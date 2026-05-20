@@ -171,7 +171,7 @@ async def test_triage_heuristic_delegates(monkeypatch: pytest.MonkeyPatch) -> No
 @pytest.mark.asyncio
 async def test_triage_capability_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each capability dispatches to its underlying ``run_*`` function."""
-    flags = {name: False for name in ("phishing", "identity", "cloud", "insider")}
+    flags = dict.fromkeys(("phishing", "identity", "cloud", "insider"), False)
 
     def _make_fake(name: str):
         async def _runner(state: InvestigationState) -> InvestigationState:
