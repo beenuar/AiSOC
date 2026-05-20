@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fix MCP tool count in docs and landing copy (Issue #36)
+
+Closes the documentation-vs-reality drift on the MCP server's tool surface.
+`services/mcp/src/tools/index.ts` registers **13** tools — five discovery
+(`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`,
+`aisoc_list_investigations`, `aisoc_lake_schema`), four deep-dive
+(`aisoc_get_alert`, `aisoc_get_case`, `aisoc_get_detection_rule`,
+`aisoc_get_investigation`), one warm-tier lake query
+(`aisoc_lake_query`, gated server-side by the `lake:query` permission),
+and three action/replay (`aisoc_run_investigation`, `aisoc_replay_decision`,
+`aisoc_explain_step`) — but eight public-facing surfaces still claimed
+"11 tools" and most tables omitted both lake tools entirely.
+
+Fixed in this PR:
+
+* `README.md` — both the MCP section copy and the services table now say
+  13 tools and call out the lake query pair.
+* `services/mcp/README.md` — count corrected; `aisoc_lake_schema` and
+  `aisoc_lake_query` added to the tool table with the same wording the
+  registry uses (discovery-before-query ordering).
+* `apps/docs/docs/integrations/mcp.md` — count corrected; the Mermaid
+  graph gained a `Lake query` subgraph wired `aisoc_lake_schema →
+  aisoc_lake_query` so the recommended call order is visible at a glance.
+* `apps/docs/docs/intro.md`, `apps/docs/docs/architecture.md` (two
+  references), `docs/architecture/SYSTEM_DESIGN.md`,
+  `docs/design/landing-page-brief.md` — all updated.
+* `apps/web/src/components/landing/sections/FeatureGrid.tsx` — the
+  marketing card "Use AiSOC from Claude, Cursor, Continue, Cody — 11
+  tools." now reads "13 tools." This is the landing-page surface most
+  visitors actually see.
+
+No tool implementation changed — the count and tables in
+`services/mcp/src/tools/index.ts` were already correct. This is a
+documentation-only fix so analysts and self-hosters don't see a smaller
+surface area than the server actually exposes, and so the lake query
+governance story is discoverable from every doc that lists tools.
+
+### Wire `DetectAgent.process` to `FusionEngine` via cross-service HTTP (Issue #190)
+
+Closes [#190](https://github.com/beenuar/AiSOC/issues/190).
+
+Closes the missing edge in the four-agent façade: `DetectAgent` previously
+self-described as the public detection surface but had no synchronous entry
+point into the fusion pipeline. Existing callers had to push to Kafka and wait
+for the consumer path to run dedup → correlation → ML scoring → confidence
+labelling → RBA, which is fine for the streaming case but unusable for
+interactive use (e.g. an investigation that needs to fuse one ad-hoc alert).
+
+Three changes, all purely additive:
+
+* `services/fusion/app/api/router.py` exposes `POST /process`, which accepts a
+  `RawAlert`, runs it through the live `FusionEngine` instance owned by the
+  fusion worker, and returns the `FusedAlert` envelope. Returns `503` if the
+  worker has not finished bootstrapping its engine — better to fail loudly than
+  to invent a synthetic verdict. Schema validation is delegated to FastAPI /
+  Pydantic, so a malformed payload still fails with `422`.
+* `services/agents/app/tools/fusion.py` is a thin async `httpx` client that
+  posts to `{FUSION_SERVICE_URL}/process` (default
+  `http://fusion:8003/process` inside the docker-compose network — fusion
+  mounts its router at the root path, *not* under `/api/fusion`). The client
+  forwards an optional bearer token and **raises** on any non-2xx or transport
+  failure. The module docstring contrasts this with `app.tools.graph`, which
+  intentionally degrades gracefully: fusion is the primary detection path, and
+  swallowing its errors would make alerts disappear silently.
+* `DetectAgent.process(raw_alert, api_token=None)` now delegates to the client
+  with no transformation. The class docstring is updated to point at the
+  correct endpoint. The same `FusionEngine` instance services both the Kafka
+  consumer and the new HTTP path, so behaviour is identical regardless of how
+  an alert arrives.
+
+Tests (`services/fusion/tests/test_process_endpoint.py`,
+`services/agents/tests/test_fusion_client.py`) cover the happy path
+(new-incident envelope), the duplicate path, both 503 modes (no worker,
+no engine), 422 on malformed and on invalid severity, and that the endpoint
+uses the same engine instance as the worker (no fresh `FusionEngine()` per
+request). Client-side tests pin the URL to `/process` (regression guard
+against the `/api/fusion/process` path mismatch we caught during initial
+wiring), assert bearer-token forwarding, confirm `httpx.HTTPStatusError`
+propagates on 503/422, and `httpx.HTTPError` propagates on transport
+failures. A final trio of tests pins `DetectAgent.process` as a faithful
+delegate to the client (args pass through unchanged, errors propagate, no
+swallowed exceptions).
+
+No feature flag and no env gate: the wiring is purely additive — no existing
+caller of the fusion service or the agents service changes shape, and the new
+endpoint/method only fire when something explicitly invokes them.
+
 ### Real ES|QL runner for saved-hunt scheduler (T3.4, v8.0)
 
 Replaces the `_execute_hunt` stub in `services/api/app/workers/hunt_scheduler.py`
