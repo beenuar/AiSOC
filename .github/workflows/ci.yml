@@ -206,10 +206,14 @@ jobs:
         # `test_fusion_client.py` (Issue #190) exercises the thin httpx
         # client that wires `DetectAgent.process` to the fusion service's
         # `POST /process` endpoint; it mocks the network with respx so the
-        # suite stays offline-safe, and it only imports `app.tools.fusion`
-        # (no LangGraph), so no extra runtime deps beyond httpx+respx.
+        # suite stays offline-safe. The test imports `DetectAgent` from
+        # `app.agents`, which transitively loads sibling sub-agents
+        # (auto_triage / phishing / identity / insider_threat / cloud) that
+        # import `langchain_core` and `langchain_openai` at module scope —
+        # so both packages are required at import time, even though the
+        # fusion-client test itself only calls into `app.tools.fusion`.
         run: |
-          pip install --quiet pytest pytest-asyncio respx
+          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \
@@ -245,11 +249,15 @@ jobs:
       - name: Install minimal deps
         # ``fastapi`` + ``httpx`` are required by the fusion router-contract
         # tests (Issue #190): they import ``app.api.router`` and drive it
-        # with FastAPI's ``ASGITransport`` + ``httpx.AsyncClient``. We
-        # deliberately do NOT install the full API dep set here — the goal
+        # with FastAPI's ``ASGITransport`` + ``httpx.AsyncClient``. ``aiokafka``
+        # is needed because ``app/api/router.py`` exposes ``set_worker(...)``
+        # which type-references ``FusionWorker`` from ``app.workers.consumer``;
+        # importing the router module therefore eagerly evaluates the
+        # consumer module, which itself imports ``aiokafka`` at module scope.
+        # We deliberately do NOT install the full API dep set here — the goal
         # of this job stays "pure helpers + thin router contracts, no
         # service boot, no Postgres/Kafka/Redis".
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka
       - name: Run fusion unit tests
         working-directory: services/fusion
         run: python -m pytest tests/ -v --tb=short
