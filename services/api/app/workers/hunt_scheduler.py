@@ -171,7 +171,7 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
         case_number=f"HUNT-{hunt.id.hex[:8].upper()}-{int(datetime.now(UTC).timestamp())}",
         title=f"Scheduled hunt fired: {hunt.name}",
         description=(
-            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its " f"scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
+            f"Saved hunt {hunt.name!r} returned {hit_count} hit(s) on its scheduled run.\n\nOriginal NL question: {hunt.nl_query}"
         ),
         case_type="hunt_finding",
         priority="medium",
