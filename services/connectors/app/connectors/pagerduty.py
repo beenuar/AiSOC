@@ -66,7 +66,9 @@ class PagerDutyConnector(BaseConnector):
                     "Subdomain (optional)",
                     required=False,
                     placeholder="acme",
-                    help_text=("Your acme.pagerduty.com subdomain. Used to build clickable links in normalised events; not required for ingestion."),
+                    help_text=(
+                        "Your acme.pagerduty.com subdomain. Used to build clickable links in normalised events; not required for ingestion."
+                    ),  # noqa: E501
                 ),
             ],
             oauth=OAuthHints(
@@ -286,15 +288,21 @@ class PagerDutyConnector(BaseConnector):
         assignees = raw.get("assignments") or []
         assignee_email = None
         if assignees and isinstance(assignees[0], dict):
-            assignee_email = ((assignees[0].get("assignee") or {}).get("summary")) if isinstance(assignees[0].get("assignee"), dict) else None
+            assignee_email = (
+                ((assignees[0].get("assignee") or {}).get("summary")) if isinstance(assignees[0].get("assignee"), dict) else None
+            )  # noqa: E501
 
-        link = raw.get("html_url") or (f"https://{self._subdomain}.pagerduty.com/incidents/{raw.get('id')}" if self._subdomain and raw.get("id") else None)
+        link = raw.get("html_url") or (
+            f"https://{self._subdomain}.pagerduty.com/incidents/{raw.get('id')}" if self._subdomain and raw.get("id") else None
+        )  # noqa: E501
 
         return {
             "source": self.connector_id,
             "external_id": f"pagerduty-incident-{raw.get('id', raw.get('incident_number', ''))}",
             "title": raw.get("title") or raw.get("description") or "PagerDuty incident",
-            "description": (f"service={service or 'unknown'}; status={status}; urgency={urgency}; priority={priority_name or 'none'}; url={link or 'n/a'}"),
+            "description": (
+                f"service={service or 'unknown'}; status={status}; urgency={urgency}; priority={priority_name or 'none'}; url={link or 'n/a'}"  # noqa: E501
+            ),  # noqa: E501
             "severity": severity,
             "actor": assignee_email,
             "actor_email": assignee_email,
@@ -320,7 +328,9 @@ class PagerDutyConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": f"pagerduty-audit-{raw.get('id', '')}",
             "title": f"PagerDuty audit: {action}",
-            "description": (f"actor={actor_email or 'unknown'}; action={action}; method={raw.get('method', {}).get('type', '') if isinstance(raw.get('method'), dict) else ''}"),
+            "description": (
+                f"actor={actor_email or 'unknown'}; action={action}; method={raw.get('method', {}).get('type', '') if isinstance(raw.get('method'), dict) else ''}"  # noqa: E501
+            ),  # noqa: E501
             "severity": severity,
             "actor": actor_email,
             "actor_email": actor_email,

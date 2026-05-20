@@ -223,9 +223,7 @@ def classify_message(content: str, *, role: str = "user") -> str | None:
     elif isinstance(parsed, list) and parsed:
         head = parsed[0]
         if isinstance(head, dict):
-            if len(head) > _MAX_JSON_LINE_KEYS and (
-                _looks_like_ocsf(head) or _looks_like_raw_log(head)
-            ):
+            if len(head) > _MAX_JSON_LINE_KEYS and (_looks_like_ocsf(head) or _looks_like_raw_log(head)):
                 return "raw event array detected (looks like log batch)"
 
     return None

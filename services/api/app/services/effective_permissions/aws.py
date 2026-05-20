@@ -121,9 +121,7 @@ def _resource_matches(statement_resource: Any, resource_arn: str) -> bool:
     return False
 
 
-def _condition_matches(
-    condition: dict[str, Any] | None, context: dict[str, Any]
-) -> bool:
+def _condition_matches(condition: dict[str, Any] | None, context: dict[str, Any]) -> bool:
     """Evaluate the subset of IAM condition operators the resolver models.
 
     Returns ``True`` when no condition is present. Supports
@@ -206,30 +204,20 @@ class AwsIamResolver(Resolver):
     ) -> ResolverResult:
         snap = snapshot if snapshot is not None else self._snapshot
         if snap is None:
-            raise ResolverError(
-                "AwsIamResolver.resolve called without a snapshot"
-            )
+            raise ResolverError("AwsIamResolver.resolve called without a snapshot")
 
         principals_by_id = {p["id"]: p for p in snap.get("principals", [])}
-        principals_by_arn = {
-            p["arn"]: p for p in snap.get("principals", []) if "arn" in p
-        }
-        principal = principals_by_id.get(principal_id) or principals_by_arn.get(
-            principal_id
-        )
+        principals_by_arn = {p["arn"]: p for p in snap.get("principals", []) if "arn" in p}
+        principal = principals_by_id.get(principal_id) or principals_by_arn.get(principal_id)
         if principal is None:
-            raise ResolverError(
-                f"principal {principal_id!r} not present in snapshot"
-            )
+            raise ResolverError(f"principal {principal_id!r} not present in snapshot")
 
         policies_by_id = {p["id"]: p for p in snap.get("policies", [])}
         groups_by_id = {g["id"]: g for g in snap.get("groups", [])}
         scp_ids = list(snap.get("scps", []))
         action_catalogue: dict[str, list[str]] = snap.get("action_catalogue", {})
 
-        identity_policy_refs = self._collect_identity_policies(
-            principal, groups_by_id
-        )
+        identity_policy_refs = self._collect_identity_policies(principal, groups_by_id)
 
         notes: list[str] = []
         decisions: list[ResolvedPermission] = []
@@ -246,10 +234,7 @@ class AwsIamResolver(Resolver):
                 decisions.append(decision)
 
         if any(p.get("permissions_boundary") for p in [principal]):
-            notes.append(
-                "permissions-boundary present on principal — not modelled; "
-                "deny-side may over-permit"
-            )
+            notes.append("permissions-boundary present on principal — not modelled; " "deny-side may over-permit")
 
         return ResolverResult(
             provider=self.provider,
@@ -300,9 +285,7 @@ class AwsIamResolver(Resolver):
     ) -> ResolvedPermission | None:
         resource_arn = resource["arn"]
         resource_service = resource.get("service") or resource_arn.split(":")[2]
-        service_catalogue = (
-            resource.get("service_actions") or action_catalogue.get(resource_service, [])
-        )
+        service_catalogue = resource.get("service_actions") or action_catalogue.get(resource_service, [])
         context = resource.get("context", {})
 
         chain: list[PolicyChainStep] = []
@@ -359,9 +342,7 @@ class AwsIamResolver(Resolver):
                             kind="policy",
                             id=resource_policy_id,
                             name=resource_policy.get("name", resource_policy_id),
-                            effect="deny"
-                            if resource_deny and not resource_allow
-                            else "allow",
+                            effect="deny" if resource_deny and not resource_allow else "allow",
                         )
                     )
 
@@ -455,9 +436,7 @@ class AwsIamResolver(Resolver):
             if not isinstance(statement, dict):
                 continue
             if principal_match_required:
-                if not _principal_matches(
-                    statement.get("Principal"), principal_arn
-                ):
+                if not _principal_matches(statement.get("Principal"), principal_arn):
                     continue
             if not _resource_matches(statement.get("Resource", "*"), resource_arn):
                 continue

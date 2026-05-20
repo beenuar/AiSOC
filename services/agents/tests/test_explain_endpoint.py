@@ -164,9 +164,9 @@ def test_explain_streams_grounded_ndjson(monkeypatch: pytest.MonkeyPatch) -> Non
 
     # Evidence surfaces the offending user from rawEvent.
     evidence = [f for f in frames if f["kind"] == "evidence"]
-    assert any("alice.tan" in e["value"] for e in evidence), (
-        f"evidence missing user from rawEvent: {[(e['label'], e['value']) for e in evidence]}"
-    )
+    assert any(
+        "alice.tan" in e["value"] for e in evidence
+    ), f"evidence missing user from rawEvent: {[(e['label'], e['value']) for e in evidence]}"
 
 
 def test_explain_uses_default_tenant_when_omitted(

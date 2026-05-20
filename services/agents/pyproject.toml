@@ -17,15 +17,15 @@ langchain-openai = ">=0.2.0,<0.4.0"
 # langgraph >=0.2 exposes the public ``START`` sentinel that
 # ``app.investigator.orchestrator`` imports. The previous ``^0.0.30`` pin
 # resolved to <0.1.0 which silently broke the import at runtime.
-langgraph = ">=0.2.40,<0.4.0"
+langgraph = ">=0.2.40,<1.1.0"
 langchain-community = ">=0.3.0,<0.4.0"
 openai = "^1.12.0"
-redis = {extras = ["hiredis"], version = "^5.0.1"}
+redis = {extras = ["hiredis"], version = ">=5.0.1,<8.0.0"}
 httpx = ">=0.26,<0.29"
-structlog = "^24.1.0"
+structlog = ">=24.1,<26.0"
 prometheus-client = "^0.19.0"
 python-dateutil = "^2.8.2"
-aiokafka = "^0.10.0"
+aiokafka = ">=0.10,<0.15"
 qdrant-client = {extras = ["fastembed"], version = "^1.9.0"}
 markdown = "^3.5"
 weasyprint = {version = "^62.0", optional = true}
@@ -38,7 +38,7 @@ apscheduler = "^3.10.4"
 pyyaml = "^6.0.1"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
+pytest = ">=7.4,<10.0"
 pytest-asyncio = "^0.23.0"
 
 [tool.pytest.ini_options]

@@ -90,34 +90,21 @@ def _build_cloud_context(state: InvestigationState) -> str:
         parts.append(f"Bucket ACL: {raw.get('bucket_acl', 'N/A')}")
         if raw.get("bucket_policy"):
             parts.append(
-                "Bucket Policy:\n"
-                + summarize_structure_for_llm(
-                    raw["bucket_policy"], label="bucket_policy", max_lines=28, max_depth=3
-                )
+                "Bucket Policy:\n" + summarize_structure_for_llm(raw["bucket_policy"], label="bucket_policy", max_lines=28, max_depth=3)
             )
 
     if raw.get("security_group_rules"):
         parts.append(
             "SG Rules:\n"
-            + summarize_structure_for_llm(
-                raw["security_group_rules"], label="security_group_rules", max_lines=28, max_depth=3
-            )
+            + summarize_structure_for_llm(raw["security_group_rules"], label="security_group_rules", max_lines=28, max_depth=3)
         )
 
     if raw.get("iam_policy") or raw.get("permissions"):
         val = raw.get("iam_policy") or raw.get("permissions")
-        parts.append(
-            "IAM/Permissions:\n"
-            + summarize_structure_for_llm(val, label="iam_permissions", max_lines=28, max_depth=3)
-        )
+        parts.append("IAM/Permissions:\n" + summarize_structure_for_llm(val, label="iam_permissions", max_lines=28, max_depth=3))
 
     if raw.get("api_calls"):
-        parts.append(
-            "API calls:\n"
-            + summarize_structure_for_llm(
-                raw["api_calls"], label="api_calls", max_lines=28, max_depth=2
-            )
-        )
+        parts.append("API calls:\n" + summarize_structure_for_llm(raw["api_calls"], label="api_calls", max_lines=28, max_depth=2))
 
     if raw.get("is_public") is not None:
         parts.append(f"Public access: {raw['is_public']}")

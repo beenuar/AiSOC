@@ -1198,8 +1198,7 @@ class RouterOrchestrator:
                 if status == failed_status:
                     yield {
                         "type": "error",
-                        "error": event_state.get("error")
-                        or "router investigation failed",
+                        "error": event_state.get("error") or "router investigation failed",
                         "case_id": case_id,
                         "run_id": run_id_str,
                         "report_md": event.get("report_md"),
