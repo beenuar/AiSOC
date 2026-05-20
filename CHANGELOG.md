@@ -46,6 +46,75 @@ fail. `services/agents/tests/test_router_report.py` covers the
 deterministic renderer. Together with the existing parallel-topology
 suite all 34 router-adjacent tests pass clean.
 
+### Attack-chain timeline UI (T3.3, v8.0)
+
+`/cases/{id}` now ships an **Attack Chain** tab that visualises the ranked
+timeline returned by `/v1/cases/{id}/attack-chain` (shipped earlier under
+`8df637b9`). The new `AttackChainPanel` in
+`apps/web/src/components/cases/CaseWorkspace.tsx`:
+
+- Window selector with the same vocabulary as the backend `WindowLiteral`
+  (`1h`, `6h`, `24h`, `72h`, `7d`, `30d`) — selection is deep-linkable via
+  `?window=…` and survives reload.
+- One card per `ChainLink` with the alert title, severity chip (driven by
+  the canonical 5-tier ladder `info | low | medium | high | critical`),
+  confidence percent, MITRE technique IDs, and the deterministic narrative
+  reason emitted by `services/api/app/services/attack_chain.py`.
+- Entity-graph summary panel — node count grouped by `kind` (`user`,
+  `asset`, `process`, `ip`, `domain`, `alert`), top edges, and a per-node
+  severity chip when present in `_entity_graph_payload`.
+- SWR-keyed on `(case_id, window)` with skeleton, error, and empty states
+  that match the rest of the case workspace.
+- New `casesApi.getAttackChain` method + `AttackChainTimeline`,
+  `AttackChainWindow`, `AttackChainLink`, `AttackChainEntityNode`,
+  `AttackChainEntityEdge`, `BackendAttackChainResponse` types in
+  `apps/web/src/lib/api.ts`. The wire format matches the backend `to_dict`
+  shape exactly (node `kind` rather than `type`; optional `severity` and
+  `event_time` from `_entity_graph_payload`).
+- Coverage in `apps/web/src/components/cases/CaseWorkspace.test.tsx`:
+  empty-state, error-state, and three data-rendering assertions
+  (alert titles, confidence percent, MITRE techniques). The SWR mock is now
+  key-aware so attack-chain and attack-path fetches stay isolated, and
+  `useSearchParams` is stateful so window-selection deep-links round-trip
+  cleanly under test. The `WindowSelector` is a labelled
+  `role="group"` of buttons with `aria-pressed`, so deep-link assertions
+  resolve the active option via the single pressed button inside the
+  group rather than a non-existent `<select>` value.
+
+Closes the UI side of T3.3 in `AISOC_V8_PROGRESS.md`. Pre-existing
+non-blocking lint warnings in `CaseWorkspace.tsx` are unchanged by this
+diff.
+
+### LLM input contract — static regression gate (T2.3, v8.0)
+
+Closes T2.3 by adding the missing **bypass-prevention** layer on top of the
+existing fail-closed validator (`services/agents/app/llm/contract.py`). Two
+new test files in `services/agents/tests/`:
+
+- `test_llm_contract_extra.py` (10 cases) — fills the coverage gaps in the
+  shipped contract: `safe_astream` validates messages exactly once and
+  refuses to yield any chunk on violation; `make_safe_chat_model` proxies
+  non-LLM attributes through but routes `ainvoke` / `astream` through
+  validation; `classify_message` rejects `api_key = '...'` assignments and
+  PEM private-key headers; `set_contract_enforcement(False)` lets raw OCSF
+  through in soft mode and re-arms cleanly when flipped back to `True`.
+- `test_llm_contract_no_bypass.py` (3 cases) — **AST-based static gate**
+  that walks every `*.py` file under `services/agents/app/` and fails CI on
+  any direct `.ainvoke(...)` / `.astream(...)` call whose receiver is not on
+  an explicit allowlist (`_graph`, `investigation_graph`, `graph` — all
+  LangGraph control-flow handles, not LLMs) or whose file is not the
+  contract module itself. Ships with self-tests proving (a) a synthetic
+  `llm.ainvoke(...)` bypass trips the detector and (b) allowlisted
+receivers do not. Adding a new agent that calls a chat model directly
+now fails the build until it routes through `safe_ainvoke` /
+`safe_astream` / `make_safe_chat_model`.
+
+The survey behind this gate confirmed every existing direct chat-model call
+under `services/agents/app/` already goes through the safe wrapper — the
+remaining `.ainvoke` / `.astream` call sites are LangGraph control-flow on
+compiled graphs, which is why those receivers are explicitly allowlisted
+rather than silently ignored.
+
 ### LLM input contract — CI tests (T2.3, v8.0)
 
 `services/agents/tests/test_llm_contract.py` exercises `classify_message` /
