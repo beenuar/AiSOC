@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fix MCP tool count in docs and landing copy (Issue #36)
+
+Closes the documentation-vs-reality drift on the MCP server's tool surface.
+`services/mcp/src/tools/index.ts` registers **13** tools — five discovery
+(`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`,
+`aisoc_list_investigations`, `aisoc_lake_schema`), four deep-dive
+(`aisoc_get_alert`, `aisoc_get_case`, `aisoc_get_detection_rule`,
+`aisoc_get_investigation`), one warm-tier lake query
+(`aisoc_lake_query`, gated server-side by the `lake:query` permission),
+and three action/replay (`aisoc_run_investigation`, `aisoc_replay_decision`,
+`aisoc_explain_step`) — but eight public-facing surfaces still claimed
+"11 tools" and most tables omitted both lake tools entirely.
+
+Fixed in this PR:
+
+* `README.md` — both the MCP section copy and the services table now say
+  13 tools and call out the lake query pair.
+* `services/mcp/README.md` — count corrected; `aisoc_lake_schema` and
+  `aisoc_lake_query` added to the tool table with the same wording the
+  registry uses (discovery-before-query ordering).
+* `apps/docs/docs/integrations/mcp.md` — count corrected; the Mermaid
+  graph gained a `Lake query` subgraph wired `aisoc_lake_schema →
+  aisoc_lake_query` so the recommended call order is visible at a glance.
+* `apps/docs/docs/intro.md`, `apps/docs/docs/architecture.md` (two
+  references), `docs/architecture/SYSTEM_DESIGN.md`,
+  `docs/design/landing-page-brief.md` — all updated.
+* `apps/web/src/components/landing/sections/FeatureGrid.tsx` — the
+  marketing card "Use AiSOC from Claude, Cursor, Continue, Cody — 11
+  tools." now reads "13 tools." This is the landing-page surface most
+  visitors actually see.
+
+No tool implementation changed — the count and tables in
+`services/mcp/src/tools/index.ts` were already correct. This is a
+documentation-only fix so analysts and self-hosters don't see a smaller
+surface area than the server actually exposes, and so the lake query
+governance story is discoverable from every doc that lists tools.
+
 ### Wire `DetectAgent.process` to `FusionEngine` via cross-service HTTP (Issue #190)
 
 Closes [#190](https://github.com/beenuar/AiSOC/issues/190).
