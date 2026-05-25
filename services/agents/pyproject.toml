@@ -28,7 +28,7 @@ python-dateutil = "^2.8.2"
 aiokafka = ">=0.10,<0.15"
 qdrant-client = {extras = ["fastembed"], version = "^1.9.0"}
 markdown = "^3.5"
-weasyprint = {version = "^62.0", optional = true}
+weasyprint = {version = ">=62,<69", optional = true}
 opentelemetry-sdk = "^1.24.0"
 opentelemetry-instrumentation-fastapi = "^0.45b0"
 opentelemetry-instrumentation-httpx = "^0.45b0"
