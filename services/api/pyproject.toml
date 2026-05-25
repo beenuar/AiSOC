@@ -42,7 +42,7 @@ pysigma = "^0.11.0"
 pysigma-backend-opensearch = "^1.0.0"
 yara-python = "^4.5.0"
 pyyaml = "^6.0.1"
-strawberry-graphql = { version = ">=0.236,<0.316", extras = ["fastapi"] }
+strawberry-graphql = { version = ">=0.236,<0.317", extras = ["fastapi"] }
 webauthn = "^2.2.0"
 weasyprint = ">=62,<69"          # WS-G2: server-side PDF generation from print-ready HTML
 
