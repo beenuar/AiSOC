@@ -23,7 +23,7 @@ openai = "^1.12.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<8.0.0"}
 httpx = ">=0.26,<0.29"
 structlog = ">=24.1,<26.0"
-prometheus-client = "^0.19.0"
+prometheus-client = ">=0.19,<0.26"
 python-dateutil = "^2.8.2"
 aiokafka = ">=0.10,<0.15"
 qdrant-client = {extras = ["fastembed"], version = "^1.9.0"}
