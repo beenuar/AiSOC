@@ -10,7 +10,7 @@ readme = "README.md"
 python = "^3.11"
 fastapi = "^0.111.0"
 uvicorn = { version = "^0.29.0", extras = ["standard"] }
-pydantic = ">=2.7,<2.11"
+pydantic = ">=2.7,<2.14"
 pydantic-settings = "^2.2.1"
 sqlalchemy = { version = "^2.0.30", extras = ["asyncio"] }
 asyncpg = ">=0.29.0,<0.32"
