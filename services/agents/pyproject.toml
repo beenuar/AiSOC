@@ -39,7 +39,7 @@ pyyaml = "^6.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.4,<10.0"
-pytest-asyncio = "^0.23.0"
+pytest-asyncio = ">=0.23,<1.4"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
