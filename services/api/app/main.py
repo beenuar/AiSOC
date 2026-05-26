@@ -3,7 +3,7 @@
 import asyncio
 import hmac
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import structlog
@@ -20,6 +20,7 @@ from app.core.airgap import airgap_status
 from app.core.config import is_dev_env, settings, warn_if_insecure_defaults
 from app.core.cors import build_cors_kwargs
 from app.core.logging import configure_logging
+from app.core.scheduler_lock import scheduler_lock
 from app.core.telemetry import instrument_app
 from app.db.clickhouse import close_clickhouse
 from app.db.database import engine
@@ -36,6 +37,33 @@ from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 _metrics_bearer = HTTPBearer(auto_error=False)
 
 logger = structlog.get_logger(__name__)
+
+_SCHEDULER_LOCK_RETRY_SECONDS = 5
+
+# 15m covers slow OAuth due-batch refreshes while each provider call is bounded
+# by OAUTH_REFRESH_HTTP_TIMEOUT_SECONDS.
+_OAUTH_REFRESH_LOCK_TTL_SECONDS = 900
+# Weekly digest can fan out across tenants + PDF generation, so use a longer
+# lease to avoid duplicate report generation during slow runs.
+_WEEKLY_DIGEST_LOCK_TTL_SECONDS = 5400
+# Hunt sweep can execute multiple saved hunts + case opens in one tick; 5m
+# covers slow sweeps while still recovering quickly after replica loss.
+_HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
+
+
+async def _run_guarded_scheduler_worker(
+    *,
+    job_name: str,
+    ttl_seconds: int,
+    worker: Callable[[], Awaitable[None]],
+) -> None:
+    while True:
+        async with scheduler_lock(job_name=job_name, ttl_seconds=ttl_seconds) as should_run:
+            if not should_run:
+                await asyncio.sleep(_SCHEDULER_LOCK_RETRY_SECONDS)
+                continue
+            await worker()
+            return
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
@@ -110,7 +138,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     oauth_refresh_task: asyncio.Task | None = None
     if settings.OAUTH_REFRESH_WORKER_ENABLED:
         try:
-            oauth_refresh_task = asyncio.create_task(run_oauth_refresh(), name="oauth_refresh_worker")
+            oauth_refresh_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="oauth_refresh",
+                    ttl_seconds=_OAUTH_REFRESH_LOCK_TTL_SECONDS,
+                    worker=run_oauth_refresh,
+                ),
+                name="oauth_refresh_worker",
+            )
             logger.info("oauth_refresh worker started")
         except Exception as exc:
             logger.warning("oauth_refresh worker failed to start", error=str(exc))
@@ -122,7 +157,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     weekly_digest_task: asyncio.Task | None = None
     if settings.WEEKLY_DIGEST_WORKER_ENABLED:
         try:
-            weekly_digest_task = asyncio.create_task(run_weekly_digest(), name="weekly_digest_worker")
+            weekly_digest_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="weekly_digest",
+                    ttl_seconds=_WEEKLY_DIGEST_LOCK_TTL_SECONDS,
+                    worker=run_weekly_digest,
+                ),
+                name="weekly_digest_worker",
+            )
             logger.info("weekly_digest worker started")
         except Exception as exc:
             logger.warning("weekly_digest worker failed to start", error=str(exc))
@@ -133,7 +175,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     hunt_scheduler_task: asyncio.Task | None = None
     if settings.HUNT_SCHEDULER_ENABLED:
         try:
-            hunt_scheduler_task = asyncio.create_task(run_hunt_scheduler(), name="hunt_scheduler_worker")
+            hunt_scheduler_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="hunt_scheduler",
+                    ttl_seconds=_HUNT_SCHEDULER_LOCK_TTL_SECONDS,
+                    worker=run_hunt_scheduler,
+                ),
+                name="hunt_scheduler_worker",
+            )
             logger.info("hunt_scheduler worker started")
         except Exception as exc:
             logger.warning("hunt_scheduler worker failed to start", error=str(exc))
