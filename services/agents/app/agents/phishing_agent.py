@@ -73,10 +73,7 @@ def _build_phishing_context(state: InvestigationState) -> str:
             parts.append(f"{label}: {sanitize_text(str(raw[key]))}")
 
     if raw.get("urls"):
-        parts.append(
-            "URLs found:\n"
-            + summarize_structure_for_llm(raw["urls"], label="urls", max_lines=24, max_depth=2)
-        )
+        parts.append("URLs found:\n" + summarize_structure_for_llm(raw["urls"], label="urls", max_lines=24, max_depth=2))
     if raw.get("url"):
         parts.append(f"Primary URL: {sanitize_text(str(raw['url']))}")
     if raw.get("domain"):
@@ -85,9 +82,7 @@ def _build_phishing_context(state: InvestigationState) -> str:
     if raw.get("attachment_hashes"):
         parts.append(
             "Attachment hashes:\n"
-            + summarize_structure_for_llm(
-                raw["attachment_hashes"], label="attachment_hashes", max_lines=16, max_depth=1
-            )
+            + summarize_structure_for_llm(raw["attachment_hashes"], label="attachment_hashes", max_lines=16, max_depth=1)
         )
     if raw.get("file_hash"):
         parts.append(f"File hash: {sanitize_text(str(raw['file_hash']))}")

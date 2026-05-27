@@ -112,11 +112,7 @@ def _build_alert_context(state: InvestigationState) -> str:
         "url": "URL",
         "hostname": "Hostname",
     }
-    present_iocs = {
-        label: sanitize_text(str(raw[key]))
-        for key, label in ioc_fields.items()
-        if raw.get(key)
-    }
+    present_iocs = {label: sanitize_text(str(raw[key])) for key, label in ioc_fields.items() if raw.get(key)}
     if present_iocs:
         parts.append("IOCs present: " + ", ".join(f"{k}={v}" for k, v in present_iocs.items()))
     else:
