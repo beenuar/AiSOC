@@ -1,0 +1,77 @@
+name: Security Audit
+
+# Scoped ignores: scripts/security_audit_ignores.txt
+# Local run: python scripts/security_audit.py <pnpm|python|go|validate-ignores>
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    name: security-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PNPM_AUDIT_REGISTRY: https://registry.npmjs.org/
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install audit tools
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit poetry poetry-plugin-export
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Validate ignore policy
+        run: python scripts/security_audit.py validate-ignores
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Audit pnpm dependencies
+        id: audit-pnpm
+        continue-on-error: true
+        run: python scripts/security_audit.py pnpm
+
+      - name: Audit Python dependencies
+        id: audit-python
+        continue-on-error: true
+        run: python scripts/security_audit.py python
+
+      - name: Audit Go dependencies
+        id: audit-go
+        continue-on-error: true
+        run: python scripts/security_audit.py go
+
+      - name: Enforce staged policy
+        if: >-
+          steps.audit-pnpm.outcome == 'failure' ||
+          steps.audit-python.outcome == 'failure' ||
+          steps.audit-go.outcome == 'failure'
+        run: |
+          echo "::error::High/critical dependency vulnerabilities found — see annotations above"
+          exit 1

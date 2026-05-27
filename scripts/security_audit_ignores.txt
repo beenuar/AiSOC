@@ -1,0 +1,10 @@
+# Dependency vulnerability ignore list for AiSOC CI.
+#
+# Format: tool|ID|reason|YYYY-MM-DD
+#   tool   — pnpm, python, or go
+#   ID     — CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N
+#   reason — why this ignore is acceptable (required, no blanks)
+#   expiry — date this ignore expires (max 90 days from today)
+#
+# Example:
+# python|CVE-2026-12345|Upstream fix not released; tracked in issue #123|2026-07-15
