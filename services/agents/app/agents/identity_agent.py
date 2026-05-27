@@ -18,9 +18,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from app.context import ContextBundle
+from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
-from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
+from app.models.state import AgentStatus, InvestigationState
 
 logger = structlog.get_logger()
 
@@ -62,8 +63,8 @@ def _build_identity_context(state: InvestigationState) -> str:
     """Serialise alert data into an identity-focused analysis prompt."""
     raw = state.raw_alert
     parts = [
-        f"Alert Summary: {state.alert_summary}",
-        f"Severity: {raw.get('severity', 'unknown')}",
+        f"Alert Summary: {sanitize_text(state.alert_summary)}",
+        f"Severity: {sanitize_text(str(raw.get('severity', 'unknown')))}",
     ]
 
     identity_fields = {
@@ -81,11 +82,14 @@ def _build_identity_context(state: InvestigationState) -> str:
     }
     for key, label in identity_fields.items():
         if raw.get(key):
-            parts.append(f"{label}: {raw[key]}")
+            parts.append(f"{label}: {sanitize_text(str(raw[key]))}")
 
     if raw.get("login_attempts"):
         parts.append(
-            "Login attempts:\n" + summarize_structure_for_llm(raw["login_attempts"], label="login_attempts", max_lines=24, max_depth=2)
+            "Login attempts:\n"
+            + summarize_structure_for_llm(
+                raw["login_attempts"], label="login_attempts", max_lines=24, max_depth=2
+            )
         )
     if raw.get("failed_count"):
         parts.append(f"Failed attempt count: {raw['failed_count']}")
@@ -93,7 +97,10 @@ def _build_identity_context(state: InvestigationState) -> str:
     geo_fields = ["login_locations", "geo_locations"]
     for gf in geo_fields:
         if raw.get(gf):
-            parts.append(f"Geo locations ({gf}):\n" + summarize_structure_for_llm(raw[gf], label=gf, max_lines=20, max_depth=2))
+            parts.append(
+                f"Geo locations ({gf}):\n"
+                + summarize_structure_for_llm(raw[gf], label=gf, max_lines=20, max_depth=2)
+            )
 
     priv_fields = ["role_change", "group_added", "permissions_changed", "privilege_level"]
     priv_parts = []
@@ -107,7 +114,10 @@ def _build_identity_context(state: InvestigationState) -> str:
         parts.append(f"Event time: {raw['timestamp']}")
     if raw.get("previous_login"):
         parts.append(
-            "Previous login:\n" + summarize_structure_for_llm(raw["previous_login"], label="previous_login", max_lines=16, max_depth=2)
+            "Previous login:\n"
+            + summarize_structure_for_llm(
+                raw["previous_login"], label="previous_login", max_lines=16, max_depth=2
+            )
         )
 
     extra_keys = {
@@ -130,7 +140,7 @@ def _build_identity_context(state: InvestigationState) -> str:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append("Additional fields:\n" + format_extra_fields_for_llm(extras, max_keys=8))
 
-    return "\n".join(parts)
+    return wrap_untrusted("\n".join(parts), label="identity_telemetry")
 
 
 def _parse_response(text: str) -> dict[str, Any]:
