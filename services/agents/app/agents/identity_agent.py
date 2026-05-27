@@ -20,8 +20,8 @@ from langchain_openai import ChatOpenAI
 from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
-from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 from app.models.state import AgentStatus, InvestigationState
+from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
 
