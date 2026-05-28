@@ -38,8 +38,8 @@ import pytest
 from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints import detection_loop as detection_loop_module
 from app.api.v1.endpoints.detection_loop import (
-    SuggestRequest,
     SuggestionResponse,
+    SuggestRequest,
     get_suggestion,
     list_suggestions,
     suggest_fp_fix,
