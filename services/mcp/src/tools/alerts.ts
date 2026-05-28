@@ -164,90 +164,22 @@ function summariseAlert(a: AlertResponse): Record<string, unknown> {
 }
 
 /**
- * Local zod→JSON-Schema converter. We keep this in the tools layer so the
- * server doesn't have to import zod itself; we only need a subset of the
- * spec (object types with strings/numbers/enums/booleans) which is easier
- * to maintain than pulling in `zod-to-json-schema` (~30kB for what we use).
+ * Convert a zod schema to JSON Schema for MCP tool input descriptors.
  *
- * If we hit a corner case the tool layer needs (recursive types, unions of
- * objects, etc.) we'll switch to the dedicated package; for now the strict
- * argument schemas stay simple enough for this to hold.
+ * Zod 4 ships `z.toJSONSchema()` natively (was previously a third-party
+ * package). We use the `input` target since these schemas describe tool
+ * *arguments* — the host validates inputs against this shape, and `input`
+ * leaves `.default()` fields optional rather than required.
  *
- * Exported so other tool files can reuse it (see `cases.ts`, `investigations.ts`).
+ * Exported so other tool files can reuse it (see `cases.ts`,
+ * `investigations.ts`, `detections.ts`, `lake.ts`).
  */
-export function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  return zodToJson(schema);
-}
-
-function zodToJson(schema: z.ZodTypeAny): Record<string, unknown> {
-  const def = schema._def as { typeName: string } & Record<string, unknown>;
-  switch (def.typeName) {
-    case "ZodObject": {
-      const shape = (schema as unknown as { shape: Record<string, z.ZodTypeAny> }).shape;
-      const properties: Record<string, unknown> = {};
-      const required: string[] = [];
-      for (const [key, child] of Object.entries(shape)) {
-        properties[key] = zodToJson(child);
-        if (!child.isOptional()) required.push(key);
-      }
-      const out: Record<string, unknown> = {
-        type: "object",
-        properties,
-        additionalProperties: false,
-      };
-      if (required.length > 0) out.required = required;
-      return out;
-    }
-    case "ZodString": {
-      const checks = (def.checks ?? []) as Array<{ kind: string }>;
-      const out: Record<string, unknown> = { type: "string" };
-      if (checks.some((c) => c.kind === "uuid")) out.format = "uuid";
-      const description = (schema as unknown as { description?: string }).description;
-      if (description) out.description = description;
-      return out;
-    }
-    case "ZodNumber": {
-      const out: Record<string, unknown> = { type: "number" };
-      const checks = (def.checks ?? []) as Array<{ kind: string; value?: number; inclusive?: boolean }>;
-      if (checks.some((c) => c.kind === "int")) out.type = "integer";
-      for (const check of checks) {
-        if (check.kind === "min" && typeof check.value === "number") out.minimum = check.value;
-        if (check.kind === "max" && typeof check.value === "number") out.maximum = check.value;
-      }
-      const description = (schema as unknown as { description?: string }).description;
-      if (description) out.description = description;
-      return out;
-    }
-    case "ZodBoolean": {
-      const out: Record<string, unknown> = { type: "boolean" };
-      const description = (schema as unknown as { description?: string }).description;
-      if (description) out.description = description;
-      return out;
-    }
-    case "ZodEnum": {
-      const values = (def.values ?? []) as string[];
-      const out: Record<string, unknown> = { type: "string", enum: values };
-      const description = (schema as unknown as { description?: string }).description;
-      if (description) out.description = description;
-      return out;
-    }
-    case "ZodOptional": {
-      const inner = (def.innerType ?? schema) as z.ZodTypeAny;
-      return zodToJson(inner);
-    }
-    case "ZodDefault": {
-      const inner = (def.innerType ?? schema) as z.ZodTypeAny;
-      const defVal = (def.defaultValue as () => unknown)();
-      return { ...zodToJson(inner), default: defVal };
-    }
-    case "ZodArray": {
-      const inner = (def.type ?? schema) as z.ZodTypeAny;
-      return { type: "array", items: zodToJson(inner) };
-    }
-    default:
-      // Conservative fallback — describe as JSON of any shape. The MCP host
-      // will still call the tool and zod's runtime parse will catch
-      // anything genuinely malformed.
-      return { description: `Unsupported schema type ${def.typeName}` };
-  }
+export function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  return z.toJSONSchema(schema, {
+    target: "draft-7",
+    io: "input",
+    // MCP hosts expect concrete object schemas with `additionalProperties: false`
+    // (matches the prior hand-rolled behaviour). zod 4 sets this from `.strict()`
+    // on the source schema, which all our top-level argument schemas already use.
+  }) as Record<string, unknown>;
 }
