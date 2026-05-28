@@ -140,7 +140,7 @@ async def get_attack_chain(
             text(
                 """
                 INSERT INTO aisoc_attack_chains (
-                    tenant_id, seed_alert_id, case_id, window,
+                    tenant_id, seed_alert_id, case_id, "window",
                     chain, entity_graph, chain_signature, confidence,
                     updated_at
                 ) VALUES (
@@ -148,7 +148,7 @@ async def get_attack_chain(
                     CAST(:chain AS JSONB), CAST(:entity_graph AS JSONB),
                     :signature, :confidence, NOW()
                 )
-                ON CONFLICT (tenant_id, seed_alert_id, window, chain_signature)
+                ON CONFLICT (tenant_id, seed_alert_id, "window", chain_signature)
                 DO UPDATE SET
                     case_id      = EXCLUDED.case_id,
                     chain        = EXCLUDED.chain,
