@@ -58,6 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: openapi-check
+    # The default GITHUB_TOKEN is read-only under the repo's restrictive
+    # token policy, so the commit/push step below 403s. Grant write scope so
+    # the bot can push the regenerated docs/openapi.yaml back to main.
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v6
