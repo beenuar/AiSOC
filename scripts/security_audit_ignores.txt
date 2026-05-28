@@ -8,3 +8,40 @@
 #
 # Example:
 # python|CVE-2026-12345|Upstream fix not released; tracked in issue #123|2026-07-15
+
+# ── 2026-05-28 triage (expire 2026-08-25) ────────────────────────────────────
+# cryptography==42.0.8 advisories (CVE-2024-12797, CVE-2026-26007,
+# GHSA-h4gh-qq45-vh27, PYSEC-2026-35) are NOT ignored — fixed by bumping the
+# connectors/osquery-tls floor to >=44.0.1 so they resolve to the clean 48.x
+# line already used by the api/actions services.
+#
+# Everything below has no patched release available (packages already at their
+# newest version) or is a framework-capped transitive dep where a bump is both
+# risky and ineffective. Time-boxed for re-evaluation within 90 days.
+
+# pnpm — all three packages are already at their latest published versions
+# (serialize-javascript 6.0.2, fast-uri 3.1.0, babel plugin 7.29.0); no fixed
+# release exists. fast-uri/babel are build/tooling-only transitive deps.
+pnpm|GHSA-5c6j-r48x-rmvq|serialize-javascript 6.0.2 is latest; no patched release; not used to serialize untrusted input|2026-08-25
+pnpm|GHSA-q3j6-qgpj-74h6|fast-uri 3.1.0 is latest; ReDoS advisory has no fixed version; transitive build/tooling dep|2026-08-25
+pnpm|GHSA-v39h-62p7-jpjc|fast-uri 3.1.0 is latest; ReDoS advisory has no fixed version; transitive build/tooling dep|2026-08-25
+pnpm|GHSA-fv7c-fp4j-7gwp|@babel/plugin-transform-modules-systemjs 7.29.0 is latest; build-time only, not shipped to runtime|2026-08-25
+
+# starlette — transitive via fastapi (capped <0.137). CVE-2024-47874 and
+# CVE-2025-54121 are fixed in 1.0.0 but reaching it requires a risky
+# framework-wide fastapi bump; PYSEC-2026-161 affects 1.0.0 too, so a bump
+# would not clear the audit. Tracked for a coordinated fastapi/starlette upgrade.
+python|PYSEC-2026-161|starlette advisory affects all releases incl. 1.0.0 (latest); no fixed version available|2026-08-25
+python|CVE-2024-47874|starlette multipart DoS; fixed in 1.0.0 but capped by fastapi<0.137; tracked for fastapi bump|2026-08-25
+python|CVE-2025-54121|starlette multipart DoS; fixed in 1.0.0 but capped by fastapi<0.137; tracked for fastapi bump|2026-08-25
+
+# langchain/langgraph — freshly disclosed 2026 advisories with no non-breaking
+# fix in the pinned 0.3.x / 1.0.x lines yet. Tracked for upstream patch.
+python|PYSEC-2026-76|langchain-openai 0.3.35 freshly disclosed; no non-breaking fix in 0.3.x line yet|2026-08-25
+python|PYSEC-2026-77|langchain-text-splitters 0.3.11 freshly disclosed; no non-breaking fix in 0.3.x line yet|2026-08-25
+python|PYSEC-2026-83|langgraph 1.0.1 freshly disclosed; awaiting patched 1.0.x release|2026-08-25
+python|CVE-2026-27794|langgraph-checkpoint 3.0.1 freshly disclosed; awaiting patched release|2026-08-25
+
+# idna — deep transitive dep (httpx/requests/email-validator); freshly
+# disclosed, no fixed version available yet.
+python|CVE-2026-45409|idna 3.13 freshly disclosed; transitive dep, no fixed version available yet|2026-08-25

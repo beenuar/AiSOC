@@ -18,7 +18,9 @@ alembic = "^1.13.1"
 httpx = ">=0.27,<0.29"
 structlog = "^24.1.0"
 prometheus-client = ">=0.20,<0.26"
-cryptography = "^42.0.0"
+# Floor raised to 44.0.1 to clear CVE-2024-12797 (and later 42.x advisories);
+# matches the resolved 48.x line used by the api/actions services.
+cryptography = ">=44.0.1,<49"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.0"

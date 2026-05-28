@@ -25,7 +25,9 @@ asyncpg = "^0.29.0"
 # Cryptography is required to decrypt the auth_config blob written by the
 # API service's CredentialVault. We share AISOC_CREDENTIAL_KEY across both
 # services via the deployment's secret store.
-cryptography = "^42.0.0"
+# Floor raised to 44.0.1 to clear CVE-2024-12797 (and later 42.x advisories);
+# matches the resolved 48.x line used by the api/actions services.
+cryptography = ">=44.0.1,<49"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
