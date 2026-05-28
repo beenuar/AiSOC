@@ -8,9 +8,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.111.0"
-uvicorn = { version = "^0.29.0", extras = ["standard"] }
-pydantic = ">=2.7,<2.11"
+fastapi = ">=0.111,<0.137"
+uvicorn = { version = ">=0.29,<0.49", extras = ["standard"] }
+pydantic = ">=2.7,<2.14"
 pydantic-settings = "^2.2.1"
 sqlalchemy = { version = "^2.0.30", extras = ["asyncio"] }
 asyncpg = ">=0.29.0,<0.32"
@@ -23,7 +23,7 @@ cryptography = ">=42,<49"  # Direct dep for credential vault Fernet
 bcrypt = ">=4.1.2,<6.0.0"  # Used directly by app.core.security (passlib is no longer compatible with bcrypt >= 4)
 python-multipart = ">=0.0.9,<0.0.30"
 tenacity = ">=8.3,<10.0"
-structlog = "^24.1.0"
+structlog = ">=24.1,<26.0"
 prometheus-client = ">=0.20,<0.26"
 opentelemetry-sdk = "^1.24.0"
 opentelemetry-instrumentation-fastapi = "^0.45b0"
@@ -42,7 +42,7 @@ pysigma = "^0.11.0"
 pysigma-backend-opensearch = "^1.0.0"
 yara-python = "^4.5.0"
 pyyaml = "^6.0.1"
-strawberry-graphql = { version = ">=0.236,<0.316", extras = ["fastapi"] }
+strawberry-graphql = { version = ">=0.236,<0.317", extras = ["fastapi"] }
 webauthn = "^2.2.0"
 weasyprint = ">=62,<69"          # WS-G2: server-side PDF generation from print-ready HTML
 

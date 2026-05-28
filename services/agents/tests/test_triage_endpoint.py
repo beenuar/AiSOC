@@ -179,7 +179,11 @@ def _poll_until_done(
         if last.get("status") != "running":
             return last
         time.sleep(0.02)
+    # Use ``pytest.fail`` for the red-failure UX, then ``raise`` so the type
+    # checker / CodeQL see the function ends on an explicit no-return path
+    # (avoids ``py/mixed-returns`` from the implicit fall-through).
     pytest.fail(f"triage run {run_id} did not complete in {timeout_s}s; last={last}")
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------

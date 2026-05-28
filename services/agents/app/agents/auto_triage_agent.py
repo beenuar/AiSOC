@@ -21,6 +21,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
@@ -98,9 +99,9 @@ def _build_alert_context(state: InvestigationState) -> str:
     """Serialise the alert into a compact string the LLM can reason over."""
     raw = state.raw_alert
     parts = [
-        f"Alert Summary: {state.alert_summary}",
-        f"Severity (vendor): {raw.get('severity', 'unknown')}",
-        f"Risk Score (vendor): {raw.get('risk_score', 'N/A')}",
+        f"Alert Summary: {sanitize_text(state.alert_summary)}",
+        f"Severity (vendor): {sanitize_text(str(raw.get('severity', 'unknown')))}",
+        f"Risk Score (vendor): {sanitize_text(str(raw.get('risk_score', 'N/A')))}",
     ]
 
     ioc_fields = {
@@ -111,7 +112,7 @@ def _build_alert_context(state: InvestigationState) -> str:
         "url": "URL",
         "hostname": "Hostname",
     }
-    present_iocs = {label: raw[key] for key, label in ioc_fields.items() if raw.get(key)}
+    present_iocs = {label: sanitize_text(str(raw[key])) for key, label in ioc_fields.items() if raw.get(key)}
     if present_iocs:
         parts.append("IOCs present: " + ", ".join(f"{k}={v}" for k, v in present_iocs.items()))
     else:
@@ -119,14 +120,14 @@ def _build_alert_context(state: InvestigationState) -> str:
 
     techniques = raw.get("mitre_techniques", [])
     if techniques:
-        parts.append(f"MITRE Techniques: {', '.join(techniques)}")
+        parts.append(f"MITRE Techniques: {', '.join(sanitize_text(str(t)) for t in techniques)}")
 
     extra_keys = {k for k in raw if k not in {"severity", "risk_score", "mitre_techniques", *ioc_fields}}
     if extra_keys:
         extras = {k: raw[k] for k in sorted(extra_keys)[:10]}
         parts.append("Additional fields (summary, not raw JSON):\n" + format_extra_fields_for_llm(extras))
 
-    return "\n".join(parts)
+    return wrap_untrusted("\n".join(parts), label="alert_telemetry")
 
 
 def _parse_llm_response(text: str) -> dict[str, Any]:

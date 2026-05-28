@@ -19,6 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from app.context import ContextBundle
+from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
@@ -55,8 +56,8 @@ def _build_phishing_context(state: InvestigationState) -> str:
     """Serialise alert data into a phishing-focused analysis prompt."""
     raw = state.raw_alert
     parts = [
-        f"Alert Summary: {state.alert_summary}",
-        f"Severity: {raw.get('severity', 'unknown')}",
+        f"Alert Summary: {sanitize_text(state.alert_summary)}",
+        f"Severity: {sanitize_text(str(raw.get('severity', 'unknown')))}",
     ]
 
     email_fields = {
@@ -69,14 +70,14 @@ def _build_phishing_context(state: InvestigationState) -> str:
     }
     for key, label in email_fields.items():
         if raw.get(key):
-            parts.append(f"{label}: {raw[key]}")
+            parts.append(f"{label}: {sanitize_text(str(raw[key]))}")
 
     if raw.get("urls"):
         parts.append("URLs found:\n" + summarize_structure_for_llm(raw["urls"], label="urls", max_lines=24, max_depth=2))
     if raw.get("url"):
-        parts.append(f"Primary URL: {raw['url']}")
+        parts.append(f"Primary URL: {sanitize_text(str(raw['url']))}")
     if raw.get("domain"):
-        parts.append(f"Domain: {raw['domain']}")
+        parts.append(f"Domain: {sanitize_text(str(raw['domain']))}")
 
     if raw.get("attachment_hashes"):
         parts.append(
@@ -84,7 +85,7 @@ def _build_phishing_context(state: InvestigationState) -> str:
             + summarize_structure_for_llm(raw["attachment_hashes"], label="attachment_hashes", max_lines=16, max_depth=1)
         )
     if raw.get("file_hash"):
-        parts.append(f"File hash: {raw['file_hash']}")
+        parts.append(f"File hash: {sanitize_text(str(raw['file_hash']))}")
 
     auth_results = {
         "spf_result": "SPF",
@@ -94,12 +95,12 @@ def _build_phishing_context(state: InvestigationState) -> str:
     auth_parts = []
     for key, label in auth_results.items():
         if raw.get(key):
-            auth_parts.append(f"{label}={raw[key]}")
+            auth_parts.append(f"{label}={sanitize_text(str(raw[key]))}")
     if auth_parts:
         parts.append(f"Email auth: {', '.join(auth_parts)}")
 
     if raw.get("body_snippet"):
-        parts.append(f"Body snippet: {raw['body_snippet'][:500]}")
+        parts.append(f"Body snippet: {sanitize_text(str(raw['body_snippet']), max_len=500)}")
 
     extra_keys = {
         k
@@ -124,7 +125,7 @@ def _build_phishing_context(state: InvestigationState) -> str:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append("Additional fields:\n" + format_extra_fields_for_llm(extras, max_keys=8))
 
-    return "\n".join(parts)
+    return wrap_untrusted("\n".join(parts), label="phishing_telemetry")
 
 
 def _parse_response(text: str) -> dict[str, Any]:

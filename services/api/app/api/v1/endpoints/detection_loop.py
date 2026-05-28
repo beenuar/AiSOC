@@ -29,8 +29,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser
 from app.core.config import settings
+from app.db.rls import TenantDBSession
 
 router = APIRouter(prefix="/detection-loop", tags=["detection_rules", "detection_loop"])
 
@@ -174,24 +175,41 @@ _SUGGESTIONS: dict[uuid.UUID, dict[str, Any]] = {}
 )
 async def suggest_fp_fix(
     body: SuggestRequest,
-    db: DBSession,
+    db: TenantDBSession,
     user: AuthUser,
 ) -> SuggestionResponse:
-    """Retrieve the triggering rule + alert evidence, then draft a Sigma improvement."""
-    # 1. Load alert
-    row = await db.execute(text("SELECT rule_id, evidence, tenant_id FROM aisoc_alerts WHERE id = :aid").bindparams(aid=body.alert_id))
+    """Retrieve the triggering rule + alert evidence, then draft a Sigma improvement.
+
+    Tenant isolation: the alert and rule lookups are scoped to ``user.tenant_id``
+    so a caller cannot pull another tenant's evidence by guessing an ``alert_id``.
+    ``TenantDBSession`` also sets the Postgres RLS context for defense in depth.
+    """
+    # 1. Load alert — scoped to caller's tenant. A cross-tenant alert_id 404s
+    # before any evidence or rule body is read.
+    row = await db.execute(
+        text("SELECT rule_id, evidence, tenant_id FROM aisoc_alerts " "WHERE id = :aid AND tenant_id = :tenant_id").bindparams(
+            aid=body.alert_id, tenant_id=user.tenant_id
+        )
+    )
     alert_row = row.fetchone()
     if not alert_row:
         raise HTTPException(status_code=404, detail="Alert not found")
 
     rule_id = alert_row.rule_id
     evidence: dict[str, Any] = alert_row.evidence or {}
-    tenant_id: uuid.UUID | None = alert_row.tenant_id
+    # Trust the caller's tenant for downstream writes — never echo a value
+    # read from the database back into an authorization decision.
+    tenant_id: uuid.UUID = user.tenant_id
 
-    # 2. Load rule body if available
+    # 2. Load rule body if available — also tenant-scoped so an alert in tenant
+    # A can never resolve a rule body owned by tenant B (e.g. via stale data).
     current_sigma = "# Rule body not found\n"
     if rule_id:
-        rule_row = await db.execute(text("SELECT rule_body FROM aisoc_detection_rules WHERE id = :rid").bindparams(rid=rule_id))
+        rule_row = await db.execute(
+            text("SELECT rule_body FROM aisoc_detection_rules " "WHERE id = :rid AND tenant_id = :tenant_id").bindparams(
+                rid=rule_id, tenant_id=user.tenant_id
+            )
+        )
         rule_data = rule_row.fetchone()
         if rule_data:
             current_sigma = rule_data.rule_body
@@ -247,7 +265,12 @@ async def suggest_fp_fix(
         proposal_id=proposal_id,
         created_at=now,
     )
-    _SUGGESTIONS[suggestion_id] = result.model_dump()
+    # Tag the in-memory record with the caller's tenant so list/detail reads
+    # can filter cross-tenant access. ``tenant_id`` is *not* part of the
+    # response schema — it is internal metadata used only for isolation.
+    stored = result.model_dump()
+    stored["tenant_id"] = tenant_id
+    _SUGGESTIONS[suggestion_id] = stored
     return result
 
 
@@ -257,7 +280,17 @@ async def suggest_fp_fix(
     summary="List LLM-drafted Sigma suggestions",
 )
 async def list_suggestions(user: AuthUser) -> SuggestionListResponse:
-    items = [SuggestionResponse(**v) for v in _SUGGESTIONS.values()]
+    """List suggestions drafted by *this* tenant only.
+
+    Tenant isolation: ``_SUGGESTIONS`` is process-wide and shared across all
+    tenants. Filtering on the stored ``tenant_id`` ensures one tenant never
+    sees another tenant's drafts, rule names, or evidence-derived rationale.
+    """
+    items = [
+        SuggestionResponse(**{k: v for k, v in stored.items() if k != "tenant_id"})
+        for stored in _SUGGESTIONS.values()
+        if str(stored.get("tenant_id")) == str(user.tenant_id)
+    ]
     return SuggestionListResponse(suggestions=items, total=len(items))
 
 
@@ -270,7 +303,12 @@ async def get_suggestion(
     suggestion_id: uuid.UUID,
     user: AuthUser,
 ) -> SuggestionResponse:
+    """Return one suggestion if and only if it belongs to the caller's tenant.
+
+    Tenant isolation: a cross-tenant lookup returns 404 (not 403) to avoid
+    leaking the existence of a suggestion that belongs to another tenant.
+    """
     item = _SUGGESTIONS.get(suggestion_id)
-    if not item:
+    if not item or str(item.get("tenant_id")) != str(user.tenant_id):
         raise HTTPException(status_code=404, detail="Suggestion not found")
-    return SuggestionResponse(**item)
+    return SuggestionResponse(**{k: v for k, v in item.items() if k != "tenant_id"})

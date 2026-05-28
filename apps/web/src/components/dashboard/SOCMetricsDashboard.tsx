@@ -154,7 +154,7 @@ function AttackHeatmap({ cells }: { cells: AttackHeatmapCell[] }) {
 }
 
 export function SOCMetricsDashboard() {
-  const { data, error, isLoading, mutate } = useSWR<SOCMetrics>(
+  const { data, error, mutate } = useSWR<SOCMetrics>(
     // Opaque cache key — `metricsApi.getSOC()` routes through the
     // tenant- and auth-aware `request()` helper, which attaches
     // `X-Tenant-Id` and `Authorization` headers and is bound to the

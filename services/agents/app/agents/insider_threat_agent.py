@@ -19,6 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from app.context import ContextBundle
+from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
@@ -66,8 +67,8 @@ def _build_insider_context(state: InvestigationState) -> str:
     """Serialise alert data into an insider-threat focused analysis prompt."""
     raw = state.raw_alert
     parts = [
-        f"Alert Summary: {state.alert_summary}",
-        f"Severity: {raw.get('severity', 'unknown')}",
+        f"Alert Summary: {sanitize_text(state.alert_summary)}",
+        f"Severity: {sanitize_text(str(raw.get('severity', 'unknown')))}",
     ]
 
     user_fields = {
@@ -82,7 +83,7 @@ def _build_insider_context(state: InvestigationState) -> str:
     }
     for key, label in user_fields.items():
         if raw.get(key):
-            parts.append(f"{label}: {raw[key]}")
+            parts.append(f"{label}: {sanitize_text(str(raw[key]))}")
 
     activity_fields = {
         "action": "Action",
@@ -97,7 +98,7 @@ def _build_insider_context(state: InvestigationState) -> str:
     }
     for key, label in activity_fields.items():
         if raw.get(key):
-            parts.append(f"{label}: {raw[key]}")
+            parts.append(f"{label}: {sanitize_text(str(raw[key]))}")
 
     if raw.get("access_time") or raw.get("timestamp"):
         parts.append(f"Access time: {raw.get('access_time') or raw.get('timestamp')}")
@@ -150,7 +151,7 @@ def _build_insider_context(state: InvestigationState) -> str:
         extras = {k: raw[k] for k in sorted(extra_keys)[:8]}
         parts.append("Additional fields:\n" + format_extra_fields_for_llm(extras, max_keys=8))
 
-    return "\n".join(parts)
+    return wrap_untrusted("\n".join(parts), label="insider_threat_telemetry")
 
 
 def _parse_response(text: str) -> dict[str, Any]:

@@ -9317,8 +9317,15 @@ paths:
       - detection_rules
       - detection_loop
       summary: Draft Sigma improvement for a FP alert
-      description: Retrieve the triggering rule + alert evidence, then draft a Sigma
+      description: 'Retrieve the triggering rule + alert evidence, then draft a Sigma
         improvement.
+
+
+        Tenant isolation: the alert and rule lookups are scoped to ``user.tenant_id``
+
+        so a caller cannot pull another tenant''s evidence by guessing an ``alert_id``.
+
+        ``TenantDBSession`` also sets the Postgres RLS context for defense in depth.'
       operationId: suggest_fp_fix_api_v1_detection_loop_suggest_post
       requestBody:
         content:
@@ -9347,6 +9354,14 @@ paths:
       - detection_rules
       - detection_loop
       summary: List LLM-drafted Sigma suggestions
+      description: 'List suggestions drafted by *this* tenant only.
+
+
+        Tenant isolation: ``_SUGGESTIONS`` is process-wide and shared across all
+
+        tenants. Filtering on the stored ``tenant_id`` ensures one tenant never
+
+        sees another tenant''s drafts, rule names, or evidence-derived rationale.'
       operationId: list_suggestions_api_v1_detection_loop_suggestions_get
       responses:
         '200':
@@ -9363,6 +9378,13 @@ paths:
       - detection_rules
       - detection_loop
       summary: Get one Sigma suggestion
+      description: 'Return one suggestion if and only if it belongs to the caller''s
+        tenant.
+
+
+        Tenant isolation: a cross-tenant lookup returns 404 (not 403) to avoid
+
+        leaking the existence of a suggestion that belongs to another tenant.'
       operationId: get_suggestion_api_v1_detection_loop_suggestions__suggestion_id__get
       security:
       - HTTPBearer: []
