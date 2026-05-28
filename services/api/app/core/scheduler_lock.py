@@ -138,18 +138,16 @@ async def scheduler_lock(*, job_name: str, ttl_seconds: int) -> AsyncIterator[bo
             with suppress(asyncio.CancelledError):
                 await renew_task
 
-        if redis_client is None:
-            return
-
-        try:
-            await redis_client.eval(
-                _RELEASE_IF_OWNER_SCRIPT,
-                1,
-                lock_key,
-                token,
-            )
-        except _BACKEND_ERRORS as exc:
-            _warn_backend_unavailable(job_name=job_name, lock_key=lock_key, phase="release", exc=exc)
+        if redis_client is not None:
+            try:
+                await redis_client.eval(
+                    _RELEASE_IF_OWNER_SCRIPT,
+                    1,
+                    lock_key,
+                    token,
+                )
+            except _BACKEND_ERRORS as exc:
+                _warn_backend_unavailable(job_name=job_name, lock_key=lock_key, phase="release", exc=exc)
 
 
 __all__ = ["scheduler_lock"]

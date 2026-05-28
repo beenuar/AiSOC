@@ -65,6 +65,7 @@ async def _run_guarded_scheduler_worker(
             await worker()
             return
 
+
 # Prometheus metrics
 REQUEST_COUNT = Counter(
     "aisoc_http_requests_total",
