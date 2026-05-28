@@ -196,17 +196,13 @@ async def test_suggest_cross_tenant_alert_id_returns_404(_stub_llm: dict[str, An
     assert alert_select is not None, "expected a SELECT against aisoc_alerts"
     sql, params = alert_select
     assert "tenant_id" in re.sub(r"\s+", " ", sql).lower(), f"alert SELECT not tenant-scoped: {sql}"
-    assert params.get("tenant_id") == tenant_a.tenant_id, (
-        f"alert SELECT did not bind the caller's tenant_id; params={params}; expected={tenant_a.tenant_id}"
-    )
+    assert (
+        params.get("tenant_id") == tenant_a.tenant_id
+    ), f"alert SELECT did not bind the caller's tenant_id; params={params}; expected={tenant_a.tenant_id}"
 
     # Critical: no rule lookup and no proposal INSERT must have run.
-    assert _find_select(db.executed, "aisoc_detection_rules") is None, (
-        "rule body lookup must not run when the alert lookup 404s"
-    )
-    assert _find_insert(db.executed, "aisoc_detection_rule_proposals") is None, (
-        "no proposal must be inserted when the alert lookup 404s"
-    )
+    assert _find_select(db.executed, "aisoc_detection_rules") is None, "rule body lookup must not run when the alert lookup 404s"
+    assert _find_insert(db.executed, "aisoc_detection_rule_proposals") is None, "no proposal must be inserted when the alert lookup 404s"
     # And nothing must land in the in-memory store.
     assert detection_loop_module._SUGGESTIONS == {}
 
@@ -247,9 +243,9 @@ async def test_suggest_same_tenant_scopes_alert_rule_and_proposal(_stub_llm: dic
     proposal_insert = _find_insert(db.executed, "aisoc_detection_rule_proposals")
     assert proposal_insert is not None, "expected an INSERT into aisoc_detection_rule_proposals"
     _sql, params = proposal_insert
-    assert params.get("tid") == user.tenant_id, (
-        f"proposal INSERT did not bind the caller's tenant; params={params}; expected={user.tenant_id}"
-    )
+    assert (
+        params.get("tid") == user.tenant_id
+    ), f"proposal INSERT did not bind the caller's tenant; params={params}; expected={user.tenant_id}"
 
     # The in-memory record must be tagged with the caller's tenant
     # (used by list/get for cross-tenant filtering) and must hold the

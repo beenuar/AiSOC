@@ -187,10 +187,9 @@ async def suggest_fp_fix(
     # 1. Load alert — scoped to caller's tenant. A cross-tenant alert_id 404s
     # before any evidence or rule body is read.
     row = await db.execute(
-        text(
-            "SELECT rule_id, evidence, tenant_id FROM aisoc_alerts "
-            "WHERE id = :aid AND tenant_id = :tenant_id"
-        ).bindparams(aid=body.alert_id, tenant_id=user.tenant_id)
+        text("SELECT rule_id, evidence, tenant_id FROM aisoc_alerts " "WHERE id = :aid AND tenant_id = :tenant_id").bindparams(
+            aid=body.alert_id, tenant_id=user.tenant_id
+        )
     )
     alert_row = row.fetchone()
     if not alert_row:
@@ -207,10 +206,9 @@ async def suggest_fp_fix(
     current_sigma = "# Rule body not found\n"
     if rule_id:
         rule_row = await db.execute(
-            text(
-                "SELECT rule_body FROM aisoc_detection_rules "
-                "WHERE id = :rid AND tenant_id = :tenant_id"
-            ).bindparams(rid=rule_id, tenant_id=user.tenant_id)
+            text("SELECT rule_body FROM aisoc_detection_rules " "WHERE id = :rid AND tenant_id = :tenant_id").bindparams(
+                rid=rule_id, tenant_id=user.tenant_id
+            )
         )
         rule_data = rule_row.fetchone()
         if rule_data:
