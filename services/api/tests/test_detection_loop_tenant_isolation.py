@@ -346,7 +346,9 @@ async def test_list_suggestions_only_returns_caller_tenant() -> None:
     tenant_b = _user()
     a1 = _seed_suggestion(tenant_a.tenant_id, "a-1")
     a2 = _seed_suggestion(tenant_a.tenant_id, "a-2")
-    _b1 = _seed_suggestion(tenant_b.tenant_id, "b-1")
+    # Seed a tenant-B suggestion solely to prove it doesn't leak into tenant A's
+    # list response below; we never need its id here.
+    _seed_suggestion(tenant_b.tenant_id, "b-1")
 
     resp = await list_suggestions(user=tenant_a)
 

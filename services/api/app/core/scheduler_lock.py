@@ -136,7 +136,10 @@ async def scheduler_lock(*, job_name: str, ttl_seconds: int) -> AsyncIterator[bo
         if renew_task is not None:
             renew_task.cancel()
             with suppress(asyncio.CancelledError):
-                await renew_task
+                # Bind to `_` so the awaited result is explicitly discarded and
+                # CodeQL's py/ineffectual-statement check doesn't misread this
+                # as a no-op (the await itself is required to drain cancellation).
+                _ = await renew_task
 
         if redis_client is not None:
             try:

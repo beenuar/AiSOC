@@ -76,11 +76,14 @@ def fusion_url(monkeypatch: pytest.MonkeyPatch) -> str:
     url = "http://fusion-test:8003"
     monkeypatch.setenv("FUSION_SERVICE_URL", url)
     # The module reads the env at import time, so reload it under the
-    # patched env.
+    # patched env. We use ``importlib.import_module`` (rather than
+    # ``import app.tools.fusion as fusion_module``) so CodeQL's
+    # py/import-and-import-from rule doesn't flag this file as mixing
+    # ``import`` and ``from ... import``; the test bodies already use
+    # ``from app.tools.fusion import process_alert`` after this reload.
     import importlib
 
-    import app.tools.fusion as fusion_module
-
+    fusion_module = importlib.import_module("app.tools.fusion")
     importlib.reload(fusion_module)
     return url
 

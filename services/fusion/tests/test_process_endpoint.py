@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from app.api import router as router_mod
 from app.api.router import router, set_worker
 from app.models.alert import (
     AlertSeverity,
@@ -101,8 +102,6 @@ def _clear_worker() -> None:
     module attribute directly is intentional — it's the same mutation
     the lifespan handler would do in reverse on shutdown.
     """
-    import app.api.router as router_mod
-
     router_mod._worker_ref = None  # noqa: SLF001 — test seam
 
 
