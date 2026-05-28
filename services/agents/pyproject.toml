@@ -19,7 +19,7 @@ langchain-openai = ">=0.2.0,<0.4.0"
 # resolved to <0.1.0 which silently broke the import at runtime.
 langgraph = ">=0.2.40,<1.1.0"
 langchain-community = ">=0.3.0,<0.4.0"
-openai = "^1.12.0"
+openai = ">=1.12,<3.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<8.0.0"}
 httpx = ">=0.26,<0.29"
 structlog = ">=24.1,<26.0"
