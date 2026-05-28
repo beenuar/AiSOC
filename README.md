@@ -1045,6 +1045,29 @@ Good first issues:
 
 ---
 
+## Credits
+
+AiSOC is built and improved by a growing community of contributors, security researchers, and operators.
+
+**Security researchers** who have made AiSOC measurably safer for everyone running it:
+
+- [**@TanmayZade**](https://github.com/TanmayZade) — Reported & fixed the prompt-injection auto-close bypass ([#220](https://github.com/beenuar/AiSOC/issues/220) / [PR #219](https://github.com/beenuar/AiSOC/pull/219))
+- [**@mangod12**](https://github.com/mangod12) — Proposed cross-tenant isolation tests + nightly RBAC regression CI ([#159](https://github.com/beenuar/AiSOC/issues/159)); informed [PR #221](https://github.com/beenuar/AiSOC/pull/221)
+- [**@jay-cyble**](https://github.com/jay-cyble) — Structured review of 13 security & UI findings ([#130](https://github.com/beenuar/AiSOC/issues/130))
+
+**Code contributors** outside the core maintainer team:
+
+- [**@jay-cyble**](https://github.com/jay-cyble) — First community contribution: UEBA service env-var alignment ([PR #135](https://github.com/beenuar/AiSOC/pull/135))
+- [**@prince30121**](https://github.com/prince30121) — Infrastructure & CI fixes
+- [**@ARDA7787**](https://github.com/ARDA7787) — Redis-backed scheduler singleton guard + dependency-CVE audit CI ([PR #218](https://github.com/beenuar/AiSOC/pull/218))
+- [**@TanmayZade**](https://github.com/TanmayZade) — Prompt sanitiser + untrusted-content wrapping across the classification agents ([PR #219](https://github.com/beenuar/AiSOC/pull/219))
+
+The full list — including bug reporters, community feedback, and how to get yourself added — lives in [**CREDITS.md**](CREDITS.md). The always-up-to-date code-contribution graph is on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
+
+Thank you to everyone who has filed an issue, shipped a PR, or quietly improved this project.
+
+---
+
 ## Security
 
 For security issues, please do not open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new). Full policy in [SECURITY.md](SECURITY.md). AiSOC follows coordinated disclosure.
