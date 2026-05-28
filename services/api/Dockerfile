@@ -36,7 +36,7 @@ RUN set -eux; \
         pip install --no-cache-dir \
             "fastapi>=0.111,<0.112" \
             "uvicorn[standard]>=0.29,<0.30" \
-            "pydantic>=2.7,<2.11" \
+            "pydantic[email]>=2.7,<2.14" \
             "pydantic-settings>=2.2,<3" \
             "sqlalchemy[asyncio]>=2.0.30,<3" \
             "asyncpg>=0.29,<0.32" \
