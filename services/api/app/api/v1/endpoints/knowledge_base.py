@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
-from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.core.airgap import enforce_airgap_for_url
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,12 @@ async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
 
 @router.get("/documents/{doc_id}", response_model=KBDocResponse, summary="Get KB document")
 async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDocResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=doc_id, tenant_id=user.tenant_id))).fetchone()
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id")
+            .bindparams(id=doc_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Document not found.")
     return _row_to_doc(row)
@@ -217,11 +222,19 @@ async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDo
 
 @router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None, summary="Remove KB document")
 async def delete_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> None:
-    existing = (await db.execute(text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=doc_id, tenant_id=user.tenant_id))).fetchone()
+    existing = (
+        await db.execute(
+            text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id")
+            .bindparams(id=doc_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Document not found.")
     # Remove all chunks with same title within this tenant only.
-    await db.execute(text("DELETE FROM aisoc_kb_documents WHERE title = :title AND tenant_id = :tenant_id").bindparams(title=existing.title, tenant_id=user.tenant_id))
+    await db.execute(
+        text("DELETE FROM aisoc_kb_documents WHERE title = :title AND tenant_id = :tenant_id")
+        .bindparams(title=existing.title, tenant_id=user.tenant_id)
+    )
     await db.commit()
 
 

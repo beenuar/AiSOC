@@ -255,7 +255,12 @@ async def list_submissions(
 
 @router.get("/{submission_id}", response_model=SubmissionResponse, summary="Get submission")
 async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=submission_id, tenant_id=user.tenant_id))).fetchone()
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id")
+            .bindparams(id=submission_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Submission not found.")
     return _row_to_submission(row)
@@ -263,7 +268,12 @@ async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser
 
 @router.post("/{submission_id}/retriage", response_model=SubmissionResponse, summary="Re-run triage on submission")
 async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
-    existing = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=submission_id, tenant_id=user.tenant_id))).fetchone()
+    existing = (
+        await db.execute(
+            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id")
+            .bindparams(id=submission_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Submission not found.")
 

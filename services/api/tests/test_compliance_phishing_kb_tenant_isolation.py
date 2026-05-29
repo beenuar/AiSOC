@@ -372,7 +372,7 @@ class TestKnowledgeBaseTenantIsolation:
             if "delete" in re.sub(r"\s+", " ", sql).lower()
         ]
         assert delete_stmts, "expected a DELETE statement"
-        for sql, params in delete_stmts:
+        for sql, _params in delete_stmts:
             normalized = re.sub(r"\s+", " ", sql).lower()
             assert "tenant_id" in normalized, (
                 f"DELETE against aisoc_kb_documents missing tenant_id: {sql}"
