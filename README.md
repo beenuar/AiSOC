@@ -9,7 +9,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Public eval harness: CI-gated](https://img.shields.io/badge/eval%20harness-CI--gated-2563eb?style=flat-square)](apps/docs/docs/benchmark.md)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-8b5cf6?style=flat-square)](CONTRIBUTING.md)
-[![Version](https://img.shields.io/badge/version-7.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.3.1-f59e0b?style=flat-square)](CHANGELOG.md)
 [![Live demo on Fly.io (v8.0 launch)](https://img.shields.io/badge/Live%20demo-Fly.io-7b2bbe?style=flat-square&logo=fly-dot-io&logoColor=white)](https://tryaisoc.com)
 [![Render demo (one-click)](https://img.shields.io/badge/Render%20demo-one%20click-46e3b7?style=flat-square&logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
 
@@ -37,9 +37,18 @@ The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agent
 
 ---
 
-## What's new (last 48 hours)
+## What's new
 
-A high-velocity wave of v1.5 console + v8.0 architectural + security changes landed on `main` over the last two days. `VERSION` is still `7.3.1`; everything below is captured under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) and will tag with the v8.0 cut.
+`VERSION` is `7.3.1`; everything below is captured under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) and will tag with the v8.0 cut.
+
+**Latest — security & stability (May 27–28, 2026)** — hardening, dependency, and boot-reliability work merged into `main`.
+- **Security Audit green** — `cryptography` floor raised to `44.0.1` to clear CVE-2024-12797 and later 42.x advisories across `services/connectors` and `services/osquery-tls`; advisories without an upstream fix are time-boxed (90-day expiry) in [`scripts/security_audit_ignores.txt`](scripts/security_audit_ignores.txt) ([#229](https://github.com/beenuar/AiSOC/pull/229)).
+- **Tenant-isolation fix** — detection-loop suggestion lookups are now scoped to the caller's tenant, closing a cross-tenant read path ([#221](https://github.com/beenuar/AiSOC/pull/221)).
+- **Full stack boots clean** — the reserved `window` column is now quoted and `pydantic[email]` ships in the image, so `docker compose` comes up end-to-end without manual patching ([#227](https://github.com/beenuar/AiSOC/pull/227)).
+- **OpenAPI auto-export unblocked** — the spec-export CI job now has `contents: write`, so the committed OpenAPI document re-syncs on every merge ([#228](https://github.com/beenuar/AiSOC/pull/228)).
+- **CodeQL quality notes cleared** — remaining low-severity CodeQL findings resolved on `main` ([#224](https://github.com/beenuar/AiSOC/pull/224)).
+- **Dependency refresh** — `zod` 3 → 4.4.3 ([#225](https://github.com/beenuar/AiSOC/pull/225)), `recharts` 2 → 3.8.1 ([#209](https://github.com/beenuar/AiSOC/pull/209)), plus a Dependabot sweep across `fastapi`, `uvicorn`, `pydantic`, `structlog`, `openai`, `weasyprint`, `strawberry-graphql`, `prometheus-client`, `go-chi`, `turbo`, and `@types/react`.
+- **Credits** — new Credits section thanking contributors and security researchers ([#223](https://github.com/beenuar/AiSOC/pull/223)).
 
 **Console workbenches (v1.5 PR-1 → PR-6)** — the SOC operator surface is now a workbench, not a list.
 - **Global time-window selector + topbar context** — one selector at the top of the console drives every page (Alerts, Cases, Hunts, Funnel KPIs, Pipeline Health). Persists across reloads, deep-linkable as a URL param.
