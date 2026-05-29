@@ -3157,9 +3157,7 @@ async def _reanchor_demo_data(session, tenant: Tenant) -> float:
     data is already fresh).
     """
     now = datetime.now(UTC)
-    latest = await session.scalar(
-        select(func.max(Alert.created_at)).where(Alert.tenant_id == tenant.id)
-    )
+    latest = await session.scalar(select(func.max(Alert.created_at)).where(Alert.tenant_id == tenant.id))
     if latest is None:
         return 0.0  # nothing seeded yet
     if latest.tzinfo is None:
@@ -3170,9 +3168,7 @@ async def _reanchor_demo_data(session, tenant: Tenant) -> float:
         return 0.0
 
     for table, columns in _REANCHOR_TABLES:
-        assignments = ", ".join(
-            f"{col} = {col} + (:secs * interval '1 second')" for col in columns
-        )
+        assignments = ", ".join(f"{col} = {col} + (:secs * interval '1 second')" for col in columns)
         await session.execute(
             text(f"UPDATE {table} SET {assignments} WHERE tenant_id = :tenant_id"),
             {"secs": shift_seconds, "tenant_id": tenant.id},
