@@ -291,9 +291,10 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
         UPDATE aisoc_phishing_submissions
         SET verdict = :verdict, confidence = :conf, indicators = :iocs::jsonb,
             mitre_technique = :mitre, triaged_at = :now
-        WHERE id = :id RETURNING *
+        WHERE id = :id AND tenant_id = :tenant_id RETURNING *
     """).bindparams(
         id=submission_id,
+        tenant_id=user.tenant_id,
         verdict=result.verdict,
         conf=result.confidence,
         iocs=json.dumps(result.indicators),

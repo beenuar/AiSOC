@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
-from app.core.airgap import enforce_airgap_for_url
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +245,13 @@ async def list_hunts(
 @router.post("", response_model=HuntResponse, status_code=status.HTTP_201_CREATED, summary="Create hunt hypothesis")
 async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) -> HuntResponse:
     mitre = body.mitre_technique or body.mitre_tactic
-    queries = await _generate_queries(body.hypothesis, mitre) or _fallback_queries(body.hypothesis)
+    # In air-gapped mode the LLM call is refused (AirgapViolation); fall back to
+    # the deterministic query templates so hunt creation still succeeds offline
+    # rather than surfacing a 500. Mirrors the phishing submit/retriage pattern.
+    try:
+        queries = await _generate_queries(body.hypothesis, mitre) or _fallback_queries(body.hypothesis)
+    except AirgapViolation:
+        queries = _fallback_queries(body.hypothesis)
     hunt_id = uuid.uuid4()
     now = datetime.now(UTC)
     q = text("""

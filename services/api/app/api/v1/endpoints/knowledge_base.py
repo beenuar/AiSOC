@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
-from app.core.airgap import enforce_airgap_for_url
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,12 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
     ]
     answer: str | None = None
     if body.synthesise and chunks:
-        answer = await _synthesise(body.question, chunks)
+        # Air-gapped deployments refuse the LLM call; still return the retrieved
+        # chunks with no synthesized answer rather than failing the whole query.
+        try:
+            answer = await _synthesise(body.question, chunks)
+        except AirgapViolation:
+            answer = None
 
     sources = list(dict.fromkeys(c.title for c in chunks))
     return QueryResponse(question=body.question, chunks=chunks, answer=answer, sources=sources)
