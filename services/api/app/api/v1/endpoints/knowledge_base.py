@@ -195,9 +195,7 @@ async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
         rows = (
             await db.execute(
                 text(
-                    "SELECT * FROM aisoc_kb_documents"
-                    " WHERE chunk_index = 0 AND tenant_id = :tenant_id"
-                    " ORDER BY created_at DESC LIMIT 200"
+                    "SELECT * FROM aisoc_kb_documents WHERE chunk_index = 0 AND tenant_id = :tenant_id ORDER BY created_at DESC LIMIT 200"
                 ).bindparams(tenant_id=user.tenant_id)
             )
         ).fetchall()
@@ -211,8 +209,9 @@ async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
 async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDocResponse:
     row = (
         await db.execute(
-            text("SELECT * FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id")
-            .bindparams(id=doc_id, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=doc_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not row:
@@ -224,16 +223,18 @@ async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDo
 async def delete_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> None:
     existing = (
         await db.execute(
-            text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id")
-            .bindparams(id=doc_id, tenant_id=user.tenant_id)
+            text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=doc_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Document not found.")
     # Remove all chunks with same title within this tenant only.
     await db.execute(
-        text("DELETE FROM aisoc_kb_documents WHERE title = :title AND tenant_id = :tenant_id")
-        .bindparams(title=existing.title, tenant_id=user.tenant_id)
+        text("DELETE FROM aisoc_kb_documents WHERE title = :title AND tenant_id = :tenant_id").bindparams(
+            title=existing.title, tenant_id=user.tenant_id
+        )
     )
     await db.commit()
 

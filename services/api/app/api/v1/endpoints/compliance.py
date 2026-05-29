@@ -323,8 +323,9 @@ async def list_evidence(
 async def get_evidence(evidence_id: uuid.UUID, db: DBSession, user: AuthUser) -> EvidenceResponse:
     row = (
         await db.execute(
-            text("SELECT * FROM aisoc_compliance_evidence WHERE id = :id AND tenant_id = :tenant_id")
-            .bindparams(id=evidence_id, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_compliance_evidence WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=evidence_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not row:

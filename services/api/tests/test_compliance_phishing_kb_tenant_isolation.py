@@ -78,24 +78,13 @@ def _assert_tenant_scoped(
         normalized = re.sub(r"\s+", " ", sql).lower()
         if table_name not in normalized:
             continue
-        assert "tenant_id" in normalized, (
-            f"SQL against {table_name} missing tenant_id filter: {sql}"
-        )
+        assert "tenant_id" in normalized, f"SQL against {table_name} missing tenant_id filter: {sql}"
         matching = [
-            (name, value)
-            for name, value in params.items()
-            if (name == "tenant_id" or name.startswith("tenant_id_"))
-            and value == tenant_id
+            (name, value) for name, value in params.items() if (name == "tenant_id" or name.startswith("tenant_id_")) and value == tenant_id
         ]
-        assert matching, (
-            f"no bound tenant_id matches caller's tenant in SQL: {sql}; "
-            f"params={params}; expected_tenant={tenant_id}"
-        )
+        assert matching, f"no bound tenant_id matches caller's tenant in SQL: {sql}; params={params}; expected_tenant={tenant_id}"
         saw_tenant_scoped = True
-    assert saw_tenant_scoped, (
-        f"no {table_name} statement was tenant-scoped; "
-        "every read/write must filter on tenant_id"
-    )
+    assert saw_tenant_scoped, f"no {table_name} statement was tenant-scoped; every read/write must filter on tenant_id"
 
 
 def _evidence_row(tenant_id: uuid.UUID, **overrides: Any) -> MagicMock:
@@ -367,16 +356,11 @@ class TestKnowledgeBaseTenantIsolation:
         await delete_document(doc_id=uuid.uuid4(), db=db, user=user)
 
         # The DELETE statement must be tenant-scoped
-        delete_stmts = [
-            (sql, params) for sql, params in db.executed
-            if "delete" in re.sub(r"\s+", " ", sql).lower()
-        ]
+        delete_stmts = [(sql, params) for sql, params in db.executed if "delete" in re.sub(r"\s+", " ", sql).lower()]
         assert delete_stmts, "expected a DELETE statement"
         for sql, _params in delete_stmts:
             normalized = re.sub(r"\s+", " ", sql).lower()
-            assert "tenant_id" in normalized, (
-                f"DELETE against aisoc_kb_documents missing tenant_id: {sql}"
-            )
+            assert "tenant_id" in normalized, f"DELETE against aisoc_kb_documents missing tenant_id: {sql}"
 
     @pytest.mark.asyncio
     async def test_ingest_inserts_with_tenant_id(self) -> None:

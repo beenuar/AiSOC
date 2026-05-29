@@ -257,8 +257,9 @@ async def list_submissions(
 async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
     row = (
         await db.execute(
-            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id")
-            .bindparams(id=submission_id, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=submission_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not row:
@@ -270,8 +271,9 @@ async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser
 async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
     existing = (
         await db.execute(
-            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id")
-            .bindparams(id=submission_id, tenant_id=user.tenant_id)
+            text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=submission_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if not existing:
