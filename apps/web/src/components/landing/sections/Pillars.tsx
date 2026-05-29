@@ -63,7 +63,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
     icon: Sparkles,
     title: 'Agentic and auditable',
     body:
-      'Four named agents. Every prompt, tool call, and decision is logged. The LLM-input contract fails closed on malformed prompts.',
+      'Four named agents. Every prompt, tool call, and decision is logged, the LLM-input contract fails closed on malformed prompts, and a CI-gated CVE audit blocks every merge.',
     stat: '4 / 100%',
     statLabel: 'agents · audited',
     href: 'https://github.com/beenuar/AiSOC#readme',

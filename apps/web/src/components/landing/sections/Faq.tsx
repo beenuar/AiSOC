@@ -50,6 +50,11 @@ const FAQS: ReadonlyArray<QA> = [
       'Only inside the maturity tier you configure. L0 keeps the agent advisory only; L2 (the production default) lets it run reversible containment actions; L4 allows whitelisted closed-loop actions. Every action class is gated against blast radius.',
   },
   {
+    q: 'How is AiSOC kept secure and up to date?',
+    a:
+      'Every pull request runs a CI-gated security audit (pip-audit + pnpm audit) that blocks the merge on any unresolved CVE, alongside CodeQL static analysis. Dependencies are kept current — the cryptography floor was recently raised to 44.0.1 to clear CVE-2024-12797, and detection-loop lookups are tenant-scoped so cross-tenant reads are impossible. The audit policy lives in scripts/security_audit.py.',
+  },
+  {
     q: 'How is this benchmarked?',
     a:
       'Five pytest suites in services/agents/tests/ run on every PR. Three are substrate self-consistency gates; the fourth is a real measurement against a fixed 1,000-alert noisy stream; the fifth is a coverage gate on the synthetic telemetry corpus. The methodology page documents what each suite measures and what it does not.',

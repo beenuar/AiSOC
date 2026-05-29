@@ -179,6 +179,15 @@ const faqJsonLd = {
     },
     {
       '@type': 'Question',
+      name: 'How is AiSOC kept secure and up to date?',
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text:
+          'Every pull request runs a CI-gated security audit (pip-audit + pnpm audit) that blocks the merge on any unresolved CVE, alongside CodeQL static analysis. Dependencies are kept current — the cryptography floor was recently raised to 44.0.1 to clear CVE-2024-12797, and detection-loop lookups are tenant-scoped so cross-tenant reads are impossible. The audit policy lives in scripts/security_audit.py.',
+      },
+    },
+    {
+      '@type': 'Question',
       name: 'How is this benchmarked?',
       acceptedAnswer: {
         '@type': 'Answer',
