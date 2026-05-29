@@ -36,7 +36,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
@@ -3110,6 +3110,76 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+# Tenant-scoped tables whose timestamp columns drive the rolling-window
+# dashboard / funnel / SOC-performance queries (24h / 7d / 30d). Re-anchoring
+# slides the whole demo dataset forward so the *newest* alert lands at "now",
+# keeping every metric inside its window no matter how long the hosted demo has
+# been running. Columns that are NULL stay NULL (interval arithmetic on NULL is
+# NULL), so optional timestamps like resolved_at/closed_at are preserved.
+_REANCHOR_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "alerts",
+        (
+            "created_at",
+            "updated_at",
+            "event_time",
+            "first_seen",
+            "last_seen",
+            "first_seen_at",
+            "resolved_at",
+            "assigned_at",
+            "snoozed_until",
+        ),
+    ),
+    ("cases", ("created_at", "updated_at", "closed_at", "assigned_at", "sla_deadline")),
+    ("case_tasks", ("created_at", "due_date", "completed_at")),
+    ("case_timeline", ("created_at",)),
+    ("remediation_gate_log", ("created_at",)),
+)
+
+# Skip the shift when the data has aged less than this — keeps a fresh seed
+# byte-stable and avoids pointless churn when the daily cron fires minutes
+# after a deploy.
+_REANCHOR_MIN_SHIFT_SECONDS = 1800.0  # 30 minutes
+
+
+async def _reanchor_demo_data(session, tenant: Tenant) -> float:
+    """Slide every demo timestamp forward so the newest alert is "now".
+
+    The seed is idempotent, so once the dataset exists its timestamps are frozen
+    at first-seed time and gradually age out of every rolling window — after
+    ~24h the Operations Funnel / Efficiency tiles go empty and the console shows
+    perpetual loading spinners. Running this on every deploy (and the daily
+    cron) keeps the hosted demo permanently "live".
+
+    Non-destructive: preserves every row, ID, relationship, and the relative
+    spacing of events. Returns the shift applied in seconds (``0.0`` when the
+    data is already fresh).
+    """
+    now = datetime.now(UTC)
+    latest = await session.scalar(
+        select(func.max(Alert.created_at)).where(Alert.tenant_id == tenant.id)
+    )
+    if latest is None:
+        return 0.0  # nothing seeded yet
+    if latest.tzinfo is None:
+        latest = latest.replace(tzinfo=UTC)
+
+    shift_seconds = (now - latest).total_seconds()
+    if shift_seconds < _REANCHOR_MIN_SHIFT_SECONDS:
+        return 0.0
+
+    for table, columns in _REANCHOR_TABLES:
+        assignments = ", ".join(
+            f"{col} = {col} + (:secs * interval '1 second')" for col in columns
+        )
+        await session.execute(
+            text(f"UPDATE {table} SET {assignments} WHERE tenant_id = :tenant_id"),
+            {"secs": shift_seconds, "tenant_id": tenant.id},
+        )
+    return shift_seconds
+
+
 async def _run_full_seed() -> None:
     print("[seed] connecting to database…", flush=True)
     async with AsyncSessionLocal() as session:
@@ -3121,6 +3191,7 @@ async def _run_full_seed() -> None:
             realistic_alerts, realistic_cases, playbook_runs = await _seed_realistic_incidents(session, tenant)
             in_flight_runs = await _seed_in_flight_investigation(session, tenant)
             mirrored = await _mirror_cases_to_aisoc(session, tenant)
+            reanchor_shift = await _reanchor_demo_data(session, tenant)
             await session.commit()
         except Exception:
             await session.rollback()
@@ -3134,6 +3205,10 @@ async def _run_full_seed() -> None:
     print(f"[seed] realistic incidents — alerts: {realistic_alerts}, cases: {realistic_cases}, playbook runs: {playbook_runs}")
     print(f"[seed] in-flight investigations: {in_flight_runs}")
     print(f"[seed] cases mirrored to aisoc_cases: {mirrored}")
+    if reanchor_shift > 0:
+        print(f"[seed] re-anchored demo timestamps forward by {reanchor_shift / 3600:.1f}h (newest alert = now)")
+    else:
+        print("[seed] demo timestamps already fresh — no re-anchor needed")
     print("[seed] done — log into the console at http://localhost:3000")
 
 
