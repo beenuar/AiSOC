@@ -196,16 +196,17 @@ async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> Submissi
     sub_id = uuid.uuid4()
     q = text("""
         INSERT INTO aisoc_phishing_submissions (
-            id, submitted_by, artifact_kind, raw_content, sender, subject,
+            id, tenant_id, submitted_by, artifact_kind, raw_content, sender, subject,
             urls, verdict, confidence, indicators, mitre_technique,
             submitted_at, triaged_at, created_at
         ) VALUES (
-            :id, :by, :kind, :content, :sender, :subject,
+            :id, :tenant_id, :by, :kind, :content, :sender, :subject,
             :urls::text[], :verdict, :conf, :iocs::jsonb, :mitre,
             :now, :now, :now
         ) RETURNING *
     """).bindparams(
         id=sub_id,
+        tenant_id=user.tenant_id,
         by=str(user) if user else "system",
         kind=body.artifact_kind,
         content=body.raw_content,
@@ -236,8 +237,8 @@ async def list_submissions(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[SubmissionResponse]:
-    wheres = ["1=1"]
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    wheres = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {"tenant_id": user.tenant_id, "limit": limit, "offset": offset}
     if verdict:
         wheres.append("verdict = :verdict")
         params["verdict"] = verdict
@@ -254,7 +255,7 @@ async def list_submissions(
 
 @router.get("/{submission_id}", response_model=SubmissionResponse, summary="Get submission")
 async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id").bindparams(id=submission_id))).fetchone()
+    row = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=submission_id, tenant_id=user.tenant_id))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Submission not found.")
     return _row_to_submission(row)
@@ -262,7 +263,7 @@ async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser
 
 @router.post("/{submission_id}/retriage", response_model=SubmissionResponse, summary="Re-run triage on submission")
 async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
-    existing = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id").bindparams(id=submission_id))).fetchone()
+    existing = (await db.execute(text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=submission_id, tenant_id=user.tenant_id))).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Submission not found.")
 

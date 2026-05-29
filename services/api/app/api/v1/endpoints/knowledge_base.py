@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 
 logger = logging.getLogger(__name__)
 
@@ -120,10 +121,12 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
     base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
     model = os.getenv("LLM_MODEL", "gpt-4o-mini")
     context = "\n\n".join(f"[{c.title}] chunk {c.chunk_index}:\n{c.content}" for c in chunks)
+    completions_url = f"{base_url}/chat/completions"
+    enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             resp = await client.post(
-                f"{base_url}/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": model,
@@ -156,14 +159,15 @@ async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBD
         doc_id = uuid.uuid4()
         q = text("""
             INSERT INTO aisoc_kb_documents (
-                id, title, doc_kind, source_url, content, tags,
+                id, tenant_id, title, doc_kind, source_url, content, tags,
                 chunk_index, chunk_total, created_at, updated_at, created_by
             ) VALUES (
-                :id, :title, :kind, :url, :content, :tags::text[],
+                :id, :tenant_id, :title, :kind, :url, :content, :tags::text[],
                 :idx, :total, :now, :now, :user
             ) RETURNING *
         """).bindparams(
             id=doc_id,
+            tenant_id=user.tenant_id,
             title=body.title,
             kind=body.doc_kind,
             url=body.source_url,
@@ -189,7 +193,13 @@ async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBD
 async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
     try:
         rows = (
-            await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE chunk_index = 0 ORDER BY created_at DESC LIMIT 200"))
+            await db.execute(
+                text(
+                    "SELECT * FROM aisoc_kb_documents"
+                    " WHERE chunk_index = 0 AND tenant_id = :tenant_id"
+                    " ORDER BY created_at DESC LIMIT 200"
+                ).bindparams(tenant_id=user.tenant_id)
+            )
         ).fetchall()
         return [_row_to_doc(r) for r in rows]
     except Exception as exc:
@@ -199,7 +209,7 @@ async def list_documents(db: DBSession, user: AuthUser) -> list[KBDocResponse]:
 
 @router.get("/documents/{doc_id}", response_model=KBDocResponse, summary="Get KB document")
 async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDocResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE id = :id").bindparams(id=doc_id))).fetchone()
+    row = (await db.execute(text("SELECT * FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=doc_id, tenant_id=user.tenant_id))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Document not found.")
     return _row_to_doc(row)
@@ -207,18 +217,18 @@ async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDo
 
 @router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None, summary="Remove KB document")
 async def delete_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> None:
-    existing = (await db.execute(text("SELECT title FROM aisoc_kb_documents WHERE id = :id").bindparams(id=doc_id))).fetchone()
+    existing = (await db.execute(text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=doc_id, tenant_id=user.tenant_id))).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="Document not found.")
-    # Remove all chunks with same title + doc_kind
-    await db.execute(text("DELETE FROM aisoc_kb_documents WHERE title = :title").bindparams(title=existing.title))
+    # Remove all chunks with same title within this tenant only.
+    await db.execute(text("DELETE FROM aisoc_kb_documents WHERE title = :title AND tenant_id = :tenant_id").bindparams(title=existing.title, tenant_id=user.tenant_id))
     await db.commit()
 
 
 @router.post("/query", response_model=QueryResponse, summary="Search knowledge base + optional LLM synthesis")
 async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryResponse:
-    wheres = ["to_tsvector('english', content) @@ plainto_tsquery('english', :q)"]
-    params: dict[str, Any] = {"q": body.question, "limit": body.top_k}
+    wheres = ["to_tsvector('english', content) @@ plainto_tsquery('english', :q)", "tenant_id = :tenant_id"]
+    params: dict[str, Any] = {"q": body.question, "tenant_id": user.tenant_id, "limit": body.top_k}
     if body.doc_kinds:
         wheres.append("doc_kind = ANY(:kinds::text[])")
         params["kinds"] = body.doc_kinds

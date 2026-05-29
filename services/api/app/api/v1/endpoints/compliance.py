@@ -165,12 +165,14 @@ def _compute_hash(prev_hash: str | None, summary: str, payload: dict[str, Any]) 
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-async def _latest_hash(db: DBSession, framework: str) -> str | None:
+async def _latest_hash(db: DBSession, framework: str, tenant_id: uuid.UUID) -> str | None:
     row = (
         await db.execute(
-            text("SELECT payload_hash FROM aisoc_compliance_evidence WHERE framework = :f ORDER BY created_at DESC LIMIT 1").bindparams(
-                f=framework
-            )
+            text(
+                "SELECT payload_hash FROM aisoc_compliance_evidence"
+                " WHERE framework = :f AND tenant_id = :tenant_id"
+                " ORDER BY created_at DESC LIMIT 1"
+            ).bindparams(f=framework, tenant_id=tenant_id)
         )
     ).fetchone()
     return row.payload_hash if row else None
@@ -241,23 +243,24 @@ async def trigger_evidence_collection(body: CollectJobRequest) -> CollectJobResp
 
 @router.post("/evidence", response_model=EvidenceResponse, status_code=status.HTTP_201_CREATED, summary="Collect evidence item")
 async def collect_evidence(body: CollectEvidenceRequest, db: DBSession, user: AuthUser) -> EvidenceResponse:
-    prev_hash = await _latest_hash(db, body.framework)
+    prev_hash = await _latest_hash(db, body.framework, user.tenant_id)
     new_hash = _compute_hash(prev_hash, body.summary, body.raw_payload)
     now = datetime.now(UTC)
     evidence_id = uuid.uuid4()
 
     q = text("""
         INSERT INTO aisoc_compliance_evidence (
-            id, case_id, framework, control_id, control_title,
+            id, tenant_id, case_id, framework, control_id, control_title,
             evidence_kind, summary, raw_payload, payload_hash, prev_hash,
             collected_at, status, created_at
         ) VALUES (
-            :id, :case_id, :fw, :ctrl, :title,
+            :id, :tenant_id, :case_id, :fw, :ctrl, :title,
             :kind, :summary, :payload::jsonb, :hash, :prev,
             :now, 'pending', :now
         ) RETURNING *
     """).bindparams(
         id=evidence_id,
+        tenant_id=user.tenant_id,
         case_id=body.case_id,
         fw=body.framework,
         ctrl=body.control_id,
@@ -290,8 +293,8 @@ async def list_evidence(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> list[EvidenceResponse]:
-    wheres = ["1=1"]
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    wheres = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {"tenant_id": user.tenant_id, "limit": limit, "offset": offset}
     if framework:
         wheres.append("framework = :fw")
         params["fw"] = framework
@@ -318,7 +321,7 @@ async def list_evidence(
 
 @router.get("/evidence/{evidence_id}", response_model=EvidenceResponse, summary="Get evidence item")
 async def get_evidence(evidence_id: uuid.UUID, db: DBSession, user: AuthUser) -> EvidenceResponse:
-    row = (await db.execute(text("SELECT * FROM aisoc_compliance_evidence WHERE id = :id").bindparams(id=evidence_id))).fetchone()
+    row = (await db.execute(text("SELECT * FROM aisoc_compliance_evidence WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=evidence_id, tenant_id=user.tenant_id))).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Evidence item not found.")
     return _row_to_evidence(row)
@@ -330,8 +333,8 @@ async def review_evidence(evidence_id: uuid.UUID, body: ReviewEvidenceRequest, d
     q = text("""
         UPDATE aisoc_compliance_evidence
         SET status = :decision, reviewed_by = :reviewer, reviewed_at = :now
-        WHERE id = :id RETURNING *
-    """).bindparams(id=evidence_id, decision=body.decision, reviewer=body.reviewer or str(user), now=now)
+        WHERE id = :id AND tenant_id = :tenant_id RETURNING *
+    """).bindparams(id=evidence_id, tenant_id=user.tenant_id, decision=body.decision, reviewer=body.reviewer or str(user), now=now)
     try:
         row = (await db.execute(q)).fetchone()
         if not row:
@@ -352,8 +355,8 @@ async def compliance_report(
     user: AuthUser,
     framework: str | None = Query(None, description="Filter to a single framework."),
 ) -> list[CompliancePosture]:
-    wheres = ["1=1"]
-    params: dict[str, Any] = {}
+    wheres = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {"tenant_id": user.tenant_id}
     if framework:
         wheres.append("framework = :fw")
         params["fw"] = framework

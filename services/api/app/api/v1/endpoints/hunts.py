@@ -37,6 +37,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.core.airgap import enforce_airgap_for_url
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +144,12 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
     if mitre:
         user_msg += f"\nMITRE TECHNIQUE: {mitre}"
     user_msg += "\nGenerate ES|QL, SPL, and KQL hunt queries."
+    completions_url = f"{base_url}/chat/completions"
+    enforce_airgap_for_url(completions_url)
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             resp = await client.post(
-                f"{base_url}/chat/completions",
+                completions_url,
                 headers={"Authorization": f"Bearer {api_key}"},
                 json={
                     "model": model,
