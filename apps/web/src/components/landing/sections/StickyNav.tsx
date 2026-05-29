@@ -109,10 +109,10 @@ export function StickyNav() {
             Self-host
           </Link>
           <Link
-            href="https://tryaisoc.com/signup"
+            href="https://tryaisoc.com/dashboard"
             className="group inline-flex items-center gap-1 rounded-md bg-velvet-emerald-cta px-4 py-1.5 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
-            Start free
+            Open dashboard
             <ArrowRight
               className="h-3.5 w-3.5 transition-transform duration-200 ease-landing-out-quart group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
               aria-hidden="true"
@@ -167,11 +167,11 @@ export function StickyNav() {
             Self-host
           </a>
           <Link
-            href="https://tryaisoc.com/signup"
+            href="https://tryaisoc.com/dashboard"
             onClick={() => setOpen(false)}
             className="flex-1 rounded-md bg-velvet-emerald-cta px-3 py-2 text-center text-sm font-semibold text-velvet-content-primary motion-safe:shadow-glow-emerald-sm"
           >
-            Start free
+            Open dashboard
           </Link>
         </div>
       </div>

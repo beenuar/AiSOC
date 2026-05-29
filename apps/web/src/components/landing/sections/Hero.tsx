@@ -116,10 +116,10 @@ export function Hero() {
             style={{ animationDelay: '540ms' }}
           >
             <Link
-              href="https://tryaisoc.com/signup"
+              href="https://tryaisoc.com/dashboard"
               className="group inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-velvet-emerald-cta px-6 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow,transform] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base sm:w-auto"
             >
-              Start free on managed
+              Open the live dashboard
               <ArrowRight
                 className="h-4 w-4 transition-transform duration-200 ease-landing-out-quart group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
                 aria-hidden="true"
