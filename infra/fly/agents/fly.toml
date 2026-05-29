@@ -35,7 +35,10 @@ kill_timeout   = "10s"            # agent runs may need to flush ledger writes
 [http_service]
   internal_port       = 8084
   force_https         = true
-  auto_stop_machines  = "stop"
+  # Never auto-stop: the web app proxies AI Copilot / agent calls over 6PN
+  # (aisoc-demo-agents.internal:8084), and 6PN connections do NOT trigger Fly's
+  # auto-start, so a stopped machine 500s the Copilot. Keep it warm 24/7.
+  auto_stop_machines  = "off"
   auto_start_machines = true
   min_machines_running = 1
   processes           = ["app"]
