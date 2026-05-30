@@ -139,6 +139,21 @@ RDS and OpenSearch take a final snapshot before deletion (set explicitly in
 the modules). The S3 state bucket and DynamoDB lock table are **not** managed
 by this configuration and survive `destroy`.
 
+## Alternate cloud skeletons
+
+This directory is the AWS/EKS reference. Two serverless-container skeletons
+exist for teams that don't want to run Kubernetes:
+
+- `infra/terraform/gcp/` — Cloud Run + Cloud SQL Postgres + Memorystore Redis +
+  Secret Manager + Artifact Registry, fronted by Serverless VPC Access.
+- `infra/terraform/azure/` — Container Apps + PostgreSQL Flexible Server +
+  Azure Cache for Redis + Key Vault + Container Registry, on a private VNet
+  with user-assigned managed identities. Mirrors the GCP layout file-for-file.
+
+Both deploy the `api`, `web`, and `ingest` services directly as managed
+containers (no cluster), and emit the same env-var contract documented in
+`apps/docs/docs/deployment/env-vars.md`.
+
 ## Related docs
 
 - `apps/docs/docs/deployment/kubernetes.md` — production deployment guide.

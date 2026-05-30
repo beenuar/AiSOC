@@ -1,0 +1,69 @@
+# AiSOC — Azure serverless skeleton
+#
+# Copy this file to `terraform.tfvars` and override what you need. Every
+# variable has a sensible default for a startup-credit-friendly demo, so an
+# empty `terraform.tfvars` already produces a working stack. Authentication is
+# picked up from `az login` (or ARM_* env vars), not from this file.
+
+# ─── Subscription / location ─────────────────────────────────────────────────
+
+# subscription_id = "00000000-0000-0000-0000-000000000000"  # or use ARM_SUBSCRIPTION_ID
+# location        = "eastus"
+# name_prefix     = "aisoc"   # 3-12 lowercase chars; keeps ACR + Key Vault names valid
+
+# tags = {
+#   project    = "aisoc"
+#   managed_by = "terraform"
+#   env        = "demo"
+# }
+
+# ─── Networking ──────────────────────────────────────────────────────────────
+
+# vnet_cidr               = "10.20.0.0/16"
+# aca_subnet_cidr         = "10.20.0.0/23"   # Container Apps needs at least /23
+# postgres_subnet_cidr    = "10.20.2.0/27"   # delegated to Postgres Flexible Server
+# privatelink_subnet_cidr = "10.20.3.0/27"   # Redis (+ future) private endpoints
+
+# ─── PostgreSQL Flexible Server ──────────────────────────────────────────────
+
+# postgres_sku        = "GP_Standard_D2s_v3"  # B_Standard_B1ms for a cheap sandbox
+# postgres_version    = "16"
+# postgres_storage_mb = 32768
+# postgres_db_name    = "aisoc"
+# postgres_user       = "aisoc"
+# postgres_zone       = "1"
+
+# ─── Azure Cache for Redis ───────────────────────────────────────────────────
+
+# redis_sku      = "Standard"   # Basic = no SLA/HA, Premium = VNet injection
+# redis_family   = "C"
+# redis_capacity = 1            # 0=250MB, 1=1GB, 2=2.5GB (C family)
+
+# ─── Container Apps images ───────────────────────────────────────────────────
+#
+# Defaults point at the public GHCR demo images so the skeleton runs with zero
+# CI work. Override with images you've pushed to the ACR this stack provisions.
+
+# api_image    = "ghcr.io/beenuar/aisoc-api:latest"
+# web_image    = "ghcr.io/beenuar/aisoc-web:latest"
+# ingest_image = "ghcr.io/beenuar/aisoc-ingest:latest"
+
+# ─── Container Apps scaling ──────────────────────────────────────────────────
+
+# api_min_replicas    = 0   # >0 to avoid cold starts
+# api_max_replicas    = 10
+# web_max_replicas    = 5
+# ingest_max_replicas = 5
+
+# ─── Access ──────────────────────────────────────────────────────────────────
+
+# cors_origins = "https://app.example.com,https://demo.example.com"
+
+# ─── Optional: agents / OpenAI ───────────────────────────────────────────────
+#
+# When set, an openai-api-key secret is provisioned in Key Vault and mounted
+# into the API container. Leave blank for the air-gapped (Ollama / LiteLLM)
+# configuration. Pass on the CLI to keep it off disk:
+#   terraform apply -var "openai_api_key=$OPENAI_API_KEY"
+
+# openai_api_key = ""
