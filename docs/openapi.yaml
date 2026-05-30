@@ -12685,6 +12685,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/realtime/ticket:
+    post:
+      tags:
+      - realtime
+      summary: Mint Realtime Ticket
+      description: 'Mint a short-lived ticket for the realtime WS/SSE edge.
+
+
+        Requires a valid session (``get_current_user`` 401s otherwise). The ticket''s
+
+        tenant is bound server-side from the authenticated user — the client cannot
+
+        request a tenant.'
+      operationId: mint_realtime_ticket_api_v1_realtime_ticket_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeTicket'
+      security:
+      - HTTPBearer: []
   /auth/saml/login:
     get:
       tags:
@@ -21961,6 +21984,27 @@ components:
       required:
       - score
       title: RatingIn
+    RealtimeTicket:
+      properties:
+        token:
+          type: string
+          title: Token
+          description: Signed HS256 ticket for the WS/SSE edge.
+        expires_in:
+          type: integer
+          title: Expires In
+          description: Ticket lifetime in seconds.
+        tenant_id:
+          type: string
+          title: Tenant Id
+          description: Tenant the ticket is scoped to.
+      type: object
+      required:
+      - token
+      - expires_in
+      - tenant_id
+      title: RealtimeTicket
+      description: Response body for ``POST /realtime/ticket``.
     RecommendedAction:
       properties:
         priority:
