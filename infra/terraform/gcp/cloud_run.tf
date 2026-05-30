@@ -152,12 +152,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
-        for_each = var.openai_api_key == "" ? [] : [1]
+        # Iterate over the count-driven secret resource (0 or 1 element) so the
+        # for_each collection is derived from resource state, not the sensitive
+        # var.openai_api_key. Sensitive values are rejected as for_each args.
+        for_each = google_secret_manager_secret.openai_api_key
         content {
           name = "OPENAI_API_KEY"
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.openai_api_key[0].secret_id
+              secret  = env.value.secret_id
               version = "latest"
             }
           }
