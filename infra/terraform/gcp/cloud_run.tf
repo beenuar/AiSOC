@@ -141,6 +141,20 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+      # Shared HS256 secret the API uses to mint realtime WS/SSE tickets
+      # (Issue #239). The Node realtime service reads the same secret value to
+      # verify them. The realtime workload itself isn't on Cloud Run (see the
+      # header note), so it consumes this from the same Secret Manager entry
+      # when deployed on its managed instance group / GKE follow-up.
+      env {
+        name = "AISOC_REALTIME_JWT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.realtime_jwt_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
       env {
         name = "REDIS_PASSWORD"
         value_source {

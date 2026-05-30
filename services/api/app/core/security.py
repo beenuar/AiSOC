@@ -172,6 +172,41 @@ def decode_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
 
+# Audience claim required on every realtime WS/SSE ticket. The Node realtime
+# verifier (``services/realtime/src/index.ts``) checks for this exact value, so
+# a leaked first-party API access token (aud unset) cannot be replayed against
+# the realtime edge and vice-versa.
+REALTIME_TICKET_AUDIENCE = "aisoc-realtime"
+
+
+def create_realtime_ticket(
+    *,
+    secret: str,
+    tenant_id: str,
+    user_id: str,
+    ttl_seconds: int,
+) -> str:
+    """Mint a short-lived HS256 ticket for the realtime WS/SSE edge.
+
+    Signed with the *shared realtime secret* (``AISOC_REALTIME_JWT_SECRET`` or
+    the dev fallback), NOT ``SECRET_KEY``. Carries an ``aud`` claim so it is only
+    valid at the realtime boundary, and an ``exp`` clamped by the caller. The
+    realtime service derives the subscription tenant from ``tenant_id`` here —
+    the browser never gets to choose its own tenant.
+    """
+    now = datetime.now(UTC)
+    expire = now + timedelta(seconds=ttl_seconds)
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "aud": REALTIME_TICKET_AUDIENCE,
+        "iat": now,
+        "exp": expire,
+        "type": "realtime_ticket",
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
 def generate_api_key() -> tuple[str, str, str]:
     """Generate a new scoped API key.
 

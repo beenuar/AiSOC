@@ -64,6 +64,14 @@ resource "azurerm_container_app" "api" {
     identity            = azurerm_user_assigned_identity.api.id
     key_vault_secret_id = azurerm_key_vault_secret.credential_key.id
   }
+  # Shared HS256 secret the API uses to mint realtime WS/SSE tickets (Issue
+  # #239). The Node realtime workload (an always-on Container App / AKS in the
+  # follow-up plan) reads the same Key Vault entry to verify them.
+  secret {
+    name                = "realtime-jwt-secret"
+    identity            = azurerm_user_assigned_identity.api.id
+    key_vault_secret_id = azurerm_key_vault_secret.realtime_jwt_secret.id
+  }
   secret {
     name                = "redis-auth"
     identity            = azurerm_user_assigned_identity.api.id
@@ -157,6 +165,10 @@ resource "azurerm_container_app" "api" {
       env {
         name        = "AISOC_CREDENTIAL_KEY"
         secret_name = "credential-key"
+      }
+      env {
+        name        = "AISOC_REALTIME_JWT_SECRET"
+        secret_name = "realtime-jwt-secret"
       }
       env {
         name        = "REDIS_PASSWORD"

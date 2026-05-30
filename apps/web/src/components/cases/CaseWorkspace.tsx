@@ -25,6 +25,7 @@ import toast from 'react-hot-toast';
 import {
   casesApi,
   graphApi,
+  realtimeApi,
   type AttackChainTimeline,
   type AttackChainWindow,
   type Case,
@@ -363,17 +364,29 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   useEffect(() => () => { stopPolling(); closeWs(); }, [stopPolling, closeWs]);
 
   /** Connect to the realtime service WebSocket for this run_id */
-  const connectWs = useCallback((runId: string, tenantId = 'default') => {
+  const connectWs = useCallback((runId: string) => {
     closeWs();
-    // Determine WS URL: same host, realtime port or proxied
-    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    // The Next.js dev server proxies /ws → realtime service on :8086
-    // In production, nginx handles the proxy.
-    const wsUrl = `${wsProto}://${window.location.host}/ws/agents?tenant_id=${tenantId}`;
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      ws.onmessage = (evt) => {
+    // Mint a short-lived ticket and attach it as `?token=` before opening the
+    // socket (Issue #239). The realtime service rejects tokenless upgrades and
+    // derives the tenant from the verified claim, so we no longer send a
+    // client-chosen `tenant_id`. On failure (signed-out / ticketing not
+    // configured) we silently fall back to the polling loop already running.
+    void (async () => {
+      let token: string;
+      try {
+        ({ token } = await realtimeApi.ticket());
+      } catch {
+        // Could not authenticate — polling fallback covers live updates.
+        return;
+      }
+      const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      // The Next.js dev server proxies /ws → realtime service on :8086.
+      // In production, nginx handles the proxy.
+      const wsUrl = `${wsProto}://${window.location.host}/ws/agents?token=${encodeURIComponent(token)}`;
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data as string) as Record<string, unknown>;
           const msgRunId = msg.run_id as string | undefined;
@@ -416,9 +429,10 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
         ws.close();
         wsRef.current = null;
       };
-    } catch {
-      // WebSocket not available — polling fallback is already running
-    }
+      } catch {
+        // WebSocket not available — polling fallback is already running
+      }
+    })();
   }, [caseId, closeWs]);
 
   const startInvestigation = useCallback(async () => {

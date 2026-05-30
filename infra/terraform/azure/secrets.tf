@@ -30,6 +30,15 @@ resource "random_password" "credential_key" {
   min_numeric = 1
 }
 
+resource "random_password" "realtime_jwt_secret" {
+  # Shared HS256 secret for short-lived realtime WS/SSE tickets (Issue #239).
+  # The API mints tickets at POST /api/v1/realtime/ticket; the Node realtime
+  # service verifies them. Kept separate from secret_key so the realtime edge
+  # rotates independently and a leaked ticket can't forge a full API session.
+  length  = 64
+  special = false
+}
+
 # ─── Key Vault ───────────────────────────────────────────────────────────────
 #
 # RBAC-authorization mode (no access policies). The deploying principal gets
@@ -95,6 +104,15 @@ resource "azurerm_key_vault_secret" "secret_key" {
 resource "azurerm_key_vault_secret" "credential_key" {
   name         = "credential-key"
   value        = base64encode(random_password.credential_key.result)
+  key_vault_id = azurerm_key_vault.main.id
+  tags         = var.tags
+
+  depends_on = [azurerm_role_assignment.deployer_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "realtime_jwt_secret" {
+  name         = "realtime-jwt-secret"
+  value        = random_password.realtime_jwt_secret.result
   key_vault_id = azurerm_key_vault.main.id
   tags         = var.tags
 

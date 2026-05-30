@@ -60,10 +60,30 @@ export function useRealtimeChannel<T = unknown>(
     if (!enabled || typeof window === 'undefined') return;
     cancelRef.current = false;
 
-    function connect() {
+    async function connect() {
       if (cancelRef.current) return;
-      const target = url ?? realtimeApi.channelUrl(channel);
       setStatus('connecting');
+
+      // Mint a fresh short-lived ticket and attach it as `?token=` immediately
+      // before opening the socket (Issue #239). On reconnect this re-mints, so
+      // an expired ticket never blocks recovery. A test-supplied `url` override
+      // bypasses ticketing.
+      let target: string;
+      try {
+        target = url ?? (await realtimeApi.channelUrl(channel));
+      } catch {
+        // Could not authenticate (e.g. signed-out, or realtime ticketing is
+        // not configured server-side → 503). Surface as error and retry with
+        // backoff rather than opening an unauthenticated socket.
+        if (cancelRef.current) return;
+        setStatus('error');
+        const attempt = reconnectRef.current + 1;
+        reconnectRef.current = attempt;
+        const delay = Math.min(1000 * 2 ** Math.min(attempt, 6), maxBackoffMs);
+        window.setTimeout(connect, delay);
+        return;
+      }
+      if (cancelRef.current) return;
 
       const ws = new WebSocket(target);
       wsRef.current = ws;

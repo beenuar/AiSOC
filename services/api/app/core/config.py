@@ -26,6 +26,15 @@ INSECURE_SECRET_KEY_DEFAULTS: frozenset[str] = frozenset(
     }
 )
 
+# Deterministic fallback secret for realtime WS/SSE tickets in development.
+# The API ticket endpoint and the Node realtime verifier BOTH fall back to
+# this literal when ``AISOC_REALTIME_JWT_SECRET`` is unset *and* the
+# environment is development-class, so local docker-compose works without any
+# secret plumbing. It is intentionally well-known and is treated as insecure
+# outside development (see ``realtime_ticket_secret``). The exact same literal
+# is hardcoded in ``services/realtime/src/index.ts`` — keep the two in sync.
+DEV_REALTIME_TICKET_SECRET: Final[str] = "aisoc-dev-realtime-ticket-secret-not-for-production"
+
 # ------------------------------------------------------------------
 # Canonical "dev mode" detection (H-8 + P2-A3).
 #
@@ -344,6 +353,26 @@ class Settings(BaseSettings):
     # tests by passing ``JWT_SECRET=""`` instead of mutating the environment.
     JWT_SECRET: str = ""
 
+    # Shared HS256 secret governing short-lived WebSocket/SSE *tickets*. The
+    # API mints tickets at ``POST /api/v1/realtime/ticket`` (see
+    # ``app/api/v1/endpoints/realtime.py``) and the Node realtime service
+    # (``services/realtime``) verifies them on every WS upgrade and SSE
+    # request. Both sides MUST read the same value. This is intentionally a
+    # *different* secret from ``SECRET_KEY`` (which signs first-party API
+    # access tokens) and ``REALTIME_INTERNAL_TOKEN`` (service-to-service
+    # fan-out auth), so the realtime edge can be rotated independently and a
+    # leaked ticket secret never forges a full API session.
+    #
+    # When empty in a development-class environment, both services fall back
+    # to ``DEV_REALTIME_TICKET_SECRET`` so local docker-compose "just works".
+    # Outside development the ticket endpoint fails closed (503) until a real
+    # secret is wired, and the realtime service rejects every connection.
+    AISOC_REALTIME_JWT_SECRET: str = ""
+    # Time-to-live, in seconds, for minted realtime tickets. Kept short so a
+    # leaked ticket is only briefly useful; the frontend re-mints on every
+    # (re)connect. Clamped to a sane ceiling by the ticket endpoint.
+    AISOC_REALTIME_TICKET_TTL_SECONDS: int = 60
+
     # Relying party identity for WebAuthn / Passkey ceremonies. RP_ID must
     # match the eTLD+1 of the PWA origin (no scheme, no port). RP_NAME is
     # what the OS prompt shows the user.
@@ -601,6 +630,32 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def realtime_ticket_secret(s: Settings | None = None) -> str | None:
+    """Resolve the effective HS256 secret used to sign realtime WS/SSE tickets.
+
+    Returns the secret to sign with, or ``None`` when the deployment is not
+    configured to mint tickets (i.e. the ticket endpoint should fail closed
+    with 503).
+
+    Resolution rules — kept byte-for-byte in sync with the Node verifier in
+    ``services/realtime/src/index.ts``:
+
+    * If ``AISOC_REALTIME_JWT_SECRET`` is set to a non-empty, non-insecure
+      value, use it (any environment).
+    * Otherwise, in a development-class environment, fall back to the shared
+      ``DEV_REALTIME_TICKET_SECRET`` so local stacks work with zero config.
+    * Otherwise (production with the secret unset or set to a known insecure
+      placeholder), return ``None`` — the caller must fail closed.
+    """
+    s = s or settings
+    configured = (s.AISOC_REALTIME_JWT_SECRET or "").strip()
+    if configured and configured not in INSECURE_SECRET_KEY_DEFAULTS:
+        return configured
+    if is_dev_env(s.ENVIRONMENT):
+        return DEV_REALTIME_TICKET_SECRET
+    return None
+
+
 def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     """Emit a structured warning for each insecure default still in place.
 
@@ -650,6 +705,17 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     # warn here so operators don't quietly run with no inter-service auth.
     if not is_dev_env(s.ENVIRONMENT) and not s.REALTIME_INTERNAL_TOKEN:
         msgs.append("REALTIME_INTERNAL_TOKEN is empty in a non-development environment — agent → realtime events are unauthenticated.")
+
+    # Realtime WS/SSE ticket secret. When unset (or set to a well-known
+    # placeholder) outside development the ticket endpoint fails closed (503)
+    # and the realtime service rejects every browser connection, so surface it
+    # loudly at boot rather than letting operators discover it via 503s.
+    if not is_dev_env(s.ENVIRONMENT) and realtime_ticket_secret(s) is None:
+        msgs.append(
+            "AISOC_REALTIME_JWT_SECRET is empty or set to a known insecure placeholder — "
+            "realtime WS/SSE ticket issuance will fail closed (503) and browser realtime "
+            "connections will be rejected until you wire a real secret."
+        )
 
     # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but
     # the LLM is still pointed at a public endpoint (api.openai.com, etc.)

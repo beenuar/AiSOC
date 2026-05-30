@@ -88,3 +88,8 @@ output "key_vault_uri" {
   description = "Vault URI for ad-hoc `az keyvault secret show` after apply."
   value       = azurerm_key_vault.main.vault_uri
 }
+
+output "realtime_jwt_secret_name" {
+  description = "Key Vault secret name for the shared realtime WS/SSE ticket secret (Issue #239). Wire this into the realtime workload (always-on Container App / AKS follow-up) as AISOC_REALTIME_JWT_SECRET so it verifies the same tickets the API mints."
+  value       = azurerm_key_vault_secret.realtime_jwt_secret.name
+}

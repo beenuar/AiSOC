@@ -109,10 +109,16 @@ output "bootstrap_checklist" {
       3. Set the Slack sales-channel webhook used by /v1/waitlist/signup:
            fly secrets set AISOC_WAITLIST_SLACK_WEBHOOK=<your webhook> -a ${fly_app.control_plane.name}
 
-      4. Deploy the AiSOC images:
+      4. Set the shared realtime WS/SSE ticket secret (Issue #239). The API
+         mints short-TTL tickets and the realtime process group verifies them,
+         so both must read the SAME value. Generate one 32-byte secret and set
+         it once — Fly fans it out to every process group in the app:
+           fly secrets set AISOC_REALTIME_JWT_SECRET=$(python -c 'import secrets; print(secrets.token_hex(32))') -a ${fly_app.control_plane.name}
+
+      5. Deploy the AiSOC images:
            fly deploy --app ${fly_app.control_plane.name}
 
-      5. Verify the public URL responds:
+      6. Verify the public URL responds:
            curl -sSf https://${var.app_hostname}/health
 
     The Redis URL is exposed as a `sensitive` output — surface it with

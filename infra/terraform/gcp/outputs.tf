@@ -107,6 +107,11 @@ output "secret_redis_auth_id" {
   value       = google_secret_manager_secret.redis_auth.secret_id
 }
 
+output "secret_realtime_jwt_secret_id" {
+  description = "Secret Manager ID for the shared realtime WS/SSE ticket secret (Issue #239). Wire this into the realtime workload (managed instance group / GKE) as AISOC_REALTIME_JWT_SECRET so it verifies the same tickets the API mints."
+  value       = google_secret_manager_secret.realtime_jwt_secret.secret_id
+}
+
 output "secret_openai_api_key_id" {
   description = "Secret Manager ID for the OpenAI API key (null when not provisioned)."
   value = nonsensitive(

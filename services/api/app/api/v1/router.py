@@ -59,6 +59,7 @@ from app.api.v1.endpoints import (
     posture,
     push,
     rbac,
+    realtime,
     remediation,
     reports,
     rule_tuning,
@@ -285,3 +286,11 @@ api_router.include_router(tenant_provision.router)
 # broadcaster (AISOC_INGEST_GRAPH_WS_URL). Backs the RealtimeGraph
 # Cytoscape view; gates on graph:read.
 api_router.include_router(graph_ws.router)
+
+# Short-lived realtime WS/SSE ticket minting — Issue #239.
+# POST /realtime/ticket authenticates the browser's session token and mints a
+# short-TTL (≤60s), audience-scoped HS256 ticket signed with the shared
+# AISOC_REALTIME_JWT_SECRET. The Node realtime service verifies it on every WS
+# upgrade and SSE request, deriving the tenant from the verified claim so the
+# fan-out edge is no longer unauthenticated.
+api_router.include_router(realtime.router)

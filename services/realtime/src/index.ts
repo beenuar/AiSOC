@@ -8,6 +8,7 @@ import pino from 'pino';
 import rateLimit from 'express-rate-limit';
 
 import { PushManager } from './push';
+import { resolveTicketSecret, verifyRealtimeTicket } from './auth';
 
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -83,6 +84,37 @@ log.info(
   { origins: CORS_ORIGINS, allowCredentials: CORS_ALLOW_CREDENTIALS },
   'CORS configured',
 );
+
+// --- Realtime ticket auth (Issue #239) -------------------------------------
+// Resolve the shared HS256 secret used to verify the short-lived tickets the
+// API mints at POST /api/v1/realtime/ticket. `null` means we are NOT configured
+// to verify (production with AISOC_REALTIME_JWT_SECRET unset/insecure) — in that
+// case every WS upgrade and SSE request is rejected (fail closed) rather than
+// silently accepting unauthenticated subscribers (the bug Issue #239 closes).
+const REALTIME_TICKET_SECRET = resolveTicketSecret();
+if (REALTIME_TICKET_SECRET === null) {
+  log.error(
+    'AISOC_REALTIME_JWT_SECRET is unset or insecure in a production environment — ' +
+      'realtime WS/SSE connections will be rejected until a real secret is wired.',
+  );
+} else if (
+  REALTIME_TICKET_SECRET === 'aisoc-dev-realtime-ticket-secret-not-for-production'
+) {
+  log.warn('Using the shared development realtime ticket secret — do NOT use in production.');
+}
+
+/**
+ * Verify the `?token=` ticket on a realtime request URL. Returns the verified
+ * tenant_id, or `null` if the request must be rejected. Centralises the
+ * fail-closed decision for both the WS upgrade and the SSE handler.
+ */
+function authenticateRealtime(url: URL): string | null {
+  if (REALTIME_TICKET_SECRET === null) return null;
+  const token = url.searchParams.get('token') || '';
+  const claims = verifyRealtimeTicket(token, REALTIME_TICKET_SECRET);
+  if (!claims) return null;
+  return claims.tenant_id;
+}
 
 const pushManager = new PushManager({
   redis: PUSH_REDIS,
@@ -164,8 +196,20 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
+  // Authenticate the connection from the short-lived ticket BEFORE completing
+  // the upgrade. Reject (401 + close) when the ticket is missing/invalid or the
+  // service is not configured to verify — never accept an anonymous subscriber.
+  const verifiedTenant = authenticateRealtime(url);
+  if (verifiedTenant === null) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
   wss.handleUpgrade(req, socket, head, (ws) => {
     (ws as any)._aisocChannel = requested;
+    // Tenant is derived from the verified ticket claim, NOT the URL query, so a
+    // client can never subscribe to another tenant's fan-out.
+    (ws as any)._aisocTenant = verifiedTenant;
     wss.emit('connection', ws, req);
   });
 });
@@ -198,8 +242,9 @@ wss.on('connection', (ws, req) => {
     ws.close(1008, 'Rate limit exceeded');
     return;
   }
-  const url = new URL(req.url || '/', `http://localhost`);
-  const tenantId = url.searchParams.get('tenant_id') || 'default';
+  // Tenant comes from the verified ticket claim stashed during the upgrade
+  // (see server.on('upgrade')), never from a client-supplied query parameter.
+  const tenantId = (ws as any)._aisocTenant || 'default';
   const channel: Channel = (ws as any)._aisocChannel ?? 'all';
 
   if (!clients.has(tenantId)) {
@@ -314,7 +359,15 @@ const internalPushRateLimit = rateLimit({
 
 // --- SSE endpoint ---
 app.get('/sse', sseRateLimit, (req, res) => {
-  const tenantId = (req.query.tenant_id as string) || 'default';
+  // Authenticate from the short-lived ticket and derive the tenant from the
+  // verified claim. Reject (401) when the ticket is missing/invalid or the
+  // service is not configured to verify — SSE is no longer an open stream.
+  const reqUrl = new URL(req.originalUrl, 'http://localhost');
+  const tenantId = authenticateRealtime(reqUrl);
+  if (tenantId === null) {
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -322,10 +375,11 @@ app.get('/sse', sseRateLimit, (req, res) => {
   // CORS headers for SSE are emitted by the `cors()` middleware on lines
   // ~118–143 above, which the `cors` npm package implements safely (CodeQL
   // recognises `cors({ origin: <function> })` as a sanitiser). SSE auth is
-  // done via the `tenant_id` query parameter, not via a session cookie,
-  // so we deliberately do not enable `Access-Control-Allow-Credentials`
-  // on this endpoint — that eliminates the entire "CORS misconfiguration
-  // for credentials transfer" attack surface that CodeQL warns about.
+  // done via the short-lived `?token=` ticket verified above (Issue #239),
+  // not via a session cookie, so we deliberately do not enable
+  // `Access-Control-Allow-Credentials` on this endpoint — that eliminates
+  // the entire "CORS misconfiguration for credentials transfer" attack
+  // surface that CodeQL warns about.
   res.flushHeaders();
 
   const heartbeat = setInterval(() => {

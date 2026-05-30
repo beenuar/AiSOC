@@ -78,6 +78,7 @@ locals {
       google_secret_manager_secret.postgres_password.id,
       google_secret_manager_secret.secret_key.id,
       google_secret_manager_secret.credential_key.id,
+      google_secret_manager_secret.realtime_jwt_secret.id,
       google_secret_manager_secret.redis_auth.id,
     ],
     google_secret_manager_secret.openai_api_key[*].id,

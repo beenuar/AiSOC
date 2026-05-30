@@ -29,6 +29,16 @@ resource "random_password" "credential_key" {
   min_numeric = 1
 }
 
+resource "random_password" "realtime_jwt_secret" {
+  # Shared HS256 secret for short-lived realtime WS/SSE tickets (Issue #239).
+  # The API mints tickets at POST /api/v1/realtime/ticket; the Node realtime
+  # service verifies them on every upgrade. Kept separate from secret_key so the
+  # realtime edge rotates independently and a leaked ticket can't forge a full
+  # API session.
+  length  = 64
+  special = false
+}
+
 # ─── Secret Manager secrets ──────────────────────────────────────────────────
 
 resource "google_secret_manager_secret" "postgres_password" {
@@ -77,6 +87,22 @@ resource "google_secret_manager_secret" "credential_key" {
 resource "google_secret_manager_secret_version" "credential_key" {
   secret      = google_secret_manager_secret.credential_key.id
   secret_data = base64encode(random_password.credential_key.result)
+}
+
+resource "google_secret_manager_secret" "realtime_jwt_secret" {
+  secret_id = "${var.name_prefix}-realtime-jwt-secret"
+  labels    = var.labels
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "realtime_jwt_secret" {
+  secret      = google_secret_manager_secret.realtime_jwt_secret.id
+  secret_data = random_password.realtime_jwt_secret.result
 }
 
 resource "google_secret_manager_secret" "redis_auth" {

@@ -5115,10 +5115,46 @@ export const savedViewsApi = {
 
 // ─── Realtime / WebSocket helpers ────────────────────────────────────────────
 
+export interface RealtimeTicket {
+  token: string;
+  expires_in: number;
+  tenant_id: string;
+}
+
 export const realtimeApi = {
-  /** Returns a ready-to-open WebSocket URL for the given channel. */
-  channelUrl(channel: 'alerts' | 'cases' | 'agents' | 'insights' | 'all') {
-    return `${wsOrigin()}/ws/${channel}?tenant_id=${encodeURIComponent(TENANT_ID)}`;
+  /**
+   * Mint a short-lived (≤60s), audience-scoped HS256 ticket for the realtime
+   * WS/SSE edge (Issue #239). This authenticated call uses the caller's session
+   * Bearer token (attached automatically by `request`); the API derives the
+   * tenant server-side, so the browser never chooses its own tenant. The
+   * returned `token` is appended as `?token=` to the WS/SSE URL immediately
+   * before connecting and re-fetched on every (re)connect since it expires fast.
+   */
+  ticket: () =>
+    request<RealtimeTicket>('/api/v1/realtime/ticket', { method: 'POST' }),
+
+  /**
+   * Returns a ready-to-open WebSocket URL for the given channel, with a freshly
+   * minted ticket attached as `?token=`. Async because it must authenticate
+   * (mint a ticket) first — the realtime service rejects tokenless upgrades.
+   * The tenant is derived from the verified ticket claim server-side, so we no
+   * longer pass (untrusted) `tenant_id` in the query string.
+   */
+  async channelUrl(
+    channel: 'alerts' | 'cases' | 'agents' | 'insights' | 'all',
+  ): Promise<string> {
+    const { token } = await realtimeApi.ticket();
+    return `${wsOrigin()}/ws/${channel}?token=${encodeURIComponent(token)}`;
+  },
+
+  /**
+   * Returns a ready-to-open SSE URL with a freshly minted ticket attached as
+   * `?token=`. Mirrors `channelUrl` for the EventSource transport.
+   */
+  async sseUrl(): Promise<string> {
+    const { token } = await realtimeApi.ticket();
+    const base = REALTIME_BASE || '';
+    return `${base}/sse?token=${encodeURIComponent(token)}`;
   },
 
   /**
