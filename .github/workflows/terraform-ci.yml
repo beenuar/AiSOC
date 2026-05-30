@@ -1,0 +1,48 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-ci.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "infra/terraform/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt-check:
+    name: Terraform fmt -check (whole tree)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+
+  validate:
+    name: Terraform validate — ${{ matrix.dir }}
+    runs-on: ubuntu-latest
+    needs: fmt-check
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [byoc, gcp, azure]
+    defaults:
+      run:
+        working-directory: infra/terraform/${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15"
+          terraform_wrapper: false
+      - run: terraform init -backend=false
+      - run: terraform validate
