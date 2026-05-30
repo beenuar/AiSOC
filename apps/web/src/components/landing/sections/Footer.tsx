@@ -15,6 +15,7 @@
 import type { ReactElement, SVGProps } from 'react';
 import Link from 'next/link';
 import { GithubMark } from './icons';
+import { docs } from '@/lib/docs';
 
 interface LinkSpec {
   label: string;
@@ -41,8 +42,8 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
   {
     heading: 'Resources',
     links: [
-      { label: 'Docs', href: 'https://github.com/beenuar/AiSOC#readme' },
-      { label: 'Architecture', href: 'https://github.com/beenuar/AiSOC#readme' },
+      { label: 'Docs', href: docs('intro') },
+      { label: 'Architecture', href: docs('architecture') },
       { label: 'Benchmark', href: '/benchmark' },
       { label: 'Blog', href: '/blog' },
       { label: 'Changelog', href: '/changelog' },

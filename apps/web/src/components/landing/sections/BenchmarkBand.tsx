@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, ExternalLink, GitCompare } from 'lucide-react';
 import { NumberTicker } from '@/components/magicui/NumberTicker';
+import { docs } from '@/lib/docs';
 
 interface Metric {
   /**
@@ -135,7 +136,7 @@ export function BenchmarkBand() {
             />
           </Link>
           <Link
-            href="https://github.com/beenuar/AiSOC#readme"
+            href={docs('benchmark')}
             className="inline-flex items-center gap-1 text-sm font-medium text-velvet-content-tertiary transition-colors duration-200 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Open the public scoreboard

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import packageJson from '../../../package.json';
+import { docs } from '@/lib/docs';
 import { Logo } from './Logo';
 
 const APP_VERSION = packageJson.version;
@@ -22,7 +23,7 @@ const COLUMNS = [
     links: [
       { label: 'Why open source', href: '/why-open-source' },
       { label: 'GitHub', href: 'https://github.com/beenuar/AiSOC' },
-      { label: 'Quickstart', href: 'https://github.com/beenuar/AiSOC#quickstart' },
+      { label: 'Quickstart', href: docs('quickstart') },
       { label: 'Roadmap', href: 'https://github.com/beenuar/AiSOC/blob/main/ROADMAP.md' },
       { label: 'Changelog', href: 'https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md' },
     ],
@@ -32,7 +33,7 @@ const COLUMNS = [
     links: [
       { label: 'Issues', href: 'https://github.com/beenuar/AiSOC/issues' },
       { label: 'Discussions', href: 'https://github.com/beenuar/AiSOC/discussions' },
-      { label: 'Contributing', href: 'https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md' },
+      { label: 'Contributing', href: docs('contributing/guidelines') },
       { label: 'Code of conduct', href: 'https://github.com/beenuar/AiSOC/blob/main/CODE_OF_CONDUCT.md' },
     ],
   },

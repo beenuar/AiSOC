@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { Footer } from '@/components/landing/Footer';
+import { docs } from '@/lib/docs';
 
 export const metadata: Metadata = {
   // Use `absolute` so the root layout's `template: '%s | AiSOC'` doesn't
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 const PILLARS = [
   {
     label: 'Investigation Ledger',
-    href: 'https://github.com/beenuar/AiSOC#investigation-ledger',
+    href: docs('architecture/itsm-as-source-of-truth'),
     body: 'Every prompt, tool call, evidence citation, and decision the agent emits is written to a durable, queryable, replayable ledger. The ledger stores the literal LLM input and output, not a summary.',
   },
   {

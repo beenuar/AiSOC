@@ -5,6 +5,7 @@ import './globals.css';
 import { PwaBootstrap } from '@/components/pwa/PwaBootstrap';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { themeBootstrapScript } from '@/components/theme/themeScript';
+import { docs } from '@/lib/docs';
 import { DISCOVERY_KEYWORDS, getPublicSiteUrl } from '@/lib/site';
 
 const inter = Inter({
@@ -125,7 +126,7 @@ const jsonLd = {
       },
       url: siteUrl,
       downloadUrl: 'https://github.com/beenuar/AiSOC',
-      installUrl: 'https://github.com/beenuar/AiSOC#quick-start',
+      installUrl: docs('quickstart'),
       releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
       featureList: [
         'Click-and-connect 26 security sources (EDR, SIEM, cloud, IAM, SaaS) with encrypted credential vault',

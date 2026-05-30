@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { docs } from '@/lib/docs';
 
 const PILLARS = [
   {
@@ -63,7 +64,7 @@ export function OpenSource() {
                   github.com/beenuar/AiSOC
                 </a>
                 <a
-                  href="https://github.com/beenuar/AiSOC#quickstart"
+                  href={docs('quickstart')}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg border border-velvet-content-primary/15 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-gray-200 transition hover:border-velvet-content-primary/30 hover:bg-white/[0.08]"

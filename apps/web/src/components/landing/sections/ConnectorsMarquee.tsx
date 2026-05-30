@@ -19,6 +19,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Marquee } from '@/components/magicui/Marquee';
+import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 
 interface ConnectorPill {
@@ -203,7 +204,7 @@ export function ConnectorsMarquee() {
                 TypeScript, and Go.
               </p>
               <Link
-                href="https://github.com/beenuar/AiSOC#readme"
+                href={docs('contributing/guidelines')}
                 className="group mt-5 inline-flex items-center gap-1 text-sm font-semibold text-velvet-emerald-mint transition-colors duration-200 hover:text-velvet-emerald-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
               >
                 Read the connector SDK

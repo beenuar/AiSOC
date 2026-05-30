@@ -22,6 +22,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, GitGraph, ScrollText, Sparkles, Boxes } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
 import { GlowingEffect } from '@/components/aceternity/GlowingEffect';
+import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 
 interface Pillar {
@@ -55,7 +56,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
       'The entity graph is written while events are normalised, not when an analyst clicks "show graph." Schema v1.0 is published.',
     stat: '17 + 14',
     statLabel: 'node labels · relationships',
-    href: 'https://github.com/beenuar/AiSOC#readme',
+    href: docs('architecture/graph-schema'),
     linkLabel: 'Read the graph schema',
   },
   {
@@ -66,7 +67,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
       'Four named agents. Every prompt, tool call, and decision is logged, the LLM-input contract fails closed on malformed prompts, and a CI-gated CVE audit blocks every merge.',
     stat: '4 / 100%',
     statLabel: 'agents · audited',
-    href: 'https://github.com/beenuar/AiSOC#readme',
+    href: docs('architecture/agents'),
     linkLabel: 'Read the agent contract',
   },
   {
@@ -77,7 +78,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
       'Render, Fly.io, Kubernetes, AWS, your air-gapped rack — same code path. BYOK LLM credentials in the encrypted vault.',
     stat: '6 + 1',
     statLabel: 'deploy targets · air-gap overlay',
-    href: 'https://github.com/beenuar/AiSOC#readme',
+    href: docs('deployment/docker'),
     linkLabel: 'Read the deployment guide',
   },
 ];

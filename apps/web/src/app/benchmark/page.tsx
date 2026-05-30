@@ -9,6 +9,7 @@ import {
 import { ComparisonTable } from '@/components/benchmark/ComparisonTable';
 import { KpiBar } from '@/components/benchmark/KpiBar';
 import { CommunitySubmissions } from '@/components/benchmark/CommunitySubmissions';
+import { docs } from '@/lib/docs';
 
 export const metadata: Metadata = {
   title: 'Public benchmark scoreboard',
@@ -169,7 +170,7 @@ export default async function BenchmarkPage() {
             append-only weekly history (substrate and wet-eval rows side-by-side
             with a MITRE-accuracy trend chart), see the{' '}
             <a
-              href="https://github.com/beenuar/AiSOC#readme"
+              href={docs('benchmark')}
               target="_blank"
               rel="noreferrer"
               className="underline decoration-dotted hover:text-gray-300"
@@ -414,7 +415,7 @@ export default async function BenchmarkPage() {
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
-              href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md"
+              href={docs('contributing/guidelines')}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"

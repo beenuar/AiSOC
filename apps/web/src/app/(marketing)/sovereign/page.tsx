@@ -395,7 +395,7 @@ export default function SovereignPage() {
             <RepoArtefact
               label="Investigation ledger"
               path="services/agents/app/ledger/"
-              href="https://github.com/beenuar/AiSOC#investigation-ledger"
+              href="https://github.com/beenuar/AiSOC/tree/main/services/agents/app/ledger"
               body="Every prompt, tool call, evidence row, and decision the agent makes — durable and replayable. The auditor reads the events directly, not a vendor summary."
             />
             <RepoArtefact

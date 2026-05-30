@@ -13,6 +13,7 @@
  */
 
 import { isDemoMode, demoBannerMessage } from '@/lib/demoMode';
+import { docs } from '@/lib/docs';
 
 export function DemoBanner() {
   if (!isDemoMode()) return null;
@@ -36,7 +37,7 @@ export function DemoBanner() {
         |
       </span>
       <a
-        href="https://github.com/beenuar/AiSOC#quickstart"
+        href={docs('quickstart')}
         target="_blank"
         rel="noopener noreferrer"
         className="underline underline-offset-2 hover:text-amber-100 transition-colors"

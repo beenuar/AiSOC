@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowRight, Menu, X } from 'lucide-react';
 import { GithubMark } from './icons';
+import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 
 const NAV_LINKS: ReadonlyArray<{ label: string; href: string }> = [
@@ -27,7 +28,7 @@ const NAV_LINKS: ReadonlyArray<{ label: string; href: string }> = [
   { label: 'Connectors', href: '#connectors' },
   { label: 'Benchmark', href: '#benchmark' },
   { label: 'Pricing', href: '#pricing' },
-  { label: 'Docs', href: 'https://github.com/beenuar/AiSOC#readme' },
+  { label: 'Docs', href: docs('intro') },
 ];
 
 export function StickyNav() {

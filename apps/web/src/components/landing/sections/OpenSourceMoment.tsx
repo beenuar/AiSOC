@@ -20,10 +20,11 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, GitBranch, Star, Terminal } from 'lucide-react';
 import { BorderBeam } from '@/components/magicui/BorderBeam';
+import { docs } from '@/lib/docs';
 import { GithubMark } from './icons';
 
 const REPO_URL = 'https://github.com/beenuar/AiSOC';
-const CONTRIBUTING_URL = 'https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md';
+const CONTRIBUTING_URL = docs('contributing/guidelines');
 const SNIPPET = `git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC
 pnpm aisoc:demo`;

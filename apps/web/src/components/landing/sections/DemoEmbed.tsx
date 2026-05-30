@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Clock, Cpu, Database } from 'lucide-react';
 import { BorderBeam } from '@/components/magicui/BorderBeam';
+import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 
 interface LedgerStep {
@@ -278,7 +279,7 @@ export function DemoEmbed() {
 
         <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center justify-center gap-3 text-center sm:flex-row sm:gap-5">
           <Link
-            href="https://github.com/beenuar/AiSOC#5-minute-demo"
+            href={docs('quickstart')}
             className="group inline-flex h-11 items-center gap-2 rounded-md bg-velvet-emerald-cta px-6 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-shadow duration-200 ease-landing-out-quart motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Run this yourself in 5 minutes
@@ -288,7 +289,7 @@ export function DemoEmbed() {
             />
           </Link>
           <Link
-            href="https://github.com/beenuar/AiSOC#readme"
+            href={docs('architecture')}
             className="inline-flex items-center gap-1 text-sm font-medium text-velvet-content-tertiary transition-colors duration-200 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
             Read the architecture

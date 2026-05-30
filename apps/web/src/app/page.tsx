@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import dynamic from 'next/dynamic';
+import { docs } from '@/lib/docs';
 import { getPublicSiteUrl } from '@/lib/site';
 import { velvetFontVariables } from '@/lib/marketing-fonts';
 import { StickyNav } from '@/components/landing/sections/StickyNav';
@@ -116,7 +117,7 @@ const productJsonLd = {
   license: 'https://opensource.org/licenses/MIT',
   url: siteUrl,
   downloadUrl: 'https://github.com/beenuar/AiSOC',
-  installUrl: 'https://github.com/beenuar/AiSOC#quick-start',
+  installUrl: docs('quickstart'),
   releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
   description:
     'AiSOC is an MIT-licensed agentic Security Operations Center: four specialised agents (Detect, Triage, Hunt, Respond), 69 first-party connectors, a public 200-incident benchmark, and air-gap deploy on a single environment flag.',
