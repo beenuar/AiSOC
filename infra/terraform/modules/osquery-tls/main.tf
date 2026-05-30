@@ -34,8 +34,8 @@ resource "kubernetes_secret" "osquery_tls" {
   }
 
   data = {
-    enroll-secret  = var.enroll_secret
-    database-url   = var.database_url
+    enroll-secret   = var.enroll_secret
+    database-url    = var.database_url
     ingest-base-url = var.ingest_base_url
   }
 }

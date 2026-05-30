@@ -52,7 +52,7 @@ variable "redis_node_type" {
 }
 
 variable "tags" {
-  type    = map(string)
+  type = map(string)
   default = {
     Project     = "AiSOC"
     Environment = "byoc"
