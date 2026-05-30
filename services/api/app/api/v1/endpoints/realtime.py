@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import CurrentUser, get_current_user
-from app.core.config import settings, realtime_ticket_secret
+from app.core.config import realtime_ticket_secret, settings
 from app.core.security import create_realtime_ticket
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
@@ -63,10 +63,7 @@ async def mint_realtime_ticket(
         # than mint a ticket the realtime verifier will reject anyway.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "Realtime ticket signing is not configured. Set AISOC_REALTIME_JWT_SECRET "
-                "to enable WS/SSE connections."
-            ),
+            detail=("Realtime ticket signing is not configured. Set AISOC_REALTIME_JWT_SECRET " "to enable WS/SSE connections."),
         )
 
     ttl = max(1, min(settings.AISOC_REALTIME_TICKET_TTL_SECONDS, _MAX_TICKET_TTL_SECONDS))

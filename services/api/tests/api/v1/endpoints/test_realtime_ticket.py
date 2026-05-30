@@ -30,8 +30,7 @@ import uuid
 import pytest
 from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints import realtime as realtime_ep
-from app.core.config import DEV_REALTIME_TICKET_SECRET, Settings, warn_if_insecure_defaults
-from app.core.config import realtime_ticket_secret
+from app.core.config import DEV_REALTIME_TICKET_SECRET, Settings, realtime_ticket_secret, warn_if_insecure_defaults
 from app.core.security import REALTIME_TICKET_AUDIENCE
 from fastapi import HTTPException
 from jose import jwt
@@ -200,8 +199,6 @@ def test_endpoint_requires_authentication():
     """
     from app.api.v1.deps import get_current_user
 
-    route = next(
-        r for r in realtime_ep.router.routes if getattr(r, "path", None) == "/realtime/ticket"
-    )
+    route = next(r for r in realtime_ep.router.routes if getattr(r, "path", None) == "/realtime/ticket")
     dep_calls = [d.call for d in route.dependant.dependencies]
     assert get_current_user in dep_calls
