@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.4.0] — 2026-05-29
+
+Security-hardening and platform release. Folds in the May 27–29 hardening wave,
+multi-agent routing, and multi-cloud infrastructure skeletons that landed on
+`main` since v7.3.1.
+
+### Highlights
+
+- **Security hardening.** Prompt-injection sanitizer wired into the
+  classification agents (PR [#219](https://github.com/beenuar/AiSOC/pull/219));
+  cross-tenant isolation enforced on the detection-loop suggestion lookups
+  (PR [#221](https://github.com/beenuar/AiSOC/pull/221)) and on the compliance,
+  phishing, and knowledge-base endpoints
+  (PR [#236](https://github.com/beenuar/AiSOC/pull/236)); nightly cross-tenant
+  RBAC regression gate (PR [#197](https://github.com/beenuar/AiSOC/pull/197));
+  cryptography CVEs cleared and unfixable advisories time-boxed
+  (PR [#229](https://github.com/beenuar/AiSOC/pull/229)); CodeQL quality notes
+  resolved (PR [#224](https://github.com/beenuar/AiSOC/pull/224)).
+- **Multi-agent routing.** `DetectAgent.process` wired to the `FusionEngine`
+  over cross-service HTTP (PR [#198](https://github.com/beenuar/AiSOC/pull/198));
+  `/investigate` swapped to the `RouterOrchestrator` behind the
+  `ROUTER_INVESTIGATE` flag (PR [#196](https://github.com/beenuar/AiSOC/pull/196));
+  Redis-backed scheduler singleton guard for in-process workers
+  (PR [#218](https://github.com/beenuar/AiSOC/pull/218)).
+- **Multi-cloud infrastructure.** Serverless-container Terraform skeletons for
+  GCP (Cloud Run + Cloud SQL + Memorystore) and Azure (Container Apps +
+  PostgreSQL Flexible Server + Cache for Redis), mirroring the AWS/EKS reference
+  file-for-file (PR [#240](https://github.com/beenuar/AiSOC/pull/240)).
+- **Live dashboard & landing.** Real `/metrics` data restored on
+  `tryaisoc.com/dashboard` (PR [#192](https://github.com/beenuar/AiSOC/pull/192));
+  API/agents machines kept warm so the dashboard no longer 500s
+  (PR [#234](https://github.com/beenuar/AiSOC/pull/234)); seed timestamps
+  re-anchored so the live dashboard never goes empty
+  (PR [#235](https://github.com/beenuar/AiSOC/pull/235)); landing CTAs pointed at
+  the live dashboard (PR [#233](https://github.com/beenuar/AiSOC/pull/233)).
+- **Dependency & CI maintenance.** ~40 Dependabot upgrades across the Python,
+  JS, and Go services plus CI stabilization (Ruff cleanup, OpenAPI export
+  permissions, pnpm-lock dedupe).
+
 ### Bump `@vitejs/plugin-react` 4.7.0 → 6.0.2 in `apps/web`
 
 Dev-only dependency upgrade (PR [#178](https://github.com/beenuar/AiSOC/pull/178)).
