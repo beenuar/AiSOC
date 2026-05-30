@@ -73,13 +73,15 @@ resource "google_project_iam_member" "runtime_shared" {
 # bundle that talks to the API over HTTP — it doesn't need DB or vault keys.
 
 locals {
-  api_secrets = compact([
-    google_secret_manager_secret.postgres_password.id,
-    google_secret_manager_secret.secret_key.id,
-    google_secret_manager_secret.credential_key.id,
-    google_secret_manager_secret.redis_auth.id,
-    var.openai_api_key == "" ? "" : google_secret_manager_secret.openai_api_key[0].id,
-  ])
+  api_secrets = concat(
+    [
+      google_secret_manager_secret.postgres_password.id,
+      google_secret_manager_secret.secret_key.id,
+      google_secret_manager_secret.credential_key.id,
+      google_secret_manager_secret.redis_auth.id,
+    ],
+    google_secret_manager_secret.openai_api_key[*].id,
+  )
 
   ingest_secrets = [
     google_secret_manager_secret.postgres_password.id,

@@ -109,5 +109,9 @@ output "secret_redis_auth_id" {
 
 output "secret_openai_api_key_id" {
   description = "Secret Manager ID for the OpenAI API key (null when not provisioned)."
-  value       = var.openai_api_key == "" ? null : google_secret_manager_secret.openai_api_key[0].secret_id
+  value = nonsensitive(
+    length(google_secret_manager_secret.openai_api_key) == 0
+    ? null
+    : google_secret_manager_secret.openai_api_key[0].secret_id
+  )
 }
