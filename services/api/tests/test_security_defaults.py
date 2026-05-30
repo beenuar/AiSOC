@@ -39,6 +39,11 @@ def _make_settings(**overrides) -> Settings:
         # Bearer token the agents service uses to push events into realtime.
         # Empty in prod means the channel is unauthenticated, which warns.
         "REALTIME_INTERNAL_TOKEN": "c" * 64,
+        # Shared HS256 secret the API uses to mint WS/SSE tickets and the
+        # realtime service uses to verify them (issue #239). Empty/placeholder
+        # values fail closed (503) in prod, so the "clean prod" baseline must
+        # set a real value.
+        "AISOC_REALTIME_JWT_SECRET": "d" * 64,
     }
     base.update(overrides)
     # ``_env_file=None`` skips .env discovery so test runs are deterministic
@@ -140,6 +145,20 @@ def test_empty_realtime_token_in_dev_does_not_warn():
     s = _make_settings(ENVIRONMENT="development", REALTIME_INTERNAL_TOKEN="")
     msgs = warn_if_insecure_defaults(s)
     assert not any("REALTIME_INTERNAL_TOKEN" in m for m in msgs)
+
+
+def test_empty_realtime_jwt_secret_in_prod_warns():
+    """WS/SSE ticket signing must use a real shared secret in prod (#239)."""
+    s = _make_settings(AISOC_REALTIME_JWT_SECRET="")
+    msgs = warn_if_insecure_defaults(s)
+    assert any("AISOC_REALTIME_JWT_SECRET" in m for m in msgs)
+
+
+def test_empty_realtime_jwt_secret_in_dev_does_not_warn():
+    """Dev falls back to a hardcoded ticket secret, so silence is intentional."""
+    s = _make_settings(ENVIRONMENT="development", AISOC_REALTIME_JWT_SECRET="")
+    msgs = warn_if_insecure_defaults(s)
+    assert not any("AISOC_REALTIME_JWT_SECRET" in m for m in msgs)
 
 
 # ─── /metrics auth gate ────────────────────────────────────────────────────
