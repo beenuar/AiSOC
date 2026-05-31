@@ -69,12 +69,12 @@ locals {
 module "vpc" {
   source = "./modules/vpc"
 
-  name_prefix         = local.name_prefix
-  vpc_cidr            = var.vpc_cidr
-  availability_zones  = local.azs
-  public_subnets_cidr = var.public_subnets_cidr
+  name_prefix          = local.name_prefix
+  vpc_cidr             = var.vpc_cidr
+  availability_zones   = local.azs
+  public_subnets_cidr  = var.public_subnets_cidr
   private_subnets_cidr = var.private_subnets_cidr
-  db_subnets_cidr     = var.db_subnets_cidr
+  db_subnets_cidr      = var.db_subnets_cidr
 }
 
 module "eks" {
@@ -124,11 +124,11 @@ module "rds" {
 module "elasticache" {
   source = "./modules/elasticache"
 
-  name_prefix   = local.name_prefix
-  vpc_id        = module.vpc.vpc_id
-  subnet_ids    = module.vpc.private_subnet_ids
-  node_type     = var.redis_node_type
-  num_shards    = 2
+  name_prefix        = local.name_prefix
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.private_subnet_ids
+  node_type          = var.redis_node_type
+  num_shards         = 2
   replicas_per_shard = 1
 
   allowed_security_groups = [module.eks.node_security_group_id]
@@ -137,11 +137,11 @@ module "elasticache" {
 module "kafka" {
   source = "./modules/kafka"
 
-  name_prefix    = local.name_prefix
-  vpc_id         = module.vpc.vpc_id
-  subnet_ids     = module.vpc.private_subnet_ids
-  instance_type  = var.kafka_instance_type
-  broker_count   = 3
+  name_prefix   = local.name_prefix
+  vpc_id        = module.vpc.vpc_id
+  subnet_ids    = module.vpc.private_subnet_ids
+  instance_type = var.kafka_instance_type
+  broker_count  = 3
 
   allowed_security_groups = [module.eks.node_security_group_id]
 }

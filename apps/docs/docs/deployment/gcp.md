@@ -170,5 +170,7 @@ terraform destroy
 - [`infra/terraform/gcp/README.md`](https://github.com/beenuar/AiSOC/blob/main/infra/terraform/gcp/README.md) — operator runbook
 - [Environment variables reference](./env-vars) — what each Cloud Run service
   consumes
+- [Azure skeleton](./azure) — equivalent skeleton on Azure (Container Apps +
+  Postgres Flexible Server + Cache for Redis)
 - [AWS BYOC module](https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc)
   — equivalent skeleton for AWS (EKS + RDS + ElastiCache)

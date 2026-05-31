@@ -181,7 +181,7 @@ resource "cloudflare_record" "app" {
   type    = "CNAME"
   content = "${fly_app.control_plane.name}.fly.dev"
   proxied = true
-  ttl     = 1  # ttl=1 means "automatic" when proxied=true
+  ttl     = 1 # ttl=1 means "automatic" when proxied=true
   comment = "Managed by AiSOC managed-instance Terraform (T6.1)"
 }
 

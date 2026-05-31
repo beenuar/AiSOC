@@ -149,6 +149,7 @@ const sidebars: SidebarsConfig = {
         "deployment/docker",
         "deployment/kubernetes",
         "deployment/gcp",
+        "deployment/azure",
         "deployment/env-vars",
       ],
     },

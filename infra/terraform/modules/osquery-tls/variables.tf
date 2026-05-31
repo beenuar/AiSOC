@@ -73,10 +73,10 @@ variable "resources" {
 variable "autoscaling" {
   description = "Horizontal Pod Autoscaler settings"
   type = object({
-    enabled                  = bool
-    min_replicas             = number
-    max_replicas             = number
-    target_cpu_utilization   = number
+    enabled                = bool
+    min_replicas           = number
+    max_replicas           = number
+    target_cpu_utilization = number
   })
   default = {
     enabled                = true

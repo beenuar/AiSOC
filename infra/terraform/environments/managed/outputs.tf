@@ -97,7 +97,7 @@ output "cloudflare_record_id" {
 
 output "bootstrap_checklist" {
   description = "Operator checklist printed after a successful apply."
-  value = <<-EOT
+  value       = <<-EOT
     AiSOC managed instance provisioned. Next steps:
 
       1. Attach Postgres to the control plane:

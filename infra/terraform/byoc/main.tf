@@ -54,9 +54,9 @@ module "eks" {
 
   eks_managed_node_groups = {
     default = {
-      min_size     = 2
-      max_size     = 6
-      desired_size = 3
+      min_size       = 2
+      max_size       = 6
+      desired_size   = 3
       instance_types = ["m6i.large"]
     }
   }
@@ -71,13 +71,13 @@ resource "aws_db_subnet_group" "db" {
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier             = "${var.cluster_name}-postgres"
-  engine                 = "postgres"
-  engine_version         = "16.2"
-  instance_class         = var.db_instance_class
-  allocated_storage      = 100
-  storage_encrypted      = true
-  multi_az               = true
+  identifier        = "${var.cluster_name}-postgres"
+  engine            = "postgres"
+  engine_version    = "16.2"
+  instance_class    = var.db_instance_class
+  allocated_storage = 100
+  storage_encrypted = true
+  multi_az          = true
 
   db_subnet_group_name   = aws_db_subnet_group.db.name
   vpc_security_group_ids = [module.eks.cluster_security_group_id]
