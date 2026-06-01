@@ -22,7 +22,7 @@
     "cmdk": "^1.1.1",
     "cytoscape": "^3.28.1",
     "cytoscape-fcose": "^2.2.0",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.4.0",
     "framer-motion": "^11.0.8",
     "gray-matter": "^4.0.3",
     "lucide-react": "^1.14.0",
