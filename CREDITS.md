@@ -15,6 +15,7 @@ We deeply appreciate everyone who takes the time to report a security issue resp
 | [**@TanmayZade**](https://github.com/TanmayZade) | Reported [#220](https://github.com/beenuar/AiSOC/issues/220) — prompt injection in classification agents leading to alert auto-close bypass. Also authored the fix in [PR #219](https://github.com/beenuar/AiSOC/pull/219) (prompt sanitiser + untrusted-content wrapping across the five classification agents). |
 | [**@mangod12**](https://github.com/mangod12) | Reported [#159](https://github.com/beenuar/AiSOC/issues/159) — proposed cross-tenant isolation tests + nightly CI for RBAC regression. Directly informed the tenant-isolation hardening work that landed in [PR #221](https://github.com/beenuar/AiSOC/pull/221). |
 | [**@jay-cyble**](https://github.com/jay-cyble) (Jay Vasant) | Reported [#130](https://github.com/beenuar/AiSOC/issues/130) — a structured review of 13 security & UI issues found via code review + live-site inspection. Multiple findings were used to drive follow-up hardening tickets. |
+| [**@chaitanyagarware**](https://github.com/chaitanyagarware) | Reported a potential cross-tenant detection-loop suggestion issue involving alert evidence access, missing tenant scoping, and suggestion store isolation concerns. |
 
 If you want to report a vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new) and read [SECURITY.md](SECURITY.md) first.
 
