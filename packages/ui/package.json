@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "clsx": "^2.1.0",
-    "lucide-react": "^1.14.0"
+    "lucide-react": "^1.17.0"
   }
 }
