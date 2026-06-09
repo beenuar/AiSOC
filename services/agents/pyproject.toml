@@ -22,7 +22,7 @@ langchain-community = ">=0.3.0,<0.4.0"
 openai = ">=1.12,<3.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<9.0.0"}
 httpx = ">=0.26,<0.29"
-structlog = ">=24.1,<26.0"
+structlog = ">=24.1,<27.0"
 prometheus-client = ">=0.19,<0.26"
 python-dateutil = "^2.8.2"
 aiokafka = ">=0.10,<0.15"
