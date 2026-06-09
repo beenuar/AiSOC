@@ -1401,9 +1401,21 @@ export const casesApi = {
   },
 
   create: async (data: Partial<Case>) => {
+    // The backend CreateCaseRequest speaks snake_case and does NOT enable
+    // populate_by_name, so a raw camelCase Case payload silently drops fields
+    // like alertIds (the alert→case promotion never linked the alert). Map the
+    // UI fields the create flow uses onto the API schema explicitly.
+    const body: Record<string, unknown> = {};
+    if (data.title !== undefined) body.title = data.title;
+    if (data.description !== undefined) body.description = data.description;
+    if (data.severity !== undefined) body.severity = data.severity;
+    if (data.assignee !== undefined) body.assignee = data.assignee;
+    if (data.alertIds !== undefined) body.alert_ids = data.alertIds;
+    if (data.mitre !== undefined) body.mitre_techniques = data.mitre;
+    if (data.dueAt !== undefined) body.sla_due_at = data.dueAt;
     const raw = await request<unknown>('/api/v1/cases', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
     return normalizeCase(raw);
   },
@@ -1426,9 +1438,11 @@ export const casesApi = {
     ),
 
   linkAlerts: async (id: string, alertIds: string[]) => {
+    // Backend AddAlertsRequest expects snake_case `alert_ids`; sending
+    // `alertIds` raised a 422 and the alert was never attached to the case.
     const raw = await request<unknown>(`/api/v1/cases/${id}/alerts`, {
       method: 'POST',
-      body: JSON.stringify({ alertIds }),
+      body: JSON.stringify({ alert_ids: alertIds }),
     });
     return normalizeCase(raw);
   },

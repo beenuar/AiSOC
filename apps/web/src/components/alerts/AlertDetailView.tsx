@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
+import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -828,6 +829,10 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
   // (`POST /api/v1/explain`). Kept local to the detail view because it
   // only makes sense while a single alert is on screen.
   const [explainOpen, setExplainOpen] = useState(false);
+  // Alert→case promotion modal (issue #293). Opened from the header
+  // "Create Case" affordance; lets the analyst spin up a new case or attach
+  // the alert to an existing one before running a playbook.
+  const [createCaseOpen, setCreateCaseOpen] = useState(false);
 
   const { data: alert, isLoading, mutate } = useSWR(
     ['alert', alertId],
@@ -925,7 +930,11 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
             </svg>
             Explain
           </button>
-          <button className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors">
+          <button
+            type="button"
+            onClick={() => setCreateCaseOpen(true)}
+            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+          >
             Create Case
           </button>
         </div>
@@ -1100,6 +1109,12 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           toast.success(`Queued playbook ${pid}`);
           setExplainOpen(false);
         }}
+      />
+
+      <CreateCaseModal
+        open={createCaseOpen}
+        onClose={() => setCreateCaseOpen(false)}
+        alert={alert}
       />
     </div>
   );
