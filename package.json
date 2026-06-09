@@ -46,7 +46,7 @@
     "demo:public:setup": "bash infra/cloudflare/tunnel.sh"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.2",
     "prettier": "^3.2.4",
     "tsx": "^4.22.1",
     "turbo": "^2.9.14",
