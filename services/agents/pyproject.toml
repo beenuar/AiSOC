@@ -8,7 +8,7 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = ">=0.109,<0.137"
-uvicorn = {extras = ["standard"], version = ">=0.27,<0.49"}
+uvicorn = {extras = ["standard"], version = ">=0.27,<0.50"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
 langchain = ">=0.3.0,<0.4.0"
