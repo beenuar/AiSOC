@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.kb_chunking import chunk_text
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,6 @@ router = APIRouter(prefix="/kb", tags=["knowledge_base"])
 # ────────────────────────────────────────────────────────────────────────────
 
 DocKind = Literal["runbook", "policy", "playbook", "sop", "wiki", "other"]
-_CHUNK_SIZE = 800  # characters per chunk
 
 
 class IngestRequest(BaseModel):
@@ -87,10 +87,6 @@ class QueryResponse(BaseModel):
 # ────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ────────────────────────────────────────────────────────────────────────────
-
-
-def _chunk(content: str, chunk_size: int = _CHUNK_SIZE) -> list[str]:
-    return [content[i : i + chunk_size] for i in range(0, len(content), chunk_size)] or [content]
 
 
 def _row_to_doc(row: Any) -> KBDocResponse:
@@ -152,10 +148,10 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
     "/ingest", response_model=list[KBDocResponse], status_code=status.HTTP_201_CREATED, summary="Ingest document into knowledge base"
 )
 async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBDocResponse]:
-    chunks = _chunk(body.content)
+    chunks = chunk_text(body.content)
     now = datetime.now(UTC)
     rows = []
-    for idx, chunk_text in enumerate(chunks):
+    for idx, chunk_content in enumerate(chunks):
         doc_id = uuid.uuid4()
         q = text("""
             INSERT INTO aisoc_kb_documents (
@@ -171,7 +167,7 @@ async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBD
             title=body.title,
             kind=body.doc_kind,
             url=body.source_url,
-            content=chunk_text,
+            content=chunk_content,
             tags=body.tags or [],
             idx=idx,
             total=len(chunks),
