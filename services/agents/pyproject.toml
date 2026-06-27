@@ -36,6 +36,11 @@ asyncpg = ">=0.29,<0.32"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
 apscheduler = "^3.10.4"
 pyyaml = "^6.0.1"
+# jsonschema is consumed by the NL → playbook drafter (T3.7) to validate
+# every drafted playbook against schemas/playbook.schema.json before the
+# editor loads it, and by scripts/lint_playbooks.py. Pinned to the
+# 4.x line that ships Draft 2020-12 support.
+jsonschema = ">=4.21,<5.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.4,<10.0"

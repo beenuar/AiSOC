@@ -133,6 +133,29 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
     }
   }, [remote, synced, history]);
 
+  // T3.7 — NL drafter seed. When the new-playbook route is entered via
+  // the "Draft from prompt" flow, the drafted Playbook is parked in
+  // sessionStorage under "aisoc:nl-draft" by /playbooks/new. Pick it up
+  // ONCE, hydrate the editor, then immediately wipe the key so reload
+  // doesn't re-seed the same draft. Use history.reset() so the seed
+  // doesn't push an empty playbook onto the undo stack.
+  useEffect(() => {
+    if (!isNew || synced) return;
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem('aisoc:nl-draft');
+      if (!raw) return;
+      sessionStorage.removeItem('aisoc:nl-draft');
+      const draft = JSON.parse(raw) as Playbook;
+      if (draft && typeof draft === 'object' && Array.isArray(draft.steps)) {
+        history.reset(draft);
+        setSynced(true);
+      }
+    } catch {
+      // Malformed sessionStorage payload — fall back to the empty playbook.
+    }
+  }, [isNew, synced, history]);
+
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);

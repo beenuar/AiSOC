@@ -20,7 +20,7 @@ logger = structlog.get_logger()
 # Address of the threat intel service that hosts the attribution endpoint.
 # Defaults to the in-cluster Docker Compose hostname; override via env in
 # Kubernetes / Fly / standalone deployments.
-THREAT_INTEL_SERVICE_URL = os.getenv("AISOC_THREATINTEL_URL", "http://threatintel:8083").rstrip("/")
+THREAT_INTEL_SERVICE_URL = os.getenv("AISOC_THREATINTEL_URL", "http://threatintel:8005").rstrip("/")
 ATTRIBUTION_TIMEOUT_SECONDS = float(os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS", "30.0"))
 # Optional shared secret presented to the threatintel ``/api/v1/actors/*``
 # endpoints when that service is configured to require one (its own

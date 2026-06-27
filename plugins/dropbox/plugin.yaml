@@ -1,0 +1,27 @@
+id: dropbox
+name: Dropbox Business Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Dropbox Business team audit log connector. Polls
+  /2/team_log/get_events for admin and security-relevant team events
+  (login, sharing, file lifecycle, device approvals, password resets)
+  and normalises them to the AiSOC alert shape with severity derived
+  from event category.
+author: AiSOC Core Team
+tags: [saas, dropbox, file-sharing, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/dropbox.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [team_admin_token]
+  properties:
+    team_admin_token:
+      type: string
+      description: >
+        Dropbox Business team-admin OAuth2 access token with the
+        team_data.member and events.read scopes. Generated under
+        App Console → My Apps → Permissions / OAuth 2.
+      secret: true

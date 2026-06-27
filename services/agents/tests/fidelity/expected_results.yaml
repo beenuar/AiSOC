@@ -66,3 +66,24 @@ ctu13_full:
   rows_scored_min: 1000
   accuracy_min: 0.55
   macro_f1_min: 0.45
+
+ait_lds_micro:
+  # services/agents/tests/eval_data/ait_lds_micro/access.log
+  # 10 hand-picked Apache CLF lines spanning the four canonical
+  # families (benign / recon / web_attack / lateral). The companion
+  # labels.csv mirrors the AIT-LDS sidecar shape.
+  dataset: ait_lds
+  mode: substrate
+  rows_scored_min: 10
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+mitre_engenuity_micro:
+  # services/agents/tests/eval_data/mitre_engenuity_micro.json
+  # 10 hand-picked procedures spanning the five MITRE detection
+  # categories (none / telemetry / general / tactic / technique).
+  dataset: mitre_engenuity
+  mode: substrate
+  rows_scored_min: 10
+  accuracy_min: 0.70
+  macro_f1_min: 0.55

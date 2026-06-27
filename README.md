@@ -1042,7 +1042,7 @@ Next (planned — checkpointed with `[~]` in `AISOC_V8_PROGRESS.md`):
 - Attack-chain ranking + timeline UI hardening (T3.3) and business-context YAML rule engine (T3.5)
 - Effective-permissions resolvers for Azure / GCP / Okta / GWS (T3.2)
 - ChatOps full coverage: Slack Block Kit approvals, Teams Adaptive Card mirror, signed email approval URLs (T3.6)
-- Remaining wave-2 connectors hardened to wave-1 quality (sublime_security, abnormal_security, box, dropbox, oci, datadog)
+- ~~Remaining wave-2 connectors hardened to wave-1 quality (sublime_security, abnormal_security, box, dropbox, oci, datadog)~~ → **wave-1 test + fixture parity landed** for all six
 - Mobile responder console (React Native), plugin marketplace v3, AI-generated threat intel briefings, embedded red-team scoring widget, SLA breach predictor, SOC-in-a-box one-click cloud deploy
 
 ---

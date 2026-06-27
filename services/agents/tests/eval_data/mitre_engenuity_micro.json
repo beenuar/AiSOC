@@ -1,0 +1,68 @@
+{
+  "Round": "round-7-cyberark-2025",
+  "Vendor": "ExampleEDR",
+  "Notes": "Synthetic 10-procedure micro fixture for the AiSOC fidelity harness. Mirrors the public MITRE Engenuity JSON shape (top-level metadata + Procedures array). Not a real participating-vendor result.",
+  "Procedures": [
+    {
+      "Step": "1.A.1",
+      "Tactic": "Initial Access",
+      "Technique.Id": "T1566.001",
+      "DetectionCategory": "Technique"
+    },
+    {
+      "Step": "1.A.2",
+      "Tactic": "Initial Access",
+      "Technique.Id": "T1566.002",
+      "DetectionCategory": "Tactic"
+    },
+    {
+      "Step": "2.B.1",
+      "Tactic": "Execution",
+      "Technique.Id": "T1059.003",
+      "DetectionCategory": "Technique"
+    },
+    {
+      "Step": "2.B.2",
+      "Tactic": "Execution",
+      "Technique.Id": "T1059",
+      "DetectionCategory": "Tactic"
+    },
+    {
+      "Step": "3.C.1",
+      "Tactic": "Persistence",
+      "Technique.Id": "T1547.001",
+      "DetectionCategory": "General"
+    },
+    {
+      "Step": "3.C.2",
+      "Tactic": "",
+      "Technique.Id": "T1547",
+      "DetectionCategory": "General"
+    },
+    {
+      "Step": "4.D.1",
+      "Tactic": "Credential Access",
+      "Technique.Id": "T1003.001",
+      "DetectionCategory": "Technique",
+      "Modifiers": ["Configuration Change"]
+    },
+    {
+      "Step": "5.E.1",
+      "Tactic": "Lateral Movement",
+      "Technique.Id": "T1021.001",
+      "DetectionCategory": "Telemetry"
+    },
+    {
+      "Step": "6.F.1",
+      "Tactic": "Exfiltration",
+      "Technique.Id": "",
+      "DetectionCategory": "None"
+    },
+    {
+      "Step": "7.G.1",
+      "Tactic": "Impact",
+      "Technique.Id": "T1486",
+      "DetectionCategory": "Tactic"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "data": {
+      "eventName": "DeleteUser",
+      "eventId": "oci-delete-user",
+      "eventTime": "2026-06-01T10:00:00Z",
+      "compartmentName": "root",
+      "identity": { "principalName": "admin", "ipAddress": "203.0.113.7" }
+    }
+  },
+  {
+    "data": {
+      "eventName": "CreateUser",
+      "eventId": "oci-create-user",
+      "eventTime": "2026-06-01T10:01:00Z",
+      "identity": { "principalName": "ops" }
+    }
+  },
+  {
+    "data": {
+      "eventName": "ListBuckets",
+      "eventId": "oci-list-buckets",
+      "eventTime": "2026-06-01T10:02:00Z",
+      "identity": { "principalName": "reader" }
+    }
+  },
+  {
+    "data": {
+      "eventName": "GetObject",
+      "eventId": "oci-get-object-denied",
+      "eventTime": "2026-06-01T10:03:00Z",
+      "identity": { "principalName": "intruder", "ipAddress": "198.51.100.22" },
+      "response": { "status": 403 }
+    }
+  }
+]

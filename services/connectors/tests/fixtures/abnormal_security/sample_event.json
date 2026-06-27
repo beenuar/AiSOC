@@ -1,0 +1,56 @@
+{
+  "threats": [
+    {
+      "threatId": "t-bec",
+      "threatType": "businessEmailCompromise",
+      "subject": "Urgent wire request",
+      "fromAddress": "ceo-spoof@evil.test",
+      "toAddresses": ["finance@corp.test"],
+      "receivedTime": "2026-06-01T10:00:00Z"
+    },
+    {
+      "id": "t-credphish",
+      "attackType": "Credential Phishing",
+      "subject": "Verify your account",
+      "sender": { "email": "phish@lookalike.test" },
+      "recipients": [{ "email": "bob@corp.test" }],
+      "receivedTime": "2026-06-01T10:01:00Z"
+    },
+    {
+      "threatId": "t-spam",
+      "threatType": "spam",
+      "subject": "Limited time deal",
+      "fromAddress": "promo@marketing.test",
+      "toAddresses": ["carol@corp.test"],
+      "receivedTime": "2026-06-01T10:02:00Z"
+    },
+    {
+      "threatId": "t-recon",
+      "threatType": "reconnaissance",
+      "subject": "Are you available?",
+      "fromAddress": "unknown@mail.test",
+      "toAddresses": ["dave@corp.test"],
+      "receivedTime": "2026-06-01T10:03:00Z"
+    }
+  ],
+  "cases": [
+    {
+      "_kind": "case",
+      "caseId": "c-ato",
+      "threatType": "accountTakeover",
+      "severity": "critical",
+      "subject": "Account takeover case",
+      "fromAddress": "attacker@evil.test",
+      "createdTime": "2026-06-01T10:04:00Z"
+    },
+    {
+      "_kind": "case",
+      "caseId": "c-override",
+      "threatType": "spam",
+      "severity": "high",
+      "subject": "Escalated low-type case",
+      "fromAddress": "noise@marketing.test",
+      "createdTime": "2026-06-01T10:05:00Z"
+    }
+  ]
+}

@@ -178,11 +178,17 @@ class DatadogConnector(BaseConnector):
                 }
                 if cursor:
                     body["page"]["cursor"] = cursor
-                resp = await client.post(
-                    f"{self._base}/api/v2/logs/events/search",
-                    headers=self._headers(),
-                    json=body,
-                )
+                try:
+                    resp = await client.post(
+                        f"{self._base}/api/v2/logs/events/search",
+                        headers=self._headers(),
+                        json=body,
+                    )
+                except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                    # Network errors must not abort the polling loop —
+                    # log and stop paginating; the next cycle retries.
+                    logger.warning("datadog.logs_network_error", error=str(exc))
+                    break
                 if resp.status_code != 200:
                     logger.warning(
                         "datadog.logs_fetch_failed",
@@ -209,11 +215,15 @@ class DatadogConnector(BaseConnector):
                 "tags": self._query if self._query and not self._query.startswith("status:") else None,
             }
             params = {k: v for k, v in params.items() if v is not None}
-            resp = await client.get(
-                f"{self._base}/api/v1/events",
-                headers=self._headers(),
-                params=params,
-            )
+            try:
+                resp = await client.get(
+                    f"{self._base}/api/v1/events",
+                    headers=self._headers(),
+                    params=params,
+                )
+            except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                logger.warning("datadog.events_network_error", error=str(exc))
+                return []
             if resp.status_code != 200:
                 logger.warning(
                     "datadog.events_fetch_failed",

@@ -1,0 +1,10 @@
+192.0.2.10 - - [08/Jul/2024:13:45:01 +0000] "GET /index.html HTTP/1.1" 200 4521 "https://acme.test/" "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/124.0" 5300
+192.0.2.10 - alice [08/Jul/2024:13:45:14 +0000] "GET /dashboard HTTP/1.1" 200 8120 "https://acme.test/login" "Mozilla/5.0 (Macintosh; Intel) Version/17.4 Safari/605.1.15" 4100
+198.51.100.20 - - [08/Jul/2024:13:45:30 +0000] "GET /admin HTTP/1.1" 404 162 "-" "Mozilla/5.0 (compatible; Nikto/2.5.0)" 320
+198.51.100.20 - - [08/Jul/2024:13:45:31 +0000] "GET /login HTTP/1.1" 404 162 "-" "Mozilla/5.0 (compatible; Nikto/2.5.0)" 280
+198.51.100.20 - - [08/Jul/2024:13:45:32 +0000] "GET /wp-admin HTTP/1.1" 404 162 "-" "Mozilla/5.0 (compatible; Gobuster/3.6)" 240
+203.0.113.7 - - [08/Jul/2024:13:46:10 +0000] "GET /index.php?id=1%20UNION+SELECT+1,2,3-- HTTP/1.1" 500 0 "-" "Mozilla/5.0 (compatible; sqlmap/1.7)" 1200
+203.0.113.7 - - [08/Jul/2024:13:46:25 +0000] "GET /search?q=<script>alert(1)</script> HTTP/1.1" 200 850 "-" "curl/8.4.0" 410
+203.0.113.7 - - [08/Jul/2024:13:46:40 +0000] "POST /uploads/shell.php HTTP/1.1" 200 28 "-" "curl/8.4.0" 350
+203.0.113.7 - - [08/Jul/2024:13:47:05 +0000] "POST /beacon HTTP/1.1" 200 64 "-" "curl/8.4.0" 280
+203.0.113.7 - - [08/Jul/2024:13:47:36 +0000] "POST /cb HTTP/1.1" 200 48 "-" "curl/8.4.0" 320

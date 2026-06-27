@@ -1,0 +1,26 @@
+id: abnormal_security
+name: Abnormal Security Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Abnormal Security behavioural-AI email threat events. Polls /v1/threats
+  and /v1/cases for BEC, credential phishing, account takeover, and
+  invoice-fraud detections, then normalises them to the AiSOC alert shape
+  with a high/medium/low severity ladder.
+author: AiSOC Core Team
+tags: [email-security, saas, bec, phishing, abnormal]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/abnormal_security.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_token]
+  properties:
+    base_url:
+      type: string
+      description: API base URL. Defaults to https://api.abnormalplatform.com.
+    api_token:
+      type: string
+      description: Bearer token issued from Abnormal Console → Settings → Integrations → API.
+      secret: true

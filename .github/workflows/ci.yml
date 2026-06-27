@@ -81,6 +81,39 @@ jobs:
       - run: pnpm build
 
   # ──────────────────────────────────────────────
+  # T3.8 — Storybook design-system gate.
+  # Builds the static Storybook bundle (proves the design-system
+  # primitives compile under the Vite-based Storybook 9 toolchain
+  # AND that the shims work) and uploads it as an artifact so the
+  # marketing team can grab screenshots from a PR build.
+  # Visual-regression DOM snapshots run as part of `pnpm test`
+  # above; this job adds the additional contract that Storybook
+  # itself stays buildable.
+  # ──────────────────────────────────────────────
+  storybook-build:
+    name: Web — Storybook build (design system v2)
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build-storybook
+      - uses: actions/upload-artifact@v4
+        with:
+          name: storybook-static
+          path: apps/web/storybook-static
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
   # @aisoc/mcp — MCP server for Claude/Cursor/Cody
   #   Typechecks, runs the vitest contract tests (config + tools registry +
   #   installer file-write behaviour), and builds the dist bundle so the

@@ -124,7 +124,11 @@ class DropboxConnector(BaseConnector):
                         "time": {"start_time": since},
                     }
                     url = f"{_BASE}/2/team_log/get_events"
-                resp = await client.post(url, headers=self._headers(), json=body)
+                try:
+                    resp = await client.post(url, headers=self._headers(), json=body)
+                except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                    logger.warning("dropbox.fetch_network_error", error=str(exc))
+                    break
                 if resp.status_code != 200:
                     logger.warning(
                         "dropbox.fetch_failed",

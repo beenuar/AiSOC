@@ -24,6 +24,7 @@ from app.playbook import (
     PlaybookEngine,
     PlaybookRun,
     PlaybookStore,
+    draft_from_nl,
 )
 
 logger = logging.getLogger("aisoc.api.playbooks")
@@ -41,6 +42,41 @@ _runs: dict[str, PlaybookRun] = {}
 class RunRequest(BaseModel):
     context: dict[str, Any] = {}
     dry_run: bool = False
+
+
+class DraftFromNLRequest(BaseModel):
+    """T3.7 — analyst prompt to draft a playbook from."""
+
+    prompt: str
+    # When ``False`` the substrate (no-LLM) drafter is used. CI sets this
+    # to ``False`` so tests are hermetic; the production default is
+    # ``True`` so the LLM is consulted when configured.
+    allow_llm: bool = True
+
+
+# ---------------------------------------------------------------------------
+# NL drafter (T3.7) — declared BEFORE /{playbook_id} so "draft-from-nl" isn't
+# parsed as an id.
+# ---------------------------------------------------------------------------
+
+
+@router.post("/draft-from-nl", summary="Draft a playbook from natural language")
+async def draft_playbook_from_nl(req: DraftFromNLRequest) -> dict:
+    """Turn an analyst-authored sentence into a draft playbook.
+
+    The returned playbook ships with ``enabled=false`` so the editor
+    is the gate — a human reviews each step before the playbook is
+    eligible to run.
+    """
+
+    prompt = (req.prompt or "").strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if len(prompt) > 4000:
+        raise HTTPException(status_code=400, detail="prompt is too long (max 4000 chars)")
+
+    result = await draft_from_nl(prompt, allow_llm=bool(req.allow_llm))
+    return result.to_dict()
 
 
 # ---------------------------------------------------------------------------
