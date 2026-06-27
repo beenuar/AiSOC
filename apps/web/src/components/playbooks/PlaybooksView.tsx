@@ -21,6 +21,7 @@ import type { Playbook, PlaybookRun } from './types';
 import { PlaybooksGallery, type PlaybookGalleryFilters } from './PlaybooksGallery';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
+import { DraftFromPromptDialog } from './DraftFromPromptDialog';
 
 /** Filter snapshot stored by the backend as a saved-view preset. */
 type PlaybookFilterSnapshot = PlaybookGalleryFilters;
@@ -423,6 +424,11 @@ export function PlaybooksView() {
   const [galleryFilters, setGalleryFilters] = useState<PlaybookFilterSnapshot>(DEFAULT_PLAYBOOK_FILTERS);
   const [galleryKey, setGalleryKey] = useState(0);
 
+  // T3.7 — controls the NL → playbook drafter modal. The modal posts to
+  // /api/v1/playbooks/draft-from-nl, parks the draft in sessionStorage,
+  // then routes to /playbooks/new where the editor picks it up.
+  const [nlDialogOpen, setNlDialogOpen] = useState(false);
+
   function handleApplyView(filters: PlaybookFilterSnapshot) {
     setGalleryFilters(filters);
     setGalleryKey((k) => k + 1);
@@ -438,13 +444,25 @@ export function PlaybooksView() {
             Automated response workflows triggered by alerts and cases
           </p>
         </div>
-        <Link
-          href="/playbooks/new"
-          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
-        >
-          + New Playbook
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setNlDialogOpen(true)}
+            className="px-4 py-2 rounded-lg border border-blue-600/60 bg-blue-950/40 text-blue-300 hover:bg-blue-900/40 hover:text-blue-200 text-sm font-medium transition-colors"
+            title="T3.7 — describe a playbook in natural language and AiSOC drafts the DAG."
+          >
+            ✨ Draft from prompt
+          </button>
+          <Link
+            href="/playbooks/new"
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+          >
+            + New Playbook
+          </Link>
+        </div>
       </div>
+
+      <DraftFromPromptDialog open={nlDialogOpen} onClose={() => setNlDialogOpen(false)} />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-800/60">

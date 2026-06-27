@@ -7,15 +7,19 @@ from .models import (
     StepCondition,
     StepType,
 )
+from .nl_drafter import DraftResult, draft_from_nl, draft_from_nl_substrate
 from .store import PlaybookStore
 
 __all__ = [
+    "DraftResult",
     "Playbook",
-    "PlaybookStep",
     "PlaybookEngine",
     "PlaybookRun",
+    "PlaybookStep",
     "PlaybookStore",
     "RunStatus",
     "StepCondition",
     "StepType",
+    "draft_from_nl",
+    "draft_from_nl_substrate",
 ]
