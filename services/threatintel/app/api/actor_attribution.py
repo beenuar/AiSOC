@@ -20,9 +20,18 @@ from app.actors.attribution import (
     ThreatActorAttributionEngine,
     ThreatActorProfile,
 )
+from app.api.auth import require_actor_auth
 
 logger = structlog.get_logger(__name__)
-router = APIRouter(prefix="/api/v1/actors", tags=["threat-actors"])
+
+# ``require_actor_auth`` gates every route on this router: a no-op when
+# ``AISOC_THREATINTEL_SERVICE_TOKEN`` is unset (internal-only default), a
+# constant-time bearer-token check when it is set.
+router = APIRouter(
+    prefix="/api/v1/actors",
+    tags=["threat-actors"],
+    dependencies=[Depends(require_actor_auth)],
+)
 
 
 def get_attribution_engine(request: Request) -> ThreatActorAttributionEngine:

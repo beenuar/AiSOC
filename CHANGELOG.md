@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [7.4.0] — 2026-05-29
+### Security
+
+- **Optional auth on the threat-actor attribution endpoints
+  (`/api/v1/actors/*`).** The `threatintel` service's actor-attribution
+  router previously accepted any caller. It now supports a shared-secret
+  gate: when `AISOC_THREATINTEL_SERVICE_TOKEN` is set, every
+  `/api/v1/actors/*` call must present `Authorization: Bearer <token>`
+  (constant-time compared, `401` on mismatch); when unset it stays
+  unauthenticated for backward compatibility and logs a warning. The
+  investigation agent forwards the same token via its own
+  `AISOC_THREATINTEL_SERVICE_TOKEN`. Resolves the `[#TODO-attribution-rbac]`
+  caveat in `docs/threat-actor-attribution.md`.
 
 Security-hardening and platform release. Folds in the May 27–29 hardening wave,
 multi-agent routing, and multi-cloud infrastructure skeletons that landed on

@@ -22,6 +22,11 @@ logger = structlog.get_logger()
 # Kubernetes / Fly / standalone deployments.
 THREAT_INTEL_SERVICE_URL = os.getenv("AISOC_THREATINTEL_URL", "http://threatintel:8083").rstrip("/")
 ATTRIBUTION_TIMEOUT_SECONDS = float(os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS", "30.0"))
+# Optional shared secret presented to the threatintel ``/api/v1/actors/*``
+# endpoints when that service is configured to require one (its own
+# ``AISOC_THREATINTEL_SERVICE_TOKEN``). Left empty for internal-only
+# deployments, where the endpoints accept unauthenticated calls.
+THREAT_INTEL_SERVICE_TOKEN = os.getenv("AISOC_THREATINTEL_SERVICE_TOKEN", "").strip()
 
 
 async def run_investigation(state: InvestigationState) -> InvestigationState:
@@ -214,6 +219,7 @@ async def _call_attribution_service(
         httpx.HTTPError: on transport or non-2xx responses; the caller
             converts these into a non-fatal finding.
     """
+    headers = {"Authorization": f"Bearer {THREAT_INTEL_SERVICE_TOKEN}"} if THREAT_INTEL_SERVICE_TOKEN else {}
     try:
         async with httpx.AsyncClient(timeout=ATTRIBUTION_TIMEOUT_SECONDS) as client:
             response = await client.post(
@@ -223,6 +229,7 @@ async def _call_attribution_service(
                     "mitre_techniques": mitre_techniques,
                     "case_metadata": case_metadata,
                 },
+                headers=headers,
             )
             response.raise_for_status()
             return response.json()

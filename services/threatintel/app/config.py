@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
 
+    # Optional shared-secret gate for the /api/v1/actors/* HTTP surface.
+    # When set, callers must present ``Authorization: Bearer <token>``
+    # (constant-time compared). Unset keeps the historical internal-only
+    # behaviour (unauthenticated). Mirrors the actions->api
+    # ``AISOC_API_SERVICE_TOKEN`` inter-service-token convention.
+    AISOC_THREATINTEL_SERVICE_TOKEN: str = ""
+
     # Redis (bloom filter + cache)
     REDIS_URL: str = "redis://redis:6379/2"
     BLOOM_CAPACITY: int = 10_000_000

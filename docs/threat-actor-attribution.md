@@ -124,11 +124,17 @@ Lists all profiles in the in-memory catalog.
 
 Returns a single profile, or `404` if the ID is unknown.
 
-> **Auth caveat (v0):** the attribution endpoints are mounted on the
-> `threatintel` service without RBAC enforcement. They are reachable
-> only inside the cluster's service mesh / private network. Do **not**
-> expose them through a public ingress until a RBAC dependency is added.
-> Tracked in [#TODO-attribution-rbac].
+> **Auth:** the `/api/v1/actors/*` endpoints support an optional shared
+> secret. When `AISOC_THREATINTEL_SERVICE_TOKEN` is set on the
+> `threatintel` service, every call must present
+> `Authorization: Bearer <token>` (constant-time compared); a missing or
+> wrong token returns `401`. When the variable is unset the endpoints stay
+> unauthenticated for backward compatibility — the service is designed to
+> run on the cluster's private network — and the service logs a warning so
+> an exposed-but-open deployment is visible. **Set the token before
+> exposing the service beyond that perimeter, and give the investigation
+> agent the same value via its own `AISOC_THREATINTEL_SERVICE_TOKEN` so it
+> can authenticate.**
 
 ## Observability
 
