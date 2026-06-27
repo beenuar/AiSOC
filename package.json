@@ -56,5 +56,13 @@
     "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
   },
-  "packageManager": "pnpm@8.15.1"
+  "packageManager": "pnpm@8.15.1",
+  "pnpm": {
+    "overrides": {
+      "shell-quote": ">=1.8.4",
+      "form-data": ">=4.0.6",
+      "ws": ">=8.21.0",
+      "hono": ">=4.12.25"
+    }
+  }
 }

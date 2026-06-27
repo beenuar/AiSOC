@@ -45,3 +45,9 @@ python|CVE-2026-27794|langgraph-checkpoint 3.0.1 freshly disclosed; awaiting pat
 # idna — deep transitive dep (httpx/requests/email-validator); freshly
 # disclosed, no fixed version available yet.
 python|CVE-2026-45409|idna 3.13 freshly disclosed; transitive dep, no fixed version available yet|2026-08-25
+
+# ── 2026-06-27 triage (expire 2026-09-25) ────────────────────────────────────
+# esbuild GHSA-gv7w-rqvm-qjhr was WITHDRAWN by GitHub on 2026-06-17 (advisory
+# reclassified as not exploitable). pnpm audit still surfaces withdrawn
+# advisories from its cached DB, so suppress until the upstream DB refresh.
+pnpm|GHSA-gv7w-rqvm-qjhr|esbuild advisory withdrawn 2026-06-17 by GitHub; reclassified as not exploitable|2026-09-25
