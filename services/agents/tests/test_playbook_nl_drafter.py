@@ -69,10 +69,7 @@ class TestSubstrateExtraction:
         assert pb.steps[0].type == StepType.INVESTIGATE
 
     def test_steps_emit_in_prompt_order(self) -> None:
-        prompt = (
-            "When a high-severity alert fires, enrich the entity, "
-            "isolate the host, then notify the SOC and create a ticket."
-        )
+        prompt = "When a high-severity alert fires, enrich the entity, " "isolate the host, then notify the SOC and create a ticket."
         pb = draft_from_nl_substrate(prompt)
         types = _step_types(pb)
         # Each verb should appear once, in prompt order.
@@ -101,15 +98,11 @@ class TestSubstrateExtraction:
         assert pb.trigger["on"] == "alert"
 
     def test_trigger_severity_inferred_from_high_token(self) -> None:
-        pb = draft_from_nl_substrate(
-            "When a high-severity alert fires, isolate the host"
-        )
+        pb = draft_from_nl_substrate("When a high-severity alert fires, isolate the host")
         assert pb.trigger.get("severity") == ["high"]
 
     def test_trigger_severity_inferred_from_critical_token(self) -> None:
-        pb = draft_from_nl_substrate(
-            "Critical alert: block the IP and notify the SOC"
-        )
+        pb = draft_from_nl_substrate("Critical alert: block the IP and notify the SOC")
         assert "critical" in pb.trigger.get("severity", [])
 
     def test_iam_role_isolation_maps_to_isolate_host(self) -> None:
@@ -123,9 +116,7 @@ class TestSubstrateExtraction:
         assert StepType.QUARANTINE_FILE in [s.type for s in pb.steps]
 
     def test_steps_carry_humanised_names(self) -> None:
-        pb = draft_from_nl_substrate(
-            "When a high-severity alert fires, isolate the host"
-        )
+        pb = draft_from_nl_substrate("When a high-severity alert fires, isolate the host")
         step = next(s for s in pb.steps if s.type == StepType.ISOLATE_HOST)
         # Name must be more descriptive than just the bare type.
         assert step.name and step.name != "isolate_host"
@@ -154,8 +145,7 @@ class TestSubstrateExtraction:
 class TestSchemaValidity:
     def test_substrate_draft_passes_pydantic(self) -> None:
         pb = draft_from_nl_substrate(
-            "When a high-severity alert fires, enrich the entity, "
-            "isolate the host, notify the SOC, create a ticket"
+            "When a high-severity alert fires, enrich the entity, " "isolate the host, notify the SOC, create a ticket"
         )
         # Round-trip via the Pydantic model — this is the contract the
         # editor consumes.
@@ -320,29 +310,21 @@ class TestLLMResilience:
         assert result.used_llm is True
         assert result.playbook.id == "fenced-id"
 
-    def test_llm_returning_malformed_json_falls_back_to_substrate(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_llm_returning_malformed_json_falls_back_to_substrate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self._patch_llm(monkeypatch, _Resp("not even close to JSON {{{"))
-        result = asyncio.run(
-            draft_from_nl("Isolate the host and notify the SOC", allow_llm=True)
-        )
+        result = asyncio.run(draft_from_nl("Isolate the host and notify the SOC", allow_llm=True))
         assert result.used_llm is False
         assert "isolate_host" in _step_types(result.playbook)
         assert "notify" in _step_types(result.playbook)
 
-    def test_llm_returning_array_falls_back_to_substrate(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_llm_returning_array_falls_back_to_substrate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Drafter requires a JSON OBJECT, never an array.
         self._patch_llm(monkeypatch, _Resp(json.dumps([1, 2, 3])))
         result = asyncio.run(draft_from_nl("Enrich the entity", allow_llm=True))
         assert result.used_llm is False
         assert "enrich" in _step_types(result.playbook)
 
-    def test_llm_raising_exception_falls_back_to_substrate(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_llm_raising_exception_falls_back_to_substrate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Boom:
             async def ainvoke(self, _messages: Any) -> Any:
                 raise RuntimeError("LLM is down")

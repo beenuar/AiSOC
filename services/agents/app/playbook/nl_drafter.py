@@ -724,9 +724,7 @@ async def draft_from_nl(prompt: str, *, allow_llm: bool = True) -> DraftResult:
         valid, err = _validate_against_schema(payload)
 
     rationale = (
-        f"Used LLM: {used_llm}. Steps: {len(pb.steps)} "
-        f"({', '.join(s.type.value for s in pb.steps)}). "
-        f"Trigger: {pb.trigger}."
+        f"Used LLM: {used_llm}. Steps: {len(pb.steps)} " f"({', '.join(s.type.value for s in pb.steps)}). " f"Trigger: {pb.trigger}."
     )
     return DraftResult(
         playbook=pb,

@@ -58,10 +58,7 @@ def test_draft_from_nl_happy_path(client: TestClient) -> None:
     resp = _post(
         client,
         {
-            "prompt": (
-                "When a high-severity alert fires, isolate the host "
-                "and notify the SOC."
-            ),
+            "prompt": ("When a high-severity alert fires, isolate the host " "and notify the SOC."),
             "allow_llm": False,
         },
     )
@@ -141,22 +138,15 @@ def test_route_not_shadowed_by_id_param() -> None:
     for a playbook whose id is ``draft-from-nl``."""
 
     # Walk the router's exposed routes and check ordering.
-    paths_in_order = [
-        getattr(r, "path", None)
-        for r in playbooks_router.routes
-        if getattr(r, "path", None)
-    ]
+    paths_in_order = [getattr(r, "path", None) for r in playbooks_router.routes if getattr(r, "path", None)]
     try:
         nl_idx = paths_in_order.index("/api/v1/playbooks/draft-from-nl")
     except ValueError as exc:
-        raise AssertionError(
-            "draft-from-nl route not registered on the playbooks router"
-        ) from exc
+        raise AssertionError("draft-from-nl route not registered on the playbooks router") from exc
 
     # Any route containing ``{playbook_id}`` must appear AFTER nl_idx.
     for i, p in enumerate(paths_in_order):
         if p and "{playbook_id}" in p:
             assert i > nl_idx, (
-                f"route {p!r} (idx {i}) comes BEFORE draft-from-nl (idx {nl_idx}); "
-                f"it would shadow the NL drafter endpoint."
+                f"route {p!r} (idx {i}) comes BEFORE draft-from-nl (idx {nl_idx}); " f"it would shadow the NL drafter endpoint."
             )
