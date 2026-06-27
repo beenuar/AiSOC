@@ -45,10 +45,7 @@ def test_exact_size_single_chunk():
 
 def test_no_chunk_exceeds_size():
     random.seed(99)
-    text = " ".join(
-        "".join(random.choices(string.ascii_lowercase, k=random.randint(3, 15)))
-        for _ in range(600)
-    )
+    text = " ".join("".join(random.choices(string.ascii_lowercase, k=random.randint(3, 15))) for _ in range(600))
     for c in chunk_text(text, chunk_size=800):
         assert len(c) <= 800
 
