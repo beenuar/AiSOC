@@ -24,18 +24,16 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest import mock
 
 import pytest
-
 from app.playbook import (
     DraftResult,
     Playbook,
     StepType,
     draft_from_nl,
     draft_from_nl_substrate,
+    nl_drafter,
 )
-from app.playbook import nl_drafter
 
 # ---------------------------------------------------------------------------
 # Helpers

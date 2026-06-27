@@ -33,7 +33,6 @@ if str(_AGENTS_ROOT) not in sys.path:
 
 from app.api.playbooks import router as playbooks_router  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Test app fixture
 # ---------------------------------------------------------------------------

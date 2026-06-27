@@ -62,11 +62,26 @@ logger = logging.getLogger("aisoc.playbook.nl_drafter")
 _VERB_PATTERNS: tuple[tuple[StepType, tuple[str, ...]], ...] = (
     (
         StepType.ISOLATE_HOST,
-        ("isolate the host", "isolate host", "host isolation", "quarantine the host", "isolate the iam role", "isolate the role"),
+        (
+            "isolate the host",
+            "isolate host",
+            "host isolation",
+            "quarantine the host",
+            "isolate the iam role",
+            "isolate the role",
+        ),
     ),
     (
         StepType.DISABLE_USER,
-        ("disable the user", "disable user", "disable the account", "deactivate the account", "lock out", "lock the user", "lock the account"),
+        (
+            "disable the user",
+            "disable user",
+            "disable the account",
+            "deactivate the account",
+            "lock out",
+            "lock the user",
+            "lock the account",
+        ),
     ),
     (
         StepType.RESET_PASSWORD,
@@ -90,7 +105,14 @@ _VERB_PATTERNS: tuple[tuple[StepType, tuple[str, ...]], ...] = (
     ),
     (
         StepType.QUARANTINE_FILE,
-        ("quarantine the file", "quarantine file", "isolate the file", "snapshot the bucket", "snapshot bucket policy", "snapshot the bucket policy"),
+        (
+            "quarantine the file",
+            "quarantine file",
+            "isolate the file",
+            "snapshot the bucket",
+            "snapshot bucket policy",
+            "snapshot the bucket policy",
+        ),
     ),
     (
         StepType.KILL_PROCESS,
@@ -113,7 +135,15 @@ _VERB_PATTERNS: tuple[tuple[StepType, tuple[str, ...]], ...] = (
     ),
     (
         StepType.ENRICH,
-        ("enrich the alert", "enrich the entity", "enrich the user", "enrich the host", "enrich the ip", "enrich the ioc", "look up reputation"),
+        (
+            "enrich the alert",
+            "enrich the entity",
+            "enrich the user",
+            "enrich the host",
+            "enrich the ip",
+            "enrich the ioc",
+            "look up reputation",
+        ),
     ),
     (
         StepType.INVESTIGATE,
@@ -133,7 +163,16 @@ _VERB_PATTERNS: tuple[tuple[StepType, tuple[str, ...]], ...] = (
     ),
     (
         StepType.NOTIFY,
-        ("page on-call", "page the on-call", "page on call", "notify the analyst", "notify the soc", "notify the channel", "post to slack", "send an email"),
+        (
+            "page on-call",
+            "page the on-call",
+            "page on call",
+            "notify the analyst",
+            "notify the soc",
+            "notify the channel",
+            "post to slack",
+            "send an email",
+        ),
     ),
     (
         StepType.APPROVAL,
