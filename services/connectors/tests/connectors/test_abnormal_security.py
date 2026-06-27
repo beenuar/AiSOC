@@ -16,8 +16,8 @@ import httpx
 import pytest
 import respx
 from app.connectors import CONNECTOR_REGISTRY
-from app.connectors.base import Capability
 from app.connectors.abnormal_security import AbnormalSecurityConnector
+from app.connectors.base import Capability
 
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "abnormal_security" / "sample_event.json"
 _BASE = "https://api.abnormalplatform.com"

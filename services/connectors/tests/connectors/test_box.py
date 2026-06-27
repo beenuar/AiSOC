@@ -100,9 +100,7 @@ async def test_fetch_alerts_stops_on_non_200():
 @respx.mock
 async def test_test_connection_success():
     c = BoxConnector(access_token="t")
-    respx.get(f"{_BASE}/2.0/users/me").respond(
-        200, json={"login": "admin@corp.test", "name": "Admin", "enterprise": {"name": "Acme"}}
-    )
+    respx.get(f"{_BASE}/2.0/users/me").respond(200, json={"login": "admin@corp.test", "name": "Admin", "enterprise": {"name": "Acme"}})
     res = await c.test_connection()
     assert res["success"] is True
     assert res["user"] == "admin@corp.test"
