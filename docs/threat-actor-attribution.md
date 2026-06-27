@@ -65,7 +65,7 @@ There is **no** synthetic "every observed IOC counts as a match" inflation.
 ## API
 
 Mounted under `/api/v1/actors` on the `threatintel` service (default
-port `8083`).
+port `8005`).
 
 ### `POST /api/v1/actors/attribute`
 
@@ -154,8 +154,8 @@ and `severity`. To enrich attribution, populate those fields on the
 incoming alert.
 
 The HTTP timeout is tunable via `AISOC_ATTRIBUTION_TIMEOUT_SECONDS`
-(default `10`), and the `threatintel` base URL via `AISOC_THREATINTEL_URL`
-(default `http://threatintel:8083`).
+(default `30`), and the `threatintel` base URL via `AISOC_THREATINTEL_URL`
+(default `http://threatintel:8005`).
 
 ## v0 limits and intended next steps
 

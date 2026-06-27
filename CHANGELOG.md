@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Threat-actor attribution could never connect.** The investigation
+  agent defaulted `AISOC_THREATINTEL_URL` to `http://threatintel:8083`,
+  but the `threatintel` service binds port **8005** (Dockerfile,
+  `docker-compose.yml`, and the README service table). Every
+  `POST /api/v1/actors/attribute` call from
+  `services/agents/app/agents/investigation_agent.py` therefore targeted a
+  port nothing listens on and failed (soft-handled, so attribution silently
+  degraded). Corrected the default to `http://threatintel:8005`, fixed the
+  matching `docs/threat-actor-attribution.md` references (and a stale
+  `AISOC_ATTRIBUTION_TIMEOUT_SECONDS` default of `10` → `30`), and added a
+  regression test (`services/agents/tests/test_attribution_service_url.py`).
+
 ## [7.4.0] — 2026-05-29
 
 Security-hardening and platform release. Folds in the May 27–29 hardening wave,
