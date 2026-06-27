@@ -122,7 +122,11 @@ class BoxConnector(BaseConnector):
                 }
                 if stream_pos:
                     params["stream_position"] = stream_pos
-                resp = await client.get(f"{_BASE}/2.0/events", headers=self._headers(), params=params)
+                try:
+                    resp = await client.get(f"{_BASE}/2.0/events", headers=self._headers(), params=params)
+                except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                    logger.warning("box.fetch_network_error", error=str(exc))
+                    break
                 if resp.status_code != 200:
                     logger.warning(
                         "box.fetch_failed",

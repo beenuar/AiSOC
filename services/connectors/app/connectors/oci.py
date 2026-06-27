@@ -172,7 +172,11 @@ class OCIConnector(BaseConnector):
                 }
                 if page:
                     params["page"] = page
-                resp = await client.get(f"{self._base}/20190901/auditEvents", params=params)
+                try:
+                    resp = await client.get(f"{self._base}/20190901/auditEvents", params=params)
+                except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                    logger.warning("oci.fetch_network_error", error=str(exc))
+                    break
                 if resp.status_code != 200:
                     logger.warning(
                         "oci.fetch_failed",

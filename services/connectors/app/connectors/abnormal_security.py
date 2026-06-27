@@ -117,7 +117,18 @@ class AbnormalSecurityConnector(BaseConnector):
                         "pageNumber": page_number,
                         "filter": f"receivedTime gte {since}",
                     }
-                    resp = await client.get(f"{self._base}{endpoint}", headers=self._headers(), params=params)
+                    try:
+                        resp = await client.get(f"{self._base}{endpoint}", headers=self._headers(), params=params)
+                    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                        # Network failure (DNS, TLS, timeout) must not abort
+                        # the polling loop — log and stop paginating *this*
+                        # stream; the next poll cycle gets a fresh attempt.
+                        logger.warning(
+                            "abnormal_security.fetch_network_error",
+                            kind=kind,
+                            error=str(exc),
+                        )
+                        break
                     if resp.status_code != 200:
                         logger.warning(
                             "abnormal_security.fetch_failed",
