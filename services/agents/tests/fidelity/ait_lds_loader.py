@@ -92,12 +92,12 @@ _LABEL_SUBSTRING_RULES: tuple[tuple[str, str], ...] = (
 # Apache combined-log-format regex. The AIT corpus uses the standard
 # combined format (CLF + Referer + User-Agent + optional %D microseconds).
 _APACHE_CLF_RE = re.compile(
-    r'^(?P<host>\S+)\s+\S+\s+(?P<user>\S+)\s+'
-    r'\[(?P<time>[^\]]+)\]\s+'
+    r"^(?P<host>\S+)\s+\S+\s+(?P<user>\S+)\s+"
+    r"\[(?P<time>[^\]]+)\]\s+"
     r'"(?P<request>[^"]*)"\s+'
-    r'(?P<status>\d{3})\s+(?P<size>\S+)'
+    r"(?P<status>\d{3})\s+(?P<size>\S+)"
     r'(?:\s+"(?P<referer>[^"]*)"\s+"(?P<ua>[^"]*)")?'
-    r'(?:\s+(?P<duration_us>\d+))?\s*$'
+    r"(?:\s+(?P<duration_us>\d+))?\s*$"
 )
 
 
