@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history so the rebuild-detection step below can resolve a
           # merge base against `origin/${base_ref}`. With the default

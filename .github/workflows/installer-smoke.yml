@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: shellcheck
         run: |
@@ -106,7 +106,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: PSScriptAnalyzer
         shell: pwsh
@@ -236,7 +236,7 @@ jobs:
             bootstrap: 'zypper --non-interactive install bash curl ca-certificates procps lsof iproute2 file'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Run --diagnose in ${{ matrix.image }}
         run: |
@@ -299,7 +299,7 @@ jobs:
     timeout-minutes: 10
     needs: lint-powershell
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Run -Diagnose -NonInteractive
         shell: pwsh
@@ -332,7 +332,7 @@ jobs:
     timeout-minutes: 5
     needs: lint-bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Refuse to nuke a non-AiSOC directory
         run: |

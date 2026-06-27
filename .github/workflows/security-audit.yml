@@ -20,7 +20,7 @@ jobs:
       PNPM_AUDIT_REGISTRY: https://registry.npmjs.org/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 

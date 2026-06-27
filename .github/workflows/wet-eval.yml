@@ -65,7 +65,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # We open a PR back to this repo, so we need a fetchable
           # history. Shallow is fine — the PR is created from a fresh
