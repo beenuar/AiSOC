@@ -20,6 +20,13 @@ const eslintConfig = [
       "build/**",
       "node_modules/**",
       "coverage/**",
+      // T3.8 — Storybook config + stories live outside the Next.js app
+      // and target the Vite-based Storybook 9 runtime; they import
+      // shimmed versions of `next/navigation` and `next/link` so they
+      // intentionally diverge from the production app's React tree.
+      ".storybook/**",
+      "stories/**",
+      "storybook-static/**",
     ],
   },
   {

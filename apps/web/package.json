@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build --output-dir storybook-static",
+    "test-storybook": "test-storybook"
   },
   "dependencies": {
     "@aisoc/types": "workspace:*",
@@ -37,7 +40,12 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^9.1.0",
+    "@storybook/addon-themes": "^9.1.0",
+    "@storybook/react-vite": "^9.1.0",
+    "@storybook/test-runner": "^0.23.0",
     "@tailwindcss/postcss": "^4.3.1",
+    "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.2.0",
     "@testing-library/user-event": "^14.5.2",
@@ -46,15 +54,17 @@
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.17",
     "axe-core": "^4.11.4",
     "eslint": "^9.39.0",
     "eslint-config-next": "16.2.7",
     "jsdom": "^24.0.0",
     "postcss": "^8.5.15",
+    "storybook": "^9.1.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
+    "vite": "^7.0.0",
     "vitest": "^4.1.6",
     "vitest-axe": "^0.1.0"
   }
