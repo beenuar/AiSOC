@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-14T12:28:24Z",
+  "generated": "2026-06-27T08:39:33Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,17 +20,17 @@
     }
   ],
   "stats": {
-    "total": 7117,
+    "total": 7123,
     "playbooks": 62,
     "detections": 6998,
-    "plugins": 57,
-    "verified": 996,
+    "plugins": 63,
+    "verified": 1002,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 996
+      "stable": 1002
     },
     "detections_by_tier": {
       "community": 1,
@@ -223972,6 +223972,31 @@
       "path": "playbooks/packs/v1/web-compromise/web-compromise-response.playbook.json"
     },
     {
+      "id": "abnormal_security",
+      "type": "plugin",
+      "name": "Abnormal Security Connector",
+      "description": "Abnormal Security behavioural-AI email threat events. Polls /v1/threats and /v1/cases for BEC, credential phishing, account takeover, and invoice-fraud detections, then normalises them to the AiSOC alert shape with a high/medium/low severity ladder.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "email-security",
+        "saas",
+        "bec",
+        "phishing",
+        "abnormal"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/abnormal_security.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/abnormal_security/plugin.yaml"
+    },
+    {
       "id": "aisoc-direct",
       "type": "plugin",
       "name": "AiSOC Direct (osquery TLS)",
@@ -224175,6 +224200,30 @@
       "path": "plugins/azure-entra/plugin.yaml"
     },
     {
+      "id": "box",
+      "type": "plugin",
+      "name": "Box Connector",
+      "description": "Box enterprise audit log connector. Polls the Box Events API (/2.0/events?stream_type=admin_logs) for admin and security-relevant events (login, shared-link creation, MFA / device-trust changes, folder permission changes) and normalises them to the AiSOC alert shape with severity derived from event type.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "box",
+        "file-sharing",
+        "audit"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/box.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/box/plugin.yaml"
+    },
+    {
       "id": "carbon-black",
       "type": "plugin",
       "name": "Carbon Black Cloud Connector",
@@ -224351,6 +224400,31 @@
       "path": "plugins/cortex-xsiam/plugin.yaml"
     },
     {
+      "id": "datadog",
+      "type": "plugin",
+      "name": "Datadog Connector (Logs + APM)",
+      "description": "Datadog observability connector. Streams from the Logs Search v2 API (/api/v2/logs/events/search) or the Events v1 API (/api/v1/events, APM monitor alerts + custom events) depending on the selected stream. Normalises results to the AiSOC alert shape with severity derived from log status or monitor alert_type. For Cloud SIEM Security Signals use the separate datadog_cloud_siem connector.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "logs",
+        "datadog",
+        "apm",
+        "observability"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/datadog.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/datadog/plugin.yaml"
+    },
+    {
       "id": "datadog-cloud-siem",
       "type": "plugin",
       "name": "Datadog Cloud SIEM Connector",
@@ -224400,6 +224474,30 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/datadog-incidents/plugin.yaml"
+    },
+    {
+      "id": "dropbox",
+      "type": "plugin",
+      "name": "Dropbox Business Connector",
+      "description": "Dropbox Business team audit log connector. Polls /2/team_log/get_events for admin and security-relevant team events (login, sharing, file lifecycle, device approvals, password resets) and normalises them to the AiSOC alert shape with severity derived from event category.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "saas",
+        "dropbox",
+        "file-sharing",
+        "audit"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/dropbox.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/dropbox/plugin.yaml"
     },
     {
       "id": "email-inbox",
@@ -224818,6 +224916,30 @@
       "path": "plugins/notion-incidents/plugin.yaml"
     },
     {
+      "id": "oci",
+      "type": "plugin",
+      "name": "Oracle Cloud Infrastructure (OCI) Connector",
+      "description": "Oracle Cloud Infrastructure audit log connector. Polls the OCI Audit service for ListEvents in the configured compartment and normalises them to the AiSOC alert shape with severity derived from event type (IAM identity changes, network policy edits, instance state changes). Auth uses an API signing key (HMAC over a canonical request, per Oracle's signing v1 spec).",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "oci",
+        "oracle",
+        "audit"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/oci.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/oci/plugin.yaml"
+    },
+    {
       "id": "okta-connector",
       "type": "plugin",
       "name": "Okta Connector",
@@ -225159,6 +225281,30 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/snowflake-events/plugin.yaml"
+    },
+    {
+      "id": "sublime_security",
+      "type": "plugin",
+      "name": "Sublime Security Connector",
+      "description": "Sublime Security inbound-email detections connector. Polls /v1/messages for malicious + suspicious verdicts produced by Sublime's rule marketplace and normalises them to the AiSOC alert shape with severity derived from verdict (and escalated when triggered rules carry BEC / credential / phishing / impersonation substrings).",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "email-security",
+        "saas",
+        "sublime",
+        "phishing"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sublime_security.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/sublime_security/plugin.yaml"
     },
     {
       "id": "sumo-logic",
