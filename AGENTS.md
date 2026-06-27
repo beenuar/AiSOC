@@ -13,6 +13,9 @@
 ## Learned Workspace Facts
 
 - Project: AiSOC — open-source, AI-powered Security Operations Center maintained by the AiSOC community under the MIT license.
+- **Single source of truth (as of 2026-06-27):** `https://github.com/beenuar/AiSOC` is the only canonical repo. The previous private staging repo `beenuar/AISOC-Cyble` was archived (read-only, `archived: true`) and its full history was merged into this monorepo under `plans/cyble-aisoc/` via `git subtree add --prefix=plans/cyble-aisoc` ([PR #324](https://github.com/beenuar/AiSOC/pull/324)). The archive notice (`DEPRECATED.md`) was subsequently subtree-pulled into `plans/cyble-aisoc/DEPRECATED.md` ([PR #325](https://github.com/beenuar/AiSOC/pull/325)).
+- **Spec + historical prototype location:** the north-star design doc lives at `plans/cyble-aisoc/cyble-aisoc-plan.md`; the historical FastAPI/static prototype + early architecture notes + 12-month roadmap live under `plans/cyble-aisoc/{platform,architecture,roadmap}/`. Treat that subtree as historical reference only — the canonical deployable code is at the monorepo root (`services/`, `apps/`, `infra/`, `packages/`).
+- **CodeQL scoping:** `.github/workflows/codeql.yml` carries `paths-ignore: 'plans/cyble-aisoc/**'` so prototype findings don't appear as actionable security alerts. The same `paths-ignore` is documented inline in the workflow.
 - Monorepo managed with pnpm (pnpm@8.15.1) and Turborepo; workspaces defined in `apps/*` and `packages/*`.
 - Apps: `apps/web` (Next.js frontend), `apps/docs` (documentation site).
 - Backend services in `services/`: `api` (FastAPI/Python 3.11), `agents`, `alert-fusion`, `connectors`, `demo-producer`, `enrichment`, `fusion`, `ingest`, `realtime`, `threatintel`, `ocsf`.
