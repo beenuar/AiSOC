@@ -47,7 +47,7 @@ from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
-from . import cicids_loader, ctu13_loader
+from . import ait_lds_loader, cicids_loader, ctu13_loader, mitre_engenuity_loader
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +137,105 @@ def _classify_ctu13(row: dict[str, Any]) -> str:
     return "benign"
 
 
+def _classify_ait_lds(row: dict[str, Any]) -> str:
+    """Reference rule-based classifier for AIT-LDS Apache rows.
+
+    Mirrors the four-family ladder used by the loader: ``benign``,
+    ``recon``, ``web_attack``, ``lateral``.
+
+    The thresholds are intentionally simple — substrate's job is to be
+    a stable deterministic floor, not state of the art. They come from
+    inspecting the micro fixture and from the AIT-LDS scenario notes
+    that describe the attacker behaviour for each phase.
+    """
+
+    method = (row.get("method", "") or "").upper()
+    path = (row.get("path", "") or "").lower()
+    status = int(row.get("status", 0))
+    size = int(row.get("size", 0))
+    ua = (row.get("user_agent", "") or "").lower()
+
+    # Web-attack heuristic: requests carrying obvious payloads
+    # (script tags, union-select, /shell.php, encoded path traversal)
+    # are escalated to web_attack regardless of status.
+    web_attack_tokens = (
+        "<script",
+        "%3cscript",
+        "union+select",
+        "union%20select",
+        "/shell.php",
+        "/cmd.php",
+        "/c99.php",
+        "/etc/passwd",
+        "../",
+        "..%2f",
+        "$(",
+        "%28%29",
+        "/wp-admin",
+        "/.env",
+    )
+    if any(token in path for token in web_attack_tokens):
+        return "web_attack"
+
+    # Lateral / C2 heuristic: small POSTs to non-existent paths returning
+    # 200 with a small body and a non-browser UA are textbook callbacks.
+    if method == "POST" and 200 <= status < 300 and 0 < size <= 256:
+        if ua and not any(b in ua for b in ("mozilla", "chrome", "safari", "edge", "firefox", "trident")):
+            return "lateral"
+
+    # Recon heuristic: scanner UAs OR a burst of 404 dir-busting on
+    # admin-style paths.
+    scanner_uas = ("nikto", "nmap", "wpscan", "dirbuster", "gobuster", "sqlmap", "masscan")
+    if any(s in ua for s in scanner_uas):
+        return "recon"
+    if status == 404 and any(p in path for p in ("/admin", "/login", "/wp-", "/.git", "/api/v", "/phpmyadmin")):
+        return "recon"
+
+    return "benign"
+
+
+def _classify_mitre_engenuity(row: dict[str, Any]) -> str:
+    """Reference rule-based classifier for MITRE Engenuity procedures.
+
+    The substrate classifier here predicts the detection category MITRE
+    would have *graded*. It is intentionally crude — the goal is a
+    stable deterministic floor that fails noisily when a refactor of
+    the loader changes how techniques + tactics are extracted.
+
+    Heuristics:
+
+    - No technique parsed → ``none`` (the vendor cannot detect what
+      MITRE could not annotate).
+    - Sub-technique present + non-empty tactic → ``technique`` (the
+      richest grade — vendor "should" be able to surface both).
+    - Parent technique present + non-empty tactic → ``tactic``.
+    - Technique present but tactic missing → ``general``.
+    - Otherwise → ``telemetry``.
+    """
+
+    techniques = row.get("techniques") or []
+    tactic = (row.get("tactic", "") or "").strip()
+
+    if not techniques:
+        return "none"
+
+    primary = (row.get("primary_technique", "") or (techniques[0] if techniques else "")).strip()
+    has_subtechnique = "." in primary
+
+    if has_subtechnique and tactic:
+        return "technique"
+    if primary and tactic:
+        return "tactic"
+    if primary:
+        return "general"
+    return "telemetry"
+
+
 _CLASSIFIERS = {
     "cicids": _classify_cicids,
     "ctu13": _classify_ctu13,
+    "ait_lds": _classify_ait_lds,
+    "mitre_engenuity": _classify_mitre_engenuity,
 }
 
 
@@ -277,13 +373,22 @@ def _accuracy(cm: ConfusionMatrix, total: int) -> float:
 def _iter_dataset(dataset: str, paths: Iterable[Path | str], *, limit: int | None) -> Iterator[dict[str, Any]]:
     if dataset == "cicids":
         return cicids_loader.iter_files(paths, limit=limit)
-    if dataset == "ctu13":
-        # CTU-13 download script materialises one file per scenario;
-        # streaming concatenation matches the CICIDS shape.
+    # The CTU-13, AIT-LDS, and MITRE Engenuity loaders all expose a
+    # ``iter_flows`` single-file generator; we concatenate them into a
+    # single stream so the runner sees one homogenous iterator
+    # regardless of dataset.
+    per_file_loaders: dict[str, Any] = {
+        "ctu13": ctu13_loader.iter_flows,
+        "ait_lds": ait_lds_loader.iter_flows,
+        "mitre_engenuity": mitre_engenuity_loader.iter_flows,
+    }
+    if dataset in per_file_loaders:
+        loader = per_file_loaders[dataset]
+
         def _gen() -> Iterator[dict[str, Any]]:
             remaining = limit
             for path in paths:
-                for row in ctu13_loader.iter_flows(path, limit=remaining):
+                for row in loader(path, limit=remaining):
                     yield row
                     if remaining is not None:
                         remaining -= 1
@@ -297,7 +402,13 @@ def _iter_dataset(dataset: str, paths: Iterable[Path | str], *, limit: int | Non
 def _to_ocsf(dataset: str, row: dict[str, Any]) -> dict[str, Any]:
     if dataset == "cicids":
         return cicids_loader.to_ocsf(row)
-    return ctu13_loader.to_ocsf(row)
+    if dataset == "ctu13":
+        return ctu13_loader.to_ocsf(row)
+    if dataset == "ait_lds":
+        return ait_lds_loader.to_ocsf(row)
+    if dataset == "mitre_engenuity":
+        return mitre_engenuity_loader.to_ocsf(row)
+    raise ValueError(f"unknown dataset: {dataset}")
 
 
 def evaluate(

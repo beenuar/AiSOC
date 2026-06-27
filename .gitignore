@@ -60,6 +60,10 @@ Thumbs.db
 # Logs
 logs/
 *.log
+# But: the AIT-LDS fidelity-benchmark fixture ships an Apache CLF
+# access.log on purpose (T5.3 in v8.0). It is committed test data,
+# not a runtime log, so unblock it explicitly.
+!services/agents/tests/eval_data/**/*.log
 
 # Docker
 .docker/

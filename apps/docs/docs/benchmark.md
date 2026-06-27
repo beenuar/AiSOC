@@ -138,6 +138,74 @@ These numbers move with the codebase. The current snapshot lives at
 > The T5.5 weekly job appends one row to that scoreboard every Sunday once
 > wet-eval CI lands.
 
+### Public-dataset fidelity (substrate)
+
+The fidelity harness lives at `services/agents/tests/fidelity/` and is
+T5.3 in the v8.0 plan. Substrate-mode runs the deterministic
+rule-based reference classifier from `runner.py` against a labelled
+public corpus; wet mode (off by default in CI) posts the OCSF event to
+an LLM endpoint and scores its answer.
+
+Numbers below are produced by the committed **micro fixtures** at
+`services/agents/tests/eval_data/`. The same code path runs against
+the full corpora locally when an operator downloads them via
+`scripts/datasets/`; the floors for full-corpus substrate runs live
+in `services/agents/tests/fidelity/expected_results.yaml`. Re-running
+the table below is one command per dataset (see below).
+
+| Dataset | Source | OCSF class | Substrate accuracy | Substrate macro F1 | Rows scored | Run on |
+|---|---|---|---|---|---|---|
+| CICIDS-2017 (micro fixture)         | Network flow CSVs (Canadian Institute for Cybersecurity)            | `4001` Network Activity      | 100.0 % | 1.000 | 100 | 2026-06-27 |
+| CTU-13 (full, local-only)           | Argus binetflows (Stratosphere Lab, CTU)                            | `4001` Network Activity      | _local-only — see [expected_results.yaml](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/fidelity/expected_results.yaml)_ | _local-only_ | _local-only_ | — |
+| AIT-LDS (micro fixture)             | Apache CLF + labels sidecar (Austrian Inst. of Technology)          | `6002` Web Resources Activity| 90.0 %  | 0.914 | 10  | 2026-06-27 |
+| MITRE Engenuity ATT&CK Evals (micro)| Round-7 procedure JSON shape (MITRE Engenuity)                      | `2004` Detection Finding     | 70.0 %  | 0.627 | 10  | 2026-06-27 |
+
+What each number actually means:
+
+- **Substrate accuracy / macro F1** are computed by `runner.evaluate()`
+  in `services/agents/tests/fidelity/runner.py`. The substrate classifier
+  is *deterministic and intentionally crude* — its job is to provide a
+  stable floor that visibly regresses when the loader or canonical-label
+  collapse logic changes.
+- **CICIDS-2017** scores 100 % on the micro fixture because the fixture
+  was hand-tuned to be unambiguous. On the full 8-day corpus the
+  substrate floor drops to ≥ 70 % accuracy / ≥ 0.55 macro F1 (the
+  `cicids_full` row in `expected_results.yaml`); that is the number to
+  compare against academic baselines.
+- **CTU-13** is local-only — the binetflow corpus is too large to commit.
+  Once downloaded with `scripts/datasets/download_ctu13.py`, the
+  substrate floor is ≥ 55 % accuracy / ≥ 0.45 macro F1 across all 13
+  scenarios after dropping `Background` per the dataset authors' protocol.
+- **AIT-LDS** scores 90 % on a 10-line Apache CLF fixture covering the
+  four canonical families (benign, recon, web_attack, lateral). The
+  single missed row is a small recon-style 404 burst that the
+  substrate classifier marks as `benign` because the path matches no
+  admin-style prefix — this is a deliberate floor, not a bug.
+- **MITRE Engenuity** scores 70 % on a 10-procedure fixture spanning
+  the five detection categories. The substrate misses the
+  `none → tactic` and `none → general` boundary cases (where MITRE
+  graded `Telemetry` but the substrate produced `tactic` based on
+  technique + tactic presence) — by design, since those are the cases
+  where the rubric is genuinely ambiguous.
+
+Wet-eval numbers, when produced, are appended manually to this section
+with the model + date; they NEVER overwrite the substrate floor.
+
+Reproduce the AIT-LDS or MITRE Engenuity row in 5 seconds:
+
+```bash
+cd services/agents
+poetry run python -m tests.fidelity.runner \
+  --dataset ait_lds \
+  --input tests/eval_data/ait_lds_micro/access.log \
+  --mode substrate
+
+poetry run python -m tests.fidelity.runner \
+  --dataset mitre_engenuity \
+  --input tests/eval_data/mitre_engenuity_micro.json \
+  --mode substrate
+```
+
 ## Performance, tokens, and cost
 
 <!-- BEGIN: T5.1 scaffolding for T2.4 wet-eval telemetry.
