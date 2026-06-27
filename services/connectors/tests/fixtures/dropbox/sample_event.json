@@ -1,0 +1,38 @@
+[
+  {
+    "event_id": "d-app-link",
+    "event_type": { ".tag": "app_link_team" },
+    "event_category": { ".tag": "apps" },
+    "actor": { "user": { "email": "admin@corp.test", "display_name": "Admin User" } },
+    "timestamp": "2026-06-01T10:00:00Z"
+  },
+  {
+    "event_id": "d-admin-role",
+    "event_type": { ".tag": "member_change_admin_role" },
+    "event_category": { ".tag": "members" },
+    "actor": { "user": { "email": "admin@corp.test" } },
+    "timestamp": "2026-06-01T10:01:00Z"
+  },
+  {
+    "event_id": "d-share-link",
+    "event_type": { ".tag": "shared_link_create" },
+    "event_category": { ".tag": "sharing" },
+    "actor": { "user": { "email": "user@corp.test" } },
+    "timestamp": "2026-06-01T10:02:00Z"
+  },
+  {
+    "event_id": "d-login-fail",
+    "event_type": { ".tag": "login_fail" },
+    "event_category": { ".tag": "logins" },
+    "actor": { "user": { "email": "victim@corp.test" } },
+    "origin": { "geo_location": { "ip_address": "203.0.113.5" } },
+    "timestamp": "2026-06-01T10:03:00Z"
+  },
+  {
+    "event_id": "d-file-request",
+    "event_type": { ".tag": "file_request_create" },
+    "event_category": { ".tag": "file_requests" },
+    "actor": { "user": { "email": "user@corp.test" } },
+    "timestamp": "2026-06-01T10:04:00Z"
+  }
+]

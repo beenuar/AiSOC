@@ -1,0 +1,62 @@
+{
+  "logs": [
+    {
+      "id": "log-critical",
+      "attributes": {
+        "status": "critical",
+        "message": "Database connection pool exhausted",
+        "host": "web-1",
+        "service": "api",
+        "timestamp": "2026-06-01T10:00:00Z"
+      }
+    },
+    {
+      "id": "log-error",
+      "attributes": {
+        "status": "error",
+        "message": "Upstream timeout calling billing",
+        "service": "worker"
+      }
+    },
+    {
+      "id": "log-warn",
+      "attributes": {
+        "level": "warn",
+        "message": "Slow query > 2s"
+      }
+    },
+    {
+      "id": "log-info",
+      "attributes": {
+        "status": "info",
+        "message": "Service started"
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": 111,
+      "alert_type": "error",
+      "title": "Monitor triggered: high error rate",
+      "text": "5xx rate above threshold",
+      "host": "db-1",
+      "date_happened": 1780000000
+    },
+    {
+      "id": 112,
+      "alert_type": "warning",
+      "title": "Latency degradation"
+    },
+    {
+      "id": 113,
+      "alert_type": "info",
+      "priority": "low",
+      "title": "Deploy completed"
+    },
+    {
+      "id": 114,
+      "alert_type": "info",
+      "title": "Routine note"
+    }
+  ]
+}
