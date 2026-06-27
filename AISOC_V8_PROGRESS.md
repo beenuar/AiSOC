@@ -26,14 +26,19 @@ update this tracker after each landed task.
 | T5.3 | AIT-LDS + MITRE Engenuity loaders | P1 | M | ✅ **Done** (2026-06-27) | Two new fidelity loaders + 16 tests + date-stamped `benchmark.md` section (29/29 fidelity tests). |
 | T4 wave-3 | Last 5–6 connectors (Abnormal Security, Box, Datadog, Dropbox, Lacework, OCI, Sublime Security) | P1 each | S–M each | ✅ **Done** (2026-06-27) | 6 new plugin manifests + 6 new docs pages + 39 new tests + 6 connector resilience fixes. Full connector suite 633/633. |
 
-All four T-IDs land via dedicated feature branches:
+All four T-IDs landed via dedicated PRs (merged 2026-06-27):
 
-| T-ID | Branch |
-|------|--------|
-| T3.7 | `feat/v8-t37-nl-playbook-drafter` |
-| T3.8 | (committed onto same T3.7 branch, will fork at PR time) |
-| T5.3 | `feat/v8-t53-aitlds-mitre-engenuity` |
-| T4 wave-3 | `feat/v8-t4-wave3-connector-scaffolding` |
+| T-ID | PR | Branch | Merged at (UTC) |
+|------|----|--------|-----------------|
+| T3.7 | [#330](https://github.com/beenuar/AiSOC/pull/330) | `feat/v8-t37-nl-playbook-drafter` | 08:55:22 |
+| T3.8 | [#331](https://github.com/beenuar/AiSOC/pull/331) | `feat/v8-t38-storybook-design-system` | 08:57:36 |
+| T5.3 | [#332](https://github.com/beenuar/AiSOC/pull/332) | `feat/v8-t53-aitlds-mitre-engenuity` | 08:53:48 |
+| T4 wave-3 | [#333](https://github.com/beenuar/AiSOC/pull/333) | `feat/v8-t4-wave3-connector-scaffolding` | 08:55:17 |
+| Tracker | [#334](https://github.com/beenuar/AiSOC/pull/334) | `docs/v8-progress-tracker` | 08:57:39 |
+
+Follow-up after merge: [`feat/v8-storybook-draftdialog-story`](https://github.com/beenuar/AiSOC/tree/feat/v8-storybook-draftdialog-story) re-introduces the
+`DraftFromPromptDialog` Storybook story that was split out of #331
+because it imported a component that only existed on #330.
 
 ---
 
@@ -117,9 +122,10 @@ All four T-IDs land via dedicated feature branches:
 
 ## What's still open
 
-- **Open one PR per T-ID** on the public repo and merge after CI is
-  green. The four feature branches are pushed; each commit body
-  carries a tight summary of the change for the PR description.
+- **All five PRs are merged.** Follow-up to re-add the
+  `DraftFromPromptDialog` Storybook story (was split out of #331
+  because of cross-branch dependency on #330) is the only loose
+  end and is staged on `feat/v8-storybook-draftdialog-story`.
 - This tracker should be updated on every merge with the PR URL and
   the merge timestamp.
 
