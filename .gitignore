@@ -44,6 +44,14 @@ venv/
 .pytest_cache/
 htmlcov/
 .coverage
+.coverage.*
+coverage.xml
+# Phase 2.2 — vitest v8 coverage outputs (apps/web/coverage/) and
+# any other per-service coverage dump. Generated on every CI run,
+# uploaded as artefacts — never committed.
+coverage/
+**/coverage/
+*.lcov
 
 # IDE
 .idea/

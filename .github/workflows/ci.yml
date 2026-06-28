@@ -42,7 +42,7 @@ jobs:
   #   measurement, etc.). They run with jsdom; no browser required.
   # ──────────────────────────────────────────────
   web-test:
-    name: Web — Vitest smoke tests
+    name: Web — Vitest smoke tests + coverage gate
     runs-on: ubuntu-latest
     needs: web-lint
     defaults:
@@ -57,7 +57,21 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      # Phase 2.2 — coverage gate. Floors are declared in
+      # `vitest.config.ts`'s `test.coverage.thresholds`; vitest exits
+      # non-zero when any floor is breached. The baseline at the time
+      # of introduction was statements 58 / branches 52 / functions
+      # 51 / lines 60; floors sit at baseline - 3pp to absorb
+      # measurement variance. Raise as the suite grows.
+      - run: pnpm test:cov
+      # Upload the coverage report so the marketing site's eval-page
+      # widget (Phase 4.3) can grab a fresh value on every main push.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-vitest-coverage
+          path: apps/web/coverage/
+          retention-days: 7
 
   # ──────────────────────────────────────────────
   # Build the Next.js web app
@@ -302,15 +316,24 @@ jobs:
         # of this job stays "pure helpers + thin router contracts, no
         # service boot, no Postgres/Kafka/Redis".
         run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka
-      - name: Run fusion unit tests
+      - name: Install pytest-cov (Phase 2.2 coverage gate)
+        run: pip install --quiet 'pytest-cov>=4,<7'
+      # Phase 2.2 — every wave-1 service now has a measured coverage
+      # floor encoded in its pyproject under `[tool.coverage.report]
+      # fail_under`. Pytest reads it via `--cov-config=pyproject.toml`
+      # and exits non-zero if the floor is breached. Floors are the
+      # branch-on baseline at the time of introduction minus ~2-3pp
+      # to absorb measurement variance; raise them as the suites
+      # grow.
+      - name: Run fusion unit tests + coverage gate
         working-directory: services/fusion
-        run: python -m pytest tests/ -v --tb=short
-      - name: Run honeytokens unit tests
+        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+      - name: Run honeytokens unit tests + coverage gate
         working-directory: services/honeytokens
-        run: python -m pytest tests/ -v --tb=short
-      - name: Run purple-team unit tests
+        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+      - name: Run purple-team unit tests + coverage gate
         working-directory: services/purple-team
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
 
   # ──────────────────────────────────────────────
   # Phase 2.1 — Wider Python service test matrix.
@@ -415,9 +438,19 @@ jobs:
             'jinja2>=3,<4' \
             'jsonschema>=4,<5' \
             'tenacity>=8,<10'
-      - name: Run ${{ matrix.service }} tests
+      # Phase 2.2 — coverage floor read from each service's pyproject.
+      # `--cov-config=pyproject.toml` makes coverage.py honour the
+      # `[tool.coverage.report] fail_under = N` line; pytest-cov then
+      # exits non-zero when the floor is breached. The N is the
+      # branch-on baseline at the time of introduction minus ~2-3pp.
+      - name: Run ${{ matrix.service }} tests + coverage gate
         working-directory: services/${{ matrix.service }}
-        run: python -m pytest tests/ -v --tb=short
+        run: |
+          python -m pytest tests/ \
+            --cov-config=pyproject.toml \
+            --cov=app \
+            --cov-report=term-missing \
+            -v --tb=short
 
   # ──────────────────────────────────────────────
   # SDK packages (Python)

@@ -25,3 +25,31 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "httpx"]
+
+
+# Phase 2.2 — coverage floor for CI gate.
+#
+# Measured baseline at the time of introduction: 12%. Floor is
+# set at 10% (current - 2pp) so flaky branch-execution variance
+# doesn't break main, while still catching any real regression. Raise
+# this number as the suite grows — never lower it without a written
+# justification. The pyproject is consulted by
+# `pytest --cov-config=pyproject.toml --cov=app` in CI.
+#
+# Why pyproject instead of pytest.ini: keeps the floor next to the
+# dep constraint that produced it, so a bump in either is reviewed
+# in the same diff.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 10
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
