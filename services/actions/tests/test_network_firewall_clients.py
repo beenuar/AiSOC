@@ -215,10 +215,7 @@ async def test_cloudflare_block_ip_zone_returns_rule_id() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_cloudflare_unblock_ip_zone_deletes_rule_by_id() -> None:
-    url = (
-        "https://api.cloudflare.com/client/v4/zones/Z1/rulesets/phases/"
-        "http_request_firewall_custom/entrypoint/rules/rule-001"
-    )
+    url = "https://api.cloudflare.com/client/v4/zones/Z1/rulesets/phases/" "http_request_firewall_custom/entrypoint/rules/rule-001"
     respx.delete(url).mock(return_value=httpx.Response(200, json={"success": True, "result": {}}))
 
     client = CloudflareClient(api_token="cf-token")

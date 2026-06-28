@@ -87,7 +87,7 @@ class CloudflareClient:
         async with httpx.AsyncClient(timeout=30.0) as client:
             rule = {
                 "action": "block",
-                "expression": f'(ip.src eq {ip})',
+                "expression": f"(ip.src eq {ip})",
                 "description": description,
                 "enabled": True,
             }

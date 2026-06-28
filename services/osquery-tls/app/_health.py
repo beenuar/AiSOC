@@ -64,9 +64,7 @@ from typing import Any
 from fastapi import FastAPI, Response
 
 
-def install_health_routes(
-    app: FastAPI, *, service_name: str
-) -> tuple[Callable[[], None], Callable[[], None]]:
+def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[[], None], Callable[[], None]]:
     """Install ``/livez`` and ``/readyz`` on ``app``.
 
     Returns a ``(mark_ready, mark_not_ready)`` tuple the caller

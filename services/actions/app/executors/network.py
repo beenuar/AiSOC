@@ -242,10 +242,7 @@ class BlockIPExecutor(BaseExecutor):
                 "action": "block_ip",
                 "ip": ip,
                 "firewall_rule_id": f"SIM-BLOCK-{ip.replace('.', '-')}",
-                "note": (
-                    "Simulation mode — provide aws_*/panos_*/fgt_*/cf_* credentials "
-                    "to enable live execution." + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — provide aws_*/panos_*/fgt_*/cf_* credentials " "to enable live execution." + _SIM_FUNNEL_CTA),
             },
             rollback_data={"ip": ip, "rule_type": "block_ip"},
             completed_at=datetime.utcnow(),
@@ -405,10 +402,7 @@ class AllowIPExecutor(BaseExecutor):
             output={
                 "action": "allow_ip",
                 "ip": ip,
-                "note": (
-                    "Simulation mode — provide aws_*/panos_*/fgt_*/cf_* credentials "
-                    "to enable live execution." + _SIM_FUNNEL_CTA
-                ),
+                "note": ("Simulation mode — provide aws_*/panos_*/fgt_*/cf_* credentials " "to enable live execution." + _SIM_FUNNEL_CTA),
             },
             rollback_data={"ip": ip},
             completed_at=datetime.utcnow(),

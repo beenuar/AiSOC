@@ -201,8 +201,7 @@ class IsolateHostExecutor(BaseExecutor):
                 "note": (
                     "Simulation mode — provide cs_client_id/cs_client_secret, "
                     "mde_tenant_id/mde_client_id/mde_client_secret, or "
-                    "s1_console_url/s1_api_token to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "s1_console_url/s1_api_token to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"hostname": hostname},
@@ -298,8 +297,7 @@ class QuarantineFileExecutor(BaseExecutor):
                 "quarantine_id": f"SIM-QRN-{file_hash[:8] if file_hash else 'NOHASH'}",
                 "note": (
                     "Simulation mode — provide cs_client_id/cs_client_secret or "
-                    "s1_console_url/s1_api_token to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "s1_console_url/s1_api_token to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"file_path": file_path, "file_hash": file_hash},
@@ -398,8 +396,7 @@ class KillProcessExecutor(BaseExecutor):
                 "pid": pid,
                 "note": (
                     "Simulation mode — provide cs_client_id/cs_client_secret (PID-based) or "
-                    "s1_console_url/s1_api_token (process_name-based) to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "s1_console_url/s1_api_token (process_name-based) to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={},
@@ -581,8 +578,7 @@ class RunAVScanExecutor(BaseExecutor):
                 "scan_type": scan_type,
                 "note": (
                     "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret or "
-                    "s1_console_url/s1_api_token to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "s1_console_url/s1_api_token to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={},

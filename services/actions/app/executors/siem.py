@@ -553,8 +553,7 @@ class AckAlertExecutor(BaseExecutor):
                 "note": (
                     "Simulation mode — provide splunk_url/splunk_token, "
                     "elastic_url+kibana_url, or "
-                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"alert_id": alert_id},
@@ -670,8 +669,7 @@ class SuppressAlertExecutor(BaseExecutor):
                 "note": (
                     "Simulation mode — provide splunk_url/splunk_token, "
                     "elastic_url+kibana_url, or "
-                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
-                    + _SIM_FUNNEL_CTA
+                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"alert_id": alert_id},
