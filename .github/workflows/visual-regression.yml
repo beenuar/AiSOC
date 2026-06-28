@@ -1,0 +1,119 @@
+# Phase 4.7 — visual regression for the AiSOC design system.
+#
+# This workflow:
+#   1. Builds Storybook with the same flags the marketing team uses for
+#      the docs site embed.
+#   2. Boots a static HTTP server over `storybook-static/` (handled by
+#      Playwright's `webServer` block in `apps/web/playwright.config.ts`).
+#   3. Walks `storybook-static/index.json`, navigates each story, and
+#      asserts `toHaveScreenshot()` against the baseline PNGs in
+#      `apps/web/e2e/visual/visual.spec.ts-snapshots/`.
+#
+# When the diff fails, the workflow uploads the Playwright HTML report
+# and the failed/expected/actual PNG triples so reviewers can scrub the
+# diff inline on the PR.
+#
+# Baselines are committed to git. To refresh them intentionally (after a
+# deliberate design change) run:
+#
+#   pnpm --filter @aisoc/web build-storybook
+#   pnpm --filter @aisoc/web visual:update
+#
+# and commit the resulting PNGs. CI re-runs immediately to confirm the
+# update lands cleanly.
+#
+# We deliberately pin Playwright to a tagged Docker image so glyph
+# rendering / GPU rasterisation stays byte-stable between baseline and
+# diff runs — this is the single biggest source of flakes in Playwright
+# visual suites and the only reliable fix is "always run in the same
+# container".
+
+name: visual-regression
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - ".github/workflows/visual-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - ".github/workflows/visual-regression.yml"
+
+# Cancel earlier runs on the same ref so only the latest commit on a
+# PR keeps running — the visual suite is the slowest job in CI and
+# stacking runs wastes minutes.
+concurrency:
+  group: visual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    name: Storybook visual diff
+    runs-on: ubuntu-latest
+    # Pin the Playwright image so font hinting + Chromium build are
+    # identical between baseline-capture and diff-runs. Bumping this
+    # tag invalidates every baseline; expect a follow-up PR to
+    # regenerate them.
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.0-jammy
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        # Workspace-aware install — pnpm reuses its content-addressed
+        # store across jobs so this is fast on warm caches.
+        working-directory: ${{ github.workspace }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Storybook
+        # Pass --quiet so the multi-thousand-line addon-docs progress
+        # spam doesn't bury the eventual failure summary.
+        run: pnpm build-storybook --quiet
+
+      - name: Run visual regression
+        run: pnpm visual
+        env:
+          CI: "true"
+
+      - name: Upload Playwright report
+        # The HTML report carries the diff overlays the reviewers need.
+        # `if: always()` so it ships on failures too.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+      - name: Upload failed snapshots
+        # Playwright writes <name>-expected.png, <name>-actual.png, and
+        # <name>-diff.png next to each other under test-results/. We
+        # ship the whole directory so reviewers don't have to scrub the
+        # HTML report just to compare two pixels.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results
+          retention-days: 14

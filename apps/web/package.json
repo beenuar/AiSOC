@@ -13,9 +13,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
+    "screencast": "playwright test --project=screencast",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build --output-dir storybook-static",
-    "test-storybook": "test-storybook"
+    "test-storybook": "test-storybook",
+    "visual": "PLAYWRIGHT_PROJECT=visual playwright test --project=visual",
+    "visual:update": "PLAYWRIGHT_PROJECT=visual playwright test --project=visual --update-snapshots",
+    "e2e": "PLAYWRIGHT_PROJECT=journey playwright test --project=journey"
   },
   "dependencies": {
     "@aisoc/types": "workspace:*",
@@ -56,11 +60,13 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
+    "@playwright/test": "^1.49.0",
     "@vitest/coverage-v8": "^4.1.9",
     "autoprefixer": "^10.4.17",
     "axe-core": "^4.11.4",
     "eslint": "^9.39.0",
     "eslint-config-next": "16.2.7",
+    "http-server": "^14.1.1",
     "jsdom": "^24.0.0",
     "postcss": "^8.5.15",
     "storybook": "^9.1.0",

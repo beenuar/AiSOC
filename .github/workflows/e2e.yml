@@ -1,0 +1,95 @@
+# Phase 4.8 — buyer-journey end-to-end test for the console.
+#
+# Walks the canonical analyst flow that every demo / sales conversation
+# leans on:
+#
+#   /alerts → (switch to alert grid) → (click row → Investigation Rail) →
+#   /alerts/<id> → /playbooks → (open Run History tab) → /playbooks/new
+#
+# The spec stubs every backend call via Playwright's network interception
+# (`page.route()`) so the suite is fully hermetic: the only thing it
+# needs is a Next dev server. We boot that as a `webServer` block in
+# `apps/web/playwright.config.ts` (project = `journey`).
+#
+# This workflow runs on every PR that touches the console, the package
+# manifest, or the workflow itself. Failures upload the Playwright HTML
+# report + traces / screenshots so reviewers can scrub the regression
+# inline on the PR.
+
+name: e2e
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - "packages/types/**"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - "packages/types/**"
+      - ".github/workflows/e2e.yml"
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  buyer-journey:
+    name: Buyer journey
+    runs-on: ubuntu-latest
+    # Same pinned Playwright image as the visual suite so the Chromium
+    # build is stable. The image already ships pnpm + Node 22 but we
+    # still re-export the same setup steps so the matrix is uniform.
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.0-jammy
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: ${{ github.workspace }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run buyer-journey E2E
+        run: pnpm e2e
+        env:
+          CI: "true"
+          # The journey spec hits its own stubbed Next dev server on
+          # 3100, so make sure no proxy is fronting localhost.
+          NO_PROXY: "127.0.0.1,localhost"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+      - name: Upload Playwright traces / screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: apps/web/test-results
+          retention-days: 14
