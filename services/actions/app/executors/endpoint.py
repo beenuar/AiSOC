@@ -1,18 +1,31 @@
 """
 Endpoint action executors: isolate host, quarantine file, kill process, run script.
 
-Live integration via CrowdStrike Falcon RTR when credentials are provided in
-ActionRequest.parameters:
-    cs_client_id: str
-    cs_client_secret: str
-    cs_base_url: str  (optional, default: https://api.crowdstrike.com)
+Vendor priority
+---------------
 
-Falls back to simulation mode if credentials are absent.
+The executors try EDR vendors in this order when their credentials
+are present in :class:`ActionRequest.parameters`:
 
-For Microsoft Defender for Endpoint isolation, supply instead:
-    mde_tenant_id: str
-    mde_client_id: str
-    mde_client_secret: str
+1. **CrowdStrike Falcon RTR** — credentials prefixed ``cs_``.
+2. **Microsoft Defender for Endpoint** — credentials prefixed ``mde_``.
+3. **SentinelOne** (Phase 3.1) — credentials prefixed ``s1_``.
+
+If no vendor credentials are supplied we fall back to simulation
+mode. The selection order is intentional: CrowdStrike has the most
+complete API surface (it can run arbitrary scripts via RTR, which
+SentinelOne can't), so when an operator hands us both we prefer it.
+SentinelOne lacks RTR-equivalent APIs for a handful of actions —
+the SentinelOne client raises ``NotImplementedError`` for those and
+this executor logs it before falling through to simulation, so the
+caller sees a clear error instead of a silent no-op.
+
+Credential reference
+--------------------
+
+* ``cs_client_id``, ``cs_client_secret``, ``cs_base_url`` (optional)
+* ``mde_tenant_id``, ``mde_client_id``, ``mde_client_secret``
+* ``s1_console_url``, ``s1_api_token``
 """
 
 from __future__ import annotations
@@ -23,6 +36,7 @@ import structlog
 
 from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
+from app.clients.sentinelone_client import SentinelOneClient
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
 
@@ -50,6 +64,40 @@ def _mde_client(params: dict) -> DefenderClient | None:
     return DefenderClient(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret)
 
 
+def _s1_client(params: dict) -> SentinelOneClient | None:
+    """Build a SentinelOne client from ``ActionRequest.parameters``.
+
+    Returns ``None`` when either field is missing so the executor
+    can cleanly fall through to the next vendor / simulation. We
+    don't pull the API token out of an env var here — the dispatcher
+    intentionally treats every credential as request-scoped so that
+    multi-tenant deployments can route different tenants to
+    different S1 consoles in the same process.
+    """
+    console_url = params.get("s1_console_url")
+    api_token = params.get("s1_api_token")
+    if not (console_url and api_token):
+        return None
+    return SentinelOneClient(console_url=console_url, api_token=api_token)
+
+
+async def _cs_contain_host_by_hostname(cs: CrowdStrikeRTRClient, hostname: str) -> dict:
+    """Resolve hostname → device_id, then containment.
+
+    The standalone CrowdStrikeRTRClient API takes a ``device_id``
+    everywhere. The executor accepts a hostname (because that's
+    what the playbook layer ships), so we resolve here and surface
+    a useful error if Falcon doesn't know the host. Without this
+    wrapper an unknown hostname produced a confusing 404 inside
+    ``contain_host`` because Falcon was being asked to contain a
+    literal computer name as if it were a device_id.
+    """
+    device_id = await cs.get_device_id(hostname)
+    if not device_id:
+        raise ValueError(f"No CrowdStrike device_id for hostname: {hostname}")
+    return await cs.contain_host(device_id)
+
+
 class IsolateHostExecutor(BaseExecutor):
     """Isolates a host from the network via EDR API.
 
@@ -65,7 +113,7 @@ class IsolateHostExecutor(BaseExecutor):
         cs = _cs_client(request.parameters)
         if cs:
             try:
-                result = await cs.contain_host(hostname)
+                result = await _cs_contain_host_by_hostname(cs, hostname)
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.COMPLETED,
@@ -109,6 +157,33 @@ class IsolateHostExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Phase 3.1 — SentinelOne fallback. Same blast-radius +
+        # rollback contract as CrowdStrike / Defender so the rollback
+        # router can route ``vendor: sentinelone`` to
+        # ``lift_containment`` without re-checking the credentials
+        # we used.
+        s1 = _s1_client(request.parameters)
+        if s1:
+            try:
+                result = await s1.contain_host(hostname)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.HIGH,
+                    output=result,
+                    rollback_data={"hostname": hostname, "vendor": "sentinelone"},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("isolate_host.sentinelone.failed", hostname=hostname, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.HIGH,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "isolate_host.simulation",
             hostname=hostname,
@@ -124,8 +199,10 @@ class IsolateHostExecutor(BaseExecutor):
                 "hostname": hostname,
                 "isolation_id": f"SIM-ISO-{hostname}",
                 "note": (
-                    "Simulation mode — provide cs_client_id/cs_client_secret or "
-                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
+                    "Simulation mode — provide cs_client_id/cs_client_secret, "
+                    "mde_tenant_id/mde_client_id/mde_client_secret, or "
+                    "s1_console_url/s1_api_token to enable live execution."
+                    + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"hostname": hostname},
@@ -156,13 +233,16 @@ class QuarantineFileExecutor(BaseExecutor):
         cs = _cs_client(request.parameters)
         if cs:
             try:
-                result = await cs.quarantine_file(hostname, file_path)
+                device_id = await cs.get_device_id(hostname)
+                if not device_id:
+                    raise ValueError(f"No CrowdStrike device_id for hostname: {hostname}")
+                result = await cs.quarantine_file(device_id, file_path)
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.COMPLETED,
                     blast_radius=BlastRadius.LOW,
                     output=result,
-                    rollback_data={"hostname": hostname, "file_path": file_path, "file_hash": file_hash},
+                    rollback_data={"hostname": hostname, "file_path": file_path, "file_hash": file_hash, "vendor": "crowdstrike"},
                     completed_at=datetime.utcnow(),
                 )
             except Exception as exc:
@@ -175,10 +255,36 @@ class QuarantineFileExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Phase 3.1 — SentinelOne fallback. The S1 client's
+        # ``quarantine_file`` issues a file-fetch into the forensics
+        # vault; see :class:`SentinelOneClient.quarantine_file` for
+        # the caveat around manual console mark-as-malicious.
+        s1 = _s1_client(request.parameters)
+        if s1:
+            try:
+                result = await s1.quarantine_file(hostname, file_path)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.LOW,
+                    output=result,
+                    rollback_data={"hostname": hostname, "file_path": file_path, "file_hash": file_hash, "vendor": "sentinelone"},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("quarantine_file.sentinelone.failed", error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "quarantine_file.simulation",
             path=file_path,
-            reason="no cs credentials",
+            reason="no EDR credentials",
             funnel="plugin-sdk",
         )
         return ActionResult(
@@ -190,7 +296,11 @@ class QuarantineFileExecutor(BaseExecutor):
                 "path": file_path,
                 "hash": file_hash,
                 "quarantine_id": f"SIM-QRN-{file_hash[:8] if file_hash else 'NOHASH'}",
-                "note": ("Simulation mode — provide cs_client_id/cs_client_secret to enable live execution." + _SIM_FUNNEL_CTA),
+                "note": (
+                    "Simulation mode — provide cs_client_id/cs_client_secret or "
+                    "s1_console_url/s1_api_token to enable live execution."
+                    + _SIM_FUNNEL_CTA
+                ),
             },
             rollback_data={"file_path": file_path, "file_hash": file_hash},
             completed_at=datetime.utcnow(),
@@ -213,13 +323,18 @@ class KillProcessExecutor(BaseExecutor):
         cs = _cs_client(request.parameters)
         if cs:
             try:
-                result = await cs.kill_process(hostname, pid=pid, process_name=process_name)
+                device_id = await cs.get_device_id(hostname)
+                if not device_id:
+                    raise ValueError(f"No CrowdStrike device_id for hostname: {hostname}")
+                if pid is None:
+                    raise ValueError("CrowdStrike kill_process requires a PID")
+                result = await cs.kill_process(device_id, int(pid))
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.COMPLETED,
                     blast_radius=BlastRadius.MEDIUM,
                     output=result,
-                    rollback_data={},
+                    rollback_data={"vendor": "crowdstrike"},
                     completed_at=datetime.utcnow(),
                 )
             except Exception as exc:
@@ -232,10 +347,45 @@ class KillProcessExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Phase 3.1 — SentinelOne fallback. Unlike CrowdStrike the
+        # S1 client requires ``process_name`` (the S1 management
+        # plane targets binaries by SHA1, not by PID); see the
+        # NotImplementedError path in :class:`SentinelOneClient.kill_process`.
+        s1 = _s1_client(request.parameters)
+        if s1:
+            try:
+                result = await s1.kill_process(hostname, pid=pid, process_name=process_name)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.MEDIUM,
+                    output=result,
+                    rollback_data={"vendor": "sentinelone"},
+                    completed_at=datetime.utcnow(),
+                )
+            except NotImplementedError as exc:
+                logger.warning(
+                    "kill_process.sentinelone.unsupported",
+                    process=process_name,
+                    pid=pid,
+                    reason=str(exc),
+                )
+                # Fall through to simulation — the caller probably
+                # asked for PID-only termination, which S1 can't do.
+            except Exception as exc:
+                logger.error("kill_process.sentinelone.failed", error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.MEDIUM,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "kill_process.simulation",
             process=process_name,
-            reason="no cs credentials",
+            reason="no EDR credentials (or vendor unsupported for this shape)",
             funnel="plugin-sdk",
         )
         return ActionResult(
@@ -246,7 +396,11 @@ class KillProcessExecutor(BaseExecutor):
                 "action": "kill_process",
                 "process": process_name,
                 "pid": pid,
-                "note": ("Simulation mode — provide cs_client_id/cs_client_secret to enable live execution." + _SIM_FUNNEL_CTA),
+                "note": (
+                    "Simulation mode — provide cs_client_id/cs_client_secret (PID-based) or "
+                    "s1_console_url/s1_api_token (process_name-based) to enable live execution."
+                    + _SIM_FUNNEL_CTA
+                ),
             },
             rollback_data={},
             completed_at=datetime.utcnow(),
@@ -266,18 +420,27 @@ class RunScriptExecutor(BaseExecutor):
         hostname = request.target
         script_name = request.parameters.get("script_name", "")
         script_args = request.parameters.get("script_args", "")
+        script_content = request.parameters.get("script_content", "")
         logger.info("Executing run_script", hostname=hostname, script=script_name)
 
         cs = _cs_client(request.parameters)
         if cs:
             try:
-                result = await cs.run_script(hostname, script_name=script_name, script_args=script_args)
+                device_id = await cs.get_device_id(hostname)
+                if not device_id:
+                    raise ValueError(f"No CrowdStrike device_id for hostname: {hostname}")
+                # The CrowdStrike client's run_script takes the raw
+                # PowerShell body, not a registered script_name +
+                # args. We accept either shape from the playbook
+                # layer and prefer raw content when supplied.
+                body = script_content or f"runscript -CloudFile='{script_name}' -CommandLine='{script_args}'"
+                result = await cs.run_script(device_id, body)
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.COMPLETED,
                     blast_radius=BlastRadius.HIGH,
                     output=result,
-                    rollback_data={},
+                    rollback_data={"vendor": "crowdstrike"},
                     completed_at=datetime.utcnow(),
                 )
             except Exception as exc:
@@ -290,10 +453,41 @@ class RunScriptExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Phase 3.1 — SentinelOne has no non-interactive remote-script
+        # API, so we surface that explicitly to the caller instead of
+        # silently falling back to simulation. The dispatcher / agent
+        # loop can use this signal to fail the playbook step rather
+        # than report a fake success.
+        s1 = _s1_client(request.parameters)
+        if s1:
+            try:
+                result = await s1.run_script(hostname, script_content or script_name)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.HIGH,
+                    output=result,
+                    rollback_data={"vendor": "sentinelone"},
+                    completed_at=datetime.utcnow(),
+                )
+            except NotImplementedError as exc:
+                logger.error(
+                    "run_script.sentinelone.unsupported",
+                    hostname=hostname,
+                    reason=str(exc),
+                )
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.HIGH,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "run_script.simulation",
             script=script_name,
-            reason="no cs credentials",
+            reason="no cs credentials (and SentinelOne does not support remote scripts)",
             funnel="plugin-sdk",
         )
         return ActionResult(
@@ -333,7 +527,7 @@ class RunAVScanExecutor(BaseExecutor):
                     status=ActionStatus.COMPLETED,
                     blast_radius=BlastRadius.LOW,
                     output=result,
-                    rollback_data={},
+                    rollback_data={"vendor": "defender"},
                     completed_at=datetime.utcnow(),
                 )
             except Exception as exc:
@@ -346,10 +540,35 @@ class RunAVScanExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Phase 3.1 — SentinelOne fallback. S1 doesn't distinguish
+        # quick vs full scans; the client logs a warning and runs
+        # one full scan either way.
+        s1 = _s1_client(request.parameters)
+        if s1:
+            try:
+                result = await s1.run_av_scan(hostname, scan_type=scan_type)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.LOW,
+                    output=result,
+                    rollback_data={"vendor": "sentinelone"},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("run_av_scan.sentinelone.failed", error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "run_av_scan.simulation",
             hostname=hostname,
-            reason="no MDE credentials",
+            reason="no EDR credentials",
             funnel="plugin-sdk",
         )
         return ActionResult(
@@ -361,7 +580,9 @@ class RunAVScanExecutor(BaseExecutor):
                 "hostname": hostname,
                 "scan_type": scan_type,
                 "note": (
-                    "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret to enable live execution." + _SIM_FUNNEL_CTA
+                    "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret or "
+                    "s1_console_url/s1_api_token to enable live execution."
+                    + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={},
