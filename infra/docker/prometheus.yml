@@ -45,6 +45,23 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Phase 2.4 — alert rule files. Each file is loaded at Prometheus
+# start-up; reloading rules at runtime requires SIGHUP'ing the
+# container. The shipped ruleset lives under `infra/docker/alerts/`
+# so adding a rule = adding a file + including it here.
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+# Phase 2.4 — Alertmanager wiring. Prometheus forwards firing /
+# resolved alerts to the in-cluster Alertmanager defined in
+# `docker-compose.yml`. Both run inside the `aisoc` network so the
+# DNS name `alertmanager:9093` resolves cluster-internal.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
 scrape_configs:
   # FastAPI core API — uvicorn worker on container port 8000.
   - job_name: 'aisoc-api'
@@ -74,6 +91,14 @@ scrape_configs:
   - job_name: 'aisoc-threatintel'
     static_configs:
       - targets: ['threatintel:8005']
+    metrics_path: /metrics
+
+  # Phase 2.4 — self-scrape Alertmanager so we have visibility
+  # into the notification pipeline (delivery failures show up as
+  # `alertmanager_notifications_failed_total > 0`).
+  - job_name: 'aisoc-alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
     metrics_path: /metrics
 
   # NOTE: agents, actions, enrichment, ueba, honeytokens,

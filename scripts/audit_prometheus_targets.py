@@ -68,6 +68,16 @@ HOSTNAME_TO_SVC_DIR = {
     "teams-bot": "teams-bot",
 }
 
+# Hostnames that map to a third-party image (not a service in our
+# `services/` tree), so the "does the service tree expose /metrics"
+# check doesn't apply. The image ships `/metrics` natively and we
+# trust its upstream contract. Phase 2.4 added `alertmanager` here
+# when wiring the in-cluster Alertmanager into the observability
+# stack.
+THIRD_PARTY_HOSTS: set[str] = {
+    "alertmanager",
+}
+
 # Services we are intentionally NOT scraping even though they CAN
 # have /metrics (they may be opt-in, gated behind a profile, or
 # kept out of the default observability surface for cost reasons).
@@ -75,7 +85,9 @@ HOSTNAME_TO_SVC_DIR = {
 SCRAPE_EXEMPT: set[str] = set()
 
 JOB_TARGET_RE = re.compile(
-    r"- job_name:\s*['\"]?(?P<job>[\w-]+)['\"]?\s*\n" r"(?:\s+.*\n)*?" r"\s+- targets:\s*\[\s*['\"]?(?P<host>[\w-]+):(?P<port>\d+)['\"]?",
+    r"- job_name:\s*['\"]?(?P<job>[\w-]+)['\"]?\s*\n"
+    r"(?:\s+.*\n)*?"
+    r"\s+- targets:\s*\[\s*['\"]?(?P<host>[\w-]+):(?P<port>\d+)['\"]?",
     re.MULTILINE,
 )
 
@@ -124,7 +136,9 @@ def main() -> int:
     args = parser.parse_args()
 
     scrape_jobs = parse_prometheus()
-    scraped_dirs = {HOSTNAME_TO_SVC_DIR.get(host, host) for _, host, _ in scrape_jobs}
+    scraped_dirs = {
+        HOSTNAME_TO_SVC_DIR.get(host, host) for _, host, _ in scrape_jobs
+    }
 
     print(f"Audit of {PROMETHEUS.relative_to(REPO_ROOT)}\n")
     print(f"{'job':<20} {'host':<18} {'port':>6}  service tree has /metrics?")
@@ -132,20 +146,27 @@ def main() -> int:
 
     drift: list[str] = []
     for job, host, port in scrape_jobs:
+        if host in THIRD_PARTY_HOSTS:
+            print(f"{job:<20} {host:<18} {port:>6}  third-party image")
+            continue
         svc_dir = HOSTNAME_TO_SVC_DIR.get(host)
         if svc_dir is None:
             print(f"{job:<20} {host:<18} {port:>6}  HOSTNAME UNKNOWN")
             drift.append(
                 f"prometheus.yml scrapes {host!r} but no compose service "
                 f"answers to that hostname (add it to "
-                f"HOSTNAME_TO_SVC_DIR in {pathlib.Path(__file__).name})"
+                f"HOSTNAME_TO_SVC_DIR or THIRD_PARTY_HOSTS in "
+                f"{pathlib.Path(__file__).name})"
             )
             continue
         has = has_metrics_endpoint(svc_dir)
         marker = "yes" if has else "NO  <-- broken scrape"
         print(f"{job:<20} {host:<18} {port:>6}  {marker}")
         if not has:
-            drift.append(f"prometheus.yml scrapes {host}:{port} but " f"services/{svc_dir}/ has no /metrics handler")
+            drift.append(
+                f"prometheus.yml scrapes {host}:{port} but "
+                f"services/{svc_dir}/ has no /metrics handler"
+            )
 
     print()
 

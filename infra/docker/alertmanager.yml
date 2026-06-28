@@ -1,0 +1,84 @@
+# Phase 2.4 — Alertmanager configuration for the AiSOC dev stack.
+#
+# The dev compose stack ships with a stub receiver that writes
+# notifications to a local webhook endpoint (a tiny FastAPI handler
+# in `services/api` would catch these in a future iteration; for
+# now they bounce to stdout via Alertmanager's own logs). Operators
+# replacing this in production swap the receiver block for their
+# real channel (PagerDuty, Slack, Opsgenie, email, Teams) — every
+# environment variable below has a sensible default that keeps the
+# dev stack from crashing if the operator hasn't provisioned the
+# downstream system yet.
+
+global:
+  # Wait this long before resending a still-firing alert. Aligns
+  # with the rules' `for:` windows so we don't double-page.
+  resolve_timeout: 5m
+
+# Routing: severity-based fan-out, team-aware grouping. This is
+# the production-shaped tree, NOT a single catch-all receiver —
+# even the dev stack benefits from realistic routing so debugging
+# the rules surfaces the right notification.
+route:
+  receiver: default
+  # Group by alertname + team so a "service down" page covers all
+  # affected services in one notification, but different teams'
+  # alerts don't get merged.
+  group_by: ['alertname', 'team']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: critical-page
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers:
+        - severity = "warning"
+      receiver: warning-ticket
+      group_wait: 1m
+      repeat_interval: 12h
+
+receivers:
+  # Production note: Alertmanager does NOT expand shell-style
+  # `${VAR:-default}` substitutions — `amtool check-config` will
+  # reject them. Operators replacing these receivers for prod
+  # should swap the entire file via a docker volume mount or by
+  # rendering a templated config at deploy time (e.g. with
+  # `envsubst` in the entrypoint or a Helm template). The dev
+  # URLs below point at the API's internal alert sink, which
+  # logs every payload for inspection.
+
+  - name: default
+    # In dev, we just want Alertmanager to log the alert. The
+    # receiver below is a no-op webhook; Alertmanager will still
+    # surface the alert in its UI (http://localhost:9094/#/alerts).
+    webhook_configs:
+      - url: http://api:8000/internal/alerts/sink
+        send_resolved: true
+
+  - name: critical-page
+    # Production operators replace this with PagerDuty / Opsgenie.
+    # In dev we route to the same sink + tag the payload so the
+    # API can distinguish severity tiers in its incoming-alert
+    # webhook handler.
+    webhook_configs:
+      - url: http://api:8000/internal/alerts/sink?severity=critical
+        send_resolved: true
+
+  - name: warning-ticket
+    # Production operators wire this to Jira / ServiceNow.
+    webhook_configs:
+      - url: http://api:8000/internal/alerts/sink?severity=warning
+        send_resolved: true
+
+# Inhibit a warning if a critical from the same group is already
+# firing — keeps the on-call from seeing two pages for the same
+# root cause (e.g. service down ALSO triggers high error rate).
+inhibit_rules:
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ['team', 'alertname']
