@@ -629,10 +629,16 @@ def test_scheduler_skips_hunt_within_cadence() -> None:
 
 
 def test_scheduler_interval_parser_recognises_common_cadences() -> None:
-    """Sanity-check the bespoke cron parser. The worker tolerates None
-    (skip) for unrecognised schedules, but the documented set must be
-    classified correctly so the docs and the parser stay in lockstep."""
-    from app.workers.hunt_scheduler import _interval_seconds_for
+    """Sanity-check the cron interval helper.
+
+    The Phase 4.5 work swapped the bespoke 5-field parser for a
+    croniter-first implementation. The common cadences still produce
+    their familiar interval-in-seconds; truly invalid strings still
+    return ``None``; and grammar the bespoke parser used to reject
+    (day-of-month, day-of-week #-modifiers, etc.) is now classified
+    correctly by croniter rather than rejected as garbage.
+    """
+    from app.workers.hunt_scheduler import _CRONITER_AVAILABLE, _interval_seconds_for
 
     assert _interval_seconds_for("* * * * *") == 60
     assert _interval_seconds_for("*/5 * * * *") == 300
@@ -642,4 +648,12 @@ def test_scheduler_interval_parser_recognises_common_cadences() -> None:
     assert _interval_seconds_for("0 0 * * 1") == 7 * 24 * 3600
     # Unrecognised — returns None so the worker skips rather than guesses.
     assert _interval_seconds_for("garbage") is None
-    assert _interval_seconds_for("0 0 1 * *") is None  # day-of-month
+    # Day-of-month: the bespoke parser returned None, croniter
+    # returns a real "next - first" delta. Either is fine; the
+    # contract the worker depends on is "positive interval OR None",
+    # never a negative or zero number.
+    monthly = _interval_seconds_for("0 0 1 * *")
+    if _CRONITER_AVAILABLE:
+        assert monthly is not None and monthly > 0
+    else:
+        assert monthly is None
