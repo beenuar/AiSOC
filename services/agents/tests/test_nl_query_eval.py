@@ -34,7 +34,14 @@ def _load_dataset() -> dict:
 
 
 def _normalise_filters(items) -> set[tuple[str, str, str]]:
-    return set(items)
+    """Convert a filter list (JSON arrays or Python tuples) to a hashable set.
+
+    The eval JSON deserialises each filter as ``list[str]``, while the
+    translator emits ``tuple[str, str, str]``. Both shapes are valid;
+    we coerce to tuples here so the set membership check works
+    regardless of which side the filter came from.
+    """
+    return {tuple(item) for item in items}
 
 
 def _semantic_score(expected: dict, actual: QueryIntents) -> tuple[float, list[str]]:
@@ -164,9 +171,15 @@ def test_nl_query_eval_semantic_match() -> None:
 
 
 def test_nl_query_eval_dataset_size() -> None:
-    """Hard-fail if anyone shrinks the eval set below the contracted 50 pairs."""
+    """Hard-fail if anyone shrinks the eval set below the contracted size.
+
+    Phase 4.6 (Milestone 5B) raised the contracted minimum from 50 to 80
+    cases so the translator has a wider net to fish regressions out of —
+    in particular the longer-tail geo / numeric / quoted-string patterns
+    a real SOC analyst types.
+    """
 
     dataset = _load_dataset()
-    assert len(dataset["cases"]) >= 50, f"eval set only has {len(dataset['cases'])} cases; the plan requires 50"
+    assert len(dataset["cases"]) >= 80, f"eval set only has {len(dataset['cases'])} cases; Phase 4.6 requires 80"
     seen_ids = {c["id"] for c in dataset["cases"]}
     assert len(seen_ids) == len(dataset["cases"]), "duplicate case ids in eval set"

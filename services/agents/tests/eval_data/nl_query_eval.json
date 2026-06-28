@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "50-pair evaluation set for the deterministic NL → ES|QL translator. Each entry is a natural-language security question plus the structured intents we expect the parser to extract. We score on (a) syntactic validity of the emitted ES|QL (parsed by services/agents/app/nl_query/grammar.py) and (b) semantic match of the parsed intents against the gold IR.",
+  "description": "82-pair evaluation set for the deterministic NL → ES|QL translator (Milestone 5B). Each entry is a natural-language security question plus the structured intents we expect the parser to extract. We score on (a) syntactic validity of the emitted ES|QL (parsed by services/agents/app/nl_query/grammar.py) and (b) semantic match of the parsed intents against the gold IR. The 2026-06-28 expansion (Phase 4.6) added 32 cases covering: geo-by-country-name (`from iran`, `from china`, …), quoted-string LIKE filters against `message`, MIN/MAX numeric aggregations, multi-axis group-bys (host+user, ip+port, user+country), and longer-tail SOC hosts (`db01`, `app-prod-03`, `edge1.corp.local`).",
   "index_pattern_default": "logs-*",
   "time_range_hours_default": 24,
   "cases": [
@@ -459,6 +459,280 @@
         "group_by": ["source.geo.country_iso_code"],
         "aggregations": [["COUNT", null, "event_count"]],
         "time_range_hours": 24
+      }
+    },
+    {
+      "id": "geo-002",
+      "question": "attacks from iran in the last 24 hours",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "IR"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "geo-003",
+      "question": "traffic from china by host last 6 hours",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "CN"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "geo-004",
+      "question": "logins from russia last 12 hours",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "RU"], ["event.category", "==", "authentication"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "geo-005",
+      "question": "sessions originating from north korea last week",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "KP"]],
+        "time_range_hours": 168
+      }
+    },
+    {
+      "id": "geo-006",
+      "question": "connections from ukraine in the last hour",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "UA"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "geo-007",
+      "question": "scans coming from brazil last 6 hours",
+      "expected": {
+        "filters": [["source.geo.country_iso_code", "==", "BR"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "msg-001",
+      "question": "events containing \"powershell\" last 6 hours",
+      "expected": {
+        "filters": [["message", "LIKE", "powershell"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "msg-002",
+      "question": "events containing \"invoke-mimikatz\" last 24 hours",
+      "expected": {
+        "filters": [["message", "LIKE", "invoke-mimikatz"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "msg-003",
+      "question": "events containing \"net user /add\" last 12 hours",
+      "expected": {
+        "filters": [["message", "LIKE", "net user /add"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "num-001",
+      "question": "min bytes by host last 6 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["MIN", "network.bytes", "min_network_bytes"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "num-002",
+      "question": "average bytes by destination port last 24 hours",
+      "expected": {
+        "group_by": ["destination.port"],
+        "aggregations": [["AVG", "network.bytes", "avg_network_bytes"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "num-003",
+      "question": "max bytes per host last 12 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["MAX", "network.bytes", "max_network_bytes"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "num-004",
+      "question": "sum of bytes by destination ip last week",
+      "expected": {
+        "group_by": ["destination.ip"],
+        "aggregations": [["SUM", "network.bytes", "sum_network_bytes"]],
+        "time_range_hours": 168
+      }
+    },
+    {
+      "id": "num-005",
+      "question": "average bytes by source ip in the past day",
+      "expected": {
+        "group_by": ["source.ip"],
+        "aggregations": [["AVG", "network.bytes", "avg_network_bytes"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "group-001",
+      "question": "count events by host and user last 24 hours",
+      "expected": {
+        "group_by": ["host.name", "user.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "group-002",
+      "question": "count network events by source ip and destination port last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "network"]],
+        "group_by": ["source.ip", "destination.port"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "group-003",
+      "question": "count authentications by user and country last 12 hours",
+      "expected": {
+        "filters": [["event.category", "==", "authentication"]],
+        "group_by": ["user.name", "source.geo.country_iso_code"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "host-006",
+      "question": "events for host db01 last 6 hours",
+      "expected": {
+        "filters": [["host.name", "==", "db01"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "host-007",
+      "question": "events on host app-prod-03 in the past hour",
+      "expected": {
+        "filters": [["host.name", "==", "app-prod-03"]],
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "host-008",
+      "question": "events from edge1.corp.local in the last day",
+      "expected": {
+        "filters": [["host.name", "==", "edge1.corp.local"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "host-009",
+      "question": "top 20 hosts by event count last 6 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 20,
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "user-006",
+      "question": "events by user bob in the last day",
+      "expected": {
+        "filters": [["user.name", "==", "bob"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "user-007",
+      "question": "events for user svc-deploy last 12 hours",
+      "expected": {
+        "filters": [["user.name", "==", "svc-deploy"]],
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "user-008",
+      "question": "unique users by host last 24 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["DISTINCT_COUNT", "user.name", "unique_user_name"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "proc-006",
+      "question": "process events on host web01 last 6 hours",
+      "expected": {
+        "filters": [["event.category", "==", "process"], ["host.name", "==", "web01"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "proc-007",
+      "question": "top 5 processes by execution count last hour",
+      "expected": {
+        "group_by": ["process.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 5,
+        "time_range_hours": 1
+      }
+    },
+    {
+      "id": "net-011",
+      "question": "blocked dns queries by domain last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"], ["event.category", "==", "network"]],
+        "group_by": ["destination.domain"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "net-012",
+      "question": "top 10 source ips by event count last 12 hours",
+      "expected": {
+        "group_by": ["source.ip"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "limit": 10,
+        "time_range_hours": 12
+      }
+    },
+    {
+      "id": "net-013",
+      "question": "unique destination ips by host last 6 hours",
+      "expected": {
+        "group_by": ["host.name"],
+        "aggregations": [["DISTINCT_COUNT", "destination.ip", "unique_destination_ip"]],
+        "time_range_hours": 6
+      }
+    },
+    {
+      "id": "outcome-005",
+      "question": "blocked events by host last 24 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "failure"]],
+        "group_by": ["host.name"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 24
+      }
+    },
+    {
+      "id": "outcome-006",
+      "question": "allowed events by source ip last 6 hours",
+      "expected": {
+        "filters": [["event.outcome", "==", "success"]],
+        "group_by": ["source.ip"],
+        "aggregations": [["COUNT", null, "event_count"]],
+        "time_range_hours": 6
       }
     }
   ]
