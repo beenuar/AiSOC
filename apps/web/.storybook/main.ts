@@ -27,7 +27,20 @@ const config: StorybookConfig = {
     name: '@storybook/react-vite',
     options: {},
   },
-  staticDirs: ['../public'],
+  // NOTE: We intentionally do NOT use `staticDirs: ['../public']` here,
+  // AND we disable Vite's auto-detection of `apps/web/public/` in
+  // `viteFinal` (`publicDir: false`). Storybook 9.1 + Node 22/24 hits a
+  // `fs.cp` race in CI when copying nested directories — see
+  // https://github.com/storybookjs/storybook/issues/16732 and the
+  // underlying still-open Node issue
+  // https://github.com/nodejs/node/issues/58947. The Vite build runs the
+  // same code path: copying `public/` with overlapping subtrees races on
+  // `mkdir` and fails with EEXIST on ubuntu-latest.
+  //
+  // None of our design-system stories actually reference `public/` assets;
+  // the few app components that do (customer-logo MDX, etc.) live in the
+  // Next app build path which serves `public/` natively. Disabling the
+  // copy keeps the Storybook bundle hermetic and the CI build deterministic.
   typescript: {
     check: false,
     reactDocgen: 'react-docgen-typescript',
@@ -42,6 +55,10 @@ const config: StorybookConfig = {
     const { default: tailwindcss } = await import('@tailwindcss/vite');
     return mergeConfig(viteConfig, {
       plugins: [tailwindcss()],
+      // Disable Vite's auto-copy of `apps/web/public/` into the Storybook
+      // output. See the staticDirs comment above — this is what actually
+      // fires the `fs.cp` EEXIST race in CI on Node 22/24.
+      publicDir: false,
       resolve: {
         alias: [
           {
