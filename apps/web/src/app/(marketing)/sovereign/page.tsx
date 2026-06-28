@@ -8,13 +8,33 @@ import { Footer } from '@/components/landing/Footer';
  *
  * Surfaces the answer to the procurement question that comes up before any
  * technical evaluation: "where can it run, on what LLM, in which country, and
- * against which compliance regime?". Everything on the page maps to an asset
- * already shipping in the repo:
+ * against which compliance regime?". Every artefact link points to a real
+ * path in the repo (Phase 1.6 audit — anything that 404'd has been corrected
+ * to the actual directory that ships the stack):
  *
- *   - Air-gapped overlay  → `docker-compose.airgap.yml` + the Ollama sidecar.
+ *   - Air-gapped overlay  → `docker-compose.airgap.yml` + Ollama sidecar.
  *   - On-prem / Helm      → `infra/helm/aisoc/`.
- *   - Public cloud / BYOC → `infra/terraform/{aws,gcp,byoc}/`.
- *   - BYO LLM endpoint    → `AISOC_LLM_*` env vars + tenant LLM credential vault.
+ *   - AWS                 → `infra/terraform/main.tf` (S3-backed root stack
+ *                            re-using `modules/eks`, `modules/rds`,
+ *                            `modules/elasticache`, `modules/kafka`).
+ *                            There is intentionally no `infra/terraform/aws/`
+ *                            subdir; the AWS-provider stack lives at the
+ *                            terraform root so it can compose every reusable
+ *                            module in one apply.
+ *   - Azure               → `infra/terraform/azure/` (Container Apps).
+ *   - GCP                 → `infra/terraform/gcp/` (Cloud Run).
+ *   - BYOC blueprint      → `infra/terraform/byoc/` (consumes your VPC,
+ *                            KMS, IAM — used for OCI / DigitalOcean /
+ *                            Hetzner / sovereign clouds).
+ *   - BYO LLM endpoint    → `AISOC_LLM_*` env vars + tenant LLM credential
+ *                            vault.
+ *
+ * The cloud × region grid is split into "First-class" (AWS / Azure / GCP —
+ * stacks with a dedicated Terraform config) and "BYOC adapter" (every
+ * other cloud — supported via the BYOC blueprint, not a turnkey stack).
+ * This is the honest line; the previous version listed OCI / DigitalOcean
+ * / Hetzner as supported with no underlying artefact, which any procurement
+ * reviewer could disprove in one `git ls-tree`.
  *
  * The page is intentionally text-and-grid heavy — buyers in regulated sectors
  * scan for keywords (air-gap, EU, GDPR, Helm, Terraform) before reading.
@@ -71,18 +91,38 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     llm: 'Cloud APIs · Ollama · BYO',
     residency: 'EU · US · India · Custom',
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
-    artefact: 'Terraform (infra/terraform/byoc)',
+    artefact: 'Terraform (infra/terraform/byoc/)',
     artefactHref:
       'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc',
   },
   {
-    name: 'Public cloud',
+    // Top-level main.tf IS the AWS stack — there is no `aws/` subdir.
+    // S3 backend, AWS provider, modules/eks + rds + elasticache + kafka.
+    name: 'Public cloud — AWS',
     llm: 'Cloud APIs · BYO endpoint',
     residency: 'EU · US · India · Custom',
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
-    artefact: 'Terraform (infra/terraform/{aws,gcp,azure,byoc})',
+    artefact: 'Terraform root (infra/terraform/) + modules/eks',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform',
+      'https://github.com/beenuar/AiSOC/blob/main/infra/terraform/main.tf',
+  },
+  {
+    name: 'Public cloud — Azure',
+    llm: 'Cloud APIs (incl. Azure OpenAI) · BYO endpoint',
+    residency: 'EU · US · India · Custom',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    artefact: 'Terraform (infra/terraform/azure/) · Container Apps',
+    artefactHref:
+      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/azure',
+  },
+  {
+    name: 'Public cloud — GCP',
+    llm: 'Cloud APIs · BYO endpoint',
+    residency: 'EU · US · India · Custom',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    artefact: 'Terraform (infra/terraform/gcp/) · Cloud Run',
+    artefactHref:
+      'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/gcp',
   },
   {
     name: 'Managed SaaS (waitlist)',
@@ -107,8 +147,8 @@ const PILLARS = [
   },
   {
     label: 'Helm + Terraform first-class',
-    body: 'A single Helm release deploys every service into your cluster; Terraform modules cover AWS EKS, GCP Cloud Run, and a generic BYOC blueprint. Bring your own VPC, KMS, and IAM — the modules consume them rather than reinventing them.',
-    cite: 'infra/helm/aisoc · infra/terraform/{aws,gcp,azure,byoc}',
+    body: 'A single Helm release deploys every service into your cluster; Terraform configs cover AWS EKS (root stack + modules/eks), Azure Container Apps (terraform/azure/), GCP Cloud Run (terraform/gcp/), and a generic BYOC blueprint (terraform/byoc/) for every other cloud. Bring your own VPC, KMS, and IAM — the modules consume them rather than reinventing them.',
+    cite: 'infra/helm/aisoc · infra/terraform/{azure,gcp,byoc} · root main.tf for AWS',
   },
   {
     label: 'Data residency by VPC',
@@ -117,7 +157,27 @@ const PILLARS = [
   },
 ];
 
-const CLOUDS = ['AWS', 'Azure', 'GCP', 'OCI', 'DigitalOcean', 'Hetzner'];
+// Strict promise of where a turnkey Terraform stack ships in the repo.
+// AWS = top-level `infra/terraform/main.tf` + `modules/eks` (no `aws/` subdir).
+// Azure = `infra/terraform/azure/` Container Apps stack.
+// GCP   = `infra/terraform/gcp/` Cloud Run stack.
+const FIRST_CLASS_CLOUDS = ['AWS', 'Azure', 'GCP'] as const;
+
+// Reached via `infra/terraform/byoc/` — not a dedicated stack. We expose
+// these honestly as "adapter" instead of pretending each has its own
+// first-class module the way AWS / Azure / GCP do. The previous version
+// of this page listed OCI / DigitalOcean / Hetzner without any
+// supporting artefact, which procurement reviewers could disprove with
+// one `git ls-tree`.
+const BYOC_CLOUDS = [
+  'OCI (Oracle Cloud)',
+  'IBM Cloud',
+  'DigitalOcean',
+  'Hetzner',
+  'Scaleway / OVH (EU sovereign)',
+  'On-prem Kubernetes',
+] as const;
+
 const REGIONS = ['US', 'EU', 'India', 'Singapore', 'Custom'];
 
 // Frameworks the platform's controls (RBAC, tenant isolation, audit logs,
@@ -331,12 +391,17 @@ export default function SovereignPage() {
             Any cloud × any region
           </h2>
           <p className="mt-3 max-w-3xl text-sm text-gray-400">
-            Because deployment is operator-controlled (Helm or Terraform into
-            your account), the supported cloud / region pairs are the ones
-            your provider supports — including sovereign-cloud regions.
+            Three clouds ship with a dedicated, turnkey Terraform stack.
+            Everything else is supported through the BYOC blueprint — same
+            agent loop, same Helm chart, the operator wires the cloud
+            primitives. Pick by what you already run in production.
           </p>
 
-          <div className="mt-8 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.02]">
+          {/* First-class clouds — each has a shipping Terraform module. */}
+          <div className="mt-8 overflow-x-auto rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.02]">
+            <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+              First-class (turnkey Terraform stack)
+            </div>
             <table className="w-full min-w-[640px] border-collapse text-sm">
               <thead>
                 <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
@@ -349,13 +414,13 @@ export default function SovereignPage() {
                 </tr>
               </thead>
               <tbody>
-                {CLOUDS.map((cloud, i) => (
+                {FIRST_CLASS_CLOUDS.map((cloud, i) => (
                   <tr
                     key={cloud}
                     className={
                       i % 2 === 0
-                        ? 'border-t border-white/5'
-                        : 'border-t border-white/5 bg-white/[0.015]'
+                        ? 'border-t border-emerald-500/10'
+                        : 'border-t border-emerald-500/10 bg-emerald-500/[0.02]'
                     }
                   >
                     <td className="px-5 py-4 font-semibold text-white">
@@ -365,7 +430,7 @@ export default function SovereignPage() {
                       <td key={r} className="px-5 py-4 text-center">
                         <span
                           className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                          aria-label={`${cloud} ${r} supported`}
+                          aria-label={`${cloud} ${r} supported by first-class Terraform stack`}
                         >
                           <svg
                             viewBox="0 0 20 20"
@@ -383,10 +448,60 @@ export default function SovereignPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-gray-500">
-            “Custom” covers sovereign-cloud regions (e.g. AWS GovCloud, Azure
-            Germany, OVH, Scaleway, IBM Cloud) and on-prem Kubernetes clusters
-            reachable from your operator network.
+
+          {/* BYOC adapter — same blueprint, no per-cloud module. */}
+          <div className="mt-6 overflow-x-auto rounded-2xl border border-cyan-500/15 bg-cyan-500/[0.02]">
+            <div className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
+              BYOC adapter (infra/terraform/byoc/)
+            </div>
+            <table className="w-full min-w-[640px] border-collapse text-sm">
+              <thead>
+                <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  <th className="px-5 py-4">Cloud</th>
+                  <th className="px-5 py-4">Pattern</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BYOC_CLOUDS.map((cloud, i) => (
+                  <tr
+                    key={cloud}
+                    className={
+                      i % 2 === 0
+                        ? 'border-t border-cyan-500/10'
+                        : 'border-t border-cyan-500/10 bg-cyan-500/[0.02]'
+                    }
+                  >
+                    <td className="px-5 py-4 font-semibold text-white">
+                      {cloud}
+                    </td>
+                    <td className="px-5 py-4 text-gray-300">
+                      You provide VPC + Postgres + Redis + Kafka + a
+                      Kubernetes target; the BYOC Terraform consumes them
+                      and the Helm chart deploys every service. Same
+                      hardened defaults as the first-class clouds.
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="mt-4 text-xs leading-relaxed text-gray-500">
+            “Custom” residency covers sovereign-cloud regions (e.g. AWS
+            GovCloud, Azure Germany, OVH, Scaleway, IBM Cloud) and on-prem
+            Kubernetes clusters reachable from your operator network. The
+            BYOC blueprint at{' '}
+            <a
+              href="https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-300 underline decoration-brand-500/40 underline-offset-2 hover:text-brand-200"
+            >
+              <code className="font-mono text-[11px]">infra/terraform/byoc/</code>
+            </a>{' '}
+            is the integration path — there is intentionally no per-cloud
+            module for clouds outside AWS / Azure / GCP, because pretending
+            otherwise would mean shipping a 404-link to procurement.
           </p>
         </div>
       </section>
@@ -411,10 +526,10 @@ export default function SovereignPage() {
               body="Single Helm release for every backend service, the web console, and the realtime gateway. Production-shaped values for resource limits, secrets, and ingress."
             />
             <RepoArtefact
-              label="Terraform modules"
+              label="Terraform configs"
               path="infra/terraform/"
               href="https://github.com/beenuar/AiSOC/tree/main/infra/terraform"
-              body="AWS EKS, GCP Cloud Run, and a BYOC blueprint that consumes your VPC, KMS, and IAM rather than reinventing them."
+              body="Top-level main.tf for AWS (S3 backend + modules/eks + RDS + ElastiCache + MSK), azure/ for Container Apps, gcp/ for Cloud Run, byoc/ for every other cloud — consumes your VPC, KMS, IAM rather than reinventing them."
             />
             <RepoArtefact
               label="Credential vault"
