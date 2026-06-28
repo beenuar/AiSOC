@@ -285,10 +285,13 @@ test.describe("buyer journey — alerts → investigation → playbook", () => {
   test("analyst triages a critical alert and finds the response playbook", async ({
     page,
   }) => {
-    // 1. Land on the alerts queue.
+    // 1. Land on the alerts queue. The layout sidebar also exposes
+    //    an "Alerts" landmark, so we relax the assertion to the first
+    //    matching heading — the intent is "we're on the page", not
+    //    "there is exactly one Alerts heading".
     await page.goto("/alerts");
     await expect(
-      page.getByRole("heading", { name: "Alerts", exact: true }),
+      page.getByRole("heading", { name: "Alerts", exact: true }).first(),
     ).toBeVisible();
 
     // 2. Switch from the default Entities (RBA) view to the legacy
@@ -334,7 +337,7 @@ test.describe("buyer journey — alerts → investigation → playbook", () => {
     //    where the response actually lives.
     await page.goto("/playbooks");
     await expect(
-      page.getByRole("heading", { name: "Playbooks", exact: true }),
+      page.getByRole("heading", { name: "Playbooks", exact: true }).first(),
     ).toBeVisible();
 
     // 7. Verify the canonical response playbook is present in the
