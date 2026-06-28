@@ -113,8 +113,31 @@ export function OpenSourceMoment() {
                     <p className="text-sm font-semibold text-velvet-content-primary">
                       beenuar / AiSOC
                     </p>
-                    <p className="text-xs text-velvet-content-tertiary">
-                      <span aria-label="GitHub stars">★ 2.3k</span> · MIT · TypeScript / Python / Go
+                    <p className="flex items-center gap-2 text-xs text-velvet-content-tertiary">
+                      {/*
+                        Live GitHub star count via shields.io. Previously hard-coded
+                        as "2.3k", which was a falsifiable claim every visitor could
+                        check in five seconds. The shields.io endpoint redraws on
+                        every page load (cached at the edge) so the number always
+                        matches what github.com/beenuar/AiSOC shows.
+
+                        Using <img> rather than next/image is deliberate: this is a
+                        ~250-byte SVG badge served by a 3rd-party CDN. Funnelling
+                        it through next/image would add a same-origin /_next/image
+                        roundtrip and lose the shields.io edge cache without
+                        delivering meaningful LCP gains.
+                      */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="https://img.shields.io/github/stars/beenuar/AiSOC?style=flat&label=%E2%98%85&color=4ade80&labelColor=0b1f1a"
+                        alt="GitHub stars"
+                        width={68}
+                        height={20}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-4 w-auto"
+                      />
+                      <span>· MIT · TypeScript / Python / Go</span>
                     </p>
                   </div>
                 </div>
