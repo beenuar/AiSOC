@@ -48,6 +48,12 @@ pyyaml = "^6.0.1"
 strawberry-graphql = { version = ">=0.236,<0.320", extras = ["fastapi"] }
 webauthn = "^2.2.0"
 weasyprint = ">=62,<70"          # WS-G2: server-side PDF generation from print-ready HTML
+# Phase 4.5 / Milestone 1F — the hunt scheduler now drives next-fire
+# computation through croniter, replacing the bespoke parser that only
+# understood a handful of common cadences. Pinned with a wide range
+# because croniter is API-stable and we only use the
+# `get_next` / `is_valid` surface.
+croniter = ">=2.0,<7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.2,<10.0"
