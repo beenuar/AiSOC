@@ -297,11 +297,10 @@ def test_resolver_matches_reference_simulator_on_50_pairs(
         )
         actual = set(match.actions) if match is not None else set()
         if actual != expected:
-            mismatches.append(f"{principal_id} ↔ {resource_id}: " f"resolver={sorted(actual)} simulator={sorted(expected)}")
+            mismatches.append(f"{principal_id} ↔ {resource_id}: resolver={sorted(actual)} simulator={sorted(expected)}")
 
     assert not mismatches, (
-        f"resolver disagreed with the reference simulator on "
-        f"{len(mismatches)} of {len(reference_pairs)} pairs:\n" + "\n".join(mismatches)
+        f"resolver disagreed with the reference simulator on {len(mismatches)} of {len(reference_pairs)} pairs:\n" + "\n".join(mismatches)
     )
 
 
@@ -412,15 +411,13 @@ def test_aws_resolver_raises_on_unknown_principal(
     "resolver_cls",
     [AzureRbacResolver, GcpIamResolver, OktaResolver, GoogleWorkspaceResolver],
 )
-def test_scaffolded_providers_raise_not_implemented(
+def test_phase_4_1_providers_now_report_full_coverage(
     resolver_cls: type,
 ) -> None:
-    """Until the wave that implements them ships, all four scaffolded
-    providers must raise ``NotImplementedError`` with a useful message."""
+    """Phase 4.1 turned the four scaffolds into real resolvers, so
+    their ``coverage`` class attribute must now report ``"full"``."""
 
-    pytest.importorskip("pytest")
-    with pytest.raises(NotImplementedError):
-        resolver_cls().resolve("any-principal", snapshot={})
+    assert resolver_cls.coverage == "full"
 
 
 def test_supported_providers_contains_all_five() -> None:

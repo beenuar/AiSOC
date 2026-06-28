@@ -22,8 +22,8 @@ Public surface
   — the dispatcher that picks the right provider and (best-effort) caches the
   result into Neo4j as ``(:Identity)-[:EFFECTIVE_PERMISSION]->(:Resource)``.
 
-Provider coverage status (v8.0 T3.2 wave-2)
-------------------------------------------
+Provider coverage status (Phase 4.1)
+-----------------------------------
 
 ==========  ==============================================================
 Provider     Status (this slice)
@@ -31,18 +31,24 @@ Provider     Status (this slice)
 aws          Full implementation — identity-based, resource-based, SCP,
              deny-overrides, ``Condition``-aware (StringEquals / StringLike),
              wildcard expansion against a synthesised action catalogue.
-azure        Scaffold — class is wired into the dispatcher and declares its
-             ``coverage = "scaffold"``, but ``resolve()`` raises
-             ``NotImplementedError``. The endpoint returns HTTP 501 for
-             ``?provider=azure`` until the RBAC walker lands.
-gcp          Scaffold — same shape as ``azure``.
-okta         Scaffold — same shape as ``azure``.
-gws          Scaffold — same shape as ``azure``.
+azure        Full implementation (Phase 4.1) — scope-inheriting RBAC walker
+             over MG -> Sub -> RG -> Resource. Role definitions /
+             assignments / deny assignments are honoured; ABAC conditions
+             surface as ``notes``.
+gcp          Full implementation (Phase 4.1) — hierarchy-inheriting binding
+             walker over Org -> Folder -> Project -> Resource. Roles expand
+             to permission lists; org-policy denied_permissions are
+             subtracted. IAM conditions (CEL) surface as ``notes``.
+okta         Full implementation (Phase 4.1) — group + admin-role expander.
+             Surfaces app reads (``okta.app.{id}.read``) plus admin role
+             privileges.
+gws          Full implementation (Phase 4.1) — OU-scoped role expander.
+             Role assignments at ``CUSTOMER`` or ``ORG_UNIT`` scope are
+             matched against the resource's OU path.
 ==========  ==============================================================
 
-Tests for the four scaffolded providers are gated with ``pytest.skip`` until
-the real implementation lands. The dispatcher in ``service.py`` is the only
-caller wiring; nothing in the API layer hardcodes a provider name.
+The dispatcher in ``service.py`` is the only caller wiring; nothing in the
+API layer hardcodes a provider name.
 """
 
 from app.services.effective_permissions.base import (
