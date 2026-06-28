@@ -22,6 +22,7 @@
 import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 interface QA {
   q: string;
@@ -62,7 +63,7 @@ const FAQS: ReadonlyArray<QA> = [
   {
     q: 'How do connectors work?',
     a:
-      'Each connector is a Python class that declares a schema, tests its credentials, polls on a schedule, and normalises events into OCSF. 69 ship in the box. The plugin SDKs (Python, TypeScript, Go) let you author your own in roughly 50 lines.',
+      `Each connector is a Python class that declares a schema, tests its credentials, polls on a schedule, and normalises events into OCSF. ${CONNECTOR_COUNT} ship in the box. The plugin SDKs (Python, TypeScript, Go) let you author your own in roughly 50 lines.`,
   },
   {
     q: 'What runs in production today?',

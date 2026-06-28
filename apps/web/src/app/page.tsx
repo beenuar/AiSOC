@@ -7,6 +7,7 @@ import { StickyNav } from '@/components/landing/sections/StickyNav';
 import { Hero } from '@/components/landing/sections/Hero';
 import { ProofStrip } from '@/components/landing/sections/ProofStrip';
 import { Problem } from '@/components/landing/sections/Problem';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 /**
  * AiSOC root (`/`) — marketing landing page (T6.5).
@@ -77,13 +78,11 @@ export const metadata: Metadata = {
   // append a redundant " | AiSOC" to a title that already leads with the
   // brand.
   title: { absolute: 'AiSOC — open-source AI Security Operations Center' },
-  description:
-    'AiSOC is an MIT-licensed, agentic SOC: four specialised agents (Detect, Triage, Hunt, Respond), 69 first-party connectors, a 200-incident benchmark harness, and air-gap deploy on a single flag. Self-host in five minutes or join the managed waitlist.',
+  description: `AiSOC is an MIT-licensed, agentic SOC: four specialised agents (Detect, Triage, Hunt, Respond), ${CONNECTOR_COUNT} first-party connectors, a 200-incident benchmark harness, and air-gap deploy on a single flag. Self-host in five minutes or join the managed waitlist.`,
   alternates: { canonical: '/' },
   openGraph: {
     title: 'AiSOC — open-source AI Security Operations Center',
-    description:
-      'Four agents, 69 connectors, a public benchmark, and air-gap on a flag. Self-host the full stack under MIT, or join the managed waitlist at tryaisoc.com.',
+    description: `Four agents, ${CONNECTOR_COUNT} connectors, a public benchmark, and air-gap on a flag. Self-host the full stack under MIT, or join the managed waitlist at tryaisoc.com.`,
     url: siteUrl,
     siteName: 'AiSOC',
     type: 'website',
@@ -93,15 +92,14 @@ export const metadata: Metadata = {
         url: '/og-image.svg',
         width: 1200,
         height: 630,
-        alt: 'AiSOC — open-source AI SOC with four specialised agents and 69 connectors',
+        alt: `AiSOC — open-source AI SOC with four specialised agents and ${CONNECTOR_COUNT} connectors`,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AiSOC — open-source AI Security Operations Center',
-    description:
-      'Four agents. 69 connectors. A public benchmark. Air-gap on a flag. MIT-licensed.',
+    description: `Four agents. ${CONNECTOR_COUNT} connectors. A public benchmark. Air-gap on a flag. MIT-licensed.`,
     images: ['/og-image.svg'],
   },
 };
@@ -119,11 +117,10 @@ const productJsonLd = {
   downloadUrl: 'https://github.com/beenuar/AiSOC',
   installUrl: docs('quickstart'),
   releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
-  description:
-    'AiSOC is an MIT-licensed agentic Security Operations Center: four specialised agents (Detect, Triage, Hunt, Respond), 69 first-party connectors, a public 200-incident benchmark, and air-gap deploy on a single environment flag.',
+  description: `AiSOC is an MIT-licensed agentic Security Operations Center: four specialised agents (Detect, Triage, Hunt, Respond), ${CONNECTOR_COUNT} first-party connectors, a public 200-incident benchmark, and air-gap deploy on a single environment flag.`,
   featureList: [
     'Four specialised agents: Detect, Triage, Hunt, Respond',
-    '69 first-party connectors across EDR, SIEM, cloud, IAM, SaaS, VCS, network',
+    `${CONNECTOR_COUNT} first-party connectors across EDR, SIEM, cloud, IAM, SaaS, VCS, network`,
     'Public 200-incident benchmark harness with substrate self-consistency gates',
     'Air-gap mode (AISOC_AIRGAPPED=true) with local Ollama sidecar',
     'L0–L4 automation maturity ladder for human-in-the-loop guardrails',

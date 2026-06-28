@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { authApi } from '@/lib/api';
 import { demoDeeplink } from '@/lib/demoMode';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 /**
  * Onboarding hero for the AiSOC root (`/`).
@@ -153,8 +154,8 @@ export function StartHero() {
                 Connect first source
               </span>
               <span className="text-xs leading-relaxed text-gray-300">
-                Pick from 50 connectors — EDR, SIEM, cloud, IAM. Credentials
-                stay encrypted.
+                Pick from {CONNECTOR_COUNT} connectors — EDR, SIEM, cloud, IAM.
+                Credentials stay encrypted.
               </span>
             </Link>
 

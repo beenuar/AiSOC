@@ -7,8 +7,9 @@
  *   - Section header (eyebrow + H2 + sub-head + category chips)
  *   - Two stacked `Marquee` rows of connector pills (top: left-to-right,
  *     bottom: right-to-left). The pills are drawn from a 24-name sample
- *     of the real `_CONNECTOR_CLASSES` registry; the full catalogue is
- *     69 today.
+ *     of the real `_CONNECTOR_CLASSES` registry. The full catalogue size
+ *     is rendered from `CONNECTOR_COUNT` (sourced from the registry by
+ *     `scripts/generate_connector_count.py`) so the prose can never drift.
  *   - Code callout with a "Write a connector in 50 lines" snippet
  *     mirroring the BaseConnector pattern used in the registry.
  *
@@ -21,6 +22,7 @@ import { ArrowRight } from 'lucide-react';
 import { Marquee } from '@/components/magicui/Marquee';
 import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 interface ConnectorPill {
   name: string;
@@ -140,7 +142,7 @@ export function ConnectorsMarquee() {
             id="connectors-heading"
             className="font-velvet-display font-normal mt-3 text-3xl tracking-tight text-velvet-content-primary sm:text-4xl lg:text-[40px] lg:leading-[1.15] lg:tracking-[-0.015em]"
           >
-            69 connectors. 6,998 detections. 62 playbook packs.
+            {CONNECTOR_COUNT} connectors. 6,998 detections. 62 playbook packs.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-velvet-content-secondary sm:text-lg">
             Every connector renders a schema-driven form, encrypts its

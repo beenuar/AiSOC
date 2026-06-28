@@ -187,6 +187,17 @@ jobs:
       # locally if this check fails.
       - name: Verify vendored narrative builder is in sync
         run: python scripts/sync_vendored_narrative.py --check
+      # Phase 1.1 — the registry at
+      # `services/connectors/app/connectors/__init__.py` is the single source
+      # of truth for the "N connectors" claim. The check verifies that:
+      #   1. apps/web/src/data/connector-count.json matches the registry
+      #   2. apps/web/src/data/connectorCount.ts matches the JSON
+      #   3. README, ROADMAP, docs/architecture and apps/docs all carry the
+      #      same number as the registry
+      # If this fails, run `python scripts/generate_connector_count.py` and
+      # commit the result.
+      - name: Verify connector count is in sync (Phase 1.1)
+        run: python scripts/generate_connector_count.py --check
 
   python-test:
     name: Python — Tests

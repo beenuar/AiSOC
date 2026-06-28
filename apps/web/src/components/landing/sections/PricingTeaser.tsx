@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 interface Tier {
   id: 'community' | 'team' | 'enterprise';
@@ -34,7 +35,7 @@ const TIERS: ReadonlyArray<Tier> = [
     tagline: 'Self-host the full stack.',
     includes: [
       'MIT-licensed code',
-      'All 69 connectors',
+      `All ${CONNECTOR_COUNT} connectors`,
       'Marketplace',
       'Public benchmark harness',
       'Community Discord',

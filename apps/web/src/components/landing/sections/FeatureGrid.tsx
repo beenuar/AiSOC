@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 interface Tile {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -132,7 +133,7 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
     tiles: [
       {
         icon: PlugZap,
-        title: '69 click-and-connect connectors.',
+        title: `${CONNECTOR_COUNT} click-and-connect connectors.`,
         body: 'EDR · SIEM · cloud · IAM · SaaS · VCS · network.',
       },
       {

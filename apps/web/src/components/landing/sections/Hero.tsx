@@ -32,9 +32,10 @@ import { TextGenerateEffect } from '@/components/aceternity/TextGenerateEffect';
 import { AnimatedGridPattern } from '@/components/magicui/AnimatedGridPattern';
 import { AuroraText } from '@/components/magicui/AuroraText';
 import { cn } from '@/lib/utils';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 const PROOF_CHIPS: ReadonlyArray<string> = [
-  '69 connectors · EDR · SIEM · cloud · IAM · SaaS · VCS · network',
+  `${CONNECTOR_COUNT} connectors · EDR · SIEM · cloud · IAM · SaaS · VCS · network`,
   '6,998 detections · 62 playbook packs · 57 plugins',
   'Self-host · Render · Fly.io · Helm · Terraform · air-gap',
 ];
