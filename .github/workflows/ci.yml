@@ -221,6 +221,14 @@ jobs:
       # forgets to register it for scraping — fails CI here.
       - name: Verify Prometheus scrape config matches reality (Phase 2.3)
         run: python scripts/audit_prometheus_targets.py --check
+      # Phase 2.5 — every `runbook_url` embedded in an alert rule must
+      # resolve to a real markdown file under `docs/runbooks/`. The
+      # on-call should never get a 404 when they click a page
+      # notification at 3am. Any future PR that adds an alert without
+      # the runbook (or removes a runbook that an alert links to)
+      # fails here.
+      - name: Verify alert rule runbook URLs resolve (Phase 2.5)
+        run: python scripts/audit_runbook_links.py --check
 
   python-test:
     name: Python — Tests
