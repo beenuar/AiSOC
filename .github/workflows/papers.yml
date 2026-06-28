@@ -1,0 +1,126 @@
+name: Public papers (regenerate PDFs)
+
+# Phase 4.3 — closes the "CI does not yet rebuild PDFs automatically"
+# TODO that has been sitting in apps/web/public/papers/README.md since
+# v8.0.
+#
+# Triggers:
+#   * On every push to main that touches a paper's markdown source.
+#   * On every PR that touches a paper's source — we only build & upload
+#     in PR mode (no commit-back) so reviewers can preview the rendered
+#     PDF from the workflow artifacts.
+#   * Manually via workflow_dispatch.
+#
+# Output:
+#   * Always: `papers-pdf-${{ github.sha }}` artifact bundle.
+#   * On push to main only: a follow-up commit `chore: refresh public
+#     paper PDFs [skip ci]` if any rendered PDF differs from what's
+#     checked in. We never amend; we add a fresh commit.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/content/papers/**.md"
+      - "scripts/render_white_paper.py"
+      - "Makefile"
+      - ".github/workflows/papers.yml"
+  pull_request:
+    paths:
+      - "apps/web/content/papers/**.md"
+      - "scripts/render_white_paper.py"
+      - "Makefile"
+      - ".github/workflows/papers.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: papers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render every paper to PDF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # We need full history so the auto-commit step's `git push`
+          # has a sane base to diff against.
+          fetch-depth: 0
+          # The auto-commit step pushes back to main, so the
+          # GITHUB_TOKEN persisted on the checkout must be the writeable
+          # one (default true).
+          persist-credentials: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # WeasyPrint needs Pango / Cairo / GLib at the system level — the
+      # same native deps that services/api/Dockerfile installs. Pinning
+      # the exact apt package set means a Debian repo nudge doesn't
+      # silently change the rendered output.
+      - name: Install WeasyPrint native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libpango-1.0-0 libpangoft2-1.0-0 \
+            libcairo2 libgdk-pixbuf-2.0-0 \
+            libffi-dev shared-mime-info fonts-inter
+
+      - name: Install render_white_paper Python deps
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet 'markdown>=3.5' 'weasyprint>=60'
+
+      - name: Render every paper (make papers)
+        run: make papers
+
+      - name: Diff rendered PDFs vs. tree
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- 'apps/web/public/papers/*.pdf'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No paper PDFs changed."
+          else
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+            echo "::notice::The following PDFs changed and will be committed:"
+            git diff --name-only -- 'apps/web/public/papers/*.pdf'
+          fi
+
+      - name: Upload rendered PDFs as artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: papers-pdf-${{ github.sha }}
+          path: apps/web/public/papers/*.pdf
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Only push back on main — never on PRs (we cannot trust PRs from
+      # forks with write tokens, and even for same-repo PRs the right
+      # surface is the artifact + a manual rebase).
+      - name: Commit refreshed PDFs back to main
+        if: |
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.diff.outputs.changed == 'true'
+        env:
+          GIT_AUTHOR_NAME: aisoc-papers-bot
+          GIT_AUTHOR_EMAIL: papers-bot@tryaisoc.com
+          GIT_COMMITTER_NAME: aisoc-papers-bot
+          GIT_COMMITTER_EMAIL: papers-bot@tryaisoc.com
+        run: |
+          set -euo pipefail
+          git add apps/web/public/papers/*.pdf
+          git commit -m "chore(papers): refresh rendered PDFs from $(git rev-parse --short HEAD) [skip ci]"
+          # If the underlying ref has moved while we were rendering,
+          # rebase onto the new HEAD. The PDF output is deterministic
+          # for a given markdown source, so re-rendering on the new
+          # base would produce the same bytes — a rebase is safe.
+          git pull --rebase origin main
+          git push origin HEAD:main

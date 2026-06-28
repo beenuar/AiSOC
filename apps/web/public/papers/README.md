@@ -6,7 +6,16 @@ site and docs site link to.  Source markdown lives at
 
 ## Regenerating the PDFs
 
-PDFs are regenerated from their source markdown via:
+PDFs are regenerated from their source markdown via the top-level
+Makefile target (Phase 4.3):
+
+```bash
+make papers                       # regenerate every paper
+```
+
+The Makefile delegates to `scripts/render_white_paper.py`. You can
+still render a single paper with explicit paths if you prefer the
+old workflow:
 
 ```bash
 python3 scripts/render_white_paper.py \
@@ -49,8 +58,18 @@ When adding a new paper:
 4. Add an entry to the index table above.
 5. Link the PDF from the relevant docs concept page or marketing surface.
 
-Do not commit PDFs without their matching markdown source, and do not
-commit markdown without re-rendering the PDF when the content changes.
+Do not commit PDFs without their matching markdown source. CI now
+rebuilds PDFs automatically via
+[`.github/workflows/papers.yml`](../../../../.github/workflows/papers.yml)
+on every push to `main` that touches a paper's markdown source —
+**you no longer have to run the renderer locally before opening a
+PR**. The workflow:
+
+1. Builds every paper using the same WeasyPrint stack.
+2. Uploads the rendered PDFs as a workflow artifact (visible on every
+   run — useful for PR preview).
+3. On `main` only, commits any changed PDFs back as
+   `chore(papers): refresh rendered PDFs from <sha> [skip ci]`.
+
 The hosted PDF is the public artefact; the markdown is the canonical
-one.  CI does not yet rebuild PDFs automatically — that is on the v8.x
-roadmap.
+one.

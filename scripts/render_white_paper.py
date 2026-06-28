@@ -1,31 +1,28 @@
 #!/usr/bin/env python3
-"""Render an AiSOC white-paper markdown file to PDF.
+"""Render AiSOC white-paper markdown files to PDF.
 
-This script converts a markdown white paper (as authored in
-``apps/web/content/papers/``) into a publication-quality PDF for
-hosting under ``apps/web/public/papers/``.
+Phase 4.3 update: the script now discovers every markdown file under
+``apps/web/content/papers/`` and renders each one to
+``apps/web/public/papers/<slug>.pdf``. This is what the CI papers
+workflow drives.
 
-It uses the same WeasyPrint stack already required by the executive
-digest PDF in ``services/api/app/services/digest_pdf.py`` plus a
-``markdown`` package for HTML conversion.  Both are pure-Python installs
-on top of native libs (Pango / Cairo / GLib) that are pinned in
-``services/api/Dockerfile``.
+Backwards-compatible CLI: passing ``--input`` / ``--output`` still
+renders a single paper at an explicit path so the local dev workflow
+documented in ``apps/web/public/papers/README.md`` keeps working.
 
-Usage::
+It uses the WeasyPrint stack already required by the executive-digest
+PDF in ``services/api/app/services/digest_pdf.py`` plus a ``markdown``
+package for HTML conversion. Both are pure-Python installs on top of
+native libs (Pango / Cairo / GLib) that are pinned in
+``services/api/Dockerfile`` and in the ``papers`` CI workflow.
 
-    python scripts/render_white_paper.py \\
-        --input apps/web/content/papers/l0-l4-automation-maturity.md \\
-        --output apps/web/public/papers/l0-l4-automation-maturity.pdf
+If WeasyPrint is not available (typical for a CI runner without the
+native stack) the script exits with code 2 and a clear message so
+callers can fall back to shipping the markdown unrendered.
 
-If WeasyPrint is not available (typical for CI runners or macOS dev
-machines without the native stack), the script exits with code 2 and a
-clear message so callers can fall back to shipping the markdown
-unrendered.  The hosted PDF is regenerated before each public release;
-the source markdown is the canonical artefact.
-
-This script is deliberately dependency-light.  It does not introduce a
-new heavy dependency (e.g. puppeteer / headless Chromium); WeasyPrint is
-already part of the AiSOC build profile for the API service.
+This script is deliberately dependency-light. It does not introduce a
+new heavy dependency (e.g. puppeteer / headless Chromium); WeasyPrint
+is already part of the AiSOC build profile for the API service.
 """
 
 from __future__ import annotations
@@ -35,9 +32,10 @@ import re
 import sys
 from pathlib import Path
 
-# Print stylesheet applied to the rendered HTML.  Keeps the PDF readable
-# (1 inch margins, page numbers, paragraph spacing) without depending on
-# a heavyweight templating engine.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_SRC_DIR = REPO_ROOT / "apps" / "web" / "content" / "papers"
+DEFAULT_OUT_DIR = REPO_ROOT / "apps" / "web" / "public" / "papers"
+
 PRINT_CSS = """
 @page {
     size: A4;
@@ -49,7 +47,7 @@ PRINT_CSS = """
         color: #6b7280;
     }
     @top-right {
-        content: "AiSOC — L0–L4 Automation Maturity";
+        content: string(paper-title);
         font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
         font-size: 8pt;
         color: #9ca3af;
@@ -68,6 +66,7 @@ h1 {
     margin: 0 0 0.4em 0;
     color: #0f172a;
     page-break-before: auto;
+    string-set: paper-title content();
 }
 h2 {
     font-size: 15pt;
@@ -138,14 +137,13 @@ COVER_HTML = """
 <div style="page-break-after: always;">
   <div style="margin-top: 60mm; text-align: center;">
     <div style="font-size: 32pt; font-weight: 700; color: #0f172a;">
-      The L0–L4 SOC<br/>Automation Maturity Model
+      {title}
     </div>
     <div style="margin-top: 12mm; font-size: 13pt; color: #475569;">
-      A pragmatic framework for graduating autonomous response,<br/>
-      with audit trails.
+      {subtitle}
     </div>
     <div style="margin-top: 18mm; font-size: 10pt; color: #64748b;">
-      AiSOC project · v1.0 · Released {date}
+      AiSOC project · {version} · Released {date}
     </div>
     <div style="margin-top: 4mm; font-size: 10pt; color: #94a3b8;">
       MIT licensed · github.com/beenuar/AiSOC
@@ -171,7 +169,7 @@ def _strip_frontmatter(source: str) -> tuple[dict[str, str], str]:
     return meta, body.lstrip("\n")
 
 
-def render(markdown_path: Path, output_path: Path) -> None:
+def _render_one(markdown_path: Path, output_path: Path) -> None:
     try:
         import markdown as md  # type: ignore[import-untyped]
     except ImportError as exc:
@@ -184,7 +182,7 @@ def render(markdown_path: Path, output_path: Path) -> None:
         raise SystemExit(2) from exc
 
     try:
-        from weasyprint import HTML, CSS  # type: ignore[import-untyped]
+        from weasyprint import CSS, HTML  # type: ignore[import-untyped]
     except (ImportError, OSError) as exc:
         print(
             "[render_white_paper] ERROR: WeasyPrint (or its native libs) is "
@@ -203,10 +201,12 @@ def render(markdown_path: Path, output_path: Path) -> None:
         extensions=["extra", "tables", "fenced_code", "toc", "sane_lists"],
     )
 
-    # Insert a single em-rule between the abstract and the body for visual
-    # separation.  The abstract block lives in frontmatter but we render
-    # an inline summary on the cover page anyway.
-    cover = COVER_HTML.format(date=meta.get("date", ""))
+    cover = COVER_HTML.format(
+        title=meta.get("title", markdown_path.stem.replace("-", " ").title()),
+        subtitle=meta.get("subtitle", ""),
+        version=meta.get("version", "v1.0"),
+        date=meta.get("date", ""),
+    )
     html = (
         "<!doctype html><html><head><meta charset='utf-8'/>"
         f"<title>{meta.get('title', 'AiSOC White Paper')}</title>"
@@ -217,7 +217,7 @@ def render(markdown_path: Path, output_path: Path) -> None:
     )
 
     # Strip the redundant top-level H1 added by the markdown body so the
-    # cover page is the only title surface.  We only do this for the
+    # cover page is the only title surface. We only do this for the
     # first occurrence to avoid wrecking section headings.
     html = re.sub(r"<h1[^>]*>.*?</h1>", "", html, count=1)
 
@@ -233,20 +233,60 @@ def render(markdown_path: Path, output_path: Path) -> None:
     )
 
 
+def render(markdown_path: Path, output_path: Path) -> None:
+    """Public single-file entrypoint kept for backwards compatibility."""
+    _render_one(markdown_path, output_path)
+
+
+def _discover() -> list[tuple[Path, Path]]:
+    """Pair every ``content/papers/*.md`` with its target PDF path."""
+    pairs: list[tuple[Path, Path]] = []
+    for src in sorted(DEFAULT_SRC_DIR.glob("*.md")):
+        if src.name.startswith("_"):
+            continue
+        pdf = DEFAULT_OUT_DIR / f"{src.stem}.pdf"
+        pairs.append((src, pdf))
+    return pairs
+
+
+def _render_all() -> None:
+    pairs = _discover()
+    if not pairs:
+        print(
+            f"[render_white_paper] no markdown sources found under {DEFAULT_SRC_DIR}",
+            file=sys.stderr,
+        )
+        return
+    for src, dst in pairs:
+        _render_one(src, dst)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--input",
-        default="apps/web/content/papers/l0-l4-automation-maturity.md",
-        help="Path to the source markdown white paper.",
+        help=("Render a single paper from this markdown path. If omitted, render every paper under apps/web/content/papers/."),
     )
     parser.add_argument(
         "--output",
-        default="apps/web/public/papers/l0-l4-automation-maturity.pdf",
-        help="Path where the rendered PDF will be written.",
+        help=("Write the rendered PDF to this path. Required when --input is supplied; ignored otherwise."),
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help=("Render every paper under apps/web/content/papers/. Default when neither --input nor --output is supplied."),
     )
     args = parser.parse_args(argv)
-    render(Path(args.input), Path(args.output))
+
+    if args.input and not args.output:
+        parser.error("--output is required when --input is supplied")
+    if args.output and not args.input:
+        parser.error("--input is required when --output is supplied")
+
+    if args.input and args.output:
+        _render_one(Path(args.input), Path(args.output))
+    else:
+        _render_all()
     return 0
 
 
