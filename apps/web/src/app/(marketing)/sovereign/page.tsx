@@ -37,7 +37,12 @@ type DeploymentMode = {
   name: string;
   llm: string;
   residency: string;
-  compliance: string;
+  // Controls the deployment maps to. These are the audit frameworks the
+  // platform's surfaced controls (RBAC, tenant isolation, audit logs,
+  // immutable ledger, encrypted vault, evidence dashboards) align to —
+  // NOT a statement that AiSOC itself holds an audit report. See the
+  // disclaimer below the matrix.
+  controlsAligned: string;
   artefact: string;
   artefactHref?: string;
 };
@@ -47,7 +52,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     name: 'Air-gapped',
     llm: 'Local Ollama sidecar',
     residency: 'Operator-defined',
-    compliance: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'docker-compose.airgap.yml',
     artefactHref:
       'https://github.com/beenuar/AiSOC/blob/main/docker-compose.airgap.yml',
@@ -56,7 +61,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     name: 'On-prem',
     llm: 'Local Ollama or BYO endpoint',
     residency: 'Operator-defined',
-    compliance: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Helm chart (infra/helm/aisoc)',
     artefactHref:
       'https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/Chart.yaml',
@@ -65,7 +70,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     name: 'Hybrid',
     llm: 'Cloud APIs · Ollama · BYO',
     residency: 'EU · US · India · Custom',
-    compliance: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
     artefact: 'Terraform (infra/terraform/byoc)',
     artefactHref:
       'https://github.com/beenuar/AiSOC/tree/main/infra/terraform/byoc',
@@ -74,8 +79,8 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     name: 'Public cloud',
     llm: 'Cloud APIs · BYO endpoint',
     residency: 'EU · US · India · Custom',
-    compliance: 'SOC 2 · ISO 27001 · GDPR · DPDP',
-    artefact: 'Terraform (infra/terraform/{aws,gcp})',
+    controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
+    artefact: 'Terraform (infra/terraform/{aws,gcp,azure,byoc})',
     artefactHref:
       'https://github.com/beenuar/AiSOC/tree/main/infra/terraform',
   },
@@ -83,7 +88,7 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     name: 'Managed SaaS (waitlist)',
     llm: 'Cloud APIs (default) · BYO',
     residency: 'EU · US · India',
-    compliance: 'SOC 2 · GDPR (target)',
+    controlsAligned: 'SOC 2 (in progress) · GDPR (target)',
     artefact: 'tryaisoc.com',
     artefactHref: 'mailto:hello@tryaisoc.com?subject=AiSOC%20managed%20waitlist',
   },
@@ -103,7 +108,7 @@ const PILLARS = [
   {
     label: 'Helm + Terraform first-class',
     body: 'A single Helm release deploys every service into your cluster; Terraform modules cover AWS EKS, GCP Cloud Run, and a generic BYOC blueprint. Bring your own VPC, KMS, and IAM — the modules consume them rather than reinventing them.',
-    cite: 'infra/helm/aisoc · infra/terraform/{aws,gcp,byoc}',
+    cite: 'infra/helm/aisoc · infra/terraform/{aws,gcp,azure,byoc}',
   },
   {
     label: 'Data residency by VPC',
@@ -115,11 +120,23 @@ const PILLARS = [
 const CLOUDS = ['AWS', 'Azure', 'GCP', 'OCI', 'DigitalOcean', 'Hetzner'];
 const REGIONS = ['US', 'EU', 'India', 'Singapore', 'Custom'];
 
+// Frameworks the platform's controls (RBAC, tenant isolation, audit logs,
+// immutable ledger, encrypted vault, evidence dashboards) map to. These are
+// NOT statements that AiSOC itself holds a third-party audit report — see
+// the disclaimer rendered under the matrix. The Managed SaaS row carries
+// the live audit status, which is the only place we hold AiSOC itself
+// against a framework.
 const COMPLIANCE_BADGES = [
-  { label: 'SOC 2', tone: 'border-emerald-500/30 text-emerald-200' },
-  { label: 'ISO 27001', tone: 'border-cyan-500/30 text-cyan-200' },
-  { label: 'GDPR', tone: 'border-brand-500/30 text-brand-200' },
-  { label: 'DPDP (India)', tone: 'border-amber-500/30 text-amber-200' },
+  { label: 'Aligned to SOC 2', tone: 'border-emerald-500/30 text-emerald-200' },
+  {
+    label: 'Aligned to ISO 27001',
+    tone: 'border-cyan-500/30 text-cyan-200',
+  },
+  { label: 'Aligned to GDPR', tone: 'border-brand-500/30 text-brand-200' },
+  {
+    label: 'Aligned to DPDP (India)',
+    tone: 'border-amber-500/30 text-amber-200',
+  },
 ];
 
 export default function SovereignPage() {
@@ -226,7 +243,7 @@ export default function SovereignPage() {
                   <th className="px-5 py-4">Mode</th>
                   <th className="px-5 py-4">LLM trust boundary</th>
                   <th className="px-5 py-4">Data residency</th>
-                  <th className="px-5 py-4">Compliance posture</th>
+                  <th className="px-5 py-4">Controls aligned to</th>
                   <th className="px-5 py-4">Shipping artefact</th>
                 </tr>
               </thead>
@@ -248,7 +265,7 @@ export default function SovereignPage() {
                       {row.residency}
                     </td>
                     <td className="px-5 py-4 text-gray-300">
-                      {row.compliance}
+                      {row.controlsAligned}
                     </td>
                     <td className="px-5 py-4">
                       {row.artefactHref ? (
@@ -281,7 +298,7 @@ export default function SovereignPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-            <span>Compliance frameworks supported across the matrix:</span>
+            <span>Surfaced controls across the matrix map to:</span>
             {COMPLIANCE_BADGES.map((b) => (
               <span
                 key={b.label}
@@ -291,6 +308,19 @@ export default function SovereignPage() {
               </span>
             ))}
           </div>
+          <p className="mt-5 max-w-3xl rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs leading-relaxed text-amber-100/90">
+            <span className="font-semibold text-amber-200">A note on compliance posture.</span>{' '}
+            “Controls aligned to” means the platform ships the
+            technical controls (RBAC, multi-tenant RLS, immutable audit
+            ledger, encrypted credential vault, evidence dashboards) that
+            help <span className="italic">you</span> meet your audit
+            obligations under each framework. AiSOC the platform is{' '}
+            <span className="italic">not</span> itself a SOC 2 / ISO 27001
+            / GDPR / DPDP certified entity — the Managed SaaS row carries
+            the live audit-track status. If you need AiSOC-the-product to
+            be in scope of your auditor’s testing, talk to us about the
+            sovereign deployment.
+          </p>
         </div>
       </section>
 

@@ -342,7 +342,9 @@ Everything ships under MIT. Fork it, self-host it, audit it, extend it.
 - Multi-tenant Postgres RLS
 - Granular RBAC (`resource:action` permissions)
 - Immutable audit log with tamper-proof trigger
-- SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA dashboards
+- Evidence dashboards with controls mapped to SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, and DORA
+  — to help your team gather audit evidence, not a claim that AiSOC itself holds any of these certifications.
+  Live audit-track status: Managed SaaS (SOC 2 in progress, GDPR target).
 - MTTD / MTTR / MTTC SLA tracking
 - ChatOps verification (HMAC-signed Slack/Teams approval prompts)
 
