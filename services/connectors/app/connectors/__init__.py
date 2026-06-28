@@ -48,6 +48,7 @@ from app.connectors.fleetdm import FleetDMConnector
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
 from app.connectors.gcp_scc import GCPSCCConnector
 from app.connectors.github import GitHubConnector
+from app.connectors.gitlab import GitLabConnector
 from app.connectors.google_workspace import GoogleWorkspaceConnector
 from app.connectors.jira_connector import JiraConnector
 from app.connectors.kubernetes_audit import KubernetesAuditConnector
@@ -124,6 +125,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     GCPCloudAuditConnector,
     GCPSCCConnector,
     GitHubConnector,
+    GitLabConnector,
     GoogleWorkspaceConnector,
     JiraConnector,
     KubernetesAuditConnector,
