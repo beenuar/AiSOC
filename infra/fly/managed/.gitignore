@@ -1,0 +1,4 @@
+# Per-tenant rendered fly.toml files — produced by render.sh,
+# consumed by provision.sh. Never check these in; they're derivable
+# from the manifest under tenants/.
+.render-cache/

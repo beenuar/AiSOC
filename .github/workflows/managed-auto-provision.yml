@@ -1,0 +1,200 @@
+name: Managed-mode auto-provision
+
+# Phase 4.2 / T6.1 closing-out workflow.
+#
+# Whenever a manifest under `infra/fly/managed/tenants/*.yaml` is added,
+# modified, or removed on `main`, this workflow runs the corresponding
+# `provision.sh` / `deprovision.sh` script so the source-of-truth for
+# which managed tenants exist is the manifest set itself.
+#
+# Safety rails:
+#   * Only runs on push to main (PRs do not provision — preview tenants
+#     are out of scope here).
+#   * Skips any manifest whose filename starts with `_` (the
+#     `_example.yaml` template).
+#   * The provision script is idempotent so a re-run after a partial
+#     failure is safe.
+#   * Deprovision needs an explicit confirmation env var
+#     (AISOC_ALLOW_DEPROVISION) — we never reflexively destroy a Fly
+#     stack from a workflow.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/fly/managed/tenants/**.yaml"
+      - "infra/fly/managed/template/**"
+      - "infra/fly/managed/render.sh"
+      - "infra/fly/managed/provision.sh"
+      - "infra/fly/managed/deprovision.sh"
+      - ".github/workflows/managed-auto-provision.yml"
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: "Path to manifest under infra/fly/managed/tenants/"
+        required: true
+        type: string
+      action:
+        description: "provision | deprovision"
+        required: true
+        default: "provision"
+        type: choice
+        options:
+          - provision
+          - deprovision
+
+permissions:
+  contents: read
+
+concurrency:
+  group: managed-auto-provision-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-changes:
+    name: Resolve changed manifests
+    runs-on: ubuntu-latest
+    outputs:
+      added: ${{ steps.diff.outputs.added }}
+      modified: ${{ steps.diff.outputs.modified }}
+      removed: ${{ steps.diff.outputs.removed }}
+      dispatch_manifest: ${{ steps.dispatch.outputs.manifest }}
+      dispatch_action: ${{ steps.dispatch.outputs.action }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Diff managed tenant manifests
+        id: diff
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          set -euo pipefail
+          # `git diff --name-status HEAD^ HEAD` gives us a stream of
+          # status\tpath lines for the merged commit. We filter to
+          # tenants/*.yaml and drop any underscore-prefixed files
+          # (those are templates, not real tenants).
+          git diff --name-status HEAD^ HEAD -- 'infra/fly/managed/tenants/*.yaml' \
+            > /tmp/manifest-diff.txt || true
+
+          added=$(awk -F '\t' '$1=="A" && $2 !~ "/_" {print $2}' /tmp/manifest-diff.txt | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          modified=$(awk -F '\t' '$1=="M" && $2 !~ "/_" {print $2}' /tmp/manifest-diff.txt | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          removed=$(awk -F '\t' '$1=="D" && $2 !~ "/_" {print $2}' /tmp/manifest-diff.txt | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          echo "added=$added"     >> "$GITHUB_OUTPUT"
+          echo "modified=$modified" >> "$GITHUB_OUTPUT"
+          echo "removed=$removed"  >> "$GITHUB_OUTPUT"
+
+      - name: Capture workflow_dispatch inputs
+        id: dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "manifest=${{ github.event.inputs.manifest }}" >> "$GITHUB_OUTPUT"
+          echo "action=${{ github.event.inputs.action }}"    >> "$GITHUB_OUTPUT"
+
+  provision-from-push:
+    name: Provision (push)
+    runs-on: ubuntu-latest
+    needs: resolve-changes
+    if: |
+      github.event_name == 'push' &&
+      (needs.resolve-changes.outputs.added != '[]' || needs.resolve-changes.outputs.modified != '[]')
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Install yq + envsubst
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yq gettext
+
+      - name: Provision each added / modified manifest
+        run: |
+          set -euo pipefail
+          added='${{ needs.resolve-changes.outputs.added }}'
+          modified='${{ needs.resolve-changes.outputs.modified }}'
+          manifests=$(jq -c -n --argjson a "$added" --argjson m "$modified" '$a + $m | unique')
+          echo "running provision.sh against: $manifests"
+          for m in $(jq -r '.[]' <<< "$manifests"); do
+            echo "::group::provision $m"
+            ./infra/fly/managed/provision.sh "$m"
+            echo "::endgroup::"
+          done
+
+  deprovision-from-push:
+    name: Deprovision (push)
+    runs-on: ubuntu-latest
+    needs: resolve-changes
+    if: |
+      github.event_name == 'push' &&
+      needs.resolve-changes.outputs.removed != '[]'
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
+      AISOC_ALLOW_DEPROVISION: ${{ vars.AISOC_ALLOW_DEPROVISION || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard rail — must opt in to destructive auto-deprovision
+        if: ${{ env.AISOC_ALLOW_DEPROVISION != '1' }}
+        run: |
+          echo "::warning::tenant manifest deletion detected but AISOC_ALLOW_DEPROVISION repo var is not '1'."
+          echo "Set the repo var to opt-in. Skipping deprovision; manifests removed:"
+          jq -r '.[]' <<< '${{ needs.resolve-changes.outputs.removed }}'
+          exit 0
+
+      - name: Install flyctl
+        if: ${{ env.AISOC_ALLOW_DEPROVISION == '1' }}
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deprovision each removed manifest
+        if: ${{ env.AISOC_ALLOW_DEPROVISION == '1' }}
+        run: |
+          set -euo pipefail
+          for m in $(jq -r '.[]' <<< '${{ needs.resolve-changes.outputs.removed }}'); do
+            # m is the path that was deleted; the slug is the filename
+            # minus .yaml extension.
+            slug=$(basename "$m" .yaml)
+            echo "::group::deprovision $slug"
+            ./infra/fly/managed/deprovision.sh "$slug"
+            echo "::endgroup::"
+          done
+
+  workflow-dispatch:
+    name: ${{ github.event.inputs.action }} (manual)
+    runs-on: ubuntu-latest
+    needs: resolve-changes
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Install yq + envsubst
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yq gettext
+
+      - name: Run the requested action
+        run: |
+          set -euo pipefail
+          manifest="${{ needs.resolve-changes.outputs.dispatch_manifest }}"
+          action="${{ needs.resolve-changes.outputs.dispatch_action }}"
+          if [[ "$action" == "provision" ]]; then
+            ./infra/fly/managed/provision.sh "$manifest"
+          elif [[ "$action" == "deprovision" ]]; then
+            slug=$(basename "$manifest" .yaml)
+            ./infra/fly/managed/deprovision.sh "$slug"
+          else
+            echo "unknown action: $action" >&2
+            exit 1
+          fi

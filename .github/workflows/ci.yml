@@ -240,6 +240,20 @@ jobs:
       - name: Verify FastAPI services install /livez + /readyz probes (Phase 2.6)
         run: python scripts/audit_health_probes.py --check
 
+      # Phase 4.2 — every managed-mode tenant manifest under
+      # `infra/fly/managed/tenants/*.yaml` must parse, carry the
+      # required fields (slug, display_name, base_domain, contact_email,
+      # plan), match the filename↔slug invariant, and stay within the
+      # plan / vm-size / postgres-plan whitelists. The auto-provision
+      # workflow on `main` reads these manifests verbatim and feeds them
+      # into `flyctl apps create / postgres create / redis create`, so a
+      # malformed manifest reaching `main` would mean a half-provisioned
+      # Fly stack and a 3am page. This gate catches it on the PR.
+      - name: Verify managed tenant manifests are well-formed (Phase 4.2)
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/audit_managed_tenants.py
+
   python-test:
     name: Python — Tests
     runs-on: ubuntu-latest
