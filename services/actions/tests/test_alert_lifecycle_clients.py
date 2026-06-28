@@ -19,7 +19,6 @@ from app.clients.defender_client import DefenderClient
 from app.clients.elastic_client import ElasticClient
 from app.clients.splunk_client import SplunkClient
 
-
 # ────────────────────────────────────────────────────────────────────
 # Splunk ES
 # ────────────────────────────────────────────────────────────────────

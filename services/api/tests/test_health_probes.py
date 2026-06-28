@@ -19,13 +19,12 @@ canonical copy.
 
 from __future__ import annotations
 
+from app._health import install_health_routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app._health import install_health_routes
 
-
-def _build_app() -> tuple[FastAPI, "callable", "callable"]:
+def _build_app() -> tuple[FastAPI, callable, callable]:
     app = FastAPI()
     mark_ready, mark_not_ready = install_health_routes(app, service_name="aisoc-test")
     return app, mark_ready, mark_not_ready

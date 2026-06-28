@@ -39,8 +39,9 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import re
 import sys
+
+import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PROMETHEUS = REPO_ROOT / "infra" / "docker" / "prometheus.yml"
@@ -84,20 +85,43 @@ THIRD_PARTY_HOSTS: set[str] = {
 # Currently empty — every instrumented service is in-scope.
 SCRAPE_EXEMPT: set[str] = set()
 
-JOB_TARGET_RE = re.compile(
-    r"- job_name:\s*['\"]?(?P<job>[\w-]+)['\"]?\s*\n"
-    r"(?:\s+.*\n)*?"
-    r"\s+- targets:\s*\[\s*['\"]?(?P<host>[\w-]+):(?P<port>\d+)['\"]?",
-    re.MULTILINE,
-)
-
-
 def parse_prometheus() -> list[tuple[str, str, int]]:
-    """Return ``[(job, host, port), ...]`` from prometheus.yml."""
-    text = PROMETHEUS.read_text(encoding="utf-8")
+    """Return ``[(job, host, port), ...]`` from prometheus.yml.
+
+    We parse the YAML structurally with ``yaml.safe_load`` rather than
+    a hand-rolled regex. The earlier regex
+    (``- job_name:\\s*…\\n(?:\\s+.*\\n)*?\\s+- targets:…``) was flagged
+    by CodeQL (rule ``py/redos``) for exponential backtracking on
+    malformed inputs starting with ``- job_name:-\\n`` and many
+    repetitions of `` \\n``. Structural parsing also tolerates
+    formatting drift (multi-target lists, single-quoted vs.
+    double-quoted, indented comments) that the regex couldn't.
+    """
+
+    raw = yaml.safe_load(PROMETHEUS.read_text(encoding="utf-8")) or {}
     out: list[tuple[str, str, int]] = []
-    for m in JOB_TARGET_RE.finditer(text):
-        out.append((m.group("job"), m.group("host"), int(m.group("port"))))
+    for sc in raw.get("scrape_configs", []) or []:
+        job = str(sc.get("job_name") or "").strip()
+        if not job:
+            continue
+        # Every scrape config has at least one static_configs entry
+        # with a `targets:` list. We extract the *first* target per
+        # job because that's what the audit cares about (the canonical
+        # service:port mapping). Multi-target configs are rare in
+        # our setup and would warrant a separate audit rule.
+        for static in sc.get("static_configs", []) or []:
+            for target in static.get("targets", []) or []:
+                target = str(target).strip()
+                if ":" not in target:
+                    continue
+                host, _, port = target.rpartition(":")
+                if not host or not port.isdigit():
+                    continue
+                out.append((job, host, int(port)))
+                break
+            else:
+                continue
+            break
     return out
 
 

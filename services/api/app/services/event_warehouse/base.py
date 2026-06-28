@@ -78,7 +78,6 @@ class EventWarehouseProvider(Protocol):
         * Return 0 (not raise) when the warehouse runs cleanly but
           finds no hits.
         """
-        ...
 
 
 class _BaseProvider:

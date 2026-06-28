@@ -19,7 +19,6 @@ from app.clients.cloudflare_client import CloudflareClient, CloudflareError
 from app.clients.fortigate_client import FortiGateClient
 from app.clients.panos_client import PanOsClient
 
-
 # ────────────────────────────────────────────────────────────────────
 # PAN-OS
 # ────────────────────────────────────────────────────────────────────
