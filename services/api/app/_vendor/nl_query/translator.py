@@ -61,7 +61,16 @@ class TranslatedQuery:
 
 @dataclass
 class QueryIntents:
-    """Structured intermediate representation parsed from the NL question."""
+    """Structured intermediate representation parsed from the NL question.
+
+    Phase 4.6 extensions:
+
+    * ``filters`` carries the AND-set of unary comparisons. The op is
+      one of ``==`` / ``!=`` / ``>`` / ``<`` / ``>=`` / ``<=`` /
+      ``LIKE`` / ``IN``. For ``IN`` the value is a JSON-encoded list
+      (e.g. ``'["IR","RU"]'``) — encoded as a string so the existing
+      ``set[tuple]`` deduplication in the parser still works.
+    """
 
     filters: list[tuple[str, str, str]] = field(default_factory=list)  # (field, op, value)
     group_by: list[str] = field(default_factory=list)
@@ -501,8 +510,14 @@ def _extract_filters(question: str, intents: QueryIntents) -> None:
     # like a hostname (alphanumeric with at least one digit, or contains a
     # dot like an FQDN). We deliberately require a digit-or-dot so we don't
     # collide with prose like ``from the last hour`` or ``from authentication``.
+    #
+    # Order matters: the FQDN alternative (`edge1.corp.local`) is listed
+    # first so Python's leftmost-alternation `re` engine prefers it over
+    # the bare-digit alternative (`edge1`) when both could match at the
+    # same position. Without that, ``from edge1.corp.local`` would
+    # mis-extract just ``edge1`` and drop the domain.
     for m in re.finditer(
-        r"\bfrom\s+([a-z][a-z0-9_\-]*\d[a-z0-9_\-]*|[a-z][a-z0-9_\-]*\.[a-z0-9_\-\.]+)\b",
+        r"\bfrom\s+([a-z][a-z0-9_\-]*\.[a-z0-9_\-\.]+|[a-z][a-z0-9_\-]*\d[a-z0-9_\-]*)\b",
         text,
     ):
         value = m.group(1).strip()

@@ -73,6 +73,17 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browser binaries
+        # The base image ships Playwright 1.49's bundled browsers, but
+        # `apps/web` resolves `@playwright/test` up the `^1.49.0` semver
+        # range (currently 1.61.x) which expects a different chromium
+        # revision (`chromium_headless_shell-1228+`). Without an
+        # explicit install step the run fails with `Executable doesn't
+        # exist at /ms-playwright/chromium_headless_shell-1228/...`.
+        # Install only chromium to keep the download small — the
+        # journey spec uses the desktop-chromium project only.
+        run: pnpm exec playwright install chromium
+
       - name: Run buyer-journey E2E
         run: pnpm e2e
         env:
