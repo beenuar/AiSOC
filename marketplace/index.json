@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-06-27T08:39:33Z",
+  "generated": "2026-06-28T09:43:41Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,17 +20,17 @@
     }
   ],
   "stats": {
-    "total": 7123,
+    "total": 7127,
     "playbooks": 62,
     "detections": 6998,
-    "plugins": 63,
-    "verified": 1002,
+    "plugins": 67,
+    "verified": 1006,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1002
+      "stable": 1006
     },
     "detections_by_tier": {
       "community": 1,
@@ -224350,6 +224350,32 @@
       "path": "plugins/cloudflare-waf/plugin.yaml"
     },
     {
+      "id": "cloudflare-zt",
+      "type": "plugin",
+      "name": "Cloudflare WAF + Zero Trust Connector",
+      "description": "Cloudflare data-plane events connector. Distinct from the existing cloudflare connector (which pulls account audit logs): this one pulls request-level decisions from two streams and folds them into the same normalised AiSOC alert shape. WAF / firewall events come from GET /zones/{zone_id}/security/events \u2014 per-zone block / challenge / log / jschallenge decisions with rule_id, action, source IP, country, ray_id. Zero Trust (Access) audit comes from GET /accounts/{account_id}/access/logs/access_requests \u2014 who tried to reach which Access app, were they allowed, and why. A single mode field selects which stream is active for an instance \u2014 operators instantiate the connector twice (once per stream) rather than have AiSOC multiplex both into one polling job and tangle the rate limits.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "edge",
+        "cloudflare",
+        "waf",
+        "zero-trust",
+        "access",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cloudflare_zt.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/cloudflare-zt/plugin.yaml"
+    },
+    {
       "id": "confluence_audit",
       "type": "plugin",
       "name": "Atlassian Confluence Audit",
@@ -225254,6 +225280,32 @@
       "path": "plugins/slack-quarantine/plugin.yaml"
     },
     {
+      "id": "snowflake",
+      "type": "plugin",
+      "name": "Snowflake Account Activity Connector",
+      "description": "Snowflake audit + account-usage connector. Distinct from the existing snowflake-events plugin (which is the reference Python + Go SDK implementation under plugins/snowflake-events/): this is the first-party AiSOC core connector that ships with the platform. Polls the SNOWFLAKE.ACCOUNT_USAGE schema for LOGIN_HISTORY and QUERY_HISTORY views, normalises rows to AiSOC alert shape, and emits anomaly candidates (failed login bursts, large-result-set downloads, queries from unexpected regions, service-account queries from human-named warehouses).",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "data",
+        "snowflake",
+        "warehouse",
+        "exfil",
+        "audit",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/snowflake.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/snowflake/plugin.yaml"
+    },
+    {
       "id": "snowflake-events",
       "type": "plugin",
       "name": "Snowflake Events Connector",
@@ -225328,6 +225380,33 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/sumo-logic/plugin.yaml"
+    },
+    {
+      "id": "sysdig",
+      "type": "plugin",
+      "name": "Sysdig Secure Connector",
+      "description": "Sysdig Secure runtime / cloud detection events. Polls the Secure Events API for Falco-style policy hits across Kubernetes workloads and cloud accounts. Each event is a runtime policy hit keyed by rule name with severity 0..7 on the Falco syslog ladder; the connector normalises that to the AiSOC alert shape (host + rule + severity + timestamps) and emits one alert per event so downstream correlation can fan out without re-querying Sysdig.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "sysdig",
+        "falco",
+        "runtime",
+        "kubernetes",
+        "cloud",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sysdig.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/sysdig/plugin.yaml"
     },
     {
       "id": "tailscale-acl",
@@ -225507,6 +225586,33 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/twilio-sms/plugin.yaml"
+    },
+    {
+      "id": "vault",
+      "type": "plugin",
+      "name": "HashiCorp Vault Connector",
+      "description": "HashiCorp Vault audit-device polling connector. Vault doesn't expose audit logs via its HTTP API by design \u2014 audit data flows out of the cluster via audit devices (file, socket, syslog). This connector consumes the AiSOC connectors-service ingest buffer (sidecar tail topology) and verifies cluster health via GET /v1/sys/health. Severity collapse: revoke / root-token / policy/ writes \u2192 high (intent is destructive or privilege-elevating); update on auth/ or sys/ paths \u2192 medium; everything else \u2192 info.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "identity",
+        "vault",
+        "secrets",
+        "audit",
+        "hashicorp",
+        "control-plane",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/vault.py",
+      "min_aisoc_version": "4.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/vault/plugin.yaml"
     },
     {
       "id": "wazuh",

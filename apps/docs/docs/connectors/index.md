@@ -29,6 +29,7 @@ The catalog ships with **69 connectors** out of the box, registered in [`service
 | Auth0 | Identity | Mgmt API token | Tenant log events (logins, MFA, anomaly) |
 | Duo Security | Identity / MFA | Integration key + secret | Authentication logs and policy events |
 | 1Password | IAM / Secrets | Service account token | Vault access events and shared-item changes |
+| [HashiCorp Vault](/docs/connectors/vault) | IAM / Secrets | Vault token + sidecar | Audit-device events: secrets ops, policy changes, token issuance |
 
 ### EDR / XDR
 
@@ -54,6 +55,7 @@ The catalog ships with **69 connectors** out of the box, registered in [`service
 | Datadog Cloud SIEM | SIEM | API + app key | Security signals and detection rule hits |
 | Google Chronicle | SIEM | Service account JSON | UDM events and detection rule hits |
 | Rapid7 InsightIDR | SIEM | API key | Investigations and detection alerts |
+| [Sysdig Secure](/docs/connectors/sysdig) | SIEM / Runtime | API token | Falco-style runtime detections from Kubernetes + cloud workloads |
 
 ### Cloud (control plane / posture / CNAPP)
 
@@ -81,6 +83,8 @@ The catalog ships with **69 connectors** out of the box, registered in [`service
 | Slack Audit | SaaS / Comms | Audit API token | Workspace audit logs (org-grid required) |
 | Salesforce | SaaS / CRM | OAuth2 / connected app | Login history, setup audit trail, security events |
 | [Cloudflare](/docs/connectors/cloudflare) | SaaS / Edge | API token | Account audit logs (operator activity, not edge traffic) |
+| [Cloudflare WAF + Zero Trust](/docs/connectors/cloudflare-zt) | Edge / Identity | Account-scoped API token | Data-plane WAF firewall events + Zero Trust Access audit |
+| [Snowflake](/docs/connectors/snowflake) | Data / Warehouse | User + password | LOGIN_HISTORY + QUERY_HISTORY anomaly detection |
 | Proofpoint | Email Security | Service principal | Threat events and click telemetry |
 | Mimecast | Email Security | API key + secret | Email threat events and policy actions |
 | Email Inbox | Email Security / Phishing | IMAP / Graph | Reported-phishing inbox triage |

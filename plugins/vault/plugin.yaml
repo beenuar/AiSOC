@@ -1,0 +1,63 @@
+id: vault
+name: HashiCorp Vault Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  HashiCorp Vault audit-device polling connector. Vault doesn't expose
+  audit logs via its HTTP API by design — audit data flows out of the
+  cluster via audit devices (file, socket, syslog). This connector
+  consumes the AiSOC connectors-service ingest buffer (sidecar tail
+  topology) and verifies cluster health via GET /v1/sys/health. Severity
+  collapse: revoke / root-token / policy/ writes → high (intent is
+  destructive or privilege-elevating); update on auth/ or sys/ paths →
+  medium; everything else → info.
+author: AiSOC Core Team
+tags: [identity, vault, secrets, audit, hashicorp, control-plane, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/vault.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [vault_addr, vault_token]
+  properties:
+    vault_addr:
+      type: string
+      pattern: "^https?://"
+      description: >
+        Vault cluster address (e.g. https://vault.acme.internal:8200).
+        Used by test_connection() to hit GET /v1/sys/health and confirm
+        the token has cluster-level visibility. The audit stream itself
+        does NOT come from this address — see ingest_endpoint.
+    vault_token:
+      type: string
+      description: >
+        Vault token with at least the default policy plus read access to
+        sys/health. We recommend a renewable periodic token bound to a
+        dedicated "aisoc-readonly" policy. Do not use the root token.
+      secret: true
+    ingest_endpoint:
+      type: string
+      default: "/v1/_/audit_ingest"
+      description: >
+        Path on the AiSOC connectors service that receives audit
+        JSON-lines from a Vault sidecar. The connector drains the
+        in-memory buffer keyed by this endpoint on each poll. Only
+        change this if the connectors service has been deployed with
+        a custom ingest mount.
+    poll_interval_seconds:
+      type: integer
+      default: 60
+      minimum: 15
+      maximum: 600
+      description: >
+        How often the audit buffer is drained. Vault audit volume can
+        be very high for active clusters — keep this short so the
+        in-memory buffer never approaches its bound.
+    audit_log_path:
+      type: string
+      description: >
+        Optional path to a Vault file audit-device on the same host
+        the connector runs on. Only used by the "pull" deployment
+        topology (small / single-node Vault). Leave blank for the
+        recommended sidecar topology.

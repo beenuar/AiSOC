@@ -1,0 +1,66 @@
+id: cloudflare-zt
+name: Cloudflare WAF + Zero Trust Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Cloudflare data-plane events connector. Distinct from the existing
+  cloudflare connector (which pulls account audit logs): this one pulls
+  request-level decisions from two streams and folds them into the same
+  normalised AiSOC alert shape. WAF / firewall events come from
+  GET /zones/{zone_id}/security/events — per-zone block / challenge /
+  log / jschallenge decisions with rule_id, action, source IP, country,
+  ray_id. Zero Trust (Access) audit comes from
+  GET /accounts/{account_id}/access/logs/access_requests — who tried to
+  reach which Access app, were they allowed, and why. A single mode
+  field selects which stream is active for an instance — operators
+  instantiate the connector twice (once per stream) rather than have
+  AiSOC multiplex both into one polling job and tangle the rate limits.
+author: AiSOC Core Team
+tags: [edge, cloudflare, waf, zero-trust, access, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cloudflare_zt.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_token, mode]
+  properties:
+    mode:
+      type: string
+      enum: [waf, zero_trust]
+      description: >
+        Which stream this connector instance polls.
+          * waf — request-level WAF/firewall decisions per zone
+          * zero_trust — Cloudflare Access audit (per account)
+        Operators add two connector instances (one per mode) when they
+        want both streams.
+    api_token:
+      type: string
+      description: >
+        Account-scoped API token with both Account: Access: Audit Logs:
+        Read and Zone: Firewall Services: Read. Bearer-token model
+        only — the legacy global-key path is not supported. Use a
+        dedicated aisoc-readonly token for least privilege.
+      secret: true
+    account_id:
+      type: string
+      description: >
+        Cloudflare account ID (32-char hex). Required for the
+        zero_trust mode; optional for waf if zone_ids covers a single
+        account.
+    zone_ids:
+      type: array
+      items: {type: string}
+      description: >
+        List of Cloudflare zone IDs to poll in waf mode. Each zone is
+        queried independently so per-zone rate limits stay isolated.
+        Leave empty in zero_trust mode.
+    poll_interval_seconds:
+      type: integer
+      default: 60
+      minimum: 30
+      maximum: 600
+      description: >
+        How often the connector polls. WAF events arrive in near-real-
+        time; below 30s the Cloudflare API rate-limits and you get the
+        same events on every page anyway.
