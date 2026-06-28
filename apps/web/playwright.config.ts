@@ -59,9 +59,12 @@ export default defineConfig({
     webServer: {
       // Boot Next on 3100 so a developer's `pnpm dev` on 3000 doesn't
       // collide with this run. `--turbo` keeps the boot under 20s on
-      // modern machines.
+      // modern machines. Bind to `localhost` (not `127.0.0.1`) so
+      // Next 16's allowedDevOrigins guard doesn't block HMR / asset
+      // requests with "Blocked cross-origin request to Next.js dev
+      // resource /_next/webpack-hmr from 127.0.0.1".
       command: "pnpm exec next dev -p 3100 --turbo",
-      url: "http://127.0.0.1:3100",
+      url: "http://localhost:3100",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       env: {
@@ -77,7 +80,7 @@ export default defineConfig({
     baseURL: IS_VISUAL
       ? "http://127.0.0.1:6007"
       : IS_JOURNEY
-        ? "http://127.0.0.1:3100"
+        ? "http://localhost:3100"
         : (process.env.AISOC_SCREENCAST_URL ?? "https://tryaisoc.com"),
     trace: IS_JOURNEY ? "retain-on-failure" : "off",
     screenshot: IS_JOURNEY ? "only-on-failure" : "off",
