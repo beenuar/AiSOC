@@ -21,6 +21,7 @@ from __future__ import annotations
 import structlog
 from fastapi import FastAPI
 
+from app._health import install_health_routes
 from app.api.live_actions_router import router as live_actions_router
 from app.api.router import router as legacy_router
 from app.live_actions import register_builtin_executors
@@ -37,6 +38,13 @@ app = FastAPI(
     version="0.2.0",
 )
 
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+# /readyz flips to 200 once the builtin executor registration is
+# complete (in the startup hook below).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-actions")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
+
 app.include_router(legacy_router, prefix="/api/v1")
 app.include_router(live_actions_router, prefix="/api/v1")
 
@@ -52,6 +60,17 @@ async def _register_builtin_live_actions() -> None:
     """
     count = register_builtin_executors(overwrite=True)
     logger.info("live_actions.bootstrap_complete", builtin_count=count)
+    # Phase 2.6 — the registry is now populated, so flip /readyz on.
+    app.state.mark_ready()
+
+
+@app.on_event("shutdown")
+async def _drain_readyz() -> None:
+    """Phase 2.6 — drain /readyz at the start of shutdown so the
+    orchestrator stops sending new requests while in-flight ones
+    finish.
+    """
+    app.state.mark_not_ready()
 
 
 @app.get("/health")

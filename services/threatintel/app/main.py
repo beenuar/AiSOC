@@ -23,6 +23,7 @@ from opensearchpy import AsyncOpenSearch
 from prometheus_client import Counter, make_asgi_app
 from qdrant_client import AsyncQdrantClient
 
+from app._health import install_health_routes
 from app.actors.attribution import ThreatActorAttributionEngine
 from app.airgap import airgap_status, is_host_allowed_for_airgap
 from app.api.actor_attribution import router as actor_attribution_router
@@ -247,7 +248,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # component of the score can match against collected threat intel.
     app.state.attribution_engine = ThreatActorAttributionEngine(os_store=os_store)
 
+    # Phase 2.6 — flip /readyz to 200 once feed scheduler + storage clients
+    # are wired. Failures in any individual feed degrade gracefully (the
+    # handler logs and the scheduler retries), so we don't tie readiness
+    # to a specific feed being reachable.
+    app.state.mark_ready()
+
     yield
+
+    # Phase 2.6 — drain readiness before tearing down feeds + storage.
+    app.state.mark_not_ready()
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     scheduler.stop()
@@ -266,6 +276,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-threatintel")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()

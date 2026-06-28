@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 
+from app._health import install_health_routes
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
@@ -40,8 +41,16 @@ async def lifespan(app: FastAPI):
     app.state.worker_task = worker_task
     app.state.redis = redis_client
 
+    # Phase 2.6 — flip /readyz to 200 now that Redis is open + the
+    # Kafka consumer is running.
+    app.state.mark_ready()
+
     logger.info("Alert Fusion Service ready")
     yield
+
+    # Phase 2.6 — flip /readyz to 503 at the start of shutdown so the
+    # orchestrator stops sending traffic before we tear Kafka down.
+    app.state.mark_not_ready()
 
     # Shutdown
     logger.info("Shutting down Alert Fusion Service")
@@ -57,5 +66,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-fusion")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 app.include_router(router)

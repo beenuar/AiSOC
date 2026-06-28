@@ -27,6 +27,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 
+from app._health import install_health_routes
 from app.callbacks import callback_max_age_seconds, handle_card_action
 
 app = FastAPI(
@@ -36,6 +37,11 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-teams-bot")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 
 @app.get("/health")
@@ -114,10 +120,15 @@ async def _startup() -> None:  # pragma: no cover - thin runtime wiring
     app.state.callback_secret = os.environ.get("AISOC_TEAMS_CALLBACK_SECRET", "")
     app.state.actions_client = build_actions_client()
     app.state.audit_sink = build_audit_sink()
+    # Phase 2.6 — actions client + audit sink wired; the webhook
+    # is now safe to dispatch.
+    app.state.mark_ready()
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:  # pragma: no cover - thin runtime wiring
+    # Phase 2.6 — drain readiness before tearing the client down.
+    app.state.mark_not_ready()
     client = getattr(app.state, "actions_client", None)
     if client is not None and hasattr(client, "aclose"):
         await client.aclose()

@@ -241,6 +241,20 @@ services:
       SECRET_KEY: dev_secret_key_change_in_production
       ENVIRONMENT: development
       LOG_LEVEL: info
+    # Phase 2.6 — use /readyz, not /health, so the orchestrator
+    # only routes traffic once the lifespan has finished wiring
+    # Postgres, Redis, Kafka, OpenSearch, Qdrant, and Neo4j.
+    # /livez is what the restart policy looks at via `pgrep`-style
+    # checks; we don't need a separate compose healthcheck for it
+    # because the process being up implies it's alive.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
     networks:
       - aisoc
     restart: unless-stopped

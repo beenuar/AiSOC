@@ -7,6 +7,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app._health import install_health_routes
 from app.core.config import settings
 from app.core.cors import build_cors_kwargs
 
@@ -50,6 +51,11 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-honeytokens")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
+
 # Honeytoken trip pixels/links are intentionally fetched from arbitrary
 # origins (that's the detection), so we keep allow_credentials=False and a
 # permissive default — AISOC_CORS_ORIGINS still lets operators tighten this
@@ -68,6 +74,16 @@ if _otel_enabled:
 @app.on_event("startup")
 async def _startup() -> None:
     LOG.info("Honeytokens service started (OTel=%s)", _otel_enabled)
+    # Phase 2.6 — no async dependencies to warm up; the router is
+    # immediately serviceable.
+    app.state.mark_ready()
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    # Phase 2.6 — drain readiness so the orchestrator stops
+    # routing traffic to a draining pod.
+    app.state.mark_not_ready()
 
 
 @app.get("/health")

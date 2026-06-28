@@ -230,6 +230,16 @@ jobs:
       - name: Verify alert rule runbook URLs resolve (Phase 2.5)
         run: python scripts/audit_runbook_links.py --check
 
+      # Phase 2.6 — every FastAPI service must install the shared
+      # /livez + /readyz probes from `app._health`. The audit script
+      # walks `services/*/app/main.py` and fails if any service is
+      # missing the helper or its wiring. Catches the "added a new
+      # service, forgot the probes" silent regression that
+      # orchestrators would otherwise hide until the first failed
+      # rollout.
+      - name: Verify FastAPI services install /livez + /readyz probes (Phase 2.6)
+        run: python scripts/audit_health_probes.py --check
+
   python-test:
     name: Python — Tests
     runs-on: ubuntu-latest

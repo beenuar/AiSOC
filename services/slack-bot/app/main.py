@@ -50,6 +50,7 @@ from fastapi import FastAPI, Request
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 from slack_bolt.async_app import AsyncApp
 
+from app._health import install_health_routes
 from app.commands import handle_aisoc_command
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -269,9 +270,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_base=api_client.base_url,
         actions_base=actions_client.base_url,
     )
+    # Phase 2.6 — flip /readyz to 200 once Bolt + the HTTP clients
+    # are wired. We deliberately don't probe Slack itself — the
+    # upstream sign-in is checked the first time Slack posts here.
+    app.state.mark_ready()
     try:
         yield
     finally:
+        # Phase 2.6 — start draining before tearing down clients.
+        app.state.mark_not_ready()
         await timeout_scheduler.aclose()
         await api_client.aclose()
         await actions_client.aclose()
@@ -288,6 +295,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=_lifespan,
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-slack-bot")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 
 @app.get("/health")

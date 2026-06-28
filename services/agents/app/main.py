@@ -6,6 +6,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app._health import install_health_routes
 from app.api.contextual import router as contextual_router
 from app.api.copilot import router as copilot_router
 from app.api.explain import router as explain_router
@@ -72,7 +73,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("hunt.scheduler.start_failed", error=str(exc))
 
+    # Phase 2.6 — flip /readyz to 200 once startup work is done.
+    app.state.mark_ready()
+
     yield
+
+    # Phase 2.6 — flip /readyz to 503 the moment we start draining.
+    app.state.mark_not_ready()
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.
@@ -99,6 +106,13 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+# /readyz returns 503 until the lifespan startup finishes touching
+# MITRE, Qdrant, ledger pool, and the hunt scheduler.
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-agents")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 # CORS — the web console talks to this service directly (it does not go through
 # the Next.js rewrite layer for agent endpoints because we want to stream

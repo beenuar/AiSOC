@@ -13,6 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
+from app._health import install_health_routes
 from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
@@ -188,7 +189,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("hunt_scheduler worker failed to start", error=str(exc))
 
+    # Phase 2.6 — flip /readyz to 200. All lifespan-managed
+    # dependencies have been touched at this point (DB, Redis,
+    # Neo4j, schedulers); the load balancer can route traffic
+    # to this pod safely now.
+    app.state.mark_ready()
+
     yield
+
+    # Phase 2.6 — flip /readyz to 503 the instant we begin
+    # shutdown, so the orchestrator drains in-flight requests
+    # without sending us new ones.
+    app.state.mark_not_ready()
 
     logger.info("AiSOC API shutting down")
     if oauth_refresh_task is not None and not oauth_refresh_task.done():
@@ -241,6 +253,15 @@ def create_application() -> FastAPI:
         openapi_url="/api/openapi.json" if not settings.is_production else None,
         lifespan=lifespan,
     )
+
+    # Phase 2.6 — k8s-style liveness (/livez) + readiness (/readyz).
+    # /livez always 200 once the process is up. /readyz returns 503
+    # until the lifespan startup hook calls ``_mark_ready()``.
+    # /health (the pre-existing endpoint) is kept for backwards
+    # compatibility with operators who scripted against it.
+    mark_ready, mark_not_ready = install_health_routes(app, service_name="aisoc-api")
+    app.state.mark_ready = mark_ready
+    app.state.mark_not_ready = mark_not_ready
 
     # OpenTelemetry auto-instrumentation (FastAPI + SQLAlchemy + httpx)
     instrument_app(app)

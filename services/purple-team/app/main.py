@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app._health import install_health_routes
 from app.core.config import settings
 from app.core.cors import build_cors_kwargs
 
@@ -68,9 +69,17 @@ async def _lifespan(app: FastAPI):
     else:
         LOG.info("Detection drift scheduler disabled by config")
 
+    # Phase 2.6 — readiness flip. We don't gate on the drift
+    # scheduler because it's an opt-in background worker; the
+    # HTTP surface (campaigns, coverage heatmap) is what
+    # consumers depend on.
+    app.state.mark_ready()
     try:
         yield
     finally:
+        # Phase 2.6 — drain readiness first so the orchestrator
+        # stops sending traffic before we stop the scheduler.
+        app.state.mark_not_ready()
         if _drift_scheduler is not None:
             _drift_scheduler.stop()
 
@@ -81,6 +90,11 @@ app = FastAPI(
     version="0.1.0",
     lifespan=_lifespan,
 )
+
+# Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+_mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-purple-team")
+app.state.mark_ready = _mark_ready
+app.state.mark_not_ready = _mark_not_ready
 
 app.add_middleware(
     CORSMiddleware,
