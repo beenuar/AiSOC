@@ -30,14 +30,21 @@ logger = structlog.get_logger()
 
 
 def _splunk_client(params: dict) -> SplunkClient | None:
-    url = params.get("splunk_url")
+    """Build a Splunk client from request parameters.
+
+    Both ``splunk_url`` and the older ``splunk_host`` key are accepted
+    (some playbooks predate the standardisation pass on Wave-E) and
+    forwarded to the client's ``host=`` argument.
+    """
+    url = params.get("splunk_url") or params.get("splunk_host")
     if not url:
         return None
     return SplunkClient(
-        base_url=url,
+        host=url,
         token=params.get("splunk_token"),
         username=params.get("splunk_username"),
         password=params.get("splunk_password"),
+        verify_ssl=bool(params.get("splunk_verify_ssl", True)),
     )
 
 
@@ -410,4 +417,269 @@ class BlockIOCExecutor(BaseExecutor):
     async def rollback(self, result: ActionResult) -> bool:
         ioc_value = result.rollback_data.get("ioc_value")
         logger.info("Rolling back block_ioc (removing IoC)", ioc=ioc_value)
+        return True
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Phase 3.3 — alert lifecycle executors (acknowledge + suppress)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _ack_vendor(params: dict) -> str | None:
+    """Pick the vendor for an ack/suppress call.
+
+    Some teams point multiple SIEMs at the same incident store; we
+    let the playbook declare which one it cares about via
+    ``alert_vendor``. Falls back to the first vendor whose
+    credentials are present, in priority order: Splunk → Elastic →
+    Defender. None means "fall back to simulation".
+    """
+    explicit = (params.get("alert_vendor") or "").strip().lower()
+    if explicit in {"splunk", "elastic", "defender", "mde"}:
+        return "defender" if explicit == "mde" else explicit
+    if _splunk_client(params):
+        return "splunk"
+    if _elastic_client(params):
+        return "elastic"
+    if all(params.get(k) for k in ("mde_tenant_id", "mde_client_id", "mde_client_secret")):
+        return "defender"
+    return None
+
+
+class AckAlertExecutor(BaseExecutor):
+    """Acknowledge an alert in Splunk ES, Elastic Security, or MDE.
+
+    ``request.target`` is the vendor-side alert identifier (Splunk
+    rule UID, Elastic ``signal_id``, MDE ``alert_id``). The vendor
+    is selected by :func:`_ack_vendor` — operators wanting an
+    explicit pin should supply ``alert_vendor`` in the request
+    parameters.
+    """
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        alert_id = request.target
+        vendor = _ack_vendor(request.parameters)
+        logger.info("Executing ack_alert", vendor=vendor, alert_id=alert_id)
+
+        if vendor == "splunk":
+            splunk = _splunk_client(request.parameters)
+            assert splunk is not None  # _ack_vendor only returns "splunk" when this is non-None
+            try:
+                owner = request.parameters.get("owner", "aisoc")
+                comment = request.parameters.get("comment") or request.rationale or "Acknowledged by AiSOC"
+                result = await splunk.acknowledge_notable_event(event_id=alert_id, owner=owner, comment=comment)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    output=result,
+                    rollback_data={"vendor": "splunk", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("ack_alert.splunk.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        if vendor == "elastic":
+            elastic = _elastic_client(request.parameters)
+            assert elastic is not None
+            try:
+                result = await elastic.acknowledge_alert(signal_id=alert_id)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    output=result,
+                    rollback_data={"vendor": "elastic", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("ack_alert.elastic.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        if vendor == "defender":
+            from app.clients.defender_client import DefenderClient
+
+            mde = DefenderClient(
+                tenant_id=request.parameters["mde_tenant_id"],
+                client_id=request.parameters["mde_client_id"],
+                client_secret=request.parameters["mde_client_secret"],
+            )
+            try:
+                comment = request.parameters.get("comment") or request.rationale or "Acknowledged by AiSOC"
+                result = await mde.acknowledge_alert(
+                    alert_id=alert_id,
+                    comment=comment,
+                    assigned_to=request.parameters.get("assigned_to"),
+                )
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    output=result,
+                    rollback_data={"vendor": "defender", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("ack_alert.defender.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.MINIMAL,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        logger.warning("ack_alert.simulation", alert_id=alert_id, reason="no SIEM credentials")
+        return ActionResult(
+            action_id=request.id,
+            status=ActionStatus.COMPLETED,
+            blast_radius=BlastRadius.MINIMAL,
+            output={
+                "action": "ack_alert",
+                "alert_id": alert_id,
+                "note": (
+                    "Simulation mode — provide splunk_url/splunk_token, "
+                    "elastic_url+kibana_url, or "
+                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
+                    + _SIM_FUNNEL_CTA
+                ),
+            },
+            rollback_data={"alert_id": alert_id},
+            completed_at=datetime.utcnow(),
+        )
+
+    async def rollback(self, result: ActionResult) -> bool:
+        # Ack is idempotent and reversible from the SIEM console;
+        # we don't auto-rollback because flipping a deliberately
+        # acknowledged alert back to "new" would be more
+        # disruptive than the original ack.
+        logger.info("ack_alert has no auto-rollback (revert from SIEM console if needed)")
+        return True
+
+
+class SuppressAlertExecutor(BaseExecutor):
+    """Suppress (close) an alert in Splunk ES, Elastic Security, or MDE."""
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        alert_id = request.target
+        vendor = _ack_vendor(request.parameters)
+        logger.info("Executing suppress_alert", vendor=vendor, alert_id=alert_id)
+
+        if vendor == "splunk":
+            splunk = _splunk_client(request.parameters)
+            assert splunk is not None
+            try:
+                comment = request.parameters.get("comment") or request.rationale or "Suppressed by AiSOC"
+                result = await splunk.suppress_notable_event(event_id=alert_id, comment=comment)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.LOW,
+                    output=result,
+                    rollback_data={"vendor": "splunk", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("suppress_alert.splunk.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        if vendor == "elastic":
+            elastic = _elastic_client(request.parameters)
+            assert elastic is not None
+            try:
+                result = await elastic.close_alert(signal_id=alert_id)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.LOW,
+                    output=result,
+                    rollback_data={"vendor": "elastic", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("suppress_alert.elastic.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        if vendor == "defender":
+            from app.clients.defender_client import DefenderClient
+
+            mde = DefenderClient(
+                tenant_id=request.parameters["mde_tenant_id"],
+                client_id=request.parameters["mde_client_id"],
+                client_secret=request.parameters["mde_client_secret"],
+            )
+            try:
+                comment = request.parameters.get("comment") or request.rationale or "Suppressed by AiSOC"
+                result = await mde.suppress_alert(
+                    alert_id=alert_id,
+                    classification=request.parameters.get("classification", "FalsePositive"),
+                    determination=request.parameters.get("determination", "NotAvailable"),
+                    comment=comment,
+                )
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.LOW,
+                    output=result,
+                    rollback_data={"vendor": "defender", "alert_id": alert_id},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("suppress_alert.defender.failed", alert_id=alert_id, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        logger.warning("suppress_alert.simulation", alert_id=alert_id, reason="no SIEM credentials")
+        return ActionResult(
+            action_id=request.id,
+            status=ActionStatus.COMPLETED,
+            blast_radius=BlastRadius.LOW,
+            output={
+                "action": "suppress_alert",
+                "alert_id": alert_id,
+                "note": (
+                    "Simulation mode — provide splunk_url/splunk_token, "
+                    "elastic_url+kibana_url, or "
+                    "mde_tenant_id/mde_client_id/mde_client_secret to enable live execution."
+                    + _SIM_FUNNEL_CTA
+                ),
+            },
+            rollback_data={"alert_id": alert_id},
+            completed_at=datetime.utcnow(),
+        )
+
+    async def rollback(self, result: ActionResult) -> bool:
+        # See AckAlertExecutor.rollback — same reasoning. Re-opening
+        # a closed alert is the analyst's call, not ours.
+        logger.info("suppress_alert has no auto-rollback (re-open from SIEM console if needed)")
         return True

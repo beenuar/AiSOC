@@ -189,3 +189,81 @@ class DefenderClient:
         if not machines:
             raise ValueError(f"No MDE machine found for hostname: {hostname}")
         return machines[0]
+
+    # ──────────────────────────────────────────────────────────────
+    # Phase 3.3 — alert lifecycle (ack + suppress)
+    # ──────────────────────────────────────────────────────────────
+
+    async def acknowledge_alert(
+        self,
+        alert_id: str,
+        comment: str = "Acknowledged by AiSOC",
+        assigned_to: str | None = None,
+    ) -> dict[str, Any]:
+        """Mark a Defender alert as ``InProgress``.
+
+        MDE alert states are ``New`` / ``InProgress`` / ``Resolved``.
+        Acknowledgement maps to InProgress because the alert is now
+        being worked but not yet closed.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            body: dict[str, Any] = {
+                "status": "InProgress",
+                "comments": [{"comment": comment}],
+            }
+            if assigned_to:
+                body["assignedTo"] = assigned_to
+            resp = await client.patch(
+                f"{_MDE_BASE}/alerts/{alert_id}",
+                headers=self._headers(),
+                json=body,
+            )
+            resp.raise_for_status()
+            logger.info("mde.alert.acknowledged", alert_id=alert_id)
+            return {
+                "success": True,
+                "action": "acknowledge_alert",
+                "alert_id": alert_id,
+                "response": resp.json() if resp.content else {},
+            }
+
+    async def suppress_alert(
+        self,
+        alert_id: str,
+        *,
+        classification: str = "FalsePositive",
+        determination: str = "NotAvailable",
+        comment: str = "Suppressed by AiSOC",
+    ) -> dict[str, Any]:
+        """Resolve + classify a Defender alert.
+
+        MDE requires a classification ("TruePositive" / "Informational" /
+        "FalsePositive") when moving an alert to ``Resolved``. We
+        default to FalsePositive because that's the operationally
+        useful suppression case — AiSOC has decided the signal isn't
+        actionable. Operators driving a TruePositive close from a
+        playbook should override the argument.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            body = {
+                "status": "Resolved",
+                "classification": classification,
+                "determination": determination,
+                "comments": [{"comment": comment}],
+            }
+            resp = await client.patch(
+                f"{_MDE_BASE}/alerts/{alert_id}",
+                headers=self._headers(),
+                json=body,
+            )
+            resp.raise_for_status()
+            logger.info("mde.alert.suppressed", alert_id=alert_id, classification=classification)
+            return {
+                "success": True,
+                "action": "suppress_alert",
+                "alert_id": alert_id,
+                "classification": classification,
+                "response": resp.json() if resp.content else {},
+            }

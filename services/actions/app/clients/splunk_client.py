@@ -201,3 +201,80 @@ class SplunkClient:
             resp.raise_for_status()
             logger.info("splunk.correlation_search.upserted", name=name)
             return {"success": True, "action": "upsert_correlation_search", "name": name}
+
+    async def acknowledge_notable_event(
+        self,
+        event_id: str,
+        owner: str = "aisoc",
+        comment: str = "Acknowledged by AiSOC",
+        urgency: str | None = None,
+    ) -> dict[str, Any]:
+        """Acknowledge (mark as in-progress) a Splunk ES notable event.
+
+        Splunk ES exposes notable-event lifecycle changes via the
+        ``notable_event_actions/edit_event`` endpoint. We set the
+        status to "in progress" (status code 1) by default; callers
+        can override ``urgency`` to retag the alert at the same time.
+
+        Phase 3.3 — replaces playbooks that were previously closing
+        Splunk alerts out-of-band via a tribal shell script.
+        """
+        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl) as client:
+            await self._authenticate(client)
+            payload = {
+                "ruleUIDs": event_id,
+                "status": 1,  # 1 = "in progress" in ES; 5 = closed.
+                "newOwner": owner,
+                "comment": comment,
+                "output_mode": "json",
+            }
+            if urgency:
+                payload["urgency"] = urgency
+            resp = await client.post(
+                f"{self._host}/services/notable_update",
+                headers=self._headers(),
+                data=payload,
+            )
+            resp.raise_for_status()
+            logger.info("splunk.notable_event.acknowledged", event_id=event_id, owner=owner)
+            return {
+                "success": True,
+                "action": "acknowledge_notable_event",
+                "event_id": event_id,
+                "owner": owner,
+                "response": resp.json() if resp.content else {},
+            }
+
+    async def suppress_notable_event(
+        self,
+        event_id: str,
+        comment: str = "Suppressed by AiSOC",
+    ) -> dict[str, Any]:
+        """Close (suppress) a Splunk ES notable event.
+
+        Sets ES status to 5 ("closed"). This is a one-way move
+        from the AiSOC side; re-opening must be done from the
+        Splunk console (no production playbook should be racing
+        the SOC analyst by re-opening tickets behind their back).
+        """
+        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl) as client:
+            await self._authenticate(client)
+            payload = {
+                "ruleUIDs": event_id,
+                "status": 5,  # 5 = "closed" in ES.
+                "comment": comment,
+                "output_mode": "json",
+            }
+            resp = await client.post(
+                f"{self._host}/services/notable_update",
+                headers=self._headers(),
+                data=payload,
+            )
+            resp.raise_for_status()
+            logger.info("splunk.notable_event.suppressed", event_id=event_id)
+            return {
+                "success": True,
+                "action": "suppress_notable_event",
+                "event_id": event_id,
+                "response": resp.json() if resp.content else {},
+            }

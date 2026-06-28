@@ -188,3 +188,48 @@ class ElasticClient:
             resp.raise_for_status()
             logger.info("elastic.watcher.deactivated", watcher_id=watcher_id)
             return {"success": True, "action": "deactivate_watcher", "watcher_id": watcher_id}
+
+    # ──────────────────────────────────────────────────────────────
+    # Phase 3.3 — alert lifecycle (ack + suppress)
+    # ──────────────────────────────────────────────────────────────
+
+    async def acknowledge_alert(self, signal_id: str) -> dict[str, Any]:
+        """Mark an Elastic Security signal as in-progress.
+
+        Elastic's "signal status" field on the ``.siem-signals-*``
+        / ``.alerts-security.alerts-*`` indices uses
+        ``open`` / ``acknowledged`` / ``closed``. We update the
+        single signal by ID via the detection-engine status API
+        (Kibana side) so the resulting state is visible in the
+        Security app exactly as a manual UI ack would be.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{self._kibana_url}/api/detection_engine/signals/status",
+                headers=self._kibana_headers(),
+                auth=self._auth(),  # type: ignore[arg-type]
+                json={"signal_ids": [signal_id], "status": "acknowledged"},
+            )
+            resp.raise_for_status()
+            logger.info("elastic.alert.acknowledged", signal_id=signal_id)
+            return {"success": True, "action": "acknowledge_alert", "signal_id": signal_id}
+
+    async def close_alert(self, signal_id: str) -> dict[str, Any]:
+        """Close (suppress) an Elastic Security signal.
+
+        Sets status to ``closed`` so it drops out of the live
+        triage queue. Like the Splunk suppress method, this is
+        a one-way move from AiSOC's side; re-opening a closed
+        alert must be done in the Kibana UI to avoid racing the
+        analyst.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{self._kibana_url}/api/detection_engine/signals/status",
+                headers=self._kibana_headers(),
+                auth=self._auth(),  # type: ignore[arg-type]
+                json={"signal_ids": [signal_id], "status": "closed"},
+            )
+            resp.raise_for_status()
+            logger.info("elastic.alert.closed", signal_id=signal_id)
+            return {"success": True, "action": "close_alert", "signal_id": signal_id}

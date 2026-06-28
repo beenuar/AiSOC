@@ -23,9 +23,11 @@ from app.executors.identity import (
 from app.executors.network import AllowIPExecutor, BlockDomainExecutor, BlockIPExecutor
 from app.executors.notification import CreateTicketExecutor, NotifySlackExecutor
 from app.executors.siem import (
+    AckAlertExecutor,
     BlockIOCExecutor,
     CreateNotableEventExecutor,
     SearchSIEMExecutor,
+    SuppressAlertExecutor,
     SyncDetectionRuleExecutor,
     UpdateWatcherExecutor,
 )
@@ -53,6 +55,9 @@ EXECUTOR_REGISTRY = {
     ActionType.SYNC_DETECTION_RULE: SyncDetectionRuleExecutor(),
     ActionType.UPDATE_WATCHER: UpdateWatcherExecutor(),
     ActionType.BLOCK_IOC: BlockIOCExecutor(),
+    # Phase 3.3 — alert lifecycle (Splunk ES / Elastic Security / MDE).
+    ActionType.ACK_ALERT: AckAlertExecutor(),
+    ActionType.SUPPRESS_ALERT: SuppressAlertExecutor(),
     # Notifications & orchestration
     ActionType.NOTIFY_SLACK: NotifySlackExecutor(),
     ActionType.CREATE_TICKET: CreateTicketExecutor(),

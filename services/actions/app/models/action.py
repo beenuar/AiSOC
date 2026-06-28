@@ -45,6 +45,11 @@ class ActionType(str, Enum):
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"
     UPDATE_WATCHER = "update_watcher"
+    # Phase 3.3 — alert lifecycle dispatch. Both verbs are SIEM/EDR
+    # agnostic; the executor picks Splunk / Elastic / MDE based on
+    # which credentials are present in the request.
+    ACK_ALERT = "ack_alert"
+    SUPPRESS_ALERT = "suppress_alert"
 
 
 class ActionStatus(str, Enum):
@@ -92,6 +97,12 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.CREATE_NOTABLE_EVENT: BlastRadius.LOW,
     ActionType.SYNC_DETECTION_RULE: BlastRadius.MEDIUM,
     ActionType.UPDATE_WATCHER: BlastRadius.MEDIUM,
+    # Phase 3.3 — ack is just a status flip on a triage queue,
+    # suppress is more impactful because it removes the alert from
+    # an analyst's view. We rate suppression as LOW (not MEDIUM)
+    # because there's a documented unsuppress path in every vendor.
+    ActionType.ACK_ALERT: BlastRadius.MINIMAL,
+    ActionType.SUPPRESS_ALERT: BlastRadius.LOW,
 }
 
 # Actions that require explicit human approval
