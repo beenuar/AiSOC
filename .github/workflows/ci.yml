@@ -313,6 +313,113 @@ jobs:
         run: python -m pytest tests/ -v --tb=short
 
   # ──────────────────────────────────────────────
+  # Phase 2.1 — Wider Python service test matrix.
+  #
+  # Pre-Phase-2 audit (`scripts/list_python_services_with_tests.py`)
+  # found seven services that ship test files but were never gated in
+  # CI:
+  #
+  #   actions       — 99 tests   (live-action dispatcher + executor
+  #                                contracts + chatops + fleetdm +
+  #                                AWS SG client + dry-run sims)
+  #   connectors    — 720 tests  (every shipped connector's normalize
+  #                                step + scheduler + audit-ledger)
+  #   osquery-tls   — 12 tests   (TLS enroll, config, distributed
+  #                                query, log API)
+  #   slack-bot     — 91 tests   (approval flow, audit, timeout,
+  #                                Block Kit, AiSOC API clients,
+  #                                signature verifier)
+  #   teams-bot     — 5 tests    (Adaptive Cards renderer)
+  #   threatintel   — 38 tests   (actor attribution, airgap mode,
+  #                                STIX/TAXII fetcher, auth, scoring)
+  #   ueba          — 6 tests    (config loader + risk scoring core)
+  #
+  # 971 previously-ungated tests now produce real CI signal. Every
+  # suite is offline-safe (respx / monkeypatch for HTTP, in-memory
+  # aiosqlite for SQLAlchemy, no real Kafka / Redis / Postgres).
+  #
+  # Strategy notes:
+  #   * Matrix-per-service so a regression in one suite doesn't mask
+  #     others, and individual jobs surface in the PR check list.
+  #   * One shared dependency install per job — the dep sets overlap
+  #     heavily and resolving them at the pyproject level (poetry
+  #     install) would balloon CI time without buying coverage.
+  #   * `prometheus-client` is required by `threatintel.actors.
+  #     attribution` at module-import time; without it the test
+  #     collector aborts before running a single test.
+  #   * `apscheduler` is required by `connectors.scheduler` at
+  #     module-import time; same import-aborted-the-collector issue.
+  #   * `slack-bolt` pulls `aiohttp` transitively — both must be
+  #     pinned because slack-bolt's async adapter eagerly imports
+  #     `aiohttp.web` even when the test only touches the signature
+  #     verifier.
+  #   * `sqlalchemy[asyncio]` + `aiosqlite` cover the connectors
+  #     scheduler tests and the osquery-tls async session fixture
+  #     (`conftest.py` line 13 imports `async_sessionmaker`).
+  # ──────────────────────────────────────────────
+  python-services-wave-2-test:
+    name: Python — Service unit tests wave 2 (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: python-lint
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - actions
+          - connectors
+          - osquery-tls
+          - slack-bot
+          - teams-bot
+          - threatintel
+          - ueba
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install shared dependency set
+        # Pinned to the pyproject constraints in each service. The set
+        # is the union of every service's runtime + dev deps; this is
+        # cheaper than per-matrix-cell `poetry install` because pip
+        # caches the wheels across matrix runs and the upper bounds
+        # come from the highest-constrained pyproject in the bunch
+        # (e.g. structlog<27, httpx<0.29, pytest-asyncio<2). If a new
+        # service needs an additional package, add it here rather than
+        # introducing per-service install steps — the goal of a
+        # uniform matrix is one install path, one cache hit.
+        run: |
+          pip install --quiet \
+            'fastapi>=0.109,<0.140' \
+            'pydantic>=2.5,<3' \
+            'pydantic-settings>=2.1,<3' \
+            'httpx>=0.27,<0.29' \
+            'structlog>=24.1,<27' \
+            'pytest>=7.4,<9' \
+            'pytest-asyncio>=0.23,<2' \
+            'pytest-cov>=4,<7' \
+            'respx>=0.21,<0.23' \
+            'redis>=5.0,<6' \
+            'aioredis>=2.0,<3' \
+            'aiokafka>=0.10,<0.15' \
+            'aiohttp>=3.9,<4' \
+            'apscheduler>=3.10,<4' \
+            'slack-bolt>=1.18,<2' \
+            'prometheus-client>=0.20,<0.24' \
+            'opentelemetry-instrumentation-fastapi>=0.45b0' \
+            'sqlalchemy[asyncio]>=2,<3' \
+            'aiosqlite>=0.19,<0.22' \
+            'asyncpg>=0.29,<0.31' \
+            'cryptography>=41,<46' \
+            'pyyaml>=6,<7' \
+            'jinja2>=3,<4' \
+            'jsonschema>=4,<5' \
+            'tenacity>=8,<10'
+      - name: Run ${{ matrix.service }} tests
+        working-directory: services/${{ matrix.service }}
+        run: python -m pytest tests/ -v --tb=short
+
+  # ──────────────────────────────────────────────
   # SDK packages (Python)
   #   The three Python SDKs ship as pip packages but never had a CI gate —
   #   regressions could land silently. This job installs each in editable
