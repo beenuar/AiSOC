@@ -1,29 +1,84 @@
+# Prometheus scrape config for the AiSOC docker-compose stack.
+#
+# Phase 2.3 — reconciled against reality. Each `job_name` here MUST
+# correspond to a service that actually exposes a `/metrics`
+# endpoint *and* is reachable on the documented container hostname
+# + INTERNAL container port (the left side of `8088:8003` is the
+# host port; Prometheus runs inside the `aisoc` Docker network so
+# it sees the right-hand-side port).
+#
+# Pre-Phase-2.3 the file shipped five scrape jobs, four of which
+# were broken:
+#
+#   - aisoc-core-api  - hostname "core-api" did not exist (the
+#                       compose service is named "api").
+#   - aisoc-enrichment- enrichment is a Go connector that has NEVER
+#                       had a /metrics handler. Prometheus would
+#                       have logged "connection refused" forever.
+#   - aisoc-agents    - hostname correct, but agents/app/main.py
+#                       has no /metrics route. The Python tests
+#                       for the agents service don't import
+#                       prometheus_client.
+#   - aisoc-actions   - same story; no /metrics route in
+#                       services/actions/app/main.py.
+#   - aisoc-ingest    - this one was always right.
+#
+# The result was "we scrape five jobs; one returns metrics". Every
+# dashboard built against `up{job=...}` showed four orange tiles.
+#
+# Below: only services with a verified /metrics handler at the
+# advertised port are scraped. The audit lives in
+# scripts/audit_prometheus_targets.py and is wired into CI so this
+# file can't drift again silently.
+#
+# Service       Source code reference                        Port
+# ------------  -------------------------------------------- -----
+# api           services/api/app/main.py @app.get("/metrics") 8000
+# ingest        services/ingest/internal/server/server.go     9090
+#               r.Get("/metrics", promhttp.Handler()...)
+# fusion        services/fusion/app/api/router.py             8003
+#               @router.get("/metrics")
+# threatintel   services/threatintel/app/main.py              8005
+#               app.mount("/metrics", metrics_app)
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'aisoc-core-api'
+  # FastAPI core API — uvicorn worker on container port 8000.
+  - job_name: 'aisoc-api'
     static_configs:
-      - targets: ['core-api:8000']
+      - targets: ['api:8000']
     metrics_path: /metrics
 
+  # Go ingest service — dedicated metrics listener on METRICS_PORT
+  # 9090 (HTTP traffic is served on 8080 internally; metrics live
+  # on a separate listener so a stalled request handler doesn't
+  # block scrapes).
   - job_name: 'aisoc-ingest'
     static_configs:
       - targets: ['ingest-worker:9090']
     metrics_path: /metrics
 
-  - job_name: 'aisoc-enrichment'
+  # Fusion service — FastAPI on container port 8003. The /metrics
+  # route is registered through `app.api.router`, not at top level.
+  - job_name: 'aisoc-fusion'
     static_configs:
-      - targets: ['enrichment:8080']
+      - targets: ['fusion:8003']
     metrics_path: /metrics
 
-  - job_name: 'aisoc-agents'
+  # Threat-intel service — FastAPI on container port 8005. Uses
+  # `app.mount("/metrics", metrics_app)` so the prometheus-client
+  # ASGI handler runs in its own sub-app (cheaper than a route).
+  - job_name: 'aisoc-threatintel'
     static_configs:
-      - targets: ['agents:8001']
+      - targets: ['threatintel:8005']
     metrics_path: /metrics
 
-  - job_name: 'aisoc-actions'
-    static_configs:
-      - targets: ['actions:8002']
-    metrics_path: /metrics
+  # NOTE: agents, actions, enrichment, ueba, honeytokens,
+  # purple-team, connectors, osquery-tls, realtime, slack-bot, and
+  # teams-bot do NOT currently expose /metrics. They MUST be wired
+  # up before they appear in this file (and the audit script will
+  # remind any future contributor who adds the route to also add
+  # the scrape target here).

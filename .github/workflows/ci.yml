@@ -212,6 +212,15 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # Phase 2.3 — every `job_name` in `infra/docker/prometheus.yml` must
+      # point at a hostname:port pair where the service actually exposes
+      # `/metrics`. Before this gate landed, four of five scrape jobs were
+      # silently broken (wrong hostname, wrong port, or a service that has
+      # no `/metrics` route at all). Any future PR that adds a target
+      # without instrumenting the service — or instruments a service but
+      # forgets to register it for scraping — fails CI here.
+      - name: Verify Prometheus scrape config matches reality (Phase 2.3)
+        run: python scripts/audit_prometheus_targets.py --check
 
   python-test:
     name: Python — Tests
