@@ -27,15 +27,26 @@ interface LinkColumn {
   links: ReadonlyArray<LinkSpec>;
 }
 
+// Footer link targets. Where we have a real shipping artefact (LICENSE,
+// SECURITY.md, ROADMAP.md, CHANGELOG.md, the docs portal, the GitHub repo)
+// we link to it directly rather than wrapping it in a stub page that adds no
+// information. Everything else routes to a real page under
+// apps/web/src/app/(marketing)/ (about, contact, press, privacy, terms,
+// pricing) or to the existing landing-page anchor.
 const COLUMNS: ReadonlyArray<LinkColumn> = [
   {
     heading: 'Product',
     links: [
-      { label: 'Detect', href: '/product/detect' },
-      { label: 'Triage', href: '/product/triage' },
-      { label: 'Hunt', href: '/product/hunt' },
-      { label: 'Respond', href: '/product/respond' },
-      { label: 'Connectors', href: '/connectors' },
+      // All four agents live in the same `#solution` section on the
+      // home page. We surface them as separate footer links because
+      // that's how buyers compare AI-SOC vendors — by named agent —
+      // but they all land on the same anchor today. When the agent
+      // deep-dives ship we'll point each row at its own page.
+      { label: 'Detect agent', href: '/#solution' },
+      { label: 'Triage agent', href: '/#solution' },
+      { label: 'Hunt agent', href: '/#solution' },
+      { label: 'Respond agent', href: '/#solution' },
+      { label: 'Connectors', href: docs('connectors') },
       { label: 'Marketplace', href: '/marketplace' },
     ],
   },
@@ -46,8 +57,14 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
       { label: 'Architecture', href: docs('architecture') },
       { label: 'Benchmark', href: '/benchmark' },
       { label: 'Blog', href: '/blog' },
-      { label: 'Changelog', href: '/changelog' },
-      { label: 'Roadmap', href: '/roadmap' },
+      {
+        label: 'Changelog',
+        href: 'https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md',
+      },
+      {
+        label: 'Roadmap',
+        href: 'https://github.com/beenuar/AiSOC/blob/main/ROADMAP.md',
+      },
     ],
   },
   {
@@ -56,6 +73,7 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
       { label: 'About', href: '/about' },
       { label: 'Sovereign', href: '/sovereign' },
       { label: 'Customers', href: '/customers' },
+      { label: 'Pricing', href: '/pricing' },
       { label: 'Contact', href: '/contact' },
       { label: 'Press', href: '/press' },
     ],
@@ -69,7 +87,10 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
       },
       { label: 'Privacy', href: '/privacy' },
       { label: 'Terms', href: '/terms' },
-      { label: 'Security', href: '/security' },
+      {
+        label: 'Security policy',
+        href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
+      },
     ],
   },
   {
@@ -78,7 +99,7 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
       { label: 'Status page', href: 'https://status.tryaisoc.com' },
       { label: 'GitHub repo', href: 'https://github.com/beenuar/AiSOC' },
       { label: 'Discord', href: 'https://discord.gg/aisoc' },
-      { label: 'RSS', href: '/rss.xml' },
+      { label: 'Releases', href: 'https://github.com/beenuar/AiSOC/releases' },
     ],
   },
 ];
