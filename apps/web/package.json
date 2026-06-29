@@ -39,7 +39,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hot-toast": "^2.4.1",
-    "recharts": "^3.8.1",
+    "recharts": "^3.9.0",
     "swr": "^2.2.4",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.14"
