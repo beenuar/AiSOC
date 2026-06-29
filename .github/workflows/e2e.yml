@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-playwright-report
           path: apps/web/playwright-report
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload Playwright traces / screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-results
           path: apps/web/test-results

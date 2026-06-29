@@ -136,7 +136,7 @@ jobs:
 
       - name: Upload captured baselines (first-run only)
         if: steps.baseline_state.outputs.have_baselines == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-baselines-seed
           path: apps/web/e2e/visual/visual.spec.ts-snapshots
@@ -146,7 +146,7 @@ jobs:
         # The HTML report carries the diff overlays the reviewers need.
         # `if: always()` so it ships on failures too.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: apps/web/playwright-report
@@ -158,7 +158,7 @@ jobs:
         # ship the whole directory so reviewers don't have to scrub the
         # HTML report just to compare two pixels.
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-test-results
           path: apps/web/test-results

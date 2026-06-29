@@ -94,7 +94,7 @@ jobs:
           fi
 
       - name: Upload rendered PDFs as artifact (always)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: papers-pdf-${{ github.sha }}
           path: apps/web/public/papers/*.pdf

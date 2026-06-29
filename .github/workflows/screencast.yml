@@ -97,7 +97,7 @@ jobs:
           ls -lh tmp/screencast/
 
       - name: Upload screencast artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screencast-${{ github.sha }}
           path: |
