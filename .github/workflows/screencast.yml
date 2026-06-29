@@ -37,7 +37,7 @@ jobs:
     # Hard 15-minute ceiling — a runaway recorder should fail fast.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4

@@ -45,7 +45,7 @@ jobs:
     name: Render every paper to PDF
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # We need full history so the auto-commit step's `git push`
           # has a sane base to diff against.
