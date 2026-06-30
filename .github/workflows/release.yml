@@ -32,6 +32,42 @@ jobs:
           echo "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # Reproducible source tarball — excludes the .git directory but keeps
+      # everything a user needs to build / inspect the release contents
+      # offline.
+      - name: Build source tarball
+        run: |
+          mkdir -p dist
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          git archive --format=tar.gz \
+            --prefix="aisoc-${VERSION#v}/" \
+            -o "dist/aisoc-${VERSION}-source.tar.gz" \
+            "$GITHUB_REF_NAME"
+
+      # SBOM (SPDX 2.3 JSON) so downstream users can vet what's in the
+      # release without re-running their own scanners.
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/aisoc-sbom-${{ steps.version.outputs.VERSION }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      # Checksums for every file in dist/ — both SHA-256 and SHA-512 so we
+      # cover both common verification preferences.
+      - name: Compute checksums
+        working-directory: dist
+        run: |
+          : > checksums.txt
+          for f in *; do
+            if [ "$f" = "checksums.txt" ]; then continue; fi
+            sha256sum "$f" >> checksums.txt
+            sha512sum "$f" >> checksums.txt
+          done
+          cat checksums.txt
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -39,6 +75,10 @@ jobs:
           body: ${{ steps.changelog.outputs.BODY }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/aisoc-${{ steps.version.outputs.VERSION }}-source.tar.gz
+            dist/aisoc-sbom-${{ steps.version.outputs.VERSION }}.spdx.json
+            dist/checksums.txt
 
   # Build & push Docker images
   #

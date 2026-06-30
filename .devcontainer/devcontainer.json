@@ -1,0 +1,63 @@
+{
+  "name": "AiSOC — one-click dev",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [3000, 3001, 8000, 8001, 8086],
+  "portsAttributes": {
+    "3000": {
+      "label": "AiSOC console (web)",
+      "onAutoForward": "openPreview"
+    },
+    "8000": {
+      "label": "AiSOC API (FastAPI / OpenAPI)"
+    },
+    "8001": {
+      "label": "AiSOC agents (LangGraph)"
+    },
+    "8086": {
+      "label": "AiSOC realtime (WebSocket)"
+    },
+    "3001": {
+      "label": "Docs site"
+    }
+  },
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@8.15.1 --activate && pnpm install --frozen-lockfile=false && echo '\\n\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n'",
+  "remoteUser": "node",
+  "containerEnv": {
+    "AISOC_DEV_MODE": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "golang.go",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "files.eol": "\n"
+      }
+    }
+  }
+}
