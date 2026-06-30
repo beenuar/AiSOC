@@ -86,13 +86,19 @@ RUN set -eux; \
     ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 ENV PATH="/usr/local/go/bin:${PATH}"
 
-# ─── Python toolchain (uv) ──────────────────────────────────────────────────
+# ─── Python toolchain (uv + ruff) ───────────────────────────────────────────
 # `uv` is the canonical Python package manager for AiSOC services. Installing
 # it at image-build time means a fresh codespace can run `uv sync` against
 # `services/api/uv.lock` immediately, with no further network round-trips.
-RUN pipx ensurepath \
- && pipx install uv \
- && pipx install ruff
+#
+# We install via `pip` (with `--break-system-packages` to opt out of PEP 668)
+# rather than `pipx` so the binaries land in `/usr/local/bin` where they are
+# on PATH for *every* user in the container — `root` during the build,
+# `node` at runtime, and any uid the workflow runner gates the container to.
+# The previous pipx approach installed to `/root/.local/bin/`, which is
+# unreadable by `node` (uid 1000) and broke the cold-start KPI probe.
+RUN python3.11 -m pip install --break-system-packages --no-cache-dir \
+        uv ruff
 
 # ─── pnpm via corepack ──────────────────────────────────────────────────────
 RUN corepack enable \

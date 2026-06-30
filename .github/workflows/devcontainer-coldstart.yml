@@ -107,8 +107,8 @@ jobs:
               echo "── node ──";            node --version
               echo "── pnpm ──";            pnpm --version
               echo "── python3.11 ──";      python3.11 --version
-              echo "── uv ──";              /root/.local/bin/uv --version 2>/dev/null || uv --version
-              echo "── ruff ──";            /root/.local/bin/ruff --version 2>/dev/null || ruff --version
+              echo "── uv ──";              uv --version
+              echo "── ruff ──";            ruff --version
               echo "── go ──";              go version
               echo "── gh ──";              gh --version | head -1
               echo "── docker (cli) ──";    docker --version
