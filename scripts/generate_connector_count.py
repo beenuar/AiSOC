@@ -54,10 +54,14 @@ TS_OUT = REPO_ROOT / "apps" / "web" / "src" / "data" / "connectorCount.ts"
 # disambiguating prefix/suffix so we never rewrite an unrelated integer.
 COUNT_BEARING_FILES: tuple[tuple[Path, tuple[re.Pattern[str], ...]], ...] = (
     (
+        # README went on a Phase-2 diet: the "declares **N first-party
+        # connectors**" and "a N-connector click-and-connect catalog"
+        # phrasings were absorbed into RELEASES.md / ROADMAP.md (already
+        # covered below). The lean README now anchors the count in a single
+        # bullet near the top of "What's in the box".
         REPO_ROOT / "README.md",
         (
-            re.compile(r"(?P<pre>declares \*\*)(?P<n>\d+)(?P<post> first-party connectors)"),
-            re.compile(r"(?P<pre>a )(?P<n>\d+)(?P<post>-connector click-and-connect catalog)"),
+            re.compile(r"(?P<pre>\*\*)(?P<n>\d+)(?P<post> click-and-connect data connectors\*\*)"),
         ),
     ),
     (
