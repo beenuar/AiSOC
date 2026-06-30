@@ -86,8 +86,47 @@ def _asyncpg_dsn(url: str) -> tuple[str, dict]:
 
 
 async def _connect() -> asyncpg.Connection:
+    """Open a fresh asyncpg connection, retrying on transient connect errors.
+
+    On Fly, the migration ``release_command`` runs the moment a new app VM
+    boots. The Postgres app it talks to may have just woken from
+    autostop / be mid-failover / be reachable but still completing its
+    own boot. asyncpg surfaces these as ``ConnectionDoesNotExistError``,
+    ``ConnectionResetError``, or ``OSError`` raised *inside the initial
+    handshake* — i.e. before the connection is ever usable. A single
+    failed connect would crash the entire deploy, which made the
+    "Deploy API to Fly" workflow look like a code regression when it
+    was really just a cold-start race.
+
+    We retry on the small set of connect-time exceptions that are
+    actually transient. Anything authentication- or schema-related
+    (``InvalidPasswordError``, ``InvalidCatalogNameError``, …) is
+    intentionally **not** retried — those need human attention, not
+    more attempts.
+    """
     dsn, kwargs = _asyncpg_dsn(str(settings.DATABASE_URL))
-    return await asyncpg.connect(dsn, **kwargs)
+    last_exc: Exception | None = None
+    for attempt in range(1, 7):  # ~30 s total at the back-off schedule below
+        try:
+            return await asyncpg.connect(dsn, **kwargs)
+        except (
+            asyncpg.exceptions.ConnectionDoesNotExistError,
+            asyncpg.exceptions.CannotConnectNowError,
+            ConnectionResetError,
+            OSError,
+        ) as exc:
+            last_exc = exc
+            delay = min(2 ** (attempt - 1), 8)
+            logger.warning(
+                "asyncpg.connect failed on attempt %d (%s: %s); retrying in %ds",
+                attempt,
+                type(exc).__name__,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    assert last_exc is not None  # for type narrowing
+    raise last_exc
 
 
 async def _applied(conn: asyncpg.Connection) -> set[str]:
