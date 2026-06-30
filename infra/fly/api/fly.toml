@@ -28,19 +28,27 @@ kill_timeout   = "5s"
 # which is exactly what we want for demo-tenant data lifecycle:
 #   1. `python -m app.scripts.run_migrations` applies the raw-SQL files under
 #      services/api/migrations/ and tracks them in aisoc_schema_migrations, so
-#      the schema stays in step with the image. (This service does not use
-#      Alembic — no alembic.ini / env.py exist here; the package is listed in
+#      the schema stays in step with the image. On success it touches
+#      `/tmp/aisoc-migrations-ok`. (This service does not use Alembic —
+#      no alembic.ini / env.py exist here; the package is listed in
 #      pyproject only for integration tests.)
 #   2. `python -m app.scripts.seed_demo` is idempotent — it short-circuits
 #      when the canonical INC-RT-* case_numbers already exist, so it's safe
 #      to run on every deploy. First-run boot creates all 15 incidents
 #      including the in-flight LockBit 3.0 ransomware investigation
 #      (INC-RT-001) that the web app's "Try the demo" CTA deeplinks to.
-# Without this, hitting / on a freshly cloned Render or Fly deploy lands
-# users on an empty dashboard and breaks the < 5 min clone-to-investigation
-# acceptance criterion in the v1.0 plan.
+#
+# Why the shell wrapper instead of a plain `&&`:
+#   With AISOC_MIGRATIONS_REQUIRED=0 (demo policy below), the migration
+#   runner exits 0 even if it can't reach Postgres after the retry budget
+#   — that keeps the API code deploy from being held hostage by a Fly
+#   Postgres outage. But on that path `seed_demo` would just hit the
+#   same connect failure through SQLAlchemy and crash the deploy anyway.
+#   The wrapper uses the migrations-OK sentinel file to skip `seed_demo`
+#   in that scenario. A *hard* migration failure (Postgres reachable, SQL
+#   failed) still propagates a non-zero exit and aborts the deploy.
 [deploy]
-  release_command = "/bin/sh -c 'python -m app.scripts.run_migrations && python -m app.scripts.seed_demo'"
+  release_command = "/bin/sh -c 'rm -f /tmp/aisoc-migrations-ok && python -m app.scripts.run_migrations && { [ -f /tmp/aisoc-migrations-ok ] && python -m app.scripts.seed_demo || echo \"[release_command] migrations soft-failed (DB unreachable) — seed_demo skipped, API code deploy proceeds\"; }'"
 
 [env]
   ENVIRONMENT      = "demo"
@@ -50,6 +58,15 @@ kill_timeout   = "5s"
   AISOC_DEMO_MODE  = "true"
   # Tenant rotation runs daily; the seeder writes the canonical INC-RT-001 case
   AISOC_DEMO_TENANT = "demo"
+  # Demo policy: don't hold an API code deploy hostage on a Postgres outage.
+  # Migrations still RUN — they retry on transient connect errors, log every
+  # attempt, and crash on any SQL-level failure — but if Postgres is fully
+  # unreachable through the entire retry budget, the migration runner exits
+  # 0 instead of 1 and the release_command wrapper skips `seed_demo`. The
+  # last-good schema and seeded dataset stay live; an operator gets a loud
+  # "MIGRATION SKIPPED" line in the deploy log to investigate. Flip this
+  # back to "1" if you want demo deploys to fail-closed on DB outages.
+  AISOC_MIGRATIONS_REQUIRED = "0"
   # Disable optional integrations (no Kafka/ClickHouse/OpenSearch on demo)
   AISOC_DISABLE_KAFKA      = "true"
   AISOC_DISABLE_CLICKHOUSE = "true"

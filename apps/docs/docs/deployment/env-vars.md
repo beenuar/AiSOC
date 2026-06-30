@@ -36,6 +36,18 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
 
+### Migration runner
+
+Source: [`services/api/app/scripts/run_migrations.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/scripts/run_migrations.py)
+
+The migration runner is invoked by deploy orchestrators (Fly's `release_command`, Render's `preDeployCommand`, the Kubernetes `Job` in the Helm chart) the moment a new API VM boots. It races against Postgres becoming reachable — these knobs control how that race is handled.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_MIGRATIONS_REQUIRED` | `1` (required) | **Default is safe — leave it alone for production.** When set to `0` / `false` / `no` / `off`, the runner exits `0` instead of `1` if it cannot reach Postgres after exhausting its retry budget (6 attempts, exponential back-off, ~31 s total). This is for *demo* environments where the API code deploy must not be held hostage by a Postgres outage — the running app keeps serving the last-good schema and dataset, and the deploy log carries a loud `MIGRATION SKIPPED` line for an operator to chase. A *hard* migration failure (Postgres reachable, SQL statement failed) still aborts the deploy regardless of this flag — a schema-change PR with a bad migration must always get human attention. |
+
+The Fly demo (`infra/fly/api/fly.toml`) sets `AISOC_MIGRATIONS_REQUIRED = "0"` and pairs it with a shell wrapper in `release_command` that uses a `/tmp/aisoc-migrations-ok` sentinel to decide whether to also run `seed_demo` — a soft-failed migration run skips the seeder (which would just hit the same connect failure through SQLAlchemy and crash the deploy anyway).
+
 ### Audit log
 
 Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).

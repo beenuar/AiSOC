@@ -89,3 +89,26 @@ async def test_connect_does_not_retry_auth_failures(monkeypatch):
         await run_migrations._connect()
 
     assert call_count["connect"] == 1, "auth failures must propagate after the first attempt, no retries"
+
+
+def test_migrations_required_defaults_to_true(monkeypatch):
+    """Absence of the env var means the previous strict behaviour: any
+    connect failure aborts the deploy. That's the safe default."""
+    monkeypatch.delenv("AISOC_MIGRATIONS_REQUIRED", raising=False)
+    assert run_migrations._migrations_required() is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "FALSE", "Off"])
+def test_migrations_required_recognises_opt_out(monkeypatch, value):
+    """Demo-mode opt-out via the documented sentinel values."""
+    monkeypatch.setenv("AISOC_MIGRATIONS_REQUIRED", value)
+    assert run_migrations._migrations_required() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on", "  1  ", ""])
+def test_migrations_required_truthy_values(monkeypatch, value):
+    """Anything not in the opt-out vocabulary is treated as 'required'.
+    Empty string included — it's an easy footgun and the safe interpretation
+    is 'I didn't mean to opt out'."""
+    monkeypatch.setenv("AISOC_MIGRATIONS_REQUIRED", value)
+    assert run_migrations._migrations_required() is True

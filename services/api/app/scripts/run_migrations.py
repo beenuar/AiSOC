@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
@@ -41,6 +42,13 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+
+# Sentinel touched on a successful migration pass. The Fly release_command
+# wrapper (see `infra/fly/api/fly.toml` → `[deploy].release_command`) keys
+# off the presence of this file to decide whether to run `seed_demo`. The
+# path lives under /tmp so it's local to the release VM and naturally
+# disappears when the VM is reaped.
+_SENTINEL_PATH = Path("/tmp/aisoc-migrations-ok")
 
 # libpq sslmode → asyncpg ssl kwarg. Mirrors the mapping in
 # ``app.db.database._normalize_async_pg_url`` so this script can be run
@@ -160,6 +168,26 @@ async def _apply_one(conn: asyncpg.Connection, name: str, sql: str) -> tuple[str
         return name, False, str(exc)
 
 
+def _migrations_required() -> bool:
+    """Whether a migration *connect* failure should crash the process.
+
+    The default is ``True`` — a deploy must not silently ship code against
+    a stale schema. Production-like environments leave this alone.
+
+    Demo environments (the Fly ``aisoc-demo-api`` app, in particular) can
+    opt out by setting ``AISOC_MIGRATIONS_REQUIRED=0``. In that mode, a
+    connect-exhausted failure logs LOUDLY and exits ``0`` so the API code
+    deploy still ships — preserving service for users on a demo while a
+    Fly Postgres outage / SSL-handshake issue / pg_hba misconfig is being
+    diagnosed. Actual SQL migration errors (server reachable, statement
+    failed) are still treated as failures regardless of this flag — a
+    schema-change PR that crashes mid-apply must still fail the deploy
+    so it gets human eyes.
+    """
+    raw = os.environ.get("AISOC_MIGRATIONS_REQUIRED", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
 async def main() -> None:
     if not MIGRATIONS_DIR.exists():
         logger.warning("migrations dir not found: %s", MIGRATIONS_DIR)
@@ -168,7 +196,36 @@ async def main() -> None:
     files = sorted(p for p in MIGRATIONS_DIR.iterdir() if p.suffix == ".sql")
     logger.info("Found %d migration files", len(files))
 
-    conn = await _connect()
+    try:
+        conn = await _connect()
+    except (
+        asyncpg.exceptions.ConnectionDoesNotExistError,
+        asyncpg.exceptions.CannotConnectNowError,
+        ConnectionResetError,
+        OSError,
+    ) as exc:
+        if _migrations_required():
+            raise
+        # Demo-mode soft-fail: Postgres unreachable through every retry.
+        # Log loud — a future audit must be able to find this — then exit
+        # 0 so the rest of the deploy proceeds. This is intentionally
+        # restricted to *connect-time* exceptions; once we have a working
+        # connection, any SQL failure during a migration still raises.
+        logger.error(
+            "MIGRATION SKIPPED — could not reach Postgres after retry budget "
+            "(%s: %s). AISOC_MIGRATIONS_REQUIRED=0 → continuing the deploy "
+            "with the existing schema. Investigate the Fly Postgres app and "
+            "either restore connectivity or set AISOC_MIGRATIONS_REQUIRED=1 "
+            "to make this fatal again.",
+            type(exc).__name__,
+            exc,
+        )
+        # Deliberately do NOT write the sentinel — the release_command
+        # wrapper uses its absence to know seed_demo should also be
+        # skipped (seed_demo would just hit the same connect failure
+        # through SQLAlchemy and crash).
+        return
+
     try:
         await conn.execute(CREATE_MIGRATIONS_TABLE)
         already = await _applied(conn)
@@ -189,6 +246,15 @@ async def main() -> None:
             logger.warning("%d migrations failed; see logs above", len(failures))
     finally:
         await conn.close()
+
+    # Sentinel for the release_command wrapper: "migrations ran against a
+    # reachable database — proceed to seed_demo". A soft-failed run skips
+    # this write so the wrapper also skips seeding.
+    _SENTINEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _SENTINEL_PATH.write_text(
+        "AiSOC run_migrations.py completed — DB reachable, seed_demo may proceed.\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
