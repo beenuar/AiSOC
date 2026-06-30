@@ -78,7 +78,7 @@ jobs:
             --reporter=line \
             --output=../../tmp/screencast
 
-      - name: Transcode webm → mp4 (H.264 / AAC)
+      - name: Transcode webm → mp4 (H.264 / AAC) + render hero.gif
         run: |
           set -euo pipefail
           src=$(find tmp/screencast -name '*.webm' | head -n1)
@@ -94,6 +94,16 @@ jobs:
             -c:a aac -b:a 128k \
             -movflags +faststart \
             tmp/screencast/demo.mp4
+
+          # Phase 2 quick-win on-ramp: also render hero.gif — a 10s
+          # loop of Shot 2 (Investigation timeline) at 720p, 15 fps.
+          # palettegen / paletteuse keeps the GIF colour quantisation
+          # clean; loop=0 makes the GIF run forever in <img> tags.
+          ffmpeg -y -ss 14 -t 10 -i "$src" \
+            -vf "fps=15,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" \
+            -loop 0 \
+            tmp/screencast/hero.gif
+
           ls -lh tmp/screencast/
 
       - name: Upload screencast artifacts
@@ -102,6 +112,7 @@ jobs:
           name: screencast-${{ github.sha }}
           path: |
             tmp/screencast/demo.mp4
+            tmp/screencast/hero.gif
             tmp/screencast/*.png
           retention-days: 30
 
@@ -121,5 +132,6 @@ jobs:
           fi
           gh release upload "${{ inputs.release_tag }}" \
             tmp/screencast/demo.mp4\#"AiSOC 90s demo (mp4)" \
+            tmp/screencast/hero.gif\#"AiSOC hero loop (gif)" \
             tmp/screencast/*.png \
             --clobber

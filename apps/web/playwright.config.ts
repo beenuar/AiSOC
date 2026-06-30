@@ -30,6 +30,7 @@ import { defineConfig, devices } from "@playwright/test";
 const PROJECT = (process.env.PLAYWRIGHT_PROJECT ?? "").toLowerCase();
 const IS_VISUAL = PROJECT === "visual";
 const IS_JOURNEY = PROJECT === "journey";
+const IS_SCREENSHOTS = PROJECT === "screenshots";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -81,7 +82,9 @@ export default defineConfig({
       ? "http://127.0.0.1:6007"
       : IS_JOURNEY
         ? "http://localhost:3100"
-        : (process.env.AISOC_SCREENCAST_URL ?? "https://tryaisoc.com"),
+        : IS_SCREENSHOTS
+          ? (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000")
+          : (process.env.AISOC_SCREENCAST_URL ?? "https://tryaisoc.com"),
     trace: IS_JOURNEY ? "retain-on-failure" : "off",
     screenshot: IS_JOURNEY ? "only-on-failure" : "off",
     video: "off",
@@ -121,6 +124,20 @@ export default defineConfig({
       testMatch: /journeys\/.*\.spec\.ts$/,
       use: {
         ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      // Phase 2 quick-win on-ramp: README hero screenshots. Runs
+      // against a seeded local demo (`pnpm aisoc:demo`) or any
+      // deployed URL pointed at by `AISOC_SCREENCAST_URL`. Output
+      // viewport is 1440x900 so the captured PNGs land in the same
+      // 1.6:1 aspect ratio the README image grid expects.
+      name: "screenshots",
+      testMatch: /screenshots\/.*\.spec\.ts$/,
+      use: {
+        ...devices["Desktop Chrome"],
+        deviceScaleFactor: 1,
         viewport: { width: 1440, height: 900 },
       },
     },

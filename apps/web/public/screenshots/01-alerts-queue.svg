@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-label="Alerts queue screenshot placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="900" fill="url(#bg)"/>
+  <text x="720" y="380" text-anchor="middle" fill="#e2e8f0" font-family="ui-sans-serif, system-ui, sans-serif" font-size="40" font-weight="700">Alerts queue  server-anchored SLA countdowns</text>
+  <text x="720" y="440" text-anchor="middle" fill="#94a3b8" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22">Real screenshot ships with the Phase 2 visual rollup.</text>
+  <text x="720" y="480" text-anchor="middle" fill="#64748b" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20">Generate locally: pnpm aisoc:demo --screenshots</text>
+  <text x="720" y="540" text-anchor="middle" fill="#475569" font-family="ui-monospace, monospace" font-size="18">apps/web/public/screenshots/01-alerts-queue.png</text>
+</svg>

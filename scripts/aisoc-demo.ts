@@ -104,6 +104,28 @@ interface Flags {
   // touches it — it exists so byte-stable reseeds are reproducible.
   demoQuick: boolean;
   clock: string | null;
+  // Phase 2 quick-win on-ramp: capture the visual assets the slim
+  // README and marketing landing depend on. Both modes run AFTER the
+  // demo stack is up and healthy; they shell out to the Playwright
+  // specs that already live under `apps/web/e2e/` so this script
+  // stays a thin orchestrator. Neither mode mutates state in the
+  // running stack.
+  //
+  //   --record       runs apps/web/e2e/demo/screencast.spec.ts against
+  //                  the local stack, transcodes the .webm to .mp4
+  //                  (H.264 + AAC) and renders hero.gif via ffmpeg,
+  //                  then copies all three into apps/web/public/demo/.
+  //
+  //   --screenshots  runs apps/web/e2e/screenshots/console.spec.ts
+  //                  and copies the four PNGs into
+  //                  apps/web/public/screenshots/01-alerts-queue.png
+  //                  through 04-marketplace.png.
+  //
+  // Both modes require ffmpeg on PATH (for --record only) and the
+  // Playwright Chromium binary installed (`pnpm --filter apps/web exec
+  // playwright install --with-deps chromium` if it isn't).
+  record: boolean;
+  screenshots: boolean;
 }
 
 function printHelp(): void {
@@ -127,6 +149,10 @@ ${c.bold("Demo content:")}
 ${c.bold("Flags:")}
   --demo-quick, --quick    seed only the 4 canonical DEMO-* cases (T6.4 screencast path)
   --clock <iso>            override the --demo-quick clock anchor (ISO-8601)
+  --record                 after boot, record the 90s screencast + hero.gif into
+                           apps/web/public/demo/ (implies --no-open; needs ffmpeg)
+  --screenshots            after boot, capture the 4 README screenshots into
+                           apps/web/public/screenshots/ (implies --no-open)
   --no-pull                skip \`docker compose pull\` (use cached images)
   --no-open                skip launching the browser (CI / headless)
   --rebuild                \`docker compose up --build\` instead of prebuilt images
@@ -153,6 +179,8 @@ function parseFlags(argv: string[]): Flags {
     resultsFile: null,
     demoQuick: false,
     clock: null,
+    record: false,
+    screenshots: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -170,6 +198,14 @@ function parseFlags(argv: string[]): Flags {
       flags.demoQuick = true;
     } else if (a === "--clock") {
       flags.clock = argv[++i] ?? null;
+    } else if (a === "--record") {
+      flags.record = true;
+      // Recording implies headless: we don't want a browser window
+      // flashing in front of the user mid-recording.
+      flags.noOpen = true;
+    } else if (a === "--screenshots") {
+      flags.screenshots = true;
+      flags.noOpen = true;
     }
   }
   return flags;
@@ -887,6 +923,175 @@ function emitReport(flags: Flags, report: RunReport): void {
   }
 }
 
+// ---------- Phase 2 quick-win: visual asset capture ----------
+
+import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
+
+const WEB_DIR = join(ROOT, "apps", "web");
+const DEMO_PUBLIC_DIR = join(WEB_DIR, "public", "demo");
+const SCREENSHOTS_PUBLIC_DIR = join(WEB_DIR, "public", "screenshots");
+const SCREENCAST_TMP_DIR = join(ROOT, "tmp", "screencast");
+const SCREENSHOTS_TMP_DIR = join(ROOT, "tmp", "screenshots");
+
+function hasBinary(bin: string): boolean {
+  // POSIX `command -v` and Windows `where` both exit 0 when the
+  // binary resolves; we wrap with a try because spawnSync sets
+  // status=null on enoent which we want to treat as "missing".
+  const cmd = platform() === "win32" ? "where" : "command";
+  const args = platform() === "win32" ? [bin] : ["-v", bin];
+  try {
+    const r = spawnSync(cmd, args, { shell: platform() !== "win32", stdio: "ignore" });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function runPlaywrightSpec(specGlob: string, outputDir: string, label: string): boolean {
+  // We deliberately invoke pnpm filter so the Playwright config in
+  // apps/web/playwright.config.ts owns the codec / viewport / video
+  // settings — this script stays a thin orchestrator.
+  log(`${c.dim("→")} ${label}: running ${specGlob}`);
+  mkdirSync(outputDir, { recursive: true });
+  const args = [
+    "--filter",
+    "apps/web",
+    "exec",
+    "playwright",
+    "test",
+    specGlob,
+    "--reporter=line",
+    `--output=${outputDir}`,
+  ];
+  const env = { ...process.env, AISOC_SCREENCAST_URL: "http://localhost:3000", AISOC_DISABLE_ANALYTICS: "1" };
+  const r = spawnSync("pnpm", args, { cwd: ROOT, env, stdio: "inherit" });
+  if (r.status !== 0) {
+    console.error(c.red(`  ${label} failed (exit ${r.status ?? "n/a"})`));
+    return false;
+  }
+  log(`${c.green("✓")} ${label} complete`);
+  return true;
+}
+
+function transcodeWebmToMp4AndGif(): boolean {
+  if (!hasBinary("ffmpeg")) {
+    console.error(c.yellow("ffmpeg not on PATH — install it to render hero.gif and demo.mp4"));
+    return false;
+  }
+  // Pick the most recent webm Playwright wrote. The Chromium recorder
+  // writes one per test-run with a deterministic-ish but undocumented
+  // filename; instead of guessing we just read the directory.
+  if (!existsSync(SCREENCAST_TMP_DIR)) {
+    console.error(c.red(`screencast tmp directory missing: ${SCREENCAST_TMP_DIR}`));
+    return false;
+  }
+  const webms = readdirSync(SCREENCAST_TMP_DIR, { recursive: true })
+    .map((name) => String(name))
+    .filter((p) => p.endsWith(".webm"))
+    .map((p) => join(SCREENCAST_TMP_DIR, p))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  if (webms.length === 0) {
+    console.error(c.red("no .webm produced by Playwright run"));
+    return false;
+  }
+  const src = webms[0];
+  const mp4 = join(DEMO_PUBLIC_DIR, "demo.mp4");
+  const gif = join(DEMO_PUBLIC_DIR, "hero.gif");
+  mkdirSync(DEMO_PUBLIC_DIR, { recursive: true });
+
+  log(`${c.dim("→")} ffmpeg transcode → ${mp4}`);
+  const mp4r = spawnSync(
+    "ffmpeg",
+    [
+      "-y", "-i", src,
+      "-c:v", "libx264", "-preset", "slow", "-crf", "22",
+      "-c:a", "aac", "-b:a", "128k",
+      "-movflags", "+faststart",
+      mp4,
+    ],
+    { stdio: "inherit" },
+  );
+  if (mp4r.status !== 0) {
+    console.error(c.red(`ffmpeg mp4 transcode failed (exit ${mp4r.status})`));
+    return false;
+  }
+
+  // The hero.gif is a 10s loop of the most visually arresting shot
+  // (Shot 2 — Investigation timeline). We grab seconds 14-24 of the
+  // screencast and scale to 720px wide with palettegen for clean
+  // GIF colour quantisation. ≤ 5 MB target so it stays inline-friendly
+  // in the README.
+  log(`${c.dim("→")} ffmpeg render → ${gif}`);
+  const gifr = spawnSync(
+    "ffmpeg",
+    [
+      "-y", "-ss", "14", "-t", "10", "-i", src,
+      "-vf", "fps=15,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
+      "-loop", "0",
+      gif,
+    ],
+    { stdio: "inherit" },
+  );
+  if (gifr.status !== 0) {
+    console.error(c.red(`ffmpeg gif render failed (exit ${gifr.status})`));
+    return false;
+  }
+  log(`${c.green("✓")} wrote ${mp4} and ${gif}`);
+  return true;
+}
+
+async function recordScreencast(flags: Flags): Promise<boolean> {
+  void flags;
+  if (!runPlaywrightSpec("demo/screencast.spec.ts", SCREENCAST_TMP_DIR, "screencast")) {
+    return false;
+  }
+  return transcodeWebmToMp4AndGif();
+}
+
+async function captureScreenshots(flags: Flags): Promise<boolean> {
+  void flags;
+  if (!runPlaywrightSpec("screenshots/console.spec.ts", SCREENSHOTS_TMP_DIR, "screenshots")) {
+    return false;
+  }
+  // The screenshots spec writes a known set of PNG names directly
+  // into SCREENSHOTS_TMP_DIR; we copy them up to the public surface
+  // so the README image refs resolve.
+  if (!existsSync(SCREENSHOTS_TMP_DIR)) {
+    console.error(c.red(`screenshots tmp directory missing: ${SCREENSHOTS_TMP_DIR}`));
+    return false;
+  }
+  mkdirSync(SCREENSHOTS_PUBLIC_DIR, { recursive: true });
+  const expected = [
+    "01-alerts-queue.png",
+    "02-investigation-rail.png",
+    "03-hunt-workbench.png",
+    "04-marketplace.png",
+  ];
+  let copied = 0;
+  for (const name of expected) {
+    // Playwright writes screenshots inside a per-test directory; we
+    // walk the tmp dir flat-search style to handle either layout.
+    const candidates = readdirSync(SCREENSHOTS_TMP_DIR, { recursive: true })
+      .map((p) => String(p))
+      .filter((p) => p.endsWith(name))
+      .map((p) => join(SCREENSHOTS_TMP_DIR, p));
+    if (candidates.length === 0) {
+      console.error(c.yellow(`  missing screenshot: ${name}`));
+      continue;
+    }
+    const src = candidates[0];
+    const dst = join(SCREENSHOTS_PUBLIC_DIR, name);
+    copyFileSync(src, dst);
+    copied += 1;
+    log(`${c.green("✓")} ${dst}`);
+  }
+  if (copied !== expected.length) {
+    console.error(c.red(`expected ${expected.length} screenshots, copied ${copied}`));
+    return false;
+  }
+  return true;
+}
+
 // ---------- Main ----------
 
 async function main() {
@@ -927,6 +1132,22 @@ async function main() {
   if (seededCase) {
     investigationKickedOff = await kickoffInvestigation(seededCase.id);
   }
+
+  // Phase 2 quick-win: visual asset capture. We do these BEFORE
+  // openInBrowser so a `--record` user doesn't end up with a browser
+  // window in the recording. A failure here is non-fatal — the demo
+  // is still up and the user can re-run the capture step out of band.
+  if (flags.record) {
+    startPhase("Recording screencast");
+    const ok = await recordScreencast(flags);
+    if (!ok) console.error(c.yellow("screencast capture failed; demo is still running"));
+  }
+  if (flags.screenshots) {
+    startPhase("Capturing screenshots");
+    const ok = await captureScreenshots(flags);
+    if (!ok) console.error(c.yellow("screenshot capture failed; demo is still running"));
+  }
+
   await openInBrowser(seededCase, flags);
 
   // Reporting runs after openInBrowser so the cheerful "demo is up"
