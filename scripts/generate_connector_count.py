@@ -57,8 +57,18 @@ COUNT_BEARING_FILES: tuple[tuple[Path, tuple[re.Pattern[str], ...]], ...] = (
         REPO_ROOT / "README.md",
         (
             re.compile(r"(?P<pre>declares \*\*)(?P<n>\d+)(?P<post> first-party connectors)"),
-            re.compile(r"(?P<pre>corrected \*\*)(?P<n>\d+)(?P<post>-connector count\*\*)"),
             re.compile(r"(?P<pre>a )(?P<n>\d+)(?P<post>-connector click-and-connect catalog)"),
+        ),
+    ),
+    (
+        # The "corrected **N-connector count**" prose used to live in README.md
+        # but was moved to RELEASES.md when the "What's new" section was
+        # collapsed under <details>. The anchor still needs to be reconciled
+        # against the registry, so we track it where it actually lives now.
+        REPO_ROOT / "RELEASES.md",
+        (
+            re.compile(r"(?P<pre>corrected \*\*)(?P<n>\d+)(?P<post>-connector count\*\*)"),
+            re.compile(r"(?P<pre>declares \*\*)(?P<n>\d+)(?P<post> first-party connectors)"),
         ),
     ),
     (
