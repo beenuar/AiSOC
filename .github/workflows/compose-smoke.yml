@@ -22,7 +22,7 @@ on:
     paths:
       # Compose surface itself.
       - 'docker-compose.yml'
-      - 'docker-compose.demo.yml'
+      - 'infra/compose/docker-compose.demo.yml'
       - '.env.example'
       - '.github/workflows/compose-smoke.yml'
       # Any source under a service build context — Dockerfile changes alone
@@ -46,7 +46,7 @@ on:
       - 'hotfix/**'
     paths:
       - 'docker-compose.yml'
-      - 'docker-compose.demo.yml'
+      - 'infra/compose/docker-compose.demo.yml'
       - '.env.example'
       - '.github/workflows/compose-smoke.yml'
       - 'services/**'

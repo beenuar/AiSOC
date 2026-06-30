@@ -1,0 +1,58 @@
+{
+  "id": "github-token-theft",
+  "title": "GitHub PAT leaked — token used to clone six private repos in 11 seconds",
+  "narrative": "A personal-access token tied to `carol@example.com` is suddenly used from an ASN that has never touched the org before, against six private repositories in 11 seconds. The token's `repo` scope is wide enough to ex-filtrate every source tree the user can read.",
+  "severity": "high",
+  "mitre_techniques": ["T1078", "T1555", "T1567"],
+  "entities": {
+    "user": "carol@example.com",
+    "token_prefix": "ghp_xxxAAAAA",
+    "source_ip": "192.0.2.55",
+    "repositories": "acme/customer-api, acme/billing-svc, acme/secrets-vault, acme/iam, acme/devops, acme/ml-models"
+  },
+  "events": [
+    {
+      "uuid": "gh-001",
+      "published": "2026-06-25T18:01:22Z",
+      "eventType": "github.audit",
+      "action": "git.clone",
+      "actor": "carol",
+      "repository": "acme/customer-api",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-002",
+      "published": "2026-06-25T18:01:24Z",
+      "eventType": "github.audit",
+      "action": "git.clone",
+      "actor": "carol",
+      "repository": "acme/billing-svc",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-003",
+      "published": "2026-06-25T18:01:27Z",
+      "eventType": "github.audit",
+      "action": "git.clone",
+      "actor": "carol",
+      "repository": "acme/secrets-vault",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-004",
+      "published": "2026-06-25T18:01:33Z",
+      "eventType": "github.audit",
+      "action": "git.clone",
+      "actor": "carol",
+      "repository": "acme/iam",
+      "source_ip": "192.0.2.55"
+    }
+  ],
+  "recommended_actions": [
+    {"name": "github.pat.revoke", "args": {"user": "carol", "token_prefix": "ghp_xxxAAAAA"}},
+    {"name": "github.user.session.revoke_all", "args": {"user": "carol"}},
+    {"name": "github.org.audit_member", "args": {"user": "carol", "lookback_days": 30}},
+    {"name": "secrets.rotate", "args": {"repositories": ["acme/secrets-vault", "acme/iam"]}},
+    {"name": "case.create", "args": {"title": "GitHub PAT leaked — six private repos cloned in 11 s", "severity": "high"}}
+  ]
+}

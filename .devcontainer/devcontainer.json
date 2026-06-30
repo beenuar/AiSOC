@@ -1,19 +1,13 @@
 {
   "name": "AiSOC — one-click dev",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
-      "moby": true,
-      "version": "latest"
-    },
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.11"
-    },
-    "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.22"
-    },
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+  "//image": "Prebuilt image is published by .github/workflows/devcontainer-build.yml. It drops Codespaces cold-start from ~5 min → ~30 s by baking Node + pnpm + Python (+ uv) + Go + Docker + gh into a single layer instead of resolving them via `features:` on every boot.",
+  "image": "ghcr.io/beenuar/aisoc-devcontainer:latest",
+  "//build": "Fallback for local devcontainer-cli use and for forks that don't have GHCR pull access. The `image` directive above wins; the build block is only consulted by tooling like `devcontainer build`.",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
   },
+  "//features": "We intentionally do NOT enable docker-in-docker / python / go / github-cli features here — they are baked into the image at build time. Re-enabling them would cancel the cold-start win.",
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
@@ -38,7 +32,9 @@
       "label": "Docs site"
     }
   },
-  "postCreateCommand": "corepack enable && corepack prepare pnpm@8.15.1 --activate && pnpm install --frozen-lockfile=false && echo '\\n\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n'",
+  "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so `--frozen-lockfile=false` here is fast (≤ 30 s on a green Codespace).",
+  "onCreateCommand": "pnpm install --frozen-lockfile=false",
+  "postAttachCommand": "echo '\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n>>> Or, no-Docker:  pip install -e packages/aisoc-sandbox && aisoc-sandbox demo\\n'",
   "remoteUser": "node",
   "containerEnv": {
     "AISOC_DEV_MODE": "1"

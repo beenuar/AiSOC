@@ -1,0 +1,98 @@
+name: Devcontainer · cold-start KPI
+
+# Asserts the documented Codespaces cold-start budget — from a fresh image
+# pull to a green `aisoc-acceptance --cold` run.
+#
+# This is the gate behind the "~30 s cold-start" claim in
+# `apps/docs/docs/operations/codespaces.md` and the plan that drove the
+# Phase-3 friction-cut workstream. If this job goes red, we're back to a
+# ~5-min cold boot and the README's "Try AiSOC in 60 seconds" promise no
+# longer holds for Codespaces users — release-blocking.
+#
+# Strategy: pull the published `ghcr.io/beenuar/aisoc-devcontainer:latest`
+# (the same image Codespaces resolves) and exec the acceptance harness
+# inside it. We measure two budgets independently:
+#
+#   1. image pull + `onCreateCommand` (pnpm install warm-store) — the
+#      "before you can run anything" phase. Budget: 60 s.
+#   2. `pnpm aisoc:acceptance --cold` — the same wall-clock measurement
+#      used by the WS-A buyer acceptance gate. Budget: 5 min.
+#
+# A regression on either budget fails the workflow.
+
+on:
+  workflow_run:
+    workflows: ['Devcontainer · build & publish']
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.devcontainer/**'
+      - 'scripts/aisoc-acceptance.ts'
+      - '.github/workflows/devcontainer-coldstart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: devcontainer-coldstart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cold-start:
+    name: Pull + boot + acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Phase budgets (seconds). Kept here so a diff in this file is the
+    # canonical record of any KPI change.
+    env:
+      PHASE_PULL_BUDGET: '60'
+      PHASE_ACCEPTANCE_BUDGET: '300'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Phase 1 — pull prebuilt image (KPI budget ${{ env.PHASE_PULL_BUDGET }}s)
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          docker pull ghcr.io/beenuar/aisoc-devcontainer:latest
+          elapsed=$(( $(date +%s) - start ))
+          echo "::notice title=devcontainer-pull-seconds::${elapsed}"
+          if [ "$elapsed" -gt "${PHASE_PULL_BUDGET}" ]; then
+            echo "::error::Devcontainer pull took ${elapsed}s, over budget of ${PHASE_PULL_BUDGET}s." >&2
+            exit 1
+          fi
+
+      - name: Phase 2 — boot + aisoc-acceptance --cold (KPI budget ${{ env.PHASE_ACCEPTANCE_BUDGET }}s)
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspaces/AiSOC" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -w /workspaces/AiSOC \
+            -e AISOC_DEV_MODE=1 \
+            ghcr.io/beenuar/aisoc-devcontainer:latest \
+            bash -lc '
+              set -euo pipefail
+              pnpm install --frozen-lockfile=false >/tmp/pnpm.log 2>&1
+              pnpm aisoc:acceptance:cold --budget-ms '"${PHASE_ACCEPTANCE_BUDGET}"'000
+            '
+          elapsed=$(( $(date +%s) - start ))
+          echo "::notice title=devcontainer-acceptance-seconds::${elapsed}"
+          if [ "$elapsed" -gt "${PHASE_ACCEPTANCE_BUDGET}" ]; then
+            echo "::error::aisoc-acceptance --cold took ${elapsed}s, over budget of ${PHASE_ACCEPTANCE_BUDGET}s." >&2
+            exit 1
+          fi

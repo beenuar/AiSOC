@@ -24,7 +24,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ─── Build-time rewrite targets (server-side) ───────────────────────────────
 # Next.js bakes rewrite destinations into .next/routes-manifest.json at
 # build time, so these args MUST be provided to docker build (e.g. via
-# `args:` in docker-compose.demo.yml's `web.build:` block) when targeting
+# `args:` in infra/compose/docker-compose.demo.yml's `web.build:` block) when targeting
 # anything other than a single-host localhost dev setup. Defaults match the
 # Compose stack's Docker DNS so a no-arg `docker build` still yields a
 # working image inside the demo network.

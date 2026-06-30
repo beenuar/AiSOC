@@ -10,7 +10,7 @@ import Link from 'next/link';
  * path in the repo (Phase 1.6 audit — anything that 404'd has been corrected
  * to the actual directory that ships the stack):
  *
- *   - Air-gapped overlay  → `docker-compose.airgap.yml` + Ollama sidecar.
+ *   - Air-gapped overlay  → `infra/compose/docker-compose.airgap.yml` + Ollama sidecar.
  *   - On-prem / Helm      → `infra/helm/aisoc/`.
  *   - AWS                 → `infra/terraform/main.tf` (S3-backed root stack
  *                            re-using `modules/eks`, `modules/rds`,
@@ -71,9 +71,9 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     llm: 'Local Ollama sidecar',
     residency: 'Operator-defined',
     controlsAligned: 'SOC 2 · ISO 27001 · GDPR · DPDP',
-    artefact: 'docker-compose.airgap.yml',
+    artefact: 'infra/compose/docker-compose.airgap.yml',
     artefactHref:
-      'https://github.com/beenuar/AiSOC/blob/main/docker-compose.airgap.yml',
+      'https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml',
   },
   {
     name: 'On-prem',
@@ -136,7 +136,7 @@ const PILLARS = [
   {
     label: 'Air-gap by config flag',
     body: 'Set AISOC_AIRGAPPED=true and the platform refuses to make outbound calls — no LLM provider, no threat-intel feed, no telemetry. The Ollama overlay ships a pinned local model so the demo seed runs end-to-end with zero external calls.',
-    cite: 'docker-compose.airgap.yml',
+    cite: 'infra/compose/docker-compose.airgap.yml',
   },
   {
     label: 'BYO LLM endpoint',
@@ -242,7 +242,7 @@ export default function SovereignPage() {
               </svg>
             </a>
             <a
-              href="https://github.com/beenuar/AiSOC/blob/main/docker-compose.airgap.yml"
+              href="https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
@@ -511,8 +511,8 @@ export default function SovereignPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <RepoArtefact
               label="Air-gap overlay"
-              path="docker-compose.airgap.yml"
-              href="https://github.com/beenuar/AiSOC/blob/main/docker-compose.airgap.yml"
+              path="infra/compose/docker-compose.airgap.yml"
+              href="https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.airgap.yml"
               body="Compose overlay that adds an Ollama sidecar with a pinned model and flips AISOC_AIRGAPPED=true on every service that calls an LLM."
             />
             <RepoArtefact

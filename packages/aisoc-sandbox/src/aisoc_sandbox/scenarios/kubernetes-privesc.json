@@ -1,0 +1,51 @@
+{
+  "id": "kubernetes-privesc",
+  "title": "Kubernetes privilege escalation — namespace-scoped SA bound to cluster-admin",
+  "narrative": "A namespace-scoped ServiceAccount was bound to the `cluster-admin` ClusterRole outside the standard change-management window. The binding was created by a user account that has no recent admin activity, and the SA in question was created less than 24 hours prior.",
+  "severity": "critical",
+  "mitre_techniques": ["T1098", "T1078"],
+  "entities": {
+    "user": "dev-onboard@example.com",
+    "service_account": "system:serviceaccount:experiments:debug-runner",
+    "cluster_role": "cluster-admin",
+    "asset": "kube-cluster://prod-eks-east-1",
+    "namespace": "experiments"
+  },
+  "events": [
+    {
+      "uuid": "k8s-001",
+      "published": "2026-06-22T02:14:00Z",
+      "eventType": "kubernetes.audit",
+      "actor": "dev-onboard@example.com",
+      "verb": "create",
+      "objectRef": "serviceaccounts/debug-runner",
+      "namespace": "experiments"
+    },
+    {
+      "uuid": "k8s-002",
+      "published": "2026-06-22T02:14:42Z",
+      "eventType": "kubernetes.audit",
+      "actor": "dev-onboard@example.com",
+      "verb": "create",
+      "objectRef": "clusterrolebindings/debug-runner-cluster-admin",
+      "roleRef": "ClusterRole/cluster-admin",
+      "subject": "system:serviceaccount:experiments:debug-runner"
+    },
+    {
+      "uuid": "k8s-003",
+      "published": "2026-06-22T02:16:18Z",
+      "eventType": "kubernetes.audit",
+      "actor": "system:serviceaccount:experiments:debug-runner",
+      "verb": "list",
+      "objectRef": "secrets",
+      "namespace": "kube-system"
+    }
+  ],
+  "recommended_actions": [
+    {"name": "k8s.clusterrolebinding.delete", "args": {"name": "debug-runner-cluster-admin"}},
+    {"name": "k8s.serviceaccount.disable", "args": {"namespace": "experiments", "name": "debug-runner"}},
+    {"name": "user.session.revoke_all", "args": {"user": "dev-onboard@example.com"}},
+    {"name": "case.create", "args": {"title": "Kubernetes privilege escalation — namespace SA bound to cluster-admin", "severity": "critical"}},
+    {"name": "case.notify", "args": {"channel": "pagerduty", "service": "kubernetes-on-call"}}
+  ]
+}

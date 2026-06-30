@@ -104,7 +104,7 @@ maintaining a fifth Dockerfile or Fly app:
 | Every deploy             | `[deploy].release_command` in `infra/fly/api/fly.toml` runs `alembic upgrade head && python -m app.scripts.seed_demo` on every `flyctl deploy`. Idempotent — a no-op against an already-seeded volume. |
 | Post-deploy (bootstrap)  | `flyctl ssh console -a aisoc-demo-api -C "python -m app.scripts.seed_demo"` runs once on a live api machine. Belt-and-suspenders for first-time deploys. |
 | Daily refresh (00:00 UTC)| A scheduled Fly machine on the `aisoc-demo-api` app, named `aisoc-demo-seed-cron`, boots from the same api image, runs the same command, and exits. |
-| Local recovery           | `python -m app.scripts.seed_demo` inside the api container of a `docker-compose -f docker-compose.demo.yml` stack — same module, same idempotency. |
+| Local recovery           | `python -m app.scripts.seed_demo` inside the api container of a `docker-compose -f infra/compose/docker-compose.demo.yml` stack — same module, same idempotency. |
 
 The canonical implementation lives in
 [`services/api/app/scripts/seed_demo.py`](../../services/api/app/scripts/seed_demo.py).

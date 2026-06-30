@@ -206,7 +206,7 @@ AiSOC/
 ├── marketplace/            # Marketplace index (index.json)
 ├── docs/                   # OpenAPI spec (openapi.yaml)
 ├── docker-compose.yml      # Full development stack
-├── docker-compose.demo.yml # Slim profile for `pnpm aisoc:demo`
+├── infra/compose/          # docker-compose.{demo,dev,airgap}.yml overlays
 └── scripts/                # Utilities (seed, eval harness, build, validate)
 ```
 

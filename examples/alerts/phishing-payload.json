@@ -1,0 +1,44 @@
+{
+  "_description": "Phishing click-through to a credential-harvest page. Three events: email delivered (sender domain `acme-paychecks.com`, registered 9 days ago); proxy URL click ~6 min after delivery; proxy form-post capture with `username` + `password` fields. Routes through the `email_gateway` and `web_proxy` connector profiles (OCSF class_uid 4009 + 4012).",
+  "_usage": "aisoc submit examples/alerts/phishing-payload.json   # real ingest\nbasoc-sandbox demo --scenario phishing-payload   # offline simulator",
+  "_mitre_techniques": ["T1566", "T1566.002"],
+  "_severity": "high",
+  "events": [
+    {
+      "uuid": "phish-0001",
+      "eventTime": "2026-06-15T11:14:00Z",
+      "eventSource": "email_gateway.example.com",
+      "eventName": "email.delivered",
+      "sender": "no-reply@acme-paychecks.com",
+      "recipient": "bob@example.com",
+      "subject": "Action required: payslip access expires today",
+      "sender_domain_age_days": 9,
+      "spf": "pass",
+      "dkim": "pass",
+      "dmarc": "pass",
+      "attachments": []
+    },
+    {
+      "uuid": "phish-0002",
+      "eventTime": "2026-06-15T11:20:32Z",
+      "eventSource": "web_proxy.example.com",
+      "eventName": "proxy.url_click",
+      "actor": "bob@example.com",
+      "source_ip": "10.0.5.42",
+      "url": "https://acme-paychecks.com/login",
+      "domain_age_days": 9,
+      "category": "Uncategorized"
+    },
+    {
+      "uuid": "phish-0003",
+      "eventTime": "2026-06-15T11:20:54Z",
+      "eventSource": "web_proxy.example.com",
+      "eventName": "proxy.form_post",
+      "actor": "bob@example.com",
+      "source_ip": "10.0.5.42",
+      "url": "https://acme-paychecks.com/login",
+      "form_fields": ["username", "password"],
+      "request_size_bytes": 412
+    }
+  ]
+}

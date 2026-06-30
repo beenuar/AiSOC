@@ -50,7 +50,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 ### Cross-cutting
 - [x] OpenTelemetry traces: agents → actions → api → realtime (Jaeger/Tempo)
 - [x] API token scopes (foundation for SSO)
-- [x] MIGRATION.md for v3 → v4 upgrade path
+- [x] `docs/upgrade/MIGRATION.md` for v3 → v4 upgrade path
 
 ---
 
@@ -195,7 +195,7 @@ Implemented and reviewed by Beenu Arora <beenu@cyble.com>.
 - [x] AI-generated weekly executive digest — auto-emailed PDF (`digest_pdf.py` + `weekly_digest_task.py`)
 - [x] Slack native bot for alert triage without opening the UI (`services/slack-bot/` — 61 tests)
 - [x] Threat actor attribution engine v0 (`services/threatintel/app/actors/attribution.py`)
-- [x] Air-gap / Ollama local-LLM mode (`docker-compose.airgap.yml` + `apps/docs/docs/operations/air-gapped.md`)
+- [x] Air-gap / Ollama local-LLM mode (`infra/compose/docker-compose.airgap.yml` + `apps/docs/docs/operations/air-gapped.md`)
 - [x] BYOK per-tenant LLM credentials UI + API (`llm_credentials.py` + `SettingsView.tsx`)
 - [x] MSSP console — per-child-tenant KPI aggregation, SLA posture, parent_tenant_id hierarchy
 - [x] Team analytics view — analyst MTTR, leaderboard, shift workload (`TeamAnalyticsView.tsx`)

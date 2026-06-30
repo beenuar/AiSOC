@@ -282,7 +282,7 @@ If you have a running AiSOC dev stack and want to see the rule fire end to end:
 
 ```bash
 # 1. Restart the API so it reloads the detection corpus from disk.
-docker compose -f docker-compose.dev.yml restart api
+docker compose -f infra/compose/docker-compose.dev.yml restart api
 
 # 2. Replay the positive fixture into the ingest pipeline.
 curl -X POST http://localhost:8000/v1/ingest/batch \

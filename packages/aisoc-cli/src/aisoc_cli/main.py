@@ -470,15 +470,15 @@ def _find_repo_root(start: Path | None = None) -> Path:
     """Walk up from ``start`` (default: cwd) looking for a docker-compose root.
 
     A repo root here is any directory containing either ``docker-compose.yml``
-    or ``docker-compose.dev.yml``. Falls back to the current working directory
-    if no match is found, so the underlying ``docker compose`` invocation can
-    still produce a sensible error message.
+    or ``infra/compose/docker-compose.dev.yml``. Falls back to the current
+    working directory if no match is found, so the underlying
+    ``docker compose`` invocation can still produce a sensible error message.
     """
     current = (start or Path.cwd()).resolve()
     for candidate in [current, *current.parents]:
         if (candidate / "docker-compose.yml").exists() or (
-            candidate / "docker-compose.dev.yml"
-        ).exists():
+            candidate / "infra" / "compose" / "docker-compose.dev.yml"
+        ).exists() or (candidate / "docker-compose.dev.yml").exists():
             return candidate
     return current
 
@@ -486,12 +486,16 @@ def _find_repo_root(start: Path | None = None) -> Path:
 def _compose_file_arg(repo_root: Path) -> list[str]:
     """Pick the right ``-f`` arg for docker compose.
 
-    Prefers ``docker-compose.dev.yml`` (the dev-aliased entry point) when
-    present, otherwise falls back to the base ``docker-compose.yml``.
+    Prefers ``infra/compose/docker-compose.dev.yml`` (the dev-aliased entry
+    point in the post-tidy layout) when present, then the legacy root path,
+    otherwise falls back to the base ``docker-compose.yml``.
     """
-    dev = repo_root / "docker-compose.dev.yml"
-    if dev.exists():
-        return ["-f", str(dev)]
+    new_dev = repo_root / "infra" / "compose" / "docker-compose.dev.yml"
+    if new_dev.exists():
+        return ["-f", str(new_dev)]
+    legacy_dev = repo_root / "docker-compose.dev.yml"
+    if legacy_dev.exists():
+        return ["-f", str(legacy_dev)]
     return ["-f", str(repo_root / "docker-compose.yml")]
 
 
@@ -527,9 +531,10 @@ def serve(detach: bool, build: bool) -> None:
     """Start the AiSOC dev stack via docker compose.
 
     Resolves the closest docker-compose root walking up from the cwd, prefers
-    ``docker-compose.dev.yml`` if it exists, and shells out to
-    ``docker compose -f <file> up``. Treat this as the founder-style
-    one-liner equivalent of the documented ``docker compose up -d``.
+    ``infra/compose/docker-compose.dev.yml`` if it exists (legacy root path is
+    still honoured), and shells out to ``docker compose -f <file> up``. Treat
+    this as the founder-style one-liner equivalent of the documented
+    ``docker compose up -d``.
     """
     _require_docker()
     repo_root = _find_repo_root()

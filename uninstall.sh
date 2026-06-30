@@ -99,17 +99,17 @@ find_repo() {
   # The uninstaller lives at the repo root, alongside install.sh.
   local self_dir
   self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [ -f "$self_dir/docker-compose.demo.yml" ] && grep -q '"name": "aisoc"' "$self_dir/package.json" 2>/dev/null; then
+  if [ -f "$self_dir/infra/compose/docker-compose.demo.yml" ] && grep -q '"name": "aisoc"' "$self_dir/package.json" 2>/dev/null; then
     REPO_ROOT="$self_dir"
     return 0
   fi
   # Fallback: maybe the user ran us from PATH or a copy. Try $HOME/aisoc.
-  if [ -d "$HOME/aisoc" ] && [ -f "$HOME/aisoc/docker-compose.demo.yml" ]; then
+  if [ -d "$HOME/aisoc" ] && [ -f "$HOME/aisoc/infra/compose/docker-compose.demo.yml" ]; then
     REPO_ROOT="$HOME/aisoc"
     return 0
   fi
   # Fallback 2: maybe we're run from the cwd of an aisoc clone.
-  if [ -f "$PWD/docker-compose.demo.yml" ] && grep -q '"name": "aisoc"' "$PWD/package.json" 2>/dev/null; then
+  if [ -f "$PWD/infra/compose/docker-compose.demo.yml" ] && grep -q '"name": "aisoc"' "$PWD/package.json" 2>/dev/null; then
     REPO_ROOT="$PWD"
     return 0
   fi
@@ -154,7 +154,7 @@ stop_demo_stack() {
   if [ -z "$REPO_ROOT" ]; then return 0; fi
 
   info "Stopping AiSOC demo stack and removing its volumes..."
-  ( cd "$REPO_ROOT" && docker compose -f docker-compose.demo.yml down -v --remove-orphans ) \
+  ( cd "$REPO_ROOT" && docker compose -f infra/compose/docker-compose.demo.yml down -v --remove-orphans ) \
     || warn "compose down exited non-zero; some resources may not have been cleaned up."
   ok "Demo stack stopped, named volumes deleted."
 }
@@ -247,7 +247,7 @@ remove_repo_clone() {
   # compose file AND a package.json claiming the project name). This stops
   # us from rm -rf'ing some unrelated directory the user happened to put
   # in $HOME/aisoc.
-  if [ ! -f "$target/docker-compose.demo.yml" ] || ! grep -q '"name": "aisoc"' "$target/package.json" 2>/dev/null; then
+  if [ ! -f "$target/infra/compose/docker-compose.demo.yml" ] || ! grep -q '"name": "aisoc"' "$target/package.json" 2>/dev/null; then
     warn "$target doesn't look like an AiSOC clone (missing compose file or package.json marker)."
     warn "Refusing to delete it — clean it up manually if you really want to."
     SAFETY_REFUSED=1

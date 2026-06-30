@@ -1,0 +1,83 @@
+name: Devcontainer · build & publish
+
+# Builds the prebuilt devcontainer image referenced from
+# `.devcontainer/devcontainer.json` and publishes it to
+# `ghcr.io/beenuar/aisoc-devcontainer`.
+#
+# Why: the prebuilt image is what makes a cold Codespace boot in ~30 s
+# instead of ~5 min. The user-visible KPI sits in
+# `.github/workflows/devcontainer-coldstart.yml`.
+#
+# When this runs:
+#   - On every push to `main` that touches the devcontainer surface.
+#   - On a weekly cron so security-relevant base-layer updates land
+#     even if the surface itself didn't change.
+#   - On manual dispatch (so a release manager can re-tag without
+#     waiting for a commit).
+#
+# Multi-arch: the image is built for `linux/amd64` and `linux/arm64`, so a
+# contributor on an M-series Mac doing local devcontainer work gets a
+# native pull, not a slow QEMU fallback.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.devcontainer/Dockerfile'
+      - '.devcontainer/devcontainer.json'
+      - '.github/workflows/devcontainer-build.yml'
+  schedule:
+    - cron: '0 9 * * 1'  # Mondays 09:00 UTC — base image hygiene
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: devcontainer-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build & push (multi-arch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/beenuar/aisoc-devcontainer
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=raw,value=weekly,enable=${{ github.event_name == 'schedule' }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .devcontainer
+          file: .devcontainer/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -213,7 +213,7 @@ Ranked. Five total. Each one cites the shipped feature behind it.
   Coolify. Plus a documented air-gap overlay with an Ollama sidecar and
   per-tenant BYOK LLM credentials in the encrypted vault.
 - **Repo evidence.** `infra/render/`, `infra/fly/`, `infra/helm/`,
-  `infra/terraform/`, `docker-compose.airgap.yml`,
+  `infra/terraform/`, `infra/compose/docker-compose.airgap.yml`,
   `apps/docs/docs/operations/air-gapped.md`,
   `apps/web/src/app/(marketing)/sovereign/page.tsx`.
 - **Metric to display.** Six deploy targets, one air-gap overlay, BYOK in
@@ -280,7 +280,7 @@ take it air-gapped on a flag.
 **Defence.** `pnpm aisoc:demo` brings up the slim stack in ~3.5 minutes
 warm. `render.yaml` powers a one-click deploy. `infra/helm/aisoc/` runs
 on any Kubernetes. `infra/terraform/` brings up AWS. The air-gapped
-overlay at `docker-compose.airgap.yml` ships a pinned Ollama sidecar so
+overlay at `infra/compose/docker-compose.airgap.yml` ships a pinned Ollama sidecar so
 the demo seed runs end-to-end with zero external calls; the
 `AISOC_AIRGAPPED=true` flag refuses outbound LLM calls,
 threat-intel feeds, and telemetry. Per-tenant LLM credentials in
@@ -895,7 +895,7 @@ Condensed teardown lives at `docs/design/landing-page-references.md`.
 | Fly.io deploy script                   | `infra/fly/`                                                                                 | Manager             | V5                  | deploy                        | Shipped       |
 | Helm chart                             | `infra/helm/aisoc/`                                                                          | CISO                | V5                  | deploy                        | Shipped       |
 | Terraform (AWS, GCP, BYOC)             | `infra/terraform/`                                                                           | CISO                | V5                  | deploy                        | Shipped       |
-| Air-gap overlay (Ollama sidecar)       | `docker-compose.airgap.yml` · `apps/docs/docs/operations/air-gapped.md`                      | CISO                | V5, P4              | deploy, pillars (P4)          | Shipped       |
+| Air-gap overlay (Ollama sidecar)       | `infra/compose/docker-compose.airgap.yml` · `apps/docs/docs/operations/air-gapped.md`        | CISO                | V5, P4              | deploy, pillars (P4)          | Shipped       |
 | BYOK per-tenant LLM credentials        | `services/api/app/models/tenant_llm.py` · `apps/web/src/components/settings/SettingsView.tsx`| CISO                | V5, P3              | deploy, pillars (P3)          | Shipped       |
 | L0–L4 maturity dial                    | `services/actions/app/services/maturity.py` · `apps/docs/docs/concepts/automation-maturity.md`| CISO                | V1, P3              | features-hunt, pillars (P3)   | Shipped       |
 | ChatOps approvals (Block Kit / Adaptive Cards) | `services/slack-bot/` · `services/notifications/.../adaptive_cards.py`                | Analyst, manager    | V1                  | features-hunt                 | Shipped (T3.6 wip) |

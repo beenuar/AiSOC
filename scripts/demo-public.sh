@@ -5,7 +5,7 @@
 # Composition of two things that already exist:
 #
 #   1. `pnpm aisoc:demo --no-open`  — boots the slim demo profile from
-#      docker-compose.demo.yml, waits for postgres + api + web, seeds canonical
+#      infra/compose/docker-compose.demo.yml, waits for postgres + api + web, seeds canonical
 #      data, kicks off an investigation. Defined in scripts/aisoc-demo.ts.
 #
 #   2. `infra/cloudflare/tunnel.sh` — creates / reuses the cloudflared tunnel
@@ -69,7 +69,7 @@ DOMAIN="${DOMAIN:-tryaisoc.com}"
 
 printf "%s%s── AiSOC public demo ──%s\n" "$C_BOLD" "$C_GREEN" "$C_RESET"
 printf "  domain   : %s%s%s\n" "$C_BOLD" "$DOMAIN" "$C_RESET"
-printf "  stack    : docker-compose.demo.yml (read-only profile, prebuilt images)\n"
+printf "  stack    : infra/compose/docker-compose.demo.yml (read-only profile, prebuilt images)\n"
 printf "  tunnel   : cloudflared (outbound only — no inbound ports needed)\n\n"
 
 # ---------------------------------------------------------------------------

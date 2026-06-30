@@ -103,7 +103,7 @@ function Confirm-Action {
 }
 
 # ─── Locate the AiSOC repo ──────────────────────────────────────────────────
-# We need the path to docker-compose.demo.yml so `docker compose down -v` can
+# We need the path to infra/compose/docker-compose.demo.yml so `docker compose down -v` can
 # resolve project resources cleanly. Prefer the directory two levels above
 # this script (script lives in <repo>/scripts/install/), then fall back to
 # the canonical $env:USERPROFILE\aisoc.
@@ -112,7 +112,7 @@ function Find-RepoRoot {
     # The uninstaller lives at the repo root, alongside install.ps1.
     $selfDir = Split-Path -Parent $PSCommandPath
     if ($selfDir -and
-        (Test-Path (Join-Path $selfDir 'docker-compose.demo.yml')) -and
+        (Test-Path (Join-Path $selfDir 'infra/compose/docker-compose.demo.yml')) -and
         (Test-Path (Join-Path $selfDir 'package.json'))) {
         $pkg = Get-Content (Join-Path $selfDir 'package.json') -Raw -ErrorAction SilentlyContinue
         if ($pkg -match '"name"\s*:\s*"aisoc"') {
@@ -121,11 +121,11 @@ function Find-RepoRoot {
     }
     # Fallback 1: $HOME/aisoc (where install.ps1 clones by default).
     $homePath = Join-Path $env:USERPROFILE 'aisoc'
-    if (Test-Path (Join-Path $homePath 'docker-compose.demo.yml')) {
+    if (Test-Path (Join-Path $homePath 'infra/compose/docker-compose.demo.yml')) {
         return $homePath
     }
     # Fallback 2: cwd is an aisoc clone.
-    if ((Test-Path (Join-Path (Get-Location) 'docker-compose.demo.yml')) -and
+    if ((Test-Path (Join-Path (Get-Location) 'infra/compose/docker-compose.demo.yml')) -and
         (Test-Path (Join-Path (Get-Location) 'package.json'))) {
         $pkg = Get-Content (Join-Path (Get-Location) 'package.json') -Raw -ErrorAction SilentlyContinue
         if ($pkg -match '"name"\s*:\s*"aisoc"') {
@@ -171,7 +171,7 @@ function Stop-DemoStack {
     Write-Info "Stopping AiSOC demo stack and removing its volumes..."
     Push-Location $RepoRoot
     try {
-        docker compose -f docker-compose.demo.yml down -v --remove-orphans
+        docker compose -f infra/compose/docker-compose.demo.yml down -v --remove-orphans
         if ($LASTEXITCODE -ne 0) {
             Write-Warn "compose down exited with code $LASTEXITCODE; some resources may not have been cleaned up."
         } else {
@@ -283,7 +283,7 @@ function Remove-RepoClone {
     # Final sanity check: target must look like an AiSOC clone. Stops us
     # from rm -rf'ing some unrelated dir the user happened to put in
     # %USERPROFILE%\aisoc.
-    $composeFile = Join-Path $target 'docker-compose.demo.yml'
+    $composeFile = Join-Path $target 'infra/compose/docker-compose.demo.yml'
     $pkgFile = Join-Path $target 'package.json'
     $looksLikeAiSOC = $false
     if ((Test-Path $composeFile) -and (Test-Path $pkgFile)) {

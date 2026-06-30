@@ -120,7 +120,7 @@ See the full [Architecture](./architecture) page for the detailed service map an
 ### Get started
 
 - [One-click install](./installation) — zero-prerequisite bootstrap for Linux, macOS, and Windows
-- [Quick Start](./quickstart) — `pnpm aisoc:demo`, under 5 minutes to a live investigation. The **Path C — founder-style CLI** flow (`docker compose -f docker-compose.dev.yml up -d` → `aisoc db upgrade` → `aisoc serve` → `aisoc submit examples/alerts/lateral-movement.json`) goes from fresh clone to a live alert at `http://localhost:3000/alerts` in under 90 seconds, with no Kafka / Fusion required for the first alert.
+- [Quick Start](./quickstart) — `pnpm aisoc:demo`, under 5 minutes to a live investigation. The **Path C — founder-style CLI** flow (`docker compose -f infra/compose/docker-compose.dev.yml up -d` → `aisoc db upgrade` → `aisoc serve` → `aisoc submit examples/alerts/lateral-movement.json`) goes from fresh clone to a live alert at `http://localhost:3000/alerts` in under 90 seconds, with no Kafka / Fusion required for the first alert.
 - [Architecture](./architecture) — service map and data flow
 - [Glossary](./glossary) — security and AiSOC-specific terminology in one place
 - [FAQ](./operations/faq) — common questions about scope, deployment, data, and licensing

@@ -1,7 +1,7 @@
 ###############################################################################
 # AiSOC — Air-gapped / Local-LLM overlay
 #
-# Extends docker-compose.demo.yml to run entirely without external LLM calls.
+# Extends infra/compose/docker-compose.demo.yml to run entirely without external LLM calls.
 # Adds an Ollama service with a pinned model and sets AISOC_AIRGAPPED=true on
 # every service that calls an LLM.
 #
@@ -11,8 +11,8 @@
 #
 # Usage (air-gapped demo):
 #   docker compose \
-#     -f docker-compose.demo.yml \
-#     -f docker-compose.airgap.yml \
+#     -f infra/compose/docker-compose.demo.yml \
+#     -f infra/compose/docker-compose.airgap.yml \
 #     up -d
 #
 # The init container below will pull the model automatically on first boot.

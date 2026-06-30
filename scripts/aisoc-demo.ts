@@ -5,7 +5,7 @@
  * Steps:
  *   1. Verify Docker + docker compose are present
  *   2. Pull prebuilt images from ghcr.io/beenuar/* (no local builds)
- *   3. docker compose up -d using docker-compose.demo.yml (slim profile)
+ *   3. docker compose up -d using infra/compose/docker-compose.demo.yml (slim profile)
  *      — the `seed` service runs `python -m app.scripts.seed_demo` once
  *      automatically when the api is healthy, then exits cleanly.
  *   4. Wait for postgres + api to be healthy
@@ -46,7 +46,7 @@ import { join } from "node:path";
 import { platform } from "node:os";
 
 const ROOT = join(__dirname, "..");
-const COMPOSE_FILE = join(ROOT, "docker-compose.demo.yml");
+const COMPOSE_FILE = join(ROOT, "infra/compose/docker-compose.demo.yml");
 const STARTED_AT = Date.now();
 
 // Per-phase timing for the v1.0 ≤5-min acceptance gate. Each step()
@@ -638,7 +638,7 @@ function seedData(flags: Flags): boolean {
     ? "Seeding 4 deterministic DEMO-* cases (--demo-quick)"
     : "Ensuring canonical demo data is seeded";
   step(5, 7, label);
-  // The `seed` service in docker-compose.demo.yml runs `python -m
+  // The `seed` service in infra/compose/docker-compose.demo.yml runs `python -m
   // app.scripts.seed_demo` automatically once the api healthcheck passes
   // and then exits. We re-run it here as a safety net for two cases:
   //   - the seed container failed silently (network blip pulling the
@@ -813,8 +813,8 @@ ${c.bold(c.green("AiSOC demo is up."))}
 
 ${c.dim("Useful commands:")}
   pnpm aisoc:doctor                           ${c.dim("# health check")}
-  docker compose -f docker-compose.demo.yml logs -f api
-  docker compose -f docker-compose.demo.yml down -v   ${c.dim("# stop & wipe demo data")}
+  docker compose -f infra/compose/docker-compose.demo.yml logs -f api
+  docker compose -f infra/compose/docker-compose.demo.yml down -v   ${c.dim("# stop & wipe demo data")}
 
 ${c.bold("Total elapsed:")} ${c.green(elapsed())}
 `);

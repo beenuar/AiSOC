@@ -206,7 +206,7 @@ images and signed plugin bundles. See [Operations → Air-gapped](./operations/a
 **APScheduler** — Python in-process job scheduler used by connectors
 (per-instance polling) and Hunt-as-Code (continuous hunt execution).
 
-**Demo profile** — Slim Docker Compose stack (`docker-compose.demo.yml`)
+**Demo profile** — Slim Docker Compose stack (`infra/compose/docker-compose.demo.yml`)
 spun up by `pnpm aisoc:demo`. Pulls prebuilt GHCR images, seeds canonical
 data, and lands you on a live case.
 

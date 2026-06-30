@@ -727,7 +727,7 @@ ensure_repo() {
 # ─── Step 6: .env bootstrap ──────────────────────────────────────────────────
 
 ensure_env_file() {
-  # docker-compose.demo.yml hardcodes its own dev passwords (see SECURITY NOTE
+  # infra/compose/docker-compose.demo.yml hardcodes its own dev passwords (see SECURITY NOTE
   # in that file), so .env isn't actually load-bearing for the demo. But
   # several apps and scripts do read .env, so we make sure it exists with
   # the example defaults to avoid spurious "key not found" warnings.

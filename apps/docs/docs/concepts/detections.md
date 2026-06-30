@@ -106,7 +106,7 @@ provenance:
 ```
 
 The full attribution table for every redistributed corpus lives in the repo's
-[`LICENSES.md`](https://github.com/beenuar/AiSOC/blob/main/LICENSES.md).
+[`.github/LICENSES.md`](https://github.com/beenuar/AiSOC/blob/main/.github/LICENSES.md).
 
 ### Quarantine
 

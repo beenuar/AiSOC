@@ -197,7 +197,7 @@ async function checkDocker() {
 
   // Use `docker ps -a` instead of `docker compose ps` so we discover
   // containers across compose projects (the demo stack uses
-  // `-f docker-compose.demo.yml` which is a separate project) AND so we can
+  // `-f infra/compose/docker-compose.demo.yml` which is a separate project) AND so we can
   // distinguish "container never created" from "container exited" — the most
   // common silent failure mode is the data tier (postgres, redis, kafka)
   // exiting 255 after a Docker Desktop restart while upper services keep

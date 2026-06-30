@@ -14,8 +14,8 @@
 #   pnpm aisoc:demo
 #
 # Manual usage:
-#   docker compose -f docker-compose.demo.yml pull
-#   docker compose -f docker-compose.demo.yml up -d
+#   docker compose -f infra/compose/docker-compose.demo.yml pull
+#   docker compose -f infra/compose/docker-compose.demo.yml up -d
 #
 # SECURITY NOTE
 # -------------
@@ -125,9 +125,10 @@ services:
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
     # Local build context for `pnpm aisoc:demo --rebuild`. Without this the
     # `--build` flag is a no-op because compose has nothing to build from.
-    # When pulling prebuilt images this block is ignored.
+    # When pulling prebuilt images this block is ignored. Paths are relative
+    # to this file (infra/compose/), hence `../../services/...`.
     build:
-      context: ./services/api
+      context: ../../services/api
     container_name: aisoc-demo-api
     # `missing` lets `pnpm aisoc:demo --rebuild` use locally built images
     # without being clobbered by a registry pull. Compose still pulls when
@@ -173,7 +174,7 @@ services:
   agents:
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_TAG:-latest}
     build:
-      context: ./services/agents
+      context: ../../services/agents
     container_name: aisoc-demo-agents
     pull_policy: missing
     depends_on:
@@ -198,7 +199,7 @@ services:
   realtime:
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_TAG:-latest}
     build:
-      context: ./services/realtime
+      context: ../../services/realtime
     container_name: aisoc-demo-realtime
     pull_policy: missing
     depends_on:
@@ -229,7 +230,7 @@ services:
   seed:
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_TAG:-latest}
     build:
-      context: ./services/api
+      context: ../../services/api
     container_name: aisoc-demo-seed
     pull_policy: missing
     depends_on:
@@ -256,7 +257,7 @@ services:
     # proxies those to the services below using the Docker DNS targets in
     # `environment:`.
     build:
-      context: .
+      context: ../..
       dockerfile: apps/web/Dockerfile
       # Next.js bakes rewrite destinations into routes-manifest.json at
       # `next build` time, not at `next start`. These args MUST match the

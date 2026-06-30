@@ -33,8 +33,10 @@ def runner() -> CliRunner:
 def fake_repo(tmp_path: Path) -> Path:
     """A minimal repo root with both compose files and a built MCP dist."""
     (tmp_path / "docker-compose.yml").write_text("services: {}\n")
-    (tmp_path / "docker-compose.dev.yml").write_text(
-        "include:\n  - path: docker-compose.yml\n"
+    compose_dir = tmp_path / "infra" / "compose"
+    compose_dir.mkdir(parents=True)
+    (compose_dir / "docker-compose.dev.yml").write_text(
+        "include:\n  - path: ../../docker-compose.yml\n"
     )
     mcp_dist = tmp_path / "services" / "mcp" / "dist"
     mcp_dist.mkdir(parents=True)

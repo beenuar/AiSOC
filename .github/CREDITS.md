@@ -69,6 +69,6 @@ You're added automatically if:
 - You reported a security issue that was acknowledged and triaged (via [private advisory](https://github.com/beenuar/AiSOC/security/advisories/new) or a confirmed public issue)
 - You filed a high-signal issue that drove a real change in the codebase
 
-If something landed because of you and you're not on this list, that's a bug — please open a PR against `CREDITS.md` and we'll merge it.
+If something landed because of you and you're not on this list, that's a bug — please open a PR against `.github/CREDITS.md` and we'll merge it.
 
 Thank you for making AiSOC better.

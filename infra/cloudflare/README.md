@@ -9,7 +9,7 @@ own machine without opening a single inbound port on your router or firewall.
 
 > **Why a tunnel and not a direct LAN bind?**
 > Compose binds every service port to `127.0.0.1` by default (see
-> `docker-compose.yml` and `docker-compose.demo.yml`). That keeps the dev
+> `docker-compose.yml` and `infra/compose/docker-compose.demo.yml`). That keeps the dev
 > passwords that ship with the repo from leaking onto your LAN. The tunnel
 > punches a single outbound TLS connection to Cloudflare and lets us route
 > traffic in front of `cloudflared` instead of in front of Compose.
@@ -143,7 +143,7 @@ If you'd rather drive the pieces yourself:
 
 ```sh
 # 1. Make sure the stack is up.
-pnpm aisoc:demo            # or: docker compose -f docker-compose.demo.yml up -d
+pnpm aisoc:demo            # or: docker compose -f infra/compose/docker-compose.demo.yml up -d
 
 # 2. Bring up the tunnel.
 bash infra/cloudflare/tunnel.sh

@@ -135,7 +135,7 @@ provenance:
 
 `provenance.license` and `provenance.license_url` cover the legal redistribution
 story; the canonical attribution table for every redistributed corpus lives in
-[`LICENSES.md`](../LICENSES.md). Without that file we cannot legally redistribute
+[`.github/LICENSES.md`](../.github/LICENSES.md). Without that file we cannot legally redistribute
 imported content.
 
 ### Quarantine

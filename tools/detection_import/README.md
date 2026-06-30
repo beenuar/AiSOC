@@ -67,5 +67,5 @@ Detection rules drift. SigmaHQ moves a rule from `experimental/` into `stable/`,
 
 1. Create `tools/detection_import/<name>_importer.py` with a `def import_rules(commit: str, *, output_root: Path | None = None) -> list[ImportedRule]` entrypoint.
 2. Wire it into `tools/detection_import/import_orchestrator.py`.
-3. Document the upstream license in [`LICENSES.md`](../../LICENSES.md).
+3. Document the upstream license in [`.github/LICENSES.md`](../../.github/LICENSES.md).
 4. Update [`detections/README.md`](../../detections/README.md) with the new tier.

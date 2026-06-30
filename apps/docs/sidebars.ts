@@ -110,6 +110,7 @@ const sidebars: SidebarsConfig = {
         "operations/secrets",
         "operations/airgap",
         "operations/air-gapped",
+        "operations/codespaces",
         "operations/theming",
         "operations/upgrades",
         "operations/notifications",

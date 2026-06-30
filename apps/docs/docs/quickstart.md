@@ -52,7 +52,7 @@ That single command:
 
 1. Pulls prebuilt images from `ghcr.io/beenuar/*` (≈90s on a warm cache).
 2. Brings up the slim demo profile defined in
-   [`docker-compose.demo.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.demo.yml):
+   [`infra/compose/docker-compose.demo.yml`](https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.demo.yml):
    `postgres`, `redis`, `kafka`, `api`, `agents`, `realtime`, `web`.
 3. Waits for healthchecks to go green.
 4. Seeds canonical demo data (tenants, users, alerts, IOCs, attack paths).
@@ -293,7 +293,7 @@ You should see the operator commands: `serve`, `db`, `mcp`, `submit`,
 aisoc serve
 ```
 
-Under the hood this runs `docker compose -f docker-compose.dev.yml up -d`
+Under the hood this runs `docker compose -f infra/compose/docker-compose.dev.yml up -d`
 against the full dev profile (Postgres, Redis, Kafka, ClickHouse, api,
 agents, fusion, ingest-worker, web, mcp, …). The command resolves the repo
 root automatically, so it works from any subdirectory.
@@ -418,7 +418,7 @@ run `pnpm build`.
 ### 7. Tear down
 
 ```bash
-docker compose -f docker-compose.dev.yml down
+docker compose -f infra/compose/docker-compose.dev.yml down
 ```
 
 Or keep the stack running and re-submit different fixtures — `aisoc

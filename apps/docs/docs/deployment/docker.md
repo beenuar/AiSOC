@@ -8,7 +8,7 @@ AiSOC ships three Compose flavors. Pick the one that matches what you are doing.
 
 | File | Purpose | When to use |
 |------|---------|-------------|
-| `docker-compose.demo.yml` | Streamlined demo with seeded data | Trying AiSOC for the first time |
+| `infra/compose/docker-compose.demo.yml` | Streamlined demo with seeded data | Trying AiSOC for the first time |
 | `docker-compose.yml` | Full developer stack | Active development against real source |
 | `docker-compose.prod.yml` | Production-leaning stack | Self-hosting on a single VM |
 
@@ -27,7 +27,7 @@ URL of the resulting case in roughly 3-4 minutes on a warm Docker daemon.
 pnpm aisoc:demo
 ```
 
-Behind the scenes this runs `docker compose -f docker-compose.demo.yml up -d`
+Behind the scenes this runs `docker compose -f infra/compose/docker-compose.demo.yml up -d`
 against `ghcr.io/beenuar/aisoc-*` images (with `pull_policy: missing`, so
 re-runs don't re-pull). Stop it with:
 

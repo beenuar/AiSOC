@@ -162,7 +162,7 @@ In order of how often this is the cause:
 1. **Migrations weren't applied on a fresh clone.** The `alerts` table needs the v7.3.1 schema (eleven columns added by `042_alerts_schema_drift_fix.sql`). Run `aisoc db upgrade` — it's idempotent, so re-running on an already-migrated database is safe. If you see `column "..." of relation "alerts" does not exist` in `docker compose logs api`, this is the cause.
 2. **`AISOC_CREDENTIAL_KEY` mismatch.** The submit endpoint writes through the same vault decrypt path as the rest of the API. If the API service was started with a different key than the one in `.env`, the row inserts but downstream lookups (e.g. tenant resolution) fail silently. Stop the stack, set the key in `.env`, restart.
 3. **Wrong tenant filter in the UI.** The web console scopes `/alerts` to the currently selected tenant. `aisoc submit` defaults to the dev tenant. If you've switched tenants in the UI, you won't see the row. Switch back to the dev tenant or pass `--tenant` to `aisoc submit`.
-4. **API is on a port other than 8000.** `aisoc submit` reads `AISOC_API_URL` (default `http://localhost:8000`). If you remapped the port in `docker-compose.dev.yml`, set the env var.
+4. **API is on a port other than 8000.** `aisoc submit` reads `AISOC_API_URL` (default `http://localhost:8000`). If you remapped the port in `infra/compose/docker-compose.dev.yml`, set the env var.
 
 Confirm the row really landed:
 

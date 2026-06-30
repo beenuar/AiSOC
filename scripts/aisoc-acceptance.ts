@@ -64,7 +64,7 @@ import { hostname, platform, release } from "node:os";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "..");
-const COMPOSE_FILE = join(ROOT, "docker-compose.demo.yml");
+const COMPOSE_FILE = join(ROOT, "infra/compose/docker-compose.demo.yml");
 const HISTORY_DIR = join(ROOT, ".aisoc");
 const HISTORY_FILE = join(HISTORY_DIR, "acceptance-history.jsonl");
 const DEFAULT_BUDGET_MS = 5 * 60 * 1000; // WS-A acceptance: 5 minutes.

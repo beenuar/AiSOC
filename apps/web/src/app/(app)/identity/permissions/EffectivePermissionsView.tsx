@@ -554,7 +554,7 @@ export function EffectivePermissionsView() {
                 The backend resolver for {PROVIDER_LABEL[provider]} is registered but
                 not yet wired up to the live snapshot store. Switch to AWS to see a
                 fully resolved Cytoscape graph, or watch{' '}
-                <span className="font-mono text-xs">AISOC_V8_PROGRESS.md</span>{' '}
+                <span className="font-mono text-xs">docs/roadmap/v8-progress.md</span>{' '}
                 for the next provider rollout.
               </p>
             </div>

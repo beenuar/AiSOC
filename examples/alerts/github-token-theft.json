@@ -1,0 +1,56 @@
+{
+  "_description": "GitHub PAT theft: a personal-access token tied to `carol@example.com` is used from an ASN the org has never previously contacted, against six private repositories in 11 seconds. Four `git.clone` audit events shown (full run had 6). Routes through the `github_audit` connector profile.",
+  "_usage": "aisoc submit examples/alerts/github-token-theft.json   # real ingest\nbasoc-sandbox demo --scenario github-token-theft   # offline simulator",
+  "_mitre_techniques": ["T1078", "T1555", "T1567"],
+  "_severity": "high",
+  "events": [
+    {
+      "uuid": "gh-001",
+      "@timestamp": "2026-06-25T18:01:22Z",
+      "action": "git.clone",
+      "actor": "carol",
+      "actor_location": {"country_code": "RO"},
+      "repo": "acme/customer-api",
+      "org": "acme",
+      "user_agent": "git/2.42.0",
+      "hashed_token_id": "ghp_xxxAAAAA",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-002",
+      "@timestamp": "2026-06-25T18:01:24Z",
+      "action": "git.clone",
+      "actor": "carol",
+      "actor_location": {"country_code": "RO"},
+      "repo": "acme/billing-svc",
+      "org": "acme",
+      "user_agent": "git/2.42.0",
+      "hashed_token_id": "ghp_xxxAAAAA",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-003",
+      "@timestamp": "2026-06-25T18:01:27Z",
+      "action": "git.clone",
+      "actor": "carol",
+      "actor_location": {"country_code": "RO"},
+      "repo": "acme/secrets-vault",
+      "org": "acme",
+      "user_agent": "git/2.42.0",
+      "hashed_token_id": "ghp_xxxAAAAA",
+      "source_ip": "192.0.2.55"
+    },
+    {
+      "uuid": "gh-004",
+      "@timestamp": "2026-06-25T18:01:33Z",
+      "action": "git.clone",
+      "actor": "carol",
+      "actor_location": {"country_code": "RO"},
+      "repo": "acme/iam",
+      "org": "acme",
+      "user_agent": "git/2.42.0",
+      "hashed_token_id": "ghp_xxxAAAAA",
+      "source_ip": "192.0.2.55"
+    }
+  ]
+}

@@ -72,7 +72,7 @@ if (-not $InstallRoot) {
     }
 }
 
-# These ports must match docker-compose.demo.yml. If you change ports
+# These ports must match infra/compose/docker-compose.demo.yml. If you change ports
 # there, change them here, otherwise users get false negatives.
 $script:PfRequiredPorts = @(
     @{ Port = 3000; Name = "web console"      },

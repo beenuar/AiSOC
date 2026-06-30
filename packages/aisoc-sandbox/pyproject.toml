@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aisoc-sandbox"
+version = "0.1.0"
+description = "Run an AiSOC agent investigation offline in under 30 seconds. No Docker, no API key."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "AiSOC contributors" }]
+keywords = ["aisoc", "soc", "security", "agent", "investigation", "ledger", "offline"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+
+# Zero runtime dependencies on purpose. The whole point of the sandbox
+# is that `pip install aisoc-sandbox && aisoc-sandbox demo` works on a
+# clean machine inside 30 seconds.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/beenuar/AiSOC"
+Documentation = "https://docs.tryaisoc.com"
+Source = "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-sandbox"
+Issues = "https://github.com/beenuar/AiSOC/issues"
+Changelog = "https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md"
+
+[project.scripts]
+aisoc-sandbox = "aisoc_sandbox.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aisoc_sandbox = ["scenarios/*.json", "py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]

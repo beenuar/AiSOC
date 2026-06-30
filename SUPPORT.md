@@ -32,7 +32,7 @@ submissions, each of which has its own template.
 ## 3. Try the live demo
 
 <https://tryaisoc.com> is a community-maintained Fly.io instance. It can
-go offline (see [LIVE-DEMO.md](LIVE-DEMO.md)). When that happens, the
+go offline (see [docs/operations/live-demo-runbook.md](docs/operations/live-demo-runbook.md)). When that happens, the
 always-on fallback is the
 [Codespaces quickstart](https://codespaces.new/beenuar/AiSOC?quickstart=1) —
 zero local install, runs in your browser.
@@ -52,7 +52,7 @@ Please include:
 **Do not open a public issue or discussion for a security issue.**
 Use [GitHub Security Advisories](https://github.com/beenuar/AiSOC/security/advisories/new)
 or follow the [SECURITY.md](SECURITY.md) policy. We follow coordinated
-disclosure and credit reporters in [CREDITS.md](CREDITS.md).
+disclosure and credit reporters in [.github/CREDITS.md](.github/CREDITS.md).
 
 ## 6. Contribute
 

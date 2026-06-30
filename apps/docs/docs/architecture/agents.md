@@ -172,7 +172,7 @@ old names) continue to work. The aliases resolve to the new façade:
 
 New code should import the four branded classes directly. Aliases will
 remain importable for the v8.x line; deprecation timing tracks in
-`AISOC_V8_PROGRESS.md`.
+`docs/roadmap/v8-progress.md`.
 
 ---
 

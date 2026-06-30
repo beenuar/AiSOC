@@ -71,7 +71,7 @@ readonly _PF_DISK_REC_GB=20
 # Ports the demo stack exposes on the host. We probe each one and (a)
 # tolerate it being free, (b) tolerate it being held by an aisoc-* container
 # from a previous run, but (c) fail if it's held by anything else. The list
-# is kept in lockstep with docker-compose.demo.yml — when a port is added
+# is kept in lockstep with infra/compose/docker-compose.demo.yml — when a port is added
 # there, add it here too.
 #
 # Using parallel arrays instead of an associative array because macOS still
@@ -215,7 +215,7 @@ _pf_port_owner() {
 
 # Returns 0 if the given port-owner string indicates an AiSOC container —
 # i.e. a previous demo run we can safely reuse / restart. The names come
-# from docker-compose.demo.yml + the project's compose project name
+# from infra/compose/docker-compose.demo.yml + the project's compose project name
 # (defaults to the directory name, usually "aisoc").
 #
 # We can't use ${var,,} (bash 4+) here because macOS still ships bash 3.2

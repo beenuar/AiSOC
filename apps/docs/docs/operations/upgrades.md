@@ -76,7 +76,7 @@ aisoc db upgrade
 #    (Equivalent to: cd services/api && uv run alembic upgrade head)
 
 # 5. Start the API service back up.
-docker compose -f docker-compose.dev.yml up -d api
+docker compose -f infra/compose/docker-compose.dev.yml up -d api
 
 # 6. Verify health and remove the maintenance gate.
 curl -fsS http://localhost:8000/healthz
@@ -114,7 +114,7 @@ git checkout v7.3.0           # the previous tag
 pnpm install --frozen-lockfile
 (cd services/api && uv sync)
 (cd services/api && uv run alembic downgrade <previous_revision>)
-docker compose -f docker-compose.dev.yml up -d api
+docker compose -f infra/compose/docker-compose.dev.yml up -d api
 ```
 
 Major releases occasionally ship one-way migrations (e.g. column drops). When that's the case, the CHANGELOG flags the migration as "irreversible" and the only rollback is restoring from the database snapshot you took in step 2 of the pre-upgrade checklist.

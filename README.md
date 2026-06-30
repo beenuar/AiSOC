@@ -17,7 +17,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 [![Live demo on Fly.io](https://img.shields.io/badge/Live%20demo-tryaisoc.com-7b2bbe?style=for-the-badge&logo=fly-dot-io&logoColor=white)](https://tryaisoc.com)
 [![Render demo (one-click)](https://img.shields.io/badge/Render-one--click-46e3b7?style=for-the-badge&logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
 
-<sub>The community-maintained demo at <a href="https://tryaisoc.com">tryaisoc.com</a> runs on Fly.io and can go offline; see <a href="LIVE-DEMO.md">LIVE-DEMO.md</a> and use Codespaces as the always-on fallback.</sub>
+<sub>The community-maintained demo at <a href="https://tryaisoc.com">tryaisoc.com</a> runs on Fly.io and can go offline; see <a href="docs/operations/live-demo-runbook.md">docs/operations/live-demo-runbook.md</a> and use Codespaces as the always-on fallback.</sub>
 
 <br />
 
@@ -31,15 +31,16 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 
 ## Try AiSOC in 60 seconds
 
-Three fastest paths to a live, seeded AiSOC investigation. Pick whichever matches what you already have on your machine:
+Four fastest paths to a working AiSOC investigation. Pick whichever matches what you already have on your machine:
 
 | If you have…                          | Run this                                                                                                 | What you get                                                                                       |
 |---------------------------------------|----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
+| **Python 3.10+** (no Docker)          | `pip install -e packages/aisoc-sandbox && aisoc-sandbox demo`                                            | Offline agent investigation walked through Detect → Triage → Hunt → Respond and printed to stdout. **< 5 s.** No API key, no network. |
 | **A browser** (zero install)          | [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)                                  | Browser IDE → `pnpm aisoc:demo --no-open` → click forwarded port `3000`. ~5 min cold.              |
 | **Docker + pnpm**                     | `git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo`                              | Local stack on Postgres + Redis + Kafka + api + agents + web. Browser opens at `INC-RT-001`.       |
 | **Nothing** (clean Linux/macOS/Win)   | `curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh \| bash`                     | Bootstraps Docker, Node, pnpm, git for you; then runs `pnpm aisoc:demo`.                           |
 
-You land on `/cases/INC-RT-001?tab=ledger`: a LockBit 3.0 ransomware case mid-investigation, with the AI agent's prompts, tool calls, and rationale streaming into the [Investigation Ledger](apps/docs/docs/console/investigation-rail.md). Stop with `pnpm aisoc:demo:down`.
+The first row is new: [`aisoc-sandbox`](packages/aisoc-sandbox/) is a zero-dependency, in-memory simulator of the agent funnel. Pick a [bundled scenario](packages/aisoc-sandbox/README.md#bundled-scenarios) (`lateral-movement`, `aws-credential-exfil`, `phishing-payload`, `kubernetes-privesc`, `github-token-theft`) or feed in your own JSON via `--file`. The other three rows boot the real stack and land you on `/cases/INC-RT-001?tab=ledger` — a LockBit 3.0 ransomware case mid-investigation, with the AI agent's prompts, tool calls, and rationale streaming into the [Investigation Ledger](apps/docs/docs/console/investigation-rail.md). Stop the real stack with `pnpm aisoc:demo:down`.
 
 > **Does the demo still boot on `main`?** Every push runs [`compose-smoke`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml) (the same `pnpm aisoc:demo` path you'd run locally) and [`e2e`](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml) against the seeded console; nightly [`compose-smoke-nightly`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml) repeats it with cold caches. A red badge below is a release-blocker.
 >
@@ -198,7 +199,7 @@ Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/p
 - **Latest GitHub release with downloads:** <https://github.com/beenuar/AiSOC/releases/latest>
 - **Per-release narrative:** [`RELEASES.md`](RELEASES.md) (mirrors what used to live in this README)
 - **Machine-readable inventory with file paths, env-var diffs, test counts:** [`CHANGELOG.md`](CHANGELOG.md)
-- **v8.0 wave-2 in flight (`[~]` items):** [`AISOC_V8_PROGRESS.md`](AISOC_V8_PROGRESS.md)
+- **v8.0 wave-2 in flight (`[~]` items):** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
 - **Bigger-picture roadmap (BYOC multi-cloud, MSSP rollups, federated search):** [`ROADMAP.md`](ROADMAP.md)
 
 ---
@@ -213,7 +214,7 @@ First-time contributors: pick a [`good first issue`](https://github.com/beenuar/
 
 ## Credits
 
-AiSOC is built and improved by a growing community of contributors, security researchers, and operators. The full attribution — including bug reporters and security researchers — lives in [`CREDITS.md`](CREDITS.md). The always-up-to-date code-contribution graph is on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
+AiSOC is built and improved by a growing community of contributors, security researchers, and operators. The full attribution — including bug reporters and security researchers — lives in [`.github/CREDITS.md`](.github/CREDITS.md). The always-up-to-date code-contribution graph is on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
 
 ---
 

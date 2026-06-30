@@ -324,7 +324,7 @@ version: v1.0
 Versioning rules:
 
 - **Additive changes** (a new optional property on an existing label, a new node label, a new relationship type) bump the **minor** component: `v1.0 → v1.1`.
-- **Breaking changes** (renaming or removing a label / relationship / required property, narrowing a type) bump the **major** component: `v1.0 → v2.0`. A major bump requires a migration note in `MIGRATION.md` and a compatibility shim for at least one minor release.
+- **Breaking changes** (renaming or removing a label / relationship / required property, narrowing a type) bump the **major** component: `v1.0 → v2.0`. A major bump requires a migration note in `docs/upgrade/MIGRATION.md` and a compatibility shim for at least one minor release.
 - **Every** schema change must touch three places in the same PR:
   1. `schemas/graph-schema.yaml`
   2. `services/ingest/internal/graph/schema.go` (the Go enums consumed by the ingest writer)
