@@ -14,7 +14,22 @@ updates:
       radix-ui:
         patterns: ["@radix-ui/*"]
       dev-tooling:
-        patterns: ["typescript", "eslint*", "@typescript-eslint/*", "tailwindcss*", "postcss*"]
+        # NOTE: `eslint*` and `@typescript-eslint/*` deliberately quarantined
+        # below — see the `dev-tooling-eslint` group. ESLint 10 changed the
+        # rule-context API in a way that `eslint-plugin-react@7.37.5`
+        # doesn't support (`TypeError: contextOrFilename.getFilename is not
+        # a function`), so the whole `eslint` family stays out of this group
+        # until `eslint-plugin-react` ships an ESLint-10-compatible release.
+        # Tracking issue: see the open `eslint-plugin-react / ESLint 10`
+        # issue in this repo.
+        patterns: ["typescript", "tailwindcss*", "postcss*"]
+      dev-tooling-eslint:
+        # Quarantined ESLint family. Dependabot still opens these PRs, but
+        # they land separately so a single incompatible plugin can't block
+        # the whole `dev-tooling` group from merging. Remove this group
+        # (and merge it back into `dev-tooling`) once
+        # `eslint-plugin-react` is ESLint-10-compatible.
+        patterns: ["eslint*", "@typescript-eslint/*"]
 
   # ── pip (api) ────────────────────────────────────────────────
   - package-ecosystem: pip
