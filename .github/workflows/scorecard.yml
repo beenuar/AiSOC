@@ -15,9 +15,8 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     permissions:
-      # Needed to upload the results to code-scanning dashboard.
-      security-events: write
-      # Needed to publish results and get a badge (see publish_results below).
+      # Needed to publish results to the public Scorecard API (drives the
+      # README badge at https://api.securityscorecards.dev/projects/...).
       id-token: write
       contents: read
       actions: read
@@ -32,6 +31,10 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+          # publish_results writes the score to the public Scorecard API so
+          # the README badge stays live. The score lives at
+          # https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC
+          # and is the single source of truth for our Scorecard signal.
           publish_results: true
 
       - name: Upload artifact
@@ -41,7 +44,20 @@ jobs:
           path: results.sarif
           retention-days: 5
 
-      - name: Upload to code-scanning
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
+      # NOTE: we deliberately do NOT upload the SARIF to GitHub's code-scanning
+      # dashboard.
+      #
+      # Why: Scorecard emits one finding per check (pinned-deps, vulnerabilities,
+      # fuzzing, code-review, etc.). These are score-tracking *metadata* — the
+      # score itself is the actionable signal, not the per-check rows. On a
+      # repo this size that's hundreds of alerts that drown out real CodeQL /
+      # secret-scanning findings. Maintainers should consume the Scorecard
+      # signal via:
+      #
+      #   * The README badge (always live, driven by publish_results above).
+      #   * The public Scorecard viewer linked from the badge.
+      #   * The uploaded SARIF artifact above for ad-hoc local inspection.
+      #
+      # If we ever want individual Scorecard rows in the code-scanning dashboard
+      # again, add back the github/codeql-action/upload-sarif step here AND add
+      # `security-events: write` to the permissions block above.

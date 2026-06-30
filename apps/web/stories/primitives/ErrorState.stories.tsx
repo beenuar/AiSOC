@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import React from 'react';
 import { ErrorState } from '@/components/ui/ErrorState';
 
 const meta: Meta<typeof ErrorState> = {

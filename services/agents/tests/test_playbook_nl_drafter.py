@@ -43,7 +43,7 @@ from app.playbook import (
 def _run(coro: Any) -> Any:
     """Run an awaitable synchronously, with one event loop per call."""
 
-    return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.run(coro)
+    return asyncio.run(coro)
 
 
 def _step_types(pb: Playbook) -> list[str]:
