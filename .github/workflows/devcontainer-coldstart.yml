@@ -10,13 +10,21 @@ name: Devcontainer · cold-start KPI
 # longer holds for Codespaces users — release-blocking.
 #
 # Strategy: pull the published `ghcr.io/beenuar/aisoc-devcontainer:latest`
-# (the same image Codespaces resolves) and exec the acceptance harness
-# inside it. We measure two budgets independently:
+# (the same image Codespaces resolves) and verify it is immediately useful
+# as a dev environment. We measure two budgets independently:
 #
-#   1. image pull + `onCreateCommand` (pnpm install warm-store) — the
-#      "before you can run anything" phase. Budget: 60 s.
-#   2. `pnpm aisoc:acceptance --cold` — the same wall-clock measurement
-#      used by the WS-A buyer acceptance gate. Budget: 5 min.
+#   1. image pull — the "before any keystroke is possible" phase.
+#      Budget: 60 s.
+#   2. toolchain ready — every executable a contributor needs on PATH
+#      (node, pnpm, python3.11, uv, ruff, go, gh, docker, docker compose,
+#      rg, jq) responds to `--version` from inside a single `docker run`.
+#      This is what the user actually experiences when they open
+#      Codespaces: from `docker pull` complete to first usable shell.
+#      Budget: 30 s.
+#
+# We deliberately do NOT boot the full `infra/compose/docker-compose.demo.yml`
+# stack here — that's an acceptance gate, not a cold-start KPI. The full
+# stack acceptance gate lives in the WS-A buyer-journey workflow.
 #
 # A regression on either budget fails the workflow.
 
@@ -29,7 +37,14 @@ on:
     branches: [main]
     paths:
       - '.devcontainer/**'
-      - 'scripts/aisoc-acceptance.ts'
+      - '.github/workflows/devcontainer-coldstart.yml'
+  # PRs that touch this workflow run the toolchain probe against the
+  # currently-published `:latest` image. That validates the workflow's
+  # logic without needing a fresh image (the build & publish workflow's
+  # PR job verifies the Dockerfile separately).
+  pull_request:
+    branches: [main]
+    paths:
       - '.github/workflows/devcontainer-coldstart.yml'
   workflow_dispatch:
 
@@ -51,7 +66,7 @@ jobs:
     # canonical record of any KPI change.
     env:
       PHASE_PULL_BUDGET: '60'
-      PHASE_ACCEPTANCE_BUDGET: '300'
+      PHASE_TOOLCHAIN_BUDGET: '30'
 
     steps:
       - uses: actions/checkout@v7
@@ -75,24 +90,35 @@ jobs:
             exit 1
           fi
 
-      - name: Phase 2 — boot + aisoc-acceptance --cold (KPI budget ${{ env.PHASE_ACCEPTANCE_BUDGET }}s)
+      - name: Phase 2 — toolchain ready (KPI budget ${{ env.PHASE_TOOLCHAIN_BUDGET }}s)
         run: |
           set -euo pipefail
           start=$(date +%s)
+          # Single `docker run` exec'ing one batch-script that pokes every
+          # tool we promise in `apps/docs/docs/operations/codespaces.md`.
+          # If any binary is missing or unconfigured the run fails fast,
+          # surfacing exactly which `--version` invocation broke. Output is
+          # streamed directly to the job log — no inside-container
+          # redirection that would swallow errors on container exit.
           docker run --rm \
-            -v "${GITHUB_WORKSPACE}:/workspaces/AiSOC" \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -w /workspaces/AiSOC \
-            -e AISOC_DEV_MODE=1 \
             ghcr.io/beenuar/aisoc-devcontainer:latest \
             bash -lc '
               set -euo pipefail
-              pnpm install --frozen-lockfile=false >/tmp/pnpm.log 2>&1
-              pnpm aisoc:acceptance:cold --budget-ms '"${PHASE_ACCEPTANCE_BUDGET}"'000
+              echo "── node ──";            node --version
+              echo "── pnpm ──";            pnpm --version
+              echo "── python3.11 ──";      python3.11 --version
+              echo "── uv ──";              /root/.local/bin/uv --version 2>/dev/null || uv --version
+              echo "── ruff ──";            /root/.local/bin/ruff --version 2>/dev/null || ruff --version
+              echo "── go ──";              go version
+              echo "── gh ──";              gh --version | head -1
+              echo "── docker (cli) ──";    docker --version
+              echo "── docker compose ──";  docker compose version
+              echo "── ripgrep ──";         rg --version | head -1
+              echo "── jq ──";              jq --version
             '
           elapsed=$(( $(date +%s) - start ))
-          echo "::notice title=devcontainer-acceptance-seconds::${elapsed}"
-          if [ "$elapsed" -gt "${PHASE_ACCEPTANCE_BUDGET}" ]; then
-            echo "::error::aisoc-acceptance --cold took ${elapsed}s, over budget of ${PHASE_ACCEPTANCE_BUDGET}s." >&2
+          echo "::notice title=devcontainer-toolchain-seconds::${elapsed}"
+          if [ "$elapsed" -gt "${PHASE_TOOLCHAIN_BUDGET}" ]; then
+            echo "::error::Devcontainer toolchain check took ${elapsed}s, over budget of ${PHASE_TOOLCHAIN_BUDGET}s." >&2
             exit 1
           fi

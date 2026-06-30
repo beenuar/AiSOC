@@ -1,9 +1,12 @@
 # Codespaces & devcontainers
 
 AiSOC ships a prebuilt devcontainer image so a fresh Codespace boots from
-clone-link to a green `pnpm aisoc:demo` in **about 30 seconds**, down from
-roughly 5 minutes when the same image was assembled from
-`features:` on every cold start.
+clone-link to **a usable dev shell in about 30 seconds**, down from
+roughly 5 minutes when the same image was assembled from `features:` on
+every cold start. (Booting the full demo stack still takes a few
+minutes — that's a docker-pull problem, not a devcontainer-assembly
+problem — but you can start typing, running tests, and editing code
+within ~30 s of the Codespace opening.)
 
 ## What's prebuilt
 
@@ -14,7 +17,10 @@ on every push to `main`. It carries:
 - Node 20 + `pnpm@8.15.1` via `corepack`
 - Python 3.11 + [`uv`](https://github.com/astral-sh/uv) + `ruff`
 - Go 1.22
-- `docker` + `docker-compose-plugin`
+- Docker CE 20.x (`docker.io`) + Compose v2 plugin
+  (pinned at `v2.29.7`, fetched from the upstream binary release into
+  `/usr/local/lib/docker/cli-plugins/` so `docker compose ...` works
+  out of the box)
 - GitHub CLI (`gh`)
 - `ripgrep`, `jq`, `build-essential` (for native deps in `npm`/`pip`)
 - A warm pnpm store directory so the codespace's first `pnpm install`
@@ -27,11 +33,16 @@ the publisher at
 
 ## Cold-start budget
 
+The KPI we hold ourselves to is _time-to-first-keystroke in a Codespace_,
+not _time-to-running-demo-stack_. The full demo stack still needs to
+pull multi-GB service images and start a Postgres / Redis / Kafka /
+service ladder — that is measured separately by the WS-A buyer
+acceptance gate.
+
 | Phase | Budget | Source of truth |
 |---|---|---|
 | `docker pull` of the devcontainer image | 60 s | `PHASE_PULL_BUDGET` |
-| `pnpm install --frozen-lockfile=false` (warm store) | included in pull phase | `onCreateCommand` |
-| `pnpm aisoc:acceptance --cold` | 5 min | `PHASE_ACCEPTANCE_BUDGET` |
+| Toolchain ready (every `--version` on PATH) | 30 s | `PHASE_TOOLCHAIN_BUDGET` |
 
 Both budgets are gated by
 [`.github/workflows/devcontainer-coldstart.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/devcontainer-coldstart.yml),
