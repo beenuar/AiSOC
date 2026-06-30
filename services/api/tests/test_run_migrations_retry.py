@@ -9,11 +9,10 @@ to those transient connect errors without masking real auth/config failures.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import asyncpg
 import pytest
-
 from app.scripts import run_migrations
 
 
@@ -23,9 +22,7 @@ async def test_connect_retries_until_success(monkeypatch):
     fake_conn = object()
     sleeps: list[float] = []
     attempts = [
-        asyncpg.exceptions.ConnectionDoesNotExistError(
-            "connection was closed in the middle of operation"
-        ),
+        asyncpg.exceptions.ConnectionDoesNotExistError("connection was closed in the middle of operation"),
         OSError("Connection refused"),
         fake_conn,
     ]
@@ -45,10 +42,7 @@ async def test_connect_retries_until_success(monkeypatch):
     result = await run_migrations._connect()
 
     assert result is fake_conn
-    assert sleeps == [1, 2], (
-        "expected exponential back-off (1s, 2s) before the third (successful)"
-        f" attempt, got {sleeps}"
-    )
+    assert sleeps == [1, 2], f"expected exponential back-off (1s, 2s) before the third (successful) attempt, got {sleeps}"
 
 
 @pytest.mark.asyncio
@@ -94,6 +88,4 @@ async def test_connect_does_not_retry_auth_failures(monkeypatch):
     with pytest.raises(asyncpg.exceptions.InvalidPasswordError):
         await run_migrations._connect()
 
-    assert call_count["connect"] == 1, (
-        "auth failures must propagate after the first attempt, no retries"
-    )
+    assert call_count["connect"] == 1, "auth failures must propagate after the first attempt, no retries"
