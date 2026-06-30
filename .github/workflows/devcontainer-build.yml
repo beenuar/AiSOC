@@ -26,6 +26,18 @@ on:
       - '.devcontainer/Dockerfile'
       - '.devcontainer/devcontainer.json'
       - '.github/workflows/devcontainer-build.yml'
+  # Build (but do not push) on PRs that touch the devcontainer surface, so we
+  # catch Dockerfile breakage before it lands on main. Without this, a typo in
+  # the Dockerfile only fails after merge — which is what happened in #368,
+  # leaving the devcontainer-build workflow red on main until the follow-up
+  # fix shipped. The post-merge push job remains the only thing that publishes
+  # to GHCR.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.devcontainer/Dockerfile'
+      - '.devcontainer/devcontainer.json'
+      - '.github/workflows/devcontainer-build.yml'
   schedule:
     - cron: '0 9 * * 1'  # Mondays 09:00 UTC — base image hygiene
   workflow_dispatch:
@@ -75,7 +87,10 @@ jobs:
         with:
           context: .devcontainer
           file: .devcontainer/Dockerfile
-          push: true
+          # Only push when the trigger is on main (push / schedule /
+          # workflow_dispatch). PR builds verify the Dockerfile compiles but
+          # never publish a `:latest` tag from an unmerged change.
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

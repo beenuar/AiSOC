@@ -37,9 +37,30 @@ RUN apt-get update \
         ca-certificates curl gnupg2 lsb-release software-properties-common \
         python3.11 python3.11-venv python3-pip pipx \
         build-essential libffi-dev libssl-dev \
-        docker.io docker-compose-plugin \
+        docker.io \
         ripgrep jq \
  && rm -rf /var/lib/apt/lists/*
+
+# ─── Docker Compose v2 (CLI plugin) ─────────────────────────────────────────
+#
+# Debian Bookworm's `docker.io` package ships Docker CE 20.x but **not** the
+# v2 `compose` CLI plugin (that lives in Docker's own apt repo only). The
+# AiSOC dev workflow — `aisoc-cli ops up`, `docker compose -f
+# infra/compose/docker-compose.dev.yml ...` — calls `docker compose`, so we
+# install the official plugin binary into the standard CLI-plugins path that
+# the docker CLI auto-discovers.
+ARG COMPOSE_VERSION=v2.29.7
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) compose_arch="x86_64" ;; \
+        arm64) compose_arch="aarch64" ;; \
+        *) echo "unsupported arch $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /usr/local/lib/docker/cli-plugins; \
+    curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${compose_arch}" \
+         -o /usr/local/lib/docker/cli-plugins/docker-compose; \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose; \
+    /usr/local/lib/docker/cli-plugins/docker-compose version
 
 # ─── GitHub CLI (gh) ────────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
