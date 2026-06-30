@@ -1,13 +1,20 @@
 # aisoc-sdk
 
-[![PyPI version](https://img.shields.io/pypi/v/aisoc-sdk)](https://pypi.org/project/aisoc-sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
+[![PyPI release](https://img.shields.io/badge/pypi-coming%20in%20v8.0-f59e0b)](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md)
 
 Async Python client SDK for [AiSOC](https://github.com/beenuar/AiSOC).
+
+> **Status — monorepo today, PyPI in v8.0.** Until the package lands on PyPI, install from the monorepo source path below. The import path (`aisoc_sdk`) and API surface stay identical once it ships.
 
 ## Installation
 
 ```bash
+# Today (from this monorepo):
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC && pip install -e packages/sdk-py
+
+# v8.0+ (once aisoc-sdk lands on PyPI):
 pip install aisoc-sdk
 ```
 

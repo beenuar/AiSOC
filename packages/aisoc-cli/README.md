@@ -2,15 +2,19 @@
 
 Developer CLI for building, validating, and publishing AiSOC plugins and detection rules.
 
+> **Status — monorepo today, PyPI in v8.0.** The CLI ships from this monorepo and is fully functional today. The PyPI release lands with v8.0. The CLI name (`aisoc`) and command surface stay identical once it ships.
+
 ## Installation
 
 ```bash
-pip install aisoc-cli
-```
+# Today (from this monorepo):
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC && pip install -e packages/aisoc-cli
 
-Or from source:
-```bash
-pip install -e packages/aisoc-cli
+# v8.0+ (once aisoc-cli lands on PyPI):
+pipx install aisoc-cli       # recommended (isolated venv)
+# or:
+pip install aisoc-cli
 ```
 
 ## Commands

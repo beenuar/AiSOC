@@ -43,6 +43,12 @@ You land on `/cases/INC-RT-001?tab=ledger`: a LockBit 3.0 ransomware case mid-in
 
 > **Want a hosted demo without spinning anything up?** The community-maintained <https://tryaisoc.com> instance runs a copy on Fly.io. It may go offline (see [LIVE-DEMO.md](LIVE-DEMO.md)) — Codespaces is the always-on fallback.
 
+> **Does the demo still boot on `main`?** Yes. Every push runs [`compose-smoke`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml) (the same `pnpm aisoc:demo` path you'd run locally) and [`e2e`](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml) against the seeded console. Nightly [`compose-smoke-nightly`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml) repeats it with cold caches. A red badge on any of those is a release-blocker — if you see one, the demo on `main` doesn't boot and a fix is already in flight.
+>
+> [![Compose Smoke](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/compose-smoke.yml?branch=main&label=compose-smoke%20%28main%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml)
+> [![Nightly cold cache](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/compose-smoke-nightly.yml?branch=main&label=compose-smoke%20%28nightly%2C%20cold%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml)
+> [![E2E](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/e2e.yml?branch=main&label=e2e%20%28seeded%20console%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml)
+
 Full multi-platform deploy guide: [Deploy in 60 seconds](#deploy-in-60-seconds) (Render, Fly.io, Docker Compose, Kubernetes, Terraform). Production-grade install with full storage tier: [`infra/helm/`](infra/helm/) or [`infra/terraform/`](infra/terraform/).
 
 ---
@@ -129,7 +135,7 @@ git clone https://github.com/beenuar/AiSOC.git && cd AiSOC && pnpm aisoc:demo
 
 Pulls prebuilt `ghcr.io/beenuar/*` images, brings up the slim demo profile (Postgres, Redis, Kafka, api, agents, realtime, web), runs the seeder as a one-shot container, and opens your browser at `/cases/INC-RT-001?tab=ledger` with `demo@tryaisoc.com` already auto-logged-in. Idempotent: re-running is a no-op against a seeded volume. Target on a clean Mac with a warm Docker daemon: clone-to-investigation in **~3.5 min warm / ~5 min cold**. Stop with `pnpm aisoc:demo:down`. See [One-shot demo](#one-shot-demo) for the timing breakdown and what you'll see on screen.
 
-**Screencast path — `--quick` mode:** for a deterministic four-case demo that runs in under four minutes on a warm laptop (the path the [90-second screencast](apps/web/public/.demo-mp4-placeholder) records against), pass `--quick`:
+**Screencast path — `--quick` mode:** for a deterministic four-case demo that runs in under four minutes on a warm laptop (the path the [90-second screencast brief](docs/demo/SCREENCAST_SHOTLIST.md) records against — the rendered `.mp4` lands in `apps/web/public/demo/` with the v8.0 launch), pass `--quick`:
 
 ```bash
 pnpm aisoc:demo --quick  # 4 cases in 4 minutes
@@ -172,16 +178,24 @@ The Render, Railway, and Coolify configs deploy the lean demo profile: api, agen
 
 AiSOC ships an [MCP server](https://modelcontextprotocol.io) so analysts can query alerts, run agent investigations, and replay every step the agent took without leaving the IDE or chat.
 
+> **Heads up — `@aisoc/mcp` ships from this monorepo today; the npm package lands in v8.0.** Use the source-build path below; it produces a binary at `services/mcp/dist/index.js` you can wire into Claude/Cursor/Cody/Continue.
+
 ```bash
-# Claude Desktop / Cursor / Continue / Cody
-npx -y @aisoc/mcp install --host claude \
+# Build the MCP server from source (once)
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC/services/mcp && pnpm install && pnpm build
+
+# Install it into your assistant (Claude / Cursor / Continue / Cody)
+node dist/index.js install --host claude \
   --aisoc-url https://aisoc.your-company.com \
   --api-key  aisoc_pat_xxxxxxxxxxxx
 ```
 
+Once `@aisoc/mcp` ships to npm in v8.0 the install flow becomes `npx -y @aisoc/mcp install --host claude …`. The tool surface and config files stay identical.
+
 The server exposes 13 tools — discovery (`aisoc_list_alerts`, `aisoc_list_cases`, `aisoc_query_detections`, `aisoc_list_investigations`, `aisoc_lake_schema`), deep-dive (`aisoc_get_alert`, `aisoc_get_case`, `aisoc_get_detection_rule`, `aisoc_get_investigation`), lake query (`aisoc_lake_query` — warm-tier SELECT, gated by `lake:query` server-side), and the action/replay set (`aisoc_run_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`) for walking the agent decision ledger step-by-step.
 
-Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source: [`services/mcp/`](services/mcp/). npm: `@aisoc/mcp`.
+Full guide: [docs/integrations/mcp](apps/docs/docs/integrations/mcp.md). Source: [`services/mcp/`](services/mcp/).
 
 ---
 
@@ -761,14 +775,14 @@ AiSOC/
 │   ├── purple-team/      # Python · Atomic Red Team + Caldera + ATT&CK
 │   ├── osquery-tls/      # Python · native osquery TLS server + FIM + pack distribution
 │   ├── osquery-extensions/ # Python · AI threat-intel table + ML anomaly score table
-│   └── mcp/              # TypeScript · Model Context Protocol server (@aisoc/mcp)
+│   └── mcp/              # TypeScript · Model Context Protocol server (npm: @aisoc/mcp, lands in v8.0)
 ├── integrations/         # Connector implementations (CrowdStrike, Splunk, AWS, …)
 ├── packages/
 │   ├── types/            # Shared TS types
 │   ├── ui/               # Shared React primitives
 │   ├── ocsf/             # OCSF normalization helpers
-│   ├── sdk-ts/           # TypeScript client SDK for AiSOC API (npm: @aisoc/sdk)
-│   ├── sdk-py/           # Async Python client SDK (PyPI: aisoc-sdk)
+│   ├── sdk-ts/           # TypeScript client SDK for AiSOC API (npm: @aisoc/sdk, lands in v8.0)
+│   ├── sdk-py/           # Async Python client SDK (PyPI: aisoc-sdk, lands in v8.0)
 │   ├── sdk-go/           # Go client SDK + models (module: github.com/beenuar/aisoc/sdk-go)
 │   ├── plugin-sdk-ts/    # TypeScript plugin development SDK
 │   ├── plugin-sdk-py/    # Python plugin development SDK (PyPI: aisoc-plugin-sdk)
@@ -840,12 +854,12 @@ Interactive docs: `http://localhost:8000/docs` (Swagger) or `http://localhost:80
 
 ## Plugin and detection SDK
 
-The CLI is published as a Python package. Install it with `pipx` (recommended) or `pip`:
+> **Heads up — `aisoc-cli` ships from this monorepo today; the PyPI release lands in v8.0.** Install from source with `pip install -e packages/aisoc-cli`. Once it's on PyPI the canonical path becomes `pipx install aisoc-cli`.
 
 ```bash
-pipx install aisoc-cli            # PyPI release
-# or, from the monorepo:
-pip install -e packages/aisoc-cli
+# Install the CLI from the monorepo (today)
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC && pip install -e packages/aisoc-cli
 
 # Scaffold a new plugin
 aisoc scaffold plugin my-connector
@@ -857,10 +871,10 @@ aisoc validate detection ./detections/my-rule.yaml
 aisoc publish plugin ./my-connector --key ~/.aisoc/signing.key
 ```
 
-SDKs:
+SDKs (all four also ship from this monorepo today; the npm and PyPI releases land in v8.0):
 
-- TypeScript — `packages/plugin-sdk-ts` (npm: `@aisoc/plugin-sdk`)
-- Python — `packages/plugin-sdk-py` (PyPI: `aisoc-plugin-sdk`)
+- TypeScript — `packages/plugin-sdk-ts` (npm: `@aisoc/plugin-sdk` — coming in v8.0)
+- Python — `packages/plugin-sdk-py` (PyPI: `aisoc-plugin-sdk` — coming in v8.0)
 - Go — `packages/plugin-sdk-go` (module: `github.com/beenuar/aisoc/plugin-sdk-go`)
 
 Detection authors can drop YAML rules directly into `detections/` and SOAR playbooks into `playbooks/`. CI validates them on every PR ([`scripts/validate_detections.py`](scripts/validate_detections.py), [`scripts/validate_playbooks.py`](scripts/validate_playbooks.py)) and [`scripts/build_marketplace.py`](scripts/build_marketplace.py) republishes [`marketplace/index.json`](marketplace/index.json) so the in-app Marketplace picks them up automatically.

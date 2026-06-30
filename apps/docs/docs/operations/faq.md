@@ -212,11 +212,11 @@ Yes. `@aisoc/mcp` exposes 11 Investigation Ledger tools to MCP-compatible LLM cl
 
 ### Are there SDKs?
 
-Three:
+Three. All three ship from this monorepo today; the npm + PyPI releases land in v8.0:
 
-- **Python** — `pip install aisoc-sdk`. Async first, typed against the OpenAPI spec.
-- **TypeScript** — `pnpm add @aisoc/sdk-ts`. Also typed against the OpenAPI spec.
-- **Go** — `go get github.com/beenuar/AiSOC/packages/sdk-go`.
+- **Python** — `pip install -e packages/sdk-py` today (`pip install aisoc-sdk` once it's on PyPI in v8.0). Async first, typed against the OpenAPI spec.
+- **TypeScript** — `pnpm --filter @aisoc/sdk-ts install` today (`pnpm add @aisoc/sdk-ts` once it's on npm in v8.0). Also typed against the OpenAPI spec.
+- **Go** — `go get github.com/beenuar/AiSOC/packages/sdk-go` (works today; Go modules don't need a registry hop).
 
 All three handle auth, retries, pagination, and backoff. See [Plugin SDK overview](../plugins/overview).
 

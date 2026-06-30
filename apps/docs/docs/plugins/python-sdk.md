@@ -6,11 +6,20 @@ sidebar_position: 2
 
 ## Installation
 
+:::info Status — monorepo today, PyPI in v8.0
+`aisoc-plugin-sdk` ships from this monorepo today. The PyPI release lands with v8.0. Use the source-install path below until then — the import path (`aisoc_plugin_sdk`) and API surface stay identical.
+:::
+
 ```bash
+# Today (monorepo source install):
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC && pip install -e packages/plugin-sdk-py
+
+# v8.0+ (once aisoc-plugin-sdk is on PyPI):
 pip install aisoc-plugin-sdk
 ```
 
-The PyPI distribution is `aisoc-plugin-sdk`; the import path is
+The PyPI distribution will be `aisoc-plugin-sdk`; the import path is
 `aisoc_plugin_sdk`. The source lives in `packages/plugin-sdk-py/`.
 
 ## Quick Start: Enricher

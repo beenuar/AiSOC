@@ -8,16 +8,20 @@ The `aisoc-cli` ships scaffolding, validation, packaging, signing, and trust
 management commands for every supported plugin type — `enricher`, `connector`,
 `responder`, `detection`, and `widget`.
 
-The CLI source lives under `packages/aisoc-cli/`. Install it from the repo for
-hacking on it locally:
+:::info Status — monorepo today, PyPI in v8.0
+The CLI is fully functional today; it ships from the monorepo. The PyPI release (`pipx install aisoc-cli` / `pip install aisoc-cli`) lands with v8.0. Use the source path below until then — the command surface (`aisoc plugin new`, `aisoc validate detection`, …) stays identical.
+:::
+
+The CLI source lives under `packages/aisoc-cli/`. Install it from the repo:
 
 ```bash
-pip install -e packages/aisoc-cli
-```
+# Today (from this monorepo):
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC && pip install -e packages/aisoc-cli
 
-Or install the published wheel:
-
-```bash
+# v8.0+ (once aisoc-cli lands on PyPI):
+pipx install aisoc-cli   # recommended (isolated venv)
+# or:
 pip install aisoc-cli
 ```
 
