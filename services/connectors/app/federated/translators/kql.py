@@ -17,10 +17,20 @@ Shape:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from app.federated.query import Indicator, QueryError, UnifiedQuery
 
+_SENTINEL_TABLE_FIELD_ALIASES: Final[dict[str, dict[str, str]]] = {
+    "SecurityIncident": {
+        "device.name": "CompromisedEntity",
+        "severity": "Severity",
+        "message": "AlertName",
+    },
+    "SigninLogs": {
+        "user.name": "UserPrincipalName",
+    },
+}
 
 def _kql_quote(value: Any) -> str:
     if isinstance(value, bool):
@@ -32,8 +42,28 @@ def _kql_quote(value: Any) -> str:
     return f'"{escaped}"'
 
 
-def _indicator_to_kql(indicator: Indicator) -> str:
-    field_token = indicator.field
+def _resolve_kql_field(field: str, table: str) -> str:
+    aliases = _SENTINEL_TABLE_FIELD_ALIASES.get(table)
+
+    if aliases is None:
+        return field
+
+    return aliases.get(field, field)
+
+
+def _indicator_to_kql(
+    indicator: Indicator,
+    *,
+    table: str,
+) -> str:
+    
+    """Render a single ``Indicator`` as a KQL where-clause."""
+
+    field_token = _resolve_kql_field(
+    indicator.field,
+    table,
+)
+    
     op = indicator.operator
     value = indicator.value
 
@@ -71,7 +101,10 @@ def to_kql(query: UnifiedQuery, *, table: str = "CommonSecurityLog") -> str:
         # KQL's "search" verb does free-text across all string columns;
         # we use it as a where-clause so the pipeline shape stays uniform.
         lines.append(f"| where * contains {_kql_quote(query.free_text)}")
+
     for indicator in query.indicators:
-        lines.append(f"| where {_indicator_to_kql(indicator)}")
+        lines.append(
+            f"| where {_indicator_to_kql(indicator, table=table)}"
+        )
     lines.append(f"| take {query.limit}")
     return "\n".join(lines)
