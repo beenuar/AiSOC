@@ -83,7 +83,7 @@ jobs:
             type=raw,value=weekly,enable=${{ github.event_name == 'schedule' }}
 
       - name: Build & push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .devcontainer
           file: .devcontainer/Dockerfile
