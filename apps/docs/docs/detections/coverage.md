@@ -11,13 +11,13 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-05-14T12:28:25Z`
+Generated: `2026-07-06T01:46:29Z`
 
 ## Headline numbers
 
 - **Curated v1.0 detections**: `416` (target: ≥ 300)
-- **Total rules considered**: `1052` (quality floor: 0.55)
-- **Unique MITRE techniques covered**: `118`
+- **Total rules considered**: `1053` (quality floor: 0.55)
+- **Unique MITRE techniques covered**: `117`
 
 ## Coverage by buyer family
 
@@ -50,10 +50,10 @@ Generated: `2026-05-14T12:28:25Z`
 
 - `_migrated`: 1
 - `application`: 29
-- `cloud`: 164
+- `cloud`: 165
 - `data-exfil`: 20
 - `endpoint`: 117
-- `identity`: 73
+- `identity`: 72
 - `network`: 12
 
 ## How to audit
