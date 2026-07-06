@@ -2,7 +2,6 @@ from app.federated.query import Indicator, UnifiedQuery
 from app.federated.translators import to_kql
 
 
-
 def test_kql_translator_aliases_user_name_for_signinlogs():
     q = UnifiedQuery(
         indicators=(

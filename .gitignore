@@ -125,4 +125,4 @@ services/api/marketplace/
 # (default mode). The source of truth is `schemas/graph-schema.yaml`; the
 # `-current.yaml` file is a runtime artefact that varies by environment.
 schemas/graph-schema-current.yaml
-.codex/
+

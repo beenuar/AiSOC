@@ -32,6 +32,7 @@ _SENTINEL_TABLE_FIELD_ALIASES: Final[dict[str, dict[str, str]]] = {
     },
 }
 
+
 def _kql_quote(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -56,14 +57,13 @@ def _indicator_to_kql(
     *,
     table: str,
 ) -> str:
-    
     """Render a single ``Indicator`` as a KQL where-clause."""
 
     field_token = _resolve_kql_field(
-    indicator.field,
-    table,
-)
-    
+        indicator.field,
+        table,
+    )
+
     op = indicator.operator
     value = indicator.value
 
@@ -103,8 +103,6 @@ def to_kql(query: UnifiedQuery, *, table: str = "CommonSecurityLog") -> str:
         lines.append(f"| where * contains {_kql_quote(query.free_text)}")
 
     for indicator in query.indicators:
-        lines.append(
-            f"| where {_indicator_to_kql(indicator, table=table)}"
-        )
+        lines.append(f"| where {_indicator_to_kql(indicator, table=table)}")
     lines.append(f"| take {query.limit}")
     return "\n".join(lines)
