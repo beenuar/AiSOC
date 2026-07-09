@@ -1,5 +1,4 @@
 import pytest
-
 from app.federated.query import Indicator, UnifiedQuery
 from app.federated.translators import to_kql
 
