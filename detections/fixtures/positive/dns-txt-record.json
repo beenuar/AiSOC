@@ -1,0 +1,6 @@
+{
+  "event_type": "dns_response",
+  "qtype": "TXT",
+  "response_size_bytes": 350.0,
+  "src_role": "__benign__"
+}
