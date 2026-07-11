@@ -325,6 +325,7 @@ jobs:
             tests/test_prompt_sanitizer.py \
             tests/test_prompt_envelope.py \
             tests/test_privacy_redactor.py \
+            tests/test_cost_governor.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────
