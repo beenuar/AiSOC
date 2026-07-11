@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.services.memory_poisoning import compute_confirmation_token
 from app.services.override_learning import (
     AlertSignature,
     RedispositionCandidate,
@@ -182,6 +183,7 @@ class TestApplyRedisposition:
             alert_ids=[],
             new_disposition="false_positive",
             analyst_id=None,
+            confirmation_token="",
         )
         assert rowcount == 0
         db.execute.assert_not_awaited()
@@ -194,13 +196,49 @@ class TestApplyRedisposition:
         db.execute = AsyncMock(return_value=result)
         db.commit = AsyncMock()
 
+        ids = [uuid.uuid4(), uuid.uuid4()]
+        token = compute_confirmation_token([str(i) for i in ids], "false_positive")
         rowcount = await apply_redisposition(
             db,
             tenant_id=uuid.uuid4(),
-            alert_ids=[uuid.uuid4(), uuid.uuid4()],
+            alert_ids=ids,
             new_disposition="false_positive",
             analyst_id=uuid.uuid4(),
+            confirmation_token=token,
         )
         assert rowcount == 7
         db.execute.assert_awaited_once()
         db.commit.assert_awaited_once()
+
+    async def test_bad_token_is_rejected(self):
+        db = MagicMock()
+        db.execute = AsyncMock()
+        db.commit = AsyncMock()
+        with pytest.raises(ValueError, match="confirmation_token"):
+            await apply_redisposition(
+                db,
+                tenant_id=uuid.uuid4(),
+                alert_ids=[uuid.uuid4()],
+                new_disposition="false_positive",
+                analyst_id=None,
+                confirmation_token="wrong",
+            )
+        db.execute.assert_not_awaited()
+
+    async def test_batch_over_cap_is_rejected(self):
+        db = MagicMock()
+        db.execute = AsyncMock()
+        db.commit = AsyncMock()
+        ids = [uuid.uuid4() for _ in range(6)]
+        token = compute_confirmation_token([str(i) for i in ids], "false_positive")
+        with pytest.raises(ValueError, match="cap"):
+            await apply_redisposition(
+                db,
+                tenant_id=uuid.uuid4(),
+                alert_ids=ids,
+                new_disposition="false_positive",
+                analyst_id=None,
+                confirmation_token=token,
+                max_batch=5,
+            )
+        db.execute.assert_not_awaited()

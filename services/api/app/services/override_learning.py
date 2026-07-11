@@ -32,17 +32,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
 from app.models.institutional_memory import InstitutionalMemory
+from app.services.memory_poisoning import (
+    DEFAULT_MAX_REDISPOSITION_BATCH,
+    MemoryAuthor,
+    MemoryProvenance,
+    compute_confirmation_token,
+)
 
 logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
 class AlertSignature:
-    """Coarse fingerprint used to match similar alerts across time."""
+    """Fingerprint used to match similar alerts across time.
+
+    Poisoning resistance (Phase 1.2): the key includes ``severity_band`` — an
+    entity-independent structural feature — in addition to the attacker-
+    choosable (category, connector, technique) triple. An attacker who farms
+    low-severity benign alerts under a signature can no longer teach the system
+    to auto-close a *high*-severity real intrusion sharing that triple, because
+    the severity band puts them in different memory keys.
+    """
 
     category: str
     connector_type: str
     primary_technique: str
+    severity_band: str = ""
 
     @classmethod
     def from_alert(cls, alert: Alert) -> AlertSignature:
@@ -52,6 +67,7 @@ class AlertSignature:
             category=(alert.category or "").lower().strip(),
             connector_type=(alert.connector_type or "").lower().strip(),
             primary_technique=primary.upper().strip(),
+            severity_band=(getattr(alert, "severity", "") or "").lower().strip(),
         )
 
     def is_empty(self) -> bool:
@@ -59,9 +75,9 @@ class AlertSignature:
         return not (self.category or self.connector_type or self.primary_technique)
 
     def memory_key(self) -> str:
-        raw = f"{self.category}|{self.connector_type}|{self.primary_technique}"
+        raw = f"{self.category}|{self.connector_type}|{self.primary_technique}|{self.severity_band}"
         digest = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
-        return f"override:{digest}"
+        return f"override:v2:{digest}"
 
     def tags(self) -> list[str]:
         out: list[str] = ["analyst_override"]
@@ -118,6 +134,17 @@ async def record_override(
         )
         return None
 
+    now = datetime.now(UTC)
+    # Provenance on every write (Phase 1.2): no anonymous memory. An analyst
+    # override is human-verified and outranks any autonomous closure.
+    provenance = MemoryProvenance(
+        author=MemoryAuthor.HUMAN_VERIFIED,
+        tenant_id=str(tenant_id),
+        source_alert_id=str(alert.id),
+        analyst_id=str(analyst_id) if analyst_id else None,
+        confidence=1.0,
+        recorded_at=now,
+    )
     payload = {
         "alert_id": str(alert.id),
         "original_verdict": original_verdict,
@@ -128,8 +155,10 @@ async def record_override(
             "category": signature.category,
             "connector_type": signature.connector_type,
             "primary_technique": signature.primary_technique,
+            "severity_band": signature.severity_band,
         },
-        "recorded_at": datetime.now(UTC).isoformat(),
+        "provenance": provenance.to_dict(),
+        "recorded_at": now.isoformat(),
     }
 
     stmt = pg_insert(InstitutionalMemory).values(
@@ -218,11 +247,25 @@ async def apply_redisposition(
     alert_ids: list[UUID],
     new_disposition: str,
     analyst_id: UUID | None,
+    confirmation_token: str,
+    max_batch: int = DEFAULT_MAX_REDISPOSITION_BATCH,
 ) -> int:
     """Bulk-apply *new_disposition* to *alert_ids*. Returns the number
-    of rows updated. Each row already has its tenant verified."""
+    of rows updated. Each row already has its tenant verified.
+
+    Blast-radius controls (Phase 1.2): the batch is capped at *max_batch* and
+    the caller must echo the *confirmation_token* computed over the exact alert
+    set + target disposition (see :func:`plan_redisposition`). A stale or
+    tampered set no longer matches its token, so history cannot be flipped
+    without an explicit, previewed human confirmation.
+    """
     if not alert_ids:
         return 0
+    if len(alert_ids) > max_batch:
+        raise ValueError(f"redisposition batch of {len(alert_ids)} exceeds the per-apply cap of {max_batch}")
+    expected_token = compute_confirmation_token([str(a) for a in alert_ids], new_disposition)
+    if confirmation_token != expected_token:
+        raise ValueError("confirmation_token does not match the alert set; re-preview before applying")
     now = datetime.now(UTC)
     result = await db.execute(
         update(Alert).where(Alert.tenant_id == tenant_id, Alert.id.in_(alert_ids)).values(disposition=new_disposition, updated_at=now)

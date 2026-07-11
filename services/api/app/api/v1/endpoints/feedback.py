@@ -28,6 +28,7 @@ from sqlalchemy import and_, func, select, update
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.models.alert import Alert
+from app.services.memory_poisoning import plan_redisposition
 from app.services.override_learning import (
     apply_redisposition,
     find_redisposition_candidates,
@@ -77,6 +78,13 @@ class AlertOverrideResponse(BaseModel):
     recorded_at: str
     memory_key: str | None = None
     redisposition_candidates: list[RedispositionCandidateModel] = Field(default_factory=list)
+    # Blast-radius controls for retroactive apply (Phase 1.2). The client must
+    # echo confirmation_token back to /redisposition/apply; quarantined means a
+    # poisoning flag or over-cap match requires human clearance before apply.
+    redisposition_confirmation_token: str | None = None
+    redisposition_capped: bool = False
+    redisposition_quarantined: bool = False
+    redisposition_total_matched: int = 0
 
 
 @router.post("/alert-override", response_model=AlertOverrideResponse)
@@ -128,6 +136,7 @@ async def submit_alert_override(
     # Find similar past alerts that would now disposition differently.
     candidates: list[RedispositionCandidateModel] = []
     memory_key: str | None = None
+    plan = None
     if signature is not None:
         memory_key = signature.memory_key()
         raw_candidates = await find_redisposition_candidates(
@@ -138,6 +147,10 @@ async def submit_alert_override(
             exclude_alert_id=alert_uuid,
         )
         candidates = [RedispositionCandidateModel(**c.to_dict()) for c in raw_candidates]
+        plan = plan_redisposition(
+            [c.alert_id for c in raw_candidates],
+            payload.corrected_verdict,
+        )
 
     logger.info(
         "analyst.override",
@@ -158,12 +171,20 @@ async def submit_alert_override(
         recorded_at=now.isoformat(),
         memory_key=memory_key,
         redisposition_candidates=candidates,
+        redisposition_confirmation_token=plan.confirmation_token if plan else None,
+        redisposition_capped=plan.capped if plan else False,
+        redisposition_quarantined=plan.quarantined if plan else False,
+        redisposition_total_matched=plan.total_matched if plan else 0,
     )
 
 
 class RedispositionApplyRequest(BaseModel):
     alert_ids: list[str]
     new_disposition: str
+    confirmation_token: str = Field(
+        ...,
+        description="Token from the /alert-override preview over this exact alert set (Phase 1.2 blast-radius control)",
+    )
 
 
 class RedispositionApplyResponse(BaseModel):
@@ -177,7 +198,11 @@ async def apply_redisposition_endpoint(
     user: AuthUser,
     db: DBSession,
 ) -> RedispositionApplyResponse:
-    """Bulk-update the disposition on past alerts the analyst confirmed."""
+    """Bulk-update the disposition on past alerts the analyst confirmed.
+
+    Requires the confirmation token from the preview; a stale/tampered set or a
+    batch over the cap is rejected rather than silently flipping history.
+    """
     if payload.new_disposition not in _VALID_VERDICTS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -187,13 +212,17 @@ async def apply_redisposition_endpoint(
         return RedispositionApplyResponse(updated=0, new_disposition=payload.new_disposition)
 
     ids = [_coerce_uuid(aid, "alert_ids") for aid in payload.alert_ids]
-    rowcount = await apply_redisposition(
-        db,
-        tenant_id=user.tenant_id,
-        alert_ids=ids,
-        new_disposition=payload.new_disposition,
-        analyst_id=user.user_id,
-    )
+    try:
+        rowcount = await apply_redisposition(
+            db,
+            tenant_id=user.tenant_id,
+            alert_ids=ids,
+            new_disposition=payload.new_disposition,
+            analyst_id=user.user_id,
+            confirmation_token=payload.confirmation_token,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return RedispositionApplyResponse(updated=rowcount, new_disposition=payload.new_disposition)
 
 
