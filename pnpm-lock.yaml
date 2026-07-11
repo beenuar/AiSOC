@@ -134,8 +134,8 @@ importers:
         specifier: ^9.1.0
         version: 9.1.20(storybook@9.1.20)
       '@storybook/addon-themes':
-        specifier: ^9.1.0
-        version: 9.1.20(storybook@9.1.20)
+        specifier: ^10.5.0
+        version: 10.5.0(storybook@9.1.20)
       '@storybook/react-vite':
         specifier: ^9.1.0
         version: 9.1.20(react-dom@19.2.7)(react@19.2.7)(storybook@9.1.20)(typescript@6.0.3)(vite@8.1.4)
@@ -7446,10 +7446,10 @@ packages:
       storybook: 9.1.20(@testing-library/dom@10.4.1)(prettier@3.9.1)(vite@8.1.4)
     dev: true
 
-  /@storybook/addon-themes@9.1.20(storybook@9.1.20):
-    resolution: {integrity: sha512-GY9WKJMxbsI24CTj1PToWbjZGuXnwLasahv51wpIQC94Sn/8NxRta8K2BO2Pqb7U3sdtjH6htUasnQnaL0/ZBw==}
+  /@storybook/addon-themes@10.5.0(storybook@9.1.20):
+    resolution: {integrity: sha512-9dvrN1JcpWt+f+RueMGvdeGTNQJ5y4w931X2HHzE+ItrN2Ogp0vSppb/baUNezeBLqhuUJjPbvyAeAb9v4rong==}
     peerDependencies:
-      storybook: ^9.1.20
+      storybook: ^10.5.0
     dependencies:
       storybook: 9.1.20(@testing-library/dom@10.4.1)(prettier@3.9.1)(vite@8.1.4)
       ts-dedent: 2.3.0
