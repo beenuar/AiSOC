@@ -50,7 +50,7 @@
     "prettier": "^3.9.1",
     "tsx": "^4.23.0",
     "turbo": "^2.9.14",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=20.0.0",

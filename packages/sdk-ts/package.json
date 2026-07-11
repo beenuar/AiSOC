@@ -28,7 +28,7 @@
     "@types/node": "^25.9.2",
     "openapi-typescript": "^7.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.6"
   },
   "peerDependencies": {
