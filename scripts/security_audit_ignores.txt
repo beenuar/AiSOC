@@ -84,3 +84,13 @@ python|CVE-2026-48775|langgraph-checkpoint unsafe JSON deserialization (fixed in
 python|GHSA-fjqc-hq36-qh5p|langgraph-checkpoint unsafe JSON deserialization (fixed in 4.1.1); requires langgraph 0.2 → 4.x major bump, tracked for dedicated PR|2026-09-25
 python|CVE-2026-48776|langgraph-sdk unsafe URL path construction (fixed in 0.3.15); transitive via langgraph, blocked by same major bump as CVE-2026-48775|2026-09-25
 python|GHSA-w39p-vh2g-g8g5|langgraph-sdk unsafe URL path construction (fixed in 0.3.15); transitive via langgraph, blocked by same major bump as CVE-2026-48775|2026-09-25
+
+# ── 2026-07-11 triage (expire 2026-10-05) ────────────────────────────────────
+# ecdsa 0.19.2 is the latest published release (2026-03-26) and already carries
+# the CVE-2026-33936 DER-parsing fix. PYSEC-2026-1325 still flags 0.19.2, so
+# there is no newer release to upgrade to. ecdsa is a hard transitive dependency
+# of python-jose[cryptography] (pulled in regardless of the crypto extra) used by
+# the API JWT layer; it is never used to parse untrusted attacker-supplied DER
+# private keys. Removing it requires migrating the auth layer off python-jose to
+# PyJWT (already a dep) — a regression-prone change tracked for a dedicated PR.
+python|PYSEC-2026-1325|ecdsa 0.19.2 is latest release; no patched version available; transitive via python-jose[cryptography]; tracked for python-jose to PyJWT migration|2026-10-05
