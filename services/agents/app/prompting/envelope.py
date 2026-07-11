@@ -230,7 +230,7 @@ class PromptInjectionGuard:
         elif isinstance(value, dict):
             for k, v in value.items():
                 self._scan_value(v, f"{path}.{k}", verdict, _depth + 1)
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, list | tuple):
             for i, v in enumerate(value):
                 self._scan_value(v, f"{path}[{i}]", verdict, _depth + 1)
 

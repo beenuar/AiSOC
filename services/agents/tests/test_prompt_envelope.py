@@ -145,9 +145,9 @@ BENIGN_FIELDS = [
 def test_guard_does_not_flag_benign_telemetry_as_high(field_name, payload):
     guard = PromptInjectionGuard()
     verdict = guard.scan({field_name: payload})
-    assert not verdict.should_demote_to_l0, (
-        f"benign text false-tripped high severity in {field_name}: {payload!r} ({[s.kind for s in verdict.signals]})"
-    )
+    assert (
+        not verdict.should_demote_to_l0
+    ), f"benign text false-tripped high severity in {field_name}: {payload!r} ({[s.kind for s in verdict.signals]})"
 
 
 # ── Verdict semantics + ledger shape ─────────────────────────────────────────
