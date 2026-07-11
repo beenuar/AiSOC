@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **World-class program Phase 0 — reality audit** (no product code). `docs/audit/REALITY_REPORT.md` classifies every headline `README.md` claim against the code (`production` / `functional-untested` / `template-fallback` / `demo-only` / `stub`) and ranks Overclaims, Load-bearing untested paths, and Circular gates. `docs/audit/CLAIM_TO_GATE_MATRIX.md` maps 27 claims to their CI gate or `NO GATE` (9 GATED / 11 PARTIAL / 7 NO GATE), each with a binding "Closes in" phase. `docs/audit/PROGRESS.md` tracks the 12-phase program. Tracking doc: `AISOC_CURSOR_PROMPT_V2.md`.
+
 ## [7.5.0] — 2026-06-29
 
 v8.0-milestone and trust-readiness release. Folds in the **AiSOC missing

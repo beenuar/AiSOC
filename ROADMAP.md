@@ -18,6 +18,24 @@
 
 This document captures the planned direction for AiSOC across major versions. All v4 deliverables and items deferred beyond v4 are listed here.
 
+## World-Class Hardening Program (2026-07, in flight)
+
+A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Live status: [`docs/audit/PROGRESS.md`](docs/audit/PROGRESS.md). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
+
+- [x] Phase 0 — Reality audit (claim-to-gate matrix, ranked overclaims/untested-paths/circular-gates)
+- [ ] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)
+- [ ] Phase 2 — Supply chain + truth (SAST/deps/containers/secrets/IaC gates, signed attested releases, hard-fail insecure prod defaults, README honesty)
+- [ ] Phase 3 — Integration / E2E / chaos / DR (real-container spine test, backup-restore, chaos, upgrade)
+- [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix)
+- [ ] Phase 5 — Data spine correctness (schema registry, DLQ, idempotency, watermarking, backfill/replay, lineage)
+- [ ] Phase 6 — Performance + cost (throughput harness, $/TB, storage-consolidation ADR)
+- [ ] Phase 7 — Ingest-time graph + multi-model router (posture, effective permissions, bi-temporal, fusion-time ContextBundle, determinism contract)
+- [ ] Phase 8 — LLMOps (prompt registry, model pinning, provider fallback, response caching, structured-output validation)
+- [ ] Phase 9 — Autonomy safety (rollback, post-action verification, dry-run default, break-glass, approval SLA, scorecard)
+- [ ] Phase 10 — Connector + content quality (conformance suite, published matrix, detection lifecycle)
+- [ ] Phase 11 — API / SDK / release engineering (oasdiff, SDK contract drift, versioning, release discipline)
+- [ ] Phase 12 — Observability + governance (SLOs, single trace, GOVERNANCE.md, DCO, committers, neutral home, trust docs)
+
 ## v4.0 — Shipped
 
 ### AI multi-agent investigator
