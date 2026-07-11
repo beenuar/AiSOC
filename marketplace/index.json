@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-06-28T09:43:41Z",
+  "generated": "2026-07-11T13:45:00Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,22 +20,22 @@
     }
   ],
   "stats": {
-    "total": 7127,
+    "total": 7129,
     "playbooks": 62,
-    "detections": 6998,
+    "detections": 7000,
     "plugins": 67,
-    "verified": 1006,
+    "verified": 1008,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1006
+      "stable": 1008
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 884
+      "stable": 886
     },
     "quarantined": 5921
   },
@@ -106,7 +106,7 @@
       "T1047": 72,
       "T1048": 15,
       "T1048.001": 1,
-      "T1048.003": 19,
+      "T1048.003": 20,
       "T1049": 16,
       "T1052": 2,
       "T1052.001": 1,
@@ -158,7 +158,7 @@
       "T1071.001": 54,
       "T1071.002": 1,
       "T1071.003": 3,
-      "T1071.004": 23,
+      "T1071.004": 24,
       "T1072": 9,
       "T1074": 3,
       "T1074.001": 6,
@@ -180,7 +180,7 @@
       "T1091": 5,
       "T1095": 8,
       "T1098": 88,
-      "T1098.001": 26,
+      "T1098.001": 27,
       "T1098.002": 6,
       "T1098.003": 34,
       "T1098.004": 12,
@@ -536,7 +536,7 @@
       "T1690": 1
     },
     "unique_techniques": 493,
-    "total_with_mitre": 5782,
+    "total_with_mitre": 5784,
     "by_tier": {
       "community": {
         "T1078.004": 1
@@ -569,7 +569,7 @@
         "T1046": 2,
         "T1047": 3,
         "T1048": 1,
-        "T1048.003": 2,
+        "T1048.003": 3,
         "T1052": 2,
         "T1052.001": 1,
         "T1053.001": 1,
@@ -593,7 +593,7 @@
         "T1070.003": 2,
         "T1071": 4,
         "T1071.001": 10,
-        "T1071.004": 5,
+        "T1071.004": 6,
         "T1074.001": 1,
         "T1078": 37,
         "T1078.001": 4,
@@ -608,7 +608,7 @@
         "T1090.003": 6,
         "T1095": 3,
         "T1098": 29,
-        "T1098.001": 21,
+        "T1098.001": 22,
         "T1098.003": 8,
         "T1098.004": 8,
         "T1098.007": 1,
@@ -35453,6 +35453,29 @@
       "path": "detections/cloud/m365-unified-audit-log-disabled.yaml"
     },
     {
+      "id": "det-cloud-226",
+      "type": "detection",
+      "name": "AWS IAM UpdateAccessKey On Privileged Principal",
+      "description": "AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS IAM UpdateAccessKey On Privileged Principal'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1098.001"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/cloud/aws-iam-update-access-key-privileged.yaml"
+    },
+    {
       "id": "det-data-exfil-001",
       "type": "detection",
       "name": "Large Outbound Transfer to Personal Cloud Storage",
@@ -48457,6 +48480,30 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/network/net-stp-topology-change-from-edge.yaml"
+    },
+    {
+      "id": "det-network-081",
+      "type": "detection",
+      "name": "DNS TXT Response Over 250 Bytes From Non-Resolver Host",
+      "description": "Triggers on the network signal described by 'DNS TXT Response Over 250 Bytes From Non-Resolver Host'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "Josh Fishman",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "network",
+      "mitre_techniques": [
+        "T1071.004",
+        "T1048.003"
+      ],
+      "log_source": "dns",
+      "playbook": "tpl-command-and-control",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/network/dns-txt-record.yaml"
     },
     {
       "id": "dlp-violation-response-v1",
