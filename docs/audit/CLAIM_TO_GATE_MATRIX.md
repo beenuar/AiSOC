@@ -31,15 +31,17 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | SAST | README badge (CodeQL) | `codeql.yml` | GATED | - |
 | Dependency CVE scanning | (implied by security) | `security-audit.yml` | GATED | - |
 | OpenSSF Scorecard | README badge L13 | `scorecard.yml` | GATED | - |
-| Container image / IaC / secret scanning (Trivy/checkov/tfsec/gitleaks/Semgrep) | (implied by security) | none | NO GATE | Phase 2 |
+| Container image / IaC / secret scanning (Trivy/checkov/tfsec/gitleaks/Semgrep) | (implied by security) | `security.yml` (gitleaks + claim-matrix HARD; Semgrep/Trivy/checkov/tfsec observe) | PARTIAL (secret scan + matrix ratchet enforced; code/IaC/container scanners report-and-ratchet, allowlist at `.security/allowlist.yml`) | Phase 2 |
 | Signed / attested release artifacts | (implied by "run next to crown jewels") | `release.yml` (SPDX source SBOM), `build-extensions.yml` (extension cosign) | PARTIAL (images unsigned; no per-image SBOM/SLSA) | Phase 2 |
-| Insecure defaults hard-fail in production | (implied by self-host) | none (warn-only) | NO GATE | Phase 2 |
+| Insecure defaults hard-fail in production | (implied by self-host) | `ci.yml` api tests (`test_security_defaults.py::test_enforce_*`; `enforce_secure_defaults` raises at boot in production) | GATED | - |
 | OpenAPI stability for 3 SDKs + MCP | (implied by SDKs) | `check-openapi.yml` (drift only) | NO GATE (no breaking-change semantics) | Phase 11 |
 
 ## Summary
 
-- GATED: 9
+- GATED: 10
 - PARTIAL: 14
-- NO GATE: 4 (Phases 1.1/1.3/1.4 moved prompt-injection, non-Postgres isolation, and no-data-exfiltration from NO GATE to PARTIAL)
+- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; remaining NO GATE close in Phases 4/10/11)
+
+The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
 The Definition of Done requires zero `NO GATE` and zero unclosed `PARTIAL`. Each row's "Closes in" column is the binding commitment.

@@ -165,6 +165,8 @@ Full architecture (every service, every storage role, the v1.5 console workbench
 
 A handful of headline capabilities — the rest are catalogued in [`apps/docs/docs/features/`](apps/docs/docs/features/) and indexed at the top of [`apps/docs/docs/intro.md`](apps/docs/docs/intro.md):
 
+> **Maturity.** Connectors, Investigation Rail + Ledger, and Hunt-as-Code are GA. Detection-as-Code and L0–L4 autonomy are beta (eval-gate and rollback/post-action-verification hardening in progress). The live-agent benchmark is preview; the substrate eval suites are GA. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
+
 - **69 click-and-connect data connectors** (EDR/XDR, SIEM, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
 - **Investigation Rail + replayable Investigation Ledger** — every prompt, tool call, evidence chip, and rationale stored against a case, replayable in the UI. [`apps/docs/docs/console/investigation-rail.md`](apps/docs/docs/console/investigation-rail.md).
 - **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that regresses MITRE accuracy. [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the 800+ native Sigma rules live in [`detections/`](detections/).

@@ -1,6 +1,6 @@
 # Third-Party Content Licenses
 
-AiSOC ships under [Apache-2.0](LICENSE). Some content under [`detections/`](detections/) is **imported** from upstream open-source detection corpora and is redistributed under each upstream project's own license. Every imported rule carries a `provenance` block documenting its source, upstream id, commit SHA, and license, so you can always trace a rule back to its origin.
+AiSOC ships under the [MIT License](LICENSE). Some content under [`detections/`](detections/) is **imported** from upstream open-source detection corpora and is redistributed under each upstream project's own license. Every imported rule carries a `provenance` block documenting its source, upstream id, commit SHA, and license, so you can always trace a rule back to its origin.
 
 This file is the canonical attribution registry. It is updated automatically when [`tools/detection-import/import.py`](tools/detection-import/import.py) runs.
 
@@ -61,9 +61,9 @@ DRL-1.1 summary: you may use, modify, and redistribute Sigma rules provided you 
 
 ## Native AiSOC content
 
-Everything under `detections/cloud/`, `detections/identity/`, `detections/endpoint/`, `detections/network/`, `detections/application/`, and `detections/data-exfil/` is **native AiSOC content** authored against AiSOC's own normalized event schema. Native rules are licensed under [Apache-2.0](LICENSE) and carry a `provenance.source: native` marker.
+Everything under `detections/cloud/`, `detections/identity/`, `detections/endpoint/`, `detections/network/`, `detections/application/`, and `detections/data-exfil/` is **native AiSOC content** authored against AiSOC's own normalized event schema. Native rules are licensed under the [MIT License](LICENSE) and carry a `provenance.source: native` marker.
 
-`detections/community/` carries community contributions, also under Apache-2.0 with the contributor named in the provenance block.
+`detections/community/` carries community contributions, also under MIT with the contributor named in the provenance block.
 
 ---
 

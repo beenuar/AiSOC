@@ -16,7 +16,9 @@ from __future__ import annotations
 import pytest
 from app.core.config import (
     INSECURE_SECRET_KEY_DEFAULTS,
+    InsecureProductionDefaultsError,
     Settings,
+    enforce_secure_defaults,
     warn_if_insecure_defaults,
 )
 from fastapi import FastAPI
@@ -49,6 +51,29 @@ def _make_settings(**overrides) -> Settings:
     # ``_env_file=None`` skips .env discovery so test runs are deterministic
     # regardless of the developer's local config.
     return Settings(_env_file=None, **base)
+
+
+# ─── enforce_secure_defaults (Phase 2 hard-fail) ───────────────────────────
+
+
+def test_enforce_raises_in_prod_with_insecure_default():
+    bad = next(iter(INSECURE_SECRET_KEY_DEFAULTS))
+    s = _make_settings(ENVIRONMENT="production", SECRET_KEY=bad)
+    with pytest.raises(InsecureProductionDefaultsError):
+        enforce_secure_defaults(s)
+
+
+def test_enforce_clean_prod_does_not_raise():
+    s = _make_settings()  # clean production baseline
+    assert enforce_secure_defaults(s) == []
+
+
+def test_enforce_non_prod_insecure_does_not_raise():
+    bad = next(iter(INSECURE_SECRET_KEY_DEFAULTS))
+    s = _make_settings(ENVIRONMENT="staging", SECRET_KEY=bad)
+    # Non-production: warns (non-empty), but never hard-fails the boot.
+    msgs = enforce_secure_defaults(s)
+    assert msgs  # the warning still fired
 
 
 # ─── warn_if_insecure_defaults ─────────────────────────────────────────────

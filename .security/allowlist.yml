@@ -1,0 +1,20 @@
+# Security scanner allowlist (Phase 2)
+#
+# Suppressions for the Semgrep / Trivy / checkov / tfsec scanners in
+# .github/workflows/security.yml. Every entry MUST carry a reason and an
+# expiry date; expired entries fail CI once the scanners flip from observe to
+# blocking (tracked Phase 2 continuation). This is separate from the
+# dependency-CVE ignore list at scripts/security_audit_ignores.txt.
+#
+# Schema:
+#   entries:
+#     - tool: semgrep|trivy|checkov|tfsec
+#       id: <rule/check id>
+#       path: <optional path glob>
+#       reason: <why this is acceptable>            # required, non-empty
+#       expires: YYYY-MM-DD                          # required, <= 90 days out
+#
+# Keep this list empty until a scanner is ratcheted to blocking; add triaged
+# baseline findings here at that time, never blanket-suppress.
+
+entries: []

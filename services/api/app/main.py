@@ -18,7 +18,7 @@ from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
 from app.core.airgap import airgap_status
-from app.core.config import is_dev_env, settings, warn_if_insecure_defaults
+from app.core.config import enforce_secure_defaults, is_dev_env, settings
 from app.core.cors import build_cors_kwargs
 from app.core.logging import configure_logging
 from app.core.scheduler_lock import scheduler_lock
@@ -88,8 +88,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Surface insecure defaults (placeholder SECRET_KEY, missing METRICS_TOKEN
     # outside dev, plugin trust mode disabled outside dev) at the top of the
-    # log stream so operators see them before anything else.
-    warn_if_insecure_defaults(settings)
+    # log stream so operators see them before anything else. In production this
+    # hard-fails the boot rather than serving with a known-bad secret (Phase 2).
+    enforce_secure_defaults(settings)
 
     # Create all database tables (dev only; use Alembic migrations in prod).
     # We keep this narrowly scoped to the canonical ``"development"`` label

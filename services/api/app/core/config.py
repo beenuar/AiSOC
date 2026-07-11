@@ -752,4 +752,32 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     return msgs
 
 
+def is_production(env: str | None) -> bool:
+    """True only for the literal ``production`` environment."""
+    return (env or "").strip().lower() == "production"
+
+
+class InsecureProductionDefaultsError(RuntimeError):
+    """Raised at boot when insecure defaults remain in a production deploy."""
+
+
+def enforce_secure_defaults(s: Settings | None = None) -> list[str]:
+    """Warn everywhere; **hard-fail the boot** in production (Phase 2).
+
+    ``warn_if_insecure_defaults`` only warns, which means a production deploy
+    can silently start with ``changeme``/placeholder secrets. This wrapper is
+    the boot-time gate: it emits the same warnings and then, if
+    ``ENVIRONMENT=production`` and any insecure default remains, raises so the
+    container crash-loops loudly instead of serving with a known-bad secret.
+
+    Returns the (empty, in a healthy prod) list of messages so callers/tests
+    can assert on it.
+    """
+    s = s or settings
+    msgs = warn_if_insecure_defaults(s)
+    if is_production(s.ENVIRONMENT) and msgs:
+        raise InsecureProductionDefaultsError("Refusing to boot in production with insecure defaults:\n  - " + "\n  - ".join(msgs))
+    return msgs
+
+
 settings = get_settings()

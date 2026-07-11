@@ -1,0 +1,113 @@
+name: Security
+
+# Phase 2 supply-chain + truth gates. Complements the existing codeql.yml
+# (SAST), security-audit.yml (dependency CVEs), and scorecard.yml.
+#
+# Enforcement policy (honest ratchet):
+#   - HARD gates (fail the build): the claim-to-gate matrix ratchet and secret
+#     scanning. A committed secret or a new ungated claim must never merge.
+#   - OBSERVE gates (report, do not fail yet): Semgrep, Trivy, checkov/tfsec.
+#     These scan a ~200k-line pre-existing codebase; we surface findings on
+#     every PR and ratchet them to blocking once a baseline is triaged into
+#     .security/allowlist.yml. Flipping continue-on-error to false is the
+#     tracked Phase 2 continuation.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  # ── HARD: every marketing claim maps to a gate (ratchet) ──────────────────
+  claim-gate-matrix:
+    name: Claim-to-gate matrix (ratchet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Enforce no new NO GATE rows
+        run: python3 scripts/check_claim_gate_matrix.py
+
+  # ── HARD: no secrets in the working tree ──────────────────────────────────
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tgz
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan working tree (respects .gitleaksignore)
+        run: gitleaks dir . --redact --exit-code 1 --no-banner
+
+  # ── OBSERVE: SAST beyond CodeQL ───────────────────────────────────────────
+  semgrep:
+    name: Semgrep (observe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install semgrep
+        run: pip install --quiet semgrep
+      - name: Scan
+        continue-on-error: true
+        run: |
+          semgrep --error --disable-version-check \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/python \
+            --config p/typescript \
+            --config p/react \
+            --exclude plans/ \
+            services/ apps/ packages/ scripts/
+
+  # ── OBSERVE: filesystem vuln scan (complements dependency SCA) ────────────
+  trivy-fs:
+    name: Trivy filesystem (observe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Trivy scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          skip-dirs: plans
+
+  # ── OBSERVE: IaC misconfig scan ───────────────────────────────────────────
+  iac-scan:
+    name: IaC scan (checkov + tfsec, observe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: checkov (terraform + helm)
+        continue-on-error: true
+        run: |
+          pip install --quiet checkov
+          checkov -d infra/terraform --quiet --compact || true
+          checkov -d infra/helm --quiet --compact || true
+      - name: tfsec (terraform)
+        continue-on-error: true
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infra/terraform
