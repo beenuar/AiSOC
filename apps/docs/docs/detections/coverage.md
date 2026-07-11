@@ -11,12 +11,12 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-07-06T01:46:29Z`
+Generated: `2026-07-11T13:45:01Z`
 
 ## Headline numbers
 
 - **Curated v1.0 detections**: `416` (target: ≥ 300)
-- **Total rules considered**: `1053` (quality floor: 0.55)
+- **Total rules considered**: `1054` (quality floor: 0.55)
 - **Unique MITRE techniques covered**: `117`
 
 ## Coverage by buyer family

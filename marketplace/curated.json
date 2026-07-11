@@ -1,10 +1,10 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-06T01:46:29Z",
+  "generated": "2026-07-11T13:45:01Z",
   "stats": {
-    "considered": 1053,
-    "eligible": 1049,
+    "considered": 1054,
+    "eligible": 1050,
     "selected": 416,
     "min_per_family": 25,
     "min_total": 300,

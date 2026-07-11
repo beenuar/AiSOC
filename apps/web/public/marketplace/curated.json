@@ -1,15 +1,15 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-05-14T12:28:25Z",
+  "generated": "2026-07-11T13:45:01Z",
   "stats": {
-    "considered": 1052,
-    "eligible": 1048,
+    "considered": 1054,
+    "eligible": 1050,
     "selected": 416,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 118,
+    "unique_techniques": 117,
     "selected_by_tier": {
       "imported": 42,
       "native": 374
@@ -23,10 +23,10 @@
     "selected_by_category": {
       "_migrated": 1,
       "application": 29,
-      "cloud": 164,
+      "cloud": 165,
       "data-exfil": 20,
       "endpoint": 117,
-      "identity": 73,
+      "identity": 72,
       "network": 12
     }
   },
@@ -434,6 +434,7 @@
         "det-cloud-208",
         "det-cloud-209",
         "det-cloud-213",
+        "det-cloud-226",
         "det-endpoint-026",
         "det-endpoint-027",
         "det-endpoint-141",
@@ -457,7 +458,6 @@
         "det-identity-003",
         "det-identity-004",
         "det-identity-006",
-        "det-identity-008",
         "det-identity-009",
         "det-identity-020",
         "det-identity-021",
@@ -656,7 +656,7 @@
     "T1087": 1,
     "T1087.004": 1,
     "T1098": 16,
-    "T1098.001": 13,
+    "T1098.001": 14,
     "T1098.003": 7,
     "T1098.004": 6,
     "T1098.007": 1,
@@ -728,8 +728,7 @@
     "T1609": 1,
     "T1610": 11,
     "T1611": 24,
-    "T1612": 1,
-    "T1621": 1
+    "T1612": 1
   },
   "items": [
     {
@@ -5718,6 +5717,32 @@
       "has_executable_body": true
     },
     {
+      "id": "det-cloud-226",
+      "name": "AWS IAM UpdateAccessKey On Privileged Principal",
+      "path": "detections/cloud/aws-iam-update-access-key-privileged.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
       "id": "det-data-exfil-001",
       "name": "Large Outbound Transfer to Personal Cloud Storage",
       "path": "detections/data-exfil/large-egress-personal-cloud.yaml",
@@ -8317,32 +8342,6 @@
       "severity": "high",
       "mitre_techniques": [
         "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-008",
-      "name": "MFA Push Bombing (MFA Fatigue)",
-      "path": "detections/identity/mfa-fatigue.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1621"
       ],
       "mitre_tactics": [],
       "families": [
