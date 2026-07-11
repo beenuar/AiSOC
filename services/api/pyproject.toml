@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = ">=0.111,<0.140"
-uvicorn = { version = ">=0.29,<0.51", extras = ["standard"] }
+uvicorn = { version = ">=0.29,<0.52", extras = ["standard"] }
 # EmailStr (used in auth/passkeys/tenants endpoints) requires the optional
 # email-validator package, which is only pulled in via the "email" extra.
 # Without it the API crashes on import with "email-validator is not installed".
