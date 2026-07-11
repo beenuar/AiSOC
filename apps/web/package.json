@@ -49,7 +49,7 @@
     "@storybook/addon-themes": "^9.1.0",
     "@storybook/react-vite": "^9.1.0",
     "@storybook/test-runner": "^0.23.0",
-    "@tailwindcss/postcss": "^4.3.1",
+    "@tailwindcss/postcss": "^4.3.2",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^16.3.2",
