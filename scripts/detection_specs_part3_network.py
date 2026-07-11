@@ -43,7 +43,7 @@ DNS_RULES: list[dict] = [
       severity="high", mitre=["t1071.004"], product="dns", service="resolver",
       when={"event_type": "dns_response", "qtype": "TXT", "response_size_bytes_gt": 512},
       fp=["DKIM/SPF audit"], playbook="tpl-command-and-control"),
-    S(slug="dns-text-record", name="DNS TXT Response Over 250 Bytes From Non-Resolver Host",
+    S(slug="dns-txt-record", name="DNS TXT Response Over 250 Bytes From Non-Resolver Host",
       severity="medium", mitre=["t1071.004", "t1048.003"], product="dns", service="resolver",
       when={"event_type": "dns_response", "qtype": "TXT", "response_size_bytes_gt": 250, "src_role_not_in": ["resolver"]},
       fp=["Approved DNS telemetry or resolver health checks"], playbook="tpl-command-and-control"),
