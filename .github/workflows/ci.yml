@@ -324,6 +324,7 @@ jobs:
             tests/test_fusion_client.py \
             tests/test_prompt_sanitizer.py \
             tests/test_prompt_envelope.py \
+            tests/test_privacy_redactor.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────

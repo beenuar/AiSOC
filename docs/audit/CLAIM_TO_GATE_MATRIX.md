@@ -16,7 +16,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: api tests` (`audit_hash`, audit immutability) | PARTIAL (write path gated; UI replay only in hermetic e2e) | Phase 3.2 |
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | GATED (but suites are self-consistency; see reality report) | Phase 4 |
 | Alert-reduction is a real measurement | README L62 | `ci.yml :: p1-eval` (`alert_reduction`) | PARTIAL (gates an in-test fusion re-impl, not `services/fusion`) | Phase 4 |
-| Runs entirely on your infrastructure / no data exfiltration | README L63 | none | NO GATE | Phase 1.4 |
+| Runs entirely on your infrastructure / no data exfiltration | README L63 | `ci.yml :: python-test` (agents) runs `test_privacy_redactor.py` (zero raw PII survives) | PARTIAL (redaction gated + README made precise per mode; air-gapped egress-blocked CI + Helm NetworkPolicy in continuation/Phase 2) | Phase 2 |
 | Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: p1-eval` (w2-dac baseline) | PARTIAL (circular: candidate `rule_body` never evaluated) | Phase 4 |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
 | 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance) | PARTIAL (97% quarantined/non-executable; heatmap is tag-based) | Phase 4 Tier 3 |
@@ -39,7 +39,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 ## Summary
 
 - GATED: 9
-- PARTIAL: 13
-- NO GATE: 5 (Phase 1.1 moved prompt-injection resistance to PARTIAL; Phase 1.3 moved non-Postgres tenant isolation to PARTIAL)
+- PARTIAL: 14
+- NO GATE: 4 (Phases 1.1/1.3/1.4 moved prompt-injection, non-Postgres isolation, and no-data-exfiltration from NO GATE to PARTIAL)
 
 The Definition of Done requires zero `NO GATE` and zero unclosed `PARTIAL`. Each row's "Closes in" column is the binding commitment.

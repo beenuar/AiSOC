@@ -60,7 +60,7 @@ Three properties distinguish it from closed-source AI SOC vendors:
 
 1. **Agent decisions are logged.** The Investigation Ledger stores the LLM prompt, the response, the evidence cited, and the downstream tool calls for every step of every run. Replays are available later.
 2. **The substrate has a public eval harness in CI.** Five suites gate every PR targeting `main` / `develop` — alert reduction is a real measurement against a fixed 1 000-alert stream; three rubric-based suites are substrate self-consistency gates over a deterministic 200-incident dataset (55 templates) with per-template macros; a fifth gate validates the backing telemetry corpus. The [benchmark page](apps/docs/docs/benchmark.md) documents exactly what each suite measures and what it does not.
-3. **It runs entirely on your infrastructure.** No callbacks to a vendor cloud and no data exfiltration for "model improvement."
+3. **You control what leaves your perimeter.** No callbacks to a vendor cloud and no "model improvement" telemetry. With a hosted LLM, evidence is pseudonymized by default (internal IPs, hostnames, emails, paths, secrets, usernames become opaque tokens); run a local model (Ollama/vLLM) for a fully air-gapped path. Exactly what leaves under each mode: [`docs/trust/data-flows.md`](docs/trust/data-flows.md).
 
 The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agents/). It is small enough to read end-to-end, swap models in, and patch.
 
