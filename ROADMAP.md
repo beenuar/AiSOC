@@ -23,7 +23,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Committed status is the checklist below (per-session working detail is tracked locally in `docs/audit/PROGRESS.md`, which is gitignored per repo convention). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
 
 - [x] Phase 0 — Reality audit (claim-to-gate matrix, ranked overclaims/untested-paths/circular-gates)
-- [ ] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)
+- [x] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)
 - [ ] Phase 2 — Supply chain + truth (SAST/deps/containers/secrets/IaC gates, signed attested releases, hard-fail insecure prod defaults, README honesty)
 - [ ] Phase 3 — Integration / E2E / chaos / DR (real-container spine test, backup-restore, chaos, upgrade)
 - [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix)

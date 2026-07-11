@@ -5,7 +5,8 @@ AiSOC is security software, so we take vulnerabilities in our own stack seriousl
 ## Threat models
 
 - Agent + tool surface (prompt injection, tool abuse): [`docs/security/agent-threat-model.md`](docs/security/agent-threat-model.md).
-- Platform + credential vault: [`docs/security/platform-threat-model.md`](docs/security/platform-threat-model.md) (Phase 1.6).
+- Platform + credential vault (KMS envelope encryption, key rotation): [`docs/security/platform-threat-model.md`](docs/security/platform-threat-model.md).
+- Connector least-privilege scopes: [`docs/security/connector-least-privilege.md`](docs/security/connector-least-privilege.md).
 
 ## Supported versions
 
