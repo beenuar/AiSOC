@@ -30,6 +30,15 @@ updates:
         # (and merge it back into `dev-tooling`) once
         # `eslint-plugin-react` is ESLint-10-compatible.
         patterns: ["eslint*", "@typescript-eslint/*"]
+    ignore:
+      # Hold `eslint` on v9: ESLint 10 removed the `context.getFilename()`
+      # API that `eslint-plugin-react` (bundled via `eslint-config-next`)
+      # still calls, so `pnpm run lint` crashes with
+      # `TypeError: contextOrFilename.getFilename is not a function`.
+      # Drop this ignore once `eslint-plugin-react` ships an
+      # ESLint-10-compatible release, then bump the family in one pass.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   # ── pip (api) ────────────────────────────────────────────────
   - package-ecosystem: pip
