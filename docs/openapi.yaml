@@ -8953,7 +8953,13 @@ paths:
       tags:
       - feedback
       summary: Apply Redisposition Endpoint
-      description: Bulk-update the disposition on past alerts the analyst confirmed.
+      description: 'Bulk-update the disposition on past alerts the analyst confirmed.
+
+
+        Requires the confirmation token from the preview; a stale/tampered set or
+        a
+
+        batch over the cap is rejected rather than silently flipping history.'
       operationId: apply_redisposition_endpoint_api_v1_feedback_redisposition_apply_post
       requestBody:
         content:
@@ -13581,6 +13587,23 @@ components:
             $ref: '#/components/schemas/RedispositionCandidateModel'
           type: array
           title: Redisposition Candidates
+        redisposition_confirmation_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Redisposition Confirmation Token
+        redisposition_capped:
+          type: boolean
+          title: Redisposition Capped
+          default: false
+        redisposition_quarantined:
+          type: boolean
+          title: Redisposition Quarantined
+          default: false
+        redisposition_total_matched:
+          type: integer
+          title: Redisposition Total Matched
+          default: 0
       type: object
       required:
       - alert_id
@@ -22048,10 +22071,16 @@ components:
         new_disposition:
           type: string
           title: New Disposition
+        confirmation_token:
+          type: string
+          title: Confirmation Token
+          description: Token from the /alert-override preview over this exact alert
+            set (Phase 1.2 blast-radius control)
       type: object
       required:
       - alert_ids
       - new_disposition
+      - confirmation_token
       title: RedispositionApplyRequest
     RedispositionApplyResponse:
       properties:
