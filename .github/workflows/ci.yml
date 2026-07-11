@@ -322,6 +322,8 @@ jobs:
             tests/test_response_quality.py \
             tests/test_audit_helpers.py \
             tests/test_fusion_client.py \
+            tests/test_prompt_sanitizer.py \
+            tests/test_prompt_envelope.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────

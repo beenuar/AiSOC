@@ -20,7 +20,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ## World-Class Hardening Program (2026-07, in flight)
 
-A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Live status: [`docs/audit/PROGRESS.md`](docs/audit/PROGRESS.md). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
+A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Committed status is the checklist below (per-session working detail is tracked locally in `docs/audit/PROGRESS.md`, which is gitignored per repo convention). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
 
 - [x] Phase 0 — Reality audit (claim-to-gate matrix, ranked overclaims/untested-paths/circular-gates)
 - [ ] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)

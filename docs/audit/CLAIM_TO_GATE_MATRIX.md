@@ -25,7 +25,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Weekly benchmark scoreboard runs live against `main` | README L173 | `wet-eval.yml` (weekly) | NO GATE (no-ops without secret; live-agent tables are placeholders) | Phase 4 Tier 1 |
 | MCP server exposes 13 tools | README L179 | `ci.yml :: mcp` | GATED | - |
 | Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; contract-drift vs `docs/openapi.yaml` ungated) | Phase 11 |
-| Prompt-injection resistance | (implied by agent claims) | none (test excluded from CI file list) | NO GATE | Phase 1.1 |
+| Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py` + `test_prompt_envelope.py` | PARTIAL (unit-level nonce envelope + guard gated; 150-payload adversarial eval + tool-call provenance in Phase 4 Tier 2) | Phase 4 |
 | Cross-tenant isolation (Postgres) | (implied by multi-tenant) | `cross-tenant-rbac.yml` (nightly, 3 endpoints) + `ci.yml` | PARTIAL (Postgres only, compiled-SQL not live DB) | Phase 1.3 |
 | Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | none | NO GATE | Phase 1.3 |
 | SAST | README badge (CodeQL) | `codeql.yml` | GATED | - |
@@ -39,7 +39,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 ## Summary
 
 - GATED: 9
-- PARTIAL: 11
-- NO GATE: 7
+- PARTIAL: 12
+- NO GATE: 6 (Phase 1.1 moved prompt-injection resistance from NO GATE to PARTIAL)
 
 The Definition of Done requires zero `NO GATE` and zero unclosed `PARTIAL`. Each row's "Closes in" column is the binding commitment.

@@ -2,6 +2,11 @@
 
 AiSOC is security software, so we take vulnerabilities in our own stack seriously. This document explains how to report issues responsibly and what to expect from us.
 
+## Threat models
+
+- Agent + tool surface (prompt injection, tool abuse): [`docs/security/agent-threat-model.md`](docs/security/agent-threat-model.md).
+- Platform + credential vault: [`docs/security/platform-threat-model.md`](docs/security/platform-threat-model.md) (Phase 1.6).
+
 ## Supported versions
 
 | Version | Status |

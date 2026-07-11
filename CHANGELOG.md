@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Phase 1.1 — prompt-injection structural containment + detection.** New `services/agents/app/prompting/envelope.py`: per-run cryptographic-nonce evidence fence (`EvidenceEnvelope`, `make_nonce`, `system_rule`) so injected text cannot forge the closing delimiter to break out of the data block, and a `PromptInjectionGuard` that scans untrusted evidence for instruction-shaped content (role markers, "ignore previous", secret/prompt exfiltration, SOAR tool-name mentions, base64- and zero-width-obfuscated directives) and, on a high-severity hit, signals demotion of the case autonomy tier to L0. Added `services/agents/tests/test_prompt_envelope.py` (25 tests across every ingest path) and gated it plus the previously-ungated `test_prompt_sanitizer.py` in the CI agents job (fixed its stale agent-wiring expectations — the investigator agents sanitise via `sanitize_text` / `sanitize_iterable_of_strings` / `format_bundle_prompt_append`). Threat model: `docs/security/agent-threat-model.md`.
+
 ### Added
 
-- **World-class program Phase 0 — reality audit** (no product code). `docs/audit/REALITY_REPORT.md` classifies every headline `README.md` claim against the code (`production` / `functional-untested` / `template-fallback` / `demo-only` / `stub`) and ranks Overclaims, Load-bearing untested paths, and Circular gates. `docs/audit/CLAIM_TO_GATE_MATRIX.md` maps 27 claims to their CI gate or `NO GATE` (9 GATED / 11 PARTIAL / 7 NO GATE), each with a binding "Closes in" phase. `docs/audit/PROGRESS.md` tracks the 12-phase program. Tracking doc: `AISOC_CURSOR_PROMPT_V2.md`.
+- **World-class program Phase 0 — reality audit** (no product code). `docs/audit/REALITY_REPORT.md` classifies every headline `README.md` claim against the code (`production` / `functional-untested` / `template-fallback` / `demo-only` / `stub`) and ranks Overclaims, Load-bearing untested paths, and Circular gates. `docs/audit/CLAIM_TO_GATE_MATRIX.md` maps 27 claims to their CI gate or `NO GATE` (9 GATED / 11 PARTIAL / 7 NO GATE), each with a binding "Closes in" phase. The committed 12-phase status checklist lives in `ROADMAP.md` (per-session working detail is in the gitignored `docs/audit/PROGRESS.md`). Tracking doc: `AISOC_CURSOR_PROMPT_V2.md`.
 
 ## [7.5.0] — 2026-06-29
 

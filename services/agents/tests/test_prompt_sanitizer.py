@@ -531,18 +531,23 @@ class TestAgentWiring:
     @pytest.mark.parametrize(
         ("module_path", "expected_calls"),
         [
-            ("app.investigator.recon_agent", ["sanitize_text", "sanitize_for_prompt"]),
+            # Every prompt-construction site must route untrusted evidence
+            # through the sanitiser. The agents sanitise scalar fields via
+            # sanitize_text / sanitize_iterable_of_strings and the context
+            # bundle via format_bundle_prompt_append (which itself calls
+            # sanitize_text). Any one of these disappearing is a regression.
+            ("app.investigator.recon_agent", ["sanitize_text", "format_bundle_prompt_append"]),
             (
                 "app.investigator.forensic_agent",
-                ["sanitize_text", "sanitize_iterable_of_strings", "sanitize_for_prompt"],
+                ["sanitize_text", "sanitize_iterable_of_strings", "format_bundle_prompt_append"],
             ),
             (
                 "app.investigator.responder_agent",
-                ["sanitize_text", "sanitize_iterable_of_strings", "sanitize_for_prompt"],
+                ["sanitize_text", "sanitize_iterable_of_strings", "format_bundle_prompt_append"],
             ),
             (
                 "app.investigator.report_writer_agent",
-                ["sanitize_text", "sanitize_iterable_of_strings", "sanitize_for_prompt"],
+                ["sanitize_text", "sanitize_iterable_of_strings", "format_bundle_prompt_append"],
             ),
         ],
     )
