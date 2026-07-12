@@ -12,13 +12,30 @@ Usage:
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "services" / "agents"))
 
-from app.llm.prompt_registry import default_registry, load_lock, write_lock  # noqa: E402
+
+def _load_prompt_registry_module():
+    """Load prompt_registry.py by path so we don't trigger app/llm/__init__.py
+    (which imports contract → structlog). This gate runs in the dep-light lint
+    job, which installs only ruff + mypy; prompt_registry.py is stdlib-only."""
+    path = ROOT / "services" / "agents" / "app" / "llm" / "prompt_registry.py"
+    spec = importlib.util.spec_from_file_location("aisoc_prompt_registry_under_check", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_pr = _load_prompt_registry_module()
+default_registry = _pr.default_registry
+load_lock = _pr.load_lock
+write_lock = _pr.write_lock
 
 
 def main() -> int:
