@@ -27,9 +27,10 @@ MATRIX = ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
 # Ratchet baseline: the number of NO GATE rows allowed. Lower this as phases
 # close gaps; never raise it. Phase 1 closed injection / non-Postgres isolation
 # / no-exfiltration; Phase 2 closed insecure-defaults + secret/IaC scanning;
-# Phase 10 moved connector "live Test connection" off NO GATE. Remaining NO GATE
-# rows (wet-eval live tables, OpenAPI breaking-change) close in Phases 4c / 11.
-MAX_NO_GATE = 2
+# Phase 10 moved connector "live Test connection" off NO GATE; Phase 11 moved
+# OpenAPI breaking-change semantics to GATED. The last NO GATE row (wet-eval
+# live-agent scoreboard tables) closes in Phase 4c (needs a budgeted live run).
+MAX_NO_GATE = 1
 
 
 def _parse_status_rows(text: str) -> list[str]:

@@ -24,7 +24,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Hunt-as-Code + `/hunt` | README L172 | `ci.yml :: p1-eval` (`hunt_corpus`) | GATED | - |
 | Weekly benchmark scoreboard runs live against `main` | README L173 | `wet-eval.yml` (weekly) | NO GATE (no-ops without secret; live-agent tables are placeholders) | Phase 4 Tier 1 |
 | MCP server exposes 13 tools | README L179 | `ci.yml :: mcp` | GATED | - |
-| Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; contract-drift vs `docs/openapi.yaml` ungated) | Phase 11 |
+| Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; OpenAPI breaking-change now gated via `openapi-breaking.yml`, so a spec change that would break the generated SDKs is caught; per-language generated-client contract-drift is 11b) | Phase 11b |
 | Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py` + `test_prompt_envelope.py` | PARTIAL (unit-level nonce envelope + guard gated; 150-payload adversarial eval + tool-call provenance in Phase 4 Tier 2) | Phase 4 |
 | Cross-tenant isolation (Postgres) | (implied by multi-tenant) | `cross-tenant-rbac.yml` (nightly, 3 endpoints) + `ci.yml` | PARTIAL (Postgres only, compiled-SQL not live DB) | Phase 1.3 |
 | Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | `isolation.yml` (offline: read paths construct a tenant scope) + `isolation-live.yml` (live A-vs-B replay: Neo4j property filter, Redis keyspace namespacing, ClickHouse via production `lake_sql.rewrite_for_tenant`, Kafka per-tenant envelope filter) | GATED | - |
@@ -34,13 +34,13 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Container image / IaC / secret scanning (Trivy/checkov/tfsec/gitleaks/Semgrep) | (implied by security) | `security.yml` (claim-matrix ratchet HARD; gitleaks/Semgrep/Trivy/checkov/tfsec observe) | PARTIAL (matrix ratchet enforced; secret + code/IaC/container scanners report-and-ratchet, allowlist at `.security/allowlist.yml` / `.gitleaksignore`; GitHub push-protection is the always-on hard secret gate) | Phase 2 |
 | Signed / attested release artifacts | (implied by "run next to crown jewels") | `release.yml` + `publish-images.yml` (cosign keyless signatures, CycloneDX SBOM attestation, BuildKit SLSA provenance + SPDX SBOM per image; SHA-pinned actions), `build-extensions.yml` (extension cosign) | GATED | - |
 | Insecure defaults hard-fail in production | (implied by self-host) | `ci.yml` api tests (`test_security_defaults.py::test_enforce_*`; `enforce_secure_defaults` raises at boot in production) | GATED | - |
-| OpenAPI stability for 3 SDKs + MCP | (implied by SDKs) | `check-openapi.yml` (drift only) | NO GATE (no breaking-change semantics) | Phase 11 |
+| OpenAPI stability for 3 SDKs + MCP | (implied by SDKs) | `check-openapi.yml` (drift) + `openapi-breaking.yml` (`scripts/openapi_diff.py` — PR spec vs base fails on removed endpoint/schema/field, type change, tightened request, or dropped enum value) | GATED | - |
 
 ## Summary
 
-- GATED: 14
+- GATED: 15
 - PARTIAL: 11
-- NO GATE: 2 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; Phase 4 moved the DAC candidate-rule gate and the imported-count honesty gate to GATED; Phase 10 moved connector "live Test connection" NO GATE → PARTIAL via the conformance contract; remaining NO GATE — wet-eval live tables (Phase 4c) and OpenAPI breaking-change semantics (Phase 11) — close next)
+- NO GATE: 1 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED; Phase 4 moved the DAC candidate-rule gate and imported-count honesty gate to GATED; Phase 10 moved connector "live Test connection" off NO GATE; Phase 11 moved OpenAPI breaking-change semantics to GATED. The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c, which needs a budgeted live-agent run)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 

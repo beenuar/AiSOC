@@ -1,0 +1,59 @@
+name: OpenAPI breaking-change gate
+
+# Phase 11 (world-class program) — check-openapi.yml proves the spec matches the
+# code (drift); this adds the missing breaking-change semantics. On a PR that
+# touches docs/openapi.yaml, diff the PR's spec against the base branch's spec
+# and fail on any change that would break an existing generated SDK client
+# (removed endpoint/schema/field, type change, tightened request, dropped enum
+# value). Ship a breaking change deliberately by bumping the version and adding
+# a CHANGELOG BREAKING note (then a maintainer re-runs with --allow-breaking).
+
+on:
+  pull_request:
+    paths:
+      - "docs/openapi.yaml"
+      - "scripts/openapi_diff.py"
+      - "tests/test_openapi_diff.py"
+      - ".github/workflows/openapi-breaking.yml"
+
+concurrency:
+  group: openapi-breaking-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  breaking-change:
+    name: No breaking OpenAPI changes vs base
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install --quiet pyyaml pytest
+
+      - name: Unit-test the detector
+        run: python -m pytest tests/test_openapi_diff.py -v --tb=short
+
+      - name: Extract base-branch spec
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if git cat-file -e "${BASE}:docs/openapi.yaml" 2>/dev/null; then
+            git show "${BASE}:docs/openapi.yaml" > /tmp/base-openapi.yaml
+            echo "extracted base spec from ${BASE}"
+          else
+            echo "no base spec (new file) — nothing to compare"
+            cp docs/openapi.yaml /tmp/base-openapi.yaml
+          fi
+
+      - name: Diff for breaking changes
+        run: python scripts/openapi_diff.py --old /tmp/base-openapi.yaml --new docs/openapi.yaml
