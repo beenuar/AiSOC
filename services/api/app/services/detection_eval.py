@@ -119,18 +119,14 @@ def evaluate_candidate_rule(
         fired, err = _fires(rule_language, rule_body, event)
         if fired:
             positives_fired += 1
-        outcomes.append(
-            FixtureOutcome(index=i, kind="positive", fired=fired, expected_fire=True, ok=fired, error=err)
-        )
+        outcomes.append(FixtureOutcome(index=i, kind="positive", fired=fired, expected_fire=True, ok=fired, error=err))
 
     negatives_fired = 0
     for i, event in enumerate(negative_fixtures):
         fired, err = _fires(rule_language, rule_body, event)
         if fired:
             negatives_fired += 1
-        outcomes.append(
-            FixtureOutcome(index=i, kind="negative", fired=fired, expected_fire=False, ok=not fired, error=err)
-        )
+        outcomes.append(FixtureOutcome(index=i, kind="negative", fired=fired, expected_fire=False, ok=not fired, error=err))
 
     fired_on_all_positives = positives_fired == len(positive_fixtures)
     silent_on_all_negatives = negatives_fired == 0
