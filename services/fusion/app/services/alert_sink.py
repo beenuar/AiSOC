@@ -39,13 +39,20 @@ INSERT INTO alerts (
 SELECT
     $1, $2, $3, $4, 'new',
     $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb,
-    $10, $11, $12, $13::jsonb,
+    $10::text, $11, $12, $13::jsonb,
     $14, $15, COALESCE($16, NOW())
 WHERE NOT EXISTS (
-    SELECT 1 FROM alerts WHERE tenant_id = $1 AND dedup_hash = $10
+    SELECT 1 FROM alerts WHERE tenant_id = $1 AND dedup_hash = $10::text
 )
 RETURNING id
 """
+# NB: $10 (dedup_hash) is cast to ::text in BOTH the INSERT target and the
+# WHERE. `dedup_hash` is VARCHAR(64), and varchar comparisons resolve through
+# text operators — so `WHERE dedup_hash = $10` deduces $10 as text while the
+# INSERT target deduces it as varchar. asyncpg's prepare cannot unify the two
+# ("inconsistent types deduced for parameter $10: text versus character
+# varying") and the persist fails silently, so no alert row is ever written.
+# Pinning both uses to ::text makes the deduction unambiguous.
 
 
 def _asyncpg_dsn(url: str) -> str:

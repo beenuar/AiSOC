@@ -110,7 +110,15 @@ resolve_timestamp() {
     fi
     log "Latest timestamp: $TIMESTAMP"
   fi
-  [[ -z "$TIMESTAMP" ]] && { echo "--timestamp or --latest is required" >&2; exit 1; }
+  if [[ -z "$TIMESTAMP" ]]; then
+    echo "--timestamp or --latest is required" >&2
+    exit 1
+  fi
+  # Return explicit success: with the previous `[[ -z … ]] && { … }` form, the
+  # test evaluates false (exit 1) once a timestamp is resolved, and as the
+  # function's last command that non-zero status propagated out and tripped
+  # `set -e` in the caller — aborting every restore before it began.
+  return 0
 }
 
 # ── pre-flight ─────────────────────────────────────────────────────────────────
