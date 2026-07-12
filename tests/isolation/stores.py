@@ -12,7 +12,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class StoreCoverage:
     name: str
-    # one of: offline_gated | rls | container_pending | unset
+    # one of: offline_gated | rls | container_gated | container_pending | unset
     status: str
     note: str
 
@@ -30,24 +30,24 @@ STORES: tuple[StoreCoverage, ...] = (
     ),
     StoreCoverage(
         "neo4j",
-        "container_pending",
-        "write-time tenant_id tagging exists (ingest/internal/graph/writer.go); live-replay in Phase 3",
+        "container_gated",
+        "tenant_id property filter; live-replay test_live_stores.py::test_neo4j_scoped_match_as_A_excludes_B (isolation-live.yml)",
     ),
     StoreCoverage(
         "clickhouse",
-        "container_pending",
-        "lake_sql.rewrite_for_tenant injects tenant predicate; live-replay in Phase 3",
+        "container_gated",
+        "lake_sql.rewrite_for_tenant injects tenant predicate; live-replay test_live_stores.py::test_clickhouse_lake_query_as_A_excludes_B (isolation-live.yml)",
     ),
     StoreCoverage(
         "redis",
-        "container_pending",
-        "cache-key namespacing; live-replay in Phase 3",
+        "container_gated",
+        "aisoc:t:<tenant>:* keyspace namespacing; live-replay test_live_stores.py::test_redis_scan_as_A_excludes_B (isolation-live.yml)",
     ),
     StoreCoverage(
         "kafka",
-        "container_pending",
-        "topic/consumer-group scoping; live-replay in Phase 3",
+        "container_gated",
+        "per-tenant envelope filter (graph_ws); live-replay test_live_stores.py::test_kafka_subscriber_A_never_receives_B (isolation-live.yml)",
     ),
 )
 
-VALID_STATUSES = {"offline_gated", "rls", "container_pending"}
+VALID_STATUSES = {"offline_gated", "rls", "container_gated"}

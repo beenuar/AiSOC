@@ -13,16 +13,21 @@ cannot ship without an isolation entry.
    tenant A can never include tenant B in its filter, and that writes stamp
    `tenant_id` with non-colliding, tenant-scoped ids. These run without any live
    datastore by mocking the client.
-2. **Live-container replay (Phase 3 `integration.yml`).** Seeds tenant A + B in
-   real containers (Qdrant, Neo4j, Redis, ClickHouse, Kafka) and asserts a read
-   as A returns zero B rows/vectors/nodes/keys. Promoted to a required check on
-   `main` when the integration tier lands.
+2. **Live-container replay (`.github/workflows/isolation-live.yml`,
+   `test_live_stores.py`).** Seeds tenant A + B in real containers (Neo4j,
+   Redis, ClickHouse, Kafka) and asserts a read as A returns zero B
+   rows/nodes/keys/messages. ClickHouse runs the *production*
+   `lake_sql.rewrite_for_tenant` rewriter against a live warehouse. Each test
+   also asserts the unscoped read sees both tenants, so a scoped pass can't be
+   vacuous. Tests skip cleanly with no containers, so a local run stays green.
 
 ## Coverage
 
 See `stores.py::STORES`. Each store is one of:
 
-- `offline_gated` — query-construction isolation asserted here, every PR.
+- `offline_gated` — query-construction isolation asserted here, every PR
+  (Qdrant).
 - `rls` — enforced by Postgres RLS + query-layer filters (tested in
   `services/api/tests/test_*_tenant_isolation.py`).
-- `container_pending` — needs the live-container replay in Phase 3.
+- `container_gated` — live-container A-vs-B replay in `isolation-live.yml`
+  (Neo4j, Redis, ClickHouse, Kafka).

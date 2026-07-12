@@ -27,7 +27,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; contract-drift vs `docs/openapi.yaml` ungated) | Phase 11 |
 | Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py` + `test_prompt_envelope.py` | PARTIAL (unit-level nonce envelope + guard gated; 150-payload adversarial eval + tool-call provenance in Phase 4 Tier 2) | Phase 4 |
 | Cross-tenant isolation (Postgres) | (implied by multi-tenant) | `cross-tenant-rbac.yml` (nightly, 3 endpoints) + `ci.yml` | PARTIAL (Postgres only, compiled-SQL not live DB) | Phase 1.3 |
-| Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | `isolation.yml` (offline: Qdrant search always tenant-scoped + registry gate) | PARTIAL (Qdrant offline-gated; Neo4j/Redis/ClickHouse/Kafka live-container replay in Phase 3) | Phase 3 |
+| Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | `isolation.yml` (offline: read paths construct a tenant scope) + `isolation-live.yml` (live A-vs-B replay: Neo4j property filter, Redis keyspace namespacing, ClickHouse via production `lake_sql.rewrite_for_tenant`, Kafka per-tenant envelope filter) | GATED | - |
 | SAST | README badge (CodeQL) | `codeql.yml` | GATED | - |
 | Dependency CVE scanning | (implied by security) | `security-audit.yml` | GATED | - |
 | OpenSSF Scorecard | README badge L13 | `scorecard.yml` | GATED | - |
@@ -38,9 +38,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 11
-- PARTIAL: 13
-- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; remaining NO GATE close in Phases 4/10/11)
+- GATED: 12
+- PARTIAL: 12
+- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; remaining NO GATE close in Phases 4/10/11)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
