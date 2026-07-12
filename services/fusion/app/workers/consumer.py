@@ -12,6 +12,8 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from app.core.config import settings
 from app.models.alert import FusionDecision, RawAlert
 from app.services.alert_sink import AlertSink
+from app.services.dlq import DeadLetter, DeadLetterQueue, LoggingDLQ, safe_record
+from app.services.event_schema import validate_event
 from app.services.fusion_engine import FusionEngine
 from app.services.promoter import promote_normalized_event
 
@@ -25,6 +27,7 @@ _METRICS = {
     "promoted": 0,
     "not_promoted": 0,
     "persisted": 0,
+    "dead_lettered": 0,
     "errors": 0,
 }
 
@@ -32,9 +35,17 @@ _METRICS = {
 class FusionWorker:
     """Kafka consumer/producer pair that drives the fusion pipeline."""
 
-    def __init__(self, engine: FusionEngine, sink: AlertSink | None = None) -> None:
+    def __init__(
+        self,
+        engine: FusionEngine,
+        sink: AlertSink | None = None,
+        dlq: DeadLetterQueue | None = None,
+    ) -> None:
         self._engine = engine
         self._sink = sink
+        # A poison message must never vanish silently; default to a structured
+        # logging DLQ so persistence-free deployments still get the signal.
+        self._dlq: DeadLetterQueue = dlq or LoggingDLQ()
         self._consumer: AIOKafkaConsumer | None = None
         self._producer: AIOKafkaProducer | None = None
         self._running = False
@@ -93,7 +104,53 @@ class FusionWorker:
                 _METRICS["errors"] += 1
                 logger.error("Failed to process message", error=str(exc), exc_info=True)
 
+    async def _dead_letter(
+        self,
+        *,
+        topic: str,
+        payload,
+        reason: str,
+        schema_version: str = "v1",
+        source_event_id: str | None = None,
+        tenant_id: str | None = None,
+    ) -> None:
+        """Route a poison message to the DLQ instead of dropping it silently."""
+        _METRICS["dead_lettered"] += 1
+        await safe_record(
+            self._dlq,
+            DeadLetter.build(
+                topic=topic,
+                reason=reason,
+                schema_version=schema_version,
+                payload=payload,
+                source_event_id=source_event_id,
+                tenant_id=tenant_id,
+            ),
+        )
+
     async def _process_message(self, payload: dict, topic: str | None = None) -> None:
+        resolved_topic = topic or settings.kafka_topic_alerts_raw
+
+        # Phase 5 — schema-validate the envelope BEFORE the promoter sees it.
+        # A malformed / mis-versioned / mis-tenanted message is dead-lettered
+        # (captured with its reason + lineage), never silently dropped.
+        validation = validate_event(
+            resolved_topic,
+            payload,
+            raw_events_topic=settings.kafka_topic_raw_events,
+            alerts_raw_topic=settings.kafka_topic_alerts_raw,
+        )
+        if not validation.ok:
+            await self._dead_letter(
+                topic=resolved_topic,
+                payload=payload,
+                reason=validation.reason,
+                schema_version=validation.schema_version,
+                source_event_id=validation.source_event_id,
+                tenant_id=validation.tenant_id,
+            )
+            return
+
         if topic == settings.kafka_topic_raw_events:
             # Ingest-normalized OCSF event — run the deterministic promotion
             # policy (see app/services/promoter.py). Non-promoted events are
@@ -107,9 +164,25 @@ class FusionWorker:
             try:
                 alert = RawAlert.model_validate(payload)
             except Exception as exc:
-                logger.warning("Invalid alert payload", error=str(exc))
-                _METRICS["errors"] += 1
+                # Deep validation failure — dead-letter it (the schema layer
+                # only caught gross shape); never silently drop.
+                await self._dead_letter(
+                    topic=resolved_topic,
+                    payload=payload,
+                    reason=f"RawAlert validation failed: {exc}",
+                    schema_version=validation.schema_version,
+                    source_event_id=validation.source_event_id,
+                    tenant_id=validation.tenant_id,
+                )
                 return
+
+        # Lineage — trace each fused alert back to its source event + schema.
+        logger.debug(
+            "fusion.lineage",
+            topic=resolved_topic,
+            schema_version=validation.schema_version,
+            source_event_id=validation.source_event_id,
+        )
 
         fused = await self._engine.process(alert)
         _METRICS["processed"] += 1
