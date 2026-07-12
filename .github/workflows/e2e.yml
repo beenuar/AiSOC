@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup pnpm
         # Intentionally omit `version:` — the root `package.json`
@@ -60,10 +60,10 @@ jobs:
         # picks that up automatically. Pinning `version: 9` here
         # would clash with the packageManager field and abort the
         # job with ERR_PNPM_BAD_PM_VERSION.
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: "pnpm"
@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: e2e-playwright-report
           path: apps/web/playwright-report
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload Playwright traces / screenshots
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: e2e-test-results
           path: apps/web/test-results

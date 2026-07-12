@@ -32,15 +32,15 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Dependency CVE scanning | (implied by security) | `security-audit.yml` | GATED | - |
 | OpenSSF Scorecard | README badge L13 | `scorecard.yml` | GATED | - |
 | Container image / IaC / secret scanning (Trivy/checkov/tfsec/gitleaks/Semgrep) | (implied by security) | `security.yml` (claim-matrix ratchet HARD; gitleaks/Semgrep/Trivy/checkov/tfsec observe) | PARTIAL (matrix ratchet enforced; secret + code/IaC/container scanners report-and-ratchet, allowlist at `.security/allowlist.yml` / `.gitleaksignore`; GitHub push-protection is the always-on hard secret gate) | Phase 2 |
-| Signed / attested release artifacts | (implied by "run next to crown jewels") | `release.yml` (SPDX source SBOM), `build-extensions.yml` (extension cosign) | PARTIAL (images unsigned; no per-image SBOM/SLSA) | Phase 2 |
+| Signed / attested release artifacts | (implied by "run next to crown jewels") | `release.yml` + `publish-images.yml` (cosign keyless signatures, CycloneDX SBOM attestation, BuildKit SLSA provenance + SPDX SBOM per image; SHA-pinned actions), `build-extensions.yml` (extension cosign) | GATED | - |
 | Insecure defaults hard-fail in production | (implied by self-host) | `ci.yml` api tests (`test_security_defaults.py::test_enforce_*`; `enforce_secure_defaults` raises at boot in production) | GATED | - |
 | OpenAPI stability for 3 SDKs + MCP | (implied by SDKs) | `check-openapi.yml` (drift only) | NO GATE (no breaking-change semantics) | Phase 11 |
 
 ## Summary
 
-- GATED: 10
-- PARTIAL: 14
-- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; remaining NO GATE close in Phases 4/10/11)
+- GATED: 11
+- PARTIAL: 13
+- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; remaining NO GATE close in Phases 4/10/11)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
