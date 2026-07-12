@@ -20,7 +20,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: python-test` (`test_detection_eval.py` — candidate `rule_body` run through the real engine vs its own positive/negative fixtures; approval requires it) + `p1-eval` w2-dac baseline | GATED | - |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
 | 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance + `detection_truth_table.py --check`); README cites the executable figure (939) not the on-disk figure for coverage | GATED | - |
-| L0-L4 automation maturity gates every action | README L171 | `ci.yml` autonomy-policy drift test | PARTIAL (thresholds gated; rollback/post-verify/dry-run ungated) | Phase 9 |
+| L0-L4 automation maturity gates every action | README L171 | `ci.yml` autonomy-policy drift test + `test_autonomy_safety.py` (dry-run-default, rollback-capability contract, verification-mandate, scorecard) | PARTIAL (thresholds + dry-run-default + rollback-capability + verification-mandate gated at the policy layer; live-router wiring of `decide()` into `/dispatch` is 9b) | Phase 9b |
 | Hunt-as-Code + `/hunt` | README L172 | `ci.yml :: p1-eval` (`hunt_corpus`) | GATED | - |
 | Weekly benchmark scoreboard runs live against `main` | README L173 | `wet-eval.yml` (weekly) | NO GATE (no-ops without secret; live-agent tables are placeholders) | Phase 4 Tier 1 |
 | MCP server exposes 13 tools | README L179 | `ci.yml :: mcp` | GATED | - |
