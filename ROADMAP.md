@@ -28,7 +28,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [x] Phase 3 — Integration / E2E / chaos / DR (real-container spine test, backup-restore, chaos, upgrade, cross-store isolation live-replay; heavy-demo-stack Playwright E2E + demo-timing gate tracked as non-blocking 3.5+)
 - [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix) — **4a/4b landed** (de-circularised DAC candidate-rule gate + honest executable-vs-imported truth table); 4c+ live-agent eval / calibration / model matrix pending
 - [x] Phase 5 — Data spine correctness (versioned event-schema registry + dead-letter queue + source-event lineage in the fusion consumer; idempotency via AlertSink dedup + event-time watermarking; backfill/replay-from-offset tracked as 5b)
-- [ ] Phase 6 — Performance + cost (throughput harness, $/TB, storage-consolidation ADR)
+- [x] Phase 6 — Performance + cost (fusion hot-path throughput harness with a generous regression-floor gate; deterministic storage $/TB cost model + drift gate; storage-consolidation ADR-0005)
 - [ ] Phase 7 — Ingest-time graph + multi-model router (posture, effective permissions, bi-temporal, fusion-time ContextBundle, determinism contract)
 - [ ] Phase 8 — LLMOps (prompt registry, model pinning, provider fallback, response caching, structured-output validation)
 - [ ] Phase 9 — Autonomy safety (rollback, post-action verification, dry-run default, break-glass, approval SLA, scorecard)

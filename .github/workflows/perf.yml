@@ -1,0 +1,88 @@
+name: Performance + cost
+
+# Phase 6 (world-class program) — two cheap, non-flaky gates:
+#
+#   throughput — runs the fusion hot-path throughput harness over a
+#                deterministic synthetic corpus and asserts a GENEROUS
+#                regression floor (a >200x margin below the measured number).
+#                It fires only on a catastrophic regression (e.g. an I/O call
+#                slipping onto the promote hot path), never on runner jitter.
+#                It is a regression floor, not a production SLO.
+#   cost-model — regenerates the storage $/TB worked example and fails if the
+#                committed docs/decisions/storage-cost-model.json is stale, so
+#                the number ADR-0005 cites can never silently drift.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/fusion/app/services/promoter.py'
+      - 'services/fusion/app/models/**'
+      - 'scripts/perf/**'
+      - 'scripts/storage_cost_model.py'
+      - 'docs/decisions/storage-cost-model.json'
+      - '.github/workflows/perf.yml'
+  pull_request:
+    paths:
+      - 'services/fusion/app/services/promoter.py'
+      - 'services/fusion/app/models/**'
+      - 'scripts/perf/**'
+      - 'scripts/storage_cost_model.py'
+      - 'docs/decisions/storage-cost-model.json'
+      - '.github/workflows/perf.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  throughput:
+    name: Fusion hot-path throughput (regression floor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install promoter deps
+        run: pip install --quiet pydantic pydantic-settings structlog
+      - name: Run throughput harness (generous floor)
+        run: |
+          python3 scripts/perf/throughput_harness.py --events 20000 --assert-floor 1000 --json | tee /tmp/throughput.json
+      - name: Publish throughput summary
+        if: always()
+        run: |
+          {
+            echo "## Fusion hot-path throughput"
+            echo ""
+            echo '```json'
+            cat /tmp/throughput.json 2>/dev/null || echo "{}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cost-model:
+    name: Storage $/TB cost model (drift gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Verify committed storage cost model is current
+        run: python3 scripts/storage_cost_model.py --check
+      - name: Publish cost summary
+        if: always()
+        run: |
+          {
+            echo "## Storage \$/TB cost model"
+            echo ""
+            echo '```'
+            python3 scripts/storage_cost_model.py 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
