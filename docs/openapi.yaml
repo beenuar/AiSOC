@@ -3213,6 +3213,55 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/detection-proposals/{proposal_id}/evaluate-rule:
+    post:
+      tags:
+      - detection_rules
+      - dac
+      summary: Evaluate Rule
+      description: 'Evaluate the candidate rule body against its own fixtures (Phase
+        4).
+
+
+        Runs the proposed ``rule_language`` + ``rule_body`` through the runtime
+
+        engine against the supplied fixtures and stores the verdict under
+
+        ``eval_result["candidate_rule"]``. This is the gate that de-circularises
+
+        promotion: a rule that misses its positives (blind) or fires on its
+
+        negatives (noisy) cannot be approved, regardless of the global benchmark.'
+      operationId: evaluate_rule_api_v1_detection_proposals__proposal_id__evaluate_rule_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRuleRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/detection-proposals/{proposal_id}/eval:
     post:
       tags:
@@ -17325,6 +17374,43 @@ components:
       - eval_report
       title: EvalAttachRequest
       description: Attach a `run_evals.py` JSON report to a proposal.
+    EvaluateRuleRequest:
+      properties:
+        positive_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 200
+          minItems: 1
+          title: Positive Fixtures
+          description: Events the rule MUST fire on (the attacks it claims to catch).
+            At least one required.
+        negative_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 200
+          title: Negative Fixtures
+          description: Benign near-miss events the rule MUST NOT fire on.
+      type: object
+      required:
+      - positive_fixtures
+      title: EvaluateRuleRequest
+      description: 'Evaluate the candidate rule body against its own fixtures (Phase
+        4).
+
+
+        This is the non-circular gate: unlike ``/run-eval`` (which measures the
+
+        repo-wide substrate benchmark and is independent of the proposed rule),
+
+        this runs the *proposed rule body itself* through the runtime engine and
+
+        asserts it fires on every positive fixture and stays silent on every
+
+        negative one. Approval now requires this verdict to pass.'
     EventListResponse:
       properties:
         items:
