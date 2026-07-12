@@ -11,8 +11,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Offline sandbox demo runs with no key/network in < 5 s | README L38 | `readme-gates.yml :: sandbox-offline` (ubuntu+macos matrix) | GATED | - |
 | `pnpm aisoc:demo` boots the real stack | README L40, L45 | `compose-smoke.yml`, `compose-smoke-nightly.yml` (cold) | PARTIAL (health-probe only, no time-to-first-investigation assertion) | Phase 3.4 |
 | 69 connectors | README L116, L168 | `ci.yml :: python-lint` (`generate_connector_count.py --check`) | GATED (count) | - |
-| Connectors: schema-driven config + vault-encrypted secrets | README L168 | `ci.yml :: python-services-test` (`test_schemas.py`); vault tests | PARTIAL (schema + vault gated; live API conformance, rate-limit, checkpoint durability ungated) | Phase 10 |
-| Connectors: live Test connection | README L168 | none | NO GATE | Phase 10 |
+| Connectors: schema-driven config + vault-encrypted secrets | README L168 | `ci.yml` connectors matrix (`test_schemas.py` + `test_conformance.py` — secret-shaped fields must be `type=secret`); vault tests | PARTIAL (schema + vault + secret-field-marking + runtime-contract conformance gated; live-vendor API smoke, rate-limit, checkpoint durability deferred) | Phase 10b |
+| Connectors: live Test connection | README L168 | `ci.yml` connectors matrix (`test_conformance.py` — every connector implements the async `test_connection` contract) + `connector_conformance.py --check` published matrix | PARTIAL (contract conformance gated; live-vendor sandbox smoke deferred) | Phase 10b |
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: api tests` (`audit_hash`, audit immutability) | PARTIAL (write path gated; UI replay only in hermetic e2e) | Phase 3.2 |
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | GATED (but suites are self-consistency; see reality report) | Phase 4 |
 | Alert-reduction is a real measurement | README L62 | `ci.yml :: p1-eval` (`alert_reduction`) | PARTIAL (gates an in-test fusion re-impl, not `services/fusion`) | Phase 4 |
@@ -39,8 +39,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 ## Summary
 
 - GATED: 14
-- PARTIAL: 10
-- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; Phase 4 moved the DAC candidate-rule gate and the imported-count honesty gate to GATED; remaining NO GATE close in Phases 4-continuation/10/11)
+- PARTIAL: 11
+- NO GATE: 2 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; Phase 4 moved the DAC candidate-rule gate and the imported-count honesty gate to GATED; Phase 10 moved connector "live Test connection" NO GATE → PARTIAL via the conformance contract; remaining NO GATE — wet-eval live tables (Phase 4c) and OpenAPI breaking-change semantics (Phase 11) — close next)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
