@@ -201,12 +201,16 @@ jobs:
           [ "${FILES}" = "${ROWS}" ] \
             || { echo "::error::tracked migrations (${ROWS}) != migration files (${FILES})"; exit 1; }
 
-      - name: Install UEBA service
-        run: pip install --quiet -e services/ueba
+      # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
+      # env.py only needs `app.models.ueba` importable, so run in-place with
+      # PYTHONPATH instead of pip-installing the service.
+      - name: Install alembic
+        run: pip install --quiet alembic
 
       - name: UEBA alembic round-trip (upgrade → downgrade → upgrade)
         working-directory: services/ueba
         env:
+          PYTHONPATH: .
           # Dedicated database so the SQL-runner schema above is untouched.
           DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/ueba_ci
         run: |
@@ -236,13 +240,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      minio:
-        image: bitnami/minio:2024.12.18
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-        ports:
-          - 9000:9000
     env:
       POSTGRES_URL: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
       BACKUP_S3_BUCKET: s3://aisoc-dr-test
@@ -258,6 +255,14 @@ jobs:
         run: |
           pip install --quiet awscli
           sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
+
+      # MinIO needs a `server /data` command, which the GitHub `services:`
+      # block cannot pass — run it as a plain container instead.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:RELEASE.2024-12-18T13-15-44Z server /data
 
       - name: Create bucket
         run: |

@@ -90,9 +90,7 @@ class AlertSink:
     async def start(self) -> None:
         """Open the pool. Failure is logged, not raised (fail-soft)."""
         try:
-            self._pool = await asyncpg.create_pool(
-                self._dsn, min_size=1, max_size=self._pool_size, timeout=10
-            )
+            self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=self._pool_size, timeout=10)
             logger.info("alert_sink.started")
         except Exception as exc:  # noqa: BLE001 — degrade, never crash the worker
             self._pool = None
