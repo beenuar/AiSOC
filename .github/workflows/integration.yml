@@ -2,7 +2,7 @@ name: Integration
 
 # Phase 3 (world-class program) — prove the stack actually runs.
 #
-# Three jobs, all against real containers, no mocks:
+# Four jobs, all against real containers, no mocks:
 #
 #   spine            — raw vendor event → ingest (OCSF normalize) → Kafka →
 #                      fusion (promote + dedup + correlate) → fused topic →
@@ -21,6 +21,10 @@ name: Integration
 #                      MinIO: seed → backup → destroy → restore → assert
 #                      full data integrity. Publishes measured RTO. An
 #                      untested backup is not a backup.
+#   upgrade          — install a prior release's migration set, seed data,
+#                      then upgrade to HEAD and migrate: assert the seeded
+#                      data survives (destructive-migration detection) and
+#                      every HEAD migration applied. People upgrade; test it.
 #
 # The spine job builds `fusion` and `ingest-worker` from PR source (they own
 # the bridges under test) and pulls the other service images from GHCR
@@ -367,4 +371,133 @@ jobs:
             echo "| rows after restore | 500 |"
             echo "| measured RTO | ${RTO_SECONDS}s |"
             echo "| RPO | last completed backup (event-loss window = backup cadence) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Upgrade safety: install a prior release, then upgrade to HEAD ──────────
+  # "People upgrade. Nothing tested it." Apply the migration set as of a prior
+  # release, seed data on that released schema, then apply HEAD's migration set
+  # (the real self-host upgrade path) and assert the seeded rows survive and
+  # every HEAD migration applied. The signal this adds over the fresh-apply job
+  # above is destructive-migration detection: a migration that drops or rewrites
+  # existing data fails here even though it applies cleanly on an empty database.
+  #
+  #   - v7.5.0 → HEAD: the real "last release → current" self-host upgrade path.
+  #   - v7.3.1 → HEAD: an older baseline so several migrations land incrementally
+  #     on a pre-existing, populated schema (not a fresh apply in disguise).
+  upgrade:
+    name: Upgrade (${{ matrix.from_ref }} → HEAD, data survives)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        from_ref: ['v7.3.1', 'v7.5.0']
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_secret
+          POSTGRES_DB: aisoc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+      ENVIRONMENT: development
+      AISOC_MIGRATIONS_STRICT: '1'
+      PGPASSWORD: aisoc_ci_secret
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          # Full history + tags so we can check out the released migration set.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # Same importable-subset recipe as the migrations job — run_migrations
+      # imports app.core.config, which needs the settings surface only.
+      - name: Install API dependencies
+        run: >-
+          pip install --quiet
+          fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+          structlog "python-jose[cryptography]" "passlib[bcrypt]" tenacity pyyaml
+          prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+          "opentelemetry-exporter-otlp-proto-grpc"
+          "opentelemetry-instrumentation-fastapi"
+          "strawberry-graphql[fastapi]"
+          neo4j redis celery httpx aiofiles email-validator PyJWT
+          "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
+
+      - name: Record HEAD sha
+        id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install the released schema (${{ matrix.from_ref }})
+        run: |
+          set -euo pipefail
+          # `git checkout <ref> -- <path>` only overwrites paths present in
+          # <ref>; it will NOT delete files added since. rm -rf first so the
+          # migrations dir exactly matches the released set (otherwise HEAD's
+          # newer files leak in and pass 1 silently becomes a fresh apply).
+          rm -rf services/api/migrations
+          git checkout "${{ matrix.from_ref }}" -- services/api/migrations
+          echo "migration files at ${{ matrix.from_ref }}: $(ls services/api/migrations/*.sql | wc -l)"
+          ( cd services/api && python -m app.scripts.run_migrations )
+
+      - name: Seed data on the released schema
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc <<'SQL'
+          CREATE TABLE upgrade_probe (id SERIAL PRIMARY KEY, payload TEXT NOT NULL);
+          INSERT INTO upgrade_probe (payload)
+            SELECT md5(g::text) FROM generate_series(1, 250) AS g;
+          SQL
+          COUNT=$(psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM upgrade_probe")
+          echo "seeded ${COUNT} probe rows on the ${{ matrix.from_ref }} schema"
+          [ "${COUNT}" = "250" ]
+
+      - name: Upgrade to HEAD and migrate
+        run: |
+          set -euo pipefail
+          rm -rf services/api/migrations
+          git checkout "${{ steps.head.outputs.sha }}" -- services/api/migrations
+          HEAD_COUNT=$(ls services/api/migrations/*.sql | wc -l)
+          echo "migration files at HEAD: ${HEAD_COUNT}"
+          ( cd services/api && python -m app.scripts.run_migrations )
+          echo "HEAD_MIGRATION_COUNT=${HEAD_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Assert seeded data survived + every HEAD migration applied
+        run: |
+          set -euo pipefail
+          PROBE=$(psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM upgrade_probe")
+          TRACKED=$(psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM aisoc_schema_migrations")
+          echo "PROBE_ROWS=${PROBE}" >> "$GITHUB_ENV"
+          echo "probe rows after upgrade: ${PROBE} (expect 250)"
+          echo "tracked migrations:       ${TRACKED} (expect ${HEAD_MIGRATION_COUNT})"
+          [ "${PROBE}" = "250" ] \
+            || { echo "::error::a migration destroyed data across the ${{ matrix.from_ref }} → HEAD upgrade (${PROBE}/250 rows survived)"; exit 1; }
+          [ "${TRACKED}" = "${HEAD_MIGRATION_COUNT}" ] \
+            || { echo "::error::not every HEAD migration applied on upgrade (${TRACKED}/${HEAD_MIGRATION_COUNT})"; exit 1; }
+
+      - name: Publish upgrade summary
+        if: always()
+        run: |
+          {
+            echo "## Upgrade gate — ${{ matrix.from_ref }} → HEAD"
+            echo ""
+            echo "| check | value |"
+            echo "|-------|-------|"
+            echo "| probe rows seeded on released schema | 250 |"
+            echo "| probe rows after upgrade | ${PROBE_ROWS:-?} |"
+            echo "| HEAD migrations applied | ${HEAD_MIGRATION_COUNT:-?} |"
           } >> "$GITHUB_STEP_SUMMARY"
