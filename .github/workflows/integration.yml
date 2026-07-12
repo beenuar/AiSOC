@@ -1,0 +1,317 @@
+name: Integration
+
+# Phase 3 (world-class program) — prove the stack actually runs.
+#
+# Three jobs, all against real containers, no mocks:
+#
+#   spine            — raw vendor event → ingest (OCSF normalize) → Kafka →
+#                      fusion (promote + dedup + correlate) → fused topic →
+#                      realtime WebSocket frame → Postgres alert row →
+#                      GET /api/v1/alerts. Plus duplicate suppression and a
+#                      chaos step (kill the fusion consumer, produce, restart,
+#                      assert recovery with zero event loss).
+#   migrations       — the API's SQL migration chain applies cleanly on a
+#                      fresh Postgres 16, is idempotent on re-run (strict
+#                      mode), and the UEBA alembic chain round-trips
+#                      upgrade → downgrade → upgrade.
+#   backup-restore   — scripts/backup.sh + restore.sh against Postgres 16 +
+#                      MinIO: seed → backup → destroy → restore → assert
+#                      full data integrity. Publishes measured RTO. An
+#                      untested backup is not a backup.
+#
+# The spine job builds `fusion` and `ingest-worker` from PR source (they own
+# the bridges under test) and pulls the other service images from GHCR
+# `:main` — those surfaces are gated by compose-smoke.yml with its own
+# rebuild-on-change detection.
+
+on:
+  pull_request:
+    paths:
+      - 'services/ingest/**'
+      - 'services/fusion/**'
+      - 'services/realtime/**'
+      - 'services/api/migrations/**'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/ueba/alembic/**'
+      - 'docker-compose.yml'
+      - 'scripts/integration/**'
+      - 'scripts/backup.sh'
+      - 'scripts/restore.sh'
+      - '.github/workflows/integration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/ingest/**'
+      - 'services/fusion/**'
+      - 'services/realtime/**'
+      - 'services/api/migrations/**'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/ueba/alembic/**'
+      - 'docker-compose.yml'
+      - 'scripts/integration/**'
+      - 'scripts/backup.sh'
+      - 'scripts/restore.sh'
+      - '.github/workflows/integration.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── The spine, end to end ──────────────────────────────────────────────────
+  spine:
+    name: Event spine (real containers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      AISOC_VERSION: main
+      COMPOSE_PROJECT_NAME: aisoc-integration
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: pip install --quiet httpx websockets
+
+      - name: Seed environment file
+        run: |
+          cp .env.example .env
+          if grep -q '^AISOC_VERSION=' .env; then
+            sed -i "s|^AISOC_VERSION=.*|AISOC_VERSION=${AISOC_VERSION}|" .env
+          else
+            printf '\nAISOC_VERSION=%s\n' "${AISOC_VERSION}" >> .env
+          fi
+
+      - name: Pre-pull published images
+        run: docker compose pull --ignore-pull-failures --quiet || true
+
+      # The two spine-bridge owners are always built from PR source so the
+      # code under test is the code that runs. Build AFTER the pull so the
+      # locally-built tags are not clobbered by the registry.
+      - name: Build fusion + ingest from source
+        run: docker compose build fusion ingest-worker
+
+      - name: Boot stack
+        run: docker compose up -d
+
+      - name: Run spine test
+        run: python3 scripts/integration/spine_test.py
+
+      # ── Chaos: kill the fusion consumer, produce, restart, assert ────────
+      # The event is produced while the consumer is down; on restart the
+      # consumer group must resume from its committed offset and process it.
+      # Zero event loss across a consumer crash is the claim under test.
+      - name: Chaos — kill fusion consumer mid-stream
+        run: |
+          set -euo pipefail
+          TITLE="ChaosTest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "chaos title: ${TITLE}"
+          docker compose kill fusion
+          python3 scripts/integration/spine_test.py --post-event --title "${TITLE}"
+          sleep 5
+          docker compose up -d fusion
+          python3 scripts/integration/spine_test.py --await-alert --title "${TITLE}" --timeout 180
+
+      - name: Capture forensics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          echo "── fusion ──";    docker compose logs --tail=150 --no-color fusion || true
+          echo "── ingest ──";    docker compose logs --tail=100 --no-color ingest-worker || true
+          echo "── realtime ──";  docker compose logs --tail=100 --no-color realtime || true
+          echo "── api ──";       docker compose logs --tail=100 --no-color api || true
+          echo "── kafka ──";     docker compose logs --tail=60  --no-color kafka || true
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  # ── Migration correctness ──────────────────────────────────────────────────
+  migrations:
+    name: Migrations (fresh apply, idempotent re-run, alembic round-trip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_secret
+          POSTGRES_DB: aisoc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+      ENVIRONMENT: development
+      AISOC_MIGRATIONS_STRICT: '1'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # Same importable-subset recipe as ci.yml's API job — run_migrations
+      # imports app.core.config, which needs the settings surface only.
+      - name: Install API dependencies
+        run: >-
+          pip install --quiet
+          fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+          structlog "python-jose[cryptography]" "passlib[bcrypt]" tenacity pyyaml
+          prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+          "opentelemetry-exporter-otlp-proto-grpc"
+          "opentelemetry-instrumentation-fastapi"
+          "strawberry-graphql[fastapi]"
+          neo4j redis celery httpx aiofiles email-validator PyJWT
+          "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
+
+      - name: Apply full migration chain on fresh Postgres (strict)
+        working-directory: services/api
+        run: python -m app.scripts.run_migrations
+
+      - name: Re-run must be a no-op (idempotency)
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m app.scripts.run_migrations 2>&1 | tee /tmp/second-run.log
+          grep -q "0 pending" /tmp/second-run.log \
+            || { echo "::error::second migration run was not a no-op"; exit 1; }
+
+      - name: Assert every migration file is tracked
+        run: |
+          set -euo pipefail
+          FILES=$(ls services/api/migrations/*.sql | wc -l)
+          ROWS=$(PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM aisoc_schema_migrations")
+          echo "migration files: ${FILES}, tracked rows: ${ROWS}"
+          [ "${FILES}" = "${ROWS}" ] \
+            || { echo "::error::tracked migrations (${ROWS}) != migration files (${FILES})"; exit 1; }
+
+      - name: Install UEBA service
+        run: pip install --quiet -e services/ueba
+
+      - name: UEBA alembic round-trip (upgrade → downgrade → upgrade)
+        working-directory: services/ueba
+        env:
+          # Dedicated database so the SQL-runner schema above is untouched.
+          DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/ueba_ci
+        run: |
+          set -euo pipefail
+          PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -c "CREATE DATABASE ueba_ci"
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          echo "alembic round-trip clean"
+
+  # ── Disaster recovery: an untested backup is not a backup ─────────────────
+  backup-restore:
+    name: Backup → destroy → restore (Postgres via MinIO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_secret
+          POSTGRES_DB: aisoc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      minio:
+        image: bitnami/minio:2024.12.18
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+    env:
+      POSTGRES_URL: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      BACKUP_S3_BUCKET: s3://aisoc-dr-test
+      BACKUP_S3_PREFIX: ci-dr
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT_URL: http://localhost:9000
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Install tooling (awscli + postgres client)
+        run: |
+          pip install --quiet awscli
+          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
+
+      - name: Create bucket
+        run: |
+          for i in $(seq 1 12); do
+            aws s3 mb "${BACKUP_S3_BUCKET}" && break || sleep 5
+          done
+
+      - name: Seed data
+        run: |
+          PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc <<'SQL'
+          CREATE TABLE dr_probe (id SERIAL PRIMARY KEY, payload TEXT NOT NULL);
+          INSERT INTO dr_probe (payload)
+            SELECT md5(g::text) FROM generate_series(1, 500) AS g;
+          SQL
+          COUNT=$(PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM dr_probe")
+          echo "seeded ${COUNT} rows"
+          [ "${COUNT}" = "500" ]
+
+      - name: Backup (scripts/backup.sh)
+        run: ./scripts/backup.sh --component postgres
+
+      - name: Destroy all data
+        run: |
+          PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc \
+            -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          COUNT=$(PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
+          echo "tables after destroy: ${COUNT}"
+          [ "${COUNT}" = "0" ]
+
+      - name: Restore (scripts/restore.sh) and measure RTO
+        run: |
+          set -euo pipefail
+          START=$(date +%s)
+          ./scripts/restore.sh --latest --component postgres < /dev/null
+          RTO=$(( $(date +%s) - START ))
+          echo "RTO_SECONDS=${RTO}" >> "$GITHUB_ENV"
+          echo "measured restore time: ${RTO}s"
+
+      - name: Assert full data integrity
+        run: |
+          COUNT=$(PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM dr_probe")
+          echo "rows after restore: ${COUNT}"
+          [ "${COUNT}" = "500" ] || { echo "::error::data loss after restore (${COUNT}/500 rows)"; exit 1; }
+
+      - name: Publish DR summary
+        run: |
+          {
+            echo "## Disaster-recovery gate"
+            echo ""
+            echo "| metric | value |"
+            echo "|--------|-------|"
+            echo "| rows seeded | 500 |"
+            echo "| rows after restore | 500 |"
+            echo "| measured RTO | ${RTO_SECONDS}s |"
+            echo "| RPO | last completed backup (event-loss window = backup cadence) |"
+          } >> "$GITHUB_STEP_SUMMARY"

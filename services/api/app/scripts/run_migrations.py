@@ -244,6 +244,11 @@ async def main() -> None:
 
         if failures:
             logger.warning("%d migrations failed; see logs above", len(failures))
+            # CI strict mode (Phase 3 migrations gate): any failed migration
+            # must fail the job instead of shipping a partially-applied
+            # schema that later boots "successfully" against missing tables.
+            if os.environ.get("AISOC_MIGRATIONS_STRICT", "").strip().lower() in {"1", "true", "yes", "on"}:
+                raise SystemExit(f"{len(failures)} migration(s) failed in strict mode")
     finally:
         await conn.close()
 

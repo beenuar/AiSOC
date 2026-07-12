@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     kafka_topic_alerts_raw: str = Field(default="aisoc.alerts.raw", alias="KAFKA_TOPIC_ALERTS_RAW")
     kafka_topic_alerts_fused: str = Field(default="aisoc.alerts.fused", alias="KAFKA_TOPIC_ALERTS_FUSED")
     kafka_consumer_group: str = Field(default="aisoc-fusion-consumer", alias="KAFKA_CONSUMER_GROUP")
+    # Phase 3.1 spine bridge — ingest's normalized-event topic. Fusion promotes
+    # findings + high/critical telemetry into RawAlerts (app/services/promoter.py).
+    kafka_topic_raw_events: str = Field(default="aisoc.raw_events", alias="KAFKA_TOPIC_RAW_EVENTS")
+    event_promotion_enabled: bool = Field(default=True, alias="AISOC_EVENT_PROMOTION_ENABLED")
+    # Phase 3.1 spine bridge — persist fused (non-duplicate) alerts to the
+    # Postgres alert store (app/services/alert_sink.py). Fail-soft by design.
+    alert_sink_enabled: bool = Field(default=True, alias="AISOC_ALERT_SINK_ENABLED")
 
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")

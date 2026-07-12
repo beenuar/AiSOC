@@ -8,6 +8,7 @@ from app._health import install_health_routes
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
+from app.services.alert_sink import AlertSink
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
@@ -33,7 +34,11 @@ async def lifespan(app: FastAPI):
         entity_risk=entity_risk,
         confidence_scorer=confidence_scorer,
     )
-    worker = FusionWorker(engine)
+    # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
+    # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
+    # DB never blocks the Kafka pipeline.
+    sink = AlertSink(settings.database_url) if settings.alert_sink_enabled else None
+    worker = FusionWorker(engine, sink=sink)
     set_worker(worker)
 
     # Start Kafka worker as a background task
