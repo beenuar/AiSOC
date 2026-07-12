@@ -62,9 +62,12 @@ async def submit_action(request: ActionRequest):
                 if result.error:
                     record["error"] = result.error
             except Exception as exc:
-                logger.error("Action execution failed", error=str(exc))
+                # Log the full detail server-side, but never echo the raw
+                # exception message (which can carry internal paths / stack
+                # detail) back to the API caller — return only the error type.
+                logger.error("Action execution failed", error=str(exc), exc_info=True)
                 record["status"] = ActionStatus.FAILED
-                record["error"] = str(exc)
+                record["error"] = f"execution failed ({type(exc).__name__})"
         else:
             record["status"] = ActionStatus.FAILED
             record["error"] = f"No executor found for action type: {request.action_type}"

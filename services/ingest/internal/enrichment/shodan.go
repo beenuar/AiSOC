@@ -78,7 +78,11 @@ func (s *ShodanEnricher) Enrich(ctx context.Context, event map[string]interface{
 
 	host, err := s.lookup(ctx, ip)
 	if err != nil {
-		s.log.Warn("Shodan lookup failed", "ip", ip, "err", err)
+		// Log a sanitized IP only. `ip` is derived from an ingested (attacker-
+		// influenceable) event, so strip control chars to prevent log
+		// injection; and we deliberately do NOT log `err`, which can carry the
+		// request URL (with the Shodan API key) or response-derived data.
+		s.log.Warn("Shodan lookup failed", "ip", sanitizeLogValue(ip))
 		return event
 	}
 	if host == nil {
@@ -186,4 +190,20 @@ func ExtractPublicIP(event map[string]interface{}) string {
 		return ip
 	}
 	return ""
+}
+
+// sanitizeLogValue strips CR/LF and other control characters so a value
+// derived from an ingested (attacker-influenceable) event cannot forge or
+// inject additional log lines.
+func sanitizeLogValue(s string) string {
+	cleaned := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+	if len(cleaned) > 256 {
+		return cleaned[:256]
+	}
+	return cleaned
 }

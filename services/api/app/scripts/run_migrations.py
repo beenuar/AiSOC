@@ -164,6 +164,8 @@ async def _apply_one(conn: asyncpg.Connection, name: str, sql: str) -> tuple[str
         try:
             await conn.execute("ROLLBACK")
         except Exception:
+            # Best-effort cleanup: if ROLLBACK itself fails the connection is
+            # already unusable and will be discarded — nothing more to do.
             pass
         return name, False, str(exc)
 

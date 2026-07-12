@@ -86,7 +86,8 @@ class DeadLetter:
 
 @runtime_checkable
 class DeadLetterQueue(Protocol):
-    async def record(self, dead_letter: DeadLetter) -> None: ...
+    async def record(self, dead_letter: DeadLetter) -> None:
+        """Persist/emit a rejected message so it is never silently lost."""
 
 
 class LoggingDLQ:

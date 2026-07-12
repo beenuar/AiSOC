@@ -29,8 +29,11 @@ def cache_key(*, model: str, prompt: str, user_input: str) -> str:
 
 @runtime_checkable
 class CacheBackend(Protocol):
-    def get(self, key: str) -> str | None: ...
-    def set(self, key: str, value: str) -> None: ...
+    def get(self, key: str) -> str | None:
+        """Return the cached value for ``key``, or None on a miss."""
+
+    def set(self, key: str, value: str) -> None:
+        """Store ``value`` under ``key``."""
 
 
 class InMemoryResponseCache:

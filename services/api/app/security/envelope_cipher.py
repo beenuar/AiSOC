@@ -51,15 +51,12 @@ class KeyManager(Protocol):
     @property
     def key_id(self) -> str:
         """Identifier of the current (primary) KEK, embedded in the token."""
-        ...
 
     def wrap(self, dek: bytes) -> bytes:
         """Encrypt a DEK under the current KEK."""
-        ...
 
     def unwrap(self, wrapped: bytes, key_id: str) -> bytes:
         """Decrypt a DEK that was wrapped under the KEK named ``key_id``."""
-        ...
 
 
 class LocalKeyManager:

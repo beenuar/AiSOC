@@ -74,6 +74,7 @@ async def wait_healthy(client: httpx.AsyncClient) -> None:
                     log(f"healthy: {name}")
                     del pending[name]
             except httpx.HTTPError:
+                # Service not up yet — keep it pending and retry on the next loop.
                 pass
         if pending:
             await asyncio.sleep(3)

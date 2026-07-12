@@ -110,7 +110,8 @@ class Governor(Protocol):
     """Subset of cost_governor used here — kept as a Protocol so this module
     doesn't import the heavy governor at module load."""
 
-    def check(self, tenant_id: str, fingerprint: str) -> Any: ...
+    def check(self, tenant_id: str, fingerprint: str) -> Any:
+        """Return a governor decision for the given tenant + request fingerprint."""
 
 
 TierFn = Callable[[RoutingRequest], TierResult | Awaitable[TierResult]]

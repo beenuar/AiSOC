@@ -210,6 +210,7 @@ def _envelope_tenant(value: bytes, headers: list[tuple[str, bytes]]) -> str:
         if isinstance(body, dict) and body.get("tenant_id"):
             return str(body["tenant_id"])
     except (ValueError, UnicodeDecodeError):
+        # Body isn't tenant-tagged JSON — fall through to the header lookup below.
         pass
     for key, val in headers or []:
         if key == "tenant_id":

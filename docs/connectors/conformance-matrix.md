@@ -8,7 +8,7 @@
 
 **69 / 69 connectors conform** to the runtime contract.
 
-| connector | category | fields | secrets | caps | test_connection | fetch_alerts | normalize |
+| connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
 | abnormal_security | saas | 2 | 1 | 3 | ✅ | ✅ | ✅ |
 | auditd | edr | 3 | 0 | 2 | ✅ | ✅ | ✅ |
