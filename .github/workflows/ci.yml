@@ -326,6 +326,7 @@ jobs:
             tests/test_prompt_envelope.py \
             tests/test_privacy_redactor.py \
             tests/test_cost_governor.py \
+            tests/test_model_router.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────

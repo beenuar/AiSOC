@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
         "concepts/detections",
         "concepts/live-actions",
         "concepts/automation-maturity",
+        "concepts/model-router",
       ],
     },
     {
