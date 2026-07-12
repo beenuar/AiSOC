@@ -75,7 +75,7 @@ The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agent
 | Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes |
 | Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published |
 | Public substrate eval harness | CI-gated, reproducible, with synthetic telemetry corpus + per-template macros | n/a | n/a | not published |
-| Detection content | 800 native + 6 000+ imported (Sigma / Splunk / Chronicle / CAR) | 1 200+ rules | 1 000+ apps | curated |
+| Detection content | 939 executable (861 native) + 6 000-rule provenance-tracked imported library ([truth table](docs/detections/truth-table.md)) | 1 200+ rules | 1 000+ apps | curated |
 | Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary |
 | Data residency | your infra | your infra | partial | vendor cloud |
 | Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise |
@@ -169,7 +169,7 @@ A handful of headline capabilities — the rest are catalogued in [`apps/docs/do
 
 - **69 click-and-connect data connectors** (EDR/XDR, SIEM, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
 - **Investigation Rail + replayable Investigation Ledger** — every prompt, tool call, evidence chip, and rationale stored against a case, replayable in the UI. [`apps/docs/docs/console/investigation-rail.md`](apps/docs/docs/console/investigation-rail.md).
-- **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that regresses MITRE accuracy. [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the 800+ native Sigma rules live in [`detections/`](detections/).
+- **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that fails its own positive/negative fixtures (the non-circular gate) or regresses MITRE accuracy. [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the 861 native rules live in [`detections/`](detections/).
 - **L0–L4 automation maturity** — gate every autonomous action on per-action confidence thresholds and blast-radius. [`apps/docs/docs/concepts/automation-maturity.md`](apps/docs/docs/concepts/automation-maturity.md).
 - **Hunt-as-Code** — YAML hypotheses with MITRE tags, cron schedules, and natural-language `/hunt` workbench. [`hunts/`](hunts/) + [`apps/docs/docs/console/rule-tuning.md`](apps/docs/docs/console/rule-tuning.md).
 - **Public weekly benchmark scoreboard** — the same harness that gates PRs, run weekly against `main`. [`apps/docs/docs/benchmark-scoreboard.mdx`](apps/docs/docs/benchmark-scoreboard.mdx).

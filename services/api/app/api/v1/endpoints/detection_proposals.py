@@ -1,11 +1,19 @@
 """Detection-as-code proposal lifecycle endpoints (Wave 2 — w2-dac).
 
 Surfaces the propose → review → eval-gated → promote flow that brings
-detections under the same CI gate as agent prompts. The eval gate is
-satisfied by `scripts/run_evals.py` running offline; the result of that
-run is stored back on the proposal as ``eval_result`` and a candidate
-that regresses MITRE accuracy by ≥ ``max_regression_pp`` percentage
-points cannot be promoted.
+detections under the same CI gate as agent prompts.
+
+Two independent gates guard promotion, and approval requires **both**:
+
+* **Candidate-rule gate (Phase 4, non-circular).** ``/evaluate-rule`` runs the
+  *proposed rule body itself* through the runtime engine against caller-supplied
+  positive and negative fixtures — it must fire on every positive and stay
+  silent on every negative. This closes the Phase 0 reality-audit finding that
+  the promote path never evaluated the proposed rule.
+* **Substrate-benchmark gate.** ``/run-eval`` / ``/eval`` run
+  ``scripts/run_evals.py`` and reject a candidate that regresses repo-wide MITRE
+  accuracy by ≥ ``max_regression_pp`` pp. This guards against a rule that passes
+  its own fixtures but perturbs the shared substrate.
 
 Endpoints
 ---------
@@ -13,7 +21,8 @@ Endpoints
 * ``POST   /detection-proposals``                     Create a proposal.
 * ``GET    /detection-proposals/{id}``                Proposal detail.
 * ``POST   /detection-proposals/{id}/comment``        Add a review comment.
-* ``POST   /detection-proposals/{id}/eval``           Attach eval result + verdict.
+* ``POST   /detection-proposals/{id}/evaluate-rule``  Evaluate the candidate rule vs its fixtures (non-circular gate).
+* ``POST   /detection-proposals/{id}/eval``           Attach substrate-benchmark result + verdict.
 * ``POST   /detection-proposals/{id}/decide``         Approve/reject a proposal.
 * ``POST   /detection-proposals/{id}/promote``        Materialise into ``detection_rules``.
 * ``GET    /detection-proposals/baselines``           List eval baselines.
@@ -44,6 +53,7 @@ from app.models.detection_proposal import (
     DetectionRuleProposal,
 )
 from app.models.detection_rule import DetectionRule
+from app.services.detection_eval import evaluate_candidate_rule
 from app.services.github import create_detection_pr
 
 router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"])
@@ -162,6 +172,29 @@ class EvalAttachRequest(BaseModel):
             "at 50 — anything above that is indistinguishable from disabling "
             "the regression gate entirely."
         ),
+    )
+
+
+class EvaluateRuleRequest(BaseModel):
+    """Evaluate the candidate rule body against its own fixtures (Phase 4).
+
+    This is the non-circular gate: unlike ``/run-eval`` (which measures the
+    repo-wide substrate benchmark and is independent of the proposed rule),
+    this runs the *proposed rule body itself* through the runtime engine and
+    asserts it fires on every positive fixture and stays silent on every
+    negative one. Approval now requires this verdict to pass.
+    """
+
+    positive_fixtures: list[dict[str, Any]] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Events the rule MUST fire on (the attacks it claims to catch). At least one required.",
+    )
+    negative_fixtures: list[dict[str, Any]] = Field(
+        default_factory=list,
+        max_length=200,
+        description="Benign near-miss events the rule MUST NOT fire on.",
     )
 
 
@@ -643,6 +676,54 @@ async def run_eval_harness(
                     _ = exc  # best-effort cleanup; ignore unlink failures
 
 
+@router.post("/{proposal_id}/evaluate-rule", response_model=ProposalResponse)
+async def evaluate_rule(
+    proposal_id: uuid.UUID,
+    request: EvaluateRuleRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
+    db: DBSession,
+) -> ProposalResponse:
+    """Evaluate the candidate rule body against its own fixtures (Phase 4).
+
+    Runs the proposed ``rule_language`` + ``rule_body`` through the runtime
+    engine against the supplied fixtures and stores the verdict under
+    ``eval_result["candidate_rule"]``. This is the gate that de-circularises
+    promotion: a rule that misses its positives (blind) or fires on its
+    negatives (noisy) cannot be approved, regardless of the global benchmark.
+    """
+    _ensure_dac_enabled()
+    proposal = await _load_proposal(db, proposal_id, current_user.tenant_id)
+    if proposal.status in {"promoted", "rejected"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Proposal is {proposal.status}; candidate-rule eval cannot be re-run",
+        )
+
+    result = evaluate_candidate_rule(
+        rule_language=proposal.rule_language,
+        rule_body=proposal.rule_body,
+        positive_fixtures=request.positive_fixtures,
+        negative_fixtures=request.negative_fixtures,
+    )
+
+    # Merge into eval_result so the benchmark verdict (if already attached) is
+    # preserved alongside the candidate-rule verdict.
+    merged = dict(proposal.eval_result or {})
+    merged["candidate_rule"] = {**result.to_dict(), "ran_at": datetime.now(UTC).isoformat()}
+    proposal.eval_result = merged
+
+    # A candidate-rule failure is decisive — it cannot be approved. On pass,
+    # only advance to eval_passed if the benchmark gate isn't failing.
+    if not result.passed:
+        proposal.status = "eval_failed"
+    elif proposal.status not in {"eval_failed"}:
+        proposal.status = "eval_passed"
+
+    await db.commit()
+    await db.refresh(proposal)
+    return ProposalResponse.model_validate(proposal)
+
+
 @router.post("/{proposal_id}/eval", response_model=ProposalResponse)
 async def attach_eval_result(
     proposal_id: uuid.UUID,
@@ -686,8 +767,21 @@ async def attach_eval_result(
         max_regression_pp=request.max_regression_pp,
     )
 
-    proposal.eval_result = verdict
-    proposal.status = "eval_passed" if verdict["passed"] else "eval_failed"
+    # Preserve any candidate-rule verdict already attached via /evaluate-rule.
+    existing = dict(proposal.eval_result or {})
+    candidate = existing.get("candidate_rule")
+    merged = dict(verdict)
+    if candidate is not None:
+        merged["candidate_rule"] = candidate
+    proposal.eval_result = merged
+
+    # Benchmark pass alone is not sufficient if the candidate rule failed its
+    # own fixtures — the non-circular gate is decisive.
+    candidate_ok = (candidate or {}).get("passed", None)
+    if candidate_ok is False:
+        proposal.status = "eval_failed"
+    else:
+        proposal.status = "eval_passed" if verdict["passed"] else "eval_failed"
     await db.commit()
     await db.refresh(proposal)
     return ProposalResponse.model_validate(proposal)
@@ -710,11 +804,33 @@ async def decide_proposal(
         )
 
     if request.decision == "approve":
-        eval_passed = bool(proposal.eval_result.get("passed")) if proposal.eval_result else False
-        if not eval_passed:
+        eval_result = proposal.eval_result or {}
+        # Phase 4 — de-circularised gate. Approval requires the candidate rule
+        # to have been evaluated against its own fixtures and passed (fires on
+        # positives, silent on negatives). A benchmark-only "pass" is no longer
+        # sufficient: the reality audit showed the benchmark is independent of
+        # the proposed rule, so a blind/noisy rule could sail through.
+        candidate = eval_result.get("candidate_rule")
+        if not candidate:
             raise HTTPException(
                 status_code=status.HTTP_412_PRECONDITION_FAILED,
-                detail="Eval gate has not passed; cannot approve. Run the eval suite and attach the report first.",
+                detail=(
+                    "Candidate-rule eval has not been run; cannot approve. "
+                    "POST /detection-proposals/{id}/evaluate-rule with positive "
+                    "and negative fixtures first."
+                ),
+            )
+        if not bool(candidate.get("passed")):
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail=f"Candidate-rule eval failed ({candidate.get('reason', 'rule did not pass its fixtures')}); cannot approve.",
+            )
+        # If a substrate-benchmark verdict is also attached it must not be a
+        # regression failure.
+        if "passed" in eval_result and not bool(eval_result.get("passed")):
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="Substrate benchmark gate failed (MITRE regression); cannot approve.",
             )
         proposal.status = "approved"
     else:

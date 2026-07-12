@@ -26,7 +26,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [x] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)
 - [x] Phase 2 — Supply chain + truth (security.yml scanners, claim-gate ratchet, hard-fail insecure prod defaults, TRADEMARK, verifying-releases, license fix; continuation landed: per-image cosign signatures + CycloneDX SBOM attestations + SLSA provenance, all actions SHA-pinned)
 - [x] Phase 3 — Integration / E2E / chaos / DR (real-container spine test, backup-restore, chaos, upgrade, cross-store isolation live-replay; heavy-demo-stack Playwright E2E + demo-timing gate tracked as non-blocking 3.5+)
-- [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix)
+- [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix) — **4a/4b landed** (de-circularised DAC candidate-rule gate + honest executable-vs-imported truth table); 4c+ live-agent eval / calibration / model matrix pending
 - [ ] Phase 5 — Data spine correctness (schema registry, DLQ, idempotency, watermarking, backfill/replay, lineage)
 - [ ] Phase 6 — Performance + cost (throughput harness, $/TB, storage-consolidation ADR)
 - [ ] Phase 7 — Ingest-time graph + multi-model router (posture, effective permissions, bi-temporal, fusion-time ContextBundle, determinism contract)

@@ -34,6 +34,12 @@ jobs:
       - name: Verify curated v1.0 coverage manifest
         run: python3 scripts/curate_detections.py --check
 
+      - name: Verify detection content truth table (Phase 4 — honest coverage)
+        # Fails if the committed docs/detections/truth-table.md drifts from the
+        # on-disk reality, so the "executable rules" headline can never quietly
+        # diverge from what the engine actually runs.
+        run: python3 scripts/detection_truth_table.py --check
+
       - name: Count rules by severity
         if: always()
         run: |

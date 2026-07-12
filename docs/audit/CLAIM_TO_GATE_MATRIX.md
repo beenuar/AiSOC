@@ -17,9 +17,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | GATED (but suites are self-consistency; see reality report) | Phase 4 |
 | Alert-reduction is a real measurement | README L62 | `ci.yml :: p1-eval` (`alert_reduction`) | PARTIAL (gates an in-test fusion re-impl, not `services/fusion`) | Phase 4 |
 | Runs entirely on your infrastructure / no data exfiltration | README L63 | `ci.yml :: python-test` (agents) runs `test_privacy_redactor.py` (zero raw PII survives) | PARTIAL (redaction gated + README made precise per mode; air-gapped egress-blocked CI + Helm NetworkPolicy in continuation/Phase 2) | Phase 2 |
-| Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: p1-eval` (w2-dac baseline) | PARTIAL (circular: candidate `rule_body` never evaluated) | Phase 4 |
+| Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: python-test` (`test_detection_eval.py` — candidate `rule_body` run through the real engine vs its own positive/negative fixtures; approval requires it) + `p1-eval` w2-dac baseline | GATED | - |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
-| 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance) | PARTIAL (97% quarantined/non-executable; heatmap is tag-based) | Phase 4 Tier 3 |
+| 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance + `detection_truth_table.py --check`); README cites the executable figure (939) not the on-disk figure for coverage | GATED | - |
 | L0-L4 automation maturity gates every action | README L171 | `ci.yml` autonomy-policy drift test | PARTIAL (thresholds gated; rollback/post-verify/dry-run ungated) | Phase 9 |
 | Hunt-as-Code + `/hunt` | README L172 | `ci.yml :: p1-eval` (`hunt_corpus`) | GATED | - |
 | Weekly benchmark scoreboard runs live against `main` | README L173 | `wet-eval.yml` (weekly) | NO GATE (no-ops without secret; live-agent tables are placeholders) | Phase 4 Tier 1 |
@@ -38,9 +38,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 12
-- PARTIAL: 12
-- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; remaining NO GATE close in Phases 4/10/11)
+- GATED: 14
+- PARTIAL: 10
+- NO GATE: 3 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED via the live-container replay; Phase 4 moved the DAC candidate-rule gate and the imported-count honesty gate to GATED; remaining NO GATE close in Phases 4-continuation/10/11)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
