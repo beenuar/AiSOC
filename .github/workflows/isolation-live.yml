@@ -43,9 +43,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install clients + test deps
+        # sqlglot MUST be pinned to the same range the API service ships
+        # (`>=23,<27`): the ClickHouse test runs the production
+        # lake_sql.rewrite_for_tenant, and sqlglot >= 27 silently stops
+        # injecting the tenant WHERE predicate (the tenant-isolation break this
+        # very gate exists to catch). test_lake_sql.py guards the pin itself.
         run: >-
           pip install --quiet
-          pytest pytest-asyncio structlog sqlglot
+          pytest pytest-asyncio structlog "sqlglot>=23,<27"
           neo4j "redis>=5,<6" clickhouse-driver "kafka-python>=2,<3"
 
       # Single-container stores run as `services:`-style `docker run` so we can
