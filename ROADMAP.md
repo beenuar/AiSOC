@@ -30,7 +30,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [x] Phase 5 — Data spine correctness (versioned event-schema registry + dead-letter queue + source-event lineage in the fusion consumer; idempotency via AlertSink dedup + event-time watermarking; backfill/replay-from-offset tracked as 5b)
 - [x] Phase 6 — Performance + cost (fusion hot-path throughput harness with a generous regression-floor gate; deterministic storage $/TB cost model + drift gate; storage-consolidation ADR-0005)
 - [x] Phase 7 — Ingest-time graph + multi-model router — **graph-at-ingest already shipped** (v8 T1.1, `services/ingest/internal/graph/`); **7a landed**: unified deterministic→ML→LLM router with tier attribution + the `AISOC_DETERMINISTIC` determinism contract (`services/agents/app/routing/model_router.py`, gated). 7b+ (posture collection, effective-permissions snapshot loader, bi-temporal valid_from/valid_to, fusion-time ContextBundle) tracked in `docs/audit/PROGRESS.md`
-- [ ] Phase 8 — LLMOps (prompt registry, model pinning, provider fallback, response caching, structured-output validation)
+- [x] Phase 8 — LLMOps (version+hash-pinned prompt registry with a CI drift gate; model pins + deterministic-terminated provider-fallback chains; content-addressed response cache; fail-closed structured-output validation)
 - [ ] Phase 9 — Autonomy safety (rollback, post-action verification, dry-run default, break-glass, approval SLA, scorecard)
 - [ ] Phase 10 — Connector + content quality (conformance suite, published matrix, detection lifecycle)
 - [ ] Phase 11 — API / SDK / release engineering (oasdiff, SDK contract drift, versioning, release discipline)

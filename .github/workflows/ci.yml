@@ -212,6 +212,10 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # Phase 8 — a production prompt cannot change without a version bump +
+      # lock regeneration (the signal that must trigger an eval re-grade).
+      - name: Verify prompt lock is current (Phase 8)
+        run: python scripts/check_prompt_lock.py
       # Phase 2.3 — every `job_name` in `infra/docker/prometheus.yml` must
       # point at a hostname:port pair where the service actually exposes
       # `/metrics`. Before this gate landed, four of five scrape jobs were
@@ -327,6 +331,7 @@ jobs:
             tests/test_privacy_redactor.py \
             tests/test_cost_governor.py \
             tests/test_model_router.py \
+            tests/test_llm_ops.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────
