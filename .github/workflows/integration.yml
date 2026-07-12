@@ -7,9 +7,12 @@ name: Integration
 #   spine            — raw vendor event → ingest (OCSF normalize) → Kafka →
 #                      fusion (promote + dedup + correlate) → fused topic →
 #                      realtime WebSocket frame → Postgres alert row →
-#                      GET /api/v1/alerts. Plus duplicate suppression and a
-#                      chaos step (kill the fusion consumer, produce, restart,
-#                      assert recovery with zero event loss).
+#                      GET /api/v1/alerts. Plus duplicate suppression and two
+#                      chaos steps: (a) kill the fusion consumer, produce,
+#                      restart, assert recovery with zero event loss; and
+#                      (b) kill Postgres mid-stream, assert fusion degrades
+#                      fail-soft without crashing, then self-heals persistence
+#                      once Postgres returns.
 #   migrations       — the API's SQL migration chain applies cleanly on a
 #                      fresh Postgres 16, is idempotent on re-run (strict
 #                      mode), and the UEBA alembic chain round-trips
@@ -119,6 +122,50 @@ jobs:
           docker compose up -d fusion
           python3 scripts/integration/spine_test.py --await-alert --title "${TITLE}" --timeout 180
 
+      # ── Chaos: Postgres outage — graceful degradation + self-heal ────────
+      # Kill Postgres mid-stream. The fusion AlertSink must degrade to
+      # "fused alerts still flow over Kafka/WS, persistence is dropped for the
+      # outage window" WITHOUT crashing the consumer, and must self-heal once
+      # Postgres returns. Distinct event titles side-step fusion's in-memory
+      # dedup so the post-restart event is a fresh persist, not a duplicate.
+      # (The during-outage event's row is intentionally not recovered — a hard
+      # DB outage is a degradation window, not corruption; the healed event
+      # proves persistence resumes.)
+      - name: Chaos — Postgres outage (graceful degradation + self-heal)
+        run: |
+          set -euo pipefail
+          OUT="PgOutage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-during"
+          HEAL="PgOutage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-healed"
+
+          echo "── killing postgres ──"
+          docker compose kill postgres
+
+          # An event produced with the DB down must be accepted + processed
+          # (ingest and fusion do not depend on Postgres for the hot path).
+          python3 scripts/integration/spine_test.py --post-event --title "${OUT}"
+          sleep 8
+
+          # The consumer must still be running — a DB outage must not crash it.
+          fusion_cid="$(docker compose ps -q fusion)"
+          running="$(docker inspect -f '{{.State.Running}}' "${fusion_cid}")"
+          echo "fusion running during outage: ${running}"
+          [ "${running}" = "true" ] \
+            || { echo "::error::fusion crashed during the Postgres outage (fail-soft violated)"; exit 1; }
+
+          echo "── restoring postgres ──"
+          docker compose up -d postgres
+          for i in $(seq 1 30); do
+            if docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
+              echo "postgres accepting connections after ${i}s"; break
+            fi
+            sleep 1
+          done
+
+          # A fresh event after restart must persist — proving the sink and the
+          # API both self-heal their Postgres pools with no restart.
+          python3 scripts/integration/spine_test.py --post-event --title "${HEAL}"
+          python3 scripts/integration/spine_test.py --await-alert --title "${HEAL}" --timeout 180
+
       - name: Capture forensics on failure
         if: failure()
         run: |
@@ -127,6 +174,7 @@ jobs:
           echo "── ingest ──";    docker compose logs --tail=100 --no-color ingest-worker || true
           echo "── realtime ──";  docker compose logs --tail=100 --no-color realtime || true
           echo "── api ──";       docker compose logs --tail=100 --no-color api || true
+          echo "── postgres ──";  docker compose logs --tail=60  --no-color postgres || true
           echo "── kafka ──";     docker compose logs --tail=60  --no-color kafka || true
 
       - name: Teardown

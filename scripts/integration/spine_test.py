@@ -160,16 +160,23 @@ async def ws_listener(ticket: str, title: str, found: asyncio.Event) -> None:
 
 async def await_alert_row(client: httpx.AsyncClient, title: str, timeout_s: int, repost: bool) -> None:
     """Poll the API until the alert row exists. Optionally re-POST the event to
-    ride out consumer-group assignment races (dedup keeps this idempotent)."""
+    ride out consumer-group assignment races (dedup keeps this idempotent).
+
+    Transient HTTP errors are swallowed and retried rather than fatal: during
+    the Postgres-outage chaos step the API and fusion are mid-reconnect, so a
+    5xx blip must extend the poll window, not fail the whole test."""
     deadline = time.monotonic() + timeout_s
     last_post = time.monotonic()
     while time.monotonic() < deadline:
-        if await count_alerts_titled(client, title) >= 1:
-            log("alert row visible via GET /api/v1/alerts")
-            return
-        if repost and time.monotonic() - last_post > REPOST_INTERVAL_S:
-            await post_event(client, title)
-            last_post = time.monotonic()
+        try:
+            if await count_alerts_titled(client, title) >= 1:
+                log("alert row visible via GET /api/v1/alerts")
+                return
+            if repost and time.monotonic() - last_post > REPOST_INTERVAL_S:
+                await post_event(client, title)
+                last_post = time.monotonic()
+        except httpx.HTTPError as exc:
+            log(f"transient error while polling (will retry): {exc}")
         await asyncio.sleep(3)
     raise SystemExit(f"alert row for {title!r} never appeared within {timeout_s}s")
 
