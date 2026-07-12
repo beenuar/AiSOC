@@ -1,0 +1,102 @@
+# Service-level objectives (Phase 12 — observability + governance).
+#
+# Every service under services/ MUST have an entry here — either an `slo:` block
+# (it serves traffic and has objectives) or an `exempt:` block with a reason (a
+# build-time library or a demo-only tool). scripts/check_slos.py --check fails
+# CI if a service is missing, so a new service cannot ship without declaring its
+# reliability posture.
+#
+# These are OBJECTIVES (targets), not measured SLIs. The golden-signal wiring
+# that measures against them is OpenTelemetry (traces → Tempo/Jaeger) +
+# Prometheus (/metrics); see docs/operations/observability.md. Error budget =
+# 1 - availability_target over a rolling 30 days.
+
+version: 1
+
+services:
+  api:
+    availability_target: 0.999
+    latency_p95_ms: 300
+    golden_signals: [latency, traffic, errors, saturation]
+    description: Public REST/GraphQL API — the analyst + integration entry point.
+  realtime:
+    availability_target: 0.999
+    latency_p95_ms: 250
+    golden_signals: [latency, traffic, errors, saturation]
+    description: WebSocket fan-out for live alerts + graph updates.
+  ingest:
+    availability_target: 0.999
+    latency_p95_ms: 200
+    golden_signals: [latency, traffic, errors, saturation]
+    description: Event intake + OCSF normalization on the hot path.
+  fusion:
+    availability_target: 0.999
+    latency_p95_ms: 500
+    golden_signals: [latency, traffic, errors, saturation]
+    description: Correlation + promotion + alert persistence.
+  agents:
+    availability_target: 0.99
+    latency_p95_ms: 120000
+    golden_signals: [latency, traffic, errors, saturation]
+    description: Investigation orchestrator (LLM latency dominates; SLO is per-investigation).
+  connectors:
+    availability_target: 0.99
+    latency_p95_ms: 5000
+    golden_signals: [traffic, errors, saturation]
+    description: Polling scheduler + connector runtime.
+  enrichment:
+    availability_target: 0.99
+    latency_p95_ms: 2000
+    golden_signals: [latency, traffic, errors]
+    description: IOC + entity enrichment cache.
+  threatintel:
+    availability_target: 0.99
+    latency_p95_ms: 1000
+    golden_signals: [latency, traffic, errors]
+    description: Threat-intel store + actor attribution.
+  ueba:
+    availability_target: 0.99
+    latency_p95_ms: 1000
+    golden_signals: [latency, traffic, errors]
+    description: Behavioral baselines + anomaly scoring.
+  actions:
+    availability_target: 0.999
+    latency_p95_ms: 3000
+    golden_signals: [latency, traffic, errors]
+    description: SOAR executors (autonomy-gated; latency depends on the vendor API).
+  slack-bot:
+    availability_target: 0.99
+    latency_p95_ms: 3000
+    golden_signals: [latency, traffic, errors]
+    description: Slack ChatOps + approvals.
+  teams-bot:
+    availability_target: 0.99
+    latency_p95_ms: 3000
+    golden_signals: [latency, traffic, errors]
+    description: Microsoft Teams ChatOps + approvals.
+  honeytokens:
+    availability_target: 0.99
+    latency_p95_ms: 500
+    golden_signals: [latency, traffic, errors]
+    description: Honeytoken minting + first-touch alerting.
+  purple-team:
+    availability_target: 0.95
+    latency_p95_ms: 2000
+    golden_signals: [traffic, errors]
+    description: Atomic/Caldera adversary emulation + coverage.
+  mcp:
+    availability_target: 0.99
+    latency_p95_ms: 2000
+    golden_signals: [latency, traffic, errors]
+    description: MCP server exposing agent tools to IDEs.
+  osquery-tls:
+    availability_target: 0.999
+    latency_p95_ms: 500
+    golden_signals: [latency, traffic, errors, saturation]
+    description: First-party osquery TLS plugin (endpoint telemetry ingest).
+
+exempt:
+  demo-producer:
+    reason: Demo-only synthetic event generator; not a production service.
+  osquery-extensions:
+    reason: Build-time Go virtual-table library shipped with the osquery agent; no service endpoint.

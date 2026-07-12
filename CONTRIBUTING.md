@@ -6,6 +6,29 @@ Thank you for your interest in contributing to AiSOC! This document provides gui
 
 By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
 
+## Governance
+
+AiSOC is community-governed under the MIT license. See [`GOVERNANCE.md`](GOVERNANCE.md) for roles, decision-making, and how to become a maintainer, and [`MAINTAINERS.md`](MAINTAINERS.md) for the current maintainers.
+
+## Developer Certificate of Origin (DCO)
+
+All contributions must be made under the project's MIT license and carry a
+**Developer Certificate of Origin** sign-off. The DCO ([developercertificate.org](https://developercertificate.org/))
+is a lightweight, per-commit attestation that you wrote the patch (or otherwise
+have the right to submit it under the project license).
+
+Sign off every commit by adding a `Signed-off-by` trailer — `git commit -s`
+does this automatically using your `user.name` / `user.email`:
+
+```bash
+git commit -s -m "feat: add the thing"
+# → adds: Signed-off-by: Your Name <you@example.com>
+```
+
+If you forgot on your last commit, `git commit --amend -s --no-edit` fixes it;
+for a whole branch, `git rebase --signoff main`.
+
+
 ## Your first 30 minutes
 
 If you've never contributed to AiSOC before, here's the shortest path from

@@ -34,7 +34,9 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [x] Phase 9 — Autonomy safety (dry-run-by-default policy, honest bounded rollback-capability contract replacing silent `return True`, mandatory post-action verification for unattended containment, break-glass HIGH-blast flag, autonomy scorecard — all gated at the policy layer; live-router wiring + durable approval-SLA timer table tracked as 9b)
 - [x] Phase 10 — Connector + content quality (runtime-contract conformance suite across all 69 connectors — gates the "live Test connection" capability that had NO gate + secret-field-marking; published `conformance-matrix.md` with a drift gate; detection lifecycle already gated by Phase 4a DAC + Phase 4b truth table. Live-vendor sandbox smoke + rate-limit/checkpoint durability tracked as 10b)
 - [x] Phase 11 — API / SDK / release engineering (pure-Python OpenAPI breaking-change detector `scripts/openapi_diff.py` + `openapi-breaking.yml` gate: PR spec vs base fails on removed endpoint/schema/field, type change, tightened request, or dropped enum value — closes the OpenAPI NO GATE row; per-language SDK generated-client contract-drift tracked as 11b)
-- [ ] Phase 12 — Observability + governance (SLOs, single trace, GOVERNANCE.md, DCO, committers, neutral home, trust docs)
+- [x] Phase 12 — Observability + governance (per-service SLOs in `docs/operations/slos.yaml` with a coverage gate; `docs/operations/observability.md` documenting the four golden signals + single OTel trace across the spine; `GOVERNANCE.md` + `MAINTAINERS.md` + DCO sign-off in `CONTRIBUTING.md`; governance-completeness gate — `governance.yml`)
+
+**All 13 phases (0–12) of the World-Class Hardening Program have landed.** The claim-to-gate matrix stands at **15 GATED / 11 PARTIAL / 1 NO GATE** (the last NO GATE — wet-eval live-agent scoreboard tables — needs a budgeted live-agent run, tracked as Phase 4c). Honestly-scoped continuations remain per phase (3.5+, 4c, 7b, 9b, 10b, 11b) and are tracked in `docs/audit/PROGRESS.md`; none change the committed phase checklist above.
 
 ## v4.0 — Shipped
 

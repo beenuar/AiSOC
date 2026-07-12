@@ -1,0 +1,62 @@
+name: Governance + SLOs
+
+# Phase 12 (world-class program) — two cheap completeness gates:
+#   slos       — every service under services/ has an SLO or exempt entry in
+#                docs/operations/slos.yaml (a new service can't ship without
+#                declaring its reliability posture).
+#   governance — the governance surface (GOVERNANCE.md, MAINTAINERS.md,
+#                SECURITY.md, CODE_OF_CONDUCT.md, TRADEMARK.md, the DCO section
+#                in CONTRIBUTING.md, SLOs, observability doc) exists and is
+#                non-trivial, so it can't silently rot.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "docs/operations/slos.yaml"
+      - "docs/operations/observability.md"
+      - "GOVERNANCE.md"
+      - "MAINTAINERS.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
+      - "CODE_OF_CONDUCT.md"
+      - "TRADEMARK.md"
+      - "scripts/check_slos.py"
+      - "scripts/check_governance.py"
+      - ".github/workflows/governance.yml"
+  pull_request:
+    paths:
+      - "services/**"
+      - "docs/operations/slos.yaml"
+      - "docs/operations/observability.md"
+      - "GOVERNANCE.md"
+      - "MAINTAINERS.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
+      - "CODE_OF_CONDUCT.md"
+      - "TRADEMARK.md"
+      - "scripts/check_slos.py"
+      - "scripts/check_governance.py"
+      - ".github/workflows/governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: SLO coverage + governance completeness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install --quiet pyyaml
+      - name: SLO coverage gate
+        run: python3 scripts/check_slos.py --print
+      - name: Governance completeness gate
+        run: python3 scripts/check_governance.py
