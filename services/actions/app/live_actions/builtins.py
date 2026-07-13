@@ -58,6 +58,10 @@ from app.executors.network import (
     BlockDomainExecutor,
     BlockIPExecutor,
 )
+from app.executors.notification import (
+    CreateTicketExecutor,
+    NotifySlackExecutor,
+)
 from app.executors.siem import (
     BlockIOCExecutor,
     CreateNotableEventExecutor,
@@ -425,6 +429,120 @@ class DefenderBlockIOC(_LegacyExecutorAdapter):
 
 
 # ---------------------------------------------------------------------------
+# Phase B2 — previously-unregistered vendor adapters.
+#
+# The legacy executors already speak these vendors (they pick the client at
+# call time from which credential block is present), but the live-action
+# registry had no (vendor, capability) entry for them — so the agent layer
+# could never plan against SentinelOne / Entra / GWS / PAN-OS / FortiGate /
+# Cloudflare / Jira / ServiceNow / PagerDuty / Slack. Registering them here
+# (with the exact credential keys their client builders read) completes the
+# discovery surface; the credential_resolver maps connector auth_config onto
+# these keys.
+# ---------------------------------------------------------------------------
+
+
+class SentinelOneIsolateHost(_LegacyExecutorAdapter):
+    vendor_id = "sentinelone"
+    capability = "isolate_host"
+    description = "Disconnect an endpoint from the network on SentinelOne."
+    requires_credentials = True
+    _legacy_executor = IsolateHostExecutor()
+    _legacy_action_type = ActionType.ISOLATE_HOST
+    _credential_keys = ("s1_console_url", "s1_api_token")
+
+
+class EntraDisableUser(_LegacyExecutorAdapter):
+    vendor_id = "azure_entra"
+    capability = "disable_user"
+    description = "Disable a user account in Microsoft Entra ID."
+    requires_credentials = True
+    _legacy_executor = DisableUserExecutor()
+    _legacy_action_type = ActionType.DISABLE_USER
+    _credential_keys = ("azure_tenant_id", "azure_client_id", "azure_client_secret")
+
+
+class GoogleWorkspaceDisableUser(_LegacyExecutorAdapter):
+    vendor_id = "google_workspace"
+    capability = "disable_user"
+    description = "Suspend a user account in Google Workspace."
+    requires_credentials = True
+    _legacy_executor = DisableUserExecutor()
+    _legacy_action_type = ActionType.DISABLE_USER
+    _credential_keys = ("gws_service_account_key", "gws_subject_email")
+
+
+class PanOsBlockIP(_LegacyExecutorAdapter):
+    vendor_id = "panos"
+    capability = "block_ip"
+    description = "Block an IP on a Palo Alto NGFW via a dynamic address group tag."
+    requires_credentials = True
+    _legacy_executor = BlockIPExecutor()
+    _legacy_action_type = ActionType.BLOCK_IP
+    _credential_keys = ("panos_host", "panos_api_key", "panos_tag")
+
+
+class FortiGateBlockIP(_LegacyExecutorAdapter):
+    vendor_id = "fortigate"
+    capability = "block_ip"
+    description = "Block an IP on a FortiGate firewall via an address group."
+    requires_credentials = True
+    _legacy_executor = BlockIPExecutor()
+    _legacy_action_type = ActionType.BLOCK_IP
+    _credential_keys = ("fgt_host", "fgt_api_token", "fgt_address_group")
+
+
+class CloudflareBlockIP(_LegacyExecutorAdapter):
+    vendor_id = "cloudflare"
+    capability = "block_ip"
+    description = "Block an IP at the Cloudflare edge (zone firewall access rule)."
+    requires_credentials = True
+    _legacy_executor = BlockIPExecutor()
+    _legacy_action_type = ActionType.BLOCK_IP
+    _credential_keys = ("cf_api_token", "cf_zone_id")
+
+
+class JiraCreateTicket(_LegacyExecutorAdapter):
+    vendor_id = "jira"
+    capability = "create_ticket"
+    description = "Create a Jira issue for the incident."
+    requires_credentials = True
+    _legacy_executor = CreateTicketExecutor()
+    _legacy_action_type = ActionType.CREATE_TICKET
+    _credential_keys = ("jira_base_url", "jira_email", "jira_api_token")
+
+
+class ServiceNowCreateTicket(_LegacyExecutorAdapter):
+    vendor_id = "servicenow"
+    capability = "create_ticket"
+    description = "Create a ServiceNow incident record."
+    requires_credentials = True
+    _legacy_executor = CreateTicketExecutor()
+    _legacy_action_type = ActionType.CREATE_TICKET
+    _credential_keys = ("snow_instance_url", "snow_username", "snow_password")
+
+
+class PagerDutyCreateTicket(_LegacyExecutorAdapter):
+    vendor_id = "pagerduty"
+    capability = "create_ticket"
+    description = "Trigger a PagerDuty incident (Events API v2)."
+    requires_credentials = True
+    _legacy_executor = CreateTicketExecutor()
+    _legacy_action_type = ActionType.CREATE_TICKET
+    _credential_keys = ("pd_routing_key",)
+
+
+class SlackNotify(_LegacyExecutorAdapter):
+    vendor_id = "slack"
+    capability = "notify"
+    description = "Post an incident notification to a Slack channel."
+    requires_credentials = True
+    _legacy_executor = NotifySlackExecutor()
+    _legacy_action_type = ActionType.NOTIFY_SLACK
+    _credential_keys = ("webhook_url",)
+
+
+# ---------------------------------------------------------------------------
 # Registration entry point
 # ---------------------------------------------------------------------------
 
@@ -453,6 +571,17 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     SplunkSyncDetectionRule,
     ElasticUpdateWatcher,
     DefenderBlockIOC,
+    # Phase B2 — previously-unregistered vendors
+    SentinelOneIsolateHost,
+    EntraDisableUser,
+    GoogleWorkspaceDisableUser,
+    PanOsBlockIP,
+    FortiGateBlockIP,
+    CloudflareBlockIP,
+    JiraCreateTicket,
+    ServiceNowCreateTicket,
+    PagerDutyCreateTicket,
+    SlackNotify,
 )
 
 

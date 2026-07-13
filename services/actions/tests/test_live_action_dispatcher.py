@@ -132,8 +132,11 @@ def _isolate_registry():
 
 
 def test_dispatch_routes_to_registered_executor():
+    """Pure mechanics: ``isolate_host`` is HIGH blast, so a real execution is
+    governed since Phase B2 — dry_run keeps this test about routing, not
+    policy (the governance behaviour has its own suite)."""
     register_executor(_OkExecutor())
-    request = LiveActionRequest(capability="isolate_host", vendor_id="stubvendor", target="srv-12")
+    request = LiveActionRequest(capability="isolate_host", vendor_id="stubvendor", target="srv-12", dry_run=True)
 
     result = asyncio.run(dispatch(request))
 
@@ -194,9 +197,16 @@ def test_dispatch_crashing_executor_is_caught():
 
 def test_dispatch_patches_mismatched_request_id():
     """Defence in depth: if an executor returns the wrong request_id we
-    patch it so the audit trail remains correlatable."""
+    patch it so the audit trail remains correlatable.
+
+    ``dry_run=True`` keeps this a pure mechanics test: ``disable_user`` is a
+    HIGH-blast ActionType, so a would-be real execution is now governed by the
+    Phase B2 autonomy gate (queued for approval) and the executor would never
+    run — which is exactly what the governance tests assert, but not what THIS
+    test is about.
+    """
     register_executor(_LyingExecutor())
-    request = LiveActionRequest(capability="disable_user", vendor_id="lyingvendor")
+    request = LiveActionRequest(capability="disable_user", vendor_id="lyingvendor", dry_run=True)
 
     result = asyncio.run(dispatch(request))
 

@@ -161,6 +161,10 @@ def test_by_vendor_endpoint(client: TestClient) -> None:
 
 
 def test_dispatch_succeeds_and_reports_live_mode(client: TestClient) -> None:
+    """Since Phase B2 a would-be real ``isolate_host`` (HIGH blast) is governed
+    by the autonomy gate: at the default tier it is downgraded to a dry-run
+    preview — the executor still runs (echo_target present) but nothing real
+    executes, and the governance verdict is on the result."""
     response = client.post(
         "/api/v1/live-actions/dispatch",
         json={
@@ -172,7 +176,8 @@ def test_dispatch_succeeds_and_reports_live_mode(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == "live"
-    assert body["result"]["status"] == "succeeded"
+    assert body["result"]["status"] == "simulated"
+    assert body["result"]["details"]["autonomy_mode"] == "dry_run"
     assert body["result"]["vendor_id"] == "stubvendor"
     assert body["result"]["capability"] == "isolate_host"
     assert body["result"]["details"]["echo_target"] == "host-77"

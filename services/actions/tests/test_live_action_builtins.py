@@ -51,7 +51,9 @@ def test_register_builtin_executors_returns_full_count() -> None:
     cheap reminder to update docs / discovery snapshots.
     """
     count = register_builtin_executors()
-    assert count == 19
+    # 19 original + 10 Phase B2 vendors (SentinelOne/Entra/GWS/PAN-OS/FortiGate/
+    # Cloudflare/Jira/ServiceNow/PagerDuty/Slack).
+    assert count == 29
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -89,6 +91,17 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("splunk", "sync_detection_rule"),
         ("elastic", "update_watcher"),
         ("defender", "block_ioc"),
+        # Phase B2 — previously-unregistered vendors
+        ("sentinelone", "isolate_host"),
+        ("azure_entra", "disable_user"),
+        ("google_workspace", "disable_user"),
+        ("panos", "block_ip"),
+        ("fortigate", "block_ip"),
+        ("cloudflare", "block_ip"),
+        ("jira", "create_ticket"),
+        ("servicenow", "create_ticket"),
+        ("pagerduty", "create_ticket"),
+        ("slack", "notify"),
     }
     assert pairs == expected
 
@@ -119,7 +132,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 19
+    assert count == 29
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

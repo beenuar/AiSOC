@@ -64,6 +64,11 @@ class LiveActionStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     SIMULATED = "simulated"  # No credentials → safe simulation path.
+    # Phase B2 — the autonomy-safety gate (Phase 9a `decide()`) is wired into
+    # dispatch. These two states mean the executor was intentionally NOT
+    # invoked: the tier/blast policy blocked it outright, or it needs a human.
+    BLOCKED = "blocked"
+    PENDING_APPROVAL = "pending_approval"
 
 
 class LiveActionRequest(BaseModel):
@@ -91,6 +96,13 @@ class LiveActionRequest(BaseModel):
     vendor_id: str
     target: str = ""
     params: dict[str, Any] = Field(default_factory=dict)
+    # Phase B2 — connector-style credentials (schema field names, e.g.
+    # ``client_id`` / ``api_token``). When present, the dispatcher translates
+    # them into the executor's vendor-prefixed params via
+    # ``app.services.credential_resolver.resolve_params`` — so callers holding
+    # a decrypted connector ``auth_config`` don't need to know each executor's
+    # parameter vocabulary. Explicit ``params`` keys win on collision.
+    auth_config: dict[str, Any] | None = None
     dry_run: bool = False
 
     # Provenance — these are filled in by the API layer / agent runner so
