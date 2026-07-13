@@ -1,41 +1,42 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-13T06:00:16Z",
+  "generated": "2026-07-13T06:40:32Z",
   "stats": {
-    "considered": 1054,
-    "eligible": 1050,
-    "selected": 416,
+    "considered": 1062,
+    "eligible": 1058,
+    "selected": 417,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
     "unique_techniques": 117,
     "selected_by_tier": {
       "imported": 42,
-      "native": 374
+      "native": 375
     },
     "selected_by_severity": {
       "critical": 99,
       "high": 208,
       "low": 6,
-      "medium": 103
+      "medium": 104
     },
     "selected_by_category": {
       "_migrated": 1,
-      "application": 29,
-      "cloud": 165,
+      "application": 33,
+      "cloud": 164,
       "data-exfil": 20,
       "endpoint": 117,
-      "identity": 72,
+      "identity": 70,
       "network": 12
     }
   },
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 48,
+      "count": 49,
       "rule_ids": [
         "det-application-050",
+        "det-application-078",
         "det-cloud-004",
         "det-cloud-008",
         "det-cloud-019",
@@ -89,12 +90,13 @@
     },
     "credential-access": {
       "label": "Credential Access",
-      "count": 84,
+      "count": 85,
       "rule_ids": [
         "det-application-004",
         "det-application-008",
         "det-application-020",
         "det-application-040",
+        "det-application-075",
         "det-cloud-047",
         "det-cloud-074",
         "det-cloud-101",
@@ -278,6 +280,7 @@
         "det-application-058",
         "det-application-063",
         "det-application-069",
+        "det-application-073",
         "det-cloud-001",
         "det-cloud-002",
         "det-cloud-003",
@@ -332,7 +335,6 @@
         "det-cloud-061",
         "det-cloud-062",
         "det-cloud-063",
-        "det-cloud-067",
         "det-cloud-072",
         "det-cloud-077",
         "det-cloud-081",
@@ -386,6 +388,9 @@
         "det-application-057",
         "det-application-060",
         "det-application-069",
+        "det-application-072",
+        "det-application-073",
+        "det-application-075",
         "det-cloud-001",
         "det-cloud-007",
         "det-cloud-014",
@@ -455,9 +460,6 @@
         "det-endpoint-302",
         "det-identity-001",
         "det-identity-002",
-        "det-identity-003",
-        "det-identity-004",
-        "det-identity-006",
         "det-identity-009",
         "det-identity-020",
         "det-identity-021",
@@ -643,21 +645,21 @@
     "T1053": 1,
     "T1057": 1,
     "T1059": 3,
-    "T1059.001": 2,
-    "T1059.004": 2,
+    "T1059.001": 1,
+    "T1059.004": 1,
     "T1069": 1,
     "T1069.003": 1,
     "T1070": 4,
     "T1071.001": 1,
-    "T1078": 16,
+    "T1078": 14,
     "T1078.001": 1,
     "T1078.004": 26,
     "T1082": 1,
     "T1087": 1,
     "T1087.004": 1,
-    "T1098": 16,
+    "T1098": 17,
     "T1098.001": 14,
-    "T1098.003": 7,
+    "T1098.003": 8,
     "T1098.004": 6,
     "T1098.007": 1,
     "T1105": 1,
@@ -679,7 +681,7 @@
     "T1212": 2,
     "T1213.002": 1,
     "T1484.002": 1,
-    "T1485": 30,
+    "T1485": 31,
     "T1486": 5,
     "T1489": 3,
     "T1490": 11,
@@ -703,7 +705,7 @@
     "T1554": 1,
     "T1555": 2,
     "T1555.005": 1,
-    "T1556": 39,
+    "T1556": 40,
     "T1556.001": 1,
     "T1556.006": 5,
     "T1556.007": 1,
@@ -1462,6 +1464,108 @@
         "executable(+0.15)"
       ],
       "log_source_product": "m365",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-072",
+      "name": "LLM Provider Admin API Key Created",
+      "path": "detections/application/llm-admin-key-created.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "openai",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-073",
+      "name": "LLM Provider Owner Role Granted",
+      "path": "detections/application/llm-member-added-owner.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "openai",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-075",
+      "name": "LLM Provider MFA Requirement Disabled",
+      "path": "detections/application/llm-mfa-disabled.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "openai",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-078",
+      "name": "LLM Provider Project Deleted",
+      "path": "detections/application/llm-project-deleted.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.955,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "openai",
       "has_executable_body": true
     },
     {
@@ -2904,32 +3008,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-067",
-      "name": "AWS EC2 UserData Modified On Running Instance",
-      "path": "detections/cloud/aws-ec2-userdata-modified-running.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1059.001",
-        "T1059.004"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "aws",
@@ -8293,58 +8371,6 @@
       "mitre_tactics": [],
       "families": [
         "credential-access",
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-004",
-      "name": "Login from Tor / Anonymous Proxy",
-      "path": "detections/identity/login-anonymous-ip.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-006",
-      "name": "Login from Country Outside Allowed Geography",
-      "path": "detections/identity/login-from-foreign-country.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
         "cloud",
         "identity"
       ],
