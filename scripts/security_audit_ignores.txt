@@ -105,3 +105,12 @@ python|PYSEC-2026-1325|ecdsa 0.19.2 is latest release; no patched version availa
 # Both PYSEC and GHSA forms listed since pip-audit may report either as primary.
 python|PYSEC-2026-2193|langchain-core prompts.loading path traversal (fixed in 1.2.22); requires langchain 0.3 → 1.x major bump, module unused in codebase; tracked with langchain migration PR|2026-10-11
 python|GHSA-qh6h-p6c9-ff54|langchain-core prompts.loading path traversal (fixed in 1.2.22); requires langchain 0.3 → 1.x major bump, module unused in codebase; tracked with langchain migration PR|2026-10-11
+
+# langchain-core SSRF via image_url token counting in
+# ChatOpenAI.get_num_tokens_from_messages (low severity, freshly disclosed).
+# Fixed only in langchain-core 1.2.11 — same langchain 0.3 → 1.x major bump as
+# the entries above. The affected method is not called anywhere in this
+# codebase (verified via repo-wide grep for get_num_tokens_from_messages /
+# image_url), so no untrusted image URL ever reaches it.
+python|PYSEC-2026-2562|langchain-core SSRF in ChatOpenAI.get_num_tokens_from_messages (low; fixed in 1.2.11); requires langchain 0.3 → 1.x major bump, method unused in codebase; tracked with langchain migration PR|2026-10-11
+python|GHSA-2g6r-c272-w58r|langchain-core SSRF in ChatOpenAI.get_num_tokens_from_messages (low; fixed in 1.2.11); requires langchain 0.3 → 1.x major bump, method unused in codebase; tracked with langchain migration PR|2026-10-11
