@@ -68,6 +68,7 @@ const NAV_ITEMS: { label: string; href: string; keywords: string[] }[] = [
   { label: 'Alerts',          href: '/alerts',       keywords: ['notifications', 'incidents'] },
   { label: 'Cases',           href: '/cases',        keywords: ['investigations', 'tickets'] },
   { label: 'Hunt',            href: '/hunt',         keywords: ['threat hunting', 'search', 'kql', 'esql'] },
+  { label: 'Explore',         href: '/explore',      keywords: ['data explorer', 'lake', 'sql', 'bi', 'query', 'identity', 'intel'] },
   { label: 'Detection Rules', href: '/detection',    keywords: ['rules', 'detections', 'sigma'] },
   { label: 'Threat Intel',    href: '/threat-intel', keywords: ['ioc', 'feeds', 'cti'] },
   { label: 'Attack Graph',    href: '/graph',        keywords: ['graph', 'paths', 'cytoscape'] },

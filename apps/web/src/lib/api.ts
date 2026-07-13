@@ -2964,6 +2964,54 @@ export const huntApi = {
     request<void>(`/api/v1/hunt/saved/${id}`, { method: 'DELETE' }),
 };
 
+// ─── Event lake (Phase A1/C1) ────────────────────────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/lake.py`. `/lake/sql` runs a
+// tenant-scoped SELECT against the ClickHouse warm tier (the server injects the
+// `tenant_id` predicate before execution); `/lake/schema` returns the
+// allowlisted tables + columns the Explore surface renders as a schema helper.
+
+export interface LakeQueryRequest {
+  sql: string;
+  row_cap?: number;
+  timeout_seconds?: number;
+}
+
+export interface LakeQueryResponse {
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+  row_cap: number;
+  referenced_tables: string[];
+  elapsed_ms: number;
+  executed_at: string;
+}
+
+export interface LakeColumnInfo {
+  name: string;
+  type: string;
+  comment: string;
+}
+
+export interface LakeTableInfo {
+  table: string;
+  columns: LakeColumnInfo[];
+}
+
+export interface LakeSchemaResponse {
+  tables: LakeTableInfo[];
+}
+
+export const lakeApi = {
+  sql: (body: LakeQueryRequest) =>
+    request<LakeQueryResponse>('/api/v1/lake/sql', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  schema: () => request<LakeSchemaResponse>('/api/v1/lake/schema'),
+};
+
 // ─── Natural-language query translator (T3.4) ────────────────────────────────
 //
 // Wraps `services/api/app/api/v1/endpoints/nl_query.py`. The translator

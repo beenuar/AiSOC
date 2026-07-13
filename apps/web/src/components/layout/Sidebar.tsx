@@ -184,6 +184,11 @@ const navSections: NavSection[] = [
         icon: <SearchIcon />,
       },
       {
+        label: 'Explore',
+        href: '/explore',
+        icon: <SearchIcon />,
+      },
+      {
         label: 'Detection Rules',
         href: '/detection',
         icon: <EyeIcon />,

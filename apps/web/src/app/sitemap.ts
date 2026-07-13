@@ -19,6 +19,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/marketplace",
     "/compliance",
     "/hunt",
+    "/explore",
     "/copilot",
     "/graph",
   ];
