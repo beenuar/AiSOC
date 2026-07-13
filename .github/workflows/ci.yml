@@ -371,7 +371,9 @@ jobs:
         # fused alerts to the Postgres alert store.
         # clickhouse-driver: required since Phase A1 — the fusion LakeWriter
         # archives normalized events into the ClickHouse event lake.
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver
+        # pyyaml: required since Phase A2 — the detection-matcher parity test
+        # loads the canonical scripts/generate_detections.py (imports yaml).
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver pyyaml
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage

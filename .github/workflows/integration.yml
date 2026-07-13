@@ -133,6 +133,14 @@ jobs:
             || { echo "::error::ClickHouse lake was never populated from the raw-events stream"; \
                  docker compose logs --tail=80 --no-color fusion || true; exit 1; }
 
+      # ── Phase A2: the executable detection corpus fires on the live stream ─
+      # Post an event whose recovered raw fields match a native detection rule
+      # (aws-root-account-login) and assert the fusion detection engine turns
+      # it into an alert — proving the 800+ rule corpus runs in production, not
+      # just in CI fixture-replay.
+      - name: Assert the detection engine fires on the live stream
+        run: python3 scripts/integration/spine_test.py --detection --timeout 180
+
       # ── Chaos: kill the fusion consumer, produce, restart, assert ────────
       # The event is produced while the consumer is down; on restart the
       # consumer group must resume from its committed offset and process it.

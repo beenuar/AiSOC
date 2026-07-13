@@ -14,6 +14,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from app.core.config import settings
 from app.models.alert import FusionDecision, RawAlert
 from app.services.alert_sink import AlertSink
+from app.services.detection_engine import DetectionEngine
 from app.services.dlq import DeadLetter, DeadLetterQueue, LoggingDLQ, safe_record
 from app.services.event_schema import validate_event
 from app.services.fusion_engine import FusionEngine
@@ -31,6 +32,7 @@ _METRICS = {
     "not_promoted": 0,
     "persisted": 0,
     "laked": 0,
+    "detected": 0,
     "dead_lettered": 0,
     "errors": 0,
 }
@@ -45,10 +47,12 @@ class FusionWorker:
         sink: AlertSink | None = None,
         dlq: DeadLetterQueue | None = None,
         lake: LakeWriter | None = None,
+        detector: DetectionEngine | None = None,
     ) -> None:
         self._engine = engine
         self._sink = sink
         self._lake = lake
+        self._detector = detector
         # A poison message must never vanish silently; default to a structured
         # logging DLQ so persistence-free deployments still get the signal.
         self._dlq: DeadLetterQueue = dlq or LoggingDLQ()
@@ -195,9 +199,19 @@ class FusionWorker:
             if self._lake is not None and await self._lake.write_event(payload):
                 _METRICS["laked"] += 1
 
+            # Phase A2 — run the executable detection corpus against the live
+            # event. Each firing rule becomes a RawAlert routed through fusion,
+            # so telemetry that isn't a vendor-asserted finding still alerts.
+            if self._detector is not None:
+                for hit in self._detector.evaluate(payload):
+                    det_alert = self._detector.build_alert(payload, hit)
+                    if det_alert is not None:
+                        _METRICS["detected"] += 1
+                        await self._fuse_and_persist(det_alert, source_event_id=validation.source_event_id)
+
             # Ingest-normalized OCSF event — run the deterministic promotion
             # policy (see app/services/promoter.py). Non-promoted events are
-            # dropped here by design; the detect stage owns rule evaluation.
+            # dropped here by design; the detect stage (above) owns rule eval.
             alert = promote_normalized_event(payload)
             if alert is None:
                 _METRICS["not_promoted"] += 1
@@ -219,14 +233,10 @@ class FusionWorker:
                 )
                 return
 
-        # Lineage — trace each fused alert back to its source event + schema.
-        logger.debug(
-            "fusion.lineage",
-            topic=resolved_topic,
-            schema_version=validation.schema_version,
-            source_event_id=validation.source_event_id,
-        )
+        await self._fuse_and_persist(alert, source_event_id=validation.source_event_id)
 
+    async def _fuse_and_persist(self, alert: RawAlert, *, source_event_id: str | None = None) -> None:
+        """Run one RawAlert through fusion, publish it, and persist it."""
         fused = await self._engine.process(alert)
         _METRICS["processed"] += 1
 
@@ -245,9 +255,8 @@ class FusionWorker:
 
         # Persist to the alert store (Phase 3.1). Fail-soft + idempotent —
         # see app/services/alert_sink.py. Duplicates are skipped inside.
-        if self._sink is not None:
-            if await self._sink.persist(fused) is not None:
-                _METRICS["persisted"] += 1
+        if self._sink is not None and await self._sink.persist(fused) is not None:
+            _METRICS["persisted"] += 1
 
     @staticmethod
     def get_metrics() -> dict:

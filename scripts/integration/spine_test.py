@@ -117,6 +117,41 @@ async def post_event(client: httpx.AsyncClient, title: str) -> None:
     log(f"ingest accepted event title={title!r}")
 
 
+# Phase A2 — an event whose recovered raw fields match the native
+# `aws-root-account-login` detection rule. The rule (product `aws`) fires in
+# the fusion detection engine and produces an alert titled below, proving the
+# executable corpus runs against the live stream (not just CI fixtures).
+DETECTION_ALERT_TITLE = "AWS Root Account Console Login"
+
+
+async def post_detection_event(client: httpx.AsyncClient) -> None:
+    payload = {
+        "connector_id": "spine-detection-test",
+        "connector_type": "aws_cloudtrail",
+        "source_format": "json",
+        "events": [
+            {
+                "event_name": "ConsoleLogin",
+                "user_type": "Root",
+                "error_code": None,
+                "src_ip": "203.0.113.7",
+                "severity": "critical",
+            }
+        ],
+    }
+    r = await client.post(
+        f"{INGEST}/v1/ingest/batch",
+        json=payload,
+        headers={"X-Tenant-ID": TENANT},
+        timeout=10,
+    )
+    r.raise_for_status()
+    body = r.json()
+    if body.get("accepted") != 1:
+        raise SystemExit(f"ingest rejected the detection event: {body}")
+    log("ingest accepted detection-triggering event (aws root login)")
+
+
 async def count_alerts_titled(client: httpx.AsyncClient, title: str) -> int:
     r = await client.get(f"{API}/api/v1/alerts", params={"page_size": 200}, timeout=10)
     r.raise_for_status()
@@ -240,7 +275,21 @@ async def main() -> None:
     parser.add_argument("--await-alert", action="store_true", help="only await the alert row")
     parser.add_argument("--title", help="event title for --post-event / --await-alert")
     parser.add_argument("--timeout", type=int, default=120)
+    parser.add_argument(
+        "--detection",
+        action="store_true",
+        help="Phase A2: post a detection-rule-triggering event and await the resulting alert",
+    )
     args = parser.parse_args()
+
+    if args.detection:
+        async with httpx.AsyncClient() as client:
+            await wait_healthy(client)
+            await asyncio.sleep(5)
+            await post_detection_event(client)
+            await await_alert_row(client, DETECTION_ALERT_TITLE, args.timeout or 180, repost=False)
+            log("DETECTION ENGINE FIRED (live-stream rule match produced an alert)")
+        return
 
     if args.post_event or args.await_alert:
         if not args.title:

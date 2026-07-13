@@ -12,6 +12,7 @@ from app.services.alert_sink import AlertSink
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
+from app.services.detection_engine import DetectionEngine
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
@@ -53,7 +54,9 @@ async def lifespan(app: FastAPI):
         if settings.lake_writer_enabled
         else None
     )
-    worker = FusionWorker(engine, sink=sink, lake=lake)
+    # Phase A2 — evaluate the executable detection corpus against the stream.
+    detector = DetectionEngine() if settings.detection_engine_enabled else None
+    worker = FusionWorker(engine, sink=sink, lake=lake, detector=detector)
     set_worker(worker)
 
     # Start Kafka worker as a background task

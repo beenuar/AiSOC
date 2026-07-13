@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     lake_batch_size: int = Field(default=100, alias="AISOC_LAKE_BATCH_SIZE")
     lake_batch_max_age_seconds: float = Field(default=2.0, alias="AISOC_LAKE_BATCH_MAX_AGE_SECONDS")
 
+    # Phase A2 — evaluate the executable native detection corpus against the
+    # live event stream (app/services/detection_engine.py). Each firing rule
+    # becomes a RawAlert routed through fusion.
+    detection_engine_enabled: bool = Field(default=True, alias="AISOC_DETECTION_ENGINE_ENABLED")
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
     dedup_window_seconds: int = Field(default=300, alias="DEDUP_WINDOW_SECONDS")
