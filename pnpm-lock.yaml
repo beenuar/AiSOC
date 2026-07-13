@@ -82,11 +82,11 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3)(@types/react@19.2.17)(react-dom@19.2.7)(react@19.2.7)
       cytoscape:
-        specifier: ^3.28.1
-        version: 3.33.3
+        specifier: ^3.34.0
+        version: 3.34.0
       cytoscape-fcose:
         specifier: ^2.2.0
-        version: 2.2.0(cytoscape@3.33.3)
+        version: 2.2.0(cytoscape@3.34.0)
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -9159,7 +9159,7 @@ packages:
     resolution: {integrity: sha512-EXHOHxqQjGxLDEh5cP4te6J0bi7LbCzmZkzsR6f703igUac8UGMdEohMyU3GHAayCTZrLQOMnaE/lqB2Ekh8Ww==}
     deprecated: This is a stub types definition. cytoscape provides its own type definitions, so you do not need this installed.
     dependencies:
-      cytoscape: 3.33.3
+      cytoscape: 3.34.0
     dev: true
 
   /@types/d3-array@3.2.2:
@@ -11894,17 +11894,17 @@ packages:
       fs-exists-sync: 0.1.0
     dev: true
 
-  /cytoscape-fcose@2.2.0(cytoscape@3.33.3):
+  /cytoscape-fcose@2.2.0(cytoscape@3.34.0):
     resolution: {integrity: sha512-ki1/VuRIHFCzxWNrsshHYPs6L7TvLu3DL+TyIGEsRcvVERmxokbf5Gdk7mFxZnTdiGtnA4cfSmjZJMviqSuZrQ==}
     peerDependencies:
       cytoscape: ^3.2.0
     dependencies:
       cose-base: 2.2.0
-      cytoscape: 3.33.3
+      cytoscape: 3.34.0
     dev: false
 
-  /cytoscape@3.33.3:
-    resolution: {integrity: sha512-Gej7U+OKR+LZ8kvX7rb2HhCYJ0IhvEFsnkud4SB1PR+BUY/TsSO0dmOW59WEVLu51b1Rm+gQRKoz4bLYxGSZ2g==}
+  /cytoscape@3.34.0:
+    resolution: {integrity: sha512-62rNSrioXw93uliKFBwjukeQyeWwH2PqDrTac31r2P6464u3AUvTk0xS4LVvT251g7IgkFunrI48ZEZGjywSOg==}
     engines: {node: '>=0.10'}
 
   /d3-array@3.2.4:
