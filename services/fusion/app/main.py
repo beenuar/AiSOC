@@ -33,9 +33,7 @@ async def lifespan(app: FastAPI):
     confidence_scorer = ConfidenceScorer(enabled=settings.confidence_enabled)
     # Phase A4 — behavioral-model fusion: one cache shared by the engine
     # (fuse-time lookup) and the worker (records the ueba.anomalies stream).
-    ueba_cache = (
-        UebaSignalCache(redis_client, ttl_seconds=settings.ueba_signal_ttl_seconds) if settings.ueba_fusion_enabled else None
-    )
+    ueba_cache = UebaSignalCache(redis_client, ttl_seconds=settings.ueba_signal_ttl_seconds) if settings.ueba_fusion_enabled else None
     engine = FusionEngine(
         dedup,
         correlator,
