@@ -69,12 +69,18 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup pnpm
-        # Intentionally omit `version:` — the root `package.json`
-        # pins `packageManager: pnpm@8.15.1` and `action-setup@v4`
-        # picks that up automatically. Pinning `version: 9` here
-        # would clash with the packageManager field and abort the
-        # job with ERR_PNPM_BAD_PM_VERSION.
+        # Pin `version:` to match the root `package.json`
+        # `packageManager: pnpm@8.15.1`. Under `action-setup@v6` an
+        # omitted version installs the latest pnpm (11.x) and then
+        # self-switches down to 8.15.1; that churn leaves optional
+        # native bindings (e.g. `@tailwindcss/oxide-linux-x64-gnu`)
+        # unlinked inside the Playwright container and the dev server
+        # fails with "Cannot find native binding". Installing 8.15.1
+        # directly avoids the switch, and matching the packageManager
+        # value means no ERR_PNPM_BAD_PM_VERSION.
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 8.15.1
 
       - name: Setup Node 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
