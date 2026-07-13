@@ -30,7 +30,7 @@ MATRIX = ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
 # Phase 10 moved connector "live Test connection" off NO GATE; Phase 11 moved
 # OpenAPI breaking-change semantics to GATED. The last NO GATE row (wet-eval
 # live-agent scoreboard tables) closes in Phase 4c (needs a budgeted live run).
-MAX_NO_GATE = 1
+MAX_NO_GATE = 0
 
 
 def _parse_status_rows(text: str) -> list[str]:

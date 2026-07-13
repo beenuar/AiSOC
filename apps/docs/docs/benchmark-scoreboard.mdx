@@ -25,6 +25,15 @@ lands in CI. The two row types share the same columns so the table reads
 uniformly, but **never quote a substrate row as live agent performance**.
 :::
 
+:::info Per-PR freshness gate (Phase E1)
+The newest `substrate` row is no longer hand-maintained: `scripts/check_scoreboard.py`
+runs in CI on every PR, executes the deterministic live-agent MITRE-accuracy
+eval over the 200-incident corpus, and **fails the build** if the published
+`mitre_accuracy` drifts more than 0.02 from the fresh run, the JSON breaks its
+schema, or a `substrate` row is mislabelled. So the headline substrate number
+here is provably what the current agent scores — not a stale figure.
+:::
+
 <Scoreboard />
 
 ## How this page is updated

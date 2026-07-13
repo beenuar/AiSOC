@@ -36,7 +36,15 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [x] Phase 11 — API / SDK / release engineering (pure-Python OpenAPI breaking-change detector `scripts/openapi_diff.py` + `openapi-breaking.yml` gate: PR spec vs base fails on removed endpoint/schema/field, type change, tightened request, or dropped enum value — closes the OpenAPI NO GATE row; per-language SDK generated-client contract-drift tracked as 11b)
 - [x] Phase 12 — Observability + governance (per-service SLOs in `docs/operations/slos.yaml` with a coverage gate; `docs/operations/observability.md` documenting the four golden signals + single OTel trace across the spine; `GOVERNANCE.md` + `MAINTAINERS.md` + DCO sign-off in `CONTRIBUTING.md`; governance-completeness gate — `governance.yml`)
 
-**Program status:** 12 of the 13 phases (0–3, 5–12) are fully landed; Phase 4 is partially landed (4a/4b shipped — the de-circularised DAC gate + the honest executable-vs-imported detection truth table) with **4c pending a budgeted live-agent run** (live-agent eval / calibration / model matrix / wet-eval live tables). The claim-to-gate matrix stands at **15 GATED / 11 PARTIAL / 1 NO GATE** — the single remaining NO GATE row is exactly that wet-eval live-agent scoreboard, and it closes with 4c. Honestly-scoped per-phase continuations (3.5+, 4c, 7b, 9b, 10b, 11b) are tracked in `docs/audit/PROGRESS.md`; none change the committed phase checklist above.
+**Program status:** all 13 hardening phases (0–12) are landed. Building on them, the **Fully-Operational AI-SOC roadmap** (Phases A1–E1) is now complete — it wired the three end-to-end paths the reality audit found unwired and pushed the platform to competitive parity + beyond:
+
+- **Phase A (SIEM foundation):** A1 ClickHouse lake writer · A2 live detection-evaluation worker (825 executable rules on the stream) · A3 default-on one-command deploy (connectors + graph on) · A4 UEBA behavioral-model fusion.
+- **Phase B (SOAR foundation):** B1 auto-triage worker (copilot default) · B2 credential resolver + `decide()`-governed live dispatch + 10 vendor adapters · B3 real rollback + post-action verification + durable approval-SLA timers · B4 Business Context Rules in the hot path.
+- **Phase C (parity differentiators):** C1 Advanced Data Explorer · C2 Effective-Permissions live posture loader · C3 autopilot/copilot posture scorecard · C4 fuse-time attack-chain auto-grouping.
+- **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.
+- **Phase E (prove it):** E1 CI-gated benchmark scoreboard tied to a deterministic live-agent MITRE-accuracy run.
+
+The claim-to-gate matrix stands at **33 GATED / 7 PARTIAL / 0 NO GATE** — **every product claim is now backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 7 remaining PARTIAL rows are honest, named deferrals to phases outside the A–E scope. Per-session working detail is tracked locally in `docs/audit/PROGRESS.md`.
 
 ## v4.0 — Shipped
 

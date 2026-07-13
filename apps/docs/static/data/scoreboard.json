@@ -3,6 +3,28 @@
   "_readme": "Append-only public benchmark scoreboard. Each row is one eval run. Substrate rows (no LLM, deterministic) are marked substrate:true and MUST NOT be quoted as live agent performance. Wet-eval rows (substrate:false) are appended by the T5.5 weekly CI workflow once it lands. Newest row first.",
   "rows": [
     {
+      "date": "2026-07-13",
+      "agent_version": "v7.5.0",
+      "commit_sha": "27c52b9a",
+      "substrate": true,
+      "eval_mode": "substrate-only",
+      "mitre_accuracy": 0.97,
+      "mitre_accuracy_per_template": 0.964,
+      "alert_reduction": 0.753,
+      "investigation_completeness": 0.942,
+      "response_quality": 1.0,
+      "playbook_completion_rate": 0.505,
+      "mtc_p50_seconds": null,
+      "mtc_p95_seconds": null,
+      "tokens_total": 0,
+      "usd_total": 0.0,
+      "tokens_mean_per_investigation": 0,
+      "usd_mean_per_investigation": 0.0,
+      "rate_card_model": "deterministic",
+      "rate_card_dated": "2026-07",
+      "notes": "Phase E1 — per-PR deterministic substrate gate, CI-enforced by scripts/check_scoreboard.py: the live LangGraph agent runs its tactic prediction over the 200-incident corpus with NO LLM (deterministic tier), and this row's mitre_accuracy must match a fresh CI run within 0.02 or CI fails. tokens/USD are 0 because the deterministic tier makes no LLM calls. Live-LLM (substrate:false) rows with real token/USD/latency come from the funded weekly wet-eval.yml job. Do not quote this substrate row as live-agent-with-LLM performance."
+    },
+    {
       "date": "2026-05-13",
       "agent_version": "v1.4.1",
       "commit_sha": "4ff1b7f4",

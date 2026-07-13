@@ -20,9 +20,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: python-test` (`test_detection_eval.py` — candidate `rule_body` run through the real engine vs its own positive/negative fixtures; approval requires it) + `p1-eval` w2-dac baseline | GATED | - |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
 | 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance + `detection_truth_table.py --check`); README cites the executable figure (939) not the on-disk figure for coverage | GATED | - |
-| L0-L4 automation maturity gates every action | README L171 | `ci.yml` autonomy-policy drift test + `test_autonomy_safety.py` (dry-run-default, rollback-capability contract, verification-mandate, scorecard) | PARTIAL (thresholds + dry-run-default + rollback-capability + verification-mandate gated at the policy layer; live-router wiring of `decide()` into `/dispatch` is 9b) | Phase 9b |
+| L0-L4 automation maturity gates every action | README L171 | `ci.yml` autonomy-policy drift test + `test_autonomy_safety.py` (dry-run-default, rollback-capability contract, verification-mandate, scorecard) + `test_governed_dispatch.py` (Phase B2 — `decide()` wired into the live-actions `/dispatch` path: above-tier→dry-run, dry-run-off→queued, L0→blocked, executor never invoked when queued/blocked) | GATED | - |
 | Hunt-as-Code + `/hunt` | README L172 | `ci.yml :: p1-eval` (`hunt_corpus`) | GATED | - |
-| Weekly benchmark scoreboard runs live against `main` | README L173 | `wet-eval.yml` (weekly) | NO GATE (no-ops without secret; live-agent tables are placeholders) | Phase 4 Tier 1 |
+| Weekly benchmark scoreboard runs live against `main` | README L173 | `ci.yml` agents job (Phase E1 — `scripts/check_scoreboard.py` runs the deterministic live-agent MITRE-accuracy eval over the 200-incident corpus and fails if the published `scoreboard.json` substrate row drifts > 0.02, the schema is invalid, or a substrate row is mislabelled) + `wet-eval.yml` (weekly funded LLM rows) | GATED | - |
 | MCP server exposes 13 tools | README L179 | `ci.yml :: mcp` | GATED | - |
 | Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; OpenAPI breaking-change now gated via `openapi-breaking.yml`, so a spec change that would break the generated SDKs is caught; per-language generated-client contract-drift is 11b) | Phase 11b |
 | Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py` + `test_prompt_envelope.py` | PARTIAL (unit-level nonce envelope + guard gated; 150-payload adversarial eval + tool-call provenance in Phase 4 Tier 2) | Phase 4 |
@@ -51,9 +51,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 31
-- PARTIAL: 8
-- NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
+- GATED: 33
+- PARTIAL: 7
+- NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 

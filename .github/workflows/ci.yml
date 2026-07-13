@@ -317,7 +317,7 @@ jobs:
         # so both packages are required at import time, even though the
         # fusion-client test itself only calls into `app.tools.fusion`.
         run: |
-          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai langgraph
+          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai langgraph jsonschema
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \
@@ -335,6 +335,14 @@ jobs:
             tests/test_fused_alert_worker.py \
             tests/test_business_context_hotpath.py \
             -v --tb=short
+      - name: Gate the public benchmark scoreboard (Phase E1)
+        # Ties apps/docs/static/data/scoreboard.json to a real deterministic
+        # live-agent MITRE-accuracy run: the newest substrate row must match a
+        # fresh run within tolerance, the schema must validate, and substrate
+        # rows must be honestly labelled. Closes the last NO GATE.
+        run: |
+          cd services/agents
+          python3 ../../scripts/check_scoreboard.py --check
 
   # ──────────────────────────────────────────────
   # Python micro-services unit tests
