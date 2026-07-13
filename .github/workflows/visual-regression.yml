@@ -69,18 +69,19 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup pnpm
-        # Pin `version:` to match the root `package.json`
-        # `packageManager: pnpm@8.15.1`. Under `action-setup@v6` an
-        # omitted version installs the latest pnpm (11.x) and then
-        # self-switches down to 8.15.1; that churn leaves optional
-        # native bindings (e.g. `@tailwindcss/oxide-linux-x64-gnu`)
-        # unlinked inside the Playwright container and the dev server
-        # fails with "Cannot find native binding". Installing 8.15.1
-        # directly avoids the switch, and matching the packageManager
-        # value means no ERR_PNPM_BAD_PM_VERSION.
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: 8.15.1
+        # Deliberately kept on action-setup@v4 while the rest of the
+        # repo moves to v6. This job runs inside the Playwright
+        # container image, which ships a global pnpm 11.x. Under
+        # action-setup@v6 pnpm self-switches from 11.x down to the
+        # packageManager pin (8.15.1); that churn leaves optional
+        # native bindings (@tailwindcss/oxide-linux-x64-gnu) unlinked
+        # in the restored store, so the Next.js dev server crashes with
+        # "Cannot find native binding" and the suite fails. v4 installs
+        # 8.15.1 directly with no switch. Pinning `version:` under v6
+        # does NOT help (the container's global pnpm still triggers the
+        # switch), so keep v4 here until the upstream pnpm store /
+        # optional-dep interaction is resolved.
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
