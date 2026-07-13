@@ -7,7 +7,7 @@
 An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and rationale are logged step-by-step and replayable. MIT-licensed.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-7.5.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-7.6.0-f59e0b?style=flat-square)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
@@ -75,7 +75,7 @@ The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agent
 | Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes |
 | Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published |
 | Public substrate eval harness | CI-gated, reproducible, with synthetic telemetry corpus + per-template macros | n/a | n/a | not published |
-| Detection content | 939 executable (861 native) + 6 000-rule provenance-tracked imported library ([truth table](docs/detections/truth-table.md)) | 1 200+ rules | 1 000+ apps | curated |
+| Detection content | 947 executable (869 native) firing on the live stream + 6 000-rule provenance-tracked imported library ([truth table](docs/detections/truth-table.md)) | 1 200+ rules | 1 000+ apps | curated |
 | Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary |
 | Data residency | your infra | your infra | partial | vendor cloud |
 | Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise |
@@ -113,7 +113,7 @@ flowchart LR
     end
 
     subgraph Ingest["Ingest & Normalize"]
-        Connectors["Connectors\n(Python · 69 vendors)"]
+        Connectors["Connectors\n(Python · 78 vendors)"]
         OsqueryTLS["osquery-tls\n(Python · host telemetry)"]
         IngestSvc["Ingest worker\n(Go · OCSF)"]
         Enrich["Enrichment\n(Go · IOC + Shodan)"]
@@ -165,14 +165,17 @@ Full architecture (every service, every storage role, the v1.5 console workbench
 
 A handful of headline capabilities — the rest are catalogued in [`apps/docs/docs/features/`](apps/docs/docs/features/) and indexed at the top of [`apps/docs/docs/intro.md`](apps/docs/docs/intro.md):
 
-> **Maturity.** Connectors, Investigation Rail + Ledger, and Hunt-as-Code are GA. Detection-as-Code and L0–L4 autonomy are beta (eval-gate and rollback/post-action-verification hardening in progress). The live-agent benchmark is preview; the substrate eval suites are GA. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
+> **Maturity (v7.6.0 — Fully-Operational release).** The end-to-end spine is wired and CI-gated: ingest → ClickHouse lake → live detection → fused alert → auto-triage → governed response. Connectors, Investigation Rail + Ledger, Hunt-as-Code, live-stream detection, and copilot auto-triage are GA. Autonomous *response* defaults to copilot/dry-run (an autonomy policy governs every real execution). The live-agent LLM benchmark is preview (the deterministic-tier scoreboard is CI-gated per PR); substrate eval suites are GA. Every product claim is backed by a failing test — [claim-to-gate matrix](docs/audit/CLAIM_TO_GATE_MATRIX.md): 33 GATED / 7 PARTIAL / 0 NO GATE. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
 
-- **78 click-and-connect data connectors** (EDR/XDR, SIEM, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
+- **78 click-and-connect data connectors** (EDR/XDR, SIEM, NDR, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets — now including IBM QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon (WEF), Zeek/Suricata NDR, a generic syslog/CEF listener, and an AI/LLM-usage audit connector. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
+- **End-to-end SIEM spine** — a cold `docker compose up` ingests connector data → lands it in the ClickHouse event lake → the executable detection corpus (947 rules) fires on the live stream → a fused alert is created, all asserted by an extended integration gate. [`apps/docs/docs/architecture.md`](apps/docs/docs/architecture.md).
+- **Autonomous triage + governed response** — every fused alert is auto-triaged by the agent (copilot/read-only by default); approved actions execute against real connector credentials through a per-action, blast-radius-scoped autonomy policy with real rollback + post-action verification. [`apps/docs/docs/concepts/automation-maturity.md`](apps/docs/docs/concepts/automation-maturity.md).
+- **Advanced Data Explorer** — one investigation surface (NL + SQL over the lake, plus pivots to identity/graph/intel), replacing the SIEM context-switch. `/explore`.
 - **Investigation Rail + replayable Investigation Ledger** — every prompt, tool call, evidence chip, and rationale stored against a case, replayable in the UI. [`apps/docs/docs/console/investigation-rail.md`](apps/docs/docs/console/investigation-rail.md).
-- **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that fails its own positive/negative fixtures (the non-circular gate) or regresses MITRE accuracy. [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the 861 native rules live in [`detections/`](detections/).
-- **L0–L4 automation maturity** — gate every autonomous action on per-action confidence thresholds and blast-radius. [`apps/docs/docs/concepts/automation-maturity.md`](apps/docs/docs/concepts/automation-maturity.md).
+- **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that fails its own positive/negative fixtures (the non-circular gate) or regresses MITRE accuracy. [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the 869 native rules live in [`detections/`](detections/).
+- **Three-model AI** — Semantic (graph-at-ingest), Behavioral (UEBA fused into alert scoring), and Knowledge (LLM), with fuse-time attack-chain grouping so related alerts auto-collapse into one ordered incident.
 - **Hunt-as-Code** — YAML hypotheses with MITRE tags, cron schedules, and natural-language `/hunt` workbench. [`hunts/`](hunts/) + [`apps/docs/docs/console/rule-tuning.md`](apps/docs/docs/console/rule-tuning.md).
-- **Public weekly benchmark scoreboard** — the same harness that gates PRs, run weekly against `main`. [`apps/docs/docs/benchmark-scoreboard.mdx`](apps/docs/docs/benchmark-scoreboard.mdx).
+- **Public weekly benchmark scoreboard** — the same harness that gates PRs; the deterministic-tier row is CI-gated for freshness on every PR, and the funded weekly job appends live-LLM rows. [`apps/docs/docs/benchmark-scoreboard.mdx`](apps/docs/docs/benchmark-scoreboard.mdx).
 
 ---
 

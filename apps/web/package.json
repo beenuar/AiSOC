@@ -1,6 +1,6 @@
 {
   "name": "@aisoc/web",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "private": true,
   "description": "AiSOC SOC Console - Next.js 14 Frontend",
   "license": "MIT",
