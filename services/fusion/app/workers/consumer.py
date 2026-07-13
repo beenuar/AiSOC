@@ -20,6 +20,7 @@ from app.services.event_schema import validate_event
 from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
 from app.services.promoter import promote_normalized_event
+from app.services.ueba_signal import UebaSignalCache
 
 logger = structlog.get_logger()
 
@@ -48,11 +49,13 @@ class FusionWorker:
         dlq: DeadLetterQueue | None = None,
         lake: LakeWriter | None = None,
         detector: DetectionEngine | None = None,
+        ueba_cache: UebaSignalCache | None = None,
     ) -> None:
         self._engine = engine
         self._sink = sink
         self._lake = lake
         self._detector = detector
+        self._ueba_cache = ueba_cache
         # A poison message must never vanish silently; default to a structured
         # logging DLQ so persistence-free deployments still get the signal.
         self._dlq: DeadLetterQueue = dlq or LoggingDLQ()
@@ -69,8 +72,12 @@ class FusionWorker:
         topics = [settings.kafka_topic_alerts_raw]
         # Subscribe to raw_events when EITHER promotion or lake archival needs
         # it — the lake must fill even if promotion is turned off.
-        if settings.event_promotion_enabled or self._lake is not None:
+        if settings.event_promotion_enabled or self._lake is not None or self._detector is not None:
             topics.append(settings.kafka_topic_raw_events)
+        # Phase A4 — also consume the UEBA behavioral-anomaly stream so the
+        # per-entity signal cache stays warm for fuse-time boosting.
+        if self._ueba_cache is not None:
+            topics.append(settings.kafka_topic_ueba_anomalies)
         self._consumer = AIOKafkaConsumer(
             *topics,
             bootstrap_servers=settings.kafka_bootstrap_servers,
@@ -171,6 +178,12 @@ class FusionWorker:
 
     async def _process_message(self, payload: dict, topic: str | None = None) -> None:
         resolved_topic = topic or settings.kafka_topic_alerts_raw
+
+        # Phase A4 — UEBA anomaly stream: warm the per-entity signal cache and
+        # return (these are behavioral signals, not alerts).
+        if self._ueba_cache is not None and topic == settings.kafka_topic_ueba_anomalies:
+            await self._ueba_cache.record(payload)
+            return
 
         # Phase 5 — schema-validate the envelope BEFORE the promoter sees it.
         # A malformed / mis-versioned / mis-tenanted message is dead-lettered

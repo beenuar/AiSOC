@@ -37,12 +37,13 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | OpenAPI stability for 3 SDKs + MCP | (implied by SDKs) | `check-openapi.yml` (drift) + `openapi-breaking.yml` (`scripts/openapi_diff.py` — PR spec vs base fails on removed endpoint/schema/field, type change, tightened request, or dropped enum value) | GATED | - |
 | Ingested events land in the queryable ClickHouse lake | README (SIEM / lake) | `integration.yml :: spine` (Phase A1 — after the spine ingests, asserts `SELECT count() FROM aisoc.raw_events > 0` against the live ClickHouse container; `services/fusion` `LakeWriter` archives every normalized event) | GATED | - |
 | Detection rules fire on the live event stream (not just CI fixtures) | README L170 (detection engine) | `integration.yml :: spine` (Phase A2 — posts an event matching the native `aws-root-account-login` rule, asserts the fusion `DetectionEngine` produces the alert) + `validate-detections.yml` (exported-ruleset drift `--check`) + fusion `test_detection_engine.py` / `test_detection_matcher_parity.py` | GATED | - |
+| Three-model AI: behavioral (UEBA) model feeds alert scoring in production | README (multi-model) | `ci.yml` fusion job (`test_ueba_signal.py` — the `ueba.anomalies` stream warms a per-entity cache that boosts fuse-time confidence + anomaly score; wired in `fusion_engine.process`) | GATED | - |
 
 ## Summary
 
-- GATED: 17
-- PARTIAL: 11
-- NO GATE: 1 (Phase 2 moved insecure-defaults-hard-fail to GATED and secret/IaC/container scanning to PARTIAL; the Phase 2 continuation moved signed/attested releases to GATED; Phase 3.4 moved cross-store isolation to GATED; Phase 4 moved the DAC candidate-rule gate and imported-count honesty gate to GATED; Phase 10 moved connector "live Test connection" off NO GATE; Phase 11 moved OpenAPI breaking-change semantics to GATED; Phase A1 gated the ClickHouse lake being populated; Phase A2 gated live-stream detection. The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c, which needs a budgeted live-agent run)
+- GATED: 19
+- PARTIAL: 10
+- NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 

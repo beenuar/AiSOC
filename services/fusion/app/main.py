@@ -16,6 +16,7 @@ from app.services.detection_engine import DetectionEngine
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
+from app.services.ueba_signal import UebaSignalCache
 from app.workers.consumer import FusionWorker
 
 
@@ -30,11 +31,17 @@ async def lifespan(app: FastAPI):
     correlator = Correlator(redis_client)
     entity_risk = EntityRiskEngine(redis_client)
     confidence_scorer = ConfidenceScorer(enabled=settings.confidence_enabled)
+    # Phase A4 — behavioral-model fusion: one cache shared by the engine
+    # (fuse-time lookup) and the worker (records the ueba.anomalies stream).
+    ueba_cache = (
+        UebaSignalCache(redis_client, ttl_seconds=settings.ueba_signal_ttl_seconds) if settings.ueba_fusion_enabled else None
+    )
     engine = FusionEngine(
         dedup,
         correlator,
         entity_risk=entity_risk,
         confidence_scorer=confidence_scorer,
+        ueba_cache=ueba_cache,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
@@ -56,7 +63,7 @@ async def lifespan(app: FastAPI):
     )
     # Phase A2 — evaluate the executable detection corpus against the stream.
     detector = DetectionEngine() if settings.detection_engine_enabled else None
-    worker = FusionWorker(engine, sink=sink, lake=lake, detector=detector)
+    worker = FusionWorker(engine, sink=sink, lake=lake, detector=detector, ueba_cache=ueba_cache)
     set_worker(worker)
 
     # Start Kafka worker as a background task

@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     # becomes a RawAlert routed through fusion.
     detection_engine_enabled: bool = Field(default=True, alias="AISOC_DETECTION_ENGINE_ENABLED")
 
+    # Phase A4 — consume the UEBA behavioral-anomaly stream and fold each
+    # entity's latest anomaly into alert confidence + anomaly score at fuse
+    # time (app/services/ueba_signal.py). Completes the three-model story.
+    ueba_fusion_enabled: bool = Field(default=True, alias="AISOC_UEBA_FUSION_ENABLED")
+    kafka_topic_ueba_anomalies: str = Field(default="ueba.anomalies", alias="KAFKA_TOPIC_UEBA_ANOMALIES")
+    ueba_signal_ttl_seconds: int = Field(default=86400, alias="AISOC_UEBA_SIGNAL_TTL_SECONDS")
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
     dedup_window_seconds: int = Field(default=300, alias="DEDUP_WINDOW_SECONDS")

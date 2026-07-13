@@ -26,6 +26,7 @@ from app.services.narrative import (
     NarrativeInputs,
     build_narrative,
 )
+from app.services.ueba_signal import UebaSignalCache, alert_entities, apply_ueba_boost
 from app.services.vuln_boost import apply_vuln_boost
 
 logger = structlog.get_logger()
@@ -118,11 +119,14 @@ class FusionEngine:
         ml_scorer: MLScorer | None = None,
         entity_risk: EntityRiskEngine | None = None,
         confidence_scorer: ConfidenceScorer | None = None,
+        ueba_cache: UebaSignalCache | None = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
         self._ml_scorer = ml_scorer or MLScorer()
         self._entity_risk = entity_risk
+        # Phase A4 — behavioral-model signal (optional; None = no UEBA fusion).
+        self._ueba_cache = ueba_cache
         # Confidence + explainability is intrinsic to a fused alert — every
         # alert leaves the engine with a high/med/low label and an evidence
         # chain. The scorer is pure / stateless so we instantiate a default.
@@ -192,6 +196,16 @@ class FusionEngine:
                 fused = apply_vuln_boost(fused)
             except Exception as exc:
                 logger.warning("vuln_boost_failed", error=str(exc))
+
+        # --- Step 3d: Behavioral-model fusion (Phase A4) ---
+        # Fold the alert's entities' latest UEBA anomaly into confidence +
+        # anomaly score. Best-effort: a Redis miss/outage is a no-op.
+        if self._ueba_cache is not None:
+            try:
+                signal = await self._ueba_cache.lookup(str(alert.tenant_id), alert_entities(alert))
+                fused = apply_ueba_boost(fused, signal)
+            except Exception as exc:
+                logger.warning("ueba_boost_failed", error=str(exc))
 
         # --- Step 4: Risk-Based Alerting (entity rollup) ---
         # RBA accumulates points on the entities this alert touches and may
