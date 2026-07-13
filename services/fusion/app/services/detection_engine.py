@@ -43,10 +43,6 @@ logger = structlog.get_logger()
 
 _RULESET_PATH = Path(__file__).resolve().parent.parent / "data" / "detection_ruleset.json"
 
-# Products whose rules should also run against every event regardless of the
-# event's own product (broadly-applicable rule families).
-_PRODUCT_AGNOSTIC = {"", "multi-cloud", "app", "application", "endpoint"}
-
 _SEVERITY_MAP = {
     "critical": AlertSeverity.CRITICAL,
     "high": AlertSeverity.HIGH,
@@ -84,26 +80,15 @@ class DetectionEngine:
     def rule_count(self) -> int:
         return len(self._rules)
 
-    @staticmethod
-    def _product_matches(rule_product: str, event_product: str) -> bool:
-        """Fuzzy product routing.
-
-        Connector product names don't line up 1:1 with spec products
-        (``aws_cloudtrail`` vs ``aws``, ``crowdstrike_falcon`` vs ``edr``), so
-        a rule is a candidate when: it is product-agnostic, the event product
-        is unknown (evaluate everything — correctness over speed), or the two
-        product strings share containment either way.
-        """
-        rp = (rule_product or "").lower()
-        if rp in _PRODUCT_AGNOSTIC:
-            return True
-        ep = (event_product or "").lower()
-        if not ep:
-            return True
-        return rp == ep or rp in ep or ep in rp
-
     def _candidates(self, product: str) -> list[dict[str, Any]]:
-        return [r for r in self._rules if self._product_matches(r.get("product", ""), product)]
+        # Correctness-first routing: evaluate the whole corpus against every
+        # event. Connector product names don't line up 1:1 with spec products
+        # (``aws_cloudtrail`` vs ``aws``, ``crowdstrike_falcon`` vs ``edr``), so
+        # any product-based pre-filter risks silently dropping a real match.
+        # The matcher short-circuits on the first absent field, so a full pass
+        # over ~800 rules is cheap in practice (a benign event touches almost
+        # none of them past the first clause).
+        return self._rules
 
     @staticmethod
     def _raw_fields(ocsf: dict[str, Any]) -> dict[str, Any]:
@@ -119,21 +104,14 @@ class DetectionEngine:
         # Fall back to the OCSF top level (some connectors emit flat OCSF).
         return ocsf if isinstance(ocsf, dict) else {}
 
-    @staticmethod
-    def _product(ocsf: dict[str, Any], message: dict[str, Any]) -> str:
-        return str(
-            _get(ocsf, "metadata", "product", "name") or message.get("connector_type") or _get(message, "connector_type") or ""
-        ).lower()
-
     def evaluate(self, message: dict[str, Any]) -> list[DetectionHit]:
         """Return every rule that fires on this normalized-event message."""
         ocsf = message.get("ocsf_event")
         if not isinstance(ocsf, dict):
             return []
         fields = self._raw_fields(ocsf)
-        product = self._product(ocsf, message)
         hits: list[DetectionHit] = []
-        for rule in self._candidates(product):
+        for rule in self._candidates(""):
             try:
                 if matches(rule["match_when"], fields):
                     hits.append(

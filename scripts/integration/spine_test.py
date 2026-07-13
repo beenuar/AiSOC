@@ -286,9 +286,24 @@ async def main() -> None:
         async with httpx.AsyncClient() as client:
             await wait_healthy(client)
             await asyncio.sleep(5)
-            await post_detection_event(client)
-            await await_alert_row(client, DETECTION_ALERT_TITLE, args.timeout or 180, repost=False)
-            log("DETECTION ENGINE FIRED (live-stream rule match produced an alert)")
+            # Re-post periodically to ride out consumer-group assignment races,
+            # exactly like the spine test (the detection alert is dedup-guarded
+            # so repeats never create duplicate rows).
+            timeout_s = args.timeout or 180
+            deadline = time.monotonic() + timeout_s
+            last_post = 0.0
+            while time.monotonic() < deadline:
+                try:
+                    if time.monotonic() - last_post > REPOST_INTERVAL_S:
+                        await post_detection_event(client)
+                        last_post = time.monotonic()
+                    if await count_alerts_titled(client, DETECTION_ALERT_TITLE) >= 1:
+                        log("DETECTION ENGINE FIRED (live-stream rule match produced an alert)")
+                        return
+                except httpx.HTTPError as exc:
+                    log(f"transient error while polling (will retry): {exc}")
+                await asyncio.sleep(3)
+            raise SystemExit(f"detection alert {DETECTION_ALERT_TITLE!r} never appeared within {timeout_s}s")
         return
 
     if args.post_event or args.await_alert:
