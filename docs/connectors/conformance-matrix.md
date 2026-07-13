@@ -6,7 +6,7 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**69 / 69 connectors conform** to the runtime contract.
+**77 / 77 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
@@ -32,10 +32,12 @@
 | crowdstrike | edr | 3 | 1 | 6 | ✅ | ✅ | ✅ |
 | datadog | siem | 5 | 2 | 4 | ✅ | ✅ | ✅ |
 | datadog_cloud_siem | siem | 3 | 2 | 5 | ✅ | ✅ | ✅ |
+| devo | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | dropbox | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
 | duo_security | iam | 3 | 1 | 1 | ✅ | ✅ | ✅ |
 | elastic | siem | 6 | 2 | 5 | ✅ | ✅ | ✅ |
 | email_inbox | saas | 7 | 1 | 1 | ✅ | ✅ | ✅ |
+| exabeam | siem | 4 | 2 | 2 | ✅ | ✅ | ✅ |
 | falco | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | fleetdm | edr | 4 | 1 | 4 | ✅ | ✅ | ✅ |
 | gcp_cloud_audit | cloud | 2 | 1 | 1 | ✅ | ✅ | ✅ |
@@ -49,6 +51,7 @@
 | m365_audit | saas | 3 | 1 | 1 | ✅ | ✅ | ✅ |
 | microsoft_sentinel | siem | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | mimecast | saas | 3 | 1 | 4 | ✅ | ✅ | ✅ |
+| netskope | network | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | oci | cloud | 6 | 1 | 3 | ✅ | ✅ | ✅ |
 | okta | iam | 2 | 1 | 6 | ✅ | ✅ | ✅ |
 | onepassword | iam | 2 | 1 | 1 | ✅ | ✅ | ✅ |
@@ -58,8 +61,10 @@
 | pagerduty | saas | 2 | 1 | 3 | ✅ | ✅ | ✅ |
 | prisma_cloud | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |
 | proofpoint | saas | 2 | 1 | 1 | ✅ | ✅ | ✅ |
+| qradar | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | rapid7_insightidr | siem | 2 | 1 | 4 | ✅ | ✅ | ✅ |
 | salesforce | saas | 4 | 2 | 4 | ✅ | ✅ | ✅ |
+| securonix | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | sentinelone | edr | 3 | 1 | 1 | ✅ | ✅ | ✅ |
 | servicenow | saas | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | slack_audit | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
@@ -69,6 +74,7 @@
 | sublime_security | saas | 2 | 1 | 3 | ✅ | ✅ | ✅ |
 | sumo_logic | siem | 3 | 1 | 4 | ✅ | ✅ | ✅ |
 | sysdig | siem | 2 | 1 | 4 | ✅ | ✅ | ✅ |
+| syslog_cef | network | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | tailscale | network | 4 | 2 | 1 | ✅ | ✅ | ✅ |
 | tenable_io | cloud | 2 | 1 | 5 | ✅ | ✅ | ✅ |
 | tines | saas | 3 | 1 | 3 | ✅ | ✅ | ✅ |
@@ -77,6 +83,8 @@
 | trend_vision_one | edr | 2 | 1 | 5 | ✅ | ✅ | ✅ |
 | vault | iam | 4 | 1 | 2 | ✅ | ✅ | ✅ |
 | wazuh | siem | 6 | 1 | 4 | ✅ | ✅ | ✅ |
+| windows_event | edr | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | wiz | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |
+| zeek_suricata | ndr | 4 | 1 | 2 | ✅ | ✅ | ✅ |
 | zscaler | network | 4 | 2 | 1 | ✅ | ✅ | ✅ |
 

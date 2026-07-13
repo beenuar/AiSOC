@@ -1,0 +1,23 @@
+id: syslog-cef
+name: Syslog / CEF Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  First-class listener for the long tail of appliances that speak syslog +
+  ArcSight CEF (firewalls, proxies, legacy IDS, custom gear). A syslog receiver
+  writes messages to a spool endpoint; this connector parses the CEF header +
+  extension and maps CEF severity (0-10) onto the five-tier ladder. Non-CEF
+  lines are ingested at info with the message preserved.
+author: AiSOC Core Team
+tags: [network, syslog, cef, arcsight, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/syslog_cef.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [spool_url, api_token]
+  properties:
+    spool_url: {type: string, description: Syslog receiver JSON spool URL.}
+    api_token: {type: string, secret: true, description: Spool bearer token.}
+    verify_tls: {type: boolean, default: true}

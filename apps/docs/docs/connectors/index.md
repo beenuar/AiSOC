@@ -18,7 +18,7 @@ If your tool isn't in the catalog, see [Universal capture](/docs/connectors/univ
 
 ## Catalog
 
-The catalog ships with **69 connectors** out of the box, registered in [`services/connectors/app/connectors/__init__.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/__init__.py). The list below is grouped by category; only a subset has dedicated walkthrough pages today (linked entries) — the rest follow the same schema-driven wizard described under [Adding a connector](#adding-a-connector).
+The catalog ships with **77 connectors** out of the box, registered in [`services/connectors/app/connectors/__init__.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/__init__.py). The list below is grouped by category; only a subset has dedicated walkthrough pages today (linked entries) — the rest follow the same schema-driven wizard described under [Adding a connector](#adding-a-connector).
 
 ### Identity
 

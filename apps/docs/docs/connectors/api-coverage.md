@@ -27,7 +27,7 @@ This page is the canonical "what works where" reference. It is generated from th
 
 When a capability is not listed for a connector, the connector simply does not support it today — it is **not** a misconfiguration to surface. Adding a capability requires an explicit code change in that connector's `capabilities()` classmethod and matching method implementation.
 
-## Coverage table — 69 connectors
+## Coverage table — 77 connectors
 
 The matrix below is grouped by category. `OAuth (hosted)` indicates the connector is wired into the hosted OAuth marketplace flow (no client secret in tenant config). `Federated search` means the connector participates in the federated-query planner.
 

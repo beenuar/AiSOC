@@ -1,0 +1,21 @@
+id: devo
+name: Devo Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull triggered alerts from the Devo Alerting API. Devo alert severity (1-5 or
+  named) maps onto the five-tier severity ladder. Auth is a Devo standalone API
+  token.
+author: AiSOC Core Team
+tags: [siem, devo, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/devo.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [api_url, api_token]
+  properties:
+    api_url: {type: string, description: Devo Alerting API URL (region-specific).}
+    api_token: {type: string, secret: true, description: Devo standalone API token.}
+    verify_tls: {type: boolean, default: true}

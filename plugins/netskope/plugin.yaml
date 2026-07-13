@@ -1,0 +1,21 @@
+id: netskope
+name: Netskope Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull DLP / malware / anomaly / policy alerts from the Netskope REST API v2.
+  Alert severity maps onto the five-tier ladder; malware and DLP alerts are
+  floored at high so they can't be under-rated. Auth is a Netskope API v2 token.
+author: AiSOC Core Team
+tags: [network, sase, swg, netskope, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/netskope.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [tenant_url, api_token]
+  properties:
+    tenant_url: {type: string, description: Netskope tenant URL (…goskope.com).}
+    api_token: {type: string, secret: true, description: Netskope API v2 token.}
+    verify_tls: {type: boolean, default: true}

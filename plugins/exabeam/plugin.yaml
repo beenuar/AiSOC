@@ -1,0 +1,22 @@
+id: exabeam
+name: Exabeam Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull notable, risk-scored user sessions from Exabeam Advanced Analytics /
+  Fusion SIEM. Session riskScore maps onto the five-tier severity ladder. Auth
+  is an API key + secret.
+author: AiSOC Core Team
+tags: [siem, ueba, exabeam, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/exabeam.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [base_url, api_key, api_secret]
+  properties:
+    base_url: {type: string, description: Exabeam cluster base URL.}
+    api_key: {type: string, secret: true, description: API key ID.}
+    api_secret: {type: string, secret: true, description: API secret.}
+    verify_tls: {type: boolean, default: true}

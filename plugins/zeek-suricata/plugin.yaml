@@ -1,0 +1,23 @@
+id: zeek-suricata
+name: Zeek / Suricata NDR Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull network-detection events from a Zeek (notice.log) or Suricata (eve.json
+  alert) sensor's JSON spool. Suricata alert severity (1=highest) and Zeek
+  notice types map onto the five-tier ladder. One instance serves either engine
+  via the engine selector.
+author: AiSOC Core Team
+tags: [ndr, network, zeek, suricata, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/zeek_suricata.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [engine, spool_url, api_token]
+  properties:
+    engine: {type: string, enum: [suricata, zeek], description: Sensor engine.}
+    spool_url: {type: string, description: Sensor JSON spool URL.}
+    api_token: {type: string, secret: true, description: Spool bearer token.}
+    verify_tls: {type: boolean, default: true}

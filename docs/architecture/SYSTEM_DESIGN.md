@@ -20,7 +20,7 @@ This document describes the end-to-end architecture of the AiSOC platform after 
                        ┌─────────────────┐   ┌──────────────────────┐
                        │  services/api   │   │ services/connectors  │
                        │  inbox tokens + │   │  APScheduler poll    │
-                       │  HMAC webhooks  │   │  69 connector classes│
+                       │  HMAC webhooks  │   │  77 connector classes│
                        │  CEF / HEC / DNS│   │  push_case + status  │
                        └────────┬────────┘   └──────────┬───────────┘
                                 │                       │
@@ -91,7 +91,7 @@ This document describes the end-to-end architecture of the AiSOC platform after 
 | `services/enrichment` | Go 1.21 | Per-IOC TTL-cached enrichment lookups | n/a |
 | `services/fusion` | Python 3.11 | Simhash dedup → correlation → ML scoring → publish fused alerts | Background ML retrain on feedback |
 | `services/api` | Python 3.11 | REST + WS, RBAC, case mgmt, rule engine, graph queries, ITSM webhook inbox, case fan-out | Schema migrations on boot |
-| `services/connectors` | Python 3.11 | 69 connector classes, APScheduler poll, `push_case` / `push_status_change` for Jira & ServiceNow | CredentialVault decrypt at poll time |
+| `services/connectors` | Python 3.11 | 77 connector classes, APScheduler poll, `push_case` / `push_status_change` for Jira & ServiceNow | CredentialVault decrypt at poll time |
 | `services/agents` | Python 3.11 | LangGraph multi-agent investigation runs | Loads full ATT&CK STIX bundle on boot, optional Qdrant embed |
 | `services/actions` | Python 3.11 | SOAR action execution with blast-radius gating | Approval workflows |
 | `services/threatintel` | Python 3.11 | IOC/actor search API | APScheduler poll loop for TAXII/MISP/OTX/KEV |
@@ -314,7 +314,7 @@ The following subsystems were added on top of the v2 design described above. The
 
 ### 12.1 Connector Platform (`services/connectors`)
 
-A first-class, in-process polling tier with **69 registered connector classes** spanning seven categories — `edr`, `siem`, `cloud`, `iam`, `saas`, `vcs`, `network`. Every connector subclasses `BaseConnector` and declares:
+A first-class, in-process polling tier with **77 registered connector classes** spanning seven categories — `edr`, `siem`, `cloud`, `iam`, `saas`, `vcs`, `network`. Every connector subclasses `BaseConnector` and declares:
 
 * `schema()` — self-describing `ConnectorSchema(name, label, category, fields, oauth, default_poll_interval_seconds)` consumed by the web console for the connect form.
 * `capabilities()` — tuple of `Capability` enum values (`PULL_ALERTS`, `PUSH_CASE`, `PUSH_STATUS`, `FEDERATED_SEARCH`, …) that the orchestrator inspects at runtime.

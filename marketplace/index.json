@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-11T13:45:00Z",
+  "generated": "2026-07-13T06:00:03Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,17 +20,17 @@
     }
   ],
   "stats": {
-    "total": 7129,
+    "total": 7137,
     "playbooks": 62,
     "detections": 7000,
-    "plugins": 67,
-    "verified": 1008,
+    "plugins": 75,
+    "verified": 1016,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1008
+      "stable": 1016
     },
     "detections_by_tier": {
       "community": 1,
@@ -224549,6 +224549,29 @@
       "path": "plugins/datadog-incidents/plugin.yaml"
     },
     {
+      "id": "devo",
+      "type": "plugin",
+      "name": "Devo Connector",
+      "description": "Pull triggered alerts from the Devo Alerting API. Devo alert severity (1-5 or named) maps onto the five-tier severity ladder. Auth is a Devo standalone API token.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "devo",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/devo.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/devo/plugin.yaml"
+    },
+    {
       "id": "dropbox",
       "type": "plugin",
       "name": "Dropbox Business Connector",
@@ -224596,6 +224619,30 @@
       "source": "core",
       "tier": "beta",
       "path": "plugins/email-inbox/plugin.yaml"
+    },
+    {
+      "id": "exabeam",
+      "type": "plugin",
+      "name": "Exabeam Connector",
+      "description": "Pull notable, risk-scored user sessions from Exabeam Advanced Analytics / Fusion SIEM. Session riskScore maps onto the five-tier severity ladder. Auth is an API key + secret.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "ueba",
+        "exabeam",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/exabeam.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/exabeam/plugin.yaml"
     },
     {
       "id": "falco",
@@ -224961,6 +225008,31 @@
       "path": "plugins/mttr-widget/plugin.yaml"
     },
     {
+      "id": "netskope",
+      "type": "plugin",
+      "name": "Netskope Connector",
+      "description": "Pull DLP / malware / anomaly / policy alerts from the Netskope REST API v2. Alert severity maps onto the five-tier ladder; malware and DLP alerts are floored at high so they can't be under-rated. Auth is a Netskope API v2 token.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "network",
+        "sase",
+        "swg",
+        "netskope",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/netskope.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/netskope/plugin.yaml"
+    },
+    {
       "id": "notion-incidents",
       "type": "plugin",
       "name": "Notion Incidents Sync",
@@ -225228,6 +225300,30 @@
       "path": "plugins/prisma-cloud/plugin.yaml"
     },
     {
+      "id": "qradar",
+      "type": "plugin",
+      "name": "IBM QRadar Connector",
+      "description": "Pull open offenses from IBM QRadar via the REST API (/api/siem/offenses). Offense magnitude (1-10) maps onto the five-tier severity ladder (info|low|medium|high|critical). Auth is a QRadar authorized-service SEC token; TLS verification defaults on but can be relaxed for consoles using an internal CA.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "qradar",
+        "ibm",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/qradar.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/qradar/plugin.yaml"
+    },
+    {
       "id": "rapid7-insightidr",
       "type": "plugin",
       "name": "Rapid7 InsightIDR Connector",
@@ -225274,6 +225370,30 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/salesforce/plugin.yaml"
+    },
+    {
+      "id": "securonix",
+      "type": "plugin",
+      "name": "Securonix Connector",
+      "description": "Pull incidents from Securonix Next-Gen SIEM / UEBA. Incident priority (Low/Medium/High/Critical) maps directly onto the five-tier severity ladder. Auth is a tenant API token.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "siem",
+        "ueba",
+        "securonix",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/securonix.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/securonix/plugin.yaml"
     },
     {
       "id": "slack-audit",
@@ -225454,6 +225574,31 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/sysdig/plugin.yaml"
+    },
+    {
+      "id": "syslog-cef",
+      "type": "plugin",
+      "name": "Syslog / CEF Connector",
+      "description": "First-class listener for the long tail of appliances that speak syslog + ArcSight CEF (firewalls, proxies, legacy IDS, custom gear). A syslog receiver writes messages to a spool endpoint; this connector parses the CEF header + extension and maps CEF severity (0-10) onto the five-tier ladder. Non-CEF lines are ingested at info with the message preserved.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "network",
+        "syslog",
+        "cef",
+        "arcsight",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/syslog_cef.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/syslog-cef/plugin.yaml"
     },
     {
       "id": "tailscale-acl",
@@ -225688,6 +225833,31 @@
       "path": "plugins/wazuh/plugin.yaml"
     },
     {
+      "id": "windows-event",
+      "type": "plugin",
+      "name": "Windows Event / Sysmon Connector",
+      "description": "Pull Windows Security + Sysmon events from a Windows Event Forwarding (WEF) collector's JSON spool endpoint. Severity is derived from channel + Event ID: log clears, service installs and process-injection surfaces are floored appropriately rather than defaulting to noise.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "edr",
+        "windows",
+        "sysmon",
+        "wef",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/windows_event.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/windows-event/plugin.yaml"
+    },
+    {
       "id": "yara-enricher",
       "type": "plugin",
       "name": "YARA File Enricher",
@@ -225713,6 +225883,31 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/yara-enricher/plugin.yaml"
+    },
+    {
+      "id": "zeek-suricata",
+      "type": "plugin",
+      "name": "Zeek / Suricata NDR Connector",
+      "description": "Pull network-detection events from a Zeek (notice.log) or Suricata (eve.json alert) sensor's JSON spool. Suricata alert severity (1=highest) and Zeek notice types map onto the five-tier ladder. One instance serves either engine via the engine selector.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "ndr",
+        "network",
+        "zeek",
+        "suricata",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/zeek_suricata.py",
+      "min_aisoc_version": "7.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/zeek-suricata/plugin.yaml"
     }
   ]
 }

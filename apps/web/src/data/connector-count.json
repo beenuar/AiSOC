@@ -1,12 +1,13 @@
 {
-  "count": 69,
+  "count": 77,
   "categories": {
     "cloud": 14,
-    "edr": 9,
+    "edr": 10,
     "iam": 6,
-    "network": 4,
+    "ndr": 1,
+    "network": 6,
     "saas": 20,
-    "siem": 13,
+    "siem": 17,
     "vcs": 3
   },
   "generatedFrom": "services/connectors/app/connectors/__init__.py",

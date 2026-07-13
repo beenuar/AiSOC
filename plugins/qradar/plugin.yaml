@@ -1,0 +1,23 @@
+id: qradar
+name: IBM QRadar Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull open offenses from IBM QRadar via the REST API (/api/siem/offenses).
+  Offense magnitude (1-10) maps onto the five-tier severity ladder
+  (info|low|medium|high|critical). Auth is a QRadar authorized-service SEC
+  token; TLS verification defaults on but can be relaxed for consoles using an
+  internal CA.
+author: AiSOC Core Team
+tags: [siem, qradar, ibm, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/qradar.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [console_url, sec_token]
+  properties:
+    console_url: {type: string, description: QRadar console base URL.}
+    sec_token: {type: string, secret: true, description: QRadar authorized-service SEC token.}
+    verify_tls: {type: boolean, default: true, description: Verify TLS; disable only for internal/self-signed CAs.}

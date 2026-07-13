@@ -46,10 +46,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Effective Permissions resolves against a live posture snapshot (not empty stub) | README (effective permissions) | `ci.yml` api job (`test_posture_loader.py` — assembles the Okta resolver snapshot from connector `get_resource_config` calls and resolves it; cloud providers consume a connector-provided reconciled snapshot; failures degrade to empty, never fabricated) + connectors `/connectors/{id}/resource_config` endpoint | GATED | - |
 | Unified Data Explorer (NL + SQL across the lake) replaces the SIEM context-switch | README (data explorer) | `ci.yml` web-test job (`ExploreView.test.tsx` — NL question → `nl-query/translate` → `lake/sql` → BI table; raw-SQL run; source pivots to identity/graph/intel; error surfaced) + web-lint type-check | GATED | - |
 | Autonomy posture is copilot-by-default with a visible per-action/blast scorecard | README (autopilot/copilot) | `ci.yml` web-test job (`AutonomyScorecard.test.tsx` — posture stays Copilot unless a high/critical-blast action auto-executes; distribution + override counts; rendered badge) | GATED | - |
+| Broad SIEM/NDR/edge coverage (QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon, Zeek/Suricata, syslog/CEF) | README (connector count) | `ci.yml` connectors job (`test_schemas.py` + `test_conformance.py` gate every connector; `test_siem_expansion.py` + `test_ndr_edge_expansion.py` pin each new connector's severity-ladder mapping) + `generate_connector_count.py --check` (registry-derived count, README phrase) | GATED | - |
 
 ## Summary
 
-- GATED: 27
+- GATED: 28
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 
