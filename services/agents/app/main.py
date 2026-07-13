@@ -23,6 +23,8 @@ from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
+from app.workers.business_context import BusinessContextApplier
+from app.workers.business_context import is_enabled as business_context_enabled
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
 
 logger = structlog.get_logger()
@@ -82,9 +84,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.triage_worker_task = None
     if worker_enabled():
         try:
+            # Phase B4 — environment-specific noise reduction (post-fusion →
+            # pre-triage). Enabled by default; needs a rules file to do anything.
+            applier = BusinessContextApplier() if business_context_enabled() else None
             triage_worker = FusedAlertTriageWorker(
                 bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
                 topic=os.getenv("KAFKA_TOPIC_ALERTS_FUSED", "aisoc.alerts.fused"),
+                business_context=applier,
             )
             app.state.triage_worker = triage_worker
             app.state.triage_worker_task = asyncio.create_task(triage_worker.start())

@@ -41,10 +41,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Agent auto-triages every alert (not manual/API-only) | README (autonomous triage) | `ci.yml` agents job (`test_fused_alert_worker.py` — `FusedAlertTriageWorker` consumes `aisoc.alerts.fused`, auto-triages each alert copilot/read-only with cost-governor dedup + circuit-breaker, degrades to deterministic triage without an LLM key, never dispatches a response) | GATED | - |
 | Connector credentials reach the SOAR executors (not simulation-only) + autonomy policy governs every real execution | README (SOAR / response) | `ci.yml` actions job (`test_credential_resolver.py` — per-vendor auth_config→executor-param translation pinned; `test_governed_dispatch.py` — Phase 9a `decide()` wired into live dispatch: above-tier ⇒ dry-run preview, dry-run-disabled ⇒ queued approval, L0 ⇒ blocked, executor never invoked when queued/blocked) | GATED | - |
 | Rollback is real (not "return True"), post-action verified, and approvals are restart-durable | README (response / rollback) | `ci.yml` actions job (`test_rollback.py` — real vendor reverse calls, honest simulated/failed states, REVERSIBLE_ACTIONS gated against the actual reverse impls; `test_verification.py` — re-queries vendor, never a false VERIFIED) + slack-bot job (`test_timer_store.py` — pending SLA timers persist + recover across restart) | GATED | - |
+| Environment-specific noise reduction (business context) applied post-fusion → pre-triage | README (noise reduction) | `ci.yml` agents job (`test_business_context_hotpath.py` — YAML when/then rules mutate severity/route/tags and suppress before any triage spend, wired into `FusedAlertTriageWorker.triage`; `AISOC_BUSINESS_CONTEXT_ENABLED` gate) | GATED | - |
 
 ## Summary
 
-- GATED: 22
+- GATED: 23
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 

@@ -45,12 +45,21 @@ from app.investigator import ledger as ledger_module
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
+from app.workers.business_context import BusinessContextApplier
 
 logger = structlog.get_logger()
 
 _NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "tryaisoc.com/agents/auto-triage")
 
-_METRICS = {"triaged": 0, "deduplicated": 0, "deterministic": 0, "llm": 0, "errors": 0}
+_METRICS = {
+    "triaged": 0,
+    "deduplicated": 0,
+    "deterministic": 0,
+    "llm": 0,
+    "bc_suppressed": 0,
+    "bc_mutated": 0,
+    "errors": 0,
+}
 
 
 def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
@@ -100,12 +109,22 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
 class FusedAlertTriageWorker:
     """Consumes ``aisoc.alerts.fused`` and auto-triages each alert (copilot)."""
 
-    def __init__(self, *, bootstrap_servers: str, topic: str = "aisoc.alerts.fused", group_id: str = "aisoc-agents-triage") -> None:
+    def __init__(
+        self,
+        *,
+        bootstrap_servers: str,
+        topic: str = "aisoc.alerts.fused",
+        group_id: str = "aisoc-agents-triage",
+        business_context: BusinessContextApplier | None = None,
+    ) -> None:
         self._bootstrap = bootstrap_servers
         self._topic = topic
         self._group_id = group_id
         self._consumer: Any | None = None
         self._running = False
+        # Phase B4 — environment-specific noise reduction applied post-fusion →
+        # pre-triage. None = disabled (no rules file / flag off).
+        self._business_context = business_context
 
     async def start(self) -> None:
         from aiokafka import AIOKafkaConsumer  # noqa: PLC0415 — optional dep, only at runtime
@@ -143,6 +162,26 @@ class FusedAlertTriageWorker:
     async def triage(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """Auto-triage one fused alert. Read-only (copilot): never dispatches a
         response. Returns a verdict summary dict, or None if unprocessable."""
+        # Phase B4 — apply business-context rules on the post-fusion alert BEFORE
+        # any triage work. A suppress rule drops the alert (no triage spend); a
+        # severity/route/tag rule mutates the alert the agent reasons over.
+        bc_matched: list[str] = []
+        if self._business_context is not None and isinstance(message, dict) and isinstance(message.get("alert"), dict):
+            bc = self._business_context.apply(message["alert"])
+            bc_matched = bc.matched_rule_ids
+            if bc.suppressed:
+                _METRICS["bc_suppressed"] += 1
+                logger.info("auto_triage_worker.bc_suppressed", matched=bc_matched)
+                return {
+                    "incident_id": str(message.get("incident_id") or message.get("id") or ""),
+                    "suppressed": True,
+                    "business_context_rules": bc_matched,
+                    "response_dispatched": False,
+                }
+            if bc.changed:
+                _METRICS["bc_mutated"] += 1
+                message = {**message, "alert": bc.alert}
+
         state = build_state(message)
         if state is None:
             logger.warning("auto_triage_worker.unprocessable", keys=sorted(message.keys()) if isinstance(message, dict) else None)
@@ -179,6 +218,7 @@ class FusedAlertTriageWorker:
             "verdict": verdict,
             "confidence": confidence,
             "tier": tier,
+            "business_context_rules": bc_matched,
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],

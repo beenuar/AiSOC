@@ -333,6 +333,7 @@ jobs:
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
+            tests/test_business_context_hotpath.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────
