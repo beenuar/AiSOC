@@ -9,6 +9,7 @@ from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
 from app.services.alert_sink import AlertSink
+from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
@@ -34,12 +35,19 @@ async def lifespan(app: FastAPI):
     # Phase A4 — behavioral-model fusion: one cache shared by the engine
     # (fuse-time lookup) and the worker (records the ueba.anomalies stream).
     ueba_cache = UebaSignalCache(redis_client, ttl_seconds=settings.ueba_signal_ttl_seconds) if settings.ueba_fusion_enabled else None
+    # Phase C4 — fuse-time attack-chain grouping (shares the fusion Redis).
+    chain_grouper = (
+        AttackChainGrouper(redis_client, window_seconds=settings.attack_chain_window_seconds)
+        if settings.attack_chain_grouping_enabled
+        else None
+    )
     engine = FusionEngine(
         dedup,
         correlator,
         entity_risk=entity_risk,
         confidence_scorer=confidence_scorer,
         ueba_cache=ueba_cache,
+        chain_grouper=chain_grouper,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable

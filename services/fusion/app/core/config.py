@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     kafka_topic_ueba_anomalies: str = Field(default="ueba.anomalies", alias="KAFKA_TOPIC_UEBA_ANOMALIES")
     ueba_signal_ttl_seconds: int = Field(default=86400, alias="AISOC_UEBA_SIGNAL_TTL_SECONDS")
 
+    # Phase C4 — form/extend attack chains at fuse time so related alerts
+    # auto-collapse into one ordered incident (app/services/attack_chain_grouper.py).
+    attack_chain_grouping_enabled: bool = Field(default=True, alias="AISOC_ATTACK_CHAIN_GROUPING_ENABLED")
+    attack_chain_window_seconds: int = Field(default=3600, alias="AISOC_ATTACK_CHAIN_WINDOW_SECONDS")
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
     dedup_window_seconds: int = Field(default=300, alias="DEDUP_WINDOW_SECONDS")

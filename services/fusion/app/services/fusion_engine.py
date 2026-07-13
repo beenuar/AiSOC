@@ -16,6 +16,7 @@ from app.models.alert import (
     IncidentSummary,
     RawAlert,
 )
+from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
@@ -120,6 +121,7 @@ class FusionEngine:
         entity_risk: EntityRiskEngine | None = None,
         confidence_scorer: ConfidenceScorer | None = None,
         ueba_cache: UebaSignalCache | None = None,
+        chain_grouper: AttackChainGrouper | None = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
@@ -127,6 +129,8 @@ class FusionEngine:
         self._entity_risk = entity_risk
         # Phase A4 — behavioral-model signal (optional; None = no UEBA fusion).
         self._ueba_cache = ueba_cache
+        # Phase C4 — fuse-time attack-chain former/extender (optional).
+        self._chain_grouper = chain_grouper
         # Confidence + explainability is intrinsic to a fused alert — every
         # alert leaves the engine with a high/med/low label and an evidence
         # chain. The scorer is pure / stateless so we instantiate a default.
@@ -206,6 +210,18 @@ class FusionEngine:
                 fused = apply_ueba_boost(fused, signal)
             except Exception as exc:
                 logger.warning("ueba_boost_failed", error=str(exc))
+
+        # --- Step 3e: Attack-chain auto-grouping at fuse time (Phase C4) ---
+        # Form/extend the entity's attack chain so related alerts collapse into
+        # one ordered incident narrative as they arrive. Additive: a failure
+        # never blocks the alert.
+        if self._chain_grouper is not None:
+            try:
+                assignment = await self._chain_grouper.assign(alert)
+                if assignment is not None:
+                    fused.enrichments["attack_chain"] = assignment.to_dict()
+            except Exception as exc:
+                logger.warning("attack_chain_grouping_failed", error=str(exc))
 
         # --- Step 4: Risk-Based Alerting (entity rollup) ---
         # RBA accumulates points on the entities this alert touches and may
