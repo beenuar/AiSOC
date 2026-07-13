@@ -94,3 +94,14 @@ python|GHSA-w39p-vh2g-g8g5|langgraph-sdk unsafe URL path construction (fixed in 
 # private keys. Removing it requires migrating the auth layer off python-jose to
 # PyJWT (already a dep) — a regression-prone change tracked for a dedicated PR.
 python|PYSEC-2026-1325|ecdsa 0.19.2 is latest release; no patched version available; transitive via python-jose[cryptography]; tracked for python-jose to PyJWT migration|2026-10-05
+
+# ── 2026-07-13 triage (expire 2026-10-11) ────────────────────────────────────
+# langchain-core prompt-loading path traversal (langchain_core.prompts.loading
+# reads files from paths in deserialized config dicts). Fixed only in
+# langchain-core 1.2.22 — a major bump from our pinned 0.3.x line with breaking
+# API changes, blocked by the same langchain 0.3 → 1.x migration tracked above
+# (GHSA-gr75-jv2w-4656 et al.). The vulnerable prompts.loading module is not
+# imported anywhere in this codebase (verified via repo-wide grep).
+# Both PYSEC and GHSA forms listed since pip-audit may report either as primary.
+python|PYSEC-2026-2193|langchain-core prompts.loading path traversal (fixed in 1.2.22); requires langchain 0.3 → 1.x major bump, module unused in codebase; tracked with langchain migration PR|2026-10-11
+python|GHSA-qh6h-p6c9-ff54|langchain-core prompts.loading path traversal (fixed in 1.2.22); requires langchain 0.3 → 1.x major bump, module unused in codebase; tracked with langchain migration PR|2026-10-11
