@@ -107,21 +107,37 @@ def test_critical_never_auto_executes(monkeypatch):
 # ── Rollback-capability contract (honest, bounded, pinned) ───────────────────
 
 
-def test_only_block_ip_is_reversible_today():
-    assert rollback_capability(ActionType.BLOCK_IP) is RollbackCapability.REVERSIBLE
-    for at in (ActionType.ISOLATE_HOST, ActionType.DISABLE_USER, ActionType.RESET_PASSWORD, ActionType.BLOCK_DOMAIN):
+def test_reversible_actions_have_real_reverse_impls():
+    # Phase B3: block_ip, isolate_host, disable_user, suspend_session all have a
+    # real vendor reverse in app.services.rollback. Actions with no reverse stay
+    # UNSUPPORTED (honest) — never a fake "rollback returns True".
+    for at in (ActionType.BLOCK_IP, ActionType.ISOLATE_HOST, ActionType.DISABLE_USER, ActionType.SUSPEND_SESSION):
+        assert rollback_capability(at) is RollbackCapability.REVERSIBLE
+    for at in (ActionType.RESET_PASSWORD, ActionType.BLOCK_DOMAIN, ActionType.QUARANTINE_FILE):
         assert rollback_capability(at) is RollbackCapability.UNSUPPORTED
 
 
 def test_reversible_set_is_pinned():
-    # Widening this set requires a conscious edit AND a real reverse impl — it
-    # can't grow silently and re-introduce the "rollback returns True" lie.
-    assert REVERSIBLE_ACTIONS == frozenset({ActionType.BLOCK_IP})
+    # Widening this set requires a conscious edit AND a real reverse impl in
+    # app.services.rollback (gated by test_rollback.py) — it can't grow silently
+    # and re-introduce the "rollback returns True" lie.
+    assert REVERSIBLE_ACTIONS == frozenset(
+        {
+            ActionType.BLOCK_IP,
+            ActionType.ISOLATE_HOST,
+            ActionType.DISABLE_USER,
+            ActionType.SUSPEND_SESSION,
+        }
+    )
 
 
 def test_decision_carries_rollback_capability():
+    # isolate_host is now reversible (Phase B3 real de-isolation path).
     d = decide(_req(ActionType.ISOLATE_HOST), tier=MaturityTier.L2_CONTAIN)
-    assert d.rollback is RollbackCapability.UNSUPPORTED
+    assert d.rollback is RollbackCapability.REVERSIBLE
+    # reset_password has no reverse — stays honestly UNSUPPORTED.
+    d2 = decide(_req(ActionType.RESET_PASSWORD), tier=MaturityTier.L2_CONTAIN)
+    assert d2.rollback is RollbackCapability.UNSUPPORTED
 
 
 # ── Scorecard makes the safety posture observable ────────────────────────────

@@ -27,7 +27,8 @@ RUN set -eux; \
             "slack-sdk>=3.27,<4" \
             "aiohttp>=3.9,<4.0" \
             "httpx>=0.27,<0.29" \
-            "structlog>=24.1,<26" ; \
+            "structlog>=24.1,<26" \
+            "asyncpg>=0.29,<0.31" ; \
     fi
 
 COPY app/ ./app/

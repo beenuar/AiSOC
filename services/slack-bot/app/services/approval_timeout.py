@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
@@ -41,6 +42,7 @@ from app.services.approval_audit import (
     ApprovalAuditSink,
     NullAuditSink,
 )
+from app.services.timer_store import InMemoryTimerStore, TimerRecord, TimerStore
 
 log = structlog.get_logger(__name__)
 
@@ -70,10 +72,15 @@ class ApprovalTimeoutScheduler:
         approve_fn: Callable[[str], Awaitable[Any]],
         reject_fn: Callable[[str], Awaitable[Any]],
         audit_sink: ApprovalAuditSink | None = None,
+        store: TimerStore | None = None,
     ) -> None:
         self._approve_fn = approve_fn
         self._reject_fn = reject_fn
         self._audit_sink = audit_sink or NullAuditSink()
+        # Phase B3 — optional durable backing store so pending SLA timers
+        # survive a bot restart. Defaults to non-durable in-memory (pre-B3
+        # behaviour); production injects a PostgresTimerStore.
+        self._store: TimerStore = store or InMemoryTimerStore()
         self._timers: dict[str, asyncio.Task[None]] = {}
 
     @property
@@ -103,11 +110,26 @@ class ApprovalTimeoutScheduler:
         if existing is not None and not existing.done():
             existing.cancel()
 
+        # Phase B3 — persist the pending timer so a restart can recover it.
+        # Best-effort: a store failure never blocks arming the in-memory timer.
+        record = TimerRecord(
+            action_id=action_id,
+            fire_at_epoch=time.time() + timeout_seconds,
+            safe_default=safe_default,
+            case_id=case_id,
+            channel=channel,
+            approver_id=approver_id,
+        )
+        asyncio.create_task(self._store.put(record))  # noqa: RUF006 — fire-and-forget persist
+
         async def _fire() -> None:
             try:
                 await asyncio.sleep(timeout_seconds)
             except asyncio.CancelledError:
                 return
+            # The timer fired — drop the durable row so recovery won't re-arm it.
+            with contextlib.suppress(Exception):
+                await self._store.delete(action_id)
             try:
                 if safe_default == "approved":
                     await self._approve_fn(action_id)
@@ -161,11 +183,41 @@ class ApprovalTimeoutScheduler:
         was armed and got cancelled; ``False`` if nothing was pending
         (idempotent — Slack can replay events).
         """
+        # Human decided in time (or explicit cancel) — drop the durable row so a
+        # restart won't resurrect a timer for an already-decided action.
+        asyncio.create_task(self._store.delete(action_id))  # noqa: RUF006 — fire-and-forget
+
         existing = self._timers.pop(action_id, None)
         if existing is None or existing.done():
             return False
         existing.cancel()
         return True
+
+    async def recover(self) -> int:
+        """Re-arm timers from the durable store after a restart.
+
+        Called from the FastAPI lifespan on startup. An overdue timer (deadline
+        already passed while the bot was down) is re-armed with a near-zero
+        delay so its safe-default fires promptly. Returns the number recovered.
+        """
+        recovered = 0
+        now = time.time()
+        for record in await self._store.list_pending():
+            if record.action_id in self._timers and not self._timers[record.action_id].done():
+                continue
+            remaining = max(0.0, record.fire_at_epoch - now)
+            self.schedule(
+                record.action_id,
+                timeout_seconds=remaining,
+                safe_default=record.safe_default,  # type: ignore[arg-type]
+                case_id=record.case_id,
+                channel=record.channel,
+                approver_id=record.approver_id,
+            )
+            recovered += 1
+        if recovered:
+            log.info("approval_timeout.recovered", count=recovered)
+        return recovered
 
     async def aclose(self) -> None:
         """Cancel every armed timer (called from the FastAPI lifespan)."""

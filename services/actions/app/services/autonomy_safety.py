@@ -42,6 +42,7 @@ from app.models.action import (
     BlastRadius,
 )
 from app.services.maturity import _AUTO_ALLOWED_AT_TIER, MaturityTier
+from app.services.rollback import REVERSIBLE_ACTIONS as _REVERSIBLE_ACTIONS
 
 _BLAST_ORDER = {
     BlastRadius.MINIMAL: 0,
@@ -64,11 +65,14 @@ class RollbackCapability(str, Enum):
     UNSUPPORTED = "unsupported"  # no automatic rollback — say so, don't fake it
 
 
-# The ONLY actions with a real reverse implementation today. `block_ip` reverses
-# via the AWS security-group `unblock_ip` call. Widening this set requires
-# implementing (and testing) a real reverse path — the gate pins it so it can't
-# grow silently to re-introduce the "rollback returns True" lie.
-REVERSIBLE_ACTIONS: frozenset[ActionType] = frozenset({ActionType.BLOCK_IP})
+# Actions with a REAL reverse implementation. Phase B3 made
+# ``app.services.rollback`` the single source of truth (imported at the top of
+# this module): an action may only be listed reversible if
+# ``rollback.reverse_action`` actually calls a vendor reverse for it
+# (isolate→lift, block_ip→unblock, disable_user→enable, suspend_session→
+# unsuspend). ``test_rollback.py`` gates the two sets so this can never silently
+# claim a reverse it can't perform.
+REVERSIBLE_ACTIONS = _REVERSIBLE_ACTIONS
 
 
 class VerificationOutcome(str, Enum):

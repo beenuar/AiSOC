@@ -42,6 +42,7 @@ Endpoints
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -253,11 +254,30 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The timeout scheduler is shared across the process — one task per
     # pending approval so a forgotten Approve/Deny can't leave the action
     # in awaiting_approval forever. See app/services/approval_timeout.py.
+    # Phase B3 — when DATABASE_URL is set, back it with a durable Postgres
+    # store so pending SLA timers survive a bot restart (best-effort; a DB
+    # failure degrades to the in-memory default).
+    timer_store = None
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if dsn:
+        try:
+            from app.services.timer_store import PostgresTimerStore  # noqa: PLC0415
+
+            timer_store = await PostgresTimerStore.create(dsn)
+        except Exception as exc:  # noqa: BLE001 — durable store is best-effort
+            logger.warning("approval_timer_store.init_failed", error=str(exc))
+            timer_store = None
     timeout_scheduler = ApprovalTimeoutScheduler(
         approve_fn=actions_client.approve_action,
         reject_fn=actions_client.reject_action,
         audit_sink=StructlogAuditSink(),
+        store=timer_store,
     )
+    # Re-arm any timers that survived a restart (no-op for the in-memory store).
+    try:
+        await timeout_scheduler.recover()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("approval_timer_store.recover_failed", error=str(exc))
 
     app.state.api_client = api_client
     app.state.actions_client = actions_client
