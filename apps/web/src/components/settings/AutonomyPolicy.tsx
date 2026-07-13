@@ -37,6 +37,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AutonomyScorecard } from '@/components/settings/AutonomyScorecard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,13 @@ export function AutonomyPolicyPanel() {
       />
 
       <div className="space-y-5 px-6 py-5">
+        {/* Phase C3 — autopilot/copilot posture + scorecard (defaults to
+            copilot). Rendered once the policy loads so the CISO sees the
+            whole-SOC autonomy posture before drilling into per-action rows. */}
+        {!isLoading && !error && actions.length > 0 ? (
+          <AutonomyScorecard actions={actions} />
+        ) : null}
+
         {/* Legend */}
         <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 text-xs text-gray-400">
           <p className="font-medium text-gray-300">How tiers map</p>

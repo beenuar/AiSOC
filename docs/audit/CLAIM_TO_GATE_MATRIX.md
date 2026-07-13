@@ -45,10 +45,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Related alerts auto-collapse into one ordered attack chain at fuse time | README (attack chains) | `ci.yml` fusion job (`test_attack_chain_grouper.py` — shared-entity alerts join one chain within the window, members ordered by MITRE kill-chain stage, cross-entity link via shared IP; wired into `fusion_engine.process` → `enrichments.attack_chain`) | GATED | - |
 | Effective Permissions resolves against a live posture snapshot (not empty stub) | README (effective permissions) | `ci.yml` api job (`test_posture_loader.py` — assembles the Okta resolver snapshot from connector `get_resource_config` calls and resolves it; cloud providers consume a connector-provided reconciled snapshot; failures degrade to empty, never fabricated) + connectors `/connectors/{id}/resource_config` endpoint | GATED | - |
 | Unified Data Explorer (NL + SQL across the lake) replaces the SIEM context-switch | README (data explorer) | `ci.yml` web-test job (`ExploreView.test.tsx` — NL question → `nl-query/translate` → `lake/sql` → BI table; raw-SQL run; source pivots to identity/graph/intel; error surfaced) + web-lint type-check | GATED | - |
+| Autonomy posture is copilot-by-default with a visible per-action/blast scorecard | README (autopilot/copilot) | `ci.yml` web-test job (`AutonomyScorecard.test.tsx` — posture stays Copilot unless a high/critical-blast action auto-executes; distribution + override counts; rendered badge) | GATED | - |
 
 ## Summary
 
-- GATED: 26
+- GATED: 27
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 
