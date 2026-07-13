@@ -317,7 +317,7 @@ jobs:
         # so both packages are required at import time, even though the
         # fusion-client test itself only calls into `app.tools.fusion`.
         run: |
-          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai
+          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai langgraph
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \
@@ -332,6 +332,7 @@ jobs:
             tests/test_cost_governor.py \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
+            tests/test_fused_alert_worker.py \
             -v --tb=short
 
   # ──────────────────────────────────────────────

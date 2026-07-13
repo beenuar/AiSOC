@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -22,6 +23,7 @@ from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
+from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
 
 logger = structlog.get_logger()
 
@@ -73,6 +75,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("hunt.scheduler.start_failed", error=str(exc))
 
+    # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
+    # read-only triage, no response dispatch). Off unless KAFKA_BOOTSTRAP_SERVERS
+    # is set; degrades to deterministic triage without an LLM key.
+    app.state.triage_worker = None
+    app.state.triage_worker_task = None
+    if worker_enabled():
+        try:
+            triage_worker = FusedAlertTriageWorker(
+                bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+                topic=os.getenv("KAFKA_TOPIC_ALERTS_FUSED", "aisoc.alerts.fused"),
+            )
+            app.state.triage_worker = triage_worker
+            app.state.triage_worker_task = asyncio.create_task(triage_worker.start())
+            logger.info("auto_triage_worker.enabled")
+        except Exception as exc:  # noqa: BLE001 — never block API startup
+            logger.warning("auto_triage_worker.start_failed", error=str(exc))
+
     # Phase 2.6 — flip /readyz to 200 once startup work is done.
     app.state.mark_ready()
 
@@ -80,6 +99,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Phase 2.6 — flip /readyz to 503 the moment we start draining.
     app.state.mark_not_ready()
+
+    # Stop the auto-triage worker first so in-flight triage can finish.
+    if getattr(app.state, "triage_worker", None) is not None:
+        try:
+            await app.state.triage_worker.stop()
+            if app.state.triage_worker_task is not None:
+                app.state.triage_worker_task.cancel()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto_triage_worker.stop_failed", error=str(exc))
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.

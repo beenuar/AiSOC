@@ -361,12 +361,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8001:8084"
     environment:
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
       CORE_API_URL: http://api:8000
+      # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
+      # read-only triage, no response dispatch). Degrades to deterministic
+      # triage when no LLM key is set.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j

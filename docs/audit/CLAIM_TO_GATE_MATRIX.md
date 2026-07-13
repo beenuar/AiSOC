@@ -38,10 +38,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Ingested events land in the queryable ClickHouse lake | README (SIEM / lake) | `integration.yml :: spine` (Phase A1 — after the spine ingests, asserts `SELECT count() FROM aisoc.raw_events > 0` against the live ClickHouse container; `services/fusion` `LakeWriter` archives every normalized event) | GATED | - |
 | Detection rules fire on the live event stream (not just CI fixtures) | README L170 (detection engine) | `integration.yml :: spine` (Phase A2 — posts an event matching the native `aws-root-account-login` rule, asserts the fusion `DetectionEngine` produces the alert) + `validate-detections.yml` (exported-ruleset drift `--check`) + fusion `test_detection_engine.py` / `test_detection_matcher_parity.py` | GATED | - |
 | Three-model AI: behavioral (UEBA) model feeds alert scoring in production | README (multi-model) | `ci.yml` fusion job (`test_ueba_signal.py` — the `ueba.anomalies` stream warms a per-entity cache that boosts fuse-time confidence + anomaly score; wired in `fusion_engine.process`) | GATED | - |
+| Agent auto-triages every alert (not manual/API-only) | README (autonomous triage) | `ci.yml` agents job (`test_fused_alert_worker.py` — `FusedAlertTriageWorker` consumes `aisoc.alerts.fused`, auto-triages each alert copilot/read-only with cost-governor dedup + circuit-breaker, degrades to deterministic triage without an LLM key, never dispatches a response) | GATED | - |
 
 ## Summary
 
-- GATED: 19
+- GATED: 20
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 
