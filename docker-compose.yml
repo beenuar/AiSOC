@@ -269,6 +269,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8081:8080"
       - "127.0.0.1:9090:9090"
@@ -281,6 +283,13 @@ services:
       LOG_LEVEL: info
       JWT_SECRET: dev_secret_key_change_in_production
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      # Phase A3 — graph-at-ingest is ON by default so a cold `up` builds the
+      # entity graph out of the box. Soft-fails (writer disabled) if Neo4j is
+      # unreachable, so this never blocks ingest.
+      AISOC_GRAPH_ENABLED: "true"
+      AISOC_NEO4J_URI: bolt://neo4j:7687
+      AISOC_NEO4J_USER: neo4j
+      AISOC_NEO4J_PASSWORD: neo4j_dev_secret
     networks:
       - aisoc
     restart: unless-stopped
@@ -434,8 +443,9 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8088:8003"
-    profiles:
-      - connectors
+    # Phase A3 — the connector runtime is part of the default stack now (was
+    # profile-gated). It idles harmlessly with no configured instances; a cold
+    # `up` therefore ships the full ingest→detect→respond spine out of the box.
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/6

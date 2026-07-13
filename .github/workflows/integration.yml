@@ -141,6 +141,37 @@ jobs:
       - name: Assert the detection engine fires on the live stream
         run: python3 scripts/integration/spine_test.py --detection --timeout 180
 
+      # ── Phase A3: the default cold-boot stack is complete ────────────────
+      # `docker compose up -d` (no profiles) now ships the connector runtime
+      # and graph-at-ingest ON by default. Assert (a) the connectors service
+      # booted in the default profile and (b) ingest enabled the Neo4j graph
+      # writer, then (c) the graph actually has nodes after the spine flowed.
+      - name: Assert default stack ships connectors + graph-at-ingest
+        run: |
+          set -euo pipefail
+          echo "── connectors service present in default boot ──"
+          docker compose ps --services | grep -qx connectors \
+            || { echo "::error::connectors not in the default compose stack"; exit 1; }
+          running="$(docker inspect -f '{{.State.Running}}' aisoc-connectors 2>/dev/null || echo false)"
+          echo "connectors running: ${running}"
+          [ "${running}" = "true" ] || { echo "::error::connectors container is not running"; docker compose logs --tail=60 --no-color connectors || true; exit 1; }
+
+          echo "── ingest enabled the graph writer ──"
+          docker compose logs --no-color ingest-worker 2>/dev/null | grep -q "graph: ingest-side writer enabled" \
+            || { echo "::error::graph-at-ingest was not enabled by default"; docker compose logs --tail=60 --no-color ingest-worker || true; exit 1; }
+
+          echo "── graph has nodes after the spine flowed ──"
+          ok=""
+          for i in $(seq 1 30); do
+            N="$(docker compose exec -T neo4j cypher-shell -u neo4j -p neo4j_dev_secret --format plain \
+                  'MATCH (n) RETURN count(n)' 2>/dev/null | tail -1 | tr -dc '0-9' || echo 0)"
+            echo "graph node count (attempt ${i}): ${N:-0}"
+            if [ "${N:-0}" -gt 0 ]; then ok=1; break; fi
+            sleep 2
+          done
+          [ -n "${ok}" ] || { echo "::error::graph-at-ingest produced no nodes from the live stream"; \
+                              docker compose logs --tail=80 --no-color ingest-worker || true; exit 1; }
+
       # ── Chaos: kill the fusion consumer, produce, restart, assert ────────
       # The event is produced while the consumer is down; on restart the
       # consumer group must resume from its committed offset and process it.

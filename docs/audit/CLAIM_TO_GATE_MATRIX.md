@@ -9,7 +9,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Claim | Source | Gate (workflow :: job) | Status | Closes in |
 |---|---|---|---|---|
 | Offline sandbox demo runs with no key/network in < 5 s | README L38 | `readme-gates.yml :: sandbox-offline` (ubuntu+macos matrix) | GATED | - |
-| `pnpm aisoc:demo` boots the real stack | README L40, L45 | `compose-smoke.yml`, `compose-smoke-nightly.yml` (cold) | PARTIAL (health-probe only, no time-to-first-investigation assertion) | Phase 3.4 |
+| `pnpm aisoc:demo` boots the real stack | README L40, L45 | `compose-smoke.yml` (cold health) + `integration.yml :: spine` (Phase A3 — default `docker compose up` ships connectors + graph-at-ingest by default; asserts cold-boot → ingest → lake + detection engine → alert row with the spine test's measured raw-event→alert latency) | GATED | - |
 | 69 connectors | README L116, L168 | `ci.yml :: python-lint` (`generate_connector_count.py --check`) | GATED (count) | - |
 | Connectors: schema-driven config + vault-encrypted secrets | README L168 | `ci.yml` connectors matrix (`test_schemas.py` + `test_conformance.py` — secret-shaped fields must be `type=secret`); vault tests | PARTIAL (schema + vault + secret-field-marking + runtime-contract conformance gated; live-vendor API smoke, rate-limit, checkpoint durability deferred) | Phase 10b |
 | Connectors: live Test connection | README L168 | `ci.yml` connectors matrix (`test_conformance.py` — every connector implements the async `test_connection` contract) + `connector_conformance.py --check` published matrix | PARTIAL (contract conformance gated; live-vendor sandbox smoke deferred) | Phase 10b |
