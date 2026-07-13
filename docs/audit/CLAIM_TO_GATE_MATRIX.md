@@ -43,10 +43,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Rollback is real (not "return True"), post-action verified, and approvals are restart-durable | README (response / rollback) | `ci.yml` actions job (`test_rollback.py` — real vendor reverse calls, honest simulated/failed states, REVERSIBLE_ACTIONS gated against the actual reverse impls; `test_verification.py` — re-queries vendor, never a false VERIFIED) + slack-bot job (`test_timer_store.py` — pending SLA timers persist + recover across restart) | GATED | - |
 | Environment-specific noise reduction (business context) applied post-fusion → pre-triage | README (noise reduction) | `ci.yml` agents job (`test_business_context_hotpath.py` — YAML when/then rules mutate severity/route/tags and suppress before any triage spend, wired into `FusedAlertTriageWorker.triage`; `AISOC_BUSINESS_CONTEXT_ENABLED` gate) | GATED | - |
 | Related alerts auto-collapse into one ordered attack chain at fuse time | README (attack chains) | `ci.yml` fusion job (`test_attack_chain_grouper.py` — shared-entity alerts join one chain within the window, members ordered by MITRE kill-chain stage, cross-entity link via shared IP; wired into `fusion_engine.process` → `enrichments.attack_chain`) | GATED | - |
+| Effective Permissions resolves against a live posture snapshot (not empty stub) | README (effective permissions) | `ci.yml` api job (`test_posture_loader.py` — assembles the Okta resolver snapshot from connector `get_resource_config` calls and resolves it; cloud providers consume a connector-provided reconciled snapshot; failures degrade to empty, never fabricated) + connectors `/connectors/{id}/resource_config` endpoint | GATED | - |
 
 ## Summary
 
-- GATED: 24
+- GATED: 25
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 

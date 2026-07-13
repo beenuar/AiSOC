@@ -71,6 +71,22 @@ class TestConnectionRequest(BaseModel):
     )
 
 
+class ResourceConfigRequest(BaseModel):
+    """Fetch one resource's live configuration (Phase C2).
+
+    Same trust model as ``TestConnectionRequest``: the API service decrypts
+    ``auth_config`` before forwarding here. ``resource_id`` is the vendor-native
+    id (Okta group/app id, ARN, Azure object id, …); ``at_ts`` is an optional
+    point-in-time (ISO-8601) — connectors that can't time-travel return their
+    latest and mark ``snapshot_freshness``.
+    """
+
+    auth_config: dict[str, Any] = PydField(default_factory=dict)
+    connector_config: dict[str, Any] = PydField(default_factory=dict)
+    resource_id: str = PydField(..., description="Vendor-native resource id to fetch.")
+    at_ts: str = PydField(default="", description="Optional ISO-8601 point-in-time.")
+
+
 class FederatedQueryRequest(BaseModel):
     """Run a unified query against a single connector instance.
 
@@ -267,6 +283,42 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
         # Defensive: some connectors might return None on success. Coerce.
         result = {"success": bool(result), "connector": connector_id}
     return result
+
+
+@router.post("/connectors/{connector_id}/resource_config")
+async def get_resource_config(connector_id: str, payload: ResourceConfigRequest):
+    """Fetch one resource's live configuration (Phase C2 posture collection).
+
+    Trust boundary matches ``/test`` and ``/query``: the API service has
+    already decrypted ``auth_config`` against the vault; the connector instance
+    lives only for this request. Connectors that don't implement
+    ``get_resource_config`` return 501.
+    """
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
+
+    kwargs = {**payload.auth_config, **payload.connector_config}
+    try:
+        connector = cls(**kwargs)
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"connector config does not match schema: {exc}",
+        ) from exc
+
+    try:
+        config = await connector.get_resource_config(payload.resource_id, payload.at_ts)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("connector.resource_config.runtime_error", connector_id=_safe_log_val(connector_id))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Resource-config fetch failed. Check connector configuration and connectivity.",
+        ) from exc
+
+    return {"connector_id": connector_id, "resource_id": payload.resource_id, "config": config}
 
 
 @router.post("/connectors/{connector_id}/query")
