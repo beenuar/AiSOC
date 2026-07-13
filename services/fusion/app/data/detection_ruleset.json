@@ -1,5 +1,5 @@
 {
-  "count": 817,
+  "count": 825,
   "rules": [
     {
       "category": "application",
@@ -1267,6 +1267,130 @@
       "service": "http",
       "severity": "high",
       "slug": "app-graphql-mutation-anonymous"
+    },
+    {
+      "category": "application",
+      "id": "det-application-071",
+      "match_when": {
+        "event_type_endswith": ".api_key.created"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "LLM Provider API Key Created",
+      "product": "openai",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "llm-api-key-created"
+    },
+    {
+      "category": "application",
+      "id": "det-application-072",
+      "match_when": {
+        "event_type_endswith": ".api_key.created",
+        "key_scope": "admin"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "LLM Provider Admin API Key Created",
+      "product": "openai",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-admin-key-created"
+    },
+    {
+      "category": "application",
+      "id": "det-application-073",
+      "match_when": {
+        "event_type_endswith": ".member.added",
+        "role": "owner"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "LLM Provider Owner Role Granted",
+      "product": "openai",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-member-added-owner"
+    },
+    {
+      "category": "application",
+      "id": "det-application-074",
+      "match_when": {
+        "action": "disabled",
+        "event_type_contains": "logging"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "LLM Provider Audit Logging Disabled",
+      "product": "openai",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "llm-logging-disabled"
+    },
+    {
+      "category": "application",
+      "id": "det-application-075",
+      "match_when": {
+        "action": "disabled",
+        "event_type_contains": "mfa"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "LLM Provider MFA Requirement Disabled",
+      "product": "openai",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-mfa-disabled"
+    },
+    {
+      "category": "application",
+      "id": "det-application-076",
+      "match_when": {
+        "event_type": "anthropic.workspace.created"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Anthropic Workspace Created",
+      "product": "anthropic",
+      "service": "audit",
+      "severity": "low",
+      "slug": "llm-anthropic-workspace-created"
+    },
+    {
+      "category": "application",
+      "id": "det-application-077",
+      "match_when": {
+        "event_type_endswith": ".service_account.created"
+      },
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "LLM Provider Service Account Created",
+      "product": "openai",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "llm-service-account-created"
+    },
+    {
+      "category": "application",
+      "id": "det-application-078",
+      "match_when": {
+        "event_type_endswith": ".project.archived"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "LLM Provider Project Deleted",
+      "product": "openai",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "llm-project-deleted"
     },
     {
       "category": "cloud",

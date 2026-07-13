@@ -99,6 +99,7 @@ const sidebars: SidebarsConfig = {
         "connectors/windows_event",
         "connectors/zeek_suricata",
         "connectors/syslog_cef",
+        "connectors/llm_usage",
       ],
     },
     {

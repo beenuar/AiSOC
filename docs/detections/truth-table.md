@@ -15,8 +15,8 @@ provenance and coverage-mapping, not firing.
 
 | metric | count |
 |--------|------:|
-| rules on disk (total) | 6975 |
-| **executable (fire today)** | **939** |
+| rules on disk (total) | 6983 |
+| **executable (fire today)** | **947** |
 | non-executable (provenance/coverage only) | 6036 |
 
 ## By tier
@@ -26,7 +26,7 @@ provenance and coverage-mapping, not firing.
 | car (imported) | 99 | 0 |
 | chronicle (imported) | 877 | 0 |
 | community | 1 | 1 |
-| native | 861 | 861 |
+| native | 869 | 869 |
 | sigma (imported) | 3132 | 77 |
 | splunk (imported) | 2005 | 0 |
 
@@ -39,9 +39,9 @@ provenance and coverage-mapping, not firing.
 
 ## How to read the README claim
 
-The imported corpus is large (6975 rules on disk) and valuable as a
+The imported corpus is large (6983 rules on disk) and valuable as a
 provenance-tracked ATT&CK-mapped library, but the number that matters
-operationally is **939 executable rules** — the ones the engine
+operationally is **947 executable rules** — the ones the engine
 fires against live telemetry. The README and marketplace must cite the
 executable figure when describing detection *coverage*, and may cite the
 on-disk figure only when explicitly describing the imported *library*.

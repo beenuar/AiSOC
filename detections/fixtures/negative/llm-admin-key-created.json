@@ -1,0 +1,4 @@
+{
+  "event_type": ".api_key.created-x",
+  "key_scope": "admin"
+}

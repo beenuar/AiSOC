@@ -47,10 +47,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Unified Data Explorer (NL + SQL across the lake) replaces the SIEM context-switch | README (data explorer) | `ci.yml` web-test job (`ExploreView.test.tsx` — NL question → `nl-query/translate` → `lake/sql` → BI table; raw-SQL run; source pivots to identity/graph/intel; error surfaced) + web-lint type-check | GATED | - |
 | Autonomy posture is copilot-by-default with a visible per-action/blast scorecard | README (autopilot/copilot) | `ci.yml` web-test job (`AutonomyScorecard.test.tsx` — posture stays Copilot unless a high/critical-blast action auto-executes; distribution + override counts; rendered badge) | GATED | - |
 | Broad SIEM/NDR/edge coverage (QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon, Zeek/Suricata, syslog/CEF) | README (connector count) | `ci.yml` connectors job (`test_schemas.py` + `test_conformance.py` gate every connector; `test_siem_expansion.py` + `test_ndr_edge_expansion.py` pin each new connector's severity-ladder mapping) + `generate_connector_count.py --check` (registry-derived count, README phrase) | GATED | - |
+| AI/LLM-usage governance: audit connector + detections + tiered lake storage | README (AI usage / storage) | `ci.yml` connectors job (`test_llm_usage.py` — OpenAI/Anthropic audit connector emits the dotted `event_type` the `llm-*` rules match) + `validate-detections.yml` (8 `llm-*` native rules replay) + api job (`test_storage_tiering.py` — hot/cold TTL-move policy + DDL gate; verified on live ClickHouse) | GATED | - |
 
 ## Summary
 
-- GATED: 28
+- GATED: 29
 - PARTIAL: 10
 - NO GATE: 1 (progressively closed through Phases 2–11 and A1–A4: insecure-defaults, secret/IaC scanning, signed releases, cross-store isolation, DAC candidate-rule + imported-count honesty, connector live-test, OpenAPI breaking-change, ClickHouse lake population (A1), live-stream detection (A2), default cold-boot stack (A3), and the behavioral-model fusion (A4). The **last** NO GATE row — wet-eval live-agent scoreboard tables — closes in Phase 4c/E1, which needs a budgeted live-agent run)
 

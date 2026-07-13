@@ -1,0 +1,23 @@
+id: det-application-076
+name: Anthropic Workspace Created
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Anthropic Workspace
+  Created'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: anthropic
+  service: audit
+detection:
+  condition: |
+    event_type == "anthropic.workspace.created"
+false_positives:
+- Planned workspace provisioning
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,12 +1,12 @@
 {
-  "count": 77,
+  "count": 78,
   "categories": {
     "cloud": 14,
     "edr": 10,
     "iam": 6,
     "ndr": 1,
     "network": 6,
-    "saas": 20,
+    "saas": 21,
     "siem": 17,
     "vcs": 3
   },

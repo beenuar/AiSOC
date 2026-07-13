@@ -55,6 +55,7 @@ from app.connectors.google_workspace import GoogleWorkspaceConnector
 from app.connectors.jira_connector import JiraConnector
 from app.connectors.kubernetes_audit import KubernetesAuditConnector
 from app.connectors.lacework import LaceworkConnector
+from app.connectors.llm_usage import LlmUsageConnector
 from app.connectors.m365_audit import M365AuditConnector
 from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.mimecast import MimecastConnector
@@ -140,6 +141,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     JiraConnector,
     KubernetesAuditConnector,
     LaceworkConnector,
+    LlmUsageConnector,
     M365AuditConnector,
     MicrosoftSentinelConnector,
     MimecastConnector,

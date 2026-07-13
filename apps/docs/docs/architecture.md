@@ -81,7 +81,7 @@ The v1.5 release ships from a review of G2, Gartner Peer Insights, and customer 
 - **Automated compliance evidence** — `services/api/app/api/v1/endpoints/compliance.py` collects point-in-time evidence for SOC 2 / ISO 27001 / NIST CSF / PCI-DSS / HIPAA / DORA.
 - **AI-generated incident reports** — one-click "Export Report" on every case generates a PDF incident report from the Investigation Ledger.
 - **Air-gap deployment configuration** — `services/api/app/api/v1/endpoints/deployment.py` exposes air-gap mode toggles for tenants that disallow external feeds.
-- **Connector catalog growth** — SentinelOne, Cortex XDR / XSIAM, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, Duo Security, Carbon Black, Chronicle, Cisco Umbrella, CrowdStrike, Datadog Cloud SIEM, Elastic, Mimecast, Okta, Rapid7 InsightIDR, Salesforce, Microsoft Sentinel, Splunk, Sumo Logic, Tenable, Trellix Helix, Trend Vision One, and more. **The catalog is now 77 connectors** across EDR, SIEM, cloud, identity, SaaS, network, and email categories. See [Connectors](./connectors/).
+- **Connector catalog growth** — SentinelOne, Cortex XDR / XSIAM, Wiz, Snyk, Zscaler, Proofpoint, ServiceNow, Jira, 1Password, Duo Security, Carbon Black, Chronicle, Cisco Umbrella, CrowdStrike, Datadog Cloud SIEM, Elastic, Mimecast, Okta, Rapid7 InsightIDR, Salesforce, Microsoft Sentinel, Splunk, Sumo Logic, Tenable, Trellix Helix, Trend Vision One, and more. **The catalog is now 78 connectors** across EDR, SIEM, cloud, identity, SaaS, network, and email categories. See [Connectors](./connectors/).
 
 ## Connector polling and credential vault
 

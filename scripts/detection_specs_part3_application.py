@@ -204,6 +204,53 @@ API_RULES: list[dict] = [
 
 
 # ---------------------------------------------------------------------------
+# AI / LLM-usage audit rules (Phase D2)
+#
+# The AI/LLM-usage audit connector (services/connectors/app/connectors/
+# llm_usage.py) pulls OpenAI + Anthropic org audit logs and emits events with
+# a top-level ``event_type`` like ``openai.api_key.created`` /
+# ``anthropic.member.added``. These rules turn the high-signal ones into
+# detections — the SaaS-AI governance surface the leading platforms emphasise.
+# ---------------------------------------------------------------------------
+LLM_USAGE_RULES: list[dict] = [
+    S(slug="llm-api-key-created", name="LLM Provider API Key Created",
+      severity="medium", mitre=["t1098"], product="openai", service="audit",
+      when={"event_type_endswith": ".api_key.created"},
+      fp=["Planned key rotation (change ticket)", "New service onboarding"],
+      playbook="tpl-account-compromise"),
+    S(slug="llm-admin-key-created", name="LLM Provider Admin API Key Created",
+      severity="high", mitre=["t1098"], product="openai", service="audit",
+      when={"event_type_endswith": ".api_key.created", "key_scope": "admin"},
+      fp=["Documented break-glass admin key issuance"],
+      playbook="tpl-privilege-escalation"),
+    S(slug="llm-member-added-owner", name="LLM Provider Owner Role Granted",
+      severity="high", mitre=["t1098.003"], product="openai", service="audit",
+      when={"event_type_endswith": ".member.added", "role": "owner"},
+      fp=["Approved org owner change"], playbook="tpl-privilege-escalation"),
+    S(slug="llm-logging-disabled", name="LLM Provider Audit Logging Disabled",
+      severity="critical", mitre=["t1562.008"], product="openai", service="audit",
+      when={"event_type_contains": "logging", "action": "disabled"},
+      fp=["Vendor maintenance window (documented)"], playbook="tpl-defense-evasion"),
+    S(slug="llm-mfa-disabled", name="LLM Provider MFA Requirement Disabled",
+      severity="high", mitre=["t1556"], product="openai", service="audit",
+      when={"event_type_contains": "mfa", "action": "disabled"},
+      fp=["Approved auth-policy change"], playbook="tpl-defense-evasion"),
+    S(slug="llm-anthropic-workspace-created", name="Anthropic Workspace Created",
+      severity="low", mitre=["t1098"], product="anthropic", service="audit",
+      when={"event_type": "anthropic.workspace.created"},
+      fp=["Planned workspace provisioning"], playbook="tpl-triage"),
+    S(slug="llm-service-account-created", name="LLM Provider Service Account Created",
+      severity="medium", mitre=["t1136.003"], product="openai", service="audit",
+      when={"event_type_endswith": ".service_account.created"},
+      fp=["New automation onboarding (change ticket)"], playbook="tpl-persistence"),
+    S(slug="llm-project-deleted", name="LLM Provider Project Deleted",
+      severity="medium", mitre=["t1485"], product="openai", service="audit",
+      when={"event_type_endswith": ".project.archived"},
+      fp=["Planned project decommission"], playbook="tpl-triage"),
+]
+
+
+# ---------------------------------------------------------------------------
 # Aggregate
 # ---------------------------------------------------------------------------
 APPLICATION_EXTRA: list[dict] = (
@@ -211,6 +258,7 @@ APPLICATION_EXTRA: list[dict] = (
     + DEVOPS_RULES
     + SAAS_RULES
     + API_RULES
+    + LLM_USAGE_RULES
 )
 
 
@@ -220,4 +268,5 @@ __all__ = [
     "DEVOPS_RULES",
     "SAAS_RULES",
     "API_RULES",
+    "LLM_USAGE_RULES",
 ]
