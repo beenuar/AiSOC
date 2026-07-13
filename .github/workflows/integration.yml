@@ -111,6 +111,28 @@ jobs:
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py
 
+      # ── Phase A1: the ClickHouse event lake is actually populated ────────
+      # The spine test ingested events; assert they landed in the
+      # `aisoc.raw_events` lake (the writer flushes by size OR age, and the
+      # fusion worker runs a periodic-flush ticker so a low-traffic batch is
+      # never stranded). Queryability (count > 0), not exact-once, is the
+      # claim — MergeTree does not dedup and a Kafka replay may duplicate.
+      - name: Assert events landed in the ClickHouse lake
+        run: |
+          set -euo pipefail
+          ok=""
+          for i in $(seq 1 30); do
+            N="$(docker compose exec -T clickhouse clickhouse-client \
+                  --user aisoc --password clickhouse_dev_secret \
+                  --query 'SELECT count() FROM aisoc.raw_events' 2>/dev/null || echo 0)"
+            echo "lake row count (attempt ${i}): ${N}"
+            if [ "${N:-0}" -gt 0 ]; then ok=1; break; fi
+            sleep 2
+          done
+          [ -n "${ok}" ] \
+            || { echo "::error::ClickHouse lake was never populated from the raw-events stream"; \
+                 docker compose logs --tail=80 --no-color fusion || true; exit 1; }
+
       # ── Chaos: kill the fusion consumer, produce, restart, assert ────────
       # The event is produced while the consumer is down; on restart the
       # consumer group must resume from its committed offset and process it.

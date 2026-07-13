@@ -14,6 +14,7 @@ from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
+from app.services.lake_writer import LakeWriter
 from app.workers.consumer import FusionWorker
 
 
@@ -38,7 +39,21 @@ async def lifespan(app: FastAPI):
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
     # DB never blocks the Kafka pipeline.
     sink = AlertSink(settings.database_url) if settings.alert_sink_enabled else None
-    worker = FusionWorker(engine, sink=sink)
+    # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
+    lake = (
+        LakeWriter(
+            host=settings.clickhouse_host,
+            port=settings.clickhouse_port,
+            database=settings.clickhouse_database,
+            user=settings.clickhouse_user,
+            password=settings.clickhouse_password,
+            batch_size=settings.lake_batch_size,
+            batch_max_age_seconds=settings.lake_batch_max_age_seconds,
+        )
+        if settings.lake_writer_enabled
+        else None
+    )
+    worker = FusionWorker(engine, sink=sink, lake=lake)
     set_worker(worker)
 
     # Start Kafka worker as a background task

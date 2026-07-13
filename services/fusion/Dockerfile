@@ -37,7 +37,8 @@ RUN set -eux; \
             "simhash>=2.1.2,<3" \
             "scikit-learn>=1.4,<2" \
             "lightgbm>=4.3,<5" \
-            "numpy>=1.26,<2" ; \
+            "numpy>=1.26,<2" \
+            "clickhouse-driver>=0.2.6,<0.3" ; \
     fi
 
 COPY app/ ./app/

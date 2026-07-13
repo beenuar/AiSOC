@@ -322,12 +322,20 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      clickhouse:
+        condition: service_started
     ports:
       - "127.0.0.1:8003:8003"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DATABASE: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: clickhouse_dev_secret
     networks:
       - aisoc
     restart: unless-stopped

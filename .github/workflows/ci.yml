@@ -369,7 +369,9 @@ jobs:
         # service boot, no Postgres/Kafka/Redis".
         # asyncpg: required since Phase 3.1 — the fusion AlertSink persists
         # fused alerts to the Postgres alert store.
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg
+        # clickhouse-driver: required since Phase A1 — the fusion LakeWriter
+        # archives normalized events into the ClickHouse event lake.
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage

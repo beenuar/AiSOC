@@ -29,6 +29,19 @@ class Settings(BaseSettings):
     # Postgres alert store (app/services/alert_sink.py). Fail-soft by design.
     alert_sink_enabled: bool = Field(default=True, alias="AISOC_ALERT_SINK_ENABLED")
 
+    # Phase A1 — archive every normalized OCSF event into the ClickHouse event
+    # lake (app/services/lake_writer.py). Independent of promotion: an event
+    # that isn't promoted to an alert must still be queryable via /lake/sql.
+    # Fail-soft; disables itself if clickhouse-driver / the server is absent.
+    lake_writer_enabled: bool = Field(default=True, alias="AISOC_LAKE_WRITER_ENABLED")
+    clickhouse_host: str = Field(default="localhost", alias="CLICKHOUSE_HOST")
+    clickhouse_port: int = Field(default=9000, alias="CLICKHOUSE_PORT")
+    clickhouse_database: str = Field(default="aisoc", alias="CLICKHOUSE_DATABASE")
+    clickhouse_user: str = Field(default="default", alias="CLICKHOUSE_USER")
+    clickhouse_password: str = Field(default="", alias="CLICKHOUSE_PASSWORD")
+    lake_batch_size: int = Field(default=100, alias="AISOC_LAKE_BATCH_SIZE")
+    lake_batch_max_age_seconds: float = Field(default=2.0, alias="AISOC_LAKE_BATCH_MAX_AGE_SECONDS")
+
     # Redis
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
     dedup_window_seconds: int = Field(default=300, alias="DEDUP_WINDOW_SECONDS")
