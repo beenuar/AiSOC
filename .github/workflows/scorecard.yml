@@ -14,6 +14,12 @@ jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
+    # Healthy runs finish in ~40s. Guard against the scorecard binary
+    # occasionally hanging on an upstream API call: without this cap the
+    # job inherits GitHub's 6-hour default and a single stall shows up as
+    # a red/cancelled check on main for hours. Fail fast so it can just be
+    # re-run instead.
+    timeout-minutes: 15
     permissions:
       # Needed to publish results to the public Scorecard API (drives the
       # README badge at https://api.securityscorecards.dev/projects/...).
