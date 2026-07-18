@@ -62,9 +62,19 @@ OPENAI_BASE_URL=http://litellm:4000/v1     # send AiSOC's calls to the gateway
 # OPENAI_API_KEY=${LITELLM_MASTER_KEY}     # (in the AiSOC services' environment)
 ```
 
-Leave `OPENAI_BASE_URL` unset to keep calling the provider directly — the
-gateway then runs idle (still serving `/health` and `/metrics`) and behaviour is
-unchanged.
+AiSOC now requests a task **alias** for every live call, so an alias only
+resolves when it reaches the gateway. If you don't run the gateway, pin each
+role to a concrete provider model instead (the **escape hatch**):
+
+```bash
+AISOC_MODEL_PIN_TRIAGE=gpt-4o-mini
+AISOC_MODEL_PIN_INVESTIGATION=gpt-4o
+# … one per role: triage, recon, investigation, copilot, summary, report, nl
+```
+
+With neither the gateway nor pin overrides configured, AiSOC uses its
+deterministic offline path. (`OPENAI_MODEL` still applies to the separate
+"explain this alert" / BYOK path.)
 
 ## Re-point a task to a local model
 

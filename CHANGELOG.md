@@ -27,6 +27,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `services/agents/tests/test_litellm_config.py`. (A follow-up PR wires the ~10
   in-code callsites to request these aliases via `model_pins` and removes the
   hardcoded `gpt-4o-mini` default, closing #478.)
+- **LLM task-alias routing — no more shipped default model
+  ([#478](https://github.com/beenuar/AiSOC/issues/478), PR2).** Every live LLM
+  call now asks for a **logical task alias** instead of a hardcoded model. New
+  `services/agents/app/llm/factory.py` (`make_chat_model` / `resolve_model_alias`)
+  resolves a task role to its `aisoc-<role>` alias + the gateway base URL;
+  `model_pins.py` now pins all seven roles (triage, recon, investigation, copilot,
+  summary, report, nl) to aliases with a `deterministic` floor. The ~10 scattered
+  `os.getenv("AISOC_LLM_MODEL"/"OPENAI_MODEL","gpt-4o-mini")` + `ChatOpenAI(...)` /
+  raw-HTTP callsites across the agents (auto-triage, cloud/identity/insider/
+  phishing, recon/forensic/responder/report-writer, copilot, contextual, NL
+  translator) and the API endpoints (translation, hunts, knowledge base, phishing;
+  via new `services/api/app/services/model_aliases.py`) now request aliases; the
+  hardcoded `gpt-4o-mini` default is gone. **Behaviour change:** live LLM now runs
+  through the gateway (`OPENAI_BASE_URL`), or pin a concrete model per role via
+  `AISOC_MODEL_PIN_<ROLE>` (escape hatch; the slim demo does this so keyed demos
+  keep working); with neither, the deterministic offline path is used. Tests:
+  `services/agents/tests/test_llm_factory.py` + tightened `test_litellm_config.py`.
+  Closes #478.
 - **v8 P4 — Compounding Memory (verdicts that measurably improve).** New
   `services/fusion/app/memory/`: a nightly-distillable institutional memory that
   makes verdicts more accurate the longer an instance runs. **Distillation**

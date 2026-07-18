@@ -36,13 +36,24 @@ class ModelPin:
         return chain
 
 
-# Shipped pins. Model IDs are the pinned defaults; override via env
-# (AISOC_MODEL_PIN_<ROLE>, e.g. AISOC_MODEL_PIN_TRIAGE). Every chain terminates
-# in `deterministic`.
+# Shipped pins. Since #478 the pinned primary is a **logical gateway alias**
+# (`aisoc-<role>`), not a concrete model — the LiteLLM gateway
+# (`infra/litellm/config.yaml`) owns the alias → real-model mapping and any
+# model-level fallback, so each AiSOC-side chain only needs its `deterministic`
+# floor. One role per AiSOC LLM workload named in #478.
+#
+# Escape hatch for deployments not running the gateway: override any primary via
+# env (`AISOC_MODEL_PIN_<ROLE>`, e.g. `AISOC_MODEL_PIN_TRIAGE=gpt-4o-mini`) to
+# send a concrete provider model directly. Every chain still terminates in
+# `deterministic`.
 _DEFAULT_PINS: dict[str, ModelPin] = {
-    "triage": ModelPin("triage", "gpt-4o-mini", ["gpt-4o", DETERMINISTIC]),
-    "recon": ModelPin("recon", "gpt-4o-mini", ["gpt-4o", DETERMINISTIC]),
-    "summary": ModelPin("summary", "gpt-4o-mini", [DETERMINISTIC]),
+    "triage": ModelPin("triage", "aisoc-triage", [DETERMINISTIC]),
+    "recon": ModelPin("recon", "aisoc-recon", [DETERMINISTIC]),
+    "investigation": ModelPin("investigation", "aisoc-investigation", [DETERMINISTIC]),
+    "copilot": ModelPin("copilot", "aisoc-copilot", [DETERMINISTIC]),
+    "summary": ModelPin("summary", "aisoc-summary", [DETERMINISTIC]),
+    "report": ModelPin("report", "aisoc-report", [DETERMINISTIC]),
+    "nl": ModelPin("nl", "aisoc-nl", [DETERMINISTIC]),
 }
 
 

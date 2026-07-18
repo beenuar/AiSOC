@@ -10,17 +10,16 @@ a confidence-weighted verdict.
 from __future__ import annotations
 
 import json
-import os
 import time
 from typing import Any
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
+from app.llm.factory import make_chat_model
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
@@ -200,8 +199,7 @@ async def run_cloud(
     bundle_lines = bundle.prompt_context_lines() if bundle is not None else []
     prompt_context = base_context + (("\n" + "\n".join(bundle_lines)) if bundle_lines else "")
 
-    model_name = os.getenv("AISOC_LLM_MODEL", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model_name, temperature=0.0, max_tokens=768)
+    llm = make_chat_model("investigation", temperature=0.0, max_tokens=768)
 
     t0 = time.monotonic()
     try:

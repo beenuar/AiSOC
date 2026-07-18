@@ -46,6 +46,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
+from app.llm.factory import resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 logger = structlog.get_logger()
@@ -418,10 +419,10 @@ def _fallback_response(system: str, user: str) -> str:
         "You're seeing a deterministic placeholder response.\n\n"
         "**To enable real contextual answers:**\n\n"
         "1. Set `OPENAI_API_KEY` in your `.env` file\n"
-        "2. Optionally set `OPENAI_MODEL` (default: `gpt-4o-mini`)\n"
+        "2. Point AiSOC at the LiteLLM gateway (`OPENAI_BASE_URL=http://litellm:4000/v1`), "
+        "which maps each task alias to a real model\n"
         "3. Restart the `aisoc-agents` service\n\n"
-        "Refer to [the docs](https://example.com/docs/copilot) for self-hosted "
-        "model alternatives (Ollama, vLLM, Together)."
+        "See the LLM-gateway docs for self-hosted model alternatives (Ollama, vLLM, Together)."
     )
 
 
@@ -445,7 +446,7 @@ async def list_actions() -> ContextualActionsCatalogue:
 async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
     started = time.monotonic()
     system, user = _build_messages(req)
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model = resolve_model_alias("copilot")
 
     fallback = not bool(os.getenv("OPENAI_API_KEY"))
     try:
@@ -503,7 +504,7 @@ async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
 )
 async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
     system, user = _build_messages(req)
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model = resolve_model_alias("copilot")
     title = _TITLES.get((req.page, req.action), f"{req.page} · {req.action}")
     suggestions = _FOLLOW_UPS.get((req.page, req.action), [])
     fallback = not bool(os.getenv("OPENAI_API_KEY"))

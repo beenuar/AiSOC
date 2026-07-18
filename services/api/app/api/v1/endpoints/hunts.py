@@ -38,6 +38,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
     if not api_key:
         return None
     base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
     user_msg = f"HYPOTHESIS: {hypothesis}"
     if mitre:
         user_msg += f"\nMITRE TECHNIQUE: {mitre}"

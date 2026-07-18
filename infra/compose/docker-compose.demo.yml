@@ -191,6 +191,17 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Issue #478 — the slim demo runs without the LiteLLM gateway, so pin every
+      # task role to a concrete provider model (AiSOC calls the provider directly
+      # with OPENAI_API_KEY; deterministic fallback when no key is set). The full
+      # stack (root docker-compose.yml) routes these aliases through the gateway.
+      AISOC_MODEL_PIN_TRIAGE: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_RECON: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_INVESTIGATION: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_COPILOT: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_SUMMARY: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_REPORT: ${OPENAI_MODEL:-gpt-4o-mini}
+      AISOC_MODEL_PIN_NL: ${OPENAI_MODEL:-gpt-4o-mini}
       ENV: development
     networks:
       - aisoc-demo

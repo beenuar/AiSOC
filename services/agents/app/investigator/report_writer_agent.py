@@ -15,10 +15,10 @@ from typing import Any
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.core.cost_telemetry import record_llm_call
 from app.llm import safe_ainvoke
+from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
@@ -158,15 +158,13 @@ def _md_to_html(md: str, case_id: str) -> str:
 
 async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node."""
-    import os
-
     state = InvestigatorState.from_dict(state_dict)
     t0 = time.monotonic()
 
     logger.info("report_writer.start", case_id=state.case_id)
 
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model, temperature=0)
+    model = resolve_model_alias("report")
+    llm = make_chat_model("report", temperature=0)
 
     context = _build_context(state)
     bundle_append = format_bundle_prompt_append(state.context_bundle)

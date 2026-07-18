@@ -885,7 +885,7 @@ async def enhance_with_llm(
     query: NLQuery,
     *,
     api_key: str,
-    model: str = "gpt-4o-mini",
+    model: str | None = None,
     timeout: float = 30.0,
     fallback: TranslatedQuery | None = None,
 ) -> TranslatedQuery:
@@ -903,6 +903,7 @@ async def enhance_with_llm(
         import textwrap
 
         from app.llm.contract import safe_chat_completions_request
+        from app.llm.factory import chat_completions_url, resolve_model_alias
 
         prompt = textwrap.dedent(
             f"""
@@ -922,8 +923,9 @@ async def enhance_with_llm(
 
         payload = await safe_chat_completions_request(
             api_key=api_key,
-            model=model,
+            model=model or resolve_model_alias("nl"),
             messages=messages,
+            url=chat_completions_url(),
             timeout=timeout,
             response_format={"type": "json_object"},
             temperature=0,

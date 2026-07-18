@@ -79,9 +79,7 @@ def test_master_key_comes_from_env():
     assert str(master_key).startswith("os.environ/"), "master_key must be an env reference, not a committed secret"
 
 
-def test_model_pins_roles_have_a_gateway_alias():
-    # Ties the code's logical roles to the gateway. Subset today (model_pins
-    # ships triage/recon/summary); becomes an equality guarantee once PR2 pins
-    # all seven roles.
-    for role in all_roles():
-        assert f"aisoc-{role}" in EXPECTED_ALIASES, f"role '{role}' has no aisoc-{role} gateway alias"
+def test_model_pins_roles_match_gateway_aliases_exactly():
+    # Ties the code's logical roles to the gateway config: every pinned role has
+    # an ``aisoc-<role>`` alias in the config, and vice versa — no drift either way.
+    assert {f"aisoc-{role}" for role in all_roles()} == EXPECTED_ALIASES

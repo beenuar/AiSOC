@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.model_aliases import resolve_model_alias
 from app.services.kb_chunking import chunk_text
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
     if not api_key:
         return None
     base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
     context = "\n\n".join(f"[{c.title}] chunk {c.chunk_index}:\n{c.content}" for c in chunks)
     completions_url = f"{base_url}/chat/completions"
     enforce_airgap_for_url(completions_url)

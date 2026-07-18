@@ -122,6 +122,7 @@ async def _get_openai_reply(
 
     try:
         from app.llm.contract import safe_chat_completions_request
+        from app.llm.factory import chat_completions_url, resolve_model_alias
 
         messages: list[dict[str, str]] = [
             {
@@ -140,8 +141,9 @@ async def _get_openai_reply(
 
         body = await safe_chat_completions_request(
             api_key=api_key,
-            model="gpt-4o-mini",
+            model=resolve_model_alias("copilot"),
             messages=messages,
+            url=chat_completions_url(),
             max_tokens=512,
         )
         return body["choices"][0]["message"]["content"]

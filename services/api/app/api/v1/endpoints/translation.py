@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.model_aliases import resolve_model_alias
 
 router = APIRouter(prefix="/translation", tags=["translation"])
 
@@ -111,7 +112,7 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
     if not api_key:
         return None
     base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
     completions_url = f"{base_url}/chat/completions"
     # Air-gap check: refuses the call entirely (rather than silently
     # falling back to template-substitution) so misconfigurations are

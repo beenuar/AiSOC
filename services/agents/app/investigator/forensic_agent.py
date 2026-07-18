@@ -17,10 +17,10 @@ from typing import Any
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from app.core.cost_telemetry import record_llm_call
 from app.llm import safe_ainvoke
+from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
@@ -54,10 +54,8 @@ Respond ONLY with a JSON object:
 
 
 async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
-    import os
-
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    llm = ChatOpenAI(model=model, temperature=0)
+    model = resolve_model_alias("investigation")
+    llm = make_chat_model("investigation", temperature=0)
 
     # Defence-in-depth: alert_summary, recon.summary, and the enrichment cache
     # can all carry attacker-controlled strings (banners, dark-web excerpts,
