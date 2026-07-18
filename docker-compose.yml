@@ -241,6 +241,10 @@ services:
       SECRET_KEY: dev_secret_key_change_in_production
       ENVIRONMENT: development
       LOG_LEVEL: info
+      # Issue #478 — LiteLLM gateway. Route this service's live LLM endpoints
+      # (translation, hunts, KB, phishing, NL-detection) through the gateway by
+      # setting OPENAI_BASE_URL=http://litellm:4000/v1 + OPENAI_API_KEY=$LITELLM_MASTER_KEY.
+      LLM_GATEWAY_URL: http://litellm:4000/v1
     # Phase 2.6 — use /readyz, not /health, so the orchestrator
     # only routes traffic once the lifespan has finished wiring
     # Postgres, Redis, Kafka, OpenSearch, Qdrant, and Neo4j.
@@ -381,7 +385,50 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Issue #478 — the LiteLLM gateway (below) is the single entry point for
+      # live LLM calls when enabled. To route this service through it, set in
+      # .env: OPENAI_BASE_URL=http://litellm:4000/v1 and
+      # OPENAI_API_KEY=$LITELLM_MASTER_KEY. Left unset, calls go direct to the
+      # provider (unchanged behaviour).
+      LLM_GATEWAY_URL: http://litellm:4000/v1
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── LLM gateway (LiteLLM) — issue #478 ─────────────────────────────────────
+  # Single entry point for every live LLM call. AiSOC requests a logical task
+  # alias (aisoc-triage, aisoc-investigation, …); the mapping alias → real model
+  # lives entirely in infra/litellm/config.yaml, so operators swap local/hosted
+  # models without touching AiSOC. Per-task latency/tokens/cost/errors are
+  # exported on /metrics (scraped as job `aisoc-litellm`). Lightweight and inert
+  # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
+  # `agents` service above.
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: aisoc-litellm
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    volumes:
+      - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
+    environment:
+      # Clients authenticate to the gateway with this key (AiSOC sends it as its
+      # OPENAI_API_KEY when OPENAI_BASE_URL points here). Override in .env.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      # Upstream provider keys the aliases resolve against (os.environ/... in the
+      # config). Empty is fine — the gateway still boots, serves /health and
+      # /metrics, and AiSOC falls back to its deterministic path.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks:
       - aisoc
     restart: unless-stopped

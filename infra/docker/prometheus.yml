@@ -93,6 +93,17 @@ scrape_configs:
       - targets: ['threatintel:8005']
     metrics_path: /metrics
 
+  # LiteLLM gateway (issue #478) — third-party image that exports
+  # per-task LLM latency, tokens, cost, errors, retries and fallbacks
+  # on /metrics via its prometheus callback (see
+  # infra/litellm/config.yaml). Not a service in our `services/` tree,
+  # so it's allowlisted in scripts/audit_prometheus_targets.py under
+  # THIRD_PARTY_HOSTS. Container listens on 4000 inside the network.
+  - job_name: 'aisoc-litellm'
+    static_configs:
+      - targets: ['litellm:4000']
+    metrics_path: /metrics
+
   # Phase 2.4 — self-scrape Alertmanager so we have visibility
   # into the notification pipeline (delivery failures show up as
   # `alertmanager_notifications_failed_total > 0`).

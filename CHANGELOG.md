@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **LLM gateway (LiteLLM) — task-based model routing + observability
+  ([#478](https://github.com/beenuar/AiSOC/issues/478), PR1).** New `litellm`
+  service in `docker-compose.yml` as the single entry point for live LLM calls.
+  AiSOC requests a **logical task alias** (`aisoc-triage`, `aisoc-recon`,
+  `aisoc-investigation`, `aisoc-copilot`, `aisoc-summary`, `aisoc-report`,
+  `aisoc-nl`); the alias → real-model mapping lives entirely in
+  `infra/litellm/config.yaml`, so operators assign different local or hosted
+  models per task — and swap them — without any AiSOC code change (commented
+  Ollama/vLLM/Anthropic examples ship in the config). Per-task latency, tokens,
+  cost, errors, retries, and fallbacks are exported on `/metrics` and scraped by
+  the bundled Prometheus (new `aisoc-litellm` job; the third-party image is
+  allowlisted in `scripts/audit_prometheus_targets.py`). Opt-in and
+  non-breaking: unset `OPENAI_BASE_URL` keeps calls going direct to the provider,
+  and the deterministic offline path is unaffected. Docs:
+  `apps/docs/docs/operations/llm-gateway.md`; config test
+  `services/agents/tests/test_litellm_config.py`. (A follow-up PR wires the ~10
+  in-code callsites to request these aliases via `model_pins` and removes the
+  hardcoded `gpt-4o-mini` default, closing #478.)
 - **v8 P4 — Compounding Memory (verdicts that measurably improve).** New
   `services/fusion/app/memory/`: a nightly-distillable institutional memory that
   makes verdicts more accurate the longer an instance runs. **Distillation**

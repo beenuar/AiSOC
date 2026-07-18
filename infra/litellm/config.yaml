@@ -1,0 +1,113 @@
+# ─── AiSOC LiteLLM gateway config (issue #478) ──────────────────────────────────
+#
+# LiteLLM is the single entry point for every *live* LLM call AiSOC makes. AiSOC
+# asks for a logical **task alias** (the `model_name` values below); this file —
+# and only this file — decides which real provider/model each alias resolves to.
+# Operators re-point a task to a different local or hosted model here, with no
+# AiSOC code change and no redeploy of the app services.
+#
+#   AiSOC task ──▶ alias (e.g. "aisoc-triage") ──▶ LiteLLM ──▶ real model
+#
+# The aliases below mirror AiSOC's distinct LLM workloads. Keep this set in sync
+# with the role pins in services/agents/app/llm/model_pins.py — the agents test
+# `test_litellm_config.py` asserts they match.
+#
+# Every alias resolves its credential from the process env (os.environ/...), so
+# no secret is ever written to this file. Point AiSOC at the gateway by setting
+# (see .env.example):
+#     OPENAI_BASE_URL=http://litellm:4000/v1
+#     OPENAI_API_KEY=$LITELLM_MASTER_KEY
+#
+# Air-gapped / fully-local deployments: swap the commented Ollama/vLLM blocks in
+# for the `openai/*` lines — the alias names stay identical, so AiSOC is unaware
+# of the switch. When no live model is reachable AiSOC still degrades to its
+# deterministic offline path (the `deterministic` floor in model_pins.py).
+
+model_list:
+  # ── Auto-triage: high volume, cheap+fast. ─────────────────────────────────────
+  - model_name: aisoc-triage
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Recon / enrichment reasoning. ─────────────────────────────────────────────
+  - model_name: aisoc-recon
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Deep investigation: the multi-step reasoning path — worth a stronger model.
+  - model_name: aisoc-investigation
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Contextual copilot: interactive analyst Q&A. ──────────────────────────────
+  - model_name: aisoc-copilot
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Summaries: alert/incident condensation. ───────────────────────────────────
+  - model_name: aisoc-summary
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Reports: analyst-facing write-ups — quality over cost. ────────────────────
+  - model_name: aisoc-report
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Natural-language generation: NL→query / NL→detection translation. ─────────
+  - model_name: aisoc-nl
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # ── Local / air-gapped example (Ollama) ───────────────────────────────────────
+  # Duplicate any alias above with a local backend to keep the call on-prem. The
+  # alias name MUST stay the same so AiSOC is unaware of the swap:
+  #
+  # - model_name: aisoc-triage
+  #   litellm_params:
+  #     model: ollama/llama3.1
+  #     api_base: http://ollama:11434
+  #
+  # ── Self-hosted vLLM (OpenAI-compatible) example ──────────────────────────────
+  # - model_name: aisoc-investigation
+  #   litellm_params:
+  #     model: openai/Qwen2.5-32B-Instruct
+  #     api_base: http://vllm:8000/v1
+  #     api_key: os.environ/VLLM_API_KEY
+  #
+  # ── Anthropic example ─────────────────────────────────────────────────────────
+  # - model_name: aisoc-report
+  #   litellm_params:
+  #     model: anthropic/claude-3-5-sonnet-latest
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+
+# ── Gateway behaviour ─────────────────────────────────────────────────────────
+litellm_settings:
+  # Silently drop provider-specific params a given backend doesn't support, so
+  # the same AiSOC request body works across OpenAI / Ollama / vLLM / Anthropic.
+  drop_params: true
+  # Per-request latency, tokens, cost, errors, retries and fallbacks are exported
+  # on GET /metrics for Prometheus (scraped as job `aisoc-litellm`). This is the
+  # centralized observability layer that complements the Investigation Ledger.
+  callbacks: ["prometheus"]
+  # Prometheus scrapes /metrics with no Authorization header; LiteLLM otherwise
+  # requires auth on that endpoint (and the auth path needs the DB layer). Allow
+  # unauthenticated scrapes so the `aisoc-litellm` job actually collects. The
+  # port is bound to 127.0.0.1 in compose, so /metrics isn't publicly exposed.
+  require_auth_for_metrics_endpoint: false
+  # Never wait forever on a stalled provider — fall through to AiSOC's own
+  # deterministic path instead of hanging the alert drawer.
+  request_timeout: 60
+
+general_settings:
+  # Clients (the AiSOC services) authenticate to the gateway with this key. Set
+  # it in the environment; AiSOC sends it as its OPENAI_API_KEY when
+  # OPENAI_BASE_URL points here. Never commit a real key.
+  master_key: os.environ/LITELLM_MASTER_KEY

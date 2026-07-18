@@ -75,6 +75,11 @@ HOSTNAME_TO_SVC_DIR = {
 # stack.
 THIRD_PARTY_HOSTS: set[str] = {
     "alertmanager",
+    # Issue #478 — LiteLLM gateway. A third-party image (berriai/litellm)
+    # that exports per-task LLM latency/tokens/cost/errors on /metrics via
+    # its prometheus callback. No source lives under services/, so the
+    # "does the service tree expose /metrics" check does not apply.
+    "litellm",
 }
 
 # Services we are intentionally NOT scraping even though they CAN
