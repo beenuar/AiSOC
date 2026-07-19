@@ -57,6 +57,10 @@ def test_demo_bootstrap_disposes_pool_on_connection_errors():
     assert "await engine.dispose()" in src
     assert "async def _wake_demo_postgres" in src
     assert 'isolation_level="AUTOCOMMIT"' in src
+    # AsyncConnection.execution_options is a coroutine — must await before
+    # run_sync (chaining without await → AttributeError on 'coroutine').
+    assert "await conn.execution_options(" in src
+    assert "await conn.run_sync(Base.metadata.create_all)" in src
     # Every failure path in the bootstrap must call the invalidator.
     for stage in ("probe:", "create_all:", "migrate:", "seed:", "wake:"):
         assert stage in src, f"bootstrap must tag failures as {stage!r}"

@@ -193,17 +193,22 @@ async def _demo_self_heal_bootstrap() -> None:
             logger.info("demo bootstrap: schema not ready (attempt %d/40): %s", attempt, type(exc).__name__)
             await _invalidate_stale_db_pool(f"probe:{type(exc).__name__}")
 
-        # ── Step A: create missing ORM tables (AUTOCOMMIT — not one giant txn)
+        # ── Step A: create missing ORM tables (AUTOCOMMIT — not one giant txn).
+        # SQLAlchemy's AsyncConnection.execution_options is a coroutine; it must
+        # be awaited before calling run_sync (chaining without await raises
+        # AttributeError: 'coroutine' object has no attribute 'run_sync').
         try:
             async with engine.connect() as conn:
-                await conn.execution_options(isolation_level="AUTOCOMMIT").run_sync(Base.metadata.create_all)
+                conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+                await conn.run_sync(Base.metadata.create_all)
             _DEMO_BOOTSTRAP_STATUS["table_present"] = True
         except Exception as exc:  # noqa: BLE001 — Postgres likely still waking
             _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"create_all:{type(exc).__name__}"
             logger.info(
-                "demo bootstrap: create_all deferred (attempt %d/40): %s",
+                "demo bootstrap: create_all deferred (attempt %d/40): %s (%s)",
                 attempt,
                 type(exc).__name__,
+                str(exc)[:200],
             )
             await _invalidate_stale_db_pool(f"create_all:{type(exc).__name__}")
             await asyncio.sleep(15)
