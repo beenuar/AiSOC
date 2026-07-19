@@ -246,9 +246,7 @@ async def _demo_self_heal_bootstrap() -> None:
         # canonical replay — only mark done when the slug is actually present.
         try:
             async with AsyncSessionLocal() as session:
-                seeded = await session.scalar(
-                    select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG)
-                )
+                seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
             if seeded:
                 _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
                 logger.info("demo bootstrap: create_all + seed pass complete (attempt %d)", attempt)

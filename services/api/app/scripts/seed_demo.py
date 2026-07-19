@@ -2081,12 +2081,14 @@ async def _seed_in_flight_investigation(session, tenant: Tenant) -> int:
         # was never created (table missing during an earlier Postgres outage).
         # Still ensure the canonical /r/demo-lockbit row lands.
         events = (
-            await session.execute(
-                select(InvestigationEvent)
-                .where(InvestigationEvent.run_id == existing_run.id)
-                .order_by(InvestigationEvent.seq.asc())
+            (
+                await session.execute(
+                    select(InvestigationEvent).where(InvestigationEvent.run_id == existing_run.id).order_by(InvestigationEvent.seq.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         await _seed_published_replay(session, tenant, existing_run, list(events))
         return 0
 
