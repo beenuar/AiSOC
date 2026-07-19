@@ -146,9 +146,7 @@ async def _demo_self_heal_bootstrap() -> None:
             async with AsyncSessionLocal() as session:
                 await session.execute(text("SELECT 1"))  # wake / confirm connectivity
                 _DEMO_BOOTSTRAP_STATUS["reachable"] = True
-                seeded = await session.scalar(
-                    select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG)
-                )
+                seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
                 _DEMO_BOOTSTRAP_STATUS["table_present"] = True
             if seeded:
                 _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
