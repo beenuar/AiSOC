@@ -68,6 +68,12 @@ def _normalize_async_pg_url(url: str) -> tuple[str, dict[str, Any]]:
 
 _normalized_url, _connect_args = _normalize_async_pg_url(str(settings.DATABASE_URL))
 
+# Bound how long asyncpg waits for a single statement. Fly's proxy can hang
+# a cold-start connect for a long time; failing fast lets the demo wake loop
+# retry instead of blocking a worker for minutes.
+_connect_args.setdefault("timeout", 15)
+_connect_args.setdefault("command_timeout", 60)
+
 # pool_pre_ping + pool_recycle are required for Fly Postgres (and any
 # managed Postgres that autostops / idle-closes). Without pre_ping the
 # pool hands out sockets that the server already closed, and asyncpg

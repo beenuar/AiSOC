@@ -102,6 +102,41 @@ async def _invalidate_stale_db_pool(reason: str) -> None:
         )
 
 
+async def _wake_demo_postgres(*, attempts: int = 15) -> bool:
+    """Hammer ``SELECT 1`` until Fly Postgres finishes autostart, or give up.
+
+    Autostart is triggered by the first TCP connect, but the handshake often
+    dies mid-flight (``ConnectionDoesNotExistError``) for several seconds
+    while the VM boots. A single probe + 45s sleep was too slow and left the
+    demo 500ing for minutes after every deploy. Dispose between attempts so
+    we never retry on a socket the proxy already tore down.
+    """
+    from sqlalchemy import text  # noqa: PLC0415
+
+    for wake_attempt in range(1, attempts + 1):
+        try:
+            await _invalidate_stale_db_pool(f"wake-prep:{wake_attempt}")
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+                await conn.commit()
+            _DEMO_BOOTSTRAP_STATUS["reachable"] = True
+            logger.info("demo bootstrap: Postgres awake (wake attempt %d)", wake_attempt)
+            return True
+        except Exception as exc:  # noqa: BLE001 — cold-start races are expected
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"wake:{type(exc).__name__}"
+            # Front-load: 1s, 2s, 3s… capped at 8s so we burn ~1 min max here.
+            delay = min(wake_attempt, 8)
+            logger.info(
+                "demo bootstrap: wake attempt %d/%d failed (%s); retry in %ds",
+                wake_attempt,
+                attempts,
+                type(exc).__name__,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    return False
+
+
 async def _demo_self_heal_bootstrap() -> None:
     """Best-effort schema + seed bootstrap for the hosted demo, run in the background.
 
@@ -121,7 +156,7 @@ async def _demo_self_heal_bootstrap() -> None:
     Each failed attempt disposes the SQLAlchemy pool so the next tick does not
     reuse a socket the server already closed (``ConnectionDoesNotExistError``).
     """
-    from sqlalchemy import select, text  # noqa: PLC0415
+    from sqlalchemy import select  # noqa: PLC0415
 
     from app.db.database import AsyncSessionLocal  # noqa: PLC0415
     from app.models.published_replay import PublishedReplay  # noqa: PLC0415
@@ -132,35 +167,36 @@ async def _demo_self_heal_bootstrap() -> None:
     # Give readiness a moment to flip before we start touching the DB.
     await asyncio.sleep(5)
 
-    # The demo's Fly Postgres autostops; the deploy-time release_command VM can't
-    # reach it, and even the API VM can only reach it once ingress traffic (a
-    # visitor, health probe, or our own connect) has triggered autostart — which
-    # can land at any time and race a fixed startup window. So retry the whole
-    # ensure-created-and-seeded operation periodically until it lands. Each pass
-    # is cheap once the schema is present (the presence check short-circuits), so
-    # routine deploys (table + row already there) exit on the first attempt with
-    # no seed; only the broken state (missing table) triggers create + seed.
-    for attempt in range(1, 41):  # ~30 min at a 45s cadence
+    # Front-load a rapid wake burst — Fly Postgres autostart often needs a
+    # dozen short-lived connects before the handshake sticks.
+    await _wake_demo_postgres(attempts=15)
+
+    # Retry until schema + seed land. Each pass is cheap once the canonical
+    # replay row is present (presence check short-circuits).
+    for attempt in range(1, 41):  # ~30 min outer budget
         _DEMO_BOOTSTRAP_STATUS["attempts"] = attempt
+
+        if not await _wake_demo_postgres(attempts=8):
+            await asyncio.sleep(15)
+            continue
+
         try:
             async with AsyncSessionLocal() as session:
-                await session.execute(text("SELECT 1"))  # wake / confirm connectivity
-                _DEMO_BOOTSTRAP_STATUS["reachable"] = True
                 seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
                 _DEMO_BOOTSTRAP_STATUS["table_present"] = True
             if seeded:
                 _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
                 logger.info("demo bootstrap: canonical replay present — done (attempt %d)", attempt)
                 return
-        except Exception as exc:  # noqa: BLE001 — table-missing or DB-unreachable; create below
+        except Exception as exc:  # noqa: BLE001 — table-missing; create below
             _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"probe:{type(exc).__name__}"
             logger.info("demo bootstrap: schema not ready (attempt %d/40): %s", attempt, type(exc).__name__)
             await _invalidate_stale_db_pool(f"probe:{type(exc).__name__}")
 
-        # ── Step A: create missing ORM tables via the engine ─────────────────
+        # ── Step A: create missing ORM tables (AUTOCOMMIT — not one giant txn)
         try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+            async with engine.connect() as conn:
+                await conn.execution_options(isolation_level="AUTOCOMMIT").run_sync(Base.metadata.create_all)
             _DEMO_BOOTSTRAP_STATUS["table_present"] = True
         except Exception as exc:  # noqa: BLE001 — Postgres likely still waking
             _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"create_all:{type(exc).__name__}"
@@ -170,11 +206,10 @@ async def _demo_self_heal_bootstrap() -> None:
                 type(exc).__name__,
             )
             await _invalidate_stale_db_pool(f"create_all:{type(exc).__name__}")
-            await asyncio.sleep(45)
+            await asyncio.sleep(15)
             continue
 
-        # ── Step B: apply pending SQL migrations (fills columns create_all
-        #    cannot add to existing tables — e.g. 046 detection_rules drift).
+        # ── Step B: apply pending SQL migrations (columns create_all can't add)
         try:
             from app.scripts.run_migrations import main as run_sql_migrations  # noqa: PLC0415
 
@@ -187,7 +222,6 @@ async def _demo_self_heal_bootstrap() -> None:
                 type(exc).__name__,
             )
             await _invalidate_stale_db_pool(f"migrate:{type(exc).__name__}")
-            # Don't continue — still try the seed; create_all may be enough.
 
         # ── Step C: idempotent full seed ─────────────────────────────────────
         try:
@@ -204,7 +238,7 @@ async def _demo_self_heal_bootstrap() -> None:
             )
             await _invalidate_stale_db_pool(f"seed:{type(exc).__name__}")
 
-        await asyncio.sleep(45)
+        await asyncio.sleep(30)
 
     logger.warning("demo bootstrap: gave up after 40 attempts (~30 min)")
 

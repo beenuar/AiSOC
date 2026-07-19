@@ -55,7 +55,9 @@ def test_demo_bootstrap_disposes_pool_on_connection_errors():
     src = _MAIN_PY.read_text(encoding="utf-8")
     assert "async def _invalidate_stale_db_pool" in src
     assert "await engine.dispose()" in src
+    assert "async def _wake_demo_postgres" in src
+    assert 'isolation_level="AUTOCOMMIT"' in src
     # Every failure path in the bootstrap must call the invalidator.
-    for stage in ("probe:", "create_all:", "migrate:", "seed:"):
+    for stage in ("probe:", "create_all:", "migrate:", "seed:", "wake:"):
         assert stage in src, f"bootstrap must tag failures as {stage!r}"
     assert src.count("await _invalidate_stale_db_pool(") >= 3
