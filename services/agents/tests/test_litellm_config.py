@@ -17,7 +17,6 @@ from __future__ import annotations
 import pathlib
 
 import yaml
-
 from app.llm.model_pins import all_roles
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
