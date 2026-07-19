@@ -42,6 +42,11 @@ _ALWAYS_ALLOWED_PREFIXES: tuple[str, ...] = (
     "/api/openapi.json",
     "/api/v1/auth/",
     "/api/v1/dev-auth",
+    # Managed-instance waitlist lives on tryaisoc.com itself — blocking the
+    # POST under demo mode made the public conversion funnel 403 for every
+    # visitor (QA 2026-07-19). Waitlist rows are a separate table from the
+    # demo SOC dataset, so writes here do not corrupt the shared demo.
+    "/api/v1/waitlist/",
     "/saml/",
     "/oidc/",
 )

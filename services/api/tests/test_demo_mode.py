@@ -62,6 +62,10 @@ def app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     def login() -> dict[str, Any]:
         return {"token": "fake"}
 
+    @app.post("/api/v1/waitlist/signup")
+    def waitlist_signup() -> dict[str, Any]:
+        return {"ok": True}
+
     return app
 
 
@@ -168,6 +172,30 @@ def test_auth_login_is_allowed(app: FastAPI) -> None:
     r = client.post("/api/v1/auth/login", json={"username": "demo", "password": "demo"})
     assert r.status_code == 200
     assert r.json() == {"token": "fake"}
+
+
+def test_waitlist_signup_is_allowed(app: FastAPI) -> None:
+    """Managed-instance waitlist must accept signups on the public demo host.
+
+    ``/waitlist`` is the conversion funnel for tryaisoc.com. Demo-mode must
+    not 403 the POST — waitlist rows are not part of the shared demo SOC
+    dataset, so allowing the write does not let visitors mutate the canned
+    alerts/cases every other visitor sees.
+    """
+    client = TestClient(app)
+    r = client.post(
+        "/api/v1/waitlist/signup",
+        json={
+            "email": "champ@acme.com",
+            "company": "Acme",
+            "role": "SOC Manager",
+            "soc_stack": ["Splunk"],
+            "motivation": "Alert volume is drowning the team.",
+        },
+    )
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    assert r.headers["X-AiSOC-Demo"] == "true"
 
 
 def test_options_preflight_is_allowed(app: FastAPI) -> None:
