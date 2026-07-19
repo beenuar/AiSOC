@@ -83,14 +83,18 @@ def _lineage_columns(table: str) -> set[str]:
         re.IGNORECASE | re.DOTALL,
     )
     alter_re = re.compile(rf"ALTER TABLE\s+(?:ONLY\s+)?{table}\b", re.IGNORECASE)
-    add_col_re = re.compile(
-        r"ADD COLUMN(?:\s+IF NOT EXISTS)?\s+(\w+)", re.IGNORECASE
-    )
+    add_col_re = re.compile(r"ADD COLUMN(?:\s+IF NOT EXISTS)?\s+(\w+)", re.IGNORECASE)
     # A column definition line inside CREATE TABLE: leading identifier that is
     # not a table-level constraint keyword.
     coldef_re = re.compile(r"^\s*(\w+)\s", re.MULTILINE)
     _skip = {
-        "constraint", "primary", "foreign", "unique", "check", "like", "exclude",
+        "constraint",
+        "primary",
+        "foreign",
+        "unique",
+        "check",
+        "like",
+        "exclude",
     }
 
     for sql_file in sorted(_MIGRATIONS.glob("*.sql")):
@@ -126,10 +130,7 @@ def test_migration_046_exists_and_is_transactional():
 
 def test_migration_046_adds_expected_columns_idempotently():
     sql = MIGRATION_046.read_text(encoding="utf-8")
-    added = {
-        c.lower()
-        for c in re.findall(r"ADD COLUMN\s+IF NOT EXISTS\s+(\w+)", sql, re.IGNORECASE)
-    }
+    added = {c.lower() for c in re.findall(r"ADD COLUMN\s+IF NOT EXISTS\s+(\w+)", sql, re.IGNORECASE)}
     missing = (_EXPECTED_046_DETECTION_COLUMNS | _EXPECTED_046_CASE_COLUMNS) - added
     assert not missing, f"046 does not add (IF NOT EXISTS): {sorted(missing)}"
 
@@ -152,8 +153,7 @@ def test_detection_rules_lineage_covers_model():
     lineage_cols = _lineage_columns("detection_rules")
     missing = model_cols - lineage_cols
     assert not missing, (
-        "detection_rules migration lineage is missing model columns "
-        f"{sorted(missing)} — a reconciling migration is required (see #492)"
+        "detection_rules migration lineage is missing model columns " f"{sorted(missing)} — a reconciling migration is required (see #492)"
     )
 
 
@@ -162,6 +162,5 @@ def test_cases_lineage_covers_model():
     lineage_cols = _lineage_columns("cases")
     missing = model_cols - lineage_cols
     assert not missing, (
-        "cases migration lineage is missing model columns "
-        f"{sorted(missing)} — a reconciling migration is required (see #492)"
+        "cases migration lineage is missing model columns " f"{sorted(missing)} — a reconciling migration is required (see #492)"
     )
