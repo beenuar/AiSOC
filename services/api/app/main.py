@@ -231,9 +231,6 @@ async def _demo_self_heal_bootstrap() -> None:
         # ── Step C: idempotent full seed ─────────────────────────────────────
         try:
             await _run_full_seed()
-            _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
-            logger.info("demo bootstrap: create_all + seed pass complete (attempt %d)", attempt)
-            return
         except Exception as exc:  # noqa: BLE001 — Postgres likely still waking; retry next tick
             _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"seed:{type(exc).__name__}"
             logger.info(
@@ -242,6 +239,29 @@ async def _demo_self_heal_bootstrap() -> None:
                 type(exc).__name__,
             )
             await _invalidate_stale_db_pool(f"seed:{type(exc).__name__}")
+            await asyncio.sleep(30)
+            continue
+
+        # Seed may short-circuit on existing cases without creating the
+        # canonical replay — only mark done when the slug is actually present.
+        try:
+            async with AsyncSessionLocal() as session:
+                seeded = await session.scalar(
+                    select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG)
+                )
+            if seeded:
+                _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
+                logger.info("demo bootstrap: create_all + seed pass complete (attempt %d)", attempt)
+                return
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = "seed:canonical_replay_missing"
+            logger.info(
+                "demo bootstrap: seed ran but %s still missing (attempt %d/40)",
+                CANONICAL_REPLAY_SLUG,
+                attempt,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"seed-verify:{type(exc).__name__}"
+            await _invalidate_stale_db_pool(f"seed-verify:{type(exc).__name__}")
 
         await asyncio.sleep(30)
 
