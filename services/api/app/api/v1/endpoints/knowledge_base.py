@@ -28,8 +28,8 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
-from app.services.model_aliases import resolve_model_alias
 from app.services.kb_chunking import chunk_text
+from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
 

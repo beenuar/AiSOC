@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.llm.factory import (
     chat_completions_url,
     make_chat_model,
