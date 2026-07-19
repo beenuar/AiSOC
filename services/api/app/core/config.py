@@ -268,6 +268,11 @@ class Settings(BaseSettings):
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc_dev_secret@localhost:5432/aisoc"  # type: ignore[assignment]
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
+    # Recycle pooled connections before managed Postgres idle-closes them.
+    # Fly Postgres autostop + idle TCP teardown made stale pool entries the
+    # dominant source of ``ConnectionDoesNotExistError`` 500s on the hosted
+    # demo; 300s is well under typical idle timeouts while keeping churn low.
+    DATABASE_POOL_RECYCLE_SECONDS: int = 300
 
     # Redis
     REDIS_URL: RedisDsn = "redis://localhost:6379/0"  # type: ignore[assignment]

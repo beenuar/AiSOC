@@ -82,6 +82,26 @@ _DEMO_BOOTSTRAP_STATUS: dict[str, object] = {
 }
 
 
+async def _invalidate_stale_db_pool(reason: str) -> None:
+    """Drop every pooled connection after a mid-flight disconnect.
+
+    Fly Postgres autostop (and idle TCP teardown) closes the server side of a
+    pooled socket without the client noticing. The next checkout then raises
+    ``ConnectionDoesNotExistError``. Disposing the pool forces fresh connects
+    on the next attempt — critical for the hosted demo where this was the
+    dominant cause of out-of-the-box 500s.
+    """
+    try:
+        await engine.dispose()
+        logger.info("demo bootstrap: disposed DB pool after %s", reason)
+    except Exception as dispose_exc:  # noqa: BLE001 — best-effort; next attempt still retries
+        logger.warning(
+            "demo bootstrap: engine.dispose failed after %s: %s",
+            reason,
+            type(dispose_exc).__name__,
+        )
+
+
 async def _demo_self_heal_bootstrap() -> None:
     """Best-effort schema + seed bootstrap for the hosted demo, run in the background.
 
@@ -93,10 +113,13 @@ async def _demo_self_heal_bootstrap() -> None:
     bare ``asyncpg`` connect (what ``run_migrations`` uses) is unreliable here,
     which is why the release_command never applied 045. So we do everything
     through the engine: periodically create any missing ORM tables (``checkfirst``
-    skips existing ones) and, when the canonical replay is absent, run the
-    idempotent demo seed — retrying for a while so it lands whenever Postgres
-    becomes reachable. Detached from boot so it never blocks readiness; every
-    failure is logged and swallowed.
+    skips existing ones), apply pending SQL migrations, and, when the canonical
+    replay is absent, run the idempotent demo seed — retrying for a while so it
+    lands whenever Postgres becomes reachable. Detached from boot so it never
+    blocks readiness; every failure is logged and swallowed.
+
+    Each failed attempt disposes the SQLAlchemy pool so the next tick does not
+    reuse a socket the server already closed (``ConnectionDoesNotExistError``).
     """
     from sqlalchemy import select, text  # noqa: PLC0415
 
@@ -123,7 +146,9 @@ async def _demo_self_heal_bootstrap() -> None:
             async with AsyncSessionLocal() as session:
                 await session.execute(text("SELECT 1"))  # wake / confirm connectivity
                 _DEMO_BOOTSTRAP_STATUS["reachable"] = True
-                seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
+                seeded = await session.scalar(
+                    select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG)
+                )
                 _DEMO_BOOTSTRAP_STATUS["table_present"] = True
             if seeded:
                 _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
@@ -132,23 +157,54 @@ async def _demo_self_heal_bootstrap() -> None:
         except Exception as exc:  # noqa: BLE001 — table-missing or DB-unreachable; create below
             _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"probe:{type(exc).__name__}"
             logger.info("demo bootstrap: schema not ready (attempt %d/40): %s", attempt, type(exc).__name__)
+            await _invalidate_stale_db_pool(f"probe:{type(exc).__name__}")
 
+        # ── Step A: create missing ORM tables via the engine ─────────────────
         try:
-            # Create any missing ORM tables (incl. published_replays) via the
-            # ENGINE — the path that reliably reaches the demo's Fly Postgres.
-            # checkfirst (create_all default) skips existing tables, so this only
-            # fills the gap the soft-failed migration left. Then seed the
-            # canonical replay + demo data through the same engine-backed session.
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             _DEMO_BOOTSTRAP_STATUS["table_present"] = True
+        except Exception as exc:  # noqa: BLE001 — Postgres likely still waking
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"create_all:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: create_all deferred (attempt %d/40): %s",
+                attempt,
+                type(exc).__name__,
+            )
+            await _invalidate_stale_db_pool(f"create_all:{type(exc).__name__}")
+            await asyncio.sleep(45)
+            continue
+
+        # ── Step B: apply pending SQL migrations (fills columns create_all
+        #    cannot add to existing tables — e.g. 046 detection_rules drift).
+        try:
+            from app.scripts.run_migrations import main as run_sql_migrations  # noqa: PLC0415
+
+            await run_sql_migrations()
+        except Exception as exc:  # noqa: BLE001 — soft-fail; seed may still work via ORM
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"migrate:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: SQL migrations deferred (attempt %d/40): %s",
+                attempt,
+                type(exc).__name__,
+            )
+            await _invalidate_stale_db_pool(f"migrate:{type(exc).__name__}")
+            # Don't continue — still try the seed; create_all may be enough.
+
+        # ── Step C: idempotent full seed ─────────────────────────────────────
+        try:
             await _run_full_seed()
             _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
             logger.info("demo bootstrap: create_all + seed pass complete (attempt %d)", attempt)
             return
         except Exception as exc:  # noqa: BLE001 — Postgres likely still waking; retry next tick
-            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"create_seed:{type(exc).__name__}"
-            logger.info("demo bootstrap: create_all+seed deferred (attempt %d/40): %s", attempt, type(exc).__name__)
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"seed:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: seed deferred (attempt %d/40): %s",
+                attempt,
+                type(exc).__name__,
+            )
+            await _invalidate_stale_db_pool(f"seed:{type(exc).__name__}")
 
         await asyncio.sleep(45)
 

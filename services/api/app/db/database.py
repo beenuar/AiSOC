@@ -68,10 +68,18 @@ def _normalize_async_pg_url(url: str) -> tuple[str, dict[str, Any]]:
 
 _normalized_url, _connect_args = _normalize_async_pg_url(str(settings.DATABASE_URL))
 
+# pool_pre_ping + pool_recycle are required for Fly Postgres (and any
+# managed Postgres that autostops / idle-closes). Without pre_ping the
+# pool hands out sockets that the server already closed, and asyncpg
+# surfaces that as ``ConnectionDoesNotExistError`` on the next query —
+# which is exactly what was 500ing every demo endpoint on tryaisoc.com
+# (auth/login, metrics/*, alerts/*, …) while /health still looked fine.
 engine = create_async_engine(
     _normalized_url,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=settings.DATABASE_POOL_RECYCLE_SECONDS,
     echo=settings.DEBUG,
     future=True,
     connect_args=_connect_args,
