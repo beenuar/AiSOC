@@ -269,6 +269,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+
+- **Hosted demo API 500s from stale Postgres pool + broken waitlist funnel (QA 2026-07-19).**
+  Live `/health` showed `demo_bootstrap.last_error_type=create_seed:ConnectionDoesNotExistError`
+  after 22 attempts — Fly Postgres autostop closed pooled sockets and every
+  subsequent checkout 500ed (`/api/v1/auth/login`, `/metrics/*`, `/alerts/*`,
+  `/cases` → 503). Fixes: (1) `pool_pre_ping=True` + `pool_recycle=300` on the
+  SQLAlchemy engine; (2) demo self-heal bootstrap now disposes the pool after
+  every disconnect, splits create_all / SQL migrations / seed into separate
+  steps, and surfaces stage-tagged errors on `/health`; (3) demo-mode middleware
+  allowlists `POST /api/v1/waitlist/signup` so the managed-instance conversion
+  funnel on tryaisoc.com is no longer 403ed for every visitor.
+
+
 - **Out-of-the-box 500 from schema drift on migration-bootstrapped installs (#492).**
   `docker-compose.yml` mounts `services/api/migrations` into
   `/docker-entrypoint-initdb.d`, so a fresh compose stack builds Postgres from
