@@ -233,6 +233,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Out-of-the-box 500 from schema drift on migration-bootstrapped installs (#492).**
+  `docker-compose.yml` mounts `services/api/migrations` into
+  `/docker-entrypoint-initdb.d`, so a fresh compose stack builds Postgres from
+  the `001_init.sql` lineage — which created `detection_rules` in its
+  pre-refactor shape (`rule_type`/`rule_content`/`hit_count`/`last_hit_at`) and
+  `cases` without `resolution`/`lessons_learned`. The current `DetectionRule`
+  and `Case` models query the refactored columns, so every default install
+  served `UndefinedColumnError` 500s (e.g. `GET /api/v1/detection/tuning`) and
+  `seed_demo` failed on `cases.resolution`. New
+  `services/api/migrations/046_detection_rules_cases_schema_drift_fix.sql`
+  reconciles both tables with the models — additive, fully idempotent
+  (`ADD COLUMN IF NOT EXISTS`), and dual-lineage safe (the `create_all` path is
+  a no-op; the legacy path backfills `rule_body`/`rule_language` from the old
+  columns and drops the stale `rule_content NOT NULL` under an
+  `information_schema` guard so ORM inserts succeed). New
+  `services/api/tests/test_schema_drift_046.py` pins the fix and adds a forward
+  guard asserting the migration lineage covers every column both models declare.
 - **Phase 3.1 gates caught two latent bugs before merge** (exactly what the real-container tier is for — both would have shipped invisibly under the previous mock-only CI). (1) **`scripts/restore.sh` never restored anything.** `resolve_timestamp()` ended in a `[[ -z "$TIMESTAMP" ]] && { … }` guard that evaluates *false* once a timestamp is resolved; as the function's last command that non-zero status propagated out and, under `set -e`, aborted the script before the restore began — for **both** `--latest` and `--timestamp`. An untested backup script had been broken the whole time. Converted the guard to an explicit `if` + `return 0`; the backup → destroy → restore gate now restores 500/500 rows with a measured RTO. (2) **`services/fusion` `AlertSink` silently failed to persist every alert.** The dedup fingerprint (`$10`) was used untyped in both the `INSERT … SELECT` target (the `dedup_hash VARCHAR(64)` column) and `WHERE dedup_hash = $10` (varchar comparisons resolve through `text` operators), so asyncpg's prepare raised `inconsistent types deduced for parameter $10: text versus character varying` and the insert threw — the fused alert streamed over Kafka/WebSocket but never reached the alert store, so the spine's `GET /api/v1/alerts` assertion timed out. Pinned both uses to `::text`; the real-container spine gate now observes the alert row end to end.
 
 ### Security
