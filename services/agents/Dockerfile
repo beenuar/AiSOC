@@ -49,7 +49,8 @@ RUN set -eux; \
             "asyncpg>=0.29,<0.30" \
             "sqlalchemy[asyncio]>=2.0.25,<3" \
             "apscheduler>=3.10.4,<4" \
-            "pyyaml>=6.0.1,<7" ; \
+            "pyyaml>=6.0.1,<7" \
+            "cryptography>=46,<50" ; \
     fi
 
 # Smoke-import the modules the orchestrator pulls in at module load time.
@@ -57,9 +58,13 @@ RUN set -eux; \
 # Also assert that the langgraph version on disk exposes the ``START``
 # sentinel — langgraph 0.0.x silently lacked it, which previously crashed the
 # agents service at boot with ``ImportError: cannot import name 'START'``.
-RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml; from langgraph.graph import END, START, StateGraph"
+RUN python -c "import opentelemetry, langgraph, fastapi, sqlalchemy, asyncpg, redis, httpx, structlog, apscheduler, yaml, _cffi_backend; from cryptography.fernet import Fernet; from langgraph.graph import END, START, StateGraph"
 
 COPY app/ ./app/
+
+# Import the application module that first exposed the missing direct
+# dependency. Keep this after COPY so the build validates the real import path.
+RUN python -c "from app.security.credential_vault import CredentialVault"
 
 EXPOSE 8084
 

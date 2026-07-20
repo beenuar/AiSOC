@@ -36,6 +36,9 @@ asyncpg = ">=0.29,<0.32"
 sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
 apscheduler = "^3.10.4"
 pyyaml = "^6.0.1"
+# Imported by app.security.credential_vault. This must be a direct runtime
+# dependency rather than an accidental dependency of Poetry itself.
+cryptography = ">=46,<50"
 # jsonschema is consumed by the NL → playbook drafter (T3.7) to validate
 # every drafted playbook against schemas/playbook.schema.json before the
 # editor loads it, and by scripts/lint_playbooks.py. Pinned to the
