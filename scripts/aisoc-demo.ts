@@ -255,6 +255,23 @@ function runStream(cmd: string, args: string[], env: NodeJS.ProcessEnv = {}): nu
   return result.status ?? 1;
 }
 
+function runCaptured(
+  cmd: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = {}
+): { code: number; output: string } {
+  const result = spawnSync(cmd, args, {
+    encoding: "utf8",
+    cwd: ROOT,
+    env: { ...process.env, ...env },
+  });
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  process.stdout.write(stdout);
+  process.stderr.write(stderr);
+  return { code: result.status ?? 1, output: `${stdout}\n${stderr}` };
+}
+
 async function probePort(host: string, port: number, timeoutMs = 1500): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = createConnection({ host, port });
@@ -291,6 +308,7 @@ async function probePort(host: string, port: number, timeoutMs = 1500): Promise<
 interface PortMap {
   web: number;
   api: number;
+  agents: number;
   realtime: number;
   postgres: number;
   redis: number;
@@ -300,6 +318,7 @@ interface PortMap {
 const DEFAULT_PORTS: PortMap = {
   web: 3000,
   api: 8000,
+  agents: 8001,
   realtime: 8086,
   postgres: 5432,
   redis: 6379,
@@ -340,7 +359,7 @@ async function pickFreePort(start: number, max = 50): Promise<number> {
   }
   throw new Error(
     `no free TCP port near ${start} (checked ${start}..${start + max - 1}). ` +
-      `Free one of them or stop the conflicting process and retry.`,
+      `Free one of them or stop the conflicting process and retry.`
   );
 }
 
@@ -352,11 +371,14 @@ async function allocatePorts(): Promise<{
   // taken 3000 doesn't push api off 8000. Each starts from its canonical
   // default and only moves if forced.
   const ports = { ...DEFAULT_PORTS };
+  const reserved = new Set<number>();
   const reassigned: Array<{ service: keyof PortMap; from: number; to: number }> = [];
   for (const service of Object.keys(DEFAULT_PORTS) as Array<keyof PortMap>) {
     const def = DEFAULT_PORTS[service];
-    const free = await pickFreePort(def);
+    let free = await pickFreePort(def);
+    while (reserved.has(free)) free = await pickFreePort(free + 1);
     ports[service] = free;
+    reserved.add(free);
     if (free !== def) reassigned.push({ service, from: def, to: free });
   }
   return { ports, reassigned };
@@ -399,7 +421,7 @@ async function waitFor(
   label: string,
   check: () => Promise<boolean>,
   timeoutMs: number,
-  pollMs = 2000,
+  pollMs = 2000
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   process.stdout.write(`   ${c.dim(`waiting for ${label}…`)} `);
@@ -473,7 +495,9 @@ function checkDocker(): boolean {
   const docker = tryRun("docker --version");
   if (!docker) {
     console.error(
-      c.red("docker is not installed or not on PATH.\n  Install Docker Desktop: https://www.docker.com/products/docker-desktop"),
+      c.red(
+        "docker is not installed or not on PATH.\n  Install Docker Desktop: https://www.docker.com/products/docker-desktop"
+      )
     );
     return false;
   }
@@ -491,17 +515,16 @@ function checkDocker(): boolean {
   // through cmd's mangled quoting. Use spawnSync directly with shell:false
   // so the args are passed verbatim to docker.exe and the quoting layer
   // is removed entirely.
-  const infoResult = spawnSync(
-    "docker",
-    ["info", "--format", "{{.ServerVersion}}"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  );
+  const infoResult = spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   const info = infoResult.status === 0 ? infoResult.stdout.trim() : "";
   if (!info) {
     console.error(
       c.red(
-        "docker daemon is not running. Start Docker Desktop (or `sudo systemctl start docker` on Linux) and retry.",
-      ),
+        "docker daemon is not running. Start Docker Desktop (or `sudo systemctl start docker` on Linux) and retry."
+      )
     );
     return false;
   }
@@ -526,8 +549,8 @@ function pullImages(flags: Flags): boolean {
     console.error(
       c.yellow(
         "image pull failed; falling back to local build. " +
-          "Use --rebuild to force building from source.",
-      ),
+          "Use --rebuild to force building from source."
+      )
     );
     flags.rebuild = true;
   }
@@ -538,6 +561,7 @@ function portEnv(ports: PortMap): NodeJS.ProcessEnv {
   return {
     AISOC_WEB_PORT: String(ports.web),
     AISOC_API_PORT: String(ports.api),
+    AISOC_AGENTS_PORT: String(ports.agents),
     AISOC_REALTIME_PORT: String(ports.realtime),
     AISOC_POSTGRES_PORT: String(ports.postgres),
     AISOC_REDIS_PORT: String(ports.redis),
@@ -553,37 +577,52 @@ async function startStack(flags: Flags): Promise<boolean> {
   // surfaced in the script's own output instead of buried in a docker
   // compose error wall. Module-level so the rest of the script can read
   // the resolved values without threading them through every signature.
-  let reassigned: Array<{ service: keyof PortMap; from: number; to: number }> = [];
-  try {
-    const alloc = await allocatePorts();
-    allocatedPorts = alloc.ports;
-    reassigned = alloc.reassigned;
-  } catch (e: any) {
-    console.error(c.red(`port allocation failed: ${e?.message ?? e}`));
-    return false;
-  }
-  if (reassigned.length > 0) {
-    for (const r of reassigned) {
-      log(
-        c.yellow("port") +
-          ` ${r.service} ${c.dim(String(r.from))} in use → using ${c.bold(String(r.to))}`,
-      );
-    }
-  } else {
-    log(c.green("ok") + " all canonical ports free");
-  }
-
   const args = ["compose", "-f", COMPOSE_FILE, "up", "-d"];
   if (flags.rebuild) args.push("--build");
-  const code = runStream("docker", args, {
-    AISOC_TAG: flags.tag,
-    ...portEnv(allocatedPorts),
-  });
-  if (code !== 0) {
-    console.error(c.red("docker compose up failed. See output above."));
-    return false;
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let reassigned: Array<{ service: keyof PortMap; from: number; to: number }> = [];
+    try {
+      const alloc = await allocatePorts();
+      allocatedPorts = alloc.ports;
+      reassigned = alloc.reassigned;
+    } catch (e: any) {
+      console.error(c.red(`port allocation failed: ${e?.message ?? e}`));
+      return false;
+    }
+    if (reassigned.length > 0) {
+      for (const r of reassigned) {
+        log(
+          c.yellow("port") +
+            ` ${r.service} ${c.dim(String(r.from))} in use → using ${c.bold(String(r.to))}`
+        );
+      }
+    } else {
+      log(c.green("ok") + " all canonical ports free");
+    }
+
+    const result = runCaptured("docker", args, {
+      AISOC_TAG: flags.tag,
+      ...portEnv(allocatedPorts),
+    });
+    if (result.code === 0) return true;
+
+    const portConflict =
+      /address already in use|port is already allocated|failed to bind host port/i.test(
+        result.output
+      );
+    if (!portConflict || attempt === maxAttempts) {
+      console.error(c.red("docker compose up failed. See output above."));
+      return false;
+    }
+    log(
+      c.yellow(
+        `port became unavailable during startup; retrying with new ports (${attempt + 1}/${maxAttempts})`
+      )
+    );
   }
-  return true;
+  return false;
 }
 
 async function waitForHealth(): Promise<boolean> {
@@ -593,21 +632,18 @@ async function waitForHealth(): Promise<boolean> {
     "postgres",
     async () => probePort("127.0.0.1", allocatedPorts.postgres),
     60_000,
-    1000,
+    1000
   );
   if (!postgresUp) return false;
 
   const apiUp = await waitFor(
     "api /health",
     async () => {
-      const j = await fetchJson(
-        `http://localhost:${allocatedPorts.api}/health`,
-        1500,
-      );
+      const j = await fetchJson(`http://localhost:${allocatedPorts.api}/health`, 1500);
       return j !== null;
     },
     120_000,
-    2000,
+    2000
   );
   if (!apiUp) return false;
 
@@ -624,7 +660,7 @@ async function waitForHealth(): Promise<boolean> {
       }
     },
     120_000,
-    2000,
+    2000
   );
   if (!webUp) {
     console.error(c.yellow("web is slow to start; continuing anyway"));
@@ -671,8 +707,8 @@ function seedData(flags: Flags): boolean {
   if (code !== 0) {
     console.error(
       c.yellow(
-        "seed re-run returned non-zero. The stack is likely already seeded by the one-shot `seed` container; continuing.",
-      ),
+        "seed re-run returned non-zero. The stack is likely already seeded by the one-shot `seed` container; continuing."
+      )
     );
   }
   return true;
@@ -691,17 +727,15 @@ function sanitizeCaseId(id: unknown): string | null {
 }
 
 async function findSeededCase(
-  flags: Flags,
+  flags: Flags
 ): Promise<{ id: string; case_number: string; title: string } | null> {
-  const showcase = flags.demoQuick
-    ? SHOWCASE_CASE_NUMBER_QUICK
-    : SHOWCASE_CASE_NUMBER_FULL;
+  const showcase = flags.demoQuick ? SHOWCASE_CASE_NUMBER_QUICK : SHOWCASE_CASE_NUMBER_FULL;
   step(
     6,
     7,
     flags.demoQuick
       ? `Locating the DEMO-004 ransomware case (--demo-quick)`
-      : "Locating the showcase ransomware investigation",
+      : "Locating the showcase ransomware investigation"
   );
   // The dev-mode auth bypass returns the demo user/tenant for unauthenticated
   // requests when ENV=development, so we can hit /v1/cases without a token.
@@ -719,12 +753,10 @@ async function findSeededCase(
     // currently expose that filter, and the volume is trivially small.
     const res = await fetchJson(
       `http://localhost:${allocatedPorts.api}/v1/cases?page_size=50`,
-      4000,
+      4000
     );
     if (res && Array.isArray(res.items) && res.items.length > 0) {
-      const found = res.items.find(
-        (item: any) => item.case_number === showcase,
-      );
+      const found = res.items.find((item: any) => item.case_number === showcase);
       const target = found ?? res.items[0];
       const safeId = sanitizeCaseId(target.id);
       if (!safeId) {
@@ -734,10 +766,7 @@ async function findSeededCase(
       if (found) {
         log(c.green("ok") + ` found showcase ${target.case_number} (${safeId})`);
       } else {
-        log(
-          c.yellow("warn") +
-            ` ${showcase} not found; falling back to ${target.case_number}`,
-        );
+        log(c.yellow("warn") + ` ${showcase} not found; falling back to ${target.case_number}`);
       }
       return { id: safeId, case_number: target.case_number, title: target.title };
     }
@@ -745,8 +774,8 @@ async function findSeededCase(
   }
   console.error(
     c.yellow(
-      "no seeded cases visible after 60s. The web console will still open, but to a blank cases list.",
-    ),
+      "no seeded cases visible after 60s. The web console will still open, but to a blank cases list."
+    )
   );
   return null;
 }
@@ -758,13 +787,16 @@ async function kickoffInvestigation(caseId: string): Promise<boolean> {
   const result = await postJson(
     `http://localhost:${allocatedPorts.api}/v1/cases/${caseId}/investigate`,
     {},
-    10000,
+    10000
   );
   if (result) {
     log(c.green("ok") + ` investigation queued (run_id ${result.run_id ?? "unknown"})`);
     return true;
   }
-  log(c.yellow("note") + " could not auto-launch investigation (no LLM key?). The case is still browsable.");
+  log(
+    c.yellow("note") +
+      " could not auto-launch investigation (no LLM key?). The case is still browsable."
+  );
   return false;
 }
 
@@ -779,7 +811,7 @@ function sanitizeCaseNumber(num: unknown): string | null {
 
 async function openInBrowser(
   seeded: { id: string; case_number: string; title: string } | null,
-  flags: Flags,
+  flags: Flags
 ) {
   // Prefer routing by human-readable case_number with the ledger tab
   // pre-selected — that's the same URL the hosted demo uses and what
@@ -800,7 +832,11 @@ async function openInBrowser(
   } else if (isHeadless()) {
     // CI, headless server, or AISOC_NO_BROWSER=1. Don't try to spawn a
     // GUI process the user can't see — just leave the URL in the banner.
-    log(c.dim("headless environment detected — not launching browser (set AISOC_NO_BROWSER=0 to override)"));
+    log(
+      c.dim(
+        "headless environment detected — not launching browser (set AISOC_NO_BROWSER=0 to override)"
+      )
+    );
   } else {
     openBrowser(url);
   }
@@ -850,7 +886,7 @@ interface RunReport {
 function buildReport(
   flags: Flags,
   showcaseCaseFound: boolean,
-  investigationKickedOff: boolean,
+  investigationKickedOff: boolean
 ): RunReport {
   closeLastPhase();
   const totalMs = Date.now() - STARTED_AT;
@@ -884,28 +920,23 @@ function printPhaseTable(report: RunReport): void {
   const rows = report.phases.map((p) => [p.name, p.label, `${p.durationMs}ms`]);
   const headers = ["Phase", "Duration", "ms"];
   const all = [headers, ...rows];
-  const widths = headers.map((_, i) =>
-    Math.max(...all.map((row) => row[i].length)),
-  );
-  const fmt = (row: string[]) =>
-    "  " + row.map((cell, i) => cell.padEnd(widths[i])).join("  ");
+  const widths = headers.map((_, i) => Math.max(...all.map((row) => row[i].length)));
+  const fmt = (row: string[]) => "  " + row.map((cell, i) => cell.padEnd(widths[i])).join("  ");
   console.log(c.dim(fmt(headers)));
   console.log(c.dim("  " + widths.map((w) => "-".repeat(w)).join("  ")));
   for (const row of rows) console.log(fmt(row));
-  console.log(
-    `\n  ${c.bold("Total:")} ${c.green(report.totalLabel)} (${report.totalMs}ms)`,
-  );
+  console.log(`\n  ${c.bold("Total:")} ${c.green(report.totalLabel)} (${report.totalMs}ms)`);
   if (report.budgetMs !== null) {
     const budgetLabel = formatMs(report.budgetMs);
     if (report.withinBudget) {
       console.log(
         `  ${c.bold("Budget:")} ${c.green(`PASS — under ${budgetLabel}`)} ` +
-          c.dim(`(${report.budgetMs - report.totalMs}ms headroom)`),
+          c.dim(`(${report.budgetMs - report.totalMs}ms headroom)`)
       );
     } else {
       console.log(
         `  ${c.bold("Budget:")} ${c.red(`FAIL — exceeded ${budgetLabel} by ${formatMs(report.totalMs - report.budgetMs)}`)} ` +
-          c.dim("(WS-A acceptance regression)"),
+          c.dim("(WS-A acceptance regression)")
       );
     }
   }
@@ -918,7 +949,7 @@ function emitReport(flags: Flags, report: RunReport): void {
     console.log(c.dim(`  results JSON written to ${flags.resultsFile}`));
   } catch (e: any) {
     console.error(
-      c.yellow(`  failed to write results to ${flags.resultsFile}: ${e?.message ?? e}`),
+      c.yellow(`  failed to write results to ${flags.resultsFile}: ${e?.message ?? e}`)
     );
   }
 }
@@ -963,7 +994,11 @@ function runPlaywrightSpec(specGlob: string, outputDir: string, label: string): 
     "--reporter=line",
     `--output=${outputDir}`,
   ];
-  const env = { ...process.env, AISOC_SCREENCAST_URL: "http://localhost:3000", AISOC_DISABLE_ANALYTICS: "1" };
+  const env = {
+    ...process.env,
+    AISOC_SCREENCAST_URL: "http://localhost:3000",
+    AISOC_DISABLE_ANALYTICS: "1",
+  };
   const r = spawnSync("pnpm", args, { cwd: ROOT, env, stdio: "inherit" });
   if (r.status !== 0) {
     console.error(c.red(`  ${label} failed (exit ${r.status ?? "n/a"})`));
@@ -1003,13 +1038,24 @@ function transcodeWebmToMp4AndGif(): boolean {
   const mp4r = spawnSync(
     "ffmpeg",
     [
-      "-y", "-i", src,
-      "-c:v", "libx264", "-preset", "slow", "-crf", "22",
-      "-c:a", "aac", "-b:a", "128k",
-      "-movflags", "+faststart",
+      "-y",
+      "-i",
+      src,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "slow",
+      "-crf",
+      "22",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-movflags",
+      "+faststart",
       mp4,
     ],
-    { stdio: "inherit" },
+    { stdio: "inherit" }
   );
   if (mp4r.status !== 0) {
     console.error(c.red(`ffmpeg mp4 transcode failed (exit ${mp4r.status})`));
@@ -1025,12 +1071,20 @@ function transcodeWebmToMp4AndGif(): boolean {
   const gifr = spawnSync(
     "ffmpeg",
     [
-      "-y", "-ss", "14", "-t", "10", "-i", src,
-      "-vf", "fps=15,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
-      "-loop", "0",
+      "-y",
+      "-ss",
+      "14",
+      "-t",
+      "10",
+      "-i",
+      src,
+      "-vf",
+      "fps=15,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse",
+      "-loop",
+      "0",
       gif,
     ],
-    { stdio: "inherit" },
+    { stdio: "inherit" }
   );
   if (gifr.status !== 0) {
     console.error(c.red(`ffmpeg gif render failed (exit ${gifr.status})`));
@@ -1110,8 +1164,8 @@ async function main() {
       c.dim(
         ` — tag=${flags.tag}${flags.rebuild ? " · rebuild" : ""}` +
           (flags.demoQuick ? " · quick" : "") +
-          (flags.budgetMs ? ` · budget=${formatMs(flags.budgetMs)}` : ""),
-      ),
+          (flags.budgetMs ? ` · budget=${formatMs(flags.budgetMs)}` : "")
+      )
   );
 
   if (!checkDocker()) process.exit(1);

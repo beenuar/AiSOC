@@ -27,6 +27,8 @@
 # rotate the password while you're there.
 ###############################################################################
 
+name: aisoc-demo
+
 networks:
   aisoc-demo:
     driver: bridge
@@ -37,7 +39,6 @@ volumes:
   kafka_demo_data:
 
 services:
-
   # ─── Infrastructure ─────────────────────────────────────────────────────────
 
   postgres:
@@ -165,7 +166,11 @@ services:
       - aisoc-demo
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c ''import urllib.request; urllib.request.urlopen("http://localhost:8000/health")'' || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
