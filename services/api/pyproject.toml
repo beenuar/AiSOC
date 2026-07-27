@@ -27,7 +27,7 @@ bcrypt = ">=4.1.2,<6.0.0"  # Used directly by app.core.security (passlib is no l
 python-multipart = ">=0.0.9,<0.0.33"
 tenacity = ">=8.3,<10.0"
 structlog = ">=24.1,<27.0"
-prometheus-client = ">=0.20,<0.26"
+prometheus-client = ">=0.20,<0.27"
 opentelemetry-sdk = "^1.24.0"
 opentelemetry-instrumentation-fastapi = "^0.45b0"
 opentelemetry-instrumentation-sqlalchemy = "^0.45b0"
