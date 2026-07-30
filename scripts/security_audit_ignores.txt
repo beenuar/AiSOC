@@ -123,3 +123,36 @@ python|GHSA-2g6r-c272-w58r|langchain-core SSRF in ChatOpenAI.get_num_tokens_from
 # version — no non-breaking fix exists. Tracked for the next webpack-dev-server
 # upgrade.
 pnpm|GHSA-xv26-6w52-cph6|websocket-driver DoS via apps/docs webpack-dev-server (dev-server only, not shipped/prod-exposed); no fix in webpack-dev-server 5.x line|2026-10-15
+
+# ── 2026-07-30 triage (expire 2026-10-28) ────────────────────────────────────
+# Fresh high-severity advisories published after the last green main run
+# (2026-07-19). `pnpm audit` reports fixAvailable=false for every one of these:
+# the direct dependents cap the transitive version, so no clean in-tree
+# auto-fix exists. next (framework) + sharp (native binary) have patched
+# releases but their bumps must be verified individually (App Router behaviour /
+# native rebuild matrix), so each real remediation is tracked for a dedicated
+# PR rather than folded into a dependency-audit unblock.
+
+# next — 4 high advisories all fixed in 16.2.11 (a patch inside our 16.2.x
+# line). Low-risk version-wise but touches both the apps/web and apps/docs App
+# Routers, so tracked for a dedicated PR gated on a full web build + e2e run.
+pnpm|GHSA-6gpp-xcg3-4w24|next middleware/proxy bypass (fixed in 16.2.11); patch bump tracked for a dedicated PR gated on web build+e2e|2026-10-28
+pnpm|GHSA-m99w-x7hq-7vfj|next App Router Server Components DoS (fixed in 16.2.11); patch bump tracked for a dedicated PR gated on web build+e2e|2026-10-28
+pnpm|GHSA-89xv-2m56-2m9x|next Server Actions SSRF (fixed in 16.2.11); patch bump tracked for a dedicated PR gated on web build+e2e|2026-10-28
+pnpm|GHSA-p9j2-gv94-2wf4|next rewrites SSRF (fixed in 16.2.11); patch bump tracked for a dedicated PR gated on web build+e2e|2026-10-28
+
+# sharp — libvips inherited CVEs, fixed in 0.35.0. sharp ships a prebuilt native
+# binary; the bump needs a platform rebuild matrix, tracked for a dedicated PR.
+pnpm|GHSA-f88m-g3jw-g9cj|sharp libvips inherited CVEs (fixed in 0.35.0); native-binary bump tracked for a dedicated PR; build-time image generation, no untrusted runtime input|2026-10-28
+
+# Transitive build/tooling deps (SVG/CSS/YAML/URI/glob processing pulled in by
+# the web + docs toolchains). pnpm reports fixAvailable=false for each because
+# the capping dependents have not shipped updated pins; tracked for overrides
+# once upstream releases them.
+pnpm|GHSA-52cp-r559-cp3m|js-yaml YAML merge-key quadratic DoS; pnpm reports no auto-fix (3.x line unfixed, consumers pinned); transitive build/tooling dep|2026-10-28
+pnpm|GHSA-2p49-hgcm-8545|svgo removeScripts residual-script (fixed 3.3.4 upstream); pnpm reports no auto-fix; build-time SVG optimization transitive dep|2026-10-28
+pnpm|GHSA-6g55-p6wh-862q|postcss arbitrary file read (fixed 8.5.12 upstream); pnpm reports no auto-fix; build-time CSS processing transitive dep|2026-10-28
+pnpm|GHSA-r28c-9q8g-f849|postcss source-map path traversal (fixed 8.5.18 upstream); pnpm reports no auto-fix; build-time CSS processing transitive dep|2026-10-28
+pnpm|GHSA-mh99-v99m-4gvg|brace-expansion unbounded-expansion DoS; pnpm reports no auto-fix (consumers pinned); transitive build/tooling glob dep|2026-10-28
+pnpm|GHSA-v2hh-gcrm-f6hx|fast-uri host confusion (<=3.1.3, no fixed release yet); transitive build/tooling dep (fastify/ajv stack)|2026-10-28
+pnpm|GHSA-4c8g-83qw-93j6|fast-uri host confusion via failed IP parse; co-resolves with GHSA-v2hh (no fixed release); transitive build/tooling dep|2026-10-28
