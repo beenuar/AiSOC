@@ -34,7 +34,28 @@ jobs:
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master
 
+      # Deploy only when the demo app is actually provisioned. The public Fly
+      # demo can be torn down / re-provisioned out-of-band; when the app is
+      # absent (or no token is configured) a hard `flyctl deploy` fails the run
+      # with "app not found" and turns main red for an infra state that isn't a
+      # code problem. Gate the remaining steps instead — deploy auto-resumes as
+      # soon as the app exists again.
+      - name: Check Fly app provisioned
+        id: flycheck
+        run: |
+          set -uo pipefail
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "::warning title=deploy-api::FLY_API_TOKEN not set — skipping deploy (demo not provisioned)."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          elif ! flyctl status --app aisoc-demo-api >/dev/null 2>&1; then
+            echo "::warning title=deploy-api::Fly app 'aisoc-demo-api' not found — skipping deploy. Recreate it (flyctl apps create aisoc-demo-api) or refresh FLY_API_TOKEN to auto-resume deploys."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.flycheck.outputs.deploy == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -44,6 +65,7 @@ jobs:
       # that dir is invisible to the image. /api/v1/marketplace returns 503
       # without index.json present at /app/marketplace/index.json in the image.
       - name: Stage marketplace/index.json into services/api
+        if: steps.flycheck.outputs.deploy == 'true'
         run: |
           python3 -m pip install --quiet pyyaml
           python3 scripts/build_marketplace.py
@@ -57,6 +79,7 @@ jobs:
       # absolute path to the fly.toml so flyctl still finds it. This mirrors
       # the deploy_app() helper in infra/fly/fly-demo-deploy.sh.
       - name: Deploy to Fly (context=services/api)
+        if: steps.flycheck.outputs.deploy == 'true'
         working-directory: services/api
         run: |
           flyctl deploy \
