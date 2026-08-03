@@ -63,9 +63,7 @@ CANONICAL_DISPOSITIONS: frozenset[str] = frozenset(
 )
 
 #: Verdicts the auto-triage LLM is allowed to emit directly.
-LLM_VERDICTS: frozenset[str] = frozenset(
-    {TRUE_POSITIVE, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, BENIGN, NEEDS_REVIEW}
-)
+LLM_VERDICTS: frozenset[str] = frozenset({TRUE_POSITIVE, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, BENIGN, NEEDS_REVIEW})
 
 #: Dispositions that indicate the detection itself was INVALID. Used for
 #: false-positive-rate / rule-tuning metrics. Deliberately excludes
@@ -74,9 +72,7 @@ INVALID_DETECTION_DISPOSITIONS: frozenset[str] = frozenset({FALSE_POSITIVE})
 
 #: Dispositions safe to auto-close without a human — no active threat and no
 #: response action required.
-AUTO_CLOSEABLE_DISPOSITIONS: frozenset[str] = frozenset(
-    {FALSE_POSITIVE, BENIGN, BENIGN_TRUE_POSITIVE}
-)
+AUTO_CLOSEABLE_DISPOSITIONS: frozenset[str] = frozenset({FALSE_POSITIVE, BENIGN, BENIGN_TRUE_POSITIVE})
 
 # Graded / vendor / legacy verdicts → canonical. Keys are compared after
 # lower-casing and collapsing separators to ``_``.

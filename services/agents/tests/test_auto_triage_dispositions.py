@@ -51,18 +51,13 @@ def _patch_llm(monkeypatch, verdict: str, confidence: float, rationale: str = "b
 
 
 def test_parser_accepts_benign_true_positive():
-    out = ata._parse_llm_response(
-        '{"verdict": "benign_true_positive", "confidence": 0.9, "rationale": "approved pentest"}'
-    )
+    out = ata._parse_llm_response('{"verdict": "benign_true_positive", "confidence": 0.9, "rationale": "approved pentest"}')
     assert out["verdict"] == BENIGN_TRUE_POSITIVE
 
 
 def test_parser_normalizes_synonym_and_spacing():
     assert ata._parse_llm_response('{"verdict": "BTP", "confidence": 0.9}')["verdict"] == BENIGN_TRUE_POSITIVE
-    assert (
-        ata._parse_llm_response('{"verdict": "benign true positive", "confidence": 0.9}')["verdict"]
-        == BENIGN_TRUE_POSITIVE
-    )
+    assert ata._parse_llm_response('{"verdict": "benign true positive", "confidence": 0.9}')["verdict"] == BENIGN_TRUE_POSITIVE
 
 
 def test_parser_unknown_verdict_fails_safe_to_true_positive():
@@ -133,9 +128,7 @@ async def test_malicious_true_positive_escalates(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_btp_metric_is_tracked_separately_from_fp(monkeypatch):
-    ata._metrics.update(
-        {"fp_count": 0, "btp_count": 0, "benign_count": 0, "tp_count": 0, "total_processed": 0, "confidence_sum": 0.0}
-    )
+    ata._metrics.update({"fp_count": 0, "btp_count": 0, "benign_count": 0, "tp_count": 0, "total_processed": 0, "confidence_sum": 0.0})
     _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved pentest")
     await ata.run_auto_triage(_state("cred dump", {"severity": "high"}))
     m = ata.get_metrics()

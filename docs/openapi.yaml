@@ -13760,8 +13760,8 @@ components:
         corrected_verdict:
           type: string
           title: Corrected Verdict
-          description: 'Analyst''s verdict: true_positive | false_positive | benign
-            | escalate'
+          description: 'Analyst''s verdict: true_positive | benign_true_positive |
+            false_positive | benign | escalate'
         reason:
           anyOf:
           - type: string
@@ -21364,6 +21364,10 @@ components:
         true_positive_corrections:
           type: integer
           title: True Positive Corrections
+        benign_true_positive_corrections:
+          type: integer
+          title: Benign True Positive Corrections
+          default: 0
         benign_corrections:
           type: integer
           title: Benign Corrections
