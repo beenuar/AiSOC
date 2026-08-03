@@ -62,6 +62,9 @@ class InMemoryResponseCache:
     def __len__(self) -> int:
         return len(self._store)
 
+    def clear(self) -> None:
+        self._store.clear()
+
 
 class ResponseCache:
     """Front door over a backend. `lookup`/`store` take request components and
@@ -75,3 +78,9 @@ class ResponseCache:
 
     def store(self, *, model: str, prompt: str, user_input: str, response: str) -> None:
         self._backend.set(cache_key(model=model, prompt=prompt, user_input=user_input), response)
+
+    def clear(self) -> None:
+        """Drop all cached entries (test isolation / manual invalidation)."""
+        clear = getattr(self._backend, "clear", None)
+        if callable(clear):
+            clear()

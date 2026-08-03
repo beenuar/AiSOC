@@ -233,3 +233,13 @@ def get_governor() -> CostGovernor:
     if _GOVERNOR is None:
         _GOVERNOR = CostGovernor(config=BudgetConfig.from_env())
     return _GOVERNOR
+
+
+def reset_governor() -> None:
+    """Drop the process-wide governor so the next get_governor() rebuilds it.
+
+    Used for test isolation: since the worker now records verdicts/spend into the
+    singleton, tests that reuse an alert must start from a clean cache.
+    """
+    global _GOVERNOR
+    _GOVERNOR = None

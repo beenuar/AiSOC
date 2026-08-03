@@ -4,14 +4,46 @@ a real match) and fail-soft."""
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
-import httpx
 import pytest
-import respx
 from app.models.alert import RawAlert
 from app.services.alert_enricher import AlertEnricher
 from app.services.confidence import _ti_contribution
+
+
+class _FakeResp:
+    def __init__(self, status: int, payload: dict[str, Any]) -> None:
+        self.status_code = status
+        self._payload = payload
+
+    def json(self) -> dict[str, Any]:
+        return self._payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def _fake_client_factory(resp=None, *, error: Exception | None = None):
+    class _FakeClient:
+        def __init__(self, *a, **k) -> None:
+            self.captured: dict[str, Any] = {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None):
+            if error is not None:
+                raise error
+            _fake_client_factory.last = {"url": url, "json": json}
+            return resp
+
+    return _FakeClient
 
 
 def _alert(**kw) -> RawAlert:
@@ -70,22 +102,20 @@ def test_to_enrichments_benign_result_is_empty_no_fake_ti():
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_enrich_calls_bulk_endpoint():
-    route = respx.post("http://enrich.test:8082/enrich/bulk").mock(
-        return_value=httpx.Response(
-            200, json={"results": [{"value": "1.2.3.4", "risk_score": 90, "malicious_votes": 3, "sources": [{"name": "VirusTotal"}]}]}
-        )
+async def test_enrich_calls_bulk_endpoint(monkeypatch):
+    resp = _FakeResp(
+        200,
+        {"results": [{"value": "1.2.3.4", "risk_score": 90, "malicious_votes": 3, "sources": [{"name": "VirusTotal"}]}]},
     )
+    monkeypatch.setattr("app.services.alert_enricher.httpx.AsyncClient", _fake_client_factory(resp))
     enr = await _enricher().enrich(_alert(src_ip="1.2.3.4"))
-    assert route.called
+    assert _fake_client_factory.last["url"].endswith("/enrich/bulk")
     assert enr["virustotal"]["hit"] is True
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_enrich_is_fail_soft_on_error():
-    respx.post("http://enrich.test:8082/enrich/bulk").mock(return_value=httpx.Response(503))
+async def test_enrich_is_fail_soft_on_error(monkeypatch):
+    monkeypatch.setattr("app.services.alert_enricher.httpx.AsyncClient", _fake_client_factory(error=RuntimeError("boom")))
     assert await _enricher().enrich(_alert(src_ip="1.2.3.4")) == {}
 
 
