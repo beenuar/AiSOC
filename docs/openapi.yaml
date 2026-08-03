@@ -3417,6 +3417,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection/tuning/auto-suggest:
+    post:
+      tags:
+      - detection
+      summary: Auto Suggest Tuning
+      description: 'Derive human-approval-gated tuning suggestions from disposition
+        history.
+
+
+        Wave 1 wiring: connects the previously-orphaned ``suggest_tuning`` engine
+        to
+
+        real per-rule disposition history and, optionally, opens DRAFT detection
+
+        proposals (source ``auto-tuner``) into the governed lifecycle. Nothing is
+
+        auto-applied — an engineer reviews + eval-gates before promotion.'
+      operationId: auto_suggest_tuning_api_v1_detection_tuning_auto_suggest_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: window_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 180
+          minimum: 1
+          default: 30
+          title: Window Days
+      - name: create_proposals
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Create Proposals
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutoSuggestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/detection/tuning:
     get:
       tags:
@@ -15034,6 +15084,32 @@ components:
       - access_token
       - refresh_token
       title: AuthenticateFinishResponse
+    AutoSuggestResponse:
+      properties:
+        window_days:
+          type: integer
+          title: Window Days
+        records_considered:
+          type: integer
+          title: Records Considered
+        suggestions:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Suggestions
+        proposals_created:
+          type: integer
+          title: Proposals Created
+      type: object
+      required:
+      - window_days
+      - records_considered
+      - suggestions
+      - proposals_created
+      title: AutoSuggestResponse
+      description: Disposition-history tuning suggestions + how many became draft
+        proposals.
     AutoTuneRequest:
       properties:
         enabled:
@@ -18649,6 +18725,14 @@ components:
           type: string
           format: date-time
           title: Generated At
+        repeat_alerts_suppressed:
+          type: integer
+          title: Repeat Alerts Suppressed
+          default: 0
+        repeat_suppression_rate:
+          type: number
+          title: Repeat Suppression Rate
+          default: 0.0
       type: object
       required:
       - period

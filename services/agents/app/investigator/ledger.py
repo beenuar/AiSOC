@@ -493,3 +493,40 @@ async def persist_auto_triage(
     except Exception as exc:  # noqa: BLE001 — re-raised as a typed, retryable error
         logger.warning("ledger.auto_triage_persist_failed", run_id=str(run_id), error=str(exc))
         raise LedgerPersistError(str(exc)) from exc
+
+
+async def record_suppression(
+    *,
+    tenant_ref: str,
+    signature: str,
+    alert_id: Any,
+    disposition: str,
+    prior_author: str,
+) -> bool:
+    """Durably record that a repeat alert was auto-suppressed from prior outcome
+    memory (Wave 1), so the compounding-reduction metric is measured, not
+    estimated. Best-effort: no DB / unknown tenant => no-op (returns False)."""
+    pool = await get_pool()
+    if pool is None:
+        return False
+    try:
+        async with pool.acquire() as conn:
+            tenant_id = await _resolve_tenant_id(conn, tenant_ref)
+            if tenant_id is None:
+                return False
+            await conn.execute(
+                """
+                INSERT INTO aisoc_outcome_suppressions
+                    (id, tenant_id, signature, alert_id, disposition, prior_author, created_at)
+                VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, now())
+                """,
+                tenant_id,
+                signature,
+                _coerce_uuid(alert_id),
+                disposition,
+                prior_author,
+            )
+        return True
+    except Exception as exc:  # noqa: BLE001 — metric write is best-effort
+        logger.debug("ledger.record_suppression_failed", signature=signature, error=str(exc))
+        return False

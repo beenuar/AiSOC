@@ -42,13 +42,14 @@ from typing import Any
 import structlog
 
 from app.agents.auto_triage_agent import run_auto_triage
-from app.agents.dispositions import NEEDS_REVIEW
+from app.agents.dispositions import NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.llm.factory import llm_override
+from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_suppress
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
@@ -77,6 +78,8 @@ _METRICS = {
     "bc_mutated": 0,
     "needs_review_fallback": 0,
     "escalated": 0,
+    "outcome_written": 0,
+    "outcome_suppressed": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "errors": 0,
@@ -88,6 +91,22 @@ def _escalation_enabled() -> bool:
     (issue #569). On by default; set ``AISOC_AGENT_ESCALATE_TO_GRAPH=0`` to
     keep triage-only (e.g. in CI / low-resource deployments)."""
     return os.getenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _truthy(name: str, default: str = "1") -> bool:
+    return os.getenv(name, default).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _memory_suppression_enabled() -> bool:
+    """Auto-suppress a repeat alert that matches a trusted prior benign/FP
+    outcome (Wave 1). On by default; disable with AISOC_AGENT_MEMORY_SUPPRESSION=0."""
+    return _truthy("AISOC_AGENT_MEMORY_SUPPRESSION")
+
+
+def _memory_writeback_enabled() -> bool:
+    """Write every durable triage outcome back as a per-signature prior (Wave 1)
+    so autonomous closures compound. Disable with AISOC_AGENT_MEMORY_WRITEBACK=0."""
+    return _truthy("AISOC_AGENT_MEMORY_WRITEBACK")
 
 
 def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
@@ -327,6 +346,16 @@ class FusedAlertTriageWorker:
 
         governor = get_governor()
         fingerprint = governor.evidence_fingerprint(str(state.tenant_id), state.raw_alert)
+
+        # Wave 1 — forward auto-suppression: if this signature has a trusted
+        # prior benign/FP outcome, auto-resolve the repeat WITHOUT re-triage
+        # (this is what makes alert volume actually shrink over time). Gated on
+        # trust (human prior, or corroborated high-confidence AI prior).
+        if _memory_suppression_enabled():
+            suppressed = await self._maybe_suppress_from_memory(state, fingerprint, bc_matched)
+            if suppressed is not None:
+                return suppressed
+
         decision = governor.check(str(state.tenant_id), fingerprint)
 
         tier: str
@@ -383,6 +412,20 @@ class FusedAlertTriageWorker:
         _METRICS["triaged"] += 1
         await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
 
+        # Wave 1 — write the durable outcome back as a per-signature prior so
+        # autonomous closures compound (a later identical alert can suppress).
+        if _memory_writeback_enabled() and verdict:
+            with contextlib.suppress(Exception):
+                await record_outcome(
+                    str(state.tenant_id),
+                    fingerprint,
+                    disposition=str(verdict),
+                    confidence=float(confidence or 0.0),
+                    author=AI,
+                    alert_id=(state.raw_alert or {}).get("id"),
+                )
+                _METRICS["outcome_written"] += 1
+
         # Issue #569: route escalations (anything NOT auto-closed — TP,
         # low-confidence, needs_review) through the full investigation graph.
         # High-confidence FP/BTP already terminated (status COMPLETED) and
@@ -402,6 +445,80 @@ class FusedAlertTriageWorker:
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
+        }
+
+    async def _maybe_suppress_from_memory(
+        self,
+        state: InvestigationState,
+        signature: str,
+        bc_matched: list[str],
+    ) -> dict[str, Any] | None:
+        """Auto-resolve a repeat alert from a trusted prior outcome (Wave 1).
+
+        Returns a summary dict (and short-circuits triage) when suppressed, else
+        None. Best-effort: any lookup failure falls through to normal triage.
+        """
+        try:
+            prior = await lookup_prior(str(state.tenant_id), signature)
+        except Exception as exc:  # noqa: BLE001 — memory read is advisory
+            logger.debug("auto_triage_worker.memory_lookup_failed", error=str(exc))
+            return None
+        if not should_auto_suppress(prior):
+            return None
+
+        assert prior is not None  # narrowed by should_auto_suppress
+        disposition = normalize_disposition(prior.get("disposition"), default=NEEDS_REVIEW)
+        confidence = float(prior.get("confidence", 0.9))
+        count = int(prior.get("count", 1))
+        author = str(prior.get("author", AI))
+
+        state.verdict = disposition
+        state.confidence = confidence
+        state.status = AgentStatus.COMPLETED
+        state.confidence_basis = [f"outcome_memory: prior {disposition} seen {count}x (author={author})"]
+        state.add_finding(
+            f"Auto-resolved from prior outcome memory: matches a prior {disposition} disposition "
+            f"(seen {count}x, author={author}) — repeat suppressed without re-triage."
+        )
+
+        _METRICS["outcome_suppressed"] += 1
+        _METRICS["triaged"] += 1
+        await self._record(state, tier="memory", verdict=disposition, confidence=confidence)
+        with contextlib.suppress(Exception):
+            await record_outcome(
+                str(state.tenant_id),
+                signature,
+                disposition=disposition,
+                confidence=confidence,
+                author=author,
+                alert_id=(state.raw_alert or {}).get("id"),
+            )
+        with contextlib.suppress(Exception):
+            await ledger_module.record_suppression(
+                tenant_ref=str(state.tenant_id),
+                signature=signature,
+                alert_id=(state.raw_alert or {}).get("id"),
+                disposition=disposition,
+                prior_author=author,
+            )
+        logger.info(
+            "auto_triage_worker.memory_suppressed",
+            run_id=str(state.run_id),
+            disposition=disposition,
+            prior_count=count,
+            author=author,
+        )
+        return {
+            "run_id": str(state.run_id),
+            "incident_id": str(state.incident_id),
+            "tenant_id": str(state.tenant_id),
+            "verdict": disposition,
+            "confidence": confidence,
+            "tier": "memory",
+            "suppressed_by_memory": True,
+            "business_context_rules": bc_matched,
+            "response_dispatched": False,
+            "proposed_actions": [],
         }
 
     async def _maybe_escalate(self, state: InvestigationState) -> None:

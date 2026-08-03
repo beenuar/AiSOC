@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -8,6 +9,7 @@ from app._health import install_health_routes
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
+from app.memory.provider import MemoryPriorProvider
 from app.services.alert_enricher import AlertEnricher
 from app.services.alert_sink import AlertSink
 from app.services.attack_chain_grouper import AttackChainGrouper
@@ -53,6 +55,11 @@ async def lifespan(app: FastAPI):
         if settings.fuse_enrichment_enabled
         else None
     )
+    # Wave 1 — live institutional-memory nudge: distil disposition history into
+    # per-tenant per-signature priors and feed them to the confidence scorer.
+    memory_provider = (
+        MemoryPriorProvider() if os.getenv("AISOC_FUSION_MEMORY_NUDGE", "1").strip().lower() not in {"0", "false", "no", "off"} else None
+    )
     engine = FusionEngine(
         dedup,
         correlator,
@@ -61,6 +68,7 @@ async def lifespan(app: FastAPI):
         ueba_cache=ueba_cache,
         chain_grouper=chain_grouper,
         enricher=enricher,
+        memory_provider=memory_provider,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
@@ -99,6 +107,23 @@ async def lifespan(app: FastAPI):
     app.state.worker_task = worker_task
     app.state.redis = redis_client
 
+    # Wave 1 — periodically distil disposition history into memory priors so
+    # the confidence nudge stays current (default every 6h). Best-effort.
+    async def _refresh_memory_priors() -> None:
+        interval = max(int(os.getenv("AISOC_FUSION_MEMORY_REFRESH_SECONDS", "21600")), 300)
+        while True:
+            try:
+                if memory_provider is not None and sink is not None:
+                    pool = await sink._ensure_pool()  # noqa: SLF001 — reuse the sink's pool
+                    if pool is not None:
+                        await memory_provider.refresh(pool)
+            except Exception as exc:  # noqa: BLE001 — never crash the service on a refresh
+                logger.warning("memory_prior_refresh_failed", error=str(exc))
+            await asyncio.sleep(interval)
+
+    memory_task = asyncio.create_task(_refresh_memory_priors()) if memory_provider is not None else None
+    app.state.memory_task = memory_task
+
     # Phase 2.6 — flip /readyz to 200 now that Redis is open + the
     # Kafka consumer is running.
     app.state.mark_ready()
@@ -114,6 +139,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Alert Fusion Service")
     await worker.stop()
     worker_task.cancel()
+    if memory_task is not None:
+        memory_task.cancel()
     await redis_client.aclose()
     logger.info("Alert Fusion Service stopped")
 

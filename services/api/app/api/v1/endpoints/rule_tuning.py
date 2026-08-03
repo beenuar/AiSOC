@@ -13,12 +13,17 @@ the existing ``/detection`` URL tree without colliding with
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel
+from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.db.rls import TenantDBSession
+from app.services.detection_tuner import DispositionRecord, suggest_tuning
 from app.services.rule_tuning import (
     ApplyTuningRequest,
     AutoTuneRequest,
@@ -34,6 +39,117 @@ from app.services.rule_tuning import (
 )
 
 router = APIRouter(prefix="/detection/tuning", tags=["detection"])
+
+
+class AutoSuggestResponse(BaseModel):
+    """Disposition-history tuning suggestions + how many became draft proposals."""
+
+    window_days: int
+    records_considered: int
+    suggestions: list[dict]
+    proposals_created: int
+
+
+def _disposition_records(rows) -> list[DispositionRecord]:  # noqa: ANN001
+    """Map alert-disposition rows into the tuner's input records.
+
+    ``human_verified`` is conservatively False here (these are stored
+    dispositions, not confirmed human overrides), so the tuner only proposes
+    scoped exceptions / severity reductions — never a bare ``suppress`` — from
+    this surface. Human-confirmed suppression still flows via the override path.
+    """
+    out: list[DispositionRecord] = []
+    for r in rows:
+        rid = getattr(r, "rule_id", None)
+        if not rid:
+            continue
+        out.append(
+            DispositionRecord(
+                rule_id=str(rid),
+                disposition=str(getattr(r, "disposition", "") or ""),
+                entity=(getattr(r, "entity", None) or None),
+                human_verified=False,
+            )
+        )
+    return out
+
+
+@router.post("/auto-suggest", response_model=AutoSuggestResponse)
+async def auto_suggest_tuning(
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
+    db: TenantDBSession,
+    window_days: int = Query(default=30, ge=1, le=180),
+    create_proposals: bool = Query(default=True),
+) -> AutoSuggestResponse:
+    """Derive human-approval-gated tuning suggestions from disposition history.
+
+    Wave 1 wiring: connects the previously-orphaned ``suggest_tuning`` engine to
+    real per-rule disposition history and, optionally, opens DRAFT detection
+    proposals (source ``auto-tuner``) into the governed lifecycle. Nothing is
+    auto-applied — an engineer reviews + eval-gates before promotion.
+    """
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT rule_id,
+                       disposition,
+                       COALESCE(affected_hosts->>0, affected_users->>0, affected_ips->>0) AS entity
+                  FROM alerts
+                 WHERE tenant_id = :tid
+                   AND rule_id IS NOT NULL
+                   AND disposition IS NOT NULL
+                   AND created_at > now() - make_interval(days => :days)
+                """
+            ).bindparams(tid=current_user.tenant_id, days=window_days)
+        )
+    ).fetchall()
+
+    records = _disposition_records(rows)
+    suggestions = suggest_tuning(records)
+
+    created = 0
+    if create_proposals and suggestions:
+        now = datetime.now(UTC)
+        for s in suggestions:
+            body = (
+                f"# Auto-tuner proposal for rule {s.rule_id}\n"
+                f"# Action: {s.action}\n"
+                f"# {s.rationale}\n"
+                f"# FP rate {s.fp_rate:.0%} over {s.sample_count} decided alerts"
+                + (f"; cluster entity: {s.entity}\n" if s.entity else "\n")
+                + "# TODO(analyst): review + attach fixtures before promotion.\n"
+            )
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO aisoc_detection_rule_proposals
+                      (id, tenant_id, base_rule_id, name, description,
+                       rule_language, rule_body, category, severity, confidence,
+                       status, source, created_at, updated_at)
+                    VALUES
+                      (:id, :tid, NULL, :name, :desc,
+                       'sigma', :body, 'tuning', 'low', 60,
+                       'draft', 'auto-tuner', :now, :now)
+                    """
+                ).bindparams(
+                    id=uuid.uuid4(),
+                    tid=current_user.tenant_id,
+                    name=f"tune {s.action}: {s.rule_id}"[:200],
+                    desc=s.rationale[:2000],
+                    body=body,
+                    now=now,
+                )
+            )
+            created += 1
+        await db.commit()
+
+    return AutoSuggestResponse(
+        window_days=window_days,
+        records_considered=len(records),
+        suggestions=[asdict(s) for s in suggestions],
+        proposals_created=created,
+    )
 
 
 @router.get("", response_model=TuningResponse)

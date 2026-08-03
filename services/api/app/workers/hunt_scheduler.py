@@ -55,7 +55,10 @@ the flag the same way it gates ``oauth_refresh`` and
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
+import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 
@@ -225,6 +228,65 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
     )
 
 
+def _hunt_to_detection_enabled() -> bool:
+    """Bridge scheduled-hunt findings into governed detection proposals (Wave 1).
+    On by default; disable with AISOC_HUNT_TO_DETECTION=false."""
+    return os.getenv("AISOC_HUNT_TO_DETECTION", "true").strip().lower() not in {"0", "false", "no", "off"}
+
+
+async def _propose_detection_from_hunt(db: AsyncSession, hunt: SavedHunt, hit_count: int) -> None:
+    """Open a DRAFT detection proposal from a scheduled hunt that found hits.
+
+    Closes the "hunt finding -> new detection" loop: a recurring, productive
+    hunt becomes a candidate detection in the governed propose -> review ->
+    eval-gate -> promote lifecycle. The proposal is a DRAFT scaffold (source
+    ``hunt-finding``) that an engineer converts into detection logic + fixtures
+    before promotion — findings never auto-promote.
+    """
+    if hit_count <= 0 or not _hunt_to_detection_enabled():
+        return
+    query = hunt.translated_query if isinstance(hunt.translated_query, dict) else {}
+    lang = str(getattr(hunt, "language", "esql") or "esql")
+    q_text = str(query.get(lang) or query.get("esql") or query.get("spl") or query.get("kql") or "").strip()
+    scaffold = (
+        f"# Draft detection proposed from scheduled hunt {hunt.name!r}.\n"
+        f"# It returned {hit_count} hit(s) on its scheduled run.\n"
+        f"# TODO(analyst): convert the hunt query below into Sigma detection logic\n"
+        f"#   and attach positive/negative fixtures before promotion.\n"
+        f"# Original question: {hunt.nl_query}\n"
+        f"# {lang} query: {q_text or '(none captured)'}\n"
+    )
+    await db.execute(
+        text(
+            """
+            INSERT INTO aisoc_detection_rule_proposals
+              (id, tenant_id, base_rule_id, name, description,
+               rule_language, rule_body, category, severity, confidence,
+               status, source, created_at, updated_at)
+            VALUES
+              (:id, :tid, NULL, :name, :desc,
+               'sigma', :body, 'hunt', 'medium', 60,
+               'draft', 'hunt-finding', :now, :now)
+            """
+        ).bindparams(
+            id=uuid.uuid4(),
+            tid=hunt.tenant_id,
+            name=f"hunt: {hunt.name}"[:200],
+            desc=(f"Auto-proposed from scheduled hunt {hunt.name!r} ({hit_count} hit(s)). {hunt.nl_query}")[:2000],
+            body=scaffold,
+            now=datetime.now(UTC),
+        )
+    )
+    logger.info("hunt_scheduler.detection_proposed hunt_id=%s tenant=%s hits=%d", hunt.id, hunt.tenant_id, hit_count)
+
+
+async def _on_hunt_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int) -> None:
+    """Default hit handler: open a case AND propose a detection (Wave 1)."""
+    await _open_case_for_hits(db, hunt, hit_count)
+    with contextlib.suppress(Exception):
+        await _propose_detection_from_hunt(db, hunt, hit_count)
+
+
 # ---------------------------------------------------------------------------
 # Hunt execution — routes through the warehouse provider registry
 # ---------------------------------------------------------------------------
@@ -315,7 +377,7 @@ async def run_once(
         db = AsyncSessionLocal()
     assert db is not None  # for type narrowing
     now = now or datetime.now(UTC)
-    callback = hit_callback or _open_case_for_hits
+    callback = hit_callback or _on_hunt_hits
     runner = executor or _execute_hunt
     fired = 0
     try:
@@ -394,5 +456,7 @@ __all__ = [
     "_is_due",
     "_interval_seconds_for",
     "_next_fire_at",
+    "_on_hunt_hits",
     "_open_case_for_hits",
+    "_propose_detection_from_hunt",
 ]
