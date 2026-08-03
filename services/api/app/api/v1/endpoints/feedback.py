@@ -40,7 +40,16 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
-_VALID_VERDICTS = {"true_positive", "false_positive", "benign", "escalate"}
+# ``benign_true_positive`` (#526): a valid detection of authorized/expected
+# activity. Kept distinct from ``false_positive`` so BTP never inflates a rule's
+# false-positive rate. Existing ``benign`` records stay valid (no migration).
+_VALID_VERDICTS = {
+    "true_positive",
+    "benign_true_positive",
+    "false_positive",
+    "benign",
+    "escalate",
+}
 
 
 def _coerce_uuid(value: str, field: str) -> uuid.UUID:
@@ -58,7 +67,7 @@ class AlertOverrideRequest(BaseModel):
     original_verdict: str = Field(..., description="The AI-generated verdict being overridden")
     corrected_verdict: str = Field(
         ...,
-        description="Analyst's verdict: true_positive | false_positive | benign | escalate",
+        description="Analyst's verdict: true_positive | benign_true_positive | false_positive | benign | escalate",
     )
     reason: str | None = Field(None, description="Optional free-text justification")
 
@@ -249,6 +258,9 @@ class OverrideSummaryResponse(BaseModel):
     total_overrides: int
     false_positive_corrections: int
     true_positive_corrections: int
+    # Counted separately from false_positive so a valid detection of authorized
+    # activity never inflates the false-positive rate on the FPR card (#526).
+    benign_true_positive_corrections: int = 0
     benign_corrections: int
     escalate_corrections: int
 
@@ -261,6 +273,7 @@ async def get_override_summary(
     """Return a summary of analyst overrides for this tenant."""
     counts: dict[str, int] = {
         "true_positive": 0,
+        "benign_true_positive": 0,
         "false_positive": 0,
         "benign": 0,
         "escalate": 0,
@@ -285,6 +298,7 @@ async def get_override_summary(
         total_overrides=total,
         false_positive_corrections=counts["false_positive"],
         true_positive_corrections=counts["true_positive"],
+        benign_true_positive_corrections=counts["benign_true_positive"],
         benign_corrections=counts["benign"],
         escalate_corrections=counts["escalate"],
     )
