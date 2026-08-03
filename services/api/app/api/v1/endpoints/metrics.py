@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.config import settings
@@ -153,6 +153,11 @@ class FunnelMetrics(BaseModel):
     mitre_coverage: MitreCoverage
     deltas: FunnelDeltas
     generated_at: datetime
+    # Wave 1 (close the loop): measured count of repeat alerts auto-suppressed
+    # from prior outcome memory in this window (compounding alert reduction).
+    # ``repeat_suppression_rate`` = suppressed / (alerts_generated + suppressed).
+    repeat_alerts_suppressed: int = 0
+    repeat_suppression_rate: float = 0.0
 
 
 # ────────────────────────── v1.5 Pipeline-health models ───────────────────────
@@ -772,6 +777,25 @@ async def _events_of_interest_from_alerts(db, tenant_id, start, end) -> int:
     return int(val or 0)
 
 
+async def _repeat_alerts_suppressed(db, tenant_id, start, end) -> int:
+    """Measured count of repeat alerts auto-suppressed from prior outcome memory
+    in [start, end). Tenant-scoped at the query layer. Returns 0 when the table
+    doesn't exist yet (pre-migration) rather than failing the funnel."""
+    try:
+        result = await db.scalar(
+            text(
+                """
+                SELECT count(*) FROM aisoc_outcome_suppressions
+                 WHERE tenant_id = :tid AND created_at >= :start AND created_at < :end
+                """
+            ),
+            {"tid": tenant_id, "start": start, "end": end},
+        )
+        return int(result or 0)
+    except Exception:  # noqa: BLE001 — analytics table optional; never break the funnel
+        return 0
+
+
 async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict:
     """Compute the funnel for a single [start, end) window."""
     events_of_interest = await _events_of_interest(db, tenant_id, start, end)
@@ -891,6 +915,12 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     ratio = round(min(covered / mitre_total, 1.0), 4) if mitre_total > 0 else 0.0
     coverage = MitreCoverage(covered=covered, total=mitre_total, ratio=ratio)
 
+    suppressed = await _repeat_alerts_suppressed(db, tenant_id, start, end)
+    # Compounding reduction: of everything the loop *could* have queued
+    # (generated + suppressed), what share did prior outcomes suppress?
+    denom = alerts_generated + suppressed
+    suppression_rate = round(suppressed / denom, 4) if denom else 0.0
+
     return {
         "events_of_interest": int(events_of_interest),
         "correlation_instances": int(correlation_instances),
@@ -901,6 +931,8 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
         "correlation_efficiency": correlation_efficiency,
         "alert_yield": alert_yield,
         "mitre_coverage": coverage,
+        "repeat_alerts_suppressed": int(suppressed),
+        "repeat_suppression_rate": suppression_rate,
     }
 
 
@@ -997,4 +1029,6 @@ async def get_funnel_metrics(
         mitre_coverage=current["mitre_coverage"],
         deltas=deltas,
         generated_at=now,
+        repeat_alerts_suppressed=current["repeat_alerts_suppressed"],
+        repeat_suppression_rate=current["repeat_suppression_rate"],
     )
