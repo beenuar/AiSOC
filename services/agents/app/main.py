@@ -21,6 +21,7 @@ from app.core.telemetry import instrument_app
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
+from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.workers.business_context import BusinessContextApplier
@@ -41,6 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("playbook_store.seeded", count=n)
     except Exception as exc:
         logger.warning("Playbook store seed failed", error=str(exc))
+
+    # Wave 1 — surface an unroutable LLM gateway/alias config at boot instead of
+    # silently degrading to heuristics on the first (400ing) live call.
+    for warning in preflight_llm():
+        logger.warning("llm_preflight", detail=warning)
 
     # Load full MITRE ATT&CK corpus
     try:

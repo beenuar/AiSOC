@@ -30,12 +30,41 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections.abc import Iterable
 from typing import Any
 
 import structlog
+from langchain_core.messages import AIMessage
+
+from app.core.cost_telemetry import record_llm_call
+from app.llm.response_cache import ResponseCache
 
 logger = structlog.get_logger()
+
+# Wave 1 — content-addressed response cache in the LLM hot path. Identical
+# (model + prompt + input) calls are served from cache instead of paid for
+# again. Byte-identical to what the model returned, so it's determinism-safe.
+# Disable with AISOC_LLM_RESPONSE_CACHE=0.
+_RESPONSE_CACHE = ResponseCache()
+_RESPONSE_CACHE_ENABLED = os.getenv("AISOC_LLM_RESPONSE_CACHE", "1").lower() not in ("0", "false", "no")
+
+
+def _model_name(llm: Any) -> str:
+    return str(getattr(llm, "model", None) or getattr(llm, "model_name", None) or "")
+
+
+def _cache_parts(messages: list[Any]) -> tuple[str, str]:
+    """Split messages into (system prompt, user input) for the cache key."""
+    prompt_parts: list[str] = []
+    input_parts: list[str] = []
+    for m in messages:
+        content = getattr(m, "content", m)
+        if not isinstance(content, str):
+            content = str(content)
+        mtype = (getattr(m, "type", "") or m.__class__.__name__).lower()
+        (prompt_parts if "system" in mtype else input_parts).append(content)
+    return "\n".join(prompt_parts), "\n".join(input_parts)
 
 
 AGENTS_LLM_CONTRACT_ENFORCED_ENV = "AISOC_AGENTS_LLM_CONTRACT_ENFORCED"
@@ -307,7 +336,31 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     """
     materialised = list(messages)
     LLMInputContract.validate(materialised)
-    return await llm.ainvoke(materialised, **kwargs)
+
+    model = _model_name(llm)
+    prompt, user_input = _cache_parts(materialised)
+    # Only cache plain calls (no per-call kwargs like temperature overrides).
+    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs
+    if use_cache:
+        cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input)
+        if cached is not None:
+            return AIMessage(content=cached)
+
+    t0 = time.monotonic()
+    result = await llm.ainvoke(materialised, **kwargs)
+    latency_ms = (time.monotonic() - t0) * 1000.0
+    # Record token/cost against the active CostTracker (no-op if none bound), so
+    # the high-volume auto-triage path is finally visible in the cost dashboard.
+    try:
+        record_llm_call(result, model=model, latency_ms=latency_ms)
+    except Exception:  # noqa: BLE001 — telemetry must never break an LLM call
+        pass
+
+    if use_cache:
+        content = getattr(result, "content", None)
+        if isinstance(content, str) and content:
+            _RESPONSE_CACHE.store(model=model, prompt=prompt, user_input=user_input, response=content)
+    return result
 
 
 async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):

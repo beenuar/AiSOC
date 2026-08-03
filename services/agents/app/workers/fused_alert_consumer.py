@@ -41,7 +41,9 @@ import structlog
 from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
+from app.core.cost_telemetry import CostTracker
 from app.investigator import ledger as ledger_module
+from app.llm.factory import llm_override
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
@@ -192,24 +194,49 @@ class FusedAlertTriageWorker:
         decision = governor.check(str(state.tenant_id), fingerprint)
 
         tier: str
+        cost_usd = 0.0
+        tokens = 0
         if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict:
             _METRICS["deduplicated"] += 1
             verdict = decision.cached_verdict.get("verdict")
             confidence = float(decision.cached_verdict.get("confidence", 0.0))
             tier = "cached"
         else:
-            use_llm = decision.use_llm and not is_deterministic_mode() and await self._llm_available(state.tenant_id)
-            if use_llm:
-                state, tier = await self._llm_triage(state)
-            else:
-                state = await run_triage(state)
-                tier = "deterministic"
-                _METRICS["deterministic"] += 1
+            cfg = await self._resolve_tenant_llm(state.tenant_id)
+            use_llm = decision.use_llm and not is_deterministic_mode() and cfg is not None
+            # Bind a CostTracker so every LLM call on this path records its
+            # token/cost (safe_ainvoke -> record_llm_call) — previously the
+            # highest-volume LLM spend was recorded as $0 and invisible.
+            async with CostTracker(run_id=str(state.run_id), tenant_id=str(state.tenant_id)) as tracker:
+                if use_llm and cfg is not None:
+                    # Route the LLM call through the tenant's BYOK key/model so
+                    # auto-triage actually honours per-tenant credentials.
+                    with llm_override(api_key=cfg.api_key, base_url=cfg.base_url, model=cfg.model):
+                        state, tier = await self._llm_triage(state)
+                else:
+                    state = await run_triage(state)
+                    tier = "deterministic"
+                    _METRICS["deterministic"] += 1
+                cost_usd = tracker.total_cost_usd
+                tokens = tracker.total_tokens
             verdict = state.verdict
             confidence = state.confidence
+            # Close the cost-governor loop: cache the verdict (so an alert flood
+            # dedups instead of re-paying) and account the spend (so per-tenant
+            # budgets + the circuit breaker actually fire). Best-effort.
+            try:
+                governor.record_verdict(
+                    str(state.tenant_id),
+                    fingerprint,
+                    {"verdict": verdict, "confidence": confidence},
+                    usd=cost_usd,
+                    tokens=tokens,
+                )
+            except Exception as exc:  # noqa: BLE001 — governance accounting is best-effort
+                logger.debug("auto_triage_worker.governor_record_failed", error=str(exc))
 
         _METRICS["triaged"] += 1
-        await self._record(state, tier=tier, verdict=verdict, confidence=confidence)
+        await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
 
         return {
             "run_id": str(state.run_id),
@@ -224,13 +251,14 @@ class FusedAlertTriageWorker:
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
         }
 
-    async def _llm_available(self, tenant_id: uuid.UUID) -> bool:
+    async def _resolve_tenant_llm(self, tenant_id: uuid.UUID) -> Any:
+        """Resolve the tenant's LLM config, or None to force deterministic triage."""
         try:
             cfg = await resolve_llm_config(str(tenant_id))
-            return bool(cfg.allowed and cfg.api_key)
+            return cfg if (cfg.allowed and cfg.api_key) else None
         except Exception as exc:  # noqa: BLE001 — resolver failure => deterministic
             logger.debug("auto_triage_worker.llm_resolve_failed", error=str(exc))
-            return False
+            return None
 
     async def _llm_triage(self, state: InvestigationState) -> tuple[InvestigationState, str]:
         try:
@@ -243,7 +271,16 @@ class FusedAlertTriageWorker:
             _METRICS["deterministic"] += 1
             return state, "deterministic"
 
-    async def _record(self, state: InvestigationState, *, tier: str, verdict: Any, confidence: float) -> None:
+    async def _record(
+        self,
+        state: InvestigationState,
+        *,
+        tier: str,
+        verdict: Any,
+        confidence: float,
+        tokens: int = 0,
+        cost_usd: float = 0.0,
+    ) -> None:
         """Best-effort ledger write. No DB => no-op (never raises)."""
         try:
             await ledger_module.start_run(
@@ -260,8 +297,8 @@ class FusedAlertTriageWorker:
                 status="completed",
                 error=None,
                 iterations=state.iteration_count,
-                total_tokens=0,
-                total_cost_usd=0.0,
+                total_tokens=tokens,
+                total_cost_usd=cost_usd,
             )
         except Exception as exc:  # noqa: BLE001 — audit is best-effort
             logger.debug("auto_triage_worker.ledger_noop", error=str(exc), verdict=verdict, confidence=confidence)

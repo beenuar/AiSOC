@@ -106,6 +106,30 @@ litellm_settings:
   # deterministic path instead of hanging the alert drawer.
   request_timeout: 60
 
+# ── Router: retries + cross-model fallbacks ───────────────────────────────────
+# model_pins.py documents that "the LiteLLM gateway owns any model-level
+# fallback" — this block makes that real. Without it each alias had exactly one
+# model and zero failover, so a single provider blip dropped straight to the
+# offline deterministic floor.
+router_settings:
+  # Retry a transient failure (rate limit / 5xx / timeout) on the same alias
+  # before falling back.
+  num_retries: 2
+  # Cross-model failover: if an alias's primary model keeps failing, route the
+  # request to an adjacent/cheaper alias so quality degrades gracefully instead
+  # of dropping to heuristics. Keys are the requested alias; values are ordered
+  # fallbacks.
+  fallbacks:
+    - aisoc-investigation: ["aisoc-triage"]
+    - aisoc-report: ["aisoc-summary"]
+    - aisoc-recon: ["aisoc-triage"]
+    - aisoc-copilot: ["aisoc-triage"]
+    - aisoc-nl: ["aisoc-triage"]
+  # Trip a per-model cooldown after repeated failures so a wedged provider stops
+  # being tried for a short window.
+  allowed_fails: 3
+  cooldown_time: 30
+
 general_settings:
   # Clients (the AiSOC services) authenticate to the gateway with this key. Set
   # it in the environment; AiSOC sends it as its OPENAI_API_KEY when
