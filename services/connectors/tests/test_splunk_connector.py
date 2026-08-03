@@ -118,12 +118,8 @@ async def test_fetch_alerts_dispatches_configured_saved_search():
 @pytest.mark.asyncio
 async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
     c = _conn(saved_search="")
-    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(
-        return_value=httpx.Response(201, json={"sid": "SID2"})
-    )
-    respx.get(url__regex=r".+/services/search/jobs/SID2/results").mock(
-        return_value=httpx.Response(200, json={"results": []})
-    )
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(return_value=httpx.Response(201, json={"sid": "SID2"}))
+    respx.get(url__regex=r".+/services/search/jobs/SID2/results").mock(return_value=httpx.Response(200, json={"results": []}))
     respx.get(url__regex=r".+/services/search/jobs/SID2(\?.*)?$").mock(return_value=_done_status())
 
     await c.fetch_alerts()

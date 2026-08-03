@@ -262,11 +262,7 @@ async def record_checkpoint(
     now = datetime.now(UTC)
     patch = cast(json.dumps({"checkpoint": checkpoint}), JSONB)
     merged = func.coalesce(connectors_table.c.connector_config, cast("{}", JSONB)).op("||")(patch)
-    stmt = (
-        update(connectors_table)
-        .where(connectors_table.c.id == connector_id)
-        .values(connector_config=merged, updated_at=now)
-    )
+    stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(connector_config=merged, updated_at=now)
     await connection.execute(stmt)
 
 
