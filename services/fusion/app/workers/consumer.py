@@ -13,7 +13,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from app.core.config import settings
 from app.models.alert import FusionDecision, RawAlert
-from app.services.alert_sink import AlertSink
+from app.services.alert_sink import AlertSink, PersistOutcome, PersistResult
 from app.services.detection_engine import DetectionEngine
 from app.services.dlq import DeadLetter, DeadLetterQueue, LoggingDLQ, safe_record
 from app.services.event_schema import validate_event
@@ -33,6 +33,8 @@ _METRICS = {
     "promoted": 0,
     "not_promoted": 0,
     "persisted": 0,
+    "persist_unavailable": 0,
+    "persist_failed": 0,
     "laked": 0,
     "detected": 0,
     "dead_lettered": 0,
@@ -273,7 +275,19 @@ class FusionWorker:
         await self._fuse_and_persist(alert, source_event_id=validation.source_event_id)
 
     async def _fuse_and_persist(self, alert: RawAlert, *, source_event_id: str | None = None) -> None:
-        """Run one RawAlert through fusion, publish it, and persist it."""
+        """Run one RawAlert through fusion, persist it, then publish it.
+
+        Issue #568: the canonical, replay-stable alert id and source-event
+        provenance are stamped on the RawAlert *before* fusion, so ``FusedAlert.id``
+        (derived from ``alert.id``) matches the persisted ``alerts.id`` row.
+        Persist runs *before* publish so the published envelope carries the
+        durable row id + a truthful persistence outcome downstream can trust.
+        """
+        # Stamp source-event provenance + canonical id (issue #568).
+        if source_event_id and source_event_id not in alert.source_event_ids:
+            alert.source_event_ids.append(source_event_id)
+        alert.id = alert.deterministic_id()
+
         fused = await self._engine.process(alert)
         _METRICS["processed"] += 1
 
@@ -284,16 +298,27 @@ class FusionWorker:
         else:
             _METRICS["new_incidents"] += 1
 
-        # Publish fused alert (even duplicates, so downstream can track)
+        # Persist FIRST (Phase 3.1 sink). Fail-soft + idempotent — see
+        # app/services/alert_sink.py. Duplicates are handled inside.
+        result = PersistResult(PersistOutcome.UNAVAILABLE, str(fused.id))
+        if self._sink is not None:
+            result = await self._sink.persist(fused)
+            if result.outcome is PersistOutcome.INSERTED:
+                _METRICS["persisted"] += 1
+            elif result.outcome is PersistOutcome.UNAVAILABLE:
+                _METRICS["persist_unavailable"] += 1
+            elif result.outcome is PersistOutcome.FAILED:
+                _METRICS["persist_failed"] += 1
+
+        # Publish fused alert (even duplicates, so downstream can track),
+        # carrying the durable row id + persistence outcome (issue #568).
+        envelope = fused.model_dump(mode="json")
+        envelope["alert_row_id"] = result.alert_id
+        envelope["persist_outcome"] = result.outcome.value
         await self._producer.send(
             settings.kafka_topic_alerts_fused,
-            value=fused.model_dump(mode="json"),
+            value=envelope,
         )
-
-        # Persist to the alert store (Phase 3.1). Fail-soft + idempotent —
-        # see app/services/alert_sink.py. Duplicates are skipped inside.
-        if self._sink is not None and await self._sink.persist(fused) is not None:
-            _METRICS["persisted"] += 1
 
     @staticmethod
     def get_metrics() -> dict:

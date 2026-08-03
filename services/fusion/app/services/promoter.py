@@ -34,6 +34,7 @@ from typing import Any
 import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
+from app.services.provenance import extract_provenance
 
 logger = structlog.get_logger()
 
@@ -161,6 +162,7 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     severity = _SEVERITY_BY_ID.get(severity_id if isinstance(severity_id, int) else 0, AlertSeverity.MEDIUM)
 
     tactics, techniques = _mitre(ocsf)
+    connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
 
     return RawAlert(
         tenant_id=tenant_id,
@@ -177,4 +179,7 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         mitre_techniques=techniques,
         raw_event=ocsf,
         event_time=_event_time(ocsf),
+        connector_id=connector_id,
+        connector_type=connector_type,
+        ocsf_class_uid=class_uid,
     )

@@ -14,6 +14,7 @@ from app.models.alert import AlertSeverity
 from app.services.promoter import promote_normalized_event, should_promote
 
 TENANT = "00000000-0000-0000-0000-000000000001"
+CONNECTOR = "00000000-0000-0000-0000-0000000000c1"
 
 
 def _message(ocsf_overrides: dict | None = None) -> dict:
@@ -44,7 +45,8 @@ def _message(ocsf_overrides: dict | None = None) -> dict:
         ocsf.update(ocsf_overrides)
     return {
         "id": str(uuid.uuid4()),
-        "connector_id": "conn-1",
+        "connector_id": CONNECTOR,
+        "connector_type": "crowdstrike_falcon",
         "tenant_id": TENANT,
         "ocsf_event": ocsf,
         "normalization_version": "1.1.0",
@@ -87,6 +89,30 @@ class TestPromoteNormalizedEvent:
         assert alert.mitre_tactics == ["Credential Access"]
         assert alert.event_time is not None
         assert alert.raw_event["class_uid"] == 2001
+        # Provenance carried first-class (issue #568)
+        assert str(alert.connector_id) == CONNECTOR
+        assert alert.connector_type == "crowdstrike_falcon"
+        assert alert.ocsf_class_uid == 2001
+
+    def test_provenance_falls_back_to_ocsf_when_envelope_sparse(self):
+        # No top-level connector_id/type — recover from the OCSF payload.
+        msg = _message()
+        del msg["connector_id"]
+        del msg["connector_type"]
+        msg["ocsf_event"]["source_connector_id"] = CONNECTOR
+        alert = promote_normalized_event(msg)
+        assert alert is not None
+        assert str(alert.connector_id) == CONNECTOR
+        # connector_type falls back to the OCSF product vendor+name label.
+        assert alert.connector_type == "CrowdStrike Falcon"
+
+    def test_canonical_id_is_deterministic_across_promotions(self):
+        # The stamped id happens in the worker, but the derivation is on the
+        # model and must be stable for identical content (issue #568).
+        a = promote_normalized_event(_message())
+        b = promote_normalized_event(_message())
+        assert a is not None and b is not None
+        assert a.deterministic_id() == b.deterministic_id()
 
     def test_severity_ladder(self):
         for sev_id, expected in [

@@ -43,6 +43,7 @@ def _worker_with_dlq() -> tuple[FusionWorker, InMemoryDLQ]:
     engine = SimpleNamespace(
         process=AsyncMock(
             return_value=SimpleNamespace(
+                id="fused-1",
                 fusion_decision=FusionDecision.NEW_ALERT,
                 model_dump=lambda mode="json": {"id": "fused-1"},
             )

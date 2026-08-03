@@ -33,6 +33,10 @@ class Alert(Base):
     connector_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_event_ids: Mapped[list] = mapped_column(JSONB, default=list)
     ocsf_class_uid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Detection-rule / Splunk saved-search provenance (issue #568) — explicit
+    # identifiers so downstream never parses them out of the title/source.
+    rule_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rule_name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Analyst verdict / disposition (set via feedback endpoint)
     disposition: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)

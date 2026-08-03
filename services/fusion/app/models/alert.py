@@ -10,9 +10,17 @@ import json
 from datetime import datetime
 from enum import Enum
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from pydantic import BaseModel, Field
+
+# Fixed namespace for deriving the canonical, replay-stable alert UUID from an
+# alert's dedup fingerprint (issue #568). Using uuid5 over a constant namespace
+# means the same logical alert (same tenant + fingerprint) always resolves to
+# the same UUID across RawAlert → FusedAlert → Kafka → Postgres → ledger → API,
+# so a replayed source event maps to exactly one alert row instead of minting a
+# fresh random id on every pass.
+ALERT_ID_NAMESPACE = UUID("a15c0c00-0000-5568-a150-c000000a1e77")
 
 
 class AlertSeverity(str, Enum):
@@ -68,8 +76,29 @@ class RawAlert(BaseModel):
     tags: list[str] = Field(default_factory=list)
     risk_score: float = 0.0
 
+    # Provenance (issue #568) — carried first-class end-to-end so downstream
+    # (auto-triage, the investigation graph, the Splunk evidence tool) can
+    # resolve the originating connector and source events WITHOUT parsing the
+    # human-readable title/source strings.
+    connector_id: UUID | None = None
+    connector_type: str | None = None
+    source_event_ids: list[str] = Field(default_factory=list)
+    ocsf_class_uid: int | None = None
+    rule_id: str | None = None  # detection rule / Splunk saved-search identifier
+    rule_name: str | None = None
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     event_time: datetime | None = None
+
+    def deterministic_id(self) -> UUID:
+        """Replay-stable canonical UUID derived from the dedup fingerprint.
+
+        Same tenant + fingerprint ⇒ same UUID on every pass, so replays resolve
+        to exactly one alert row (issue #568). This is intentionally aligned
+        with :meth:`fingerprint` (the dedup key) — two events that dedup to the
+        same row also share the same canonical id.
+        """
+        return uuid5(ALERT_ID_NAMESPACE, f"{self.tenant_id}:{self.fingerprint()}")
 
     def fingerprint(self) -> str:
         """Generate a stable deduplication fingerprint."""

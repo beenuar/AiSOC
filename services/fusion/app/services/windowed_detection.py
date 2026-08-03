@@ -30,6 +30,7 @@ import structlog
 from app.models.alert import AlertSeverity, RawAlert
 from app.services.detection_engine import DetectionHit
 from app.services.detection_matcher import matches
+from app.services.provenance import extract_provenance
 
 logger = structlog.get_logger()
 
@@ -180,6 +181,7 @@ class WindowedDetectionEngine:
         except (ValueError, TypeError):
             return None
         fields = self._fields(message)
+        connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
         return RawAlert(
             tenant_id=tenant_id,
             source=f"detection:{hit.rule_id}",
@@ -191,4 +193,9 @@ class WindowedDetectionEngine:
             username=fields.get("user"),
             mitre_techniques=hit.mitre,
             raw_event=ocsf,
+            connector_id=connector_id,
+            connector_type=connector_type,
+            ocsf_class_uid=class_uid,
+            rule_id=hit.rule_id,
+            rule_name=hit.name,
         )
