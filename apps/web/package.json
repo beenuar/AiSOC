@@ -51,7 +51,7 @@
     "@storybook/react-vite": "^9.1.0",
     "@storybook/test-runner": "^0.23.0",
     "@tailwindcss/postcss": "^4.3.2",
-    "@tailwindcss/vite": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.5.2",
