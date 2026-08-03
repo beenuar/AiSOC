@@ -71,7 +71,7 @@
 | slack_audit | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
 | snowflake | saas | 5 | 1 | 4 | ✅ | ✅ | ✅ |
 | snyk | vcs | 3 | 1 | 1 | ✅ | ✅ | ✅ |
-| splunk | siem | 4 | 1 | 4 | ✅ | ✅ | ✅ |
+| splunk | siem | 5 | 1 | 4 | ✅ | ✅ | ✅ |
 | sublime_security | saas | 2 | 1 | 3 | ✅ | ✅ | ✅ |
 | sumo_logic | siem | 3 | 1 | 4 | ✅ | ✅ | ✅ |
 | sysdig | siem | 2 | 1 | 4 | ✅ | ✅ | ✅ |
