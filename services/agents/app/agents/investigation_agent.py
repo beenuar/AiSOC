@@ -116,9 +116,7 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     # bounded evidence query failed/timed out (applicable but not queried), a
     # dismissive verdict is downgraded to needs_review so a human decides.
     if splunk_evidence.applicable and not splunk_evidence.queried and verdict in (FALSE_POSITIVE, BENIGN, BENIGN_TRUE_POSITIVE):
-        state.add_finding(
-            "Splunk evidence unavailable — cannot confirm a benign/false-positive verdict; escalating to needs_review."
-        )
+        state.add_finding("Splunk evidence unavailable — cannot confirm a benign/false-positive verdict; escalating to needs_review.")
         verdict = NEEDS_REVIEW
 
     state.confidence = confidence

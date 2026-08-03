@@ -55,6 +55,7 @@ class AutoTriageError(RuntimeError):
     deterministic triage or mark the alert ``needs_review`` — never null.
     """
 
+
 _metrics: dict[str, Any] = {
     "auto_resolved_count": 0,
     "escalated_count": 0,

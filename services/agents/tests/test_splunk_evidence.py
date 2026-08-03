@@ -175,7 +175,7 @@ async def test_client_issues_bounded_oneshot_request(monkeypatch):
 
     creds = SplunkCreds(base_url="https://splunk.local:8089", token=TOKEN, ssl_verify=False)
     client = SplunkEvidenceClient(creds, max_results=50)
-    results = await client.search("search index=main (host=\"h\") | head 50", earliest="-6h", latest="now")
+    results = await client.search('search index=main (host="h") | head 50', earliest="-6h", latest="now")
 
     assert len(results) == 2
     assert captured["url"].endswith("/services/search/jobs")
