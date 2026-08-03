@@ -14,12 +14,15 @@ consoles via a toggle (many QRadar deployments use an internal CA).
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
 import structlog
 
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
+from app.federated.query import UnifiedQuery
+from app.federated.translators import to_aql
 
 logger = structlog.get_logger()
 
@@ -32,6 +35,7 @@ class QRadarConnector(BaseConnector):
     connector_id = "qradar"
     connector_name = "IBM QRadar"
     connector_category = "siem"
+    supports_federated_search = True
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -126,6 +130,37 @@ class QRadarConnector(BaseConnector):
         if m >= 2:
             return "low"
         return "info"
+
+    async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
+        """Run a translated AQL search via the QRadar Ariel API.
+
+        Returns raw event rows for analyst pivoting (not normalized alerts), so
+        the API layer stamps connector identity onto each row downstream. The
+        Ariel flow is create-search -> poll-until-COMPLETED -> fetch-results.
+        """
+        aql = to_aql(unified, table="events")
+        async with httpx.AsyncClient(timeout=60.0, verify=self._verify) as client:
+            resp = await client.post(
+                f"{self._base}/api/ariel/searches",
+                headers=self._headers(),
+                params={"query_expression": aql},
+            )
+            resp.raise_for_status()
+            search_id = resp.json().get("search_id")
+            if not search_id:
+                return []
+            for _ in range(30):
+                status_resp = await client.get(f"{self._base}/api/ariel/searches/{search_id}", headers=self._headers())
+                state = status_resp.json().get("status", "")
+                if state in ("COMPLETED", "ERROR", "CANCELED"):
+                    break
+                await asyncio.sleep(2)
+            results = await client.get(
+                f"{self._base}/api/ariel/searches/{search_id}/results",
+                headers={**self._headers(), "Range": "items=0-999"},
+            )
+            results.raise_for_status()
+            return list(results.json().get("events", []))
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         return {
