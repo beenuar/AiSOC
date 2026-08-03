@@ -46,6 +46,7 @@ from app.agents.dispositions import NEEDS_REVIEW
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
+from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.llm.factory import llm_override
 from app.models.state import AgentStatus, InvestigationState
@@ -75,10 +76,18 @@ _METRICS = {
     "bc_suppressed": 0,
     "bc_mutated": 0,
     "needs_review_fallback": 0,
+    "escalated": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "errors": 0,
 }
+
+
+def _escalation_enabled() -> bool:
+    """Route non-auto-closed alerts through the full investigation graph
+    (issue #569). On by default; set ``AISOC_AGENT_ESCALATE_TO_GRAPH=0`` to
+    keep triage-only (e.g. in CI / low-resource deployments)."""
+    return os.getenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "1").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
@@ -128,6 +137,12 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         "raw_event": alert.get("raw_event", {}),
         "confidence": message.get("confidence_score"),
         "fusion_decision": message.get("fusion_decision"),
+        # Connector provenance (issue #568) carried through the graph so the
+        # investigation (e.g. the Splunk evidence tool, #570) can resolve the
+        # originating connector instance.
+        "connector_id": alert.get("connector_id"),
+        "connector_type": alert.get("connector_type"),
+        "source_event_ids": alert.get("source_event_ids", []),
     }
     # Deterministic, replay-stable run id (issue #571) — same alert + workflow
     # version ⇒ same run, so replays are idempotent in the ledger.
@@ -368,6 +383,14 @@ class FusedAlertTriageWorker:
         _METRICS["triaged"] += 1
         await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
 
+        # Issue #569: route escalations (anything NOT auto-closed — TP,
+        # low-confidence, needs_review) through the full investigation graph.
+        # High-confidence FP/BTP already terminated (status COMPLETED) and
+        # skip enrichment. Best-effort: the verdict is already durable, so an
+        # enrichment/investigation failure never fails the triage outcome.
+        if state.status is not AgentStatus.COMPLETED:
+            await self._maybe_escalate(state)
+
         return {
             "run_id": str(state.run_id),
             "incident_id": str(state.incident_id),
@@ -380,6 +403,23 @@ class FusedAlertTriageWorker:
             "response_dispatched": False,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
         }
+
+    async def _maybe_escalate(self, state: InvestigationState) -> None:
+        """Run the full investigation graph for an escalated alert (issue #569).
+
+        Shares the same graph runner as the manual investigations API. Every
+        node is recorded to the ledger under the deterministic run_id, so a
+        restart re-runs idempotently. Best-effort + budgeted — a failure or
+        timeout leaves the durable verdict intact and the alert escalated.
+        """
+        if not _escalation_enabled():
+            return
+        try:
+            async with CostTracker(run_id=str(state.run_id), tenant_id=str(state.tenant_id)):
+                await run_escalation(state, budget=default_budget(), seq_start=1)
+            _METRICS["escalated"] += 1
+        except Exception as exc:  # noqa: BLE001 — escalation is best-effort over a durable verdict
+            logger.warning("auto_triage_worker.escalation_failed", run_id=str(state.run_id), error=str(exc))
 
     async def _resolve_tenant_llm(self, tenant_id: uuid.UUID) -> Any:
         """Resolve the tenant's LLM config, or None to force deterministic triage."""

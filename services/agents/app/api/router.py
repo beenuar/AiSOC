@@ -11,12 +11,14 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from app.graph.workflow import investigation_graph
+from app.graph.runner import run_full_investigation
 from app.models.state import AgentTask, InvestigationState
 
 router = APIRouter()
 
-# In-memory run store (replace with Redis/DB in production)
+# In-memory run store for status polling. The durable record of every step is
+# the Postgres Investigation Ledger (written by the shared graph runner) — this
+# dict is only the fast local status cache for GET /investigations/{run_id}.
 _runs: dict[str, dict] = {}
 
 
@@ -35,12 +37,20 @@ class InvestigationResponse(BaseModel):
 
 
 async def _run_investigation(run_id: str, state: InvestigationState) -> None:
-    """Run investigation in background and store results."""
+    """Run investigation in background and store results.
+
+    Uses the SAME durable graph runner as the Kafka auto-triage worker
+    (issue #569), so manual and automated investigations share one
+    orchestration implementation and both persist every step to the ledger.
+    """
     try:
-        initial_state = state.to_dict()
-        result = await investigation_graph.ainvoke(initial_state)
-        _runs[run_id] = {"status": "completed", "result": result, "completed_at": datetime.utcnow().isoformat()}
-    except Exception as exc:
+        result = await run_full_investigation(state)
+        _runs[run_id] = {
+            "status": "completed",
+            "result": result.to_dict(),
+            "completed_at": datetime.utcnow().isoformat(),
+        }
+    except Exception as exc:  # noqa: BLE001 — surface failure via the status cache
         _runs[run_id] = {"status": "failed", "error": str(exc)}
 
 

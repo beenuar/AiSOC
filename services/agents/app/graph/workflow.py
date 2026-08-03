@@ -121,5 +121,30 @@ def build_investigation_graph() -> StateGraph:
     return graph.compile()
 
 
-# Module-level compiled graph (singleton)
+def build_escalation_graph() -> StateGraph:
+    """The post-triage escalation pipeline (issue #569).
+
+    Shares the SAME node implementations as the full graph but skips the
+    auto-triage entry node — used by the Kafka auto-triage worker, which has
+    already produced a governed verdict, to route escalated alerts (TP /
+    low-confidence / needs_review) through enrichment → investigation →
+    attack-path without re-triaging.
+
+    Flow: triage ──► enrichment ──► investigation ──► attack_path ──► END
+    """
+    graph = StateGraph(dict)
+    graph.add_node("triage", triage_node)
+    graph.add_node("enrichment", enrichment_node)
+    graph.add_node("investigation", investigation_node)
+    graph.add_node("attack_path", attack_path_node)
+    graph.set_entry_point("triage")
+    graph.add_edge("triage", "enrichment")
+    graph.add_edge("enrichment", "investigation")
+    graph.add_edge("investigation", "attack_path")
+    graph.add_edge("attack_path", END)
+    return graph.compile()
+
+
+# Module-level compiled graphs (singletons)
 investigation_graph = build_investigation_graph()
+escalation_graph = build_escalation_graph()

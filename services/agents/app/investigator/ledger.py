@@ -107,6 +107,22 @@ async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.
     return row["id"] if row else None
 
 
+async def resolve_tenant(tenant_ref: str) -> uuid.UUID | None:
+    """Resolve a tenant ref (UUID string / slug / name) to its UUID, or None.
+
+    Best-effort (no DB configured or lookup failure ⇒ None). Used by the shared
+    graph runner to attribute per-node ledger events (issue #569)."""
+    pool = await get_pool()
+    if pool is None:
+        return None
+    try:
+        async with pool.acquire() as conn:
+            return await _resolve_tenant_id(conn, tenant_ref)
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        logger.debug("ledger.resolve_tenant_failed", tenant_ref=tenant_ref, error=str(exc))
+        return None
+
+
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
     """Match the API service's set_rls_context — required so the audit-log
     immutability trigger and tenant policies allow our INSERTs."""

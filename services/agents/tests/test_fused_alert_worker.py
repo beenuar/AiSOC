@@ -61,6 +61,9 @@ def _no_ledger_db(monkeypatch):
     monkeypatch.setattr(worker_mod.ledger_module, "persist_auto_triage", _persist_noop)
     # Force the deterministic path unless a test overrides (no LLM key in CI).
     monkeypatch.setenv("AISOC_DETERMINISTIC", "0")
+    # Escalation runs the full graph (external calls); off by default in unit
+    # tests — the dedicated escalation tests enable it and stub run_escalation.
+    monkeypatch.setenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "0")
 
 
 def _worker() -> FusedAlertTriageWorker:
@@ -217,6 +220,63 @@ async def test_successful_triage_returns_true_and_commits(monkeypatch):
     worker = FusedAlertTriageWorker(bootstrap_servers="unused", max_attempts=2)
     # persist_auto_triage is stubbed to no-op by the autouse fixture.
     assert await worker._process_with_retry(_fused()) is True
+
+
+# ── #569: escalation into the full investigation graph ───────────────────────
+
+
+async def test_non_auto_closed_alert_escalates_to_full_graph(monkeypatch):
+    # A critical cred-dump triages to a non-benign verdict (not auto-closed) →
+    # it must enter the full investigation graph.
+    monkeypatch.setenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "1")
+    monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=False))
+    called: dict = {}
+
+    async def _fake_escalation(state, **kwargs):  # noqa: ANN003
+        called["state"] = state
+        return state
+
+    monkeypatch.setattr(worker_mod, "run_escalation", _fake_escalation)
+    result = await _worker().triage(_fused())
+    assert result["verdict"] not in ("false_positive", "benign", "benign_true_positive")
+    assert "state" in called  # escalation ran
+
+
+async def test_high_confidence_auto_closed_does_not_escalate(monkeypatch):
+    # A high-confidence FP that auto-closed must terminate WITHOUT enrichment.
+    monkeypatch.setenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "1")
+    monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
+    monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=True))
+
+    async def _auto_closed(state):
+        state.verdict = "false_positive"
+        state.status = worker_mod.AgentStatus.COMPLETED
+        return state
+
+    monkeypatch.setattr(worker_mod, "run_triage", _auto_closed)
+    calls = {"n": 0}
+
+    async def _fake_escalation(state, **kwargs):  # noqa: ANN003
+        calls["n"] += 1
+        return state
+
+    monkeypatch.setattr(worker_mod, "run_escalation", _fake_escalation)
+    await _worker().triage(_fused())
+    assert calls["n"] == 0
+
+
+async def test_escalation_can_be_disabled_by_flag(monkeypatch):
+    monkeypatch.setenv("AISOC_AGENT_ESCALATE_TO_GRAPH", "0")
+    monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=False))
+    calls = {"n": 0}
+
+    async def _fake_escalation(state, **kwargs):  # noqa: ANN003
+        calls["n"] += 1
+        return state
+
+    monkeypatch.setattr(worker_mod, "run_escalation", _fake_escalation)
+    await _worker().triage(_fused())
+    assert calls["n"] == 0
 
 
 # ── fail-soft ─────────────────────────────────────────────────────────────────
