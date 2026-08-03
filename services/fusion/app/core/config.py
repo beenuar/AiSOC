@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # live event stream (app/services/detection_engine.py). Each firing rule
     # becomes a RawAlert routed through fusion.
     detection_engine_enabled: bool = Field(default=True, alias="AISOC_DETECTION_ENGINE_ENABLED")
+    # Stateful / windowed detections (brute force, spray, scans) — Redis-backed
+    # sliding-window thresholds evaluated alongside the stateless corpus.
+    windowed_detection_enabled: bool = Field(default=True, alias="AISOC_WINDOWED_DETECTION_ENABLED")
 
     # Phase A4 — consume the UEBA behavioral-anomaly stream and fold each
     # entity's latest anomaly into alert confidence + anomaly score at fuse

@@ -18,6 +18,7 @@ from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
 from app.services.ueba_signal import UebaSignalCache
+from app.services.windowed_detection import WindowedDetectionEngine
 from app.workers.consumer import FusionWorker
 
 
@@ -69,7 +70,16 @@ async def lifespan(app: FastAPI):
     )
     # Phase A2 — evaluate the executable detection corpus against the stream.
     detector = DetectionEngine() if settings.detection_engine_enabled else None
-    worker = FusionWorker(engine, sink=sink, lake=lake, detector=detector, ueba_cache=ueba_cache)
+    # Wave 2 — windowed detections share the fusion Redis for sliding-window state.
+    windowed_detector = WindowedDetectionEngine(redis_client) if settings.windowed_detection_enabled else None
+    worker = FusionWorker(
+        engine,
+        sink=sink,
+        lake=lake,
+        detector=detector,
+        windowed_detector=windowed_detector,
+        ueba_cache=ueba_cache,
+    )
     set_worker(worker)
 
     # Start Kafka worker as a background task

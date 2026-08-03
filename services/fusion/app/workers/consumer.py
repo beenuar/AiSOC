@@ -21,6 +21,7 @@ from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
 from app.services.promoter import promote_normalized_event
 from app.services.ueba_signal import UebaSignalCache
+from app.services.windowed_detection import WindowedDetectionEngine
 
 logger = structlog.get_logger()
 
@@ -49,12 +50,14 @@ class FusionWorker:
         dlq: DeadLetterQueue | None = None,
         lake: LakeWriter | None = None,
         detector: DetectionEngine | None = None,
+        windowed_detector: WindowedDetectionEngine | None = None,
         ueba_cache: UebaSignalCache | None = None,
     ) -> None:
         self._engine = engine
         self._sink = sink
         self._lake = lake
         self._detector = detector
+        self._windowed = windowed_detector
         self._ueba_cache = ueba_cache
         # A poison message must never vanish silently; default to a structured
         # logging DLQ so persistence-free deployments still get the signal.
@@ -72,7 +75,7 @@ class FusionWorker:
         topics = [settings.kafka_topic_alerts_raw]
         # Subscribe to raw_events when EITHER promotion or lake archival needs
         # it — the lake must fill even if promotion is turned off.
-        if settings.event_promotion_enabled or self._lake is not None or self._detector is not None:
+        if settings.event_promotion_enabled or self._lake is not None or self._detector is not None or self._windowed is not None:
             topics.append(settings.kafka_topic_raw_events)
         # Phase A4 — also consume the UEBA behavioral-anomaly stream so the
         # per-entity signal cache stays warm for fuse-time boosting.
@@ -221,6 +224,15 @@ class FusionWorker:
                     if det_alert is not None:
                         _METRICS["detected"] += 1
                         await self._fuse_and_persist(det_alert, source_event_id=validation.source_event_id)
+
+            # Wave 2 — stateful/windowed detections (brute force, spray, scans)
+            # count this event into its sliding window and fire once on threshold.
+            if self._windowed is not None:
+                for hit in await self._windowed.evaluate(payload):
+                    win_alert = self._windowed.build_alert(payload, hit)
+                    if win_alert is not None:
+                        _METRICS["detected"] += 1
+                        await self._fuse_and_persist(win_alert, source_event_id=validation.source_event_id)
 
             # Ingest-normalized OCSF event — run the deterministic promotion
             # policy (see app/services/promoter.py). Non-promoted events are
