@@ -1029,6 +1029,6 @@ async def get_funnel_metrics(
         mitre_coverage=current["mitre_coverage"],
         deltas=deltas,
         generated_at=now,
-        repeat_alerts_suppressed=current["repeat_alerts_suppressed"],
-        repeat_suppression_rate=current["repeat_suppression_rate"],
+        repeat_alerts_suppressed=current.get("repeat_alerts_suppressed", 0),
+        repeat_suppression_rate=current.get("repeat_suppression_rate", 0.0),
     )
