@@ -48,7 +48,7 @@ jsonschema = ">=4.21,<5.0"
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.4,<10.0"
 pytest-asyncio = ">=0.23,<1.5"
-respx = ">=0.22,<0.23"
+respx = ">=0.22,<0.24"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
