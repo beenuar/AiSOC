@@ -83,7 +83,10 @@ class FusionWorker:
             bootstrap_servers=settings.kafka_bootstrap_servers,
             group_id=settings.kafka_consumer_group,
             auto_offset_reset="latest",
-            enable_auto_commit=True,
+            # At-least-once: commit offsets only AFTER a message is fully
+            # processed (see _consume_loop), not on a background timer that could
+            # commit an in-flight message before processing finishes.
+            enable_auto_commit=False,
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         )
         self._producer = AIOKafkaProducer(
@@ -147,6 +150,15 @@ class FusionWorker:
             except Exception as exc:
                 _METRICS["errors"] += 1
                 logger.error("Failed to process message", error=str(exc), exc_info=True)
+            else:
+                # At-least-once: commit only after the message is handled
+                # (validated + laked + promoted, or dead-lettered). A crash
+                # before this line re-delivers the in-flight message on restart
+                # instead of losing it. Commit failure => reprocess on restart.
+                try:
+                    await self._consumer.commit()
+                except Exception as commit_exc:  # noqa: BLE001
+                    logger.warning("fusion.commit_failed", error=str(commit_exc))
             # Flush any stale lake batch so archival isn't stranded during a
             # low-traffic window (batch fills by size OR age).
             if self._lake is not None:

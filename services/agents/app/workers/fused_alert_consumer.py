@@ -136,7 +136,9 @@ class FusedAlertTriageWorker:
             bootstrap_servers=self._bootstrap,
             group_id=self._group_id,
             auto_offset_reset="latest",
-            enable_auto_commit=True,
+            # At-least-once: commit only after an alert is triaged, so a crash
+            # mid-triage re-delivers the alert instead of dropping it.
+            enable_auto_commit=False,
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         )
         await self._consumer.start()
@@ -151,6 +153,11 @@ class FusedAlertTriageWorker:
                 except Exception as exc:  # noqa: BLE001 — one poison alert must not kill the loop
                     _METRICS["errors"] += 1
                     logger.error("auto_triage_worker.error", error=str(exc), exc_info=True)
+                else:
+                    try:
+                        await self._consumer.commit()
+                    except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
+                        logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
         finally:
             await self._consumer.stop()
 
