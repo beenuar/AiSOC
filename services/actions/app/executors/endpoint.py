@@ -34,6 +34,7 @@ from datetime import datetime
 
 import structlog
 
+from app.clients.cortex_xdr_client import CortexXdrClient
 from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
 from app.clients.sentinelone_client import SentinelOneClient
@@ -79,6 +80,20 @@ def _s1_client(params: dict) -> SentinelOneClient | None:
     if not (console_url and api_token):
         return None
     return SentinelOneClient(console_url=console_url, api_token=api_token)
+
+
+def _cortex_client(params: dict) -> CortexXdrClient | None:
+    """Build a Cortex XDR client from request-scoped credentials.
+
+    Returns ``None`` when any field is missing so the executor falls through to
+    the next vendor / simulation.
+    """
+    api_key_id = params.get("cortex_api_key_id")
+    api_key = params.get("cortex_api_key")
+    fqdn = params.get("cortex_fqdn")
+    if not (api_key_id and api_key and fqdn):
+        return None
+    return CortexXdrClient(api_key_id=api_key_id, api_key=api_key, fqdn=fqdn)
 
 
 async def _cs_contain_host_by_hostname(cs: CrowdStrikeRTRClient, hostname: str) -> dict:
@@ -184,6 +199,30 @@ class IsolateHostExecutor(BaseExecutor):
                     completed_at=datetime.utcnow(),
                 )
 
+        # Cortex XDR fallback — same blast-radius + rollback contract so the
+        # rollback router can route ``vendor: cortex_xdr`` to ``lift_containment``.
+        cortex = _cortex_client(request.parameters)
+        if cortex:
+            try:
+                result = await cortex.contain_host(hostname)
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.COMPLETED,
+                    blast_radius=BlastRadius.HIGH,
+                    output=result,
+                    rollback_data={"hostname": hostname, "vendor": "cortex_xdr"},
+                    completed_at=datetime.utcnow(),
+                )
+            except Exception as exc:
+                logger.error("isolate_host.cortex_xdr.failed", hostname=hostname, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.HIGH,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
         logger.warning(
             "isolate_host.simulation",
             hostname=hostname,
@@ -200,8 +239,9 @@ class IsolateHostExecutor(BaseExecutor):
                 "isolation_id": f"SIM-ISO-{hostname}",
                 "note": (
                     "Simulation mode — provide cs_client_id/cs_client_secret, "
-                    "mde_tenant_id/mde_client_id/mde_client_secret, or "
-                    "s1_console_url/s1_api_token to enable live execution." + _SIM_FUNNEL_CTA
+                    "mde_tenant_id/mde_client_id/mde_client_secret, "
+                    "s1_console_url/s1_api_token, or "
+                    "cortex_api_key_id/cortex_api_key/cortex_fqdn to enable live execution." + _SIM_FUNNEL_CTA
                 ),
             },
             rollback_data={"hostname": hostname},

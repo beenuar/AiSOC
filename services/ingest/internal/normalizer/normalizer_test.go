@@ -102,3 +102,66 @@ func TestGenerateEventIDContentFallback(t *testing.T) {
 		t.Error("identical replay produced different IDs")
 	}
 }
+
+// A canonical connector envelope (source + raw_event) must be recognised and
+// mapped to an OCSF Security Finding regardless of connector_type, so
+// CrowdStrike/SentinelOne/etc. stop falling to the generic Network-Activity
+// profile (Wave 0).
+func TestCanonicalEnvelopeMapsToFinding(t *testing.T) {
+	n := newTestNormalizer()
+	raw := &RawEvent{
+		ConnectorID:   "c1",
+		ConnectorType: "crowdstrike", // has no raw profile keyed "crowdstrike"
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-08-02T00:00:00Z",
+		Payload: map[string]interface{}{
+			"source":      "crowdstrike",
+			"external_id": "THREAT-9",
+			"title":       "Malware Blocked",
+			"severity":    "high",
+			"src_ip":      "10.0.0.4",
+			"hostname":    "ws-9",
+			"created_at":  "2026-08-01T23:00:00Z",
+			"raw_event":   map[string]interface{}{"id": "THREAT-9"},
+		},
+	}
+	ev, err := n.Normalize(raw)
+	if err != nil {
+		t.Fatalf("Normalize error: %v", err)
+	}
+	ocsf := ev.OcsfEvent
+	if ocsf["class_uid"] != 2001 {
+		t.Errorf("class_uid = %v, want 2001 (Security Finding, not generic 4001)", ocsf["class_uid"])
+	}
+	if ocsf["severity_id"] != 4 {
+		t.Errorf("severity_id = %v, want 4 (high preserved)", ocsf["severity_id"])
+	}
+	if ocsf["message"] != "Malware Blocked" {
+		t.Errorf("message = %v, want the canonical title", ocsf["message"])
+	}
+	// The envelope ID must be the replay-stable event_id, not a random UUID.
+	if ev.ID != ocsf["event_id"] {
+		t.Errorf("envelope ID %q != ocsf event_id %q (should be the deterministic id)", ev.ID, ocsf["event_id"])
+	}
+	if ev.ID != generateEventID(raw) {
+		t.Errorf("envelope ID is not the deterministic generateEventID value")
+	}
+}
+
+// Identity-provider canonical envelopes map to Authentication (3002).
+func TestCanonicalEnvelopeIdpMapsToAuthentication(t *testing.T) {
+	n := newTestNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID: "c2", ConnectorType: "okta", TenantID: "t-okta-uuid-1111-1111-111111111111",
+		Payload: map[string]interface{}{
+			"source": "okta", "external_id": "EVT-1", "title": "Suspicious sign-in",
+			"severity": "medium", "raw_event": map[string]interface{}{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Normalize error: %v", err)
+	}
+	if ev.OcsfEvent["class_uid"] != 3002 {
+		t.Errorf("okta canonical class_uid = %v, want 3002 (Authentication)", ev.OcsfEvent["class_uid"])
+	}
+}

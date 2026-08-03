@@ -35,7 +35,15 @@ class SentinelOneConnector(BaseConnector):
 
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
-        return (Capability.PULL_ALERTS,)
+        # Response actions are executed by services/actions SentinelOneClient
+        # (contain_host / lift_containment / quarantine_file are all live). PID
+        # kill + run_script are unsupported by the S1 API, so they're omitted.
+        return (
+            Capability.PULL_ALERTS,
+            Capability.ISOLATE_HOST,
+            Capability.UNISOLATE_HOST,
+            Capability.QUARANTINE_FILE,
+        )
 
     @classmethod
     def schema(cls) -> ConnectorSchema:

@@ -58,10 +58,13 @@ class CortexXDRConnector(BaseConnector):
 
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
-        # Today the runtime only implements ``fetch_alerts`` (incidents).
-        # ``ISOLATE_HOST`` / ``KILL_PROCESS`` belong here once we wire the
-        # Cortex XDR Endpoints API.
-        return (Capability.PULL_ALERTS,)
+        # Endpoint isolation is executed by services/actions CortexXdrClient
+        # against the Cortex XDR Endpoints API (isolate / unisolate).
+        return (
+            Capability.PULL_ALERTS,
+            Capability.ISOLATE_HOST,
+            Capability.UNISOLATE_HOST,
+        )
 
     def __init__(self, api_key_id: str, api_key: str, fqdn: str):
         self._api_key_id = api_key_id

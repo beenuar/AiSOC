@@ -33,9 +33,16 @@ CREATE TABLE IF NOT EXISTS aisoc.raw_events (
     mitre_techniques Array(String),
     mitre_tactics   Array(String),
     iocs            Array(String)
-) ENGINE = MergeTree()
+)
+-- ReplacingMergeTree collapses rows sharing the ORDER BY key, keeping the row
+-- with the greatest ingest_time. Ingest now stamps a replay-stable event_id
+-- (derived from tenant + connector + vendor id), so overlapping connector
+-- polls / backfills / Kafka replays of the same event dedup on merge instead of
+-- accumulating duplicate lake rows. Queries needing exact-once before a merge
+-- can still use `FINAL` or `LIMIT 1 BY event_id`.
+ENGINE = ReplacingMergeTree(ingest_time)
 PARTITION BY (toYYYYMM(event_time), tenant_id)
-ORDER BY (tenant_id, event_time, class_uid)
+ORDER BY (tenant_id, event_time, class_uid, event_id)
 TTL toDateTime(event_time) + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 

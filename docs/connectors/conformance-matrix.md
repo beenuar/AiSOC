@@ -27,7 +27,7 @@
 | cloudflare | saas | 2 | 1 | 1 | ✅ | ✅ | ✅ |
 | cloudflare_zt | network | 4 | 1 | 3 | ✅ | ✅ | ✅ |
 | confluence_audit | saas | 3 | 1 | 2 | ✅ | ✅ | ✅ |
-| cortex_xdr | edr | 3 | 2 | 1 | ✅ | ✅ | ✅ |
+| cortex_xdr | edr | 3 | 2 | 3 | ✅ | ✅ | ✅ |
 | cortex_xsiam | siem | 3 | 2 | 5 | ✅ | ✅ | ✅ |
 | crowdstrike | edr | 3 | 1 | 6 | ✅ | ✅ | ✅ |
 | datadog | siem | 5 | 2 | 4 | ✅ | ✅ | ✅ |
@@ -66,7 +66,7 @@
 | rapid7_insightidr | siem | 2 | 1 | 4 | ✅ | ✅ | ✅ |
 | salesforce | saas | 4 | 2 | 4 | ✅ | ✅ | ✅ |
 | securonix | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
-| sentinelone | edr | 3 | 1 | 1 | ✅ | ✅ | ✅ |
+| sentinelone | edr | 3 | 1 | 4 | ✅ | ✅ | ✅ |
 | servicenow | saas | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | slack_audit | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
 | snowflake | saas | 5 | 1 | 4 | ✅ | ✅ | ✅ |
