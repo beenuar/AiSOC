@@ -15,6 +15,7 @@ worst possible failure mode.
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,6 +31,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    cast,
     func,
     select,
     update,
@@ -240,6 +242,30 @@ async def record_poll_failure(
             updated_at=now,
             last_outage_at=func.coalesce(connectors_table.c.last_outage_at, now),
         )
+    )
+    await connection.execute(stmt)
+
+
+async def record_checkpoint(
+    connection: Any,
+    connector_id: uuid.UUID,
+    checkpoint: dict[str, Any],
+) -> None:
+    """Persist a connector's ingest checkpoint under ``connector_config.checkpoint``.
+
+    Used by connectors that resume from a per-source cursor (e.g. Splunk, #529).
+    Merged into the existing JSONB with the ``||`` operator so the rest of the
+    config is preserved. Written only after ingest accepts the batch, so a
+    crash mid-poll leaves the previous checkpoint intact and the next poll
+    re-scans a bounded overlap rather than skipping events.
+    """
+    now = datetime.now(UTC)
+    patch = cast(json.dumps({"checkpoint": checkpoint}), JSONB)
+    merged = func.coalesce(connectors_table.c.connector_config, cast("{}", JSONB)).op("||")(patch)
+    stmt = (
+        update(connectors_table)
+        .where(connectors_table.c.id == connector_id)
+        .values(connector_config=merged, updated_at=now)
     )
     await connection.execute(stmt)
 

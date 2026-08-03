@@ -63,6 +63,7 @@ from app.db.connector_repo import (
     ConnectorInstance,
     fetch_enabled_connectors,
     record_backfill_run,
+    record_checkpoint,
     record_poll_failure,
     record_poll_success,
     record_schema_drift,
@@ -424,8 +425,10 @@ class ConnectorScheduler:
 
         # Filter out the scheduler-only knobs from connector_config before
         # passing to the constructor — connectors don't accept
-        # ``poll_interval_seconds`` as a kwarg.
-        runtime_config = {k: v for k, v in (target.connector_config or {}).items() if k not in {"poll_interval_seconds"}}
+        # ``poll_interval_seconds`` (or the ingest ``checkpoint``) as a kwarg.
+        runtime_config = {
+            k: v for k, v in (target.connector_config or {}).items() if k not in {"poll_interval_seconds", "checkpoint"}
+        }
         kwargs = {**auth, **runtime_config}
 
         started = datetime.now(UTC)
@@ -440,6 +443,15 @@ class ConnectorScheduler:
             )
             await self._record_failure(target.id)
             return
+
+        # Seed the connector's ingest checkpoint (#529) if it supports one, so a
+        # restart resumes from the last-accepted event instead of re-scanning.
+        setter = getattr(connector, "set_checkpoint", None)
+        if callable(setter):
+            try:
+                setter((target.connector_config or {}).get("checkpoint"))
+            except Exception:  # never let checkpoint seeding break a poll
+                logger.debug("connector.scheduler.checkpoint_seed_failed id=%s", connector_id)
 
         # The schema lives in connector_config; use it for fetch lookback.
         # We deliberately default to the same poll interval, so a 5-min
@@ -559,6 +571,18 @@ class ConnectorScheduler:
 
         accepted = int(result.get("accepted", 0) or 0)
         elapsed_ms = int((datetime.now(UTC) - started).total_seconds() * 1000)
+
+        # Advance the persisted checkpoint only now that ingest has accepted the
+        # batch (#529). A failed push returned earlier, so reaching here means
+        # the page was accepted — this is the "advance only after accept" rule.
+        getter = getattr(connector, "get_checkpoint", None)
+        if callable(getter):
+            try:
+                new_checkpoint = getter()
+            except Exception:  # never let checkpoint bookkeeping break a poll
+                new_checkpoint = None
+            if isinstance(new_checkpoint, dict) and new_checkpoint:
+                await self._record_checkpoint(target.id, new_checkpoint)
 
         # If drift was detected, persist that fact *before* marking the
         # poll successful so the UI reflects "drifted" status alongside
@@ -734,6 +758,25 @@ class ConnectorScheduler:
                 connector_id,
             )
 
+    async def _record_checkpoint(self, connector_id: uuid.UUID, checkpoint: dict[str, Any]) -> None:
+        """Persist an advanced ingest checkpoint into ``connector_config`` (#529).
+
+        Best-effort: a failed write leaves the previous checkpoint in place, so
+        the next poll simply re-scans a small overlap rather than skipping
+        events. One job per instance (``max_instances=1``) means no concurrent
+        writer races here.
+        """
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_checkpoint(conn, connector_id, checkpoint)
+        except Exception:  # pragma: no cover
+            logger.debug(
+                "connector.scheduler.record_checkpoint_failed id=%s",
+                connector_id,
+            )
+
     async def _record_failure(self, connector_id: uuid.UUID) -> None:
         if self._engine is None:  # pragma: no cover
             return
@@ -747,8 +790,27 @@ class ConnectorScheduler:
             )
 
 
+def _is_canonical_event(event: Any) -> bool:
+    """True if ``event`` is already a normalized connector envelope.
+
+    Connectors normalize inside ``fetch_alerts`` and return this shape; the
+    scheduler must NOT re-normalize it (#528). A second ``normalize`` pass
+    treats the envelope as a raw vendor row and corrupts it (blanks the
+    external_id, resets severity, double-nests ``raw_event``). We detect the
+    envelope structurally — a canonical event carries the original vendor row
+    under ``raw_event`` plus a ``source`` label — which no raw vendor row has.
+    """
+    return isinstance(event, dict) and "raw_event" in event and "source" in event
+
+
 def _safe_normalize(connector: Any, event: dict[str, Any]) -> dict[str, Any]:
-    """Run ``connector.normalize`` but never raise out of the loop."""
+    """Normalize an event once, never raising out of the loop.
+
+    Idempotent: an already-canonical event is passed through untouched so
+    self-normalizing connectors aren't double-normalized (#528).
+    """
+    if _is_canonical_event(event):
+        return event
     try:
         out = connector.normalize(event)
     except Exception:

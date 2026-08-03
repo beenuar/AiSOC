@@ -134,6 +134,27 @@ var connectorProfiles = map[string]connectorProfile{
 		},
 		severityMap: map[string]int{},
 	},
+	// splunk — connector type emitted by SplunkConnector (#528). Its
+	// fetch_alerts already returns a canonical envelope (external_id / title /
+	// severity / src_ip / hostname / created_at + the original row under
+	// raw_event), so the field map reads those lowercase canonical keys, NOT
+	// raw Splunk fields. Class 2001 (Security Finding, category 2) means the
+	// fusion promoter promotes a notable as a vendor-asserted finding
+	// regardless of severity, so a Medium notable is never silently dropped.
+	"splunk": {
+		product:   OcsfProduct{Name: "Splunk", VendorName: "Splunk"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"title":       "message",
+			"external_id": "finding.uid",
+			"src_ip":      "src_endpoint.ip",
+			"hostname":    "device.name",
+		},
+		severityMap: map[string]int{
+			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
+		},
+	},
 	"okta_system_log": {
 		product:   OcsfProduct{Name: "Okta System Log", VendorName: "Okta"},
 		classUID:  3002,
@@ -267,6 +288,10 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	if t, ok := raw.Payload["time"].(string); ok && t != "" {
 		eventTime = t
 	} else if t, ok := raw.Payload["timestamp"].(string); ok && t != "" {
+		eventTime = t
+	} else if t, ok := raw.Payload["created_at"].(string); ok && t != "" {
+		// Canonical connector envelopes (e.g. Splunk, #528) carry the event
+		// time under created_at; honor it so the notable's event time survives.
 		eventTime = t
 	}
 	ocsf["time"] = normalizeTime(eventTime)
@@ -475,11 +500,45 @@ func setNestedField(m map[string]interface{}, path string, val interface{}) {
 	setNestedField(nested, parts[1], val)
 }
 
-// generateEventID creates a deterministic event ID for deduplication
+// firstString returns the first non-empty string value among the given payload
+// keys, or "" if none are present.
+func firstString(payload map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := payload[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// generateEventID creates a deterministic, replay-stable event ID for
+// deduplication (#529).
+//
+// It is derived from the connector instance + tenant + a STABLE vendor
+// identifier (external_id / event_id / id / _cd, in priority order) so
+// re-ingesting the same event — overlapping poll windows, backfills, restarts —
+// always yields the same canonical ID. ReceivedAt is deliberately excluded from
+// this path; it is set per poll and previously made the ID change on every
+// poll. When no stable vendor ID exists we fall back to the event time plus a
+// content hash of the payload, so a byte-identical replay still collapses to
+// one ID while two same-timestamp events with different content stay distinct.
 func generateEventID(raw *RawEvent) string {
-	key := fmt.Sprintf("%s:%s:%s", raw.ConnectorID, raw.TenantID, raw.ReceivedAt)
-	if id, ok := raw.Payload["id"].(string); ok && id != "" {
-		key += ":" + id
+	base := fmt.Sprintf("%s:%s", raw.ConnectorID, raw.TenantID)
+	for _, field := range []string{"external_id", "event_id", "id", "_cd"} {
+		if v, ok := raw.Payload[field].(string); ok && v != "" {
+			return uuid.NewSHA1(uuid.NameSpaceOID, []byte(base+":"+field+"="+v)).String()
+		}
+	}
+	key := base
+	if t := firstString(raw.Payload, "time", "created_at", "timestamp"); t != "" {
+		key += ":t=" + t
+	} else {
+		key += ":r=" + raw.ReceivedAt
+	}
+	// json.Marshal sorts map keys, so the same payload always hashes to the
+	// same content string — the hash is deterministic across replays.
+	if rawBytes, err := json.Marshal(raw.Payload); err == nil {
+		key += ":c=" + string(rawBytes)
 	}
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(key)).String()
 }

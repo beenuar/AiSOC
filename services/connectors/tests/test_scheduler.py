@@ -1000,3 +1000,46 @@ async def test_scheduled_job_executes_without_manual_resume():
         aps.shutdown(wait=False)
 
     assert ran.is_set(), "scheduled polling job did not execute on its own"
+
+
+# ---------------------------------------------------------------------------
+# #528 — the scheduler must normalize each event exactly once.
+# ---------------------------------------------------------------------------
+
+
+def test_safe_normalize_passes_through_canonical_event():
+    """A self-normalized (canonical) event must NOT be re-normalized (#528)."""
+    from app.scheduler import _is_canonical_event, _safe_normalize
+
+    canonical = {
+        "source": "splunk",
+        "external_id": "NOTABLE-1",
+        "title": "Brute Force Detected",
+        "severity": "high",
+        "raw_event": {"event_id": "NOTABLE-1", "urgency": "high"},
+    }
+    assert _is_canonical_event(canonical) is True
+
+    class _BrokenReNormalizer:
+        connector_id = "splunk"
+
+        def normalize(self, _raw):  # would corrupt a canonical event if called
+            raise AssertionError("normalize must not run on an already-canonical event")
+
+    # Passed straight through, unchanged — the double-normalize is skipped.
+    assert _safe_normalize(_BrokenReNormalizer(), canonical) is canonical
+
+
+def test_safe_normalize_still_normalizes_raw_event():
+    """A genuinely raw vendor row is still normalized exactly once."""
+    from app.scheduler import _safe_normalize
+
+    class _Normalizer:
+        connector_id = "x"
+
+        def normalize(self, raw):
+            return {"source": "x", "raw_event": raw, "external_id": raw["id"]}
+
+    out = _safe_normalize(_Normalizer(), {"id": "abc", "foo": "bar"})
+    assert out["external_id"] == "abc"
+    assert out["raw_event"] == {"id": "abc", "foo": "bar"}
