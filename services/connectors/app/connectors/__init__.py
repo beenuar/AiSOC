@@ -37,6 +37,7 @@ from app.connectors.confluence_audit import ConfluenceAuditConnector
 from app.connectors.cortex_xdr import CortexXDRConnector
 from app.connectors.cortex_xsiam import CortexXSIAMConnector
 from app.connectors.crowdstrike import CrowdStrikeConnector
+from app.connectors.darktrace import DarktraceConnector
 from app.connectors.datadog import DatadogConnector
 from app.connectors.datadog_cloud_siem import DatadogCloudSIEMConnector
 from app.connectors.devo import DevoConnector
@@ -52,7 +53,10 @@ from app.connectors.gcp_scc import GCPSCCConnector
 from app.connectors.github import GitHubConnector
 from app.connectors.gitlab import GitLabConnector
 from app.connectors.google_workspace import GoogleWorkspaceConnector
+from app.connectors.greynoise import GreyNoiseConnector
+from app.connectors.imperva import ImpervaConnector
 from app.connectors.jira_connector import JiraConnector
+from app.connectors.jumpcloud import JumpCloudConnector
 from app.connectors.kubernetes_audit import KubernetesAuditConnector
 from app.connectors.lacework import LaceworkConnector
 from app.connectors.llm_usage import LlmUsageConnector
@@ -70,6 +74,7 @@ from app.connectors.pagerduty import PagerDutyConnector
 from app.connectors.prisma_cloud import PrismaCloudConnector
 from app.connectors.proofpoint import ProofpointConnector
 from app.connectors.qradar import QRadarConnector
+from app.connectors.qualys import QualysConnector
 from app.connectors.rapid7_insightidr import Rapid7InsightIDRConnector
 from app.connectors.salesforce import SalesforceConnector
 from app.connectors.securonix import SecuronixConnector
@@ -123,6 +128,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     CortexXDRConnector,
     CortexXSIAMConnector,
     CrowdStrikeConnector,
+    DarktraceConnector,
     DatadogConnector,
     DatadogCloudSIEMConnector,
     DevoConnector,
@@ -138,7 +144,10 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     GitHubConnector,
     GitLabConnector,
     GoogleWorkspaceConnector,
+    GreyNoiseConnector,
+    ImpervaConnector,
     JiraConnector,
+    JumpCloudConnector,
     KubernetesAuditConnector,
     LaceworkConnector,
     LlmUsageConnector,
@@ -156,6 +165,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     PrismaCloudConnector,
     ProofpointConnector,
     QRadarConnector,
+    QualysConnector,
     Rapid7InsightIDRConnector,
     SalesforceConnector,
     SecuronixConnector,
