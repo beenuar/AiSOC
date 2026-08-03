@@ -16,6 +16,7 @@ from app.models.alert import (
     IncidentSummary,
     RawAlert,
 )
+from app.services.alert_enricher import AlertEnricher
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
@@ -122,6 +123,7 @@ class FusionEngine:
         confidence_scorer: ConfidenceScorer | None = None,
         ueba_cache: UebaSignalCache | None = None,
         chain_grouper: AttackChainGrouper | None = None,
+        enricher: AlertEnricher | None = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
@@ -131,6 +133,8 @@ class FusionEngine:
         self._ueba_cache = ueba_cache
         # Phase C4 — fuse-time attack-chain former/extender (optional).
         self._chain_grouper = chain_grouper
+        # Wave 1 — fuse-time TI/vuln enrichment (optional; None = no enrichment).
+        self._enricher = enricher
         # Confidence + explainability is intrinsic to a fused alert — every
         # alert leaves the engine with a high/med/low label and an evidence
         # chain. The scorer is pure / stateless so we instantiate a default.
@@ -178,6 +182,19 @@ class FusionEngine:
             duplicate_of=None,
             alert=alert,
         )
+
+        # --- Step 2.5: Fuse-time enrichment (Wave 1) ---
+        # Populate fused.enrichments with TI / vuln matches BEFORE confidence +
+        # vuln-boost read it, so the threat_intel factor and exploit-in-wild
+        # boost actually fire. Best-effort: an enrichment miss/outage is a no-op
+        # and leaves the scorer's honest "no TI match" prior in place.
+        if self._enricher is not None:
+            try:
+                enrichments = await self._enricher.enrich(alert)
+                if enrichments:
+                    fused.enrichments.update(enrichments)
+            except Exception as exc:
+                logger.warning("fuse_enrichment_failed", error=str(exc))
 
         # --- Step 3: ML scoring ---
         try:

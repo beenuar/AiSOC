@@ -8,6 +8,7 @@ from app._health import install_health_routes
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
+from app.services.alert_enricher import AlertEnricher
 from app.services.alert_sink import AlertSink
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.confidence import ConfidenceScorer
@@ -41,6 +42,16 @@ async def lifespan(app: FastAPI):
         if settings.attack_chain_grouping_enabled
         else None
     )
+    # Wave 1 — fuse-time TI/vuln enrichment via the enrichment service.
+    enricher = (
+        AlertEnricher(
+            base_url=settings.enrichment_service_url,
+            timeout_seconds=settings.fuse_enrichment_timeout_seconds,
+            malicious_risk_floor=settings.fuse_enrichment_risk_floor,
+        )
+        if settings.fuse_enrichment_enabled
+        else None
+    )
     engine = FusionEngine(
         dedup,
         correlator,
@@ -48,6 +59,7 @@ async def lifespan(app: FastAPI):
         confidence_scorer=confidence_scorer,
         ueba_cache=ueba_cache,
         chain_grouper=chain_grouper,
+        enricher=enricher,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable
