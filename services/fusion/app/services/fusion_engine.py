@@ -4,6 +4,7 @@ Core fusion engine: orchestrates deduplication → correlation → ML scoring.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -124,11 +125,16 @@ class FusionEngine:
         ueba_cache: UebaSignalCache | None = None,
         chain_grouper: AttackChainGrouper | None = None,
         enricher: AlertEnricher | None = None,
+        memory_provider: Any = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
         self._ml_scorer = ml_scorer or MLScorer()
         self._entity_risk = entity_risk
+        # Wave 1 — live institutional-memory priors for the confidence nudge
+        # (optional; None = no nudge). Refreshed out-of-band from disposition
+        # history by app.memory.provider.MemoryPriorProvider.
+        self._memory_provider = memory_provider
         # Phase A4 — behavioral-model signal (optional; None = no UEBA fusion).
         self._ueba_cache = ueba_cache
         # Phase C4 — fuse-time attack-chain former/extender (optional).
@@ -206,7 +212,8 @@ class FusionEngine:
         # Pure, synchronous projection of the values already on ``fused``.
         # Runs after ML scoring so the rationale picks up anomaly / priority.
         try:
-            fused = self._confidence_scorer.score(fused)
+            priors = self._memory_provider.get_priors(str(fused.tenant_id)) if self._memory_provider is not None else None
+            fused = self._confidence_scorer.score(fused, priors=priors)
         except Exception as exc:
             logger.warning("confidence_scoring_failed", error=str(exc))
 

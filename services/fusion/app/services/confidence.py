@@ -47,6 +47,8 @@ from __future__ import annotations
 
 import structlog
 
+from app.memory.distill import SignaturePrior, signature_key
+from app.memory.stage import MEMORY_CAP, memory_contribution
 from app.models.alert import (
     AlertSeverity,
     ConfidenceFactor,
@@ -179,7 +181,7 @@ class ConfidenceScorer:
     def enabled(self) -> bool:
         return self._enabled
 
-    def score(self, fused: FusedAlert) -> FusedAlert:
+    def score(self, fused: FusedAlert, priors: dict[str, SignaturePrior] | None = None) -> FusedAlert:
         if not self._enabled:
             # Break-glass path. Leave the model defaults in place so the
             # frontend can degrade gracefully (no chip, no rationale panel)
@@ -276,6 +278,30 @@ class ConfidenceScorer:
                 weight=WEIGHT_IOC_DENSITY,
             )
         )
+
+        # 8. Institutional memory nudge (Wave 1) — a bounded ±MEMORY_CAP
+        # adjustment from the distilled per-signature prior. A signature the
+        # analysts have repeatedly corrected to benign pulls new alerts of that
+        # signature down; one repeatedly confirmed nudges up. Unknown
+        # signatures contribute nothing (no factor added).
+        if priors:
+            sig = signature_key(
+                category="",
+                connector_type=(alert.connector_type or ""),
+                primary_technique=(alert.mitre_techniques[0] if alert.mitre_techniques else ""),
+            )
+            mem = memory_contribution(sig, priors)
+            if mem.sample_count > 0:
+                rationale.append(
+                    ConfidenceFactor(
+                        factor="institutional_memory",
+                        label="Institutional memory",
+                        value=mem.basis,
+                        # contribution*weight == mem.delta (bounded ±MEMORY_CAP).
+                        contribution=round(mem.delta / MEMORY_CAP, 4) if MEMORY_CAP else 0.0,
+                        weight=MEMORY_CAP,
+                    )
+                )
 
         # Combine: score = 0.5 + Σ(w_i * c_i), clamped to [0, 1]
         delta = sum(f.contribution * f.weight for f in rationale)

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Closed loop: outcomes compound, repeat alerts auto-suppress (Wave 1).** Every
+  durable auto-triage outcome is now written back as a per-signature institutional
+  prior (`services/agents/app/memory/outcomes.py`), and a later alert matching a
+  trusted prior benign/false-positive disposition is auto-resolved WITHOUT
+  re-triage — human priors are trusted immediately, AI priors require corroboration
+  (repeat count + high confidence), and a prior true-positive never auto-closes a
+  future alert. Suppressions are recorded to `aisoc_outcome_suppressions`
+  (migration 048) and surfaced as a measured `repeat_alerts_suppressed` /
+  `repeat_suppression_rate` on `GET /metrics/funnel`. Fusion now applies a bounded
+  (±0.10), per-tenant institutional-memory nudge to fuse-time confidence
+  (`MemoryPriorProvider` distils disposition history; refreshed on a cadence),
+  scheduled hunt findings open governed DRAFT `DetectionRuleProposal`s
+  (`hunt-finding` source), and the previously-orphaned disposition-history tuner is
+  wired via `POST /detection/tuning/auto-suggest`. Gates: `test_outcome_memory.py`,
+  `test_memory_nudge.py`, `test_wave1_loop_edges.py`; claim-to-gate matrix +4.
 - **LLM gateway (LiteLLM) — task-based model routing + observability
   ([#478](https://github.com/beenuar/AiSOC/issues/478), PR1).** New `litellm`
   service in `docker-compose.yml` as the single entry point for live LLM calls.
