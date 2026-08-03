@@ -58,9 +58,7 @@ async def lifespan(app: FastAPI):
     # Wave 1 — live institutional-memory nudge: distil disposition history into
     # per-tenant per-signature priors and feed them to the confidence scorer.
     memory_provider = (
-        MemoryPriorProvider()
-        if os.getenv("AISOC_FUSION_MEMORY_NUDGE", "1").strip().lower() not in {"0", "false", "no", "off"}
-        else None
+        MemoryPriorProvider() if os.getenv("AISOC_FUSION_MEMORY_NUDGE", "1").strip().lower() not in {"0", "false", "no", "off"} else None
     )
     engine = FusionEngine(
         dedup,

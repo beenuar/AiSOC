@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-
 from app.api.v1.endpoints.rule_tuning import _disposition_records
 from app.workers import hunt_scheduler
 
