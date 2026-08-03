@@ -11,7 +11,9 @@ from typing import Any
 import httpx
 import structlog
 
+from app.agents.dispositions import BENIGN, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, NEEDS_REVIEW
 from app.confidence import score_investigation
+from app.investigator.splunk_evidence import collect_splunk_evidence
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import lookup_technique
 
@@ -36,6 +38,11 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     logger.info("Investigation agent starting", incident_id=str(state.incident_id))
 
     state.iteration_count += 1
+
+    # --- Pull surrounding SIEM evidence for Splunk-originated alerts (#570) ---
+    # Bounded, read-only, credential-vault-backed. Failure => missing evidence
+    # (handled after scoring below), never a silent dismissal.
+    splunk_evidence = await collect_splunk_evidence(state)
 
     # Analyze enrichment results for threat patterns
     malicious_iocs = {k: v for k, v in state.ioc_enrichments.items() if v.get("threat_classification") in ("malicious", "suspicious")}
@@ -104,6 +111,16 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
         )
 
     confidence, basis, verdict = score_investigation(state)
+
+    # #570: never dismiss a Splunk-originated alert on MISSING evidence. If the
+    # bounded evidence query failed/timed out (applicable but not queried), a
+    # dismissive verdict is downgraded to needs_review so a human decides.
+    if splunk_evidence.applicable and not splunk_evidence.queried and verdict in (FALSE_POSITIVE, BENIGN, BENIGN_TRUE_POSITIVE):
+        state.add_finding(
+            "Splunk evidence unavailable — cannot confirm a benign/false-positive verdict; escalating to needs_review."
+        )
+        verdict = NEEDS_REVIEW
+
     state.confidence = confidence
     state.confidence_basis = basis
     state.verdict = verdict

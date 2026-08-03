@@ -77,7 +77,9 @@ class SearchSIEMExecutor(BaseExecutor):
         splunk = _splunk_client(request.parameters)
         if splunk:
             try:
-                results = await splunk.run_search(query=query, max_results=max_results)
+                # SplunkClient.run_search takes `max_count` (issue #570); the old
+                # `max_results=` kwarg raised TypeError on every live Splunk search.
+                results = await splunk.run_search(query=query, max_count=max_results)
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.COMPLETED,
