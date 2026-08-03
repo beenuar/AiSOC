@@ -38,6 +38,7 @@ from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
+from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
 
 logger = structlog.get_logger()
 
@@ -52,6 +53,7 @@ _metrics: dict[str, Any] = {
     "benign_count": 0,
     "btp_count": 0,
     "tp_count": 0,
+    "injection_demoted": 0,
 }
 
 _SYSTEM_PROMPT = """\
@@ -207,6 +209,14 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     state.status = AgentStatus.RUNNING
     state.iteration_count += 1
 
+    # Prompt-injection guard: scan the untrusted alert evidence BEFORE reasoning
+    # over it. A high-severity hit demotes the case to L0 (manual review) so the
+    # agent can never be steered into auto-closing an alert whose own evidence
+    # is trying to manipulate the model. Per-run nonce fences the instructions.
+    raw = state.raw_alert or {}
+    injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
+    nonce = make_nonce()
+
     alert_context = _build_alert_context(state)
 
     llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
@@ -216,7 +226,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT),
+                SystemMessage(content=_SYSTEM_PROMPT + "\n\n" + system_rule(nonce)),
                 HumanMessage(content=alert_context),
             ],
         )
@@ -262,6 +272,21 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # Auto-close FP / benign / benign_true_positive (no active threat, no
     # response needed); true_positive and needs_review always escalate.
     should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and confidence >= AUTO_CLOSE_THRESHOLD
+
+    # Prompt-injection L0 demotion: a high-severity injection signal always
+    # blocks auto-close and routes to a human, regardless of the LLM's verdict.
+    if injection.should_demote_to_l0:
+        _metrics["injection_demoted"] += 1
+        should_auto_close = False
+        ledger = injection.as_ledger_dict()
+        state.confidence_basis.append(f"prompt_injection={ledger.get('max_severity')} (auto-close blocked, demoted to L0)")
+        state.add_finding("Prompt-injection detected in alert evidence — demoted to manual review (L0); auto-close blocked.")
+        logger.warning(
+            "auto_triage.prompt_injection_demoted",
+            incident_id=str(state.incident_id),
+            signals=len(injection.signals),
+            max_severity=ledger.get("max_severity"),
+        )
 
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1
