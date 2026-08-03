@@ -927,3 +927,76 @@ def _patch_repo_calls(monkeypatch):
     monkeypatch.setattr("app.scheduler.record_poll_failure", fake_record_poll_failure)
     monkeypatch.setattr("app.scheduler.record_schema_drift", fake_record_schema_drift)
     monkeypatch.setattr("app.scheduler.record_backfill_run", fake_record_backfill_run)
+
+
+# ---------------------------------------------------------------------------
+# #527 — polling jobs must be registered ACTIVE, never paused.
+#
+# These use a REAL AsyncIOScheduler (not the fake) because the regression is a
+# pure APScheduler semantic: passing ``next_run_time=None`` adds the job in a
+# paused state, which the fake scheduler cannot reproduce.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reload_registers_active_not_paused_job():
+    """A newly enabled connector gets a non-null next_run_time (not paused)."""
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="crowdstrike", connector_config={"poll_interval_seconds": 60})
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    # Keep the test hermetic — the job must never actually reach the network.
+    sched._poll_one = AsyncMock()
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+
+        job = aps.get_job(f"connector:{inst.id}")
+        assert job is not None, "polling job was not scheduled"
+        # The #527 failure mode: a paused job has next_run_time is None.
+        assert job.next_run_time is not None, "polling job registered PAUSED (#527 regression)"
+
+        # First-run jitter stays bounded by the poll interval (capped at 60s).
+        delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+        assert -1 <= delay <= 61, f"first-run delay {delay}s outside jitter bound"
+
+        diag = sched.job_diagnostics()
+        assert diag, "job_diagnostics returned nothing"
+        assert all(d["paused"] is False for d in diag), f"a job is paused: {diag}"
+    finally:
+        aps.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_scheduled_job_executes_without_manual_resume():
+    """An active job fires on its own — no explicit ``resume()`` needed (#527)."""
+    import asyncio as _asyncio
+
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="crowdstrike", connector_config={"poll_interval_seconds": 30})
+    # UUID int == 0 → jitter (id.int % window) == 0 → first_run == now, so the
+    # job is due immediately once the scheduler is running.
+    inst.id = uuid.UUID(int=0)
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+
+    ran = _asyncio.Event()
+
+    async def _fake_poll(*, connector_id, **_kw):  # noqa: ANN001
+        ran.set()
+
+    sched._poll_one = _fake_poll
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+        await _asyncio.wait_for(ran.wait(), timeout=5)
+    finally:
+        aps.shutdown(wait=False)
+
+    assert ran.is_set(), "scheduled polling job did not execute on its own"

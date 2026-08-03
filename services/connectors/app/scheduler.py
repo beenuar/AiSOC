@@ -52,7 +52,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -262,6 +262,17 @@ class ConnectorScheduler:
                 continue
 
             interval = _coerce_poll_interval(inst.connector_config)
+            # APScheduler 3.x treats ``next_run_time=None`` as "add the job
+            # PAUSED": it registers but never fires and nothing resumes it, so
+            # enabled connectors silently never auto-poll (#527). Compute an
+            # explicit, timezone-aware first-run time instead. The offset is a
+            # STABLE per-connector jitter derived from the UUID (deterministic
+            # across reloads so a config change doesn't randomly re-phase the
+            # job) that spreads first-fire to avoid a stampede when many
+            # connectors load at once. It's bounded by the poll interval, and
+            # capped at 60s so long-interval connectors still start promptly.
+            jitter_window = max(1, min(interval, 60))
+            first_run = datetime.now(UTC) + timedelta(seconds=inst.id.int % jitter_window)
             self._scheduler.add_job(
                 self._poll_one,
                 "interval",
@@ -271,9 +282,7 @@ class ConnectorScheduler:
                 max_instances=1,
                 # Don't pile up missed polls if the source was slow/dead.
                 coalesce=True,
-                # Spread first-fire by seconds-since-epoch hash so 100
-                # connectors don't all stampede at the same instant.
-                next_run_time=None,
+                next_run_time=first_run,
                 kwargs={"connector_id": inst.id},
             )
             self._known_signatures[cid] = sig
@@ -296,6 +305,31 @@ class ConnectorScheduler:
                 pass
             self._known_signatures.pop(cid, None)
             logger.info("connector.scheduler.unscheduled id=%s", cid)
+
+    def job_diagnostics(self) -> list[dict[str, Any]]:
+        """Return per-job scheduling diagnostics.
+
+        Each entry reports the job id and its ``next_run_time``; a null
+        ``next_run_time`` means APScheduler has the job PAUSED (the #527
+        failure mode), so operators / tests can assert every polling job is
+        actually active. Returns an empty list when the scheduler isn't
+        running.
+        """
+        if self._scheduler is None:
+            return []
+        out: list[dict[str, Any]] = []
+        for job in self._scheduler.get_jobs():
+            if not job.id.startswith("connector:"):
+                continue
+            nrt = getattr(job, "next_run_time", None)
+            out.append(
+                {
+                    "job_id": job.id,
+                    "next_run_time": nrt.isoformat() if nrt is not None else None,
+                    "paused": nrt is None,
+                }
+            )
+        return out
 
     @staticmethod
     def _signature(inst: ConnectorInstance) -> str:
