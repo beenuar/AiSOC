@@ -2683,6 +2683,47 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/rules/{rule_id}/backtest:
+    post:
+      tags:
+      - detection_rules
+      summary: Backtest a detection rule against historical lake events
+      description: 'Run a rule over the last N days of REAL events in the ClickHouse
+        lake and
+
+        report exactly how many would have fired (Wave 2). Tenant-scoped via
+
+        ``lake_sql.rewrite_for_tenant``. Read-only.'
+      operationId: backtest_detection_rule_api_v1_rules__rule_id__backtest_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: rule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Rule Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/detection/rules:
     get:
       tags:
@@ -15018,6 +15059,73 @@ components:
       - tenant_id
       - actions
       title: AutonomyPolicyResponse
+    BacktestRequest:
+      properties:
+        window_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Window Days
+          description: How many days of history to scan.
+          default: 30
+        limit:
+          type: integer
+          maximum: 100000.0
+          minimum: 1.0
+          title: Limit
+          description: Max events to scan.
+          default: 5000
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+          description: Optional connector_type filter (e.g. 'okta_system_log').
+      type: object
+      title: BacktestRequest
+      description: Backtest a rule over historical lake events.
+    BacktestResponse:
+      properties:
+        rule_id:
+          type: string
+          format: uuid
+          title: Rule Id
+        rule_language:
+          type: string
+          title: Rule Language
+        window_days:
+          type: integer
+          title: Window Days
+        events_scanned:
+          type: integer
+          title: Events Scanned
+        would_fire:
+          type: integer
+          title: Would Fire
+        hit_rate:
+          type: number
+          title: Hit Rate
+        sample_matches:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Sample Matches
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - rule_id
+      - rule_language
+      - window_days
+      - events_scanned
+      - would_fire
+      - hit_rate
+      - sample_matches
+      title: BacktestResponse
     BaselineResponse:
       properties:
         id:

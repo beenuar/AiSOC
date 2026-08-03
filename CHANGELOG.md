@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Detection backtesting over the event lake (Wave 2).** New
+  `POST /api/v1/rules/{rule_id}/backtest` runs a candidate detection rule against
+  REAL historical events in the tenant-scoped ClickHouse lake
+  (`aisoc.raw_events`) over a bounded window and reports exactly how many events
+  would have fired (`would_fire`), the `hit_rate`, and sample matches — so an
+  engineer can see a rule's noise on real history before promoting it, instead of
+  only testing against hand-crafted fixtures. The source filter is
+  injection-sanitised and the SELECT is tenant-rewritten via
+  `lake_sql.rewrite_for_tenant`. Read-only (`rules:read`). Gate: `test_backtest.py`.
 - **LLM gateway (LiteLLM) — task-based model routing + observability
   ([#478](https://github.com/beenuar/AiSOC/issues/478), PR1).** New `litellm`
   service in `docker-compose.yml` as the single entry point for live LLM calls.

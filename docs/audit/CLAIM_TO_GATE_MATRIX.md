@@ -49,10 +49,12 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Broad SIEM/NDR/edge coverage (QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon, Zeek/Suricata, syslog/CEF) | README (connector count) | `ci.yml` connectors job (`test_schemas.py` + `test_conformance.py` gate every connector; `test_siem_expansion.py` + `test_ndr_edge_expansion.py` pin each new connector's severity-ladder mapping) + `generate_connector_count.py --check` (registry-derived count, README phrase) | GATED | - |
 | AI/LLM-usage governance: audit connector + detections + tiered lake storage | README (AI usage / storage) | `ci.yml` connectors job (`test_llm_usage.py` — OpenAI/Anthropic audit connector emits the dotted `event_type` the `llm-*` rules match) + `validate-detections.yml` (8 `llm-*` native rules replay) + api job (`test_storage_tiering.py` — hot/cold TTL-move policy + DDL gate; verified on live ClickHouse) | GATED | - |
 
+| Detections can be backtested over historical lake data before promotion | README (detection engineering) | `ci.yml` api job (`test_backtest.py` — bounded/allow-listed SQL construction with injection-sanitised source filter, lake-row→event mapping with JSON payload expansion, exact would-fire count + hit-rate + samples) | PARTIAL (pure backtest logic gated; the live tenant-scoped ClickHouse fetch is exercised by the integration gate, not a unit) | Phase 2 |
+
 ## Summary
 
 - GATED: 33
-- PARTIAL: 7
+- PARTIAL: 8
 - NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.

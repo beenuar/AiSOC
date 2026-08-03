@@ -422,6 +422,35 @@ def _flatten_dict(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
 # ─── Main Execute Function ────────────────────────────────────────────────────
 
 
+def _rule_runners():
+    """Language -> runner map shared by execute_rule + backtest."""
+    return {
+        "sigma": _run_sigma,
+        "yara": _run_yara,
+        "kql": _run_kql,
+        "eql": _run_eql,
+        "lucene": lambda body, evts: (_run_kql(body, evts)[0], None),
+        "regex": _run_regex,
+    }
+
+
+def evaluate_rule_over_events(
+    rule_language: str,
+    rule_body: str,
+    events: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Return (ALL matched events, error) for a rule over events.
+
+    Unlike :func:`execute_rule` (which returns a bool + caps samples at 10),
+    this exposes the full match list so a backtest can report an exact count of
+    how many historical events a candidate rule would have fired on.
+    """
+    runner = _rule_runners().get(rule_language.lower())
+    if runner is None:
+        return [], f"Unsupported rule language: {rule_language}"
+    return runner(rule_body, events)
+
+
 def execute_rule(
     rule_id: str,
     rule_name: str,
@@ -437,14 +466,7 @@ def execute_rule(
     start = time.monotonic()
 
     lang = rule_language.lower()
-    runners = {
-        "sigma": _run_sigma,
-        "yara": _run_yara,
-        "kql": _run_kql,
-        "eql": _run_eql,
-        "lucene": lambda body, evts: (_run_kql(body, evts)[0], None),
-        "regex": _run_regex,
-    }
+    runners = _rule_runners()
 
     runner = runners.get(lang)
     if runner is None:
