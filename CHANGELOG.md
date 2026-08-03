@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only testing against hand-crafted fixtures. The source filter is
   injection-sanitised and the SELECT is tenant-rewritten via
   `lake_sql.rewrite_for_tenant`. Read-only (`rules:read`). Gate: `test_backtest.py`.
+  Also `POST /detection-proposals/{id}/backtest` attaches the result to the
+  proposal's `eval_result["backtest"]` as a third promotion signal, with an
+  opt-in `AISOC_BACKTEST_MAX_HIT_RATE` gate that blocks `/decide` approval for
+  rules too noisy over history (W2.2, `test_backtest_gate.py`), and the rule
+  editor gains a "Backtest over history" panel (W2.3).
 - **Closed loop: outcomes compound, repeat alerts auto-suppress (Wave 1).** Every
   durable auto-triage outcome is now written back as a per-signature institutional
   prior (`services/agents/app/memory/outcomes.py`), and a later alert matching a
