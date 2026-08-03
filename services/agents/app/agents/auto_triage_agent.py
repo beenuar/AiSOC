@@ -44,6 +44,17 @@ logger = structlog.get_logger()
 
 AUTO_CLOSE_THRESHOLD: float = float(os.getenv("AISOC_AUTO_CLOSE_THRESHOLD", "0.85"))
 
+
+class AutoTriageError(RuntimeError):
+    """Raised when the LLM auto-triage call or its response parsing fails.
+
+    Issue #571: the old code swallowed LLM/parse exceptions and returned a
+    RUNNING state with a null verdict, so the worker's deterministic fallback
+    (`_llm_triage`'s except branch) was unreachable and a null verdict could be
+    recorded as "completed". Raising a typed error lets the caller fall back to
+    deterministic triage or mark the alert ``needs_review`` — never null.
+    """
+
 _metrics: dict[str, Any] = {
     "auto_resolved_count": 0,
     "escalated_count": 0,
@@ -233,11 +244,13 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         raw_text = response.content
         result = _parse_llm_response(raw_text)
     except Exception as exc:
-        logger.error("Auto-triage LLM call failed, escalating", error=str(exc))
-        state.add_finding(f"Auto-triage LLM error: {exc} — escalating to manual triage")
-        _metrics["escalated_count"] += 1
+        # Issue #571: do NOT swallow + return a null-verdict RUNNING state.
+        # Raise a typed error so the caller falls back to deterministic triage
+        # (or marks the alert needs_review) instead of completing with no verdict.
+        logger.error("Auto-triage LLM call failed", error=str(exc))
+        state.add_finding(f"Auto-triage LLM error: {exc}")
         _metrics["total_processed"] += 1
-        return state
+        raise AutoTriageError(str(exc)) from exc
 
     elapsed_ms = round((time.monotonic() - t0) * 1000)
 

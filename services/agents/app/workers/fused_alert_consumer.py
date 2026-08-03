@@ -31,14 +31,18 @@ never dies on one poison alert.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import os
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 
 from app.agents.auto_triage_agent import run_auto_triage
+from app.agents.dispositions import NEEDS_REVIEW
 from app.agents.triage_agent import run_triage
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
@@ -53,6 +57,16 @@ logger = structlog.get_logger()
 
 _NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "tryaisoc.com/agents/auto-triage")
 
+# Idempotency key component (issue #571): the deterministic run_id is derived
+# from (canonical alert id, workflow version), so a replayed fused message
+# reuses the same run_id and cannot duplicate ledger runs/outcomes. Bump this
+# when the triage workflow changes in a way that should re-run past alerts.
+WORKFLOW_VERSION = "auto-triage-v1"
+
+# Bounded retries before dead-lettering a poison alert (issue #571).
+_MAX_ATTEMPTS = int(os.getenv("AISOC_AGENT_MAX_ATTEMPTS", "3"))
+_RETRY_BACKOFF_S = float(os.getenv("AISOC_AGENT_RETRY_BACKOFF_S", "0.5"))
+
 _METRICS = {
     "triaged": 0,
     "deduplicated": 0,
@@ -60,6 +74,9 @@ _METRICS = {
     "llm": 0,
     "bc_suppressed": 0,
     "bc_mutated": 0,
+    "needs_review_fallback": 0,
+    "persist_retries": 0,
+    "dead_lettered": 0,
     "errors": 0,
 }
 
@@ -71,6 +88,15 @@ def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
         return uuid.uuid5(_NAMESPACE, str(value or fallback))
 
 
+def _rationale_of(state: InvestigationState) -> str:
+    """Human-readable rationale for the verdict, for the ledger + alerts row."""
+    if state.confidence_basis:
+        return " · ".join(str(b) for b in state.confidence_basis)[:8000]
+    if state.findings:
+        return " · ".join(str(f) for f in state.findings)[:8000]
+    return f"Auto-triage verdict={state.verdict} confidence={state.confidence:.2f}"
+
+
 def build_state(message: dict[str, Any]) -> InvestigationState | None:
     """Map an ``aisoc.alerts.fused`` message to a seeded InvestigationState."""
     if not isinstance(message, dict):
@@ -80,11 +106,15 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         return None
     tenant = _coerce_uuid(message.get("tenant_id") or alert.get("tenant_id"), fallback="default")
     incident = _coerce_uuid(message.get("incident_id") or message.get("id") or alert.get("id"), fallback=str(tenant))
+    # Canonical alert row id (issue #568): the fused envelope now carries the
+    # durable alerts.id as `alert_row_id`, falling back to the (also canonical)
+    # message id. This is what the verdict is persisted against.
+    alert_row_id = str(message.get("alert_row_id") or message.get("id") or alert.get("id") or "")
     summary = str(alert.get("title") or "").strip()
     if message.get("narrative"):
         summary = f"{summary} — {message['narrative']}"[:1000] if summary else str(message["narrative"])[:1000]
     raw_alert = {
-        "id": str(message.get("id") or alert.get("id") or ""),
+        "id": alert_row_id,
         "severity": alert.get("severity"),
         "src_ip": alert.get("src_ip"),
         "dst_ip": alert.get("dst_ip"),
@@ -99,7 +129,11 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         "confidence": message.get("confidence_score"),
         "fusion_decision": message.get("fusion_decision"),
     }
+    # Deterministic, replay-stable run id (issue #571) — same alert + workflow
+    # version ⇒ same run, so replays are idempotent in the ledger.
+    run_id = uuid.uuid5(_NAMESPACE, f"{alert_row_id}:{WORKFLOW_VERSION}") if alert_row_id else uuid.uuid4()
     return InvestigationState(
+        run_id=run_id,
         incident_id=incident,
         tenant_id=tenant,
         alert_summary=summary,
@@ -117,12 +151,17 @@ class FusedAlertTriageWorker:
         bootstrap_servers: str,
         topic: str = "aisoc.alerts.fused",
         group_id: str = "aisoc-agents-triage",
+        dlq_topic: str | None = None,
+        max_attempts: int = _MAX_ATTEMPTS,
         business_context: BusinessContextApplier | None = None,
     ) -> None:
         self._bootstrap = bootstrap_servers
         self._topic = topic
         self._group_id = group_id
+        self._dlq_topic = dlq_topic or os.getenv("KAFKA_TOPIC_ALERTS_FUSED_DLQ", f"{topic}.dlq")
+        self._max_attempts = max(1, max_attempts)
         self._consumer: Any | None = None
+        self._producer: Any | None = None  # lazily created for the DLQ
         self._running = False
         # Phase B4 — environment-specific noise reduction applied post-fusion →
         # pre-triage. None = disabled (no rules file / flag off).
@@ -148,24 +187,99 @@ class FusedAlertTriageWorker:
             async for msg in self._consumer:
                 if not self._running:
                     break
+                # Commit ONLY after a durable outcome (verdict + ledger written)
+                # or after the poison alert is dead-lettered — so a crash between
+                # inference and persistence replays the alert instead of losing
+                # it, and offsets advance only on durable completion (issue #571).
+                await self._process_with_retry(msg.value)
                 try:
-                    await self.triage(msg.value)
-                except Exception as exc:  # noqa: BLE001 — one poison alert must not kill the loop
-                    _METRICS["errors"] += 1
-                    logger.error("auto_triage_worker.error", error=str(exc), exc_info=True)
-                else:
-                    try:
-                        await self._consumer.commit()
-                    except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
-                        logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
+                    await self._consumer.commit()
+                except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
+                    logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
         finally:
             await self._consumer.stop()
+
+    async def _process_with_retry(self, message: Any) -> bool:
+        """Triage one alert with bounded retries; dead-letter on exhaustion.
+
+        Returns True on durable success, False if the message was dead-lettered.
+        Either way the caller commits (a poison alert must not wedge the loop).
+        """
+        last_error: str = ""
+        stage = "triage"
+        for attempt in range(1, self._max_attempts + 1):
+            try:
+                await self.triage(message)
+                return True
+            except ledger_module.LedgerPersistError as exc:
+                stage = "persist"
+                last_error = str(exc)
+                _METRICS["persist_retries"] += 1
+                logger.warning("auto_triage_worker.persist_retry", attempt=attempt, error=last_error)
+            except Exception as exc:  # noqa: BLE001 — retry, then dead-letter
+                stage = "triage"
+                last_error = str(exc)
+                logger.warning("auto_triage_worker.triage_retry", attempt=attempt, error=last_error)
+            if attempt < self._max_attempts:
+                await asyncio.sleep(self._retry_backoff(attempt))
+        _METRICS["errors"] += 1
+        await self._send_to_dlq(message, attempts=self._max_attempts, stage=stage, error=last_error)
+        return False
+
+    def _retry_backoff(self, attempt: int) -> float:
+        return _RETRY_BACKOFF_S * attempt
+
+    async def _ensure_producer(self) -> Any | None:
+        if self._producer is not None:
+            return self._producer
+        try:
+            from aiokafka import AIOKafkaProducer  # noqa: PLC0415 — optional dep, runtime only
+
+            self._producer = AIOKafkaProducer(
+                bootstrap_servers=self._bootstrap,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            await self._producer.start()
+            return self._producer
+        except Exception as exc:  # noqa: BLE001 — DLQ is best-effort
+            logger.error("auto_triage_worker.dlq_producer_failed", error=str(exc))
+            self._producer = None
+            return None
+
+    async def _send_to_dlq(self, message: Any, *, attempts: int, stage: str, error: str) -> None:
+        """Publish a poison alert to the DLQ with alert id, attempts, and stage."""
+        alert_id = ""
+        if isinstance(message, dict):
+            alert = message.get("alert") if isinstance(message.get("alert"), dict) else {}
+            alert_id = str(message.get("alert_row_id") or message.get("id") or alert.get("id") or "")
+        record = {
+            "alert_id": alert_id,
+            "attempts": attempts,
+            "failure_stage": stage,
+            "error": (error or "")[:2000],
+            "dead_lettered_at": datetime.now(UTC).isoformat(),
+            "original": message if isinstance(message, dict) else {"raw": str(message)[:2000]},
+        }
+        producer = await self._ensure_producer()
+        if producer is None:
+            logger.error("auto_triage_worker.dlq_unavailable", alert_id=alert_id, stage=stage)
+            return
+        try:
+            await producer.send(self._dlq_topic, value=record)
+            _METRICS["dead_lettered"] += 1
+            logger.error("auto_triage_worker.dead_lettered", alert_id=alert_id, stage=stage, attempts=attempts)
+        except Exception as exc:  # noqa: BLE001 — never wedge the loop on a DLQ failure
+            logger.error("auto_triage_worker.dlq_send_failed", alert_id=alert_id, error=str(exc))
 
     async def stop(self) -> None:
         self._running = False
         if self._consumer is not None:
             await self._consumer.stop()
             self._consumer = None
+        if self._producer is not None:
+            with contextlib.suppress(Exception):
+                await self._producer.stop()
+            self._producer = None
         logger.info("auto_triage_worker.stopped", metrics=dict(_METRICS))
 
     async def triage(self, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -228,6 +342,15 @@ class FusedAlertTriageWorker:
                 tokens = tracker.total_tokens
             verdict = state.verdict
             confidence = state.confidence
+            # Never complete with a null/empty verdict (issue #571): if both the
+            # LLM and deterministic paths somehow left it unset, fail safe to
+            # needs_review so the alert is escalated to a human, not auto-closed.
+            if not verdict:
+                verdict = state.verdict = NEEDS_REVIEW
+                if state.status is AgentStatus.COMPLETED:
+                    state.status = AgentStatus.RUNNING
+                _METRICS["needs_review_fallback"] += 1
+                state.add_finding("Triage produced no verdict — defaulting to needs_review (escalated).")
             # Close the cost-governor loop: cache the verdict (so an alert flood
             # dedups instead of re-paying) and account the spend (so per-tenant
             # budgets + the circuit breaker actually fire). Best-effort.
@@ -288,27 +411,42 @@ class FusedAlertTriageWorker:
         tokens: int = 0,
         cost_usd: float = 0.0,
     ) -> None:
-        """Best-effort ledger write. No DB => no-op (never raises)."""
-        try:
-            await ledger_module.start_run(
-                run_id=state.run_id,
-                case_id=str(state.incident_id),
-                tenant_ref=str(state.tenant_id),
-                alert_summary=state.alert_summary or "",
-                raw_alert=state.raw_alert or {},
-                model_used=f"kafka:auto_triage:{tier}",
-            )
-            await ledger_module.complete_run(
-                run_id=state.run_id,
-                tenant_id=state.tenant_id,
-                status="completed",
-                error=None,
-                iterations=state.iteration_count,
-                total_tokens=tokens,
-                total_cost_usd=cost_usd,
-            )
-        except Exception as exc:  # noqa: BLE001 — audit is best-effort
-            logger.debug("auto_triage_worker.ledger_noop", error=str(exc), verdict=verdict, confidence=confidence)
+        """Durably persist the triage outcome (issue #571).
+
+        Writes the verdict/confidence/rationale/recommendations to BOTH the
+        ledger and the ``alerts`` row in one transaction. No DB configured =>
+        no-op (returns without raising). A real DB error raises
+        :class:`LedgerPersistError` so the caller retries / dead-letters — the
+        Kafka offset is not committed until this succeeds.
+        """
+        rationale = _rationale_of(state)
+        recommendations = [
+            {
+                "action_type": a.action_type,
+                "description": a.description,
+                "risk_level": a.risk_level.value if hasattr(a.risk_level, "value") else str(a.risk_level),
+                "requires_approval": a.requires_approval,
+                "target": a.target,
+            }
+            for a in state.proposed_actions
+        ]
+        await ledger_module.persist_auto_triage(
+            run_id=state.run_id,
+            alert_id=(state.raw_alert or {}).get("id"),
+            tenant_ref=str(state.tenant_id),
+            alert_summary=state.alert_summary or "",
+            raw_alert=state.raw_alert or {},
+            tier=tier,
+            verdict=str(verdict) if verdict else NEEDS_REVIEW,
+            confidence=float(confidence or 0.0),
+            rationale=rationale,
+            findings=list(state.findings),
+            proposed_actions=recommendations,
+            auto_closed=state.status is AgentStatus.COMPLETED,
+            iterations=state.iteration_count,
+            tokens=tokens,
+            cost_usd=cost_usd,
+        )
 
     @staticmethod
     def get_metrics() -> dict[str, int]:

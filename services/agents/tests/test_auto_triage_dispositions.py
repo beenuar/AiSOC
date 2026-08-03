@@ -127,6 +127,30 @@ async def test_malicious_true_positive_escalates(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_llm_timeout_raises_typed_error_not_null_verdict(monkeypatch):
+    # Issue #571: an LLM failure must raise AutoTriageError (so the worker falls
+    # back to deterministic), NOT silently return a null-verdict RUNNING state.
+    async def _boom(_llm, _messages):
+        raise TimeoutError("llm timed out")
+
+    monkeypatch.setattr(ata, "make_chat_model", lambda *a, **k: object())
+    monkeypatch.setattr(ata, "safe_ainvoke", _boom)
+    with pytest.raises(ata.AutoTriageError):
+        await ata.run_auto_triage(_state("Beaconing", {"severity": "critical"}))
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_raises_typed_error(monkeypatch):
+    async def _bad(_llm, _messages):
+        return SimpleNamespace(content="the model rambled with no json")
+
+    monkeypatch.setattr(ata, "make_chat_model", lambda *a, **k: object())
+    monkeypatch.setattr(ata, "safe_ainvoke", _bad)
+    with pytest.raises(ata.AutoTriageError):
+        await ata.run_auto_triage(_state("Suspicious", {"severity": "high"}))
+
+
+@pytest.mark.asyncio
 async def test_btp_metric_is_tracked_separately_from_fp(monkeypatch):
     ata._metrics.update({"fp_count": 0, "btp_count": 0, "benign_count": 0, "tp_count": 0, "total_processed": 0, "confidence_sum": 0.0})
     _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved pentest")
