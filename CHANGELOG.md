@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.7.0] — 2026-08-04
+
 ### Added
 
 - **Self-service data lifecycle (Wave 5).** (1) **Configurable retention**
