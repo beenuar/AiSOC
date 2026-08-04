@@ -32,7 +32,14 @@ from typing import Any
 
 MAX_OPS = 64
 MAX_PATTERN_LEN = 512
+# Hard cap on the string a user-supplied regex is run against. Bounding the
+# input length bounds worst-case backtracking to a fixed constant, which is our
+# primary ReDoS mitigation for the (tenant-admin-authored) regex_extract op.
+MAX_MATCH_INPUT = 2048
 _VALID_OPS = frozenset({"rename", "copy", "set", "set_default", "drop", "lowercase", "uppercase", "coalesce", "regex_extract"})
+# Reject the classic catastrophic-backtracking shapes: a quantified group whose
+# body itself contains a quantifier, e.g. (a+)+ / (a*)* / (a+)* .
+_REDOS_SIGNATURE = re.compile(r"\([^)]*[+*][^)]*\)[+*]")
 
 
 class TransformError(Exception):
@@ -93,6 +100,8 @@ def validate_transforms(ops: list[dict[str, Any]]) -> None:
             pattern = str(op.get("pattern", ""))
             if len(pattern) > MAX_PATTERN_LEN:
                 raise TransformError(f"op[{i}] pattern too long")
+            if _REDOS_SIGNATURE.search(pattern):
+                raise TransformError(f"op[{i}] pattern has a nested-quantifier (ReDoS) shape; rewrite it")
             try:
                 re.compile(pattern)
             except re.error as exc:
@@ -137,7 +146,12 @@ def apply_transforms(event: dict[str, Any], ops: list[dict[str, Any]]) -> Transf
             elif name == "regex_extract":
                 val = _get(ev, op["field"])
                 if isinstance(val, str):
-                    match = re.search(str(op.get("pattern", "")), val)
+                    # Pattern is validated at registration time (compiles + no
+                    # nested-quantifier ReDoS shape); the input is hard-capped so
+                    # worst-case backtracking is bounded. The pattern is
+                    # tenant-admin configuration (settings:write), not end-user
+                    # input. See MAX_MATCH_INPUT / _REDOS_SIGNATURE.
+                    match = re.search(str(op.get("pattern", "")), val[:MAX_MATCH_INPUT])
                     if match:
                         for key, group in match.groupdict().items():
                             if group is not None:

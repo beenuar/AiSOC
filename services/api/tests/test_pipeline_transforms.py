@@ -78,6 +78,22 @@ def test_validate_rejects_too_many_ops():
         validate_transforms([{"op": "drop", "field": "x"}] * 200)
 
 
+def test_validate_rejects_redos_nested_quantifier():
+    for evil in (r"(a+)+$", r"(a*)*b", r"(x+)*"):
+        with pytest.raises(TransformError):
+            validate_transforms([{"op": "regex_extract", "field": "m", "pattern": evil}])
+
+
+def test_regex_input_is_length_bounded():
+    # A huge input is truncated before matching (ReDoS bound); still extracts.
+    out = apply_transforms(
+        {"m": "x" * 10000 + " user=zed"},
+        [{"op": "regex_extract", "field": "m", "pattern": r"user=(?P<user>\w+)"}],
+    )
+    # The match target beyond the cap is dropped, so the trailing token is not found.
+    assert "user" not in out.event
+
+
 def test_original_event_is_not_mutated():
     original = {"src": "v"}
     apply_transforms(original, [{"op": "rename", "from": "src", "to": "dst"}])
