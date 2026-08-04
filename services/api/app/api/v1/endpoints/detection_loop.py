@@ -231,7 +231,7 @@ async def suggest_fp_fix(
         await db.execute(
             text(
                 """
-                INSERT INTO aisoc_detection_rule_proposals
+                INSERT INTO detection_rule_proposals
                   (id, tenant_id, base_rule_id, name, description,
                    rule_language, rule_body, category, severity, confidence,
                    status, source, created_at, updated_at)

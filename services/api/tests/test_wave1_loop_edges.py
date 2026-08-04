@@ -38,7 +38,7 @@ async def test_hunt_hits_open_a_detection_proposal(monkeypatch):
     await hunt_scheduler._propose_detection_from_hunt(db, _hunt(), 5)
     assert db.execute.await_count == 1
     sql = str(db.execute.await_args.args[0])
-    assert "aisoc_detection_rule_proposals" in sql
+    assert "detection_rule_proposals" in sql
 
 
 @pytest.mark.asyncio

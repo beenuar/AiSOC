@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisoc-detections"
+version = "0.1.0"
+description = "AiSOC Python detection framework — write detections as def rule(event), unit-tested against inline fixtures"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Beenu Arora", email = "beenu@cyble.com" },
+]
+keywords = ["aisoc", "soc", "security", "detection", "detection-as-code"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+aisoc-detections = "aisoc_detections.runner:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/beenuar/AiSOC"
+Repository = "https://github.com/beenuar/AiSOC"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aisoc_detections"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "aisoc_detections",
+  "detections",
+  "tests",
+  "README.md",
+  "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

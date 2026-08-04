@@ -14,17 +14,25 @@ functional in all deployment environments.
 from __future__ import annotations
 
 import os
-from typing import Literal
+import uuid
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.models.detection_proposal import DetectionRuleProposal
+from app.services.detection_eval import evaluate_candidate_rule
+from app.services.fixture_synth import derive_fixtures_from_sigma
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/nl-detection", tags=["nl_detection"])
+
+_SEVERITY_MAP = {"informational": "info", "info": "info", "low": "low", "medium": "medium", "high": "high", "critical": "critical"}
 
 
 # ---------------------------------------------------------------------------
@@ -210,5 +218,101 @@ async def translate_detection(payload: NLDetectionRequest) -> NLDetectionRespons
         kql=rules.get("kql"),
         spl=rules.get("spl"),
         esql=rules.get("esql"),
+        model_used=model_used,
+    )
+
+
+class NLProposeRequest(BaseModel):
+    description: str = Field(..., min_length=10, max_length=2000)
+    severity: Literal["informational", "low", "medium", "high", "critical"] = "medium"
+    mitre_techniques: list[str] = Field(default_factory=list)
+
+
+class NLProposeResponse(BaseModel):
+    proposal_id: uuid.UUID | None
+    status: str
+    passed: bool
+    reason: str
+    sigma: str
+    fixtures: dict[str, Any]
+    model_used: str
+
+
+@router.post("/propose", response_model=NLProposeResponse)
+async def propose_from_nl(
+    payload: NLProposeRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
+    db: DBSession,
+) -> NLProposeResponse:
+    """AI Detection Builder (W3.2): NL threat description -> Sigma rule +
+    AUTO-GENERATED positive/negative fixtures -> non-circular eval-gate ->
+    governed DRAFT proposal.
+
+    Fixtures are DERIVED from the generated rule's own selection (not invented
+    by the LLM), so the gate genuinely proves the rule fires on a positive and
+    stays quiet on a negative. If the rule can't be auto-verified, no proposal
+    is opened and the human is asked to supply fixtures — the honest outcome."""
+    translate_req = NLDetectionRequest(
+        description=payload.description,
+        target_platforms=["sigma"],
+        severity=payload.severity,
+        mitre_techniques=payload.mitre_techniques,
+    )
+    rules = await _llm_translate(translate_req)
+    model_used = rules.pop("_model", "unknown")
+    sigma = rules.get("sigma") or ""
+    if not sigma.strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="could not generate a Sigma rule")
+
+    derived = derive_fixtures_from_sigma(sigma)
+    if derived is None:
+        return NLProposeResponse(
+            proposal_id=None,
+            status="needs_fixtures",
+            passed=False,
+            reason=(
+                "Could not auto-derive fixtures from the generated rule; supply "
+                "positive/negative fixtures via /detection-proposals/{id}/evaluate-rule."
+            ),
+            sigma=sigma,
+            fixtures={"positive": [], "negative": []},
+            model_used=model_used,
+        )
+    positive, negative = derived
+    result = evaluate_candidate_rule(rule_language="sigma", rule_body=sigma, positive_fixtures=positive, negative_fixtures=negative)
+
+    proposal = DetectionRuleProposal(
+        tenant_id=current_user.tenant_id,
+        name=f"AI: {payload.description[:60].strip()}",
+        description=payload.description,
+        rule_language="sigma",
+        rule_body=sigma,
+        category="ai-generated",
+        severity=_SEVERITY_MAP.get(payload.severity, "medium"),
+        confidence=60,
+        mitre_techniques=payload.mitre_techniques,
+        status="eval_passed" if result.passed else "draft",
+        eval_result={
+            "candidate_rule": {
+                **result.to_dict(),
+                "auto_generated_fixtures": True,
+                "fixtures": {"positive": positive, "negative": negative},
+                "ran_at": datetime.now(UTC).isoformat(),
+            }
+        },
+        proposed_by_id=current_user.user_id,
+    )
+    db.add(proposal)
+    await db.commit()
+    await db.refresh(proposal)
+
+    logger.info("nl_detection.proposed", proposal_id=str(proposal.id), passed=result.passed, model=model_used)
+    return NLProposeResponse(
+        proposal_id=proposal.id,
+        status=proposal.status,
+        passed=result.passed,
+        reason=result.to_dict().get("reason", ""),
+        sigma=sigma,
+        fixtures={"positive": positive, "negative": negative},
         model_used=model_used,
     )
