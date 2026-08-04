@@ -11894,6 +11894,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report-builder/validate:
+    post:
+      tags:
+      - report_builder
+      summary: Validate Report
+      description: 'Validate a report definition (whitelisted widget types + sources,
+        unique
+
+        ids, bounded size) without rendering or persisting it.'
+      operationId: validate_report_api_v1_report_builder_validate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportDefinitionBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Validate Report Api V1 Report Builder Validate Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/report-builder/render:
+    post:
+      tags:
+      - report_builder
+      summary: Render
+      description: 'Render a report by resolving each widget''s data server-side.
+        Wires the
+
+        real ``alerts_by_severity`` resolver (tenant-scoped) + ``static``; other
+
+        sources render an honest ``error`` until their resolver is wired.'
+      operationId: render_api_v1_report_builder_render_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportDefinitionBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Render Api V1 Report Builder Render Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/airgap/status:
     get:
       tags:
@@ -22943,6 +23011,23 @@ components:
       required:
       - yaml
       title: ReplaceRulesRequest
+    ReportDefinitionBody:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        widgets:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Widgets
+      type: object
+      required:
+      - name
+      title: ReportDefinitionBody
     ReviewAction:
       properties:
         action:

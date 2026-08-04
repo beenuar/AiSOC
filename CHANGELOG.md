@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Customizable dashboard / report builder (Wave 7).** A declarative report is
+  a list of widgets (whitelisted `type` × data `source`), validated for unknown
+  types/sources, duplicate ids, and bounded size, then rendered by resolving
+  each widget's data server-side — resilient to a failing/missing resolver (one
+  bad widget renders an `error`, never breaks the report). `POST
+  /report-builder/validate` + `/render` (the latter wires the real tenant-scoped
+  `alerts_by_severity` resolver). The same definition can drive the live
+  dashboard and an exported report. Gated by `test_report_builder.py` (8 cases).
+
 - **Invoking-identity scoping for response actions (Wave 4).** An
   `ActionPrincipal` (user id + tenant + roles + permissions) now rides on every
   `ActionRequest` (W4.1). The actions service enforces **least-privilege**: an

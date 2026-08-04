@@ -59,10 +59,11 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Response actions run under least-privilege for the invoking identity | README (autonomy + safety) | `actions` job (`test_authz.py` — `authorize_action` denies a principal lacking the action's blast-radius permission; tier hierarchy + wildcards; tenant binding) | GATED | - |
 | Actions-service mutating routes are authenticated (fail-closed in prod) | README (autonomy + safety) | `actions` job (`test_authz.py` — `require_service_auth` returns 401 on a bad/absent bearer token, 503 when unconfigured in production, open only in dev mode) | GATED | - |
 | Approvals are bound to a qualified approver (separation of duties) | README (autonomy + safety) | `actions` job (`test_authz.py` — `authorize_approver` requires the action's permission and rejects the requester approving their own action) | GATED | - |
+| Customizable dashboard / report builder validates + renders | README (analytics + reporting) | `ci.yml` api job (`test_report_builder.py` — whitelisted widget types + data sources, unique widget ids, bounded size; render resolves each widget and is resilient to a failing/missing resolver; `/report-builder/render` wires the real tenant-scoped `alerts_by_severity`) | GATED | - |
 
 ## Summary
 
-- GATED: 42
+- GATED: 41
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
 
