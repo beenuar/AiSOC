@@ -1,0 +1,43 @@
+name: Python Detections
+
+# Gate the Python detection framework (Wave 3, W3.1): every bundled detection
+# must pass its own positive/negative fixtures, and the framework's own tests
+# must pass. A blind rule (misses a positive) or a noisy one (fires on a
+# negative) fails the build.
+on:
+  pull_request:
+    paths:
+      - "packages/aisoc-detections/**"
+      - ".github/workflows/python-detections.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/aisoc-detections/**"
+      - ".github/workflows/python-detections.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    name: Python detections — fixture gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test deps
+        run: pip install --quiet pytest "ruff>=0.4.4,<0.5"
+      - name: Run the detection fixture suite
+        working-directory: packages/aisoc-detections
+        run: python -m aisoc_detections.runner detections
+      - name: Run the framework tests
+        working-directory: packages/aisoc-detections
+        run: PYTHONPATH=. python -m pytest tests/ -v --tb=short
+      - name: Lint
+        working-directory: packages/aisoc-detections
+        run: |
+          ruff check aisoc_detections detections tests
+          ruff format --check aisoc_detections detections tests

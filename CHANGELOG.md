@@ -19,7 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unconfigured (W4.3). Approvals are **bound**: an approver must hold the
   action's permission and cannot approve their own request (separation of
   duties, W4.4). Gated by `test_authz.py` (10 cases).
-
+- **Three detection-authoring modes (Wave 3).** (1) A **Python detection
+  framework** (`packages/aisoc-detections`): write detections as
+  `def rule(event) -> bool` + metadata + inline positive/negative `TESTS`,
+  complementing the YAML/Sigma corpus; a fixture harness fails a blind rule
+  (misses a positive) or a noisy one (fires on a negative), `evaluate()` is
+  fail-closed, and a CI gate (`python-detections.yml`) runs it. Ships a CLI
+  (`aisoc-detections`) + example detections. (2) An **AI Detection Builder**
+  (`POST /nl-detection/propose`): a plain-English threat description becomes a
+  Sigma rule with **auto-generated** positive/negative fixtures **derived from
+  the rule's own selection** (not invented by the LLM), run through the
+  non-circular eval-gate, and opened as a governed DRAFT proposal. (3) A
+  **no-code / simple detection builder** (`SimpleRuleBuilder`): a form
+  (field/operator/value rows) compiles to a valid Sigma rule dropped into the
+  governed editor. Also fixes a real bug: `detection_loop` / the Wave-1 tuner +
+  hunt bridge inserted into a non-existent `aisoc_detection_rule_proposals`
+  table (the real table is `detection_rule_proposals`).
 - **Detection backtesting over the event lake (Wave 2).** New
   `POST /api/v1/rules/{rule_id}/backtest` runs a candidate detection rule against
   REAL historical events in the tenant-scoped ClickHouse lake

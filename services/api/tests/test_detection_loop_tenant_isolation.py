@@ -11,7 +11,7 @@ The contract being protected
   the **rule body lookup** on the caller's ``tenant_id``. A cross-tenant
   ``alert_id`` must 404 *before* any evidence or rule body is read, and
   no detection-rule-proposal row may be inserted.
-* The auto-created ``aisoc_detection_rule_proposals`` row must bind the
+* The auto-created ``detection_rule_proposals`` row must bind the
   **caller's** ``tenant_id`` — never one derived from a database read,
   so a poisoned ``aisoc_alerts.tenant_id`` cannot redirect the write.
 * ``GET /detection-loop/suggestions`` and
@@ -202,7 +202,7 @@ async def test_suggest_cross_tenant_alert_id_returns_404(_stub_llm: dict[str, An
 
     # Critical: no rule lookup and no proposal INSERT must have run.
     assert _find_select(db.executed, "aisoc_detection_rules") is None, "rule body lookup must not run when the alert lookup 404s"
-    assert _find_insert(db.executed, "aisoc_detection_rule_proposals") is None, "no proposal must be inserted when the alert lookup 404s"
+    assert _find_insert(db.executed, "detection_rule_proposals") is None, "no proposal must be inserted when the alert lookup 404s"
     # And nothing must land in the in-memory store.
     assert detection_loop_module._SUGGESTIONS == {}
 
@@ -240,8 +240,8 @@ async def test_suggest_same_tenant_scopes_alert_rule_and_proposal(_stub_llm: dic
     assert params.get("tenant_id") == user.tenant_id
 
     # Proposal INSERT — the ``tid`` bind must equal the *caller's* tenant.
-    proposal_insert = _find_insert(db.executed, "aisoc_detection_rule_proposals")
-    assert proposal_insert is not None, "expected an INSERT into aisoc_detection_rule_proposals"
+    proposal_insert = _find_insert(db.executed, "detection_rule_proposals")
+    assert proposal_insert is not None, "expected an INSERT into detection_rule_proposals"
     _sql, params = proposal_insert
     assert (
         params.get("tid") == user.tenant_id
@@ -277,7 +277,7 @@ async def test_suggest_proposal_insert_binds_caller_tenant_not_db_row_tenant(_st
         user=user,
     )
 
-    proposal_insert = _find_insert(db.executed, "aisoc_detection_rule_proposals")
+    proposal_insert = _find_insert(db.executed, "detection_rule_proposals")
     assert proposal_insert is not None
     _sql, params = proposal_insert
     # The critical assertion: never trust a value we read back from the DB
@@ -311,7 +311,7 @@ async def test_suggest_alert_without_rule_id_skips_rule_select(_stub_llm: dict[s
 
     assert response.base_rule_id is None
     assert _find_select(db.executed, "aisoc_detection_rules") is None
-    proposal_insert = _find_insert(db.executed, "aisoc_detection_rule_proposals")
+    proposal_insert = _find_insert(db.executed, "detection_rule_proposals")
     assert proposal_insert is not None
     assert proposal_insert[1].get("tid") == user.tenant_id
 
