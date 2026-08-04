@@ -118,6 +118,36 @@ APPROVAL_REQUIRED_ACTIONS = {
 }
 
 
+# Wave 4 (W4.2) — least-privilege permission required to EXECUTE each action,
+# derived from its blast radius. A principal must hold this permission (or a
+# broader one — see `authz.has_action_permission`). MINIMAL/LOW → :low,
+# MEDIUM → :medium, HIGH/CRITICAL → :high.
+def _perm_for_blast(blast: BlastRadius) -> str:
+    if blast in (BlastRadius.HIGH, BlastRadius.CRITICAL):
+        return "actions:execute:high"
+    if blast == BlastRadius.MEDIUM:
+        return "actions:execute:medium"
+    return "actions:execute:low"
+
+
+ACTION_REQUIRED_PERMISSION: dict[ActionType, str] = {action: _perm_for_blast(blast) for action, blast in ACTION_BLAST_RADIUS.items()}
+
+
+class ActionPrincipal(BaseModel):
+    """The authenticated identity on whose behalf an action runs (W4.1).
+
+    Propagated from the API's authenticated user into the actions service so
+    execution + approval can be scoped to that user's real permissions —
+    replacing the free-text ``requested_by`` string as the authorization basis.
+    """
+
+    user_id: str
+    tenant_id: UUID | None = None
+    email: str | None = None
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+
+
 class ActionRequest(BaseModel):
     """Request to execute an action."""
 
@@ -128,6 +158,9 @@ class ActionRequest(BaseModel):
     target: str
     parameters: dict[str, Any] = Field(default_factory=dict)
     requested_by: str = "system"
+    # W4.1 — structured invoking identity. Optional for back-compat with the
+    # legacy `requested_by` string + system-initiated calls.
+    principal: ActionPrincipal | None = None
     rationale: str = ""
     auto_rollback: bool = False
     rollback_after_seconds: int | None = None

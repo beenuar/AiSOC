@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Invoking-identity scoping for response actions (Wave 4).** An
+  `ActionPrincipal` (user id + tenant + roles + permissions) now rides on every
+  `ActionRequest` (W4.1). The actions service enforces **least-privilege**: an
+  action only runs if its principal holds the permission its blast radius
+  demands (`actions:execute:{low,medium,high}`, higher tiers granting lower;
+  `actions:*` granting all), with tenant binding (W4.2). The mutating action
+  routes require a service bearer token and **fail closed** in production when
+  unconfigured (W4.3). Approvals are **bound**: an approver must hold the
+  action's permission and cannot approve their own request (separation of
+  duties, W4.4). Gated by `test_authz.py` (10 cases).
+
 - **Detection backtesting over the event lake (Wave 2).** New
   `POST /api/v1/rules/{rule_id}/backtest` runs a candidate detection rule against
   REAL historical events in the tenant-scoped ClickHouse lake

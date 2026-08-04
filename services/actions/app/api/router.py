@@ -9,11 +9,17 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from app.core.config import get_settings
-from app.models.action import ActionRequest, ActionStatus, ActionType
+from app.models.action import ActionPrincipal, ActionRequest, ActionStatus, ActionType
+from app.security.authz import (
+    ActionAuthzError,
+    authorize_action,
+    authorize_approver,
+    require_service_auth,
+)
 from app.security.chatops_token import ChatOpsTokenError, verify_token
 from app.services.blast_radius import BlastRadiusGate
 from app.services.executor_registry import EXECUTOR_REGISTRY
@@ -33,8 +39,16 @@ _chatops_replied: set[str] = set()
 
 
 @router.post("/actions", response_model=dict)
-async def submit_action(request: ActionRequest):
+async def submit_action(request: ActionRequest, _auth: None = Depends(require_service_auth)):
     """Submit an action for execution (may require approval)."""
+    # W4.2 — least-privilege: the invoking principal must hold the permission
+    # this action's blast radius demands before it is gated or executed.
+    try:
+        authorize_action(request)
+    except ActionAuthzError as exc:
+        logger.warning("Action authorization denied", action_type=request.action_type, reason=str(exc))
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
     status, blast_radius, reason = gate.evaluate(request)
 
     record = {
@@ -47,6 +61,9 @@ async def submit_action(request: ActionRequest):
         "incident_id": str(request.incident_id),
         "tenant_id": str(request.tenant_id),
         "rationale": request.rationale,
+        # W4.4 — remember who requested it so an approver can't approve their
+        # own action (separation of duties).
+        "requested_by_user_id": request.principal.user_id if request.principal else None,
     }
     _actions[str(request.id)] = record
 
@@ -83,13 +100,33 @@ async def submit_action(request: ActionRequest):
 
 
 @router.post("/actions/{action_id}/approve")
-async def approve_action(action_id: str):
-    """Approve a pending action (human-in-the-loop gate)."""
+async def approve_action(
+    action_id: str,
+    approver: ActionPrincipal | None = None,
+    _auth: None = Depends(require_service_auth),
+):
+    """Approve a pending action (human-in-the-loop gate).
+
+    W4.4 — when an approver identity is supplied it is bound: the approver must
+    hold the action's required permission and must not be the requester. When
+    principals are required (``AISOC_ACTIONS_REQUIRE_PRINCIPAL``) an approver is
+    mandatory."""
     record = _actions.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
     if record["status"] != ActionStatus.AWAITING_APPROVAL:
         raise HTTPException(status_code=400, detail=f"Action is not awaiting approval (current: {record['status']})")
+
+    if approver is None:
+        if get_settings().AISOC_ACTIONS_REQUIRE_PRINCIPAL:
+            raise HTTPException(status_code=403, detail="an approver identity is required")
+    else:
+        try:
+            authorize_approver(record, approver)
+        except ActionAuthzError as exc:
+            logger.warning("Approval denied", action_id=action_id, reason=str(exc))
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        record["approved_by_user_id"] = approver.user_id
 
     # Reconstruct request and execute
     request = ActionRequest(
@@ -115,7 +152,7 @@ async def approve_action(action_id: str):
 
 
 @router.post("/actions/{action_id}/reject")
-async def reject_action(action_id: str):
+async def reject_action(action_id: str, _auth: None = Depends(require_service_auth)):
     """Reject a pending action."""
     record = _actions.get(action_id)
     if not record:
