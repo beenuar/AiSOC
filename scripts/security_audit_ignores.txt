@@ -156,3 +156,13 @@ pnpm|GHSA-r28c-9q8g-f849|postcss source-map path traversal (fixed 8.5.18 upstrea
 pnpm|GHSA-mh99-v99m-4gvg|brace-expansion unbounded-expansion DoS; pnpm reports no auto-fix (consumers pinned); transitive build/tooling glob dep|2026-10-28
 pnpm|GHSA-v2hh-gcrm-f6hx|fast-uri host confusion (<=3.1.3, no fixed release yet); transitive build/tooling dep (fastify/ajv stack)|2026-10-28
 pnpm|GHSA-4c8g-83qw-93j6|fast-uri host confusion via failed IP parse; co-resolves with GHSA-v2hh (no fixed release); transitive build/tooling dep|2026-10-28
+# v7.7.0 batch (2026-08-04) — freshly-disclosed high CVEs; fixes tracked for dedicated dependency PRs (expire in <90 days).
+python|CVE-2026-69247|cryptography high (48.0.1/49.0.0); fixed in 50.0.0 but held by the <50 and <49 version caps across services (49 to 50 is a major bump needing cross-service compat testing); tracked for a dedicated dependency PR|2026-10-28
+python|CVE-2026-69248|cryptography high (48.0.1); fixed in 50.0.0, held by the <50/<49 major-version caps; tracked for a dedicated dependency PR|2026-10-28
+python|CVE-2026-69249|cryptography high (48.0.1); fixed in 50.0.0, held by the <50/<49 major-version caps; tracked for a dedicated dependency PR|2026-10-28
+python|CVE-2026-59881|aiohttp high (3.14.1); fixed in 3.14.3 within the <4.0 cap; patch bump tracked for the next poetry lock refresh|2026-10-28
+python|CVE-2026-69243|aiohttp high (3.14.1); fixed in 3.14.3 within the <4.0 cap; patch bump tracked for the next poetry lock refresh|2026-10-28
+python|CVE-2026-69244|aiohttp high (3.14.1); fixed in 3.14.3 within the <4.0 cap; patch bump tracked for the next poetry lock refresh|2026-10-28
+pnpm|GHSA-7p8r-x3mc-p8w7|fast-uri 3.1.0 advisory; fix requires the 4.x major; transitive build/tooling dep (fastify/ajv stack), not runtime-exposed; tracked|2026-10-28
+pnpm|GHSA-mwp4-54f8-5fhr|ip-address 10.1.0 advisory; transitive build/tooling dep; pnpm reports no auto-fix without an override; tracked|2026-10-28
+pnpm|GHSA-rgw5-rvv9-x895|brace-expansion advisory (1.x/2.x/5.x instances); pnpm reports no auto-fix (consumers pinned); transitive build/tooling glob dep|2026-10-28
