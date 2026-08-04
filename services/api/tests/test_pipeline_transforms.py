@@ -46,10 +46,10 @@ def test_lowercase_and_coalesce():
     assert out.event["greeting"] == "hello"
 
 
-def test_regex_extract_named_groups():
+def test_extract_named_groups():
     out = apply_transforms(
         {"msg": "user=bob action=login src=10.0.0.1"},
-        [{"op": "regex_extract", "field": "msg", "pattern": r"user=(?P<user>\w+).*src=(?P<src_ip>[\d.]+)"}],
+        [{"op": "extract", "field": "msg", "template": "user=%{WORD:user} action=%{WORD:action} src=%{IP:src_ip}"}],
     )
     assert out.event["user"] == "bob"
     assert out.event["src_ip"] == "10.0.0.1"
@@ -68,9 +68,9 @@ def test_validate_rejects_unknown_op():
         validate_transforms([{"op": "rm -rf"}])
 
 
-def test_validate_rejects_bad_regex():
+def test_validate_rejects_unknown_grok_token():
     with pytest.raises(TransformError):
-        validate_transforms([{"op": "regex_extract", "field": "m", "pattern": "(unclosed"}])
+        validate_transforms([{"op": "extract", "field": "m", "template": "x=%{NOPE:v}"}])
 
 
 def test_validate_rejects_too_many_ops():
@@ -78,20 +78,28 @@ def test_validate_rejects_too_many_ops():
         validate_transforms([{"op": "drop", "field": "x"}] * 200)
 
 
-def test_validate_rejects_redos_nested_quantifier():
-    for evil in (r"(a+)+$", r"(a*)*b", r"(x+)*"):
-        with pytest.raises(TransformError):
-            validate_transforms([{"op": "regex_extract", "field": "m", "pattern": evil}])
+def test_extract_literals_are_escaped_not_regex():
+    # Regex metacharacters in the template's literal text are matched literally,
+    # never interpreted — so no user data becomes a regex operator (ReDoS-proof).
+    out = apply_transforms(
+        {"m": "a.b=hello"},
+        [{"op": "extract", "field": "m", "template": "a.b=%{WORD:v}"}],
+    )
+    assert out.event["v"] == "hello"
+    # The literal "a.b" must not match "axb" (the dot is escaped).
+    out2 = apply_transforms(
+        {"m": "axb=hello"},
+        [{"op": "extract", "field": "m", "template": "a.b=%{WORD:v}"}],
+    )
+    assert "v" not in out2.event
 
 
-def test_regex_input_is_length_bounded():
-    # A huge input is truncated before matching (ReDoS bound); still extracts.
+def test_extract_input_is_length_bounded():
     out = apply_transforms(
         {"m": "x" * 10000 + " user=zed"},
-        [{"op": "regex_extract", "field": "m", "pattern": r"user=(?P<user>\w+)"}],
+        [{"op": "extract", "field": "m", "template": "user=%{WORD:user}"}],
     )
-    # The match target beyond the cap is dropped, so the trailing token is not found.
-    assert "user" not in out.event
+    assert "user" not in out.event  # trailing token beyond the cap is dropped
 
 
 def test_original_event_is_not_mutated():

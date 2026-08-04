@@ -20,8 +20,10 @@ Supported ops (each a dict with an ``op`` key)::
     {"op": "lowercase",   "field": "f"}
     {"op": "uppercase",   "field": "f"}
     {"op": "coalesce",    "fields": ["a", "b"], "to": "dst"}  # first non-None
-    {"op": "regex_extract", "field": "msg", "pattern": "user=(?P<user>\\w+)"}
-        # named groups become top-level fields
+    {"op": "extract",     "field": "msg", "template": "user=%{WORD:user} src=%{IP:src_ip}"}
+        # grok-style: %{TOKEN:name} named captures become top-level fields.
+        # Literal text is escaped and TOKENs come from a fixed, ReDoS-safe map
+        # (WORD/NUMBER/INT/IP/EMAIL/HOST/NOTSPACE/GREEDY) — never raw regex.
 """
 
 from __future__ import annotations
@@ -31,15 +33,45 @@ from dataclasses import dataclass, field
 from typing import Any
 
 MAX_OPS = 64
-MAX_PATTERN_LEN = 512
-# Hard cap on the string a user-supplied regex is run against. Bounding the
-# input length bounds worst-case backtracking to a fixed constant, which is our
-# primary ReDoS mitigation for the (tenant-admin-authored) regex_extract op.
+MAX_TEMPLATE_LEN = 512
+# Hard cap on the string an extract pattern is run against — a defence-in-depth
+# bound even though the compiled pattern is ReDoS-safe by construction.
 MAX_MATCH_INPUT = 2048
-_VALID_OPS = frozenset({"rename", "copy", "set", "set_default", "drop", "lowercase", "uppercase", "coalesce", "regex_extract"})
-# Reject the classic catastrophic-backtracking shapes: a quantified group whose
-# body itself contains a quantifier, e.g. (a+)+ / (a*)* / (a+)* .
-_REDOS_SIGNATURE = re.compile(r"\([^)]*[+*][^)]*\)[+*]")
+_VALID_OPS = frozenset({"rename", "copy", "set", "set_default", "drop", "lowercase", "uppercase", "coalesce", "extract"})
+
+# Grok-style extraction. The user writes a TEMPLATE, not a raw regex — literal
+# text is `re.escape`d and `%{TOKEN:name}` placeholders expand to a FIXED,
+# vetted, linear-time token regex. No user data ever becomes regex
+# metacharacters, so the op is ReDoS-proof by construction (and not a
+# regex-injection sink).
+_GROK_TOKENS: dict[str, str] = {
+    "WORD": r"\w+",
+    "NUMBER": r"\d+",
+    "INT": r"-?\d+",
+    "IP": r"\d{1,3}(?:\.\d{1,3}){3}",
+    "EMAIL": r"[^\s@]+@[^\s@]+",
+    "HOST": r"[\w.-]+",
+    "NOTSPACE": r"\S+",
+    "GREEDY": r".+",
+}
+_GROK_PLACEHOLDER = re.compile(r"%\{(\w+)(?::(\w+))?\}")
+
+
+def compile_grok(template: str) -> str:
+    """Compile a grok template into a regex built only from `re.escape`d
+    literals + constant token patterns (never raw user regex)."""
+    parts: list[str] = []
+    last = 0
+    for m in _GROK_PLACEHOLDER.finditer(template):
+        parts.append(re.escape(template[last : m.start()]))
+        token, name = m.group(1), m.group(2)
+        base = _GROK_TOKENS.get(token.upper())
+        if base is None:
+            raise TransformError(f"unknown grok token %{{{token}}}; use one of {sorted(_GROK_TOKENS)}")
+        parts.append(f"(?P<{name}>{base})" if name else f"(?:{base})")
+        last = m.end()
+    parts.append(re.escape(template[last:]))
+    return "".join(parts)
 
 
 class TransformError(Exception):
@@ -96,16 +128,14 @@ def validate_transforms(ops: list[dict[str, Any]]) -> None:
         name = op["op"]
         if name not in _VALID_OPS:
             raise TransformError(f"op[{i}] unknown op '{name}'")
-        if name == "regex_extract":
-            pattern = str(op.get("pattern", ""))
-            if len(pattern) > MAX_PATTERN_LEN:
-                raise TransformError(f"op[{i}] pattern too long")
-            if _REDOS_SIGNATURE.search(pattern):
-                raise TransformError(f"op[{i}] pattern has a nested-quantifier (ReDoS) shape; rewrite it")
+        if name == "extract":
+            template = str(op.get("template", ""))
+            if len(template) > MAX_TEMPLATE_LEN:
+                raise TransformError(f"op[{i}] template too long")
             try:
-                re.compile(pattern)
+                re.compile(compile_grok(template))
             except re.error as exc:
-                raise TransformError(f"op[{i}] invalid regex: {exc}") from exc
+                raise TransformError(f"op[{i}] invalid extract template: {exc}") from exc
 
 
 def apply_transforms(event: dict[str, Any], ops: list[dict[str, Any]]) -> TransformResult:
@@ -143,15 +173,15 @@ def apply_transforms(event: dict[str, Any], ops: list[dict[str, Any]]) -> Transf
                     if val is not None:
                         _set(ev, op["to"], val)
                         break
-            elif name == "regex_extract":
+            elif name == "extract":
                 val = _get(ev, op["field"])
                 if isinstance(val, str):
-                    # Pattern is validated at registration time (compiles + no
-                    # nested-quantifier ReDoS shape); the input is hard-capped so
-                    # worst-case backtracking is bounded. The pattern is
-                    # tenant-admin configuration (settings:write), not end-user
-                    # input. See MAX_MATCH_INPUT / _REDOS_SIGNATURE.
-                    match = re.search(str(op.get("pattern", "")), val[:MAX_MATCH_INPUT])
+                    # The pattern is compiled from a grok template: literal text
+                    # is re.escape'd and tokens come from a fixed linear-time
+                    # map, so it is ReDoS-safe by construction (no raw user
+                    # regex). Input is also hard-capped as defence in depth.
+                    pattern = compile_grok(str(op.get("template", "")))
+                    match = re.search(pattern, val[:MAX_MATCH_INPUT])
                     if match:
                         for key, group in match.groupdict().items():
                             if group is not None:
