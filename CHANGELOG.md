@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Self-service data lifecycle (Wave 5).** (1) **Configurable retention**
+  (`/data-lifecycle/retention`): per-tenant windows (days) for `raw_events`
+  (lake) / `alerts` / `audit`, clamped to `[1, 3650]`, with a bounded
+  **tenant-scoped** ClickHouse purge and a parameterised Postgres purge (W5.1).
+  (2) A **field-extraction / transform DSL** (`pipeline_transforms`): a safe,
+  whitelisted, no-`eval` pipeline (`rename` / `copy` / `set` / `set_default` /
+  `drop` / `lowercase` / `uppercase` / `coalesce` / `regex_extract` with dotted
+  paths + named groups) that reshapes events onto OCSF; validation rejects
+  unknown ops, bad regex, and oversized pipelines; runtime is fail-open per op
+  and never mutates the input (W5.3). (3) **Runtime custom parsers**
+  (`/data-lifecycle/parsers` + `/parsers/test`): a parser is a named,
+  tenant-scoped, validated transform pipeline you can register and dry-run
+  against a sample event (W5.2). Gated by `test_retention.py` +
+  `test_pipeline_transforms.py`.
+
 - **Detection backtesting over the event lake (Wave 2).** New
   `POST /api/v1/rules/{rule_id}/backtest` runs a candidate detection rule against
   REAL historical events in the tenant-scoped ClickHouse lake

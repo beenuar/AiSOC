@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     compliance,
     connectors,
     costs,
+    data_lifecycle,
     deployment,
     detection_compat,
     detection_loop,
@@ -168,6 +169,9 @@ api_router.include_router(assets.router)
 api_router.include_router(mssp.router)
 api_router.include_router(insider_threat.router)
 api_router.include_router(remediation.router)
+
+# Wave 5 — self-service data lifecycle (retention + custom parsers)
+api_router.include_router(data_lifecycle.router)
 
 # Analyst feedback loop
 api_router.include_router(feedback.router)

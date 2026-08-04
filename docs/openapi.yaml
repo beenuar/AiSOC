@@ -9266,6 +9266,147 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/data-lifecycle/retention:
+    get:
+      tags:
+      - data_lifecycle
+      summary: Get Retention
+      operationId: get_retention_api_v1_data_lifecycle_retention_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionOut'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - data_lifecycle
+      summary: Put Retention
+      operationId: put_retention_api_v1_data_lifecycle_retention_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/data-lifecycle/parsers:
+    get:
+      tags:
+      - data_lifecycle
+      summary: List Parsers
+      operationId: list_parsers_api_v1_data_lifecycle_parsers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ParserOut'
+                type: array
+                title: Response List Parsers Api V1 Data Lifecycle Parsers Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - data_lifecycle
+      summary: Create Parser
+      operationId: create_parser_api_v1_data_lifecycle_parsers_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParserIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParserOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/data-lifecycle/parsers/test:
+    post:
+      tags:
+      - data_lifecycle
+      summary: Test Parser
+      description: 'Dry-run a parser pipeline against a sample event — validate +
+        preview
+
+        the reshaped event without persisting anything (W5.2/W5.3).'
+      operationId: test_parser_api_v1_data_lifecycle_parsers_test_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParserTestIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParserTestOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/data-lifecycle/parsers/{parser_id}:
+    delete:
+      tags:
+      - data_lifecycle
+      summary: Delete Parser
+      operationId: delete_parser_api_v1_data_lifecycle_parsers__parser_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: parser_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Parser Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/feedback/alert-override:
     post:
       tags:
@@ -21699,6 +21840,93 @@ components:
       - parameter_overrides
       - created_at
       title: PackAssignmentOut
+    ParserIn:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        source:
+          type: string
+          title: Source
+          default: generic
+        transforms:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Transforms
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - name
+      title: ParserIn
+    ParserOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        source:
+          type: string
+          title: Source
+        transforms:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Transforms
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - id
+      - name
+      - source
+      - transforms
+      - enabled
+      title: ParserOut
+    ParserTestIn:
+      properties:
+        transforms:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Transforms
+        sample_event:
+          additionalProperties: true
+          type: object
+          title: Sample Event
+      type: object
+      required:
+      - transforms
+      - sample_event
+      title: ParserTestIn
+    ParserTestOut:
+      properties:
+        event:
+          additionalProperties: true
+          type: object
+          title: Event
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+      type: object
+      required:
+      - event
+      - warnings
+      title: ParserTestOut
     PasskeyCredentialOut:
       properties:
         id:
@@ -22838,6 +23066,48 @@ components:
       required:
       - yaml
       title: ReplaceRulesRequest
+    RetentionOut:
+      properties:
+        raw_events_days:
+          type: integer
+          title: Raw Events Days
+        alerts_days:
+          type: integer
+          title: Alerts Days
+        audit_days:
+          type: integer
+          title: Audit Days
+      type: object
+      required:
+      - raw_events_days
+      - alerts_days
+      - audit_days
+      title: RetentionOut
+    RetentionUpdate:
+      properties:
+        raw_events_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Raw Events Days
+        alerts_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Alerts Days
+        audit_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Audit Days
+      type: object
+      title: RetentionUpdate
     ReviewAction:
       properties:
         action:
