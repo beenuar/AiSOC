@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Compliance mapping + agentless CSPM + destinations (Wave 6).** (1) An
+  **agentless CSPM scan engine** (`cspm.scan_resources` + `POST /posture/scan`):
+  evaluates a read-only cloud-resource snapshot against misconfiguration checks
+  (public/unencrypted S3, world-open security groups on sensitive ports, IAM
+  users without MFA / stale keys, public/unencrypted RDS, unencrypted EBS),
+  emitting findings with severity + control refs (W6.2). (2) **Compliance
+  control mapping with auto-evidence** (`compliance_mapping`): CSPM findings and
+  fired detections (via MITRE) map to CIS / SOC 2 controls and mint dated
+  evidence records automatically (W6.1). (3) **Notification/SOAR destinations**
+  (`destinations` + `POST /posture/destinations/preview`): Opsgenie, email, and
+  a generic `aisoc.handoff.v1` external-SOAR webhook, with an SSRF guard on
+  outbound targets (W6.3). Gated by `test_compliance_cspm.py` (14 cases).
+
 - **Detection backtesting over the event lake (Wave 2).** New
   `POST /api/v1/rules/{rule_id}/backtest` runs a candidate detection rule against
   REAL historical events in the tenant-scoped ClickHouse lake

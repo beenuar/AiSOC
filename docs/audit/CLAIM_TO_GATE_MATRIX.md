@@ -54,9 +54,13 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Analyst disposition history drives human-approval-gated tuning proposals | README (self-improving detections) | `ci.yml` api job (`test_wave1_loop_edges.py` — the previously-orphaned `suggest_tuning` engine is wired to real per-rule disposition history via `/detection/tuning/auto-suggest`, opening DRAFT proposals; `test_detection_tuner.py` fixture-gates the engine) | PARTIAL (mapping + wiring gated; end-to-end proposal insert exercised in api integration, not a unit DB) | Phase 2 |
 | Detections can be backtested over historical lake data before promotion | README (detection engineering) | `ci.yml` api job (`test_backtest.py` — bounded/allow-listed SQL construction with injection-sanitised source filter, lake-row→event mapping with JSON payload expansion, exact would-fire count + hit-rate + samples; `test_backtest_gate.py` — opt-in `AISOC_BACKTEST_MAX_HIT_RATE` /decide gate) + web type-check (rule-editor backtest panel) | PARTIAL (pure backtest logic + gate gated; the live tenant-scoped ClickHouse fetch is exercised by the integration gate, not a unit) | Phase 2 |
 
+| Agentless CSPM scans a cloud snapshot for misconfigurations | README (cloud posture) | `ci.yml` api job (`test_compliance_cspm.py` — public S3, world-open security groups on sensitive ports, IAM users without MFA / stale keys, public/unencrypted RDS + EBS all flagged with severity + control refs; clean resources yield nothing) | GATED | - |
+| Security findings/detections map to compliance controls with auto-evidence | README (compliance) | `ci.yml` api job (`test_compliance_cspm.py` — MITRE→control mapping, per-control evidence records for detections + CSPM findings, unknown controls skipped) | GATED | - |
+| Alerts fan out to Opsgenie / email / external-SOAR destinations (SSRF-guarded) | README (destinations + SOAR) | `ci.yml` api job (`test_compliance_cspm.py` — Opsgenie priority mapping, email subject/recipients, `aisoc.handoff.v1` SOAR envelope; outbound webhook guard blocks non-http(s) schemes + private/loopback targets) | GATED | - |
+
 ## Summary
 
-- GATED: 36
+- GATED: 39
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
 
