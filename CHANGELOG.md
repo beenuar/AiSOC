@@ -15,10 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **tenant-scoped** ClickHouse purge and a parameterised Postgres purge (W5.1).
   (2) A **field-extraction / transform DSL** (`pipeline_transforms`): a safe,
   whitelisted, no-`eval` pipeline (`rename` / `copy` / `set` / `set_default` /
-  `drop` / `lowercase` / `uppercase` / `coalesce` / `regex_extract` with dotted
-  paths + named groups) that reshapes events onto OCSF; validation rejects
-  unknown ops, bad regex, and oversized pipelines; runtime is fail-open per op
-  and never mutates the input (W5.3). (3) **Runtime custom parsers**
+  `drop` / `lowercase` / `uppercase` / `coalesce` / grok-style `extract` with
+  dotted paths + named captures) that reshapes events onto OCSF; the `extract`
+  op compiles a `%{TOKEN:name}` template from `re.escape`d literals + a fixed
+  linear-time token map, so it is ReDoS-proof by construction (no raw user
+  regex); validation rejects unknown ops/tokens and oversized pipelines;
+  runtime is fail-open per op and never mutates the input (W5.3). (3) **Runtime custom parsers**
   (`/data-lifecycle/parsers` + `/parsers/test`): a parser is a named,
   tenant-scoped, validated transform pipeline you can register and dry-run
   against a sample event (W5.2). Gated by `test_retention.py` +
