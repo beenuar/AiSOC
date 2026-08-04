@@ -3303,6 +3303,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/detection-proposals/{proposal_id}/backtest:
+    post:
+      tags:
+      - detection_rules
+      - dac
+      summary: Backtest Proposal
+      description: 'Run the candidate rule over the last N days of REAL lake events
+        and
+
+        attach the result to ``eval_result["backtest"]`` (Wave 2, W2.2).
+
+
+        This is a third, honest signal alongside the fixture gate + MITRE baseline:
+
+        a rule that would have fired on a large fraction of historical events is
+
+        noisy. When ``AISOC_BACKTEST_MAX_HIT_RATE`` is set, ``/decide`` blocks
+
+        approval above that hit-rate (opt-in — informational by default).'
+      operationId: backtest_proposal_api_v1_detection_proposals__proposal_id__backtest_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Proposal Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestProposalRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/detection-proposals/{proposal_id}/eval:
     post:
       tags:
@@ -15177,6 +15226,30 @@ components:
       - tenant_id
       - actions
       title: AutonomyPolicyResponse
+    BacktestProposalRequest:
+      properties:
+        window_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Window Days
+          default: 30
+        limit:
+          type: integer
+          maximum: 100000.0
+          minimum: 1.0
+          title: Limit
+          default: 5000
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+          description: Optional connector_type filter.
+      type: object
+      title: BacktestProposalRequest
+      description: Backtest a candidate proposal's rule over historical lake events
+        (W2.2).
     BacktestRequest:
       properties:
         window_days:

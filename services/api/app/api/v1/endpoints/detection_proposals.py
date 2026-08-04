@@ -53,10 +53,23 @@ from app.models.detection_proposal import (
     DetectionRuleProposal,
 )
 from app.models.detection_rule import DetectionRule
+from app.services.backtest import backtest_rule, fetch_lake_events
 from app.services.detection_eval import evaluate_candidate_rule
 from app.services.github import create_detection_pr
 
 router = APIRouter(prefix="/detection-proposals", tags=["detection_rules", "dac"])
+
+
+def _backtest_max_hit_rate() -> float | None:
+    """Optional approval gate: max backtest hit-rate before /decide blocks
+    approval. Unset (default) => informational only (W2.2)."""
+    raw = os.getenv("AISOC_BACKTEST_MAX_HIT_RATE", "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
 
 
 # Resolve the AiSOC repository root by walking up from this file until we
@@ -724,6 +737,63 @@ async def evaluate_rule(
     return ProposalResponse.model_validate(proposal)
 
 
+class BacktestProposalRequest(BaseModel):
+    """Backtest a candidate proposal's rule over historical lake events (W2.2)."""
+
+    window_days: int = Field(30, ge=1, le=365)
+    limit: int = Field(5000, ge=1, le=100_000)
+    source: str | None = Field(None, description="Optional connector_type filter.")
+
+
+@router.post("/{proposal_id}/backtest", response_model=ProposalResponse)
+async def backtest_proposal(
+    proposal_id: uuid.UUID,
+    request: BacktestProposalRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
+    db: DBSession,
+) -> ProposalResponse:
+    """Run the candidate rule over the last N days of REAL lake events and
+    attach the result to ``eval_result["backtest"]`` (Wave 2, W2.2).
+
+    This is a third, honest signal alongside the fixture gate + MITRE baseline:
+    a rule that would have fired on a large fraction of historical events is
+    noisy. When ``AISOC_BACKTEST_MAX_HIT_RATE`` is set, ``/decide`` blocks
+    approval above that hit-rate (opt-in — informational by default)."""
+    _ensure_dac_enabled()
+    from app.db.clickhouse import LakeQueryNotConfiguredError  # noqa: PLC0415
+
+    proposal = await _load_proposal(db, proposal_id, current_user.tenant_id)
+    if proposal.status in {"promoted", "rejected"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Proposal is {proposal.status}; backtest cannot be re-run")
+
+    try:
+        events = await fetch_lake_events(
+            current_user.tenant_id,
+            window_days=request.window_days,
+            limit=request.limit,
+            source=request.source,
+        )
+    except LakeQueryNotConfiguredError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="lake backend not configured") from exc
+    except Exception as exc:  # noqa: BLE001 — lake failure is a 502, not 500
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"lake query failed: {exc}") from exc
+
+    summary = backtest_rule(rule_language=proposal.rule_language, rule_body=proposal.rule_body, events=events)
+    merged = dict(proposal.eval_result or {})
+    merged["backtest"] = {
+        "window_days": request.window_days,
+        "events_scanned": summary["events_scanned"],
+        "would_fire": summary["would_fire"],
+        "hit_rate": summary["hit_rate"],
+        "error": summary["error"],
+        "ran_at": datetime.now(UTC).isoformat(),
+    }
+    proposal.eval_result = merged
+    await db.commit()
+    await db.refresh(proposal)
+    return ProposalResponse.model_validate(proposal)
+
+
 @router.post("/{proposal_id}/eval", response_model=ProposalResponse)
 async def attach_eval_result(
     proposal_id: uuid.UUID,
@@ -832,6 +902,20 @@ async def decide_proposal(
                 status_code=status.HTTP_412_PRECONDITION_FAILED,
                 detail="Substrate benchmark gate failed (MITRE regression); cannot approve.",
             )
+        # W2.2 — optional backtest hit-rate gate (opt-in; informational by
+        # default). A rule that would fire on too large a fraction of real
+        # historical events is too noisy to promote.
+        gate = _backtest_max_hit_rate()
+        if gate is not None:
+            backtest = eval_result.get("backtest")
+            if isinstance(backtest, dict) and float(backtest.get("hit_rate", 0.0)) > gate:
+                raise HTTPException(
+                    status_code=status.HTTP_412_PRECONDITION_FAILED,
+                    detail=(
+                        f"Backtest hit-rate {float(backtest['hit_rate']):.0%} exceeds the configured "
+                        f"maximum {gate:.0%} — rule is too noisy over history; cannot approve."
+                    ),
+                )
         proposal.status = "approved"
     else:
         proposal.status = "rejected"

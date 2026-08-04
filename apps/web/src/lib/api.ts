@@ -3509,6 +3509,17 @@ export interface DetectionConfidence {
   generatedAt: string;
 }
 
+export interface DetectionBacktestResult {
+  rule_id: string;
+  rule_language: string;
+  window_days: number;
+  events_scanned: number;
+  would_fire: number;
+  hit_rate: number;
+  sample_matches: Record<string, unknown>[];
+  error: string | null;
+}
+
 export const detectionApi = {
   list: () =>
     request<{ rules: DetectionRule[]; total: number }>(
@@ -3516,6 +3527,17 @@ export const detectionApi = {
     ),
 
   get: (id: string) => request<DetectionRule>(`/api/v1/detection/rules/${id}`),
+
+  // Wave 2 (W2.3) — backtest a saved rule over the last N days of real lake
+  // events. Returns exactly how many events would have fired + sample matches.
+  backtest: (
+    id: string,
+    body: { window_days?: number; limit?: number; source?: string | null },
+  ) =>
+    request<DetectionBacktestResult>(`/api/v1/rules/${id}/backtest`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   create: (rule: Partial<DetectionRule>) =>
     request<DetectionRule>('/api/v1/detection/rules', {

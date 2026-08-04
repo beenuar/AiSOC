@@ -138,6 +138,16 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
   // Wave 3 (W3.3) — no-code builder panel toggle.
   const [showBuilder, setShowBuilder] = useState(false);
 
+  // Wave 2 (W2.3) — backtest a SAVED rule over real historical lake events.
+  const [backtestDays, setBacktestDays] = useState(30);
+  const [backtesting, setBacktesting] = useState(false);
+  const [backtestResult, setBacktestResult] = useState<{
+    eventsScanned: number;
+    wouldFire: number;
+    hitRate: number;
+    error: string | null;
+  } | null>(null);
+
   // Detection-as-Code: propose-for-review state. Wave-2 buyer-value path.
   // The author writes a rule here, hits "Propose for review", and the backend
   // runs `scripts/run_evals.py` against the active baseline. The verdict is
@@ -262,6 +272,41 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
       }
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleBacktest = async () => {
+    if (!data?.id) {
+      toast.error('Save the rule first to backtest it over historical data');
+      return;
+    }
+    setBacktesting(true);
+    setBacktestResult(null);
+    try {
+      const result = await detectionApi.backtest(data.id, {
+        window_days: backtestDays,
+      });
+      setBacktestResult({
+        eventsScanned: result.events_scanned,
+        wouldFire: result.would_fire,
+        hitRate: result.hit_rate,
+        error: result.error,
+      });
+      toast.success(
+        `Backtest: would fire on ${result.would_fire} of ${result.events_scanned} event(s)`,
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Backtest failed';
+      setBacktestResult({
+        eventsScanned: 0,
+        wouldFire: 0,
+        hitRate: 0,
+        error: message,
+      });
+      toast.error(message);
+    } finally {
+      setBacktesting(false);
     }
   };
 
@@ -768,6 +813,68 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
                       No match — rule did not fire on this sample.
                     </div>
                   )}
+                </div>
+                {/* Wave 2 (W2.3) — backtest a saved rule over historical lake events */}
+                <div className="mt-3 rounded-lg border border-gray-800 bg-gray-900/40 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-gray-300">
+                      Backtest over history
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] text-gray-500">days</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={backtestDays}
+                        onChange={(e) =>
+                          setBacktestDays(
+                            Math.max(
+                              1,
+                              Math.min(365, Number(e.target.value) || 30),
+                            ),
+                          )
+                        }
+                        className="w-16 rounded-md border border-gray-800 bg-gray-950 px-2 py-1 text-xs text-gray-200 outline-none focus:border-blue-500/60"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleBacktest}
+                        disabled={backtesting || !data?.id}
+                        className="rounded-md bg-blue-600/80 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                      >
+                        {backtesting ? 'Running…' : 'Run backtest'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    {!data?.id ? (
+                      <p className="text-[11px] text-gray-600">
+                        Save the rule to backtest it against real historical
+                        events.
+                      </p>
+                    ) : !backtestResult ? (
+                      <p className="text-[11px] text-gray-600">
+                        Run a backtest to see how many past events this rule
+                        would have fired on.
+                      </p>
+                    ) : backtestResult.error ? (
+                      <p className="text-[11px] text-red-400">
+                        {backtestResult.error}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-gray-300">
+                        Would fire on{' '}
+                        <span className="font-semibold text-emerald-300">
+                          {backtestResult.wouldFire}
+                        </span>{' '}
+                        of {backtestResult.eventsScanned} event
+                        {backtestResult.eventsScanned === 1 ? '' : 's'} (
+                        {(backtestResult.hitRate * 100).toFixed(1)}% hit-rate)
+                        over the last {backtestDays}d.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

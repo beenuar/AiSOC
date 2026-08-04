@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from typing import Any
 
 from app.services.rule_engine import evaluate_rule_over_events
@@ -64,6 +65,24 @@ def rows_to_events(columns: list[str], rows: list[list[Any]]) -> list[dict[str, 
                 event = {**event, **payload}
         events.append(event)
     return events
+
+
+async def fetch_lake_events(
+    tenant_id: uuid.UUID,
+    *,
+    window_days: int,
+    limit: int,
+    source: str | None,
+) -> list[dict[str, Any]]:
+    """Fetch tenant-scoped historical events from the ClickHouse lake for a
+    backtest. Shared by the rule + proposal backtest endpoints."""
+    from app.db.clickhouse import execute_lake_query  # noqa: PLC0415 — optional lake backend
+    from app.services.lake_sql import rewrite_for_tenant  # noqa: PLC0415
+
+    sql = build_backtest_sql(window_days=window_days, limit=limit, source=source)
+    rewrite = rewrite_for_tenant(sql, tenant_id, row_cap=limit)
+    result = await execute_lake_query(rewrite.sql, timeout_seconds=30)
+    return rows_to_events(result.columns, result.rows)
 
 
 def backtest_rule(
