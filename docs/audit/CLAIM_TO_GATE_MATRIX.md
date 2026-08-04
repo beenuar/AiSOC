@@ -59,13 +59,18 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Response actions run under least-privilege for the invoking identity | README (autonomy + safety) | `actions` job (`test_authz.py` — `authorize_action` denies a principal lacking the action's blast-radius permission; tier hierarchy + wildcards; tenant binding) | GATED | - |
 | Actions-service mutating routes are authenticated (fail-closed in prod) | README (autonomy + safety) | `actions` job (`test_authz.py` — `require_service_auth` returns 401 on a bad/absent bearer token, 503 when unconfigured in production, open only in dev mode) | GATED | - |
 | Approvals are bound to a qualified approver (separation of duties) | README (autonomy + safety) | `actions` job (`test_authz.py` — `authorize_approver` requires the action's permission and rejects the requester approving their own action) | GATED | - |
+| Customizable dashboard / report builder validates + renders | README (analytics + reporting) | `ci.yml` api job (`test_report_builder.py` — whitelisted widget types + data sources, unique widget ids, bounded size; render resolves each widget and is resilient to a failing/missing resolver; `/report-builder/render` wires the real tenant-scoped `alerts_by_severity`) | GATED | - |
+
+| Agentless CSPM scans a cloud snapshot for misconfigurations | README (cloud posture) | `ci.yml` api job (`test_compliance_cspm.py` — public S3, world-open security groups on sensitive ports, IAM users without MFA / stale keys, public/unencrypted RDS + EBS all flagged with severity + control refs; clean resources yield nothing) | GATED | - |
+| Security findings/detections map to compliance controls with auto-evidence | README (compliance) | `ci.yml` api job (`test_compliance_cspm.py` — MITRE→control mapping, per-control evidence records for detections + CSPM findings, unknown controls skipped) | GATED | - |
+| Alerts fan out to Opsgenie / email / external-SOAR destinations (SSRF-guarded) | README (destinations + SOAR) | `ci.yml` api job (`test_compliance_cspm.py` — Opsgenie priority mapping, email subject/recipients, `aisoc.handoff.v1` SOAR envelope; outbound webhook guard blocks non-http(s) schemes + private/loopback targets) | GATED | - |
 
 | Per-tenant configurable data retention with tenant-scoped purge | README (data lifecycle) | `ci.yml` api job (`test_retention.py` — defaults + tenant override merge, clamps to [1, 3650] days, mandatory tenant predicate in the ClickHouse purge, parameterised Postgres cutoff never string-interpolated) | GATED | - |
 | Self-service field-extraction / transform pipelines (custom parsers) | README (data lifecycle) | `ci.yml` api job (`test_pipeline_transforms.py` — the whitelisted DSL renames/maps/extracts onto OCSF with dotted paths + named-group regex; validation rejects unknown ops / bad regex / oversized pipelines; fail-open per op never drops an event; input never mutated) | GATED | - |
 
 ## Summary
 
-- GATED: 42
+- GATED: 46
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
 

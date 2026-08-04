@@ -63,6 +63,7 @@ from app.api.v1.endpoints import (
     realtime,
     remediation,
     replay,
+    report_builder,
     reports,
     rule_tuning,
     saved_hunts,
@@ -222,6 +223,9 @@ api_router.include_router(posture.router)
 api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
 api_router.include_router(reports.router)
+
+# Wave 7 — customizable dashboard / report builder
+api_router.include_router(report_builder.router)
 
 # Air-gap status snapshot for operators — Tier 3.1 (air-gapped certification)
 api_router.include_router(airgap.router)

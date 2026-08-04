@@ -15,6 +15,13 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.posture import PostureFinding, PostureScanRun
 from app.models.tenant import User
+from app.services.compliance_mapping import evidence_for_cspm_finding
+from app.services.cspm import scan_resources, summarize
+from app.services.destinations import (
+    build_email_payload,
+    build_opsgenie_payload,
+    build_soar_handoff_payload,
+)
 
 router = APIRouter(prefix="/posture", tags=["posture"])
 
@@ -218,3 +225,60 @@ async def list_scans(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 — agentless CSPM scan engine (W6.2) + auto-evidence (W6.1)
+# + destination payload preview (W6.3)
+# ---------------------------------------------------------------------------
+
+
+class CspmScanRequest(BaseModel):
+    resources: list[dict[str, Any]] = Field(default_factory=list, description="Normalised cloud-resource snapshot.")
+
+
+class CspmScanResponse(BaseModel):
+    findings: list[dict[str, Any]]
+    summary: dict[str, int]
+    evidence: list[dict[str, Any]]
+
+
+@router.post("/scan", response_model=CspmScanResponse)
+async def cspm_scan(
+    body: CspmScanRequest,
+    current_user: User = Depends(get_current_user),
+) -> CspmScanResponse:
+    """Agentless CSPM MVP (W6.2): evaluate a cloud-resource snapshot against the
+    misconfiguration checks, returning findings + a severity summary + the
+    auto-generated compliance evidence (W6.1). Stateless — the findings store
+    endpoints above persist what an operator chooses to keep."""
+    findings = scan_resources(body.resources)
+    finding_dicts = [f.as_dict() for f in findings]
+    evidence: list[dict[str, Any]] = []
+    for fd in finding_dicts:
+        evidence.extend(r.as_dict() for r in evidence_for_cspm_finding(fd))
+    return CspmScanResponse(findings=finding_dicts, summary=summarize(findings), evidence=evidence)
+
+
+class DestinationPreviewRequest(BaseModel):
+    kind: str = Field(..., description="opsgenie | email | webhook")
+    alert: dict[str, Any]
+    recipients: list[str] = Field(default_factory=list)
+
+
+@router.post("/destinations/preview")
+async def destination_preview(
+    body: DestinationPreviewRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Preview the exact payload a destination would send (W6.3) — no send."""
+    if body.kind == "opsgenie":
+        return {"kind": "opsgenie", "payload": build_opsgenie_payload(body.alert)}
+    if body.kind == "email":
+        return {"kind": "email", "payload": build_email_payload(body.alert, body.recipients)}
+    if body.kind == "webhook":
+        return {"kind": "webhook", "payload": build_soar_handoff_payload(body.alert)}
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"unknown destination kind: {body.kind}",
+    )

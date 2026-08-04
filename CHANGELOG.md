@@ -23,6 +23,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tenant-scoped, validated transform pipeline you can register and dry-run
   against a sample event (W5.2). Gated by `test_retention.py` +
   `test_pipeline_transforms.py`.
+- **Customizable dashboard / report builder (Wave 7).** A declarative report is
+  a list of widgets (whitelisted `type` × data `source`), validated for unknown
+  types/sources, duplicate ids, and bounded size, then rendered by resolving
+  each widget's data server-side — resilient to a failing/missing resolver (one
+  bad widget renders an `error`, never breaks the report). `POST
+  /report-builder/validate` + `/render` (the latter wires the real tenant-scoped
+  `alerts_by_severity` resolver). The same definition can drive the live
+  dashboard and an exported report. Gated by `test_report_builder.py` (8 cases).
+- **Compliance mapping + agentless CSPM + destinations (Wave 6).** (1) An
+  **agentless CSPM scan engine** (`cspm.scan_resources` + `POST /posture/scan`):
+  evaluates a read-only cloud-resource snapshot against misconfiguration checks
+  (public/unencrypted S3, world-open security groups on sensitive ports, IAM
+  users without MFA / stale keys, public/unencrypted RDS, unencrypted EBS),
+  emitting findings with severity + control refs (W6.2). (2) **Compliance
+  control mapping with auto-evidence** (`compliance_mapping`): CSPM findings and
+  fired detections (via MITRE) map to CIS / SOC 2 controls and mint dated
+  evidence records automatically (W6.1). (3) **Notification/SOAR destinations**
+  (`destinations` + `POST /posture/destinations/preview`): Opsgenie, email, and
+  a generic `aisoc.handoff.v1` external-SOAR webhook, with an SSRF guard on
+  outbound targets (W6.3). Gated by `test_compliance_cspm.py` (14 cases).
 - **Invoking-identity scoping for response actions (Wave 4).** An
   `ActionPrincipal` (user id + tenant + roles + permissions) now rides on every
   `ActionRequest` (W4.1). The actions service enforces **least-privilege**: an
