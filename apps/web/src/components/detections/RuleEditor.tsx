@@ -19,6 +19,7 @@ import type { AlertSeverity } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
+import { SimpleRuleBuilder } from '@/components/detections/SimpleRuleBuilder';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
@@ -133,6 +134,9 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
     preview: HuntResult[];
   } | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Wave 3 (W3.3) — no-code builder panel toggle.
+  const [showBuilder, setShowBuilder] = useState(false);
 
   // Wave 2 (W2.3) — backtest a SAVED rule over real historical lake events.
   const [backtestDays, setBacktestDays] = useState(30);
@@ -689,6 +693,29 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
               </button>
             ))}
           </div>
+
+          {/* Wave 3 (W3.3) — no-code builder toggle + panel */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowBuilder((v) => !v)}
+              className="rounded-md border border-gray-800 bg-gray-900/40 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-blue-500/60"
+            >
+              {showBuilder ? 'Hide no-code builder' : 'No-code builder'}
+            </button>
+          </div>
+          {showBuilder && (
+            <SimpleRuleBuilder
+              onGenerate={(sigma) => {
+                setBody(sigma);
+                handleLanguageChange('sigma');
+                setShowBuilder(false);
+                toast.success(
+                  'Sigma generated — review, test, and propose it below',
+                );
+              }}
+            />
+          )}
 
           {/* Editor */}
           <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#0d1117]">
