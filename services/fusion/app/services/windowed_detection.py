@@ -122,6 +122,7 @@ class WindowedDetectionEngine:
                 if isinstance(parsed, dict):
                     return parsed
             except (ValueError, TypeError):
+                # raw_data isn't valid JSON — fall back to the OCSF envelope.
                 pass
         return ocsf
 

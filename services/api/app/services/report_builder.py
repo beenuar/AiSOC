@@ -10,9 +10,12 @@ and an exported PDF/HTML report.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 WIDGET_TYPES = frozenset({"metric", "table", "timeseries", "bar", "pie", "text"})
 # Whitelisted data sources a widget may bind to. Extend as new resolvers land.
@@ -100,7 +103,11 @@ def render_report(definition: ReportDefinition, resolvers: dict[str, Resolver]) 
             else:
                 try:
                     entry["data"] = resolver(widget.params)
-                except Exception as exc:  # noqa: BLE001 — one bad widget shouldn't break the report
-                    entry["error"] = f"{type(exc).__name__}: {exc}"
+                except Exception:  # noqa: BLE001 — one bad widget shouldn't break the report
+                    # Log the detail server-side but never expose the raw
+                    # exception (it may carry stack/internal detail) to the API
+                    # caller — the widget just carries a generic error.
+                    logger.warning("report widget %r resolver failed", widget.id, exc_info=True)
+                    entry["error"] = "resolver failed"
         rendered.append(entry)
     return {"name": definition.name, "widgets": rendered}

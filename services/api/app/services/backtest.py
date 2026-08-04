@@ -60,6 +60,8 @@ def rows_to_events(columns: list[str], rows: list[list[Any]]) -> list[dict[str, 
                         # keep the OCSF columns available too.
                         event = {**event, **parsed}
                 except (ValueError, TypeError):
+                    # Payload isn't valid JSON — keep the event as-is rather than
+                    # drop it (best-effort raw_data expansion).
                     pass
             elif isinstance(payload, dict):
                 event = {**event, **payload}

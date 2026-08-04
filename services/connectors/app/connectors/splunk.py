@@ -211,6 +211,7 @@ class SplunkConnector(BaseConnector):
             if isinstance(data, dict) and data.get("sid"):
                 return str(data["sid"])
         except (ValueError, KeyError):
+            # Response wasn't JSON with a sid — fall through to the XML path below.
             pass
         # The dispatch endpoint may answer with XML (<sid>…</sid>) despite
         # output_mode=json depending on Splunk version.
