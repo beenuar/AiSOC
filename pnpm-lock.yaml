@@ -183,7 +183,7 @@ importers:
         version: 4.1.10(vitest@4.1.10)
       autoprefixer:
         specifier: ^10.5.2
-        version: 10.5.2(postcss@8.5.25)
+        version: 10.5.2(postcss@8.5.26)
       axe-core:
         specifier: ^4.11.4
         version: 4.11.4
@@ -200,8 +200,8 @@ importers:
         specifier: ^30.0.0
         version: 30.0.1
       postcss:
-        specifier: ^8.5.23
-        version: 8.5.25
+        specifier: ^8.5.26
+        version: 8.5.26
       storybook:
         specifier: ^9.1.0
         version: 9.1.20(@testing-library/dom@10.4.1)(prettier@3.9.5)(vite@8.1.4)
@@ -9181,21 +9181,6 @@ packages:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
     dev: true
 
-  /autoprefixer@10.5.2(postcss@8.5.25):
-    resolution: {integrity: sha512-rD5t5DwOjJdmSORcTq64j8MawTC+tbQ+HHqjR4NDumamy/ambn1UJrlKL+KdwujWxMkFjPM3pPHOEA9tl4767Q==}
-    engines: {node: ^10 || ^12 || >=14}
-    hasBin: true
-    peerDependencies:
-      postcss: ^8.1.0
-    dependencies:
-      browserslist: 4.28.5
-      caniuse-lite: 1.0.30001803
-      fraction.js: 5.3.4
-      picocolors: 1.1.1
-      postcss: 8.5.25
-      postcss-value-parser: 4.2.0
-    dev: true
-
   /autoprefixer@10.5.2(postcss@8.5.26):
     resolution: {integrity: sha512-rD5t5DwOjJdmSORcTq64j8MawTC+tbQ+HHqjR4NDumamy/ambn1UJrlKL+KdwujWxMkFjPM3pPHOEA9tl4767Q==}
     engines: {node: ^10 || ^12 || >=14}
@@ -9209,7 +9194,6 @@ packages:
       picocolors: 1.1.1
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
-    dev: false
 
   /available-typed-arrays@1.0.7:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
@@ -15714,12 +15698,6 @@ packages:
       thenify-all: 1.6.0
     dev: true
 
-  /nanoid@3.3.16:
-    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-    dev: true
-
   /nanoid@3.3.18:
     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -17247,15 +17225,6 @@ packages:
       picocolors: 1.1.1
       source-map-js: 1.2.1
     dev: false
-
-  /postcss@8.5.25:
-    resolution: {integrity: sha512-DTPx3RWSSnWyzLxQnlH0rJP+EW5ekl16ZU4/psbIhA0e53kJfdgaN5vKM+xP7yJtXVu+nfdVFmlgFDEKAe4Pyw==}
-    engines: {node: ^10 || ^12 || >=14}
-    dependencies:
-      nanoid: 3.3.16
-      picocolors: 1.1.1
-      source-map-js: 1.2.1
-    dev: true
 
   /postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
@@ -19965,7 +19934,7 @@ packages:
       esbuild: 0.25.12
       lightningcss: 1.32.0
       picomatch: 4.0.5
-      postcss: 8.5.25
+      postcss: 8.5.26
       rolldown: 1.1.5
       tinyglobby: 0.2.17
       tsx: 4.23.1
