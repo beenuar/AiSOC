@@ -121,8 +121,8 @@ importers:
         specifier: ^3.9.2
         version: 3.9.2(@types/react@19.2.18)(react-dom@19.2.8)(react-is@19.2.8)(react@19.2.8)(redux@5.0.1)
       swr:
-        specifier: ^2.4.2
-        version: 2.4.2(react@19.2.8)
+        specifier: ^2.5.0
+        version: 2.5.0(react@19.2.8)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -19106,8 +19106,8 @@ packages:
       sax: 1.6.0
     dev: false
 
-  /swr@2.4.2(react@19.2.8):
-    resolution: {integrity: sha512-ej644Y2bvkIajfR32KGeSSdBXQW+ScjGjkybZgSE7kFpk9eGnV44XY9FJylXi+W75pavSX1PVNB57W5EbhGIYw==}
+  /swr@2.5.0(react@19.2.8):
+    resolution: {integrity: sha512-W0GomadRJe9OfzIoRX0kZHhDSaRRfdiOUeH6uazgR05SibBhDNwfdTbhAxmFtObvkf59fFymo22mooKukosvNA==}
     peerDependencies:
       react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
