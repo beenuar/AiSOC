@@ -166,3 +166,9 @@ python|CVE-2026-69244|aiohttp high (3.14.1); fixed in 3.14.3 within the <4.0 cap
 pnpm|GHSA-7p8r-x3mc-p8w7|fast-uri 3.1.0 advisory; fix requires the 4.x major; transitive build/tooling dep (fastify/ajv stack), not runtime-exposed; tracked|2026-10-28
 pnpm|GHSA-mwp4-54f8-5fhr|ip-address 10.1.0 advisory; transitive build/tooling dep; pnpm reports no auto-fix without an override; tracked|2026-10-28
 pnpm|GHSA-rgw5-rvv9-x895|brace-expansion advisory (1.x/2.x/5.x instances); pnpm reports no auto-fix (consumers pinned); transitive build/tooling glob dep|2026-10-28
+# 2026-08-11 batch — freshly-disclosed high advisories (all transitive; expire <90d; tracked for dep-bump PRs).
+pnpm|GHSA-2v37-7h3g-55p8|nanoid advisory; transitive dep; pnpm reports no in-place auto-fix; tracked for a dep-bump PR|2026-11-05
+pnpm|GHSA-5p2g-fcmc-qvqq|image-size advisory; transitive build-time dep (next image pipeline); tracked for a dep-bump PR|2026-11-05
+pnpm|GHSA-w3rx-r6r6-pgpr|image-size advisory (co-resolves with GHSA-5p2g); transitive build-time dep; tracked|2026-11-05
+pnpm|GHSA-5p4m-2wfm-xmqj|js-yaml advisory (new); transitive build/tooling dep; pnpm reports no auto-fix; tracked|2026-11-05
+python|CVE-2026-71554|h2 4.3.0 HTTP/2 advisory; transitive (httpx/httpcore + aiohttp stack); tracked for the next lock refresh|2026-11-05
