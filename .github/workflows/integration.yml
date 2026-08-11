@@ -78,7 +78,7 @@ jobs:
       AISOC_VERSION: main
       COMPOSE_PROJECT_NAME: aisoc-integration
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -271,7 +271,7 @@ jobs:
       ENVIRONMENT: development
       AISOC_MIGRATIONS_STRICT: '1'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -362,7 +362,7 @@ jobs:
       AWS_ENDPOINT_URL: http://localhost:9000
       AWS_DEFAULT_REGION: us-east-1
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install tooling (awscli + postgres client)
         run: |
@@ -474,7 +474,7 @@ jobs:
       AISOC_MIGRATIONS_STRICT: '1'
       PGPASSWORD: aisoc_ci_secret
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Full history + tags so we can check out the released migration set.
           fetch-depth: 0

@@ -61,7 +61,7 @@ jobs:
       dispatch_manifest: ${{ steps.dispatch.outputs.manifest }}
       dispatch_action: ${{ steps.dispatch.outputs.action }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 2
 
@@ -103,7 +103,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master
@@ -138,7 +138,7 @@ jobs:
       FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
       AISOC_ALLOW_DEPROVISION: ${{ vars.AISOC_ALLOW_DEPROVISION || '0' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Guard rail — must opt in to destructive auto-deprovision
         if: ${{ env.AISOC_ALLOW_DEPROVISION != '1' }}
@@ -174,7 +174,7 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_MANAGED_ORG || 'aisoc-managed' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # master
