@@ -44,6 +44,10 @@ class Settings(BaseSettings):
         default=3,
         validation_alias=AliasChoices("PEER_GROUP_MIN_SIZE", "UEBA_PEER_GROUP_MIN_SIZE"),
     )
+    min_baseline_samples: int = Field(
+        default=30,
+        validation_alias=AliasChoices("MIN_BASELINE_SAMPLES", "UEBA_MIN_BASELINE_SAMPLES"),
+    )
     scoring_batch_size: int = Field(
         default=100,
         validation_alias=AliasChoices("SCORING_BATCH_SIZE", "UEBA_SCORING_BATCH_SIZE"),

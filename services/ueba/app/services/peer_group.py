@@ -93,11 +93,19 @@ class PeerGroupService:
             return None
 
         # Check minimum sample size
-        first_feat_count = next(iter(stats.values()), {}).get("count", 0)
+        first_feat: dict[str, float] = next(iter(stats.values()), {})
+        first_feat_count = first_feat.get("count", 0)
         if first_feat_count < settings.peer_group_min_size:
             return None
 
-        z_scores = [compute_z_score(stats, f, v) for f, v in features.items() if f in stats]
+        # ``None`` marks a feature whose peer baseline cannot be scored; keeping
+        # it out means a group of uniformly-degenerate features yields no peer
+        # signal at all, rather than a 0.0 that halves the caller's composite.
+        z_scores = [
+            z
+            for z in (compute_z_score(stats, f, v) for f, v in features.items())
+            if z is not None
+        ]
         if not z_scores:
             return None
 

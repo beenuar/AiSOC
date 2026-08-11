@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir \
     "numpy>=1.26.0" \
     "scipy>=1.12.0" \
     "httpx>=0.27.0" \
+    "structlog>=24.1,<27.0" \
     "opentelemetry-sdk>=1.24.0" \
     "opentelemetry-exporter-otlp>=1.24.0" \
     "opentelemetry-instrumentation-fastapi>=0.45b0"

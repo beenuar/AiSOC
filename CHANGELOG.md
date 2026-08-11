@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **UEBA can no longer read an unscoreable baseline as normal behaviour.** A
+  feature that had never been observed, had too few samples, or had zero
+  variance produced a `0.0` z-score — the same value an observation sitting
+  exactly on its own mean produces. Since the composite is a root-sum-of-
+  squares, that zero contributed nothing and the entity read as all-clear;
+  service accounts, batch jobs and automation users converge on a constant
+  stream, so they could not raise an anomaly at all. `compute_z_score` now
+  returns `None` for these cases and callers exclude it. Per-feature composites
+  are unchanged (`0.0 ** 2` already contributed nothing), but a peer group
+  whose features are all degenerate now yields no peer signal instead of a
+  `0.0` that halved the caller's personal composite — a `critical` score was
+  being reported as `medium`. Affected feature names are logged at `info`.
+  A new `MIN_BASELINE_SAMPLES` setting (default 30) gates the sample count.
+
 - **Agent investigations are now persisted to the ledger (issue #601).** The
   demo seed renames the canonical seed tenant's slug from `default` to `demo`,
   so the agents service's `tenant_ref="default"` fallback matched no tenant and
