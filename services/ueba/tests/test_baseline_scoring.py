@@ -12,6 +12,7 @@ mean, so the RSS composite read "no signal" as "all clear"; service accounts,
 batch jobs and automation users converge on a constant stream and could never
 raise an anomaly.
 """
+
 from __future__ import annotations
 
 import math
@@ -35,10 +36,7 @@ def _feed(values: list[float], feature: str = "f") -> dict[str, dict[str, float]
 
 def _scored(*z_scores: float) -> dict[str, dict[str, float]]:
     """Build a `score_features`-shaped payload carrying the given z-scores."""
-    return {
-        f"feature_{i}": {"value": 0.0, "mean": 0.0, "std": 1.0, "z_score": z}
-        for i, z in enumerate(z_scores)
-    }
+    return {f"feature_{i}": {"value": 0.0, "mean": 0.0, "std": 1.0, "z_score": z} for i, z in enumerate(z_scores)}
 
 
 class TestWelfordUpdate:
@@ -87,9 +85,7 @@ class TestComputeZScoreEstablishedBaseline:
     def test_scores_value_against_baseline(self):
         stats = _feed([10.0, 12.0, 14.0, 11.0, 13.0])
         s = stats["f"]
-        assert compute_z_score(stats, "f", 20.0, min_samples=5) == pytest.approx(
-            abs(20.0 - s["mean"]) / s["std"]
-        )
+        assert compute_z_score(stats, "f", 20.0, min_samples=5) == pytest.approx(abs(20.0 - s["mean"]) / s["std"])
 
     def test_deviation_is_absolute_in_both_directions(self):
         stats = _feed([10.0, 12.0, 14.0, 11.0, 13.0])
@@ -100,9 +96,7 @@ class TestComputeZScoreEstablishedBaseline:
         # A genuinely normal observation still scores 0.0 — this is the value
         # that must stay distinct from the unscoreable None below.
         stats = _feed([10.0, 12.0, 14.0, 11.0, 13.0])
-        assert compute_z_score(
-            stats, "f", stats["f"]["mean"], min_samples=5
-        ) == pytest.approx(0.0)
+        assert compute_z_score(stats, "f", stats["f"]["mean"], min_samples=5) == pytest.approx(0.0)
 
     def test_defaults_to_the_configured_sample_gate(self):
         # Thirty observations clear settings.min_baseline_samples unaided.
@@ -169,9 +163,7 @@ class TestCompositeScore:
     def test_zero_scored_features_contribute_nothing(self):
         # Why dropping unscoreable features later is numerically neutral:
         # RSS has no denominator, and 0**2 adds nothing to the sum.
-        assert _composite_score(_scored(3.0, 4.0)) == pytest.approx(
-            _composite_score(_scored(3.0, 4.0, 0.0, 0.0))
-        )
+        assert _composite_score(_scored(3.0, 4.0)) == pytest.approx(_composite_score(_scored(3.0, 4.0, 0.0, 0.0)))
 
     def test_only_unscoreable_features_score_zero(self):
         assert _composite_score({"a": {"z_score": None}, "b": {"z_score": None}}) == 0.0
@@ -182,9 +174,7 @@ class TestCompositeScore:
 
     def test_is_not_normalised_by_feature_count(self):
         # Ten mild deviations outrank three identical ones.
-        assert _composite_score(_scored(*([2.0] * 10))) > _composite_score(
-            _scored(2.0, 2.0, 2.0)
-        )
+        assert _composite_score(_scored(*([2.0] * 10))) > _composite_score(_scored(2.0, 2.0, 2.0))
 
 
 class TestUnscoreableFeatures:

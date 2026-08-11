@@ -101,11 +101,7 @@ class PeerGroupService:
         # ``None`` marks a feature whose peer baseline cannot be scored; keeping
         # it out means a group of uniformly-degenerate features yields no peer
         # signal at all, rather than a 0.0 that halves the caller's composite.
-        z_scores = [
-            z
-            for z in (compute_z_score(stats, f, v) for f, v in features.items())
-            if z is not None
-        ]
+        z_scores = [z for z in (compute_z_score(stats, f, v) for f, v in features.items()) if z is not None]
         if not z_scores:
             return None
 
