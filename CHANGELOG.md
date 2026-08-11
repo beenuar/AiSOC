@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agent investigations are now persisted to the ledger (issue #601).** The
+  demo seed renames the canonical seed tenant's slug from `default` to `demo`,
+  so the agents service's `tenant_ref="default"` fallback matched no tenant and
+  every investigation was silently skipped (`ledger.skip_run
+  reason=unknown_tenant` at `debug`) after already spending compute. Two fixes:
+  the API now forwards the authenticated `tenant_id` to the agents service on
+  `/cases/{id}/investigate` (the run is attributed to the real tenant), and the
+  ledger resolver maps the `"default"` placeholder to the canonical seed tenant
+  (stable UUID, regardless of its current slug) or the sole tenant in a
+  single-tenant install. A genuinely unresolvable tenant now logs at `warning`
+  with the run/case id, not `debug`.
+
 ## [7.7.0] — 2026-08-04
 
 ### Added

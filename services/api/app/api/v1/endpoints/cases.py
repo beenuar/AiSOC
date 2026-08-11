@@ -1113,10 +1113,14 @@ async def case_investigate(
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
+    # Forward the authenticated tenant so the agents service attributes the run
+    # to the real tenant instead of falling back to the "default" placeholder,
+    # which the demo seed no longer maps to any tenant (issue #601). The ledger
+    # is scoped by tenant_id, so without this the whole run is never persisted.
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
-        json={"alert_summary": body.alert_summary or ""},
+        json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
     )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)

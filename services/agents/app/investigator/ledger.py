@@ -84,27 +84,50 @@ async def close_pool() -> None:
         _POOL = None
 
 
+# The canonical seed tenant (migration 001). Its slug/name can be renamed by the
+# demo seed (slug 'default' → 'demo'), but this UUID is stable — so the 'default'
+# placeholder ref resolves here regardless of the current slug. See issue #601.
+_CANONICAL_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+_PLACEHOLDER_TENANT_REFS = frozenset({"", "default"})
+
+
 async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.UUID | None:
     """Look up the canonical tenant UUID. Accepts a UUID string, slug, or name.
 
-    Returns None if no matching tenant exists. Callers should fall back to
-    skipping the write rather than violating the FK.
+    The ``"default"`` placeholder — the agents service's fallback when a caller
+    doesn't pass an explicit tenant — resolves to the canonical seed tenant, or,
+    in a single-tenant install, to the sole tenant. This fixes issue #601: the
+    demo seed renames the seed tenant's slug from ``default`` to ``demo``, so
+    ``"default"`` matched nothing and every investigation was silently skipped.
+
+    Returns None only when the ref is genuinely ambiguous (an unknown ref, or
+    ``"default"`` with several tenants and no canonical one). Callers skip the
+    write rather than violate the FK — but should log loudly, not at debug.
     """
-    # If already a UUID, trust it
+    ref = (tenant_ref or "").strip()
+
+    # 1. An explicit UUID is trusted as-is.
     try:
-        return uuid.UUID(tenant_ref)
+        return uuid.UUID(ref)
     except (ValueError, TypeError):
         pass
 
-    row = await conn.fetchrow(
-        """
-        SELECT id FROM tenants
-        WHERE slug = $1 OR name = $1
-        LIMIT 1
-        """,
-        tenant_ref,
-    )
-    return row["id"] if row else None
+    # 2. Exact slug / name match.
+    row = await conn.fetchrow("SELECT id FROM tenants WHERE slug = $1 OR name = $1 LIMIT 1", ref)
+    if row:
+        return row["id"]
+
+    # 3. Placeholder ref → the canonical seed tenant (stable UUID, ignoring its
+    #    current slug/name), else the sole tenant in a single-tenant install.
+    if ref.lower() in _PLACEHOLDER_TENANT_REFS:
+        canonical = await conn.fetchrow("SELECT id FROM tenants WHERE id = $1", _CANONICAL_TENANT_ID)
+        if canonical:
+            return canonical["id"]
+        only = await conn.fetch("SELECT id FROM tenants LIMIT 2")
+        if len(only) == 1:
+            return only[0]["id"]
+
+    return None
 
 
 async def resolve_tenant(tenant_ref: str) -> uuid.UUID | None:
@@ -149,10 +172,16 @@ async def start_run(
         async with pool.acquire() as conn:
             tenant_id = await _resolve_tenant_id(conn, tenant_ref)
             if tenant_id is None:
-                logger.debug(
+                # Loud, not debug (issue #601): the Investigation Ledger is a
+                # headline capability — a silent skip leaves it off with no
+                # operator signal after the run has already spent compute.
+                logger.warning(
                     "ledger.skip_run",
                     reason="unknown_tenant",
                     tenant_ref=tenant_ref,
+                    run_id=str(run_id),
+                    case_id=case_id,
+                    hint="pass an explicit tenant_id (UUID/slug); 'default' resolves only when a canonical or single tenant exists",
                 )
                 return None
             await _set_rls_context(conn, tenant_id)
