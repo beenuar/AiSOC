@@ -47,7 +47,7 @@ yara-python = "^4.5.0"
 pyyaml = "^6.0.1"
 strawberry-graphql = { version = ">=0.236,<0.324", extras = ["fastapi"] }
 webauthn = ">=2.2,<4.0"
-weasyprint = ">=62,<70"          # WS-G2: server-side PDF generation from print-ready HTML
+weasyprint = ">=62,<71"          # WS-G2: server-side PDF generation from print-ready HTML
 # Phase 4.5 / Milestone 1F — the hunt scheduler now drives next-fire
 # computation through croniter, replacing the bespoke parser that only
 # understood a handful of common cadences. Pinned with a wide range
