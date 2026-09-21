@@ -371,11 +371,17 @@ jobs:
 
       # MinIO needs a `server /data` command, which the GitHub `services:`
       # block cannot pass — run it as a plain container instead.
+      #
+      # Pulled from quay.io, not Docker Hub: the `minio/minio` Docker Hub
+      # repository was withdrawn upstream and now 404s, which broke this step
+      # with `docker run` exit 125. Pinned by digest for the same
+      # RELEASE.2024-12-18T13-15-44Z build this job has always used.
       - name: Start MinIO
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:RELEASE.2024-12-18T13-15-44Z server /data
+            quay.io/minio/minio@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3 \
+            server /data
 
       - name: Create bucket
         run: |
