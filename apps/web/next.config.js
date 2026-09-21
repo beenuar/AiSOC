@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 
+const fs = require('fs');
 const path = require('path');
+
+// Repo-root VERSION file is the single source of truth for the app version
+// shown in Settings → About. Baked into the bundle at build time since the
+// browser has no way to read a file off the deployed container's disk.
+const APP_VERSION = fs
+  .readFileSync(path.resolve(__dirname, '..', '..', 'VERSION'), 'utf8')
+  .trim();
 
 // ─── Server-side rewrite targets ────────────────────────────────────────────
 //
@@ -70,6 +78,7 @@ const nextConfig = {
     NEXT_PUBLIC_PURPLE_TEAM_API: process.env.NEXT_PUBLIC_PURPLE_TEAM_API || '',
     NEXT_PUBLIC_HONEYTOKENS_URL: process.env.NEXT_PUBLIC_HONEYTOKENS_URL || '',
     NEXT_PUBLIC_OSQUERY_TLS_URL: process.env.NEXT_PUBLIC_OSQUERY_TLS_URL || '',
+    NEXT_PUBLIC_APP_VERSION: APP_VERSION,
   },
   // ─── Permanent URL redirects (browser-visible) ───────────────────────────
   //

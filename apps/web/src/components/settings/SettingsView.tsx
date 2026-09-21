@@ -28,14 +28,17 @@ import {
   ApiError,
   connectorsApi,
   deploymentApi,
+  tenantsApi,
   type AirgapStatus,
   type Connector,
   type ConnectorStatus,
+  type FullTenant,
   type LlmCredentialUpsert,
   type LlmCredentialView,
   type LlmProvider,
   type LlmStatus,
   type LlmWritableProvider,
+  type TenantUser,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -643,50 +646,108 @@ function ProfilePanel() {
 // ─── Panel: Workspace ─────────────────────────────────────────────────────────
 
 function WorkspacePanel() {
+  const {
+    data: tenant,
+    error: tenantError,
+    isLoading: tenantLoading,
+    mutate: retryTenant,
+  } = useSWR<FullTenant>('settings:tenant', () => tenantsApi.getFull(), {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  });
+
+  const {
+    data: users,
+    error: usersError,
+    isLoading: usersLoading,
+    mutate: retryUsers,
+  } = useSWR<TenantUser[]>('settings:tenant-users', () => tenantsApi.listUsers(), {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  });
+
+  const activeCount = users?.filter((u) => u.is_active).length ?? 0;
+
   return (
     <div>
       <PanelHeader
         title="Workspace"
         description="Tenant identity and locale settings. Available to workspace administrators."
       />
-      <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Workspace name" value="AiSOC Demo" />
-        <InfoTile label="Tenant ID" value="tenant_demo_01H0XE4T2WJ9N6" mono />
-        <InfoTile label="Plan" value="Open-source (MIT)" />
-        <InfoTile label="Region" value="us-east-1 / Multi-AZ" />
-        <InfoTile label="Created" value={format(Date.now() - 1000 * 60 * 60 * 24 * 96, 'PPP')} />
-        <InfoTile
-          label="Default locale"
-          value={`${Intl.DateTimeFormat().resolvedOptions().locale} • 24h`}
-        />
-      </div>
+      {tenantLoading ? (
+        <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : tenantError || !tenant ? (
+        <div className="px-6 py-5">
+          <ErrorState
+            title="Could not load workspace details"
+            error={tenantError}
+            onRetry={() => retryTenant()}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
+          <InfoTile label="Workspace name" value={tenant.name} />
+          <InfoTile label="Tenant ID" value={tenant.id} mono />
+          <InfoTile label="Plan" value={tenant.plan} />
+          <InfoTile label="Slug" value={tenant.slug} mono />
+          <InfoTile label="Created" value={format(new Date(tenant.created_at), 'PPP')} />
+          <InfoTile
+            label="Default locale"
+            value={`${Intl.DateTimeFormat().resolvedOptions().locale} • 24h`}
+          />
+        </div>
+      )}
       <div className="border-t border-gray-800 px-6 py-5">
         <h3 className="text-sm font-semibold text-gray-200">Members</h3>
-        <p className="mt-1 text-xs text-gray-500">
-          5 active operators in this workspace (demo data).
-        </p>
-        <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-gray-800 bg-gray-950/40">
-          {[
-            { name: 'Sasha Lin', email: 'sasha.lin@example.com', role: 'Admin' },
-            { name: 'Avi Sharma', email: 'avi.sharma@example.com', role: 'Analyst' },
-            { name: 'Diego Vega', email: 'diego.vega@example.com', role: 'Analyst' },
-            { name: 'Mia Ocampo', email: 'mia.ocampo@example.com', role: 'Hunter' },
-            { name: 'CI Service', email: 'ci@example.com', role: 'Service' },
-          ].map((m) => (
-            <li
-              key={m.email}
-              className="flex items-center justify-between px-4 py-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-gray-100">{m.name}</p>
-                <p className="truncate text-xs text-gray-500">{m.email}</p>
-              </div>
-              <span className="rounded-full bg-gray-800 px-2.5 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
-                {m.role}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {usersLoading ? null : usersError || !users ? null : (
+          <p className="mt-1 text-xs text-gray-500">
+            {activeCount} active operator{activeCount === 1 ? '' : 's'} in this workspace
+            {users.length !== activeCount ? ` (${users.length} total)` : ''}.
+          </p>
+        )}
+        {usersLoading ? (
+          <div className="mt-3 space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : usersError || !users ? (
+          <div className="mt-3">
+            <ErrorState
+              title="Could not load members"
+              error={usersError}
+              onRetry={() => retryUsers()}
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 divide-y divide-gray-800 rounded-lg border border-gray-800 bg-gray-950/40">
+            {users.map((u) => (
+              <li
+                key={u.id}
+                className="flex items-center justify-between px-4 py-3 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-gray-100">
+                    {u.username}
+                    {!u.is_active && (
+                      <span className="ml-2 rounded-full bg-gray-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 ring-1 ring-gray-700">
+                        Inactive
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-gray-500">{u.email}</p>
+                </div>
+                <span className="rounded-full bg-gray-800 px-2.5 py-1 text-xs text-gray-300 ring-1 ring-gray-700">
+                  {u.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -2205,8 +2266,8 @@ function AboutPanel() {
         description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value="v6.0.1" />
-        <InfoTile label="Build" value="local • dev" />
+        <InfoTile label="Version" value={`v${process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'}`} />
+        <InfoTile label="Build" value="Self-hosted • Docker Compose" />
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />
       </div>
