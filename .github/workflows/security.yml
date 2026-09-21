@@ -43,17 +43,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # `continue-on-error` also covers the install: this is an OBSERVE gate, so
+      # a flaky release download must not turn it into a hard red. Without it a
+      # transient blip here fails the whole job, which is what happened on #614
+      # (install exited 2, the scan step never ran, and the check reported
+      # failure as if a secret had been found).
       - name: Install gitleaks
+        continue-on-error: true
         run: |
           set -euo pipefail
           VERSION=8.21.2
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tgz
+          # --fail so an HTTP error is not silently written into the tarball and
+          # surfaced later as a confusing `tar` error; --retry for the blips.
+          curl -sSL --fail --retry 3 --retry-delay 5 --retry-all-errors \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tgz
           tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
           sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version
       - name: Scan working tree (respects .gitleaksignore)
         continue-on-error: true
-        run: gitleaks dir . --redact --exit-code 1 --no-banner
+        run: |
+          if ! command -v gitleaks >/dev/null 2>&1; then
+            echo "::warning title=secret-scan::gitleaks install failed — working tree NOT scanned this run"
+            exit 0
+          fi
+          gitleaks dir . --redact --exit-code 1 --no-banner
 
   # ── OBSERVE: SAST beyond CodeQL ───────────────────────────────────────────
   semgrep:
