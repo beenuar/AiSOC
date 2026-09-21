@@ -6,9 +6,17 @@ const path = require('path');
 // Repo-root VERSION file is the single source of truth for the app version
 // shown in Settings → About. Baked into the bundle at build time since the
 // browser has no way to read a file off the deployed container's disk.
-const APP_VERSION = fs
-  .readFileSync(path.resolve(__dirname, '..', '..', 'VERSION'), 'utf8')
-  .trim();
+// Falls back to "0.0.0" rather than failing the build if some build context
+// doesn't carry the file through (e.g. a Dockerfile COPY list falling out of
+// sync, or `next build` invoked from an unexpected working directory).
+let APP_VERSION = '0.0.0';
+try {
+  APP_VERSION = fs
+    .readFileSync(path.resolve(__dirname, '..', '..', 'VERSION'), 'utf8')
+    .trim();
+} catch {
+  console.warn('[next.config.js] Could not read repo-root VERSION file; using 0.0.0');
+}
 
 // ─── Server-side rewrite targets ────────────────────────────────────────────
 //
