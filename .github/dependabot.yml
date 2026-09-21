@@ -110,3 +110,11 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    groups:
+      codeql-action:
+        # `init`, `autobuild` and `analyze` must move in one commit. CodeQL
+        # refuses to run when a single workflow mixes versions ("Not all
+        # workflow steps that use `github/codeql-action` actions use the same
+        # version") and fails the job as a configuration error, so ungrouped
+        # dependabot PRs for these are individually unmergeable.
+        patterns: ["github/codeql-action*"]
