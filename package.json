@@ -65,7 +65,18 @@
       "shell-quote": ">=1.8.4",
       "form-data": ">=4.0.6",
       "ws": ">=8.21.0",
-      "hono": ">=4.12.25"
+      "hono": ">=4.12.25",
+      "@babel/plugin-transform-modules-systemjs": ">=7.29.4 <8",
+      "brace-expansion@1": ">=1.1.18 <2",
+      "browserslist": ">=4.28.7 <5",
+      "fast-uri": ">=3.1.6 <4",
+      "ip-address": ">=10.3.1 <11",
+      "js-yaml@3": ">=3.15.2 <4",
+      "js-yaml@4": ">=4.3.2 <5",
+      "serialize-javascript": ">=7.0.3 <8",
+      "sharp": ">=0.35.4",
+      "svgo@3": ">=3.3.5 <4",
+      "websocket-driver": ">=0.7.5"
     }
   }
 }
