@@ -377,6 +377,34 @@ export interface ChildTenant {
   created_at?: string;
 }
 
+// Full tenant record from `GET /api/v1/tenants/me` (requires `settings:read`).
+// See services/api/app/api/v1/endpoints/tenants.py, class TenantResponse.
+export interface FullTenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  limits: Record<string, unknown>;
+  mssp_role?: 'parent' | 'child' | null;
+  parent_tenant_id?: string | null;
+  created_at: string;
+}
+
+// Tenant member from `GET /api/v1/tenants/me/users` (requires `users:read`).
+// See services/api/app/api/v1/endpoints/tenants.py, class UserResponse.
+export interface TenantUser {
+  id: string;
+  tenant_id: string;
+  email: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  last_login: string | null;
+  created_at: string;
+}
+
 export const tenantsApi = {
   /**
    * Lightweight tenant identity for the SOC console TopBar.
@@ -388,6 +416,16 @@ export const tenantsApi = {
    */
   async me(): Promise<MyTenant> {
     return request<MyTenant>('/api/v1/tenants/me/identity');
+  },
+
+  /** Full tenant record (plan, limits, settings) for the Workspace settings panel. */
+  async getFull(): Promise<FullTenant> {
+    return request<FullTenant>('/api/v1/tenants/me');
+  },
+
+  /** All users in the current tenant, for the Workspace settings panel. */
+  async listUsers(): Promise<TenantUser[]> {
+    return request<TenantUser[]>('/api/v1/tenants/me/users');
   },
 };
 
