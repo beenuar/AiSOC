@@ -1,5 +1,5 @@
 {
-  "count": 825,
+  "count": 833,
   "rules": [
     {
       "category": "application",
@@ -1391,6 +1391,132 @@
       "service": "audit",
       "severity": "medium",
       "slug": "llm-project-deleted"
+    },
+    {
+      "category": "application",
+      "id": "det-application-079",
+      "match_when": {
+        "finding_type": "prompt_injection"
+      },
+      "mitre": [
+        "T1059"
+      ],
+      "name": "Prompt Injection Detected in AI Agent Context",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-prompt-injection-detected"
+    },
+    {
+      "category": "application",
+      "id": "det-application-080",
+      "match_when": {
+        "finding_type": "excessive_agency"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI Agent Took Action Beyond Its Granted Scope",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-agent-excessive-agency"
+    },
+    {
+      "category": "application",
+      "id": "det-application-081",
+      "match_when": {
+        "finding_type": "sensitive_data_egress"
+      },
+      "mitre": [
+        "T1567"
+      ],
+      "name": "Sensitive Data Left via an AI Agent",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "critical",
+      "slug": "ai-sensitive-data-egress"
+    },
+    {
+      "category": "application",
+      "id": "det-application-082",
+      "match_when": {
+        "finding_type": "unapproved_model"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI Agent Used an Unapproved Model",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-unapproved-model"
+    },
+    {
+      "category": "application",
+      "id": "det-application-083",
+      "match_when": {
+        "finding_type": "tool_escalation"
+      },
+      "mitre": [
+        "T1548"
+      ],
+      "name": "AI Agent Escalated to a Higher-Privilege Tool",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-tool-escalation"
+    },
+    {
+      "category": "application",
+      "id": "det-application-084",
+      "match_when": {
+        "finding_type": "shadow_ai"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Undeclared AI Agent Observed",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-shadow-agent-discovered"
+    },
+    {
+      "category": "application",
+      "id": "det-application-085",
+      "match_when": {
+        "prompt_secret_kinds_has_any": [
+          "aws_access_key",
+          "github_token",
+          "openai_key",
+          "private_key",
+          "slack_token"
+        ]
+      },
+      "mitre": [
+        "T1552"
+      ],
+      "name": "Credential Material Present in an AI Prompt",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-prompt-contained-credential"
+    },
+    {
+      "category": "application",
+      "id": "det-application-086",
+      "match_when": {
+        "outcome": "denied"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI Agent Tool Call Denied",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "low",
+      "slug": "ai-agent-tool-call-failed-repeatedly"
     },
     {
       "category": "cloud",
