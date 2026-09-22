@@ -382,7 +382,29 @@ export function CopilotView() {
         context: { page: 'copilot' },
       });
       setConversationId(res.conversationId);
-      setMessages((prev) => [...prev, res.reply]);
+      // A 200 does not mean a model answered. When no LLM key is configured,
+      // or the call fails, the backend falls back to a canned paragraph and
+      // now says so with `source: "template"`. Without this the analyst reads
+      // generic claims — "this IP was seen in 3 other alerts" — as real
+      // analysis of their own environment, and the honest fallback below never
+      // fires because the request technically succeeded.
+      const source = (res as { source?: string }).source;
+      const notice = (res as { notice?: string }).notice;
+      const reply =
+        source === 'template'
+          ? {
+              ...res.reply,
+              content: [
+                notice ??
+                  'This reply came from a built-in template, not a language model, and is not analysis of your environment.',
+                '',
+                '---',
+                '',
+                res.reply.content,
+              ].join('\n'),
+            }
+          : res.reply;
+      setMessages((prev) => [...prev, reply]);
     } catch (err) {
       // Backend not reachable / not implemented yet — fall back to a demo
       // reply so the dock still feels alive in local dev.

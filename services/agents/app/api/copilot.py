@@ -20,7 +20,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter
@@ -53,6 +53,12 @@ class CopilotChatRequest(BaseModel):
 class CopilotChatResponse(BaseModel):
     conversationId: str
     reply: CopilotMessage
+    #: ``llm`` when a model produced the reply, ``template`` when this service
+    #: fell back to a canned paragraph (no API key, or the call failed).
+    #: The console must label a ``template`` reply rather than presenting it as
+    #: analysis of the user's environment.
+    source: Literal["llm", "template"] = "llm"
+    notice: str | None = None
 
 
 class CopilotConversation(BaseModel):
@@ -115,10 +121,18 @@ def _title_from_message(msg: str) -> str:
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
-) -> str:
+) -> tuple[str, str]:
+    """Return ``(reply_text, source)`` where source is ``llm`` or ``template``.
+
+    The caller must surface ``template`` to the user. This function silently
+    returned a canned paragraph as a normal 200 whenever the key was missing or
+    any exception fired, so an analyst read "this IP was seen in 3 other
+    alerts" as real analysis of their environment. The frontend had an honest
+    fallback of its own that never fired, because the backend reported success.
+    """
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        return _synthetic_reply(user_message)
+        return _synthetic_reply(user_message), "template"
 
     try:
         from app.llm.contract import safe_chat_completions_request
@@ -146,10 +160,10 @@ async def _get_openai_reply(
             url=chat_completions_url(),
             max_tokens=512,
         )
-        return body["choices"][0]["message"]["content"]
+        return body["choices"][0]["message"]["content"], "llm"
     except Exception as exc:
         logger.warning("copilot.openai_error", error=str(exc))
-        return _synthetic_reply(user_message)
+        return _synthetic_reply(user_message), "template"
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +226,7 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
     }
     conv["messages"].append(user_msg)
 
-    reply_text = await _get_openai_reply(conv, req.message)
+    reply_text, reply_source = await _get_openai_reply(conv, req.message)
 
     assistant_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -226,6 +240,14 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
     return CopilotChatResponse(
         conversationId=conv_id,
         reply=CopilotMessage(**assistant_msg),
+        source=reply_source,
+        notice=(
+            "This reply came from a built-in template, not a language model. "
+            "It is generic guidance and is not analysis of your environment. "
+            "Configure an LLM key to get a real investigation."
+            if reply_source == "template"
+            else None
+        ),
     )
 
 
@@ -253,10 +275,13 @@ async def chat_stream(req: CopilotChatRequest) -> StreamingResponse:
     }
     conv["messages"].append(user_msg)
 
-    reply_text = await _get_openai_reply(conv, req.message)
+    reply_text, reply_source = await _get_openai_reply(conv, req.message)
     msg_id = str(uuid.uuid4())
 
     async def _stream() -> AsyncIterator[bytes]:
+        # Provenance first: a consumer must be able to label the answer before
+        # it starts rendering tokens, not after.
+        yield (json.dumps({"source": reply_source, "delta": "", "done": False}) + "\n").encode()
         words = reply_text.split(" ")
         for i, word in enumerate(words):
             chunk = word + (" " if i < len(words) - 1 else "")

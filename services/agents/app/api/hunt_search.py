@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, HTTPException
@@ -55,6 +55,18 @@ class HuntResponse(BaseModel):
     total: int
     took_ms: int
     hits: list[HuntHit]
+    #: Where the hits came from. ``sample`` means this handler generated
+    #: illustrative telemetry rather than querying anything.
+    #:
+    #: This field exists because the endpoint returns synthetic hits
+    #: unconditionally and used to say nothing about it. A 200 with no marker
+    #: read to the console as a successful live query, so the hunt workbench
+    #: rendered a green "Live backend" pill over fabricated CrowdStrike process
+    #: events. A caller must be able to tell the difference without reading
+    #: this file.
+    source: Literal["sample", "live"] = "sample"
+    #: Human-readable reason, surfaced in the UI banner.
+    notice: str | None = None
 
 
 class SavedSearchCreate(BaseModel):
@@ -152,6 +164,12 @@ async def hunt_search(query: HuntQuery) -> HuntResponse:
         total=len(hits_raw),
         took_ms=took_ms,
         hits=[HuntHit(**h) for h in hits_raw],
+        source="sample",
+        notice=(
+            "These are illustrative sample events, not results from your telemetry. "
+            "This endpoint does not yet execute the query against the event lake; "
+            "run the hunt from /hunt against a configured data source for real hits."
+        ),
     )
 
 
