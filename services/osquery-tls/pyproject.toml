@@ -20,7 +20,7 @@ structlog = "^24.1.0"
 prometheus-client = ">=0.20,<0.26"
 # Floor raised to 44.0.1 to clear CVE-2024-12797 (and later 42.x advisories);
 # matches the resolved 48.x line used by the api/actions services.
-cryptography = ">=44.0.1,<49"
+cryptography = ">=44.0.1,<51"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.0"

@@ -345,7 +345,13 @@ jobs:
         # so both packages are required at import time, even though the
         # fusion-client test itself only calls into `app.tools.fusion`.
         run: |
-          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai langgraph jsonschema
+          # langchain-core floored at 1.2.22: the high-severity advisory on
+          # the 0.3.x line has no patch there, so the pin had to move before
+          # the alert could close. The deterministic eval suites are the
+          # re-grade — MITRE accuracy is unchanged at 97.0%.
+          pip install --quiet pytest pytest-asyncio respx \
+            'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
+            jsonschema
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \

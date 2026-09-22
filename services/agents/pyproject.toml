@@ -11,14 +11,19 @@ fastapi = ">=0.109,<0.142"
 uvicorn = {extras = ["standard"], version = ">=0.27,<0.53"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
-langchain = ">=0.3.0,<0.4.0"
-langchain-core = ">=0.3.0,<0.4.0"
-langchain-openai = ">=0.2.0,<0.4.0"
+langchain = ">=0.3.0,<2.0.0"
+langchain-core = ">=1.2.22,<2.0.0"
+langchain-openai = ">=0.2.0,<2.0.0"
+# langchain-core is floored at 1.2.22, which patches the high-severity
+# advisory that kept the 0.3.x line unpatchable. The 0.3 cap was the
+# reason this could not be fixed: the patch only exists on the 1.x line,
+# so the pin had to move before the advisory could close.
+#
 # langgraph >=0.2 exposes the public ``START`` sentinel that
 # ``app.investigator.orchestrator`` imports. The previous ``^0.0.30`` pin
 # resolved to <0.1.0 which silently broke the import at runtime.
-langgraph = ">=0.2.40,<1.1.0"
-langchain-community = ">=0.3.0,<0.4.0"
+langgraph = ">=0.2.40,<2.0.0"
+langchain-community = ">=0.3.0,<2.0.0"
 openai = ">=1.12,<3.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<9.0.0"}
 httpx = ">=0.26,<0.29"
