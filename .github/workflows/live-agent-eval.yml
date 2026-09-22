@@ -1,0 +1,154 @@
+name: Live agent eval (local model)
+
+# The project's own REALITY_REPORT names this as "the hard ceiling on the
+# project's credibility": no gated suite runs the live agent. `mitre_accuracy`
+# is an offline keyword extractor, and the one job that does dispatch the real
+# LangGraph — wet-eval.yml — no-ops without a funded provider key, so forks and
+# most PRs have never measured agent accuracy at all.
+#
+# A local model removes the funding dependency. Ollama serves an
+# OpenAI-compatible endpoint, `services/agents/app/llm/factory.py` already
+# honours OPENAI_BASE_URL, so the real agent can be dispatched on a runner with
+# no secret of any kind.
+#
+# Two deliberate constraints:
+#
+#   * `--wet-limit` — a CPU-hosted model cannot chew through all 200 incidents
+#     in a CI budget. The slice is a deterministic prefix so runs stay
+#     comparable, and the report records how many were dispatched.
+#   * `--wet-require-live` — without it the harness degrades to substrate
+#     numbers on any failure, which would publish deterministic estimates as
+#     live-agent performance. A gate that can pass without calling the model is
+#     worse than no gate.
+#
+# Not a PR gate yet, on purpose. It follows the observe-then-ratchet convention
+# already used by security.yml: prove the job is stable and establish a floor
+# from real runs first, then promote it to `pull_request` and make the
+# threshold blocking. Promoting it before the floor is grounded in measurements
+# would just be inventing a number.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Ollama model tag'
+        type: string
+        default: 'qwen2.5:0.5b'
+      incidents:
+        description: 'How many incidents to dispatch'
+        type: string
+        default: '20'
+  schedule:
+    - cron: '0 3 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-agent-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-agent:
+    name: Dispatch the real agent against a local model
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OLLAMA_MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+      INCIDENT_LIMIT: ${{ github.event.inputs.incidents || '20' }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # The full agent dependency set, not the trimmed list ci.yml uses for
+      # unit tests: this job needs `app.investigator` to actually import, and
+      # the harness treats an ImportError as a degraded run.
+      - name: Install agent dependencies
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip poetry
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+
+      - name: Install Ollama
+        run: |
+          set -euo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama --version
+
+      - name: Serve the model
+        run: |
+          set -euo pipefail
+          nohup ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:11434/api/tags >/dev/null; then
+              echo "ollama up after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:11434/api/tags >/dev/null || {
+            echo "::error title=live-agent-eval::Ollama never became ready."
+            tail -50 "$RUNNER_TEMP/ollama.log"
+            exit 1
+          }
+          ollama pull "$OLLAMA_MODEL"
+
+      - name: Dispatch the agent
+        env:
+          # The harness reads its key from this dedicated slot; the value is
+          # irrelevant to Ollama but the SDK requires one to be present.
+          WET_EVAL_OPENAI_KEY: ollama
+          OPENAI_API_KEY: ollama
+          OPENAI_BASE_URL: http://127.0.0.1:11434/v1
+          AISOC_LLM_MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/run_evals.py \
+            --wet \
+            --wet-require-live \
+            --wet-limit "$INCIDENT_LIMIT" \
+            --out live-agent-eval.json \
+            --wet-out live-agent-eval.wet.json
+
+      - name: Summarise
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ ! -f live-agent-eval.wet.json ]; then
+            echo "No report produced — see the dispatch step." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          block = json.load(open("live-agent-eval.wet.json"))
+          print("## Live agent eval (local model)\n")
+          print(f"- mode: `{block.get('mode')}`")
+          print(f"- model: `{block.get('model')}`")
+          agg = block.get("aggregate", {})
+          lat = agg.get("latency_ms", {})
+          print(f"- incidents dispatched: {block.get('incident_count', 'unknown')}")
+          if lat:
+              print(f"- latency p50/p95 ms: {lat.get('p50')} / {lat.get('p95')}")
+          for w in block.get("warnings", []):
+              print(f"- warning: {w}")
+          PY
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: live-agent-eval-${{ github.run_id }}
+          path: |
+            live-agent-eval.json
+            live-agent-eval.wet.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Ollama log on failure
+        if: failure()
+        run: tail -100 "$RUNNER_TEMP/ollama.log" || true
