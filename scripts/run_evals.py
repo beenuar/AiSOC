@@ -854,6 +854,28 @@ def main() -> None:
             "the substrate suites."
         ),
     )
+    parser.add_argument(
+        "--wet-limit",
+        type=int,
+        default=None,
+        help=(
+            "Only meaningful with --wet. Dispatch at most N incidents instead "
+            "of the full 200. A CPU-hosted local model cannot finish the whole "
+            "corpus inside a CI budget; the slice is a deterministic prefix so "
+            "runs stay comparable, and the report records how many were used."
+        ),
+    )
+    parser.add_argument(
+        "--wet-require-live",
+        action="store_true",
+        help=(
+            "Only meaningful with --wet. Fail instead of degrading to dry-run "
+            "numbers when the live agent cannot be reached. Degrading is right "
+            "for a reporting job, but fatal for a gate: a degraded run would "
+            "publish substrate numbers as live-agent performance. Any job that "
+            "asserts on these numbers must pass this."
+        ),
+    )
     args = parser.parse_args()
 
     # Wet-eval mode short-circuits the substrate gates entirely (T5.5).
@@ -873,10 +895,21 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(2)
-        wet_report = compute_wet_eval(
-            mode=wet_mode,
-            harness_version=f"scripts/run_evals.py @ {os.environ.get('GITHUB_SHA', 'local')}",
-        )
+        try:
+            wet_report = compute_wet_eval(
+                mode=wet_mode,
+                harness_version=(
+                    f"scripts/run_evals.py @ {os.environ.get('GITHUB_SHA', 'local')}"
+                ),
+                limit=args.wet_limit,
+                require_live=args.wet_require_live,
+            )
+        except RuntimeError as exc:
+            # Only reachable under --wet-require-live. A caller that asked for
+            # live numbers and got a degraded run needs a non-zero exit, not a
+            # well-formed report full of substrate estimates.
+            print(f"[run_evals] live wet-eval required but unavailable: {exc}", file=sys.stderr)
+            sys.exit(3)
         wet_block = wet_report.to_dict(include_records=False)
         summary = {
             "generated_at": datetime.now(UTC).isoformat(),

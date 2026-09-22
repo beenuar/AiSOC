@@ -191,6 +191,12 @@ class WetEvalRecord:
     latency_seconds: float
     usd: float
     mitre_correct: bool
+    # Fraction of the concrete indicators the agent asserted that actually
+    # appear in the evidence it was handed. Only meaningful on the live path —
+    # the dry-run path synthesises no agent text, so it stays None rather than
+    # reporting a flattering 1.0 for output that was never produced.
+    groundedness: float | None = None
+    hallucinated: list[str] = field(default_factory=list)
 
     @property
     def total_tokens(self) -> int:
@@ -258,10 +264,14 @@ def _live_records(
     incidents_path: Path | str,
     *,
     model: str,
-) -> tuple[list[WetEvalRecord], list[str]]:
+    limit: int | None = None,
+) -> tuple[list[WetEvalRecord], list[str], bool]:
     """Dispatch the 200-incident set against the live agent.
 
-    Returns ``(records, warnings)``. If the agent stack can't be imported
+    Returns ``(records, warnings, degraded)``, where ``degraded`` is True when
+    the records are substrate fallbacks rather than real agent output. A
+    warning alone is not degradation: a missing optional axis costs one metric,
+    not the run. If the agent stack can't be imported
     (e.g. running on a bare-Python host) we fall back to the dry-run
     records and append a clear warning so the workflow can mark the run
     as degraded rather than silently emitting fake numbers.
@@ -274,6 +284,9 @@ def _live_records(
     provider didn't surface usage.
     """
     warnings: list[str] = []
+    # Resolved below alongside the agent. Kept as a name here so a missing
+    # groundedness module degrades that one axis to None rather than raising.
+    _score_groundedness = None
     try:
         # Imported lazily to keep the dry-run path stdlib-only.
         from app.investigator import (  # type: ignore  # noqa: F401
@@ -285,9 +298,26 @@ def _live_records(
             f"{exc!r}. Falling back to dry-run shape; tag the report "
             "consumer to render the warning."
         )
-        return _dry_run_records(incidents_path, model=model), warnings
+        return _dry_run_records(incidents_path, model=model), warnings, True
+
+    # Scored only on the live path, where there is real agent text to check
+    # against the evidence. Its absence costs one axis, not the run.
+    try:
+        from app.confidence.groundedness import (  # type: ignore
+            score_groundedness as _imported_score,
+        )
+
+        _score_groundedness = _imported_score
+    except Exception as exc:  # pragma: no cover - degraded envs only.
+        warnings.append(f"Groundedness axis unavailable: {exc!r}")
 
     incidents = json.loads(Path(incidents_path).read_text())
+    # A CPU-hosted local model cannot chew through all 200 incidents inside a
+    # CI budget. Taking a deterministic prefix keeps the slice comparable
+    # between runs; the slice size is reported so nobody mistakes a 20-incident
+    # sample for the full corpus.
+    if limit is not None and limit > 0:
+        incidents = incidents[:limit]
     records: list[WetEvalRecord] = []
 
     # Read the API key from the dedicated wet-eval slot rather than
@@ -301,7 +331,7 @@ def _live_records(
             "skipped this run; falling back to dry-run shape so the "
             "workflow doesn't emit fabricated numbers."
         )
-        return _dry_run_records(incidents_path, model=model), warnings
+        return _dry_run_records(incidents_path, model=model), warnings, True
 
     # Best-effort: stash the key in OPENAI_API_KEY for the agent's
     # default LLM resolver, but don't override it if something else
@@ -338,12 +368,33 @@ def _live_records(
         expected = set(inc.get("expected_mitre_tactics") or [])
         mitre_correct = bool(expected and (predicted & expected))
 
+        # Groundedness: did the agent assert any concrete indicator that the
+        # evidence never contained? This is the one axis that measures the live
+        # model rather than the substrate, and it is deterministic — no judge
+        # model, just regex indicator extraction on both sides.
+        grounded_score: float | None = None
+        hallucinated: list[str] = []
+        if _score_groundedness is not None:
+            evidence_text = " ".join(
+                [
+                    str(inc.get("description") or ""),
+                    str(inc.get("title") or ""),
+                    " ".join(str(k) for k in (inc.get("evidence_keywords") or [])),
+                    json.dumps(inc.get("telemetry") or []),
+                ]
+            )
+            scored = _score_groundedness(str(result), evidence_text)
+            grounded_score = scored.score
+            hallucinated = list(scored.hallucinated)
+
         records.append(
             WetEvalRecord(
                 incident_id=str(inc.get("id") or ""),
                 template_id=str(inc.get("template_id") or ""),
                 family=family_for_template(str(inc.get("template_id") or "")),
                 severity=str(inc.get("severity") or "medium").lower(),
+                groundedness=grounded_score,
+                hallucinated=hallucinated,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 latency_seconds=round(latency_s, 4),
@@ -353,7 +404,7 @@ def _live_records(
                 mitre_correct=mitre_correct,
             )
         )
-    return records, warnings
+    return records, warnings, False
 
 
 # ---------------------------------------------------------------------------
@@ -556,24 +607,49 @@ def compute_wet_eval(
     model: str = DEFAULT_MODEL,
     rate_card: dict[str, dict[str, float]] | None = None,
     harness_version: str = "",
+    limit: int | None = None,
+    require_live: bool = False,
 ) -> WetEvalReport:
     """Top-level entry point. Returns a populated ``WetEvalReport``.
 
     ``mode`` must be either ``"dry_run"`` (no live calls, deterministic
     shape from substrate) or ``"live"`` (real LangGraph agent + LLM).
+
+    ``limit`` caps how many incidents the live path dispatches, so a
+    CPU-hosted local model can finish inside a CI budget.
+
+    ``require_live`` turns the degrade-to-dry-run behaviour into a hard
+    error. Degrading is right for a reporting job — better a labelled
+    estimate than a crash — but fatal for a *gate*: a run that silently
+    substitutes substrate numbers would report a healthy live agent while
+    never having called one. Anything asserting on these numbers must pass
+    ``require_live=True``.
     """
     if mode not in {"dry_run", "live"}:
         raise ValueError(f"mode must be 'dry_run' or 'live', got {mode!r}")
 
     if mode == "dry_run":
+        if require_live:
+            raise RuntimeError("require_live=True is incompatible with mode='dry_run'")
         records = _dry_run_records(incidents_path, model=model)
         warnings: list[str] = []
     else:
-        records, warnings = _live_records(incidents_path, model=model)
+        records, warnings, degraded = _live_records(
+            incidents_path, model=model, limit=limit
+        )
+        if require_live and degraded:
+            raise RuntimeError(
+                "require_live=True but the live path fell back to substrate "
+                "numbers:\n  - " + "\n  - ".join(warnings)
+            )
         # Degrade-cleanly: if the live path could not produce records
         # we re-tag the report as ``dry_run`` so consumers don't think
         # they're looking at real numbers.
         if not records:
+            if require_live:
+                raise RuntimeError(
+                    "require_live=True but the live agent produced zero records."
+                )
             warnings.append(
                 "Live agent path produced zero records. Re-tagging as "
                 "dry_run with synthesised shape to keep the report well-"
