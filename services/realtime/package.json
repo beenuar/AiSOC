@@ -18,7 +18,7 @@
     "kafkajs": "^2.2.4",
     "pino": "^8.18.0",
     "web-push": "^3.6.7",
-    "ws": "^8.16.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
