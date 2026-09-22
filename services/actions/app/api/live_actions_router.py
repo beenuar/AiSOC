@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.live_actions import (
@@ -44,9 +44,20 @@ from app.live_actions import (
     list_descriptors,
     list_vendors_for_capability,
 )
+from app.security.authz import require_service_auth
 
 logger = structlog.get_logger(__name__)
-router = APIRouter(prefix="/live-actions", tags=["live-actions"])
+# Router-level auth. `/dispatch` executes real vendor actions — isolating a
+# host, disabling an account, blocking an IP — and was reachable by anyone who
+# could reach the port, while the legacy `app.api.router` next to it had
+# required a service token on every route since it was written. Applying the
+# dependency to the router rather than per-route means a route added later is
+# protected by default instead of by remembering to decorate it.
+router = APIRouter(
+    prefix="/live-actions",
+    tags=["live-actions"],
+    dependencies=[Depends(require_service_auth)],
+)
 
 
 class LiveActionDiscoveryResponse(BaseModel):

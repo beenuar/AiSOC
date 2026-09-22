@@ -55,24 +55,53 @@ class VerificationResult:
 Probe = Callable[[str, dict[str, Any]], Awaitable[bool | None]]
 
 
-async def _probe_isolate(target: str, params: dict[str, Any]) -> bool | None:
-    """Confirm host isolation by re-querying the EDR.
+#: CrowdStrike device states that mean containment is actually in force.
+#: ``containment_pending`` is deliberately excluded: the request was accepted
+#: but the host is not contained yet, which is precisely the "the API returned
+#: 200" condition this module exists to distinguish from a real effect.
+_CONTAINED_STATES = {"contained"}
 
-    Today only CrowdStrike exposes enough to re-query (the device must resolve);
-    absent CrowdStrike credentials we return None → UNVERIFIED (honest).
+
+async def _probe_isolate(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm host isolation by reading the EDR's containment state.
+
+    This previously returned ``bool(device_id)`` — i.e. "does this hostname
+    resolve to a device". That is true of every host in the fleet, contained or
+    not, so it would have certified an uncontained host as VERIFIED. Now it
+    reads the device's actual ``status``.
+
+    Absent CrowdStrike credentials we return None → UNVERIFIED (honest).
     """
     cs = _cs_client(params)
     if cs is None:
         return None
     device_id = await cs.get_device_id(target)
-    # A resolvable device id is a real (if partial) confirmation the target
-    # exists and the containment call targeted a real host. Fuller state
-    # verification lands when the client exposes a containment-status read.
-    return bool(device_id)
+    if not device_id:
+        # The host cannot be found at all, so containment cannot be confirmed.
+        # Indeterminate rather than FAILED: a renamed or decommissioned host is
+        # not the same fact as "containment did not take".
+        return None
+    status = await cs.get_containment_status(device_id)
+    if status is None:
+        return None
+    return status.lower() in _CONTAINED_STATES
+
+
+async def _probe_block_ip(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an IP block by re-reading the enforcing rule set.
+
+    Only AWS security groups are readable today; every other vendor arm of
+    ``BlockIPExecutor`` has no read-back, so this reports indeterminate rather
+    than inventing a confirmation.
+    """
+    from app.executors.network import read_back_blocked_ip  # noqa: PLC0415
+
+    return await read_back_blocked_ip(target, params)
 
 
 _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.ISOLATE_HOST: _probe_isolate,
+    ActionType.BLOCK_IP: _probe_block_ip,
 }
 
 

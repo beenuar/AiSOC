@@ -173,3 +173,40 @@ async def reverse_action(action_type: ActionType, target: str, params: dict[str,
     except Exception as exc:  # noqa: BLE001 — a failed reverse must be reported, not hidden
         logger.error("rollback.reverse_failed", action=action_type.value, target=target, error=str(exc))
         return RollbackResult(True, False, False, None, f"reverse call failed: {exc}")
+
+
+async def reverse_via_rollback_service(
+    action_type: ActionType,
+    target: str | None,
+    rollback_data: dict[str, Any] | None,
+    log: Any = None,
+) -> bool:
+    """Adapter so an executor's ``rollback()`` can use the real reverse calls.
+
+    Every executor in ``endpoint.py``, ``identity.py`` and ``siem.py`` used to
+    log an intent and ``return True`` without contacting the vendor, which told
+    an operator the action had been undone when nothing had happened. The real
+    reverse calls already existed here and had no caller outside their own
+    test; this bridges the two.
+
+    Returns True when the reverse really ran or was an honest credential-less
+    simulation, and False when a reverse exists and genuinely failed — so a
+    caller can distinguish "undone" from "could not undo".
+    """
+    result = await reverse_action(action_type, target or "", dict(rollback_data or {}))
+    emit = (log or logger).info if result.ok else (log or logger).error
+    emit(
+        "rollback.executor_reverse",
+        action=action_type.value,
+        target=target,
+        vendor=result.vendor,
+        reversed=result.reversed_,
+        simulated=result.simulated,
+        supported=result.supported,
+        reason=result.reason,
+    )
+    # An unsupported reverse is not a failure of this call — there is simply
+    # nothing to undo for that action type (e.g. a notification).
+    if not result.supported:
+        return True
+    return result.ok

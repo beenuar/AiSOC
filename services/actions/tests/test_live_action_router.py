@@ -25,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from app.core.config import get_settings
 from app.live_actions import (
     LiveActionExecutor,
     LiveActionRequest,
@@ -74,7 +75,7 @@ class _StubBlockIP(LiveActionExecutor):
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """Yield a TestClient with a clean registry seeded with two stubs.
 
     We deliberately *don't* let the startup hook run with the full set
@@ -82,7 +83,15 @@ def client() -> Iterator[TestClient]:
     the universe shifts under them. The router code path is identical
     regardless of how many executors are registered, so two stubs are
     enough to cover the contract.
+
+    Dev mode is on because these tests pin the REST contract, not the auth
+    boundary. The auth boundary has its own tests below, which is the point:
+    this router dispatches real vendor containment and until now carried no
+    authentication at all.
     """
+    monkeypatch.delenv("AISOC_ACTIONS_SERVICE_TOKEN", raising=False)
+    monkeypatch.setenv("AISOC_DEV_MODE", "true")
+    get_settings.cache_clear()
     reset_for_tests()
     register_executor(_StubIsolateHost(), source="builtin")
     register_executor(_StubBlockIP(), source="builtin")

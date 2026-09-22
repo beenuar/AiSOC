@@ -39,7 +39,7 @@ from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
 from app.clients.sentinelone_client import SentinelOneClient
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
-from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
+from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType, BlastRadius
 
 logger = structlog.get_logger()
 
@@ -249,10 +249,27 @@ class IsolateHostExecutor(BaseExecutor):
         )
 
     async def rollback(self, result: ActionResult) -> bool:
+        """De-isolate the host by actually calling the EDR.
+
+        This used to log "Rolling back isolate_host (de-isolating)" and return
+        True without contacting any vendor, so an operator who clicked rollback
+        was told the host was released while it stayed contained.
+        `reverse_action` holds the real lift-containment calls for CrowdStrike,
+        Defender and SentinelOne; it reports `simulated` when credentials are
+        absent rather than claiming success.
+        """
+        # Imported inline, not at module scope: app.services.rollback imports
+        # the vendor client factories from this module, so a top-level import
+        # here would be circular.
+        from app.services.rollback import reverse_via_rollback_service  # noqa: PLC0415
+
         hostname = result.rollback_data.get("hostname")
-        vendor = result.rollback_data.get("vendor")
-        logger.info("Rolling back isolate_host (de-isolating)", hostname=hostname, vendor=vendor)
-        return True
+        return await reverse_via_rollback_service(
+            ActionType.ISOLATE_HOST,
+            hostname,
+            result.rollback_data,
+            logger,
+        )
 
 
 class QuarantineFileExecutor(BaseExecutor):
