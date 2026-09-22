@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -20,6 +20,7 @@ from app.models.purple_team import (
     TabletopSession,
     TestExecution,
 )
+from app.security.service_auth import require_service_auth
 from app.services.atomic_loader import load_atomics
 from app.services.caldera_client import CalderaClient
 from app.services.drift import (
@@ -32,7 +33,21 @@ from app.services.drift import (
 
 LOG = logging.getLogger(__name__)
 
-router = APIRouter()
+# Default-deny for the whole router, not just the mutating verbs.
+#
+# This service executes adversary emulation: `POST /caldera/run` starts a real
+# Caldera operation against live hosts and `POST /atomics/run` records an
+# execution. Both were reachable with no credential at all, and both read
+# `tenant_id` and `executed_by` from the request body, so a caller declared
+# their own identity and their own tenant.
+#
+# The read routes are included deliberately rather than left open: they take
+# `tenant_id` as a plain query parameter, so an unauthenticated caller could
+# enumerate any tenant's execution history and coverage posture.
+#
+# `/health` and the probes in `app/_health.py` are registered on the app, not
+# this router, so they stay reachable for orchestrators.
+router = APIRouter(dependencies=[Depends(require_service_auth)])
 
 # ---------------------------------------------------------------------------
 # Database helpers

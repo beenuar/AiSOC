@@ -385,7 +385,12 @@ jobs:
         # archives normalized events into the ClickHouse event lake.
         # pyyaml: required since Phase A2 — the detection-matcher parity test
         # loads the canonical scripts/generate_detections.py (imports yaml).
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver pyyaml cryptography
+        # sqlalchemy: required by the purple-team router-contract test. That
+        # test asserts every route on the router carries the service-auth
+        # dependency, and importing the router to enumerate its routes pulls
+        # sqlalchemy. Skipping the import instead would leave a gate that
+        # cannot fail, which is worse than installing one more package.
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver pyyaml cryptography sqlalchemy
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage
