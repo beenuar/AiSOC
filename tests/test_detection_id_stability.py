@@ -24,9 +24,11 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 LOCK_PATH = REPO_ROOT / "detections" / "rule-ids.lock.json"
 
-# Imported for its side effect of populating sys.modules, so the corrupt-
-# lock test can patch the module object without a second import style.
-import generate_detections  # noqa: E402,F401
+# One import style for this module throughout: the tests need both the
+# functions and the module object (to patch ID_LOCK), and mixing
+# `import X` with `from X import y` for the same module is what
+# py/import-and-import-from flags.
+import generate_detections  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -50,9 +52,7 @@ def test_regeneration_assigns_no_new_ids(categories: dict, lock: dict[str, str])
     was added, and the next run would write one — which is a diff nobody
     reviewed.
     """
-    from generate_detections import assign_ids
-
-    resolved, newly = assign_ids(categories)
+    resolved, newly = generate_detections.assign_ids(categories)
     assert not newly, (
         f"{len(newly)} spec(s) have no locked id: {', '.join(sorted(newly)[:8])}. "
         f"Run scripts/generate_detections.py and commit detections/rule-ids.lock.json."
@@ -62,12 +62,10 @@ def test_regeneration_assigns_no_new_ids(categories: dict, lock: dict[str, str])
 
 def test_inserting_a_rule_does_not_renumber_the_others(categories: dict, lock: dict[str, str]) -> None:
     """The exact bug. Insertion at the front used to move 81 network ids."""
-    from generate_detections import assign_ids
-
     mutated = {k: list(v) for k, v in categories.items()}
     mutated["network"].insert(0, {"slug": "zzz-test-inserted-first"})
 
-    resolved, newly = assign_ids(mutated)
+    resolved, newly = generate_detections.assign_ids(mutated)
 
     moved = {k: (lock[k], resolved[k]) for k in lock if resolved.get(k) != lock[k]}
     assert not moved, f"inserting one rule moved {len(moved)} existing ids: " f"{list(moved.items())[:3]}"
@@ -75,11 +73,9 @@ def test_inserting_a_rule_does_not_renumber_the_others(categories: dict, lock: d
 
 
 def test_a_new_rule_takes_the_next_free_number(categories: dict, lock: dict[str, str]) -> None:
-    from generate_detections import assign_ids
-
     mutated = {k: list(v) for k, v in categories.items()}
     mutated["network"].append({"slug": "zzz-test-appended"})
-    resolved, _ = assign_ids(mutated)
+    resolved, _ = generate_detections.assign_ids(mutated)
 
     existing = {int(v.rsplit("-", 1)[1]) for k, v in lock.items() if k.startswith("network/")}
     assigned = int(resolved["network/zzz-test-appended"].rsplit("-", 1)[1])
@@ -91,10 +87,8 @@ def test_a_deleted_rule_does_not_recycle_its_id(lock: dict[str, str]) -> None:
 
     The lock is never pruned, so a removed rule's id stays burned.
     """
-    from generate_detections import assign_ids
-
     reduced = {"network": [{"slug": "zzz-test-only-rule"}]}
-    resolved, _ = assign_ids(reduced)
+    resolved, _ = generate_detections.assign_ids(reduced)
 
     burned = {v for k, v in lock.items() if k.startswith("network/")}
     assert resolved["network/zzz-test-only-rule"] not in burned, "a new rule was given an id that a previous rule already used"
@@ -118,9 +112,7 @@ def test_a_corrupt_lock_refuses_rather_than_renumbering(tmp_path: Path, monkeypa
     # setattr on the module object reached through sys.modules, so the file
     # keeps a single import style — mixing `import X as m` with `from X
     # import y` for the same module is what CodeQL flags.
-    monkeypatch.setattr(sys.modules["generate_detections"], "ID_LOCK", bad)
-
-    from generate_detections import load_id_lock
+    monkeypatch.setattr(generate_detections, "ID_LOCK", bad)
 
     with pytest.raises(SystemExit, match="unreadable"):
-        load_id_lock()
+        generate_detections.load_id_lock()
