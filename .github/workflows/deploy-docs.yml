@@ -40,7 +40,14 @@ jobs:
       - name: Install dependencies
         run: pnpm --filter @aisoc/docs install
 
+      # Set explicitly rather than leaning on the defaults in
+      # docusaurus.config.ts. These values decide the canonical <link>, the
+      # sitemap and every absolute asset URL, so a silent default drift would
+      # de-index the docs without failing a build.
       - name: Build docs
+        env:
+          DOCS_URL: https://beenuar.github.io
+          DOCS_BASE_URL: /AiSOC/
         run: pnpm --filter @aisoc/docs build
 
       - name: Upload artifact

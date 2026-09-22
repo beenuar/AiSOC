@@ -1,0 +1,86 @@
+name: Link check
+
+# The front door is load-bearing for adoption and it rotted silently: SUPPORT.md
+# advertised a docs site at a URL that returned 404, and the README linked a
+# "live demo replay" and a "browser tools" page that both 404'd. Nothing in CI
+# noticed, because no job had ever resolved a link.
+#
+# Two tiers, matching the ratchet convention already used in security.yml:
+#
+#   front-door  HARD gate. The handful of files a new visitor actually reads.
+#               These are verified green, so a regression here is a real break.
+#   docs-tree   OBSERVE. The full documentation tree has pre-existing rot that
+#               should be burned down deliberately rather than by blocking
+#               every unrelated PR. Promote to hard once the backlog is clear.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.github/workflows/link-check.yml'
+      - '.lycheeignore'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.github/workflows/link-check.yml'
+      - '.lycheeignore'
+  # External links rot without anyone touching this repo, which is how the
+  # docs URL went stale in the first place.
+  schedule:
+    - cron: '30 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  front-door:
+    name: Front door · links must resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check README, SUPPORT, CONTRIBUTING, SECURITY, GOVERNANCE
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-retries 3
+            --retry-wait-time 5
+            --timeout 25
+            --accept 200,206,301,302,307,308,403,429
+            README.md SUPPORT.md CONTRIBUTING.md SECURITY.md GOVERNANCE.md
+          fail: true
+
+  # Observe tier. Note `fail: false` on the lychee step rather than
+  # `continue-on-error` on the job: job-level continue-on-error still reports
+  # the check run as a failure, which is indistinguishable from a real break
+  # at a glance and is exactly the trap the gitleaks observe gate fell into.
+  # The step has to succeed for the signal to read honestly.
+  docs-tree:
+    name: Docs tree · links (observe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check docs/ and apps/docs/docs/
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --retry-wait-time 5
+            --timeout 25
+            --accept 200,206,301,302,307,308,403,429
+            'docs/**/*.md' 'apps/docs/docs/**/*.md' 'apps/docs/docs/**/*.mdx'
+          fail: false
