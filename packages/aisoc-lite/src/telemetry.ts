@@ -12,7 +12,17 @@
 
 import type { TriageResult } from "./verdict/types.js";
 
-const ENDPOINT = process.env.AISOC_TELEMETRY_ENDPOINT || "https://telemetry.tryaisoc.com/v1/cli";
+/**
+ * There is deliberately no default endpoint.
+ *
+ * This previously defaulted to a hosted collector that does not resolve, so an
+ * opted-in user's payload was POSTed into a black hole while TELEMETRY.md told
+ * them it was being collected. Silently discarding data someone consented to
+ * send is a worse trust failure than not collecting it, so sending now
+ * requires an endpoint to be named explicitly. Self-hosters can point this at
+ * their own collector; the project itself runs none.
+ */
+const ENDPOINT = process.env.AISOC_TELEMETRY_ENDPOINT || "";
 
 export interface TelemetryDecision {
   enabled: boolean;
@@ -64,8 +74,14 @@ export function buildPayload(result: TriageResult, source: string, version: stri
   };
 }
 
-/** Fire-and-forget send. Never blocks or fails the CLI; silent on error. */
+/**
+ * Fire-and-forget send. Never blocks or fails the CLI; silent on error.
+ *
+ * Returns false without any network call when no endpoint is configured, so
+ * "enabled but going nowhere" is distinguishable from "sent".
+ */
 export async function sendTelemetry(payload: TelemetryPayload): Promise<boolean> {
+  if (!ENDPOINT) return false;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
