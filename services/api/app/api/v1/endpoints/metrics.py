@@ -158,6 +158,25 @@ class FunnelMetrics(BaseModel):
     # ``repeat_suppression_rate`` = suppressed / (alerts_generated + suppressed).
     repeat_alerts_suppressed: int = 0
     repeat_suppression_rate: float = 0.0
+    # v9 (trust surface): how often the agent declines to decide, and how well
+    # its reasoning was supported by the evidence it was given.
+    #
+    # These exist because they are the questions a buyer evaluating an AI-SOC
+    # actually asks, and because a system that never abstains is not
+    # calibrated — it is guessing with confidence. Publishing the rate inverts
+    # the usual incentive to report only automation percentage.
+    #
+    # ``abstention_rate`` = needs_review / triaged. ``mean_groundedness`` is
+    # averaged over scored verdicts only; verdicts from the deterministic path
+    # are never scored and are excluded rather than counted as zero.
+    # ``ungrounded_demotions`` is the subset where the agent had a confident
+    # auto-closing answer that its evidence did not support.
+    triaged_alerts: int = 0
+    abstentions: int = 0
+    abstention_rate: float = 0.0
+    ungrounded_demotions: int = 0
+    mean_groundedness: float | None = None
+    scored_verdicts: int = 0
 
 
 # ────────────────────────── v1.5 Pipeline-health models ───────────────────────
@@ -796,6 +815,63 @@ async def _repeat_alerts_suppressed(db, tenant_id, start, end) -> int:
         return 0
 
 
+async def _triage_quality(db, tenant_id, start, end) -> dict[str, object]:
+    """Abstention and groundedness over auto-triaged alerts in [start, end).
+
+    Tenant-scoped at the query layer. Returns zeros when the columns do not
+    exist yet (pre-migration) rather than failing the funnel, matching
+    ``_repeat_alerts_suppressed``.
+
+    ``mean_groundedness`` averages only scored verdicts. The deterministic
+    triage path never assesses groundedness, so counting its verdicts as 0.0
+    would report a platform-wide collapse in reasoning quality every time the
+    LLM path was unavailable.
+    """
+    empty = {
+        "triaged_alerts": 0,
+        "abstentions": 0,
+        "abstention_rate": 0.0,
+        "ungrounded_demotions": 0,
+        "mean_groundedness": None,
+        "scored_verdicts": 0,
+    }
+    try:
+        row = (
+            await db.execute(
+                text(
+                    """
+                    SELECT
+                      count(*) FILTER (WHERE disposition IS NOT NULL)              AS triaged,
+                      count(*) FILTER (WHERE disposition = 'needs_review')         AS abstentions,
+                      count(*) FILTER (WHERE triage_ungrounded IS TRUE)            AS ungrounded,
+                      count(*) FILTER (WHERE triage_groundedness IS NOT NULL)      AS scored,
+                      avg(triage_groundedness)                                     AS mean_groundedness
+                      FROM alerts
+                     WHERE tenant_id = :tid AND created_at >= :start AND created_at < :end
+                    """
+                ),
+                {"tid": tenant_id, "start": start, "end": end},
+            )
+        ).first()
+    except Exception:  # noqa: BLE001 — analytics columns optional; never break the funnel
+        return empty
+
+    if row is None:
+        return empty
+
+    triaged = int(row[0] or 0)
+    abstentions = int(row[1] or 0)
+    scored = int(row[3] or 0)
+    return {
+        "triaged_alerts": triaged,
+        "abstentions": abstentions,
+        "abstention_rate": round(abstentions / triaged, 4) if triaged else 0.0,
+        "ungrounded_demotions": int(row[2] or 0),
+        "mean_groundedness": round(float(row[4]), 4) if row[4] is not None else None,
+        "scored_verdicts": scored,
+    }
+
+
 async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict:
     """Compute the funnel for a single [start, end) window."""
     events_of_interest = await _events_of_interest(db, tenant_id, start, end)
@@ -916,6 +992,7 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     coverage = MitreCoverage(covered=covered, total=mitre_total, ratio=ratio)
 
     suppressed = await _repeat_alerts_suppressed(db, tenant_id, start, end)
+    quality = await _triage_quality(db, tenant_id, start, end)
     # Compounding reduction: of everything the loop *could* have queued
     # (generated + suppressed), what share did prior outcomes suppress?
     denom = alerts_generated + suppressed
@@ -933,6 +1010,7 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
         "mitre_coverage": coverage,
         "repeat_alerts_suppressed": int(suppressed),
         "repeat_suppression_rate": suppression_rate,
+        **quality,
     }
 
 

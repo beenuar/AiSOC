@@ -712,6 +712,11 @@ class FusedAlertTriageWorker:
             iterations=state.iteration_count,
             tokens=tokens,
             cost_usd=cost_usd,
+            # Persisted so an ungrounded auto-closure is auditable after the
+            # fact and aggregatable on /metrics/funnel, rather than surviving
+            # only inside a findings string.
+            groundedness=state.groundedness,
+            ungrounded=(state.groundedness is not None and state.groundedness < _groundedness_floor()),
         )
 
     @staticmethod

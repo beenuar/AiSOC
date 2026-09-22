@@ -19180,6 +19180,31 @@ components:
           type: number
           title: Repeat Suppression Rate
           default: 0.0
+        triaged_alerts:
+          type: integer
+          title: Triaged Alerts
+          default: 0
+        abstentions:
+          type: integer
+          title: Abstentions
+          default: 0
+        abstention_rate:
+          type: number
+          title: Abstention Rate
+          default: 0.0
+        ungrounded_demotions:
+          type: integer
+          title: Ungrounded Demotions
+          default: 0
+        mean_groundedness:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mean Groundedness
+        scored_verdicts:
+          type: integer
+          title: Scored Verdicts
+          default: 0
       type: object
       required:
       - period
