@@ -216,12 +216,10 @@ _HIGH_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             # No scheme requirement: a hostname field carries
             # "collector.attacker.example/?q=SYSTEM_PROMPT" without one, and
             # that is the field an attacker who controls DNS can reach.
-            r"(?:https?://)?[\w.-]{4,80}/\S{0,10}\?\S{0,40}"
-            r"(?:prompt|secret|token|key|credential|context|system)",
+            r"(?:https?://)?[\w.-]{4,80}/\S{0,10}\?\S{0,40}" r"(?:prompt|secret|token|key|credential|context|system)",
             re.IGNORECASE,
         ),
     ),
-
     (
         # Addressed to the model. The tell is not the verb but the
         # salutation: telemetry does not write "note for the analyst AI".
@@ -240,9 +238,7 @@ _HIGH_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         # jailbreak_persona vocabulary and does exactly the same thing.
         "role_reassignment",
         re.compile(
-            r"\byou are (?:now |no longer )"
-            r"|\bnot a (?:security )?(?:analyst|soc|investigator)\b"
-            r"|\bstop (?:acting|behaving) as\b",
+            r"\byou are (?:now |no longer )" r"|\bnot a (?:security )?(?:analyst|soc|investigator)\b" r"|\bstop (?:acting|behaving) as\b",
             re.IGNORECASE,
         ),
     ),
@@ -279,8 +275,7 @@ _MEDIUM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         # real boundary; this catches the attempt.
         "claimed_boundary",
         re.compile(
-            r"(?:-{2,}|={2,}|\*{2,})\s*END\s+(?:UNTRUSTED|EVIDENCE|DATA|INPUT)"
-            r"|</\s*evidence\s*>",
+            r"(?:-{2,}|={2,}|\*{2,})\s*END\s+(?:UNTRUSTED|EVIDENCE|DATA|INPUT)" r"|</\s*evidence\s*>",
             re.IGNORECASE,
         ),
     ),
