@@ -36,7 +36,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/beenuar/AiSOC"
-Documentation = "https://docs.tryaisoc.com"
+Documentation = "https://beenuar.github.io/AiSOC/"
 Source = "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-sandbox"
 Issues = "https://github.com/beenuar/AiSOC/issues"
 Changelog = "https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md"
