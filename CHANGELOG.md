@@ -7,6 +7,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Securing the customer's AI estate.** AiSOC could already ingest an
+  organisation's OpenAI and Anthropic *audit logs* — who minted an API key, who
+  was granted owner. That is control-plane governance and says nothing about
+  what the agents did once running. Of 23 capabilities leading AI-SOC products
+  compete on, 22 already existed in this tree; this was the gap, and the five
+  MCP detections already in the repo were sitting in `_quarantine/`,
+  non-executable.
+  - Two webhook templates (`ai-runtime`, `ai-finding`) and matching OCSF
+    profiles, so the push and pull paths produce the same shape. The split
+    between them is the design: routine agent activity is `6003` API Activity,
+    category 6, which the promoter leaves in the lake to be hunted, while a
+    guardrail finding is `2001` Security Finding, category 2, always promoted.
+    All-2001 would flood the queue with an agent's normal operation; all-6003
+    would leave a detected prompt injection silent in the lake. Both
+    directions are tested.
+  - `packages/aisoc-ai-sdk`, a dependency-free span emitter (enforced by CI,
+    because it is imported into a customer's agent process). Prompt and
+    response content is hashed by default and never transmitted unless the
+    caller opts in — but *which secret shapes* were present is reported, so
+    "this prompt contained an AWS key" is detectable while the key never
+    leaves the process. Tool argument names are sent; values are not.
+  - `ai_gateway` connector for LiteLLM / Portkey / Helicone / in-house
+    proxies, covering every app behind a gateway — which matters because the
+    apps most in need of visibility are the ones nobody will retrofit an SDK
+    into. New `ai` connector category. 83 → 84 connectors.
+  - Eight executable detections, authored as Python specs rather than YAML,
+    since the YAML under `detections/` is a generated projection the engine
+    never reads.
+  - AiSOC's own MCP server is the first monitored AI asset. Its README claimed
+    "every tool call lands in the AiSOC audit log with the calling user and the
+    tool name"; it emitted nothing, and the API's audit middleware only records
+    mutating methods with a valid JWT, so the ten read tools produced no audit
+    row at all. It now emits to the same template a customer agent would use.
+- **The agent's abstention rate and groundedness are published.** v8.0 wired
+  groundedness scoring into the triage path and then discarded the score — it
+  survived only inside a findings string. Migration 051 persists it, and
+  `/metrics/funnel` exposes `abstention_rate`, `ungrounded_demotions`,
+  `mean_groundedness` and `scored_verdicts`. A system that never abstains is
+  not calibrated, it is guessing with confidence; publishing the rate inverts
+  the usual incentive to report only an automation percentage.
+- **The windowed detection engine has a loader.** It shipped with three
+  hardcoded rules and its own docstring deferred the rest. That absence is most
+  of why the quarantine has stayed at ~2,000 rules: a large share of
+  quarantined Splunk imports are `| stats count ... by` aggregations, which
+  cannot be expressed in the stateless matcher at all and had nowhere to go.
+  Five rules to start, including the AI agent tool-denial counterpart to the
+  low-severity stateless building block.
+- **UEBA baselines non-human principals.** `service_account`, `ai_agent` and
+  `mcp_server` were excluded by a regex on one HTTP route, while the schema
+  column, the statistics and the Kafka path all accepted anything. These are
+  the entities most in need of baselining: they run continuously with standing
+  credentials. Doing this before v8.0's degenerate-variance fix would have been
+  misleading, since a constant stream collapses the standard deviation and every
+  such principal would have read as permanently normal.
+
+### Fixed
+
+- **The detection truth table was a gate that could certify a no-op.** It
+  classified rules by file path and by the key names inside `detection:`, never
+  consulting the engine — so it published **947 executable** while the engine
+  loaded **825**, counted 77 imported Sigma rules that have no evaluator
+  anywhere in the repo, and counted 44 native rules with no compiled spec. The
+  danger was worse than a wrong number: because it keyed off `_quarantine/`
+  membership, a bulk un-quarantine would have raised the published figure
+  without changing what fires. Executable now means "the engine loads this id".
+- **663 of 825 loaded rules matched on fields that were not visible.**
+  `raw_data` carries the connector's normalized dict and connectors put the
+  vendor payload one level down under `raw_event`, while the matcher does a
+  flat `event.get(field)`. Fixture replay could not catch any of them, because
+  fixtures are synthesized from the rule they test. The workaround in the tree
+  was per-field hoisting inside individual connectors. Both engines now merge
+  the payload once, with connector keys winning on collision.
+  `scripts/check_detection_fields.py` ratchets the 138 rules that depend on
+  fields nothing computes.
+- **26 connectors were mis-attributed and mostly unpromotable.** 31 envelope
+  dicts emitted `raw` instead of `raw_event`, missing the normalizer's
+  `isCanonicalEnvelope` check and falling through to a fallback that borrowed
+  the `splunk_enterprise` profile. That profile stamps vendor "Splunk" — so
+  Okta, QRadar, Carbon Black, Netskope and 22 others reported alerts as coming
+  from Splunk — and is `class_uid` 4001 with an *empty* severity map, so
+  category 4 with severity 0 satisfied neither branch of `should_promote()` and
+  their events could never become alerts. Replaced with a vendor-neutral
+  `genericProfile`.
+- **The dependency audit silently skipped a service** (#650). A failed `poetry
+  export` was a warning, so `services/slack-bot` fell out of the scan while the
+  job passed. A gate that quietly skips is worse than one that fails, because
+  it reads as coverage that is not there. Coverage gaps now fail the job, and
+  regenerating the lock surfaced eleven advisories across `idna`,
+  `pydantic-settings`, `anyio`, `aiohttp` and `starlette` — nine of which were
+  only visible once the scan actually ran.
+- The MCP README's audit-trail claim, the quarantine README's translation
+  instructions (which documented the no-op YAML path that produced the 44
+  orphans), and the orphaned `detections/splunk-imports/_migrated/` directory
+  of 16 files that no script, workflow or doc referenced.
+
+### Changed
+
+- Eleven new claim-to-gate matrix rows, one per capability. 84 rows: 73 GATED,
+  11 PARTIAL, 0 NO GATE. The field gate is recorded as `GATED (ratchet)` with
+  its closing condition rather than as clean, because 138 rules still depend on
+  computed fields and claiming otherwise would be the overstatement the matrix
+  exists to prevent.
+
+### Known
+
+- `scripts/generate_detections.py` is not idempotent. Rule ids are positional
+  (`det-{category}-{NNN}`) and the committed YAML was produced from a different
+  spec ordering than the current code emits, so re-running it on a clean
+  checkout reassigns ids and trips the marketplace gate. `validate_detections.py`
+  does not compare the projection against the generator, so nothing catches it.
+  New rules must therefore be appended rather than inserted. Fixing it properly
+  means either content-derived ids or a one-time regenerate-and-commit plus a
+  `--check` gate.
+
+
 ## [8.0.0] — 2026-09-22
 
 **Close the loop.** v8.0 was reserved for the package-publish milestone. That
