@@ -134,6 +134,25 @@ async def create_asset(
     return asset
 
 
+@router.get("/vulnerabilities", response_model=list[VulnerabilityOut])
+async def list_vulnerabilities(
+    severity: str | None = Query(None),
+    is_exploited: bool | None = Query(None),
+    limit: int = Query(50, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[AssetVulnerability]:
+    q = select(AssetVulnerability).where(AssetVulnerability.tenant_id == current_user.tenant_id)
+    if severity:
+        q = q.where(AssetVulnerability.severity == severity)
+    if is_exploited is not None:
+        q = q.where(AssetVulnerability.is_exploited == is_exploited)
+    q = q.order_by(AssetVulnerability.last_found.desc()).offset(offset).limit(limit)
+    result = await db.execute(q)
+    return list(result.scalars().all())
+
+
 @router.get("/{asset_id}", response_model=AssetOut)
 async def get_asset(
     asset_id: uuid.UUID,
@@ -182,25 +201,6 @@ async def delete_asset(
 # ---------------------------------------------------------------------------
 # Vulnerability CRUD
 # ---------------------------------------------------------------------------
-
-
-@router.get("/vulnerabilities", response_model=list[VulnerabilityOut])
-async def list_vulnerabilities(
-    severity: str | None = Query(None),
-    is_exploited: bool | None = Query(None),
-    limit: int = Query(50, le=500),
-    offset: int = Query(0, ge=0),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> list[AssetVulnerability]:
-    q = select(AssetVulnerability).where(AssetVulnerability.tenant_id == current_user.tenant_id)
-    if severity:
-        q = q.where(AssetVulnerability.severity == severity)
-    if is_exploited is not None:
-        q = q.where(AssetVulnerability.is_exploited == is_exploited)
-    q = q.order_by(AssetVulnerability.last_found.desc()).offset(offset).limit(limit)
-    result = await db.execute(q)
-    return list(result.scalars().all())
 
 
 @router.post("/vulnerabilities", response_model=VulnerabilityOut, status_code=status.HTTP_201_CREATED)
