@@ -5,6 +5,9 @@
 #   1. PostgreSQL (pg_dump → gzip → encrypt → upload)
 #   2. ClickHouse (SELECT … FORMAT TSV → gzip → encrypt → upload)
 #   3. Plugin store (marketplace/index.json + community plugin artifacts → upload)
+#   4. Neo4j entity graph (APOC cypher export → gzip → encrypt → upload)
+#   5. Qdrant vector store (per-collection snapshot → encrypt → upload)
+#   6. Redis (RDB → encrypt → upload)
 #
 # Every artifact is encrypted with AES-256-GCM before it leaves the host, and
 # every artifact is recorded in a SHA-256 manifest uploaded alongside it. The
@@ -37,7 +40,8 @@
 #   SLACK_WEBHOOK_URL     — notify on completion/failure (optional)
 #
 # Usage:
-#   ./scripts/backup.sh [--dry-run] [--component postgres|clickhouse|plugins|all]
+#   ./scripts/backup.sh [--dry-run]
+#     [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|all]
 
 set -euo pipefail
 
@@ -52,12 +56,19 @@ CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-}"
 CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-aisoc}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 BACKUP_ENCRYPTION="${BACKUP_ENCRYPTION:-on}"
+NEO4J_URI="${NEO4J_URI:-}"
+NEO4J_HTTP_URL="${NEO4J_HTTP_URL:-http://localhost:7474}"
+NEO4J_USER="${NEO4J_USER:-neo4j}"
+NEO4J_PASSWORD="${NEO4J_PASSWORD:-}"
+QDRANT_URL="${QDRANT_URL:-}"
+REDIS_URL="${REDIS_URL:-}"
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
 DRY_RUN=false
 COMPONENT="all"
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 BACKUP_DIR="/tmp/aisoc-backup-${TIMESTAMP}"
 ERRORS=0
+SKIPS=0
 MANIFEST=""          # set after BACKUP_DIR exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -78,6 +89,20 @@ log()  { echo "[$(date -u +%T)] $*"; }
 # set -e kills the script mid-handler. The whole error-accumulation design
 # below (keep going, report N failures at the end) never ran because of it.
 fail() { echo "[ERROR] $*" >&2; ERRORS=$((ERRORS + 1)); }
+
+# unreachable() is fail() for live runs and a note for dry runs. A dry run
+# is a configuration check — an operator validating settings from a laptop
+# cannot reach the cluster's ClickHouse, and exiting 1 for that made
+# --dry-run useless for the thing it exists to do. A live run still treats
+# an unreachable store as a failed backup, which it is.
+unreachable() {
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[skip] $*" >&2
+    SKIPS=$((SKIPS + 1))
+  else
+    fail "$*"
+  fi
+}
 
 require() {
   command -v "$1" &>/dev/null || { echo "Missing required command: $1" >&2; exit 1; }
@@ -221,7 +246,7 @@ log "Component: ${COMPONENT} | Dry-run: ${DRY_RUN}"
 
 # ── 1. PostgreSQL ─────────────────────────────────────────────────────────────
 backup_postgres() {
-  [[ -z "$POSTGRES_URL" ]] && { fail "POSTGRES_URL is not set; skipping postgres backup"; return; }
+  [[ -z "$POSTGRES_URL" ]] && { unreachable "POSTGRES_URL is not set"; return; }
   log "--- PostgreSQL backup ---"
   local outfile="${BACKUP_DIR}/postgres-${TIMESTAMP}.sql.gz"
   local s3dest="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/postgres-${TIMESTAMP}.sql.gz"
@@ -280,7 +305,7 @@ backup_clickhouse() {
     2>/dev/null || echo "")
 
   if [[ -z "$tables" ]]; then
-    fail "Could not connect to ClickHouse at ${ch_url}; skipping"
+    unreachable "Could not connect to ClickHouse at ${ch_url}"
     return
   fi
 
@@ -366,18 +391,179 @@ backup_plugins() {
   log "Plugin store backup complete"
 }
 
+
+# ── 4. Neo4j (entity graph) ───────────────────────────────────────────────────
+# The graph is not derivable from the lake: it carries relationships built at
+# ingest time and enriched since, so losing it loses the blast-radius and
+# attack-path surfaces even with every raw event intact.
+#
+# Exported as Cypher via APOC rather than neo4j-admin dump, because a dump
+# needs the database stopped or an enterprise online-backup licence, and an
+# export runs against a live community instance over HTTP.
+backup_neo4j() {
+  [[ -z "$NEO4J_URI" ]] && { log "NEO4J_URI not set; skipping Neo4j backup"; return; }
+  log "--- Neo4j backup ---"
+  local outfile="${BACKUP_DIR}/neo4j-${TIMESTAMP}.cypher.gz"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would export the graph from ${NEO4J_URI}"
+    return
+  fi
+
+  local auth=""
+  [[ -n "$NEO4J_USER" ]] && auth="-u ${NEO4J_USER}:${NEO4J_PASSWORD}"
+
+  # apoc.export.cypher.all with stream:true returns the script in the
+  # response rather than writing to the server's import directory, which
+  # we have no way to read from here.
+  local query
+  query=$(cat <<'CYPHER'
+{"statements":[{"statement":"CALL apoc.export.cypher.all(null, {stream:true, format:'cypher-shell', useOptimizations:{type:'UNWIND_BATCH', unwindBatchSize:1000}}) YIELD cypherStatements RETURN cypherStatements"}]}
+CYPHER
+)
+  # shellcheck disable=SC2086
+  if ! curl -sf $auth -H 'Content-Type: application/json' \
+       -d "$query" "${NEO4J_HTTP_URL}/db/neo4j/tx/commit" \
+       | python3 -c "
+import json, sys
+doc = json.load(sys.stdin)
+if doc.get('errors'):
+    sys.stderr.write(json.dumps(doc['errors']) + '\n')
+    raise SystemExit(1)
+for result in doc.get('results', []):
+    for row in result.get('data', []):
+        for value in row.get('row', []):
+            if value:
+                sys.stdout.write(value)
+" | gzip > "$outfile"; then
+    fail "Neo4j export failed. APOC must be installed (apoc.export.cypher.all) and"
+    echo "        apoc.export.file.enabled / apoc.import.file.enabled configured." >&2
+    return
+  fi
+
+  if [[ ! -s "$outfile" ]]; then
+    fail "Neo4j export produced an empty file; refusing to upload it."
+    return
+  fi
+
+  log "Graph export size: $(du -sh "$outfile" | cut -f1)"
+  upload_sealed "$outfile" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/neo4j"
+  s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/neo4j"
+  log "Neo4j backup complete"
+}
+
+# ── 5. Qdrant (vector store) ──────────────────────────────────────────────────
+# Embeddings are expensive to recompute and, for tenant-private case vectors,
+# not always recomputable — the source case may have been purged by retention.
+backup_qdrant() {
+  [[ -z "$QDRANT_URL" ]] && { log "QDRANT_URL not set; skipping Qdrant backup"; return; }
+  log "--- Qdrant backup ---"
+
+  local collections
+  collections=$(curl -sf "${QDRANT_URL}/collections" 2>/dev/null \
+    | python3 -c "
+import json, sys
+try:
+    doc = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+for c in doc.get('result', {}).get('collections', []):
+    print(c['name'])
+" || echo "")
+
+  if [[ -z "$collections" ]]; then
+    unreachable "Could not list Qdrant collections at ${QDRANT_URL}"
+    return
+  fi
+
+  while IFS= read -r collection; do
+    [[ -z "$collection" ]] && continue
+    log "  Snapshotting collection: ${collection}"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log "  [dry-run] Would snapshot ${collection}"
+      continue
+    fi
+
+    # Qdrant creates the snapshot server-side, then we stream it out.
+    local snapshot_name
+    snapshot_name=$(curl -sf -X POST "${QDRANT_URL}/collections/${collection}/snapshots" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['result']['name'])" 2>/dev/null || echo "")
+    if [[ -z "$snapshot_name" ]]; then
+      fail "  Snapshot request failed for ${collection}"
+      continue
+    fi
+
+    local outfile="${BACKUP_DIR}/qdrant-${collection}-${TIMESTAMP}.snapshot"
+    if ! curl -sf -o "$outfile" \
+         "${QDRANT_URL}/collections/${collection}/snapshots/${snapshot_name}"; then
+      fail "  Snapshot download failed for ${collection}"
+      continue
+    fi
+
+    # Server-side snapshots accumulate and fill the volume otherwise.
+    curl -sf -X DELETE \
+      "${QDRANT_URL}/collections/${collection}/snapshots/${snapshot_name}" >/dev/null || true
+
+    log "    Size: $(du -sh "$outfile" | cut -f1)"
+    upload_sealed "$outfile" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/qdrant/${collection}"
+  done <<< "$collections"
+
+  s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/qdrant"
+  log "Qdrant backup complete"
+}
+
+# ── 6. Redis ──────────────────────────────────────────────────────────────────
+# Mostly cache, and mostly reconstructible — but it also holds scheduler leases
+# and rate-limiter state, and an RDB is cheap. Backed up so a restore does not
+# silently start with every scheduled job appearing due at once.
+backup_redis() {
+  [[ -z "$REDIS_URL" ]] && { log "REDIS_URL not set; skipping Redis backup"; return; }
+  if ! command -v redis-cli &>/dev/null; then
+    log "redis-cli not installed; skipping Redis backup"
+    return
+  fi
+  log "--- Redis backup ---"
+  local outfile="${BACKUP_DIR}/redis-${TIMESTAMP}.rdb"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would run --rdb against ${REDIS_URL}"
+    return
+  fi
+
+  if ! redis-cli -u "$REDIS_URL" --rdb "$outfile" >/dev/null 2>&1; then
+    fail "redis-cli --rdb failed (BGSAVE may be disabled on a managed instance)"
+    return
+  fi
+  if [[ ! -s "$outfile" ]]; then
+    fail "Redis dump is empty; refusing to upload it."
+    return
+  fi
+
+  log "RDB size: $(du -sh "$outfile" | cut -f1)"
+  upload_sealed "$outfile" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/redis"
+  s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/redis"
+  log "Redis backup complete"
+}
+
 # ── run selected components ───────────────────────────────────────────────────
 case "$COMPONENT" in
   postgres)   backup_postgres ;;
   clickhouse) backup_clickhouse ;;
   plugins)    backup_plugins ;;
+  neo4j)      backup_neo4j ;;
+  qdrant)     backup_qdrant ;;
+  redis)      backup_redis ;;
   all)
     backup_postgres
     backup_clickhouse
     backup_plugins
+    backup_neo4j
+    backup_qdrant
+    backup_redis
     ;;
   *)
-    echo "Unknown component: $COMPONENT (choose: postgres|clickhouse|plugins|all)" >&2
+    echo "Unknown component: $COMPONENT" >&2
+    echo "  choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|all" >&2
     exit 1
     ;;
 esac
@@ -403,6 +589,9 @@ fi
 
 # ── summary ───────────────────────────────────────────────────────────────────
 if [[ "$ERRORS" -eq 0 ]]; then
+  if [[ "$SKIPS" -gt 0 ]]; then
+    log "=== Backup dry-run completed; ${SKIPS} component(s) unreachable from here ==="
+  fi
   log "=== Backup completed successfully ==="
   notify_slack "success" "All components backed up to ${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/${TIMESTAMP}"
   exit 0

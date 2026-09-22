@@ -1,14 +1,16 @@
-name: Terraform CI
+name: Infrastructure CI
 
 on:
   pull_request:
     paths:
       - "infra/terraform/**"
+      - "infra/helm/**"
       - ".github/workflows/terraform-ci.yml"
   push:
     branches: [main, develop]
     paths:
       - "infra/terraform/**"
+      - "infra/helm/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,3 +48,89 @@ jobs:
           terraform_wrapper: false
       - run: terraform init -backend=false
       - run: terraform validate
+
+  # The chart shipped referencing .Values.ueba, .Values.honeytokens and
+  # .Values.purpleTeam, none of which existed in values.yaml. `helm template`
+  # failed on a nil pointer, so the chart could not be rendered at all — and
+  # nothing in CI ever tried, which is why it stayed that way. Rendering it is
+  # the cheapest possible proof that the documented install path exists.
+  helm:
+    name: Helm chart renders
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.16.3
+
+      - name: Fetch chart dependencies
+        working-directory: infra/helm/aisoc
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm dependency build
+
+      - name: helm lint
+        run: helm lint infra/helm/aisoc
+
+      - name: Render with defaults
+        run: helm template aisoc infra/helm/aisoc > /tmp/default.yaml
+
+      - name: Render with every optional component enabled
+        run: |
+          helm template aisoc infra/helm/aisoc \
+            --set backup.enabled=true \
+            --set backup.s3.bucket=s3://example \
+            --set backup.encryption.existingSecret=aisoc-backup-secret \
+            --set honeytokens.enabled=true \
+            --set purpleTeam.enabled=true \
+            --set networkPolicy.enabled=true \
+            > /tmp/full.yaml
+
+      - name: Assert the manifests are valid and the backup job is present
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+
+          for path in ("/tmp/default.yaml", "/tmp/full.yaml"):
+              with open(path) as fh:
+                  docs = [d for d in yaml.safe_load_all(fh) if d]
+              assert docs, f"{path} rendered nothing"
+              for d in docs:
+                  assert d.get("kind"), f"{path}: manifest with no kind: {d}"
+                  assert d.get("apiVersion"), f"{path}: manifest with no apiVersion"
+              print(f"{path}: {len(docs)} manifests")
+
+          with open("/tmp/full.yaml") as fh:
+              full = [d for d in yaml.safe_load_all(fh) if d]
+
+          crons = [d for d in full if d["kind"] == "CronJob"]
+          assert len(crons) == 1, f"expected one backup CronJob, got {len(crons)}"
+          spec = crons[0]["spec"]
+          assert spec["concurrencyPolicy"] == "Forbid", spec
+          # A stuck job must not suppress every later run indefinitely.
+          assert spec["jobTemplate"]["spec"]["activeDeadlineSeconds"] > 0
+          container = spec["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]
+          assert container["command"] == ["/app/scripts/backup.sh"], container["command"]
+          env = {e["name"] for e in container["env"]}
+          assert "BACKUP_ENCRYPTION_KEY" in env, "backup job has no encryption key"
+          assert container["securityContext"]["readOnlyRootFilesystem"] is True
+          print("backup CronJob: ok")
+
+          # Every optional component must actually appear when enabled,
+          # otherwise the flags are decorative.
+          names = {d["metadata"]["name"] for d in full}
+          for want in ("honeytokens", "purple-team", "ueba"):
+              assert any(want in n for n in names), f"{want} missing from the full render"
+          print("optional components: ok")
+          PY
+
+      - name: Backup script must accept every component the chart can request
+        run: |
+          set -euo pipefail
+          for c in postgres clickhouse plugins neo4j qdrant redis all; do
+            BACKUP_S3_BUCKET=s3://ci BACKUP_ENCRYPTION=off \
+              ./scripts/backup.sh --dry-run --component "$c" >/dev/null \
+              || { echo "::error::backup.sh rejected --component $c"; exit 1; }
+          done
+          echo "all components accepted"
