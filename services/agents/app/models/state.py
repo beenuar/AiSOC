@@ -84,6 +84,12 @@ class InvestigationState(BaseModel):
     confidence_basis: list[str] = Field(default_factory=list)
     verdict: str | None = None
 
+    # Fraction of the concrete indicators cited in the reasoning that actually
+    # appear in the evidence (see app/confidence/groundedness.py). None means
+    # the verdict was not scored. Recorded alongside the verdict so an
+    # ungrounded auto-closure is visible after the fact, not just at the time.
+    groundedness: float | None = None
+
     # Metadata
     iteration_count: int = 0
     max_iterations: int = 10

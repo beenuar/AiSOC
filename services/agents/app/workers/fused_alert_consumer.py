@@ -42,8 +42,9 @@ from typing import Any
 import structlog
 
 from app.agents.auto_triage_agent import run_auto_triage
-from app.agents.dispositions import NEEDS_REVIEW, normalize_disposition
+from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
+from app.confidence.groundedness import score_groundedness
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
 from app.graph.runner import default_budget, run_escalation
@@ -80,6 +81,7 @@ _METRICS = {
     "escalated": 0,
     "outcome_written": 0,
     "outcome_suppressed": 0,
+    "ungrounded_demoted": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "errors": 0,
@@ -107,6 +109,22 @@ def _memory_writeback_enabled() -> bool:
     """Write every durable triage outcome back as a per-signature prior (Wave 1)
     so autonomous closures compound. Disable with AISOC_AGENT_MEMORY_WRITEBACK=0."""
     return _truthy("AISOC_AGENT_MEMORY_WRITEBACK")
+
+
+def _groundedness_gate_enabled() -> bool:
+    """Demote a verdict whose reasoning cites indicators the evidence lacks.
+
+    On by default; disable with AISOC_AGENT_GROUNDEDNESS_GATE=0.
+    """
+    return _truthy("AISOC_AGENT_GROUNDEDNESS_GATE")
+
+
+def _groundedness_floor() -> float:
+    """Minimum grounded fraction for a verdict to be trusted to auto-close."""
+    try:
+        return float(os.getenv("AISOC_AGENT_GROUNDEDNESS_FLOOR", "0.75"))
+    except ValueError:
+        return 0.75
 
 
 def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
@@ -143,6 +161,12 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         summary = f"{summary} — {message['narrative']}"[:1000] if summary else str(message["narrative"])[:1000]
     raw_alert = {
         "id": alert_row_id,
+        # Rule identity travels with the alert so the evidence fingerprint can
+        # tell two different detections on the same host apart. Without it, a
+        # benign prior for one detection would suppress an unrelated one.
+        "title": alert.get("title"),
+        "rule_id": alert.get("rule_id"),
+        "rule_name": alert.get("rule_name"),
         "severity": alert.get("severity"),
         "src_ip": alert.get("src_ip"),
         "dst_ip": alert.get("dst_ip"),
@@ -409,6 +433,13 @@ class FusedAlertTriageWorker:
             except Exception as exc:  # noqa: BLE001 — governance accounting is best-effort
                 logger.debug("auto_triage_worker.governor_record_failed", error=str(exc))
 
+        # Groundedness gate: does the verdict's reasoning cite indicators the
+        # evidence actually contained? `score_groundedness` existed as an eval
+        # axis with no caller in the service, so a confident verdict citing an
+        # IP or hash that appeared nowhere in the alert was persisted, acted on
+        # and auto-closed with no signal that it was invented.
+        verdict, confidence = self._apply_groundedness_gate(state, verdict, confidence)
+
         _METRICS["triaged"] += 1
         await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
 
@@ -557,6 +588,64 @@ class FusedAlertTriageWorker:
             state = await run_triage(state)
             _METRICS["deterministic"] += 1
             return state, "deterministic"
+
+    def _apply_groundedness_gate(
+        self,
+        state: InvestigationState,
+        verdict: Any,
+        confidence: float,
+    ) -> tuple[Any, float]:
+        """Refuse to auto-close on reasoning the evidence does not support.
+
+        `score_groundedness` measures what fraction of the concrete indicators
+        an output asserts — IPs, hashes, CVEs, MITRE techniques, domains —
+        actually appear in the evidence the agent was given. It shipped as an
+        eval axis and had no caller in the service, so a confident verdict
+        citing an IP that appeared nowhere in the alert was persisted, acted on
+        and auto-closed with nothing recording that it was invented.
+
+        Only auto-closing verdicts are gated. Demoting an escalation because
+        its prose mentioned an extra indicator would add review load without
+        reducing risk, and a verdict that already routes to a human is not
+        making an unsupervised decision.
+        """
+        if not _groundedness_gate_enabled() or not verdict:
+            return verdict, confidence
+        if normalize_disposition(str(verdict), default=NEEDS_REVIEW) not in AUTO_CLOSEABLE_DISPOSITIONS:
+            return verdict, confidence
+
+        reasoning = " ".join(str(part) for part in [*(state.findings or []), *(state.confidence_basis or [])])
+        if not reasoning.strip():
+            return verdict, confidence
+
+        try:
+            evidence = json.dumps(state.raw_alert or {}, default=str)
+            result = score_groundedness(reasoning, f"{evidence}\n{state.alert_summary or ''}")
+        except Exception as exc:  # noqa: BLE001 — a scoring failure must not change the verdict
+            logger.debug("auto_triage_worker.groundedness_failed", error=str(exc))
+            return verdict, confidence
+
+        state.groundedness = result.score
+        if result.score >= _groundedness_floor():
+            return verdict, confidence
+
+        _METRICS["ungrounded_demoted"] += 1
+        logger.warning(
+            "auto_triage_worker.ungrounded_verdict_demoted",
+            run_id=str(state.run_id),
+            original_verdict=str(verdict),
+            groundedness=result.score,
+            hallucinated=result.hallucinated[:10],
+        )
+        state.add_finding(
+            f"Verdict demoted to needs_review: only {result.score:.0%} of the indicators cited in "
+            f"the reasoning appear in the evidence (unsupported: {', '.join(result.hallucinated[:5])})."
+        )
+        if state.status is AgentStatus.COMPLETED:
+            state.status = AgentStatus.RUNNING
+        state.verdict = NEEDS_REVIEW
+        # Confidence describes the demoted verdict now, not the discarded one.
+        return NEEDS_REVIEW, min(float(confidence or 0.0), result.score)
 
     async def _record(
         self,
