@@ -328,6 +328,11 @@ async def get_incident_context(
     graph that was unreachable.
     """
     context = IncidentContext(alert_id=alert_id, tenant_id=tenant_id)
+    # alert_id arrives from a URL path, so it is attacker-controlled and can
+    # forge log lines with CR/LF. Sanitised inline rather than via a helper:
+    # the taint tracker does not follow a helper across a function boundary,
+    # and this shape is the repo's documented convention.
+    safe_alert_id = str(alert_id).replace("\r", "").replace("\n", " ")[:120]
 
     async def _gather(sess: Any) -> None:
         base = {
@@ -348,14 +353,14 @@ async def get_incident_context(
                     "incident_context.%s timed out after %.1fs alert=%s",
                     name,
                     QUERY_TIMEOUT_SECONDS,
-                    alert_id,
+                    safe_alert_id,
                 )
                 return name, TimeoutError(f"{name}: timeout")
             except Exception as exc:
                 logger.warning(
                     "incident_context.%s failed alert=%s err=%s",
                     name,
-                    alert_id,
+                    safe_alert_id,
                     type(exc).__name__,
                 )
                 return name, exc
@@ -377,11 +382,11 @@ async def get_incident_context(
         # The graph being unreachable must not be indistinguishable from an
         # alert with no context.
         context.errors.append(f"graph unavailable ({type(exc).__name__})")
-        logger.warning("incident_context.unavailable alert=%s err=%s", alert_id, type(exc).__name__)
+        logger.warning("incident_context.unavailable alert=%s err=%s", safe_alert_id, type(exc).__name__)
 
     logger.info(
         "incident_context alert=%s tenant=%s dimensions=%d partial=%s",
-        alert_id,
+        safe_alert_id,
         tenant_id,
         context.dimensions_resolved,
         context.is_partial,

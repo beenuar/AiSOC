@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from app.context import bundle as module
 from app.context.bundle import (
     ContextBundle,
     ContextBundleBuilder,
@@ -112,8 +113,6 @@ def _reset_calls() -> None:
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: FakeClient) -> None:
-    import app.context.bundle as module
-
     monkeypatch.setattr(module.httpx, "AsyncClient", client)
 
 

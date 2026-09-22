@@ -40,6 +40,11 @@ logger = logging.getLogger("aisoc.connectors.credential_vault")
 # plaintext on the decrypt path. Must match the API service's prefix byte-for-byte.
 _CIPHER_PREFIX: Final[str] = "vault:v1:"
 
+# Envelope tokens are written only by services/api, which owns the key
+# manager. This read-path copy recognises them so it can refuse them
+# rather than pass the ciphertext through as plaintext.
+_ENVELOPE_PREFIX = "vault:v2:"
+
 
 class CredentialVaultError(RuntimeError):
     """Raised when the vault cannot encrypt/decrypt safely."""
@@ -85,6 +90,19 @@ class CredentialVault:
     def decrypt(self, value: str) -> str:
         if not isinstance(value, str):
             raise CredentialVaultError(f"vault.decrypt expects str, got {type(value).__name__}")
+        # A vault:v2 envelope token cannot be read here: this is a vendored
+        # read-path copy and only services/api holds the envelope key
+        # manager. Falling through the plaintext branch below would hand the
+        # ciphertext to a vendor API as if it were the credential, producing
+        # an auth failure that looks like a customer configuration problem.
+        # Fail closed and say which service can read it.
+        if value.startswith(_ENVELOPE_PREFIX):
+            raise CredentialVaultError(
+                "this credential is envelope-encrypted (vault:v2) and cannot be "
+                "decrypted by this service; only services/api holds the key "
+                "manager. Either disable AISOC_CREDENTIAL_ENVELOPE or route the "
+                "read through the API."
+            )
         if not value.startswith(_CIPHER_PREFIX):
             return value
         token = value[len(_CIPHER_PREFIX) :].encode("ascii")

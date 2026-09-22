@@ -21,6 +21,7 @@ import re
 from typing import Any
 
 import pytest
+from app.services import incident_context as module
 from app.services.incident_context import (
     _DIMENSIONS,
     GLOBAL_LABELS,
@@ -186,7 +187,6 @@ class TestPartialResults:
 
     async def test_a_slow_dimension_does_not_hang_the_bundle(self) -> None:
         """This sits on the hot path of every escalated alert."""
-        import app.services.incident_context as module
 
         class Slow(FakeSession):
             async def run(self, cypher: str, **params: Any) -> FakeResult:
