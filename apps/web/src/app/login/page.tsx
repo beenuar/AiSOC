@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { authApi } from '@/lib/api';
+import { isDemoMode } from '@/lib/demoMode';
 
 type Phase = 'idle' | 'pending' | 'success' | 'error';
 
@@ -120,12 +121,17 @@ function LoginInner() {
               Sign in to AiSOC
             </h1>
             <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-              Open-source AI SOC console. Use the demo credentials below or
-              your own tenant&rsquo;s account.
+              Open-source AI SOC console. Sign in with your tenant&rsquo;s
+              account.
             </p>
           </div>
 
-          {/* Demo banner */}
+          {/* Demo banner — demo mode only.
+              These credentials are seeded by the public demo and exist
+              nowhere else, so on a self-hosted deployment this rendered a
+              "Use demo" button that fails and told the operator's own users
+              to sign in with an account on somebody else's instance. */}
+          {isDemoMode() && (
           <div className="mb-6 rounded-xl border border-indigo-500/30 bg-indigo-500/5 px-4 py-3 text-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -144,6 +150,7 @@ function LoginInner() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Form */}
           <form onSubmit={submit} className="space-y-4" noValidate>
@@ -242,7 +249,7 @@ function LoginInner() {
                 href="/"
                 className="hover:text-zinc-400 underline-offset-2 hover:underline"
               >
-                ← Back to tryaisoc.com
+                ← Back to home
               </Link>
             </p>
           </div>
