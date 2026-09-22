@@ -1,0 +1,23 @@
+id: det-application-083
+name: AI Agent Escalated to a Higher-Privilege Tool
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'AI Agent Escalated
+  to a Higher-Privilege Tool'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1548
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "tool_escalation"
+false_positives:
+- Break-glass tool use during an incident, with a ticket
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

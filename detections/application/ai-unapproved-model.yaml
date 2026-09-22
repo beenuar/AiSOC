@@ -1,0 +1,23 @@
+id: det-application-082
+name: AI Agent Used an Unapproved Model
+description: An agent called a model outside the approved set. Often benign drift, but it is also how
+  data leaves a reviewed provider for an unreviewed one.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "unapproved_model"
+false_positives:
+- Model newly approved but the inventory not yet updated
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

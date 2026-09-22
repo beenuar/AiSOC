@@ -1,0 +1,23 @@
+id: det-application-084
+name: Undeclared AI Agent Observed
+description: 'Telemetry arrived from an agent absent from the inventory. Shadow AI is the AI-estate equivalent
+  of an unmanaged endpoint: it cannot be governed, and its access is unreviewed.'
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "shadow_ai"
+false_positives:
+- A newly deployed agent that has not been registered yet
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
