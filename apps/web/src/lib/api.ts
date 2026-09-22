@@ -5321,3 +5321,53 @@ export default {
   costs: costsApi,
   savedViews: savedViewsApi,
 };
+
+// ─── API keys ────────────────────────────────────────────────────────────────
+//
+// The settings panel used to mint an `aisoc_live_…` secret in the browser with
+// `crypto.getRandomValues` and report "API key created". That string
+// authenticated nothing, so a user would wire it into a CI pipeline or a
+// forwarder and get silent 401s — while believing they held a working
+// credential. The real CRUD backend has existed at `/api/v1/api-keys` all
+// along; it simply had no client binding.
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  is_active: boolean;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+/** Create response. `key` is the raw secret and is returned exactly once. */
+export interface CreatedApiKey extends Omit<ApiKeyRecord, 'is_active' | 'last_used_at'> {
+  key: string;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  scopes?: string[];
+  expires_in_days?: number | null;
+}
+
+export const apiKeysApi = {
+  list: () => request<ApiKeyRecord[]>('/api/v1/api-keys'),
+
+  create: (data: CreateApiKeyInput) =>
+    request<CreatedApiKey>('/api/v1/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Partial<CreateApiKeyInput>) =>
+    request<ApiKeyRecord>(`/api/v1/api-keys/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  revoke: (id: string) =>
+    request<void>(`/api/v1/api-keys/${id}`, { method: 'DELETE' }),
+};

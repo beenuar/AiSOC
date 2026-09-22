@@ -17,7 +17,7 @@
  * has a graceful demo fallback so the page always feels alive.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
@@ -26,10 +26,12 @@ import { format, formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import {
   ApiError,
+  apiKeysApi,
   connectorsApi,
   deploymentApi,
   tenantsApi,
   type AirgapStatus,
+  type ApiKeyRecord,
   type Connector,
   type ConnectorStatus,
   type FullTenant,
@@ -183,31 +185,6 @@ const DEMO_CONNECTORS: Connector[] = [
   },
 ];
 
-const DEMO_API_KEYS: ApiKey[] = [
-  {
-    id: 'key-1',
-    name: 'CI / Detection-as-Code Pipeline',
-    prefix: 'aisoc_live_xLm9…',
-    scopes: ['detection:read', 'detection:write', 'cases:read'],
-    createdAt: ago(60 * 24 * 90),
-    lastUsedAt: ago(20),
-  },
-  {
-    id: 'key-2',
-    name: 'Splunk forwarder',
-    prefix: 'aisoc_live_aQ02…',
-    scopes: ['ingest:write'],
-    createdAt: ago(60 * 24 * 240),
-    lastUsedAt: ago(2),
-  },
-  {
-    id: 'key-3',
-    name: 'PagerDuty webhook',
-    prefix: 'aisoc_live_TT74…',
-    scopes: ['cases:write', 'cases:read'],
-    createdAt: ago(60 * 24 * 30),
-  },
-];
 
 const DEMO_AUDIT: AuditEntry[] = [
   {
@@ -989,37 +966,92 @@ function StatTile({
 
 // ─── Panel: API keys ──────────────────────────────────────────────────────────
 
+function toApiKey(record: ApiKeyRecord): ApiKey {
+  return {
+    id: record.id,
+    name: record.name,
+    prefix: record.prefix,
+    scopes: record.scopes,
+    createdAt: record.created_at,
+    lastUsedAt: record.last_used_at ?? undefined,
+  };
+}
+
 function ApiKeysPanel() {
-  const [keys, setKeys] = useState<ApiKey[]>(DEMO_API_KEYS);
+  // This panel used to mint an `aisoc_live_…` secret in the browser with
+  // crypto.getRandomValues, push it into local state, and report "API key
+  // created". The string authenticated nothing: a user would wire it into a CI
+  // pipeline or a log forwarder and get silent 401s while believing they held a
+  // working credential. The real CRUD backend at /api/v1/api-keys has existed
+  // all along and simply had no client binding.
+  const [keys, setKeys] = useState<ApiKey[]>([]);
   const [draftName, setDraftName] = useState('');
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  const create = () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const records = await apiKeysApi.list();
+      setKeys(records.filter((r) => r.is_active).map(toApiKey));
+      setLoadError(null);
+    } catch (err) {
+      // An honest error, not a fallback list of plausible-looking keys. A
+      // fabricated "Splunk forwarder" row invites someone to trust or revoke a
+      // credential that does not exist.
+      setKeys([]);
+      setLoadError(
+        err instanceof Error ? err.message : 'Could not load API keys.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const create = async () => {
     if (!draftName.trim()) {
       toast.error('Give the key a name');
       return;
     }
-    const idBytes = crypto.getRandomValues(new Uint8Array(6));
-    const id = `key-${Array.from(idBytes).map(b => b.toString(16).padStart(2, '0')).join('')}`;
-    const secretBytes = crypto.getRandomValues(new Uint8Array(16));
-    const secretBody = Array.from(secretBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const secret = `aisoc_live_${secretBody}`;
-    const key: ApiKey = {
-      id,
-      name: draftName.trim(),
-      prefix: `${secret.slice(0, 16)}…`,
-      scopes: ['cases:read', 'detection:read'],
-      createdAt: new Date().toISOString(),
-    };
-    setKeys((curr) => [key, ...curr]);
-    setCreatedSecret(secret);
-    setDraftName('');
-    toast.success('API key created');
+    setCreating(true);
+    try {
+      const created = await apiKeysApi.create({
+        name: draftName.trim(),
+        scopes: ['cases:read', 'detection:read'],
+      });
+      // The raw secret is returned exactly once by the backend, so this is the
+      // only moment it can be shown.
+      setCreatedSecret(created.key);
+      setDraftName('');
+      await load();
+      toast.success('API key created');
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not create the API key',
+      );
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const revoke = (id: string) => {
-    setKeys((curr) => curr.filter((k) => k.id !== id));
-    toast.success('Key revoked');
+  const revoke = async (id: string) => {
+    try {
+      await apiKeysApi.revoke(id);
+      await load();
+      toast.success('Key revoked');
+    } catch (err) {
+      // Never drop the row on failure: showing a key as revoked while it still
+      // authenticates is the dangerous direction.
+      toast.error(
+        err instanceof Error ? err.message : 'Could not revoke the key',
+      );
+    }
   };
 
   const copy = (value: string) => {
@@ -1048,10 +1080,11 @@ function ApiKeysPanel() {
           </Field>
           <button
             type="button"
-            onClick={create}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            onClick={() => void create()}
+            disabled={creating}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
           >
-            Generate key
+            {creating ? 'Generating…' : 'Generate key'}
           </button>
         </div>
 
@@ -1091,7 +1124,14 @@ function ApiKeysPanel() {
         </AnimatePresence>
 
         {/* List */}
-        {keys.length === 0 ? (
+        {loadError ? (
+          <EmptyState
+            title="Could not load API keys"
+            description={loadError}
+          />
+        ) : loading ? (
+          <EmptyState title="Loading API keys…" description="" />
+        ) : keys.length === 0 ? (
           <EmptyState
             title="No API keys yet"
             description="Create your first key above to authenticate pipelines."
@@ -1141,7 +1181,7 @@ function ApiKeysPanel() {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => revoke(k.id)}
+                        onClick={() => void revoke(k.id)}
                         className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/20"
                       >
                         Revoke
