@@ -33,6 +33,7 @@ from typing import Any
 
 import structlog
 
+from app.core.cost_governor import get_governor
 from app.investigator.strategies import Strategy, select_strategy
 from app.llm.factory import make_chat_model
 from app.llm.tool_loop import run_with_tools
@@ -54,6 +55,17 @@ ENABLED = os.getenv("AISOC_DEEP_INVESTIGATION", "true").strip().lower() not in (
 MAX_ITERATIONS = int(os.getenv("AISOC_DEEP_INVESTIGATION_MAX_ITERS", "6"))
 BUDGET_SECONDS = float(os.getenv("AISOC_DEEP_INVESTIGATION_BUDGET_SECONDS", "120"))
 
+#: Per-incident spend ceiling. The cost governor already enforces a rolling
+#: per-tenant budget, which is the wrong granularity for this: one runaway
+#: investigation consuming a quarter of the day's allowance looks identical
+#: to a hundred well-behaved ones until the budget runs out mid-afternoon
+#: and every subsequent alert goes untriaged.
+#:
+#: A chain that cannot conclude within this is not one more turn away from
+#: concluding, and the honest output is a partial investigation that says so.
+MAX_USD_PER_INVESTIGATION = float(os.getenv("AISOC_DEEP_INVESTIGATION_MAX_USD", "0.50"))
+MAX_TOKENS_PER_INVESTIGATION = int(os.getenv("AISOC_DEEP_INVESTIGATION_MAX_TOKENS", "60000"))
+
 
 @dataclass
 class DeepInvestigationResult:
@@ -74,6 +86,14 @@ class DeepInvestigationResult:
     truncated: bool = False
     latency_ms: int = 0
     over_budget: bool = False
+    #: Spend attributable to this one investigation. A fifteen-step pivot
+    #: chain is an order of magnitude more expensive than enrich-and-
+    #: summarise, and per-tenant daily budgets do not surface that: one alert
+    #: consuming a quarter of the day's budget looks the same as a hundred
+    #: alerts consuming it evenly, right up until the day ends early.
+    tokens: int = 0
+    usd_cost: float = 0.0
+    cost_capped: bool = False
     unavailable_data: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -94,6 +114,9 @@ class DeepInvestigationResult:
             "truncated": self.truncated,
             "latency_ms": self.latency_ms,
             "over_budget": self.over_budget,
+            "tokens": self.tokens,
+            "usd_cost": round(self.usd_cost, 6),
+            "cost_capped": self.cost_capped,
             "reached_depth": self.reached_depth,
             "unavailable_data": self.unavailable_data,
             "error": self.error,
@@ -232,6 +255,10 @@ async def run_deep_investigation(
         return result
 
     started = time.monotonic()
+    governor = get_governor()
+    spend_before = governor.spent_usd(tenant_id)
+    tokens_before = governor.spent_tokens(tenant_id)
+
     try:
         model = llm if llm is not None else make_chat_model("investigation")
 
@@ -262,6 +289,18 @@ async def run_deep_investigation(
         return result
 
     result.latency_ms = int((time.monotonic() - started) * 1000)
+    # Attributed by difference rather than self-reported: the loop does not
+    # know what it cost, and the governor is the only place that does.
+    result.usd_cost = max(0.0, governor.spent_usd(tenant_id) - spend_before)
+    result.tokens = max(0, governor.spent_tokens(tenant_id) - tokens_before)
+    result.cost_capped = result.usd_cost >= MAX_USD_PER_INVESTIGATION or result.tokens >= MAX_TOKENS_PER_INVESTIGATION
+    if result.cost_capped:
+        logger.warning(
+            "deep_investigation.cost_capped",
+            strategy=strategy.id,
+            usd=round(result.usd_cost, 4),
+            tokens=result.tokens,
+        )
     result.narrative = loop.get("content", "") or ""
     result.tool_trace = loop.get("tool_trace", []) or []
     result.iterations = int(loop.get("iterations", 0) or 0)

@@ -360,6 +360,7 @@ jobs:
             tests/test_cost_governor.py \
             tests/test_bundle_incident_context.py \
             tests/test_deep_investigation.py \
+            tests/adversarial/ \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
