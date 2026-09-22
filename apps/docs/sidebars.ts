@@ -178,6 +178,8 @@ const sidebars: SidebarsConfig = {
       label: "Operations",
       items: [
         "operations/security",
+        "compliance/evidence-pack",
+        "compliance/fips-posture",
         "operations/credentials",
         "operations/secrets",
         "operations/airgap",
