@@ -25,8 +25,10 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from app.agents import tool_loop
 from app.agents.investigation_agent import _bundle_findings
 from app.models.state import AgentStatus, InvestigationState
+from app.workers import fused_alert_consumer as consumer
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker
 
 
@@ -48,8 +50,6 @@ def _state() -> InvestigationState:
 @pytest.mark.asyncio
 async def test_escalation_prefetches_the_context_bundle(monkeypatch: pytest.MonkeyPatch):
     """The regression: the automatic path got no pre-fetched context at all."""
-    import app.workers.fused_alert_consumer as mod
-
     seen: dict[str, object] = {}
 
     async def _prefetch(*, case_id, tenant_id, alert_summary, raw_alert):  # noqa: ANN001
@@ -60,8 +60,8 @@ async def test_escalation_prefetches_the_context_bundle(monkeypatch: pytest.Monk
         seen["bundle_at_run"] = state.context_bundle
         return state
 
-    monkeypatch.setattr(mod, "prefetch_context_bundle_dict", _prefetch)
-    monkeypatch.setattr(mod, "run_escalation", _run_escalation)
+    monkeypatch.setattr(consumer, "prefetch_context_bundle_dict", _prefetch)
+    monkeypatch.setattr(consumer, "run_escalation", _run_escalation)
     monkeypatch.setenv("AISOC_AGENT_ESCALATION", "1")
 
     state = _state()
@@ -78,8 +78,6 @@ async def test_a_context_failure_never_blocks_the_escalation(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Context is additive. Losing it must not lose the investigation."""
-    import app.workers.fused_alert_consumer as mod
-
     ran = False
 
     async def _prefetch(**kwargs):  # noqa: ANN003
@@ -90,8 +88,8 @@ async def test_a_context_failure_never_blocks_the_escalation(
         ran = True
         return state
 
-    monkeypatch.setattr(mod, "prefetch_context_bundle_dict", _prefetch)
-    monkeypatch.setattr(mod, "run_escalation", _run_escalation)
+    monkeypatch.setattr(consumer, "prefetch_context_bundle_dict", _prefetch)
+    monkeypatch.setattr(consumer, "run_escalation", _run_escalation)
     monkeypatch.setenv("AISOC_AGENT_ESCALATION", "1")
 
     await FusedAlertTriageWorker(bootstrap_servers="localhost:9092")._maybe_escalate(_state())
@@ -175,7 +173,6 @@ async def test_the_tool_loop_routes_through_the_llm_contract(
     the highest-risk content in the system, and lost token/cost telemetry for
     every tool-calling turn.
     """
-    import app.agents.tool_loop as loop
     from app.tools.registry import ToolRegistry
 
     called = False
@@ -190,12 +187,12 @@ async def test_the_tool_loop_routes_through_the_llm_contract(
 
         return _Resp()
 
-    monkeypatch.setattr(loop, "safe_ainvoke", _safe)
+    monkeypatch.setattr(tool_loop, "safe_ainvoke", _safe)
 
     class _LLM:
         def bind_tools(self, schemas):  # noqa: ANN001
             return self
 
-    out = await loop.run_with_tools(_LLM(), system="s", user="u", registry=ToolRegistry())
+    out = await tool_loop.run_with_tools(_LLM(), system="s", user="u", registry=ToolRegistry())
     assert called, "the loop bypassed safe_ainvoke"
     assert out["content"] == "done"

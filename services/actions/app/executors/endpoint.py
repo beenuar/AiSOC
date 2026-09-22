@@ -34,66 +34,23 @@ from datetime import datetime
 
 import structlog
 
-from app.clients.cortex_xdr_client import CortexXdrClient
 from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
-from app.clients.defender_client import DefenderClient
-from app.clients.sentinelone_client import SentinelOneClient
+
+# Re-exported from app.clients.factories, which is where these now live so
+# app.services.rollback can import them without creating a cycle back into
+# this module. Imported here because rollback and verification import them
+# from this path, and tests monkeypatch them here.
+from app.clients.factories import (  # noqa: F401
+    _cortex_client,
+    _cs_client,
+    _mde_client,
+    _s1_client,
+)
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType, BlastRadius
+from app.services.rollback import reverse_via_rollback_service
 
 logger = structlog.get_logger()
-
-
-def _cs_client(params: dict) -> CrowdStrikeRTRClient | None:
-    client_id = params.get("cs_client_id")
-    client_secret = params.get("cs_client_secret")
-    if not (client_id and client_secret):
-        return None
-    return CrowdStrikeRTRClient(
-        client_id=client_id,
-        client_secret=client_secret,
-        base_url=params.get("cs_base_url", "https://api.crowdstrike.com"),
-    )
-
-
-def _mde_client(params: dict) -> DefenderClient | None:
-    tenant_id = params.get("mde_tenant_id")
-    client_id = params.get("mde_client_id")
-    client_secret = params.get("mde_client_secret")
-    if not (tenant_id and client_id and client_secret):
-        return None
-    return DefenderClient(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret)
-
-
-def _s1_client(params: dict) -> SentinelOneClient | None:
-    """Build a SentinelOne client from ``ActionRequest.parameters``.
-
-    Returns ``None`` when either field is missing so the executor
-    can cleanly fall through to the next vendor / simulation. We
-    don't pull the API token out of an env var here — the dispatcher
-    intentionally treats every credential as request-scoped so that
-    multi-tenant deployments can route different tenants to
-    different S1 consoles in the same process.
-    """
-    console_url = params.get("s1_console_url")
-    api_token = params.get("s1_api_token")
-    if not (console_url and api_token):
-        return None
-    return SentinelOneClient(console_url=console_url, api_token=api_token)
-
-
-def _cortex_client(params: dict) -> CortexXdrClient | None:
-    """Build a Cortex XDR client from request-scoped credentials.
-
-    Returns ``None`` when any field is missing so the executor falls through to
-    the next vendor / simulation.
-    """
-    api_key_id = params.get("cortex_api_key_id")
-    api_key = params.get("cortex_api_key")
-    fqdn = params.get("cortex_fqdn")
-    if not (api_key_id and api_key and fqdn):
-        return None
-    return CortexXdrClient(api_key_id=api_key_id, api_key=api_key, fqdn=fqdn)
 
 
 async def _cs_contain_host_by_hostname(cs: CrowdStrikeRTRClient, hostname: str) -> dict:
@@ -258,11 +215,6 @@ class IsolateHostExecutor(BaseExecutor):
         Defender and SentinelOne; it reports `simulated` when credentials are
         absent rather than claiming success.
         """
-        # Imported inline, not at module scope: app.services.rollback imports
-        # the vendor client factories from this module, so a top-level import
-        # here would be circular.
-        from app.services.rollback import reverse_via_rollback_service  # noqa: PLC0415
-
         hostname = result.rollback_data.get("hostname")
         return await reverse_via_rollback_service(
             ActionType.ISOLATE_HOST,

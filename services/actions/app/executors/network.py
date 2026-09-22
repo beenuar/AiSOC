@@ -44,66 +44,21 @@ from datetime import datetime
 import structlog
 
 from app.clients.aws_security_groups import AWSSecurityGroupsClient
-from app.clients.cloudflare_client import CloudflareClient
-from app.clients.fortigate_client import FortiGateClient
-from app.clients.panos_client import PanOsClient
+
+# Re-exported from app.clients.factories, which is where these now live so
+# app.services.rollback can import them without creating a cycle back into
+# this module. Imported here because rollback and verification import them
+# from this path, and tests monkeypatch them here.
+from app.clients.factories import (  # noqa: F401
+    _aws_client,
+    _cloudflare_client,
+    _fortigate_client,
+    _panos_client,
+)
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
 
 logger = structlog.get_logger()
-
-
-def _aws_client(params: dict) -> AWSSecurityGroupsClient | None:
-    access_key = params.get("aws_access_key_id")
-    secret_key = params.get("aws_secret_access_key")
-    sg_id = params.get("aws_security_group_id")
-    if not sg_id:
-        return None
-    return AWSSecurityGroupsClient(
-        access_key_id=access_key,
-        secret_access_key=secret_key,
-        region=params.get("aws_region", "us-east-1"),
-        role_arn=params.get("aws_role_arn"),
-        session_name=params.get("aws_session_name", "aisoc-action"),
-    )
-
-
-def _panos_client(params: dict) -> PanOsClient | None:
-    """Build a PAN-OS client. Returns None if the minimum
-    credentials are missing so the executor can fall through.
-    """
-    host = params.get("panos_host")
-    api_key = params.get("panos_api_key")
-    tag = params.get("panos_tag")
-    if not (host and api_key and tag):
-        return None
-    return PanOsClient(
-        host=host,
-        api_key=api_key,
-        vsys=params.get("panos_vsys", "vsys1"),
-        verify_tls=bool(params.get("panos_verify_tls", True)),
-    )
-
-
-def _fortigate_client(params: dict) -> FortiGateClient | None:
-    host = params.get("fgt_host")
-    token = params.get("fgt_api_token")
-    group = params.get("fgt_address_group")
-    if not (host and token and group):
-        return None
-    return FortiGateClient(
-        host=host,
-        api_token=token,
-        vdom=params.get("fgt_vdom", "root"),
-        verify_tls=bool(params.get("fgt_verify_tls", True)),
-    )
-
-
-def _cloudflare_client(params: dict) -> CloudflareClient | None:
-    token = params.get("cf_api_token")
-    if not token:
-        return None
-    return CloudflareClient(api_token=token)
 
 
 class BlockIPExecutor(BaseExecutor):

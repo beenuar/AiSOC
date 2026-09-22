@@ -38,42 +38,20 @@ from datetime import datetime
 
 import structlog
 
-from app.clients.azure_entra_client import AzureEntraClient
-from app.clients.google_workspace_client import GoogleWorkspaceClient
-from app.clients.okta_client import OktaClient
+# Re-exported from app.clients.factories, which is where these now live so
+# app.services.rollback can import them without creating a cycle back into
+# this module. Imported here because rollback and verification import them
+# from this path, and tests monkeypatch them here.
+from app.clients.factories import (  # noqa: F401
+    _entra_client,
+    _gws_client,
+    _okta_client,
+)
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
 from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType, BlastRadius
+from app.services.rollback import reverse_via_rollback_service
 
 logger = structlog.get_logger()
-
-
-def _okta_client(params: dict) -> OktaClient | None:
-    domain = params.get("okta_domain")
-    api_token = params.get("okta_api_token")
-    if not (domain and api_token):
-        return None
-    return OktaClient(domain=domain, api_token=api_token)
-
-
-def _entra_client(params: dict) -> AzureEntraClient | None:
-    tenant_id = params.get("azure_tenant_id")
-    client_id = params.get("azure_client_id")
-    client_secret = params.get("azure_client_secret")
-    if not (tenant_id and client_id and client_secret):
-        return None
-    return AzureEntraClient(
-        tenant_id=tenant_id,
-        client_id=client_id,
-        client_secret=client_secret,
-    )
-
-
-def _gws_client(params: dict) -> GoogleWorkspaceClient | None:
-    key = params.get("gws_service_account_key")
-    subject = params.get("gws_subject_email")
-    if not (key and subject):
-        return None
-    return GoogleWorkspaceClient(service_account_key=key, subject_email=subject)
 
 
 _SIM_NOTE_IDENTITY = (
@@ -404,11 +382,6 @@ class SuspendSessionExecutor(BaseExecutor):
 
     async def rollback(self, result: ActionResult) -> bool:
         """Un-suspend the session by actually calling the identity provider."""
-        # Imported inline, not at module scope: app.services.rollback imports
-        # the vendor client factories from this module, so a top-level import
-        # here would be circular.
-        from app.services.rollback import reverse_via_rollback_service  # noqa: PLC0415
-
         user_id = result.rollback_data.get("user_id")
         return await reverse_via_rollback_service(
             ActionType.SUSPEND_SESSION,

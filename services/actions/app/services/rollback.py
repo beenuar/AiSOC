@@ -35,9 +35,18 @@ from typing import Any
 
 import structlog
 
-from app.executors.endpoint import _cs_client, _mde_client, _s1_client
-from app.executors.identity import _entra_client, _gws_client, _okta_client
-from app.executors.network import _aws_client, _cloudflare_client, _fortigate_client, _panos_client
+from app.clients.factories import (
+    _aws_client,
+    _cloudflare_client,
+    _cs_client,
+    _entra_client,
+    _fortigate_client,
+    _gws_client,
+    _mde_client,
+    _okta_client,
+    _panos_client,
+    _s1_client,
+)
 from app.models.action import ActionType
 
 logger = structlog.get_logger()

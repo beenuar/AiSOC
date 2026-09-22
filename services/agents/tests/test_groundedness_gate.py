@@ -21,6 +21,7 @@ import uuid
 
 import pytest
 from app.models.state import AgentStatus, InvestigationState
+from app.workers import fused_alert_consumer as consumer
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker
 
 FALSE_POSITIVE = "false_positive"
@@ -147,12 +148,11 @@ def test_the_floor_is_configurable(monkeypatch: pytest.MonkeyPatch):
 
 def test_a_scoring_failure_never_changes_the_verdict(monkeypatch: pytest.MonkeyPatch):
     """The verdict is the product. A broken scorer must not rewrite it."""
-    import app.workers.fused_alert_consumer as mod
 
     def _boom(*a, **k):  # noqa: ANN002, ANN003
         raise RuntimeError("scorer exploded")
 
-    monkeypatch.setattr(mod, "score_groundedness", _boom)
+    monkeypatch.setattr(consumer, "score_groundedness", _boom)
     state = _state(["Traffic to 203.0.113.77 is benign."])
     verdict, confidence = _worker()._apply_groundedness_gate(state, FALSE_POSITIVE, 0.95)
     assert verdict == FALSE_POSITIVE
