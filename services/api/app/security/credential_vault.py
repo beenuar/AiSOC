@@ -128,6 +128,30 @@ class CredentialVault:
         # read — enabling envelope mode must never strand existing secrets.
         self._envelope = envelope
 
+    @classmethod
+    def with_envelope(
+        cls,
+        primary_key: bytes,
+        envelope: EnvelopeCipher,
+        *,
+        historical_keys: list[bytes] | None = None,
+    ) -> CredentialVault:
+        """Build a vault whose *writes* are envelope-encrypted.
+
+        A named constructor rather than a keyword argument on ``__init__``.
+        Four modules in this repo are importable as
+        ``app.security.credential_vault`` — the API owns the write path and
+        services/actions, agents and connectors ship vendored read-path
+        copies — so a call site passing ``envelope=`` is ambiguous to any
+        reader, and to static analysis, about which class it means. The
+        vendored copies have no such classmethod, which makes the intent
+        unambiguous at the call site.
+
+        Reads remain backward compatible either way: a ``vault:v1`` token
+        written before envelope mode was enabled still decrypts.
+        """
+        return cls(primary_key, historical_keys=historical_keys, envelope=envelope)
+
     # --------------------------------------------------------------------- core
 
     def encrypt(self, value: str) -> str:

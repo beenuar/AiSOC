@@ -38,18 +38,18 @@ class TestWritePath:
         assert vault.decrypt(token) == "s3cret"
 
     def test_envelope_mode_writes_v2(self) -> None:
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         token = vault.encrypt("s3cret")
         assert token.startswith("vault:v2:")
         assert vault.decrypt(token) == "s3cret"
 
     def test_v2_token_does_not_contain_the_secret(self) -> None:
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         assert "AKIAIOSFODNN7EXAMPLE" not in vault.encrypt("AKIAIOSFODNN7EXAMPLE")
 
     def test_each_secret_gets_a_distinct_dek(self) -> None:
         """The blast-radius property: one leaked DEK must expose one secret."""
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         a = vault.encrypt("same value")
         b = vault.encrypt("same value")
         assert a != b
@@ -58,7 +58,7 @@ class TestWritePath:
         assert wrapped_a != wrapped_b
 
     def test_encrypt_is_idempotent_across_both_versions(self) -> None:
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         v2 = vault.encrypt("x")
         assert vault.encrypt(v2) == v2
         v1 = CredentialVault(PRIMARY).encrypt("x")
@@ -72,7 +72,7 @@ class TestReadCompatibility:
         before = CredentialVault(PRIMARY)
         token = before.encrypt("legacy-credential")
 
-        after = CredentialVault(PRIMARY, envelope=_envelope())
+        after = CredentialVault.with_envelope(PRIMARY, _envelope())
         assert after.decrypt(token) == "legacy-credential"
 
     def test_mixed_dict_round_trips(self) -> None:
@@ -84,7 +84,7 @@ class TestReadCompatibility:
             "nested": {"token": legacy.encrypt("old-token")},
         }
 
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         payload["client_secret"] = vault.encrypt("new-secret")
 
         out = vault.decrypt_dict(payload)
@@ -95,13 +95,13 @@ class TestReadCompatibility:
 
     def test_rewriting_a_row_upgrades_it_to_v2(self) -> None:
         """The documented migration path: rows upgrade when next written."""
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         legacy_token = CredentialVault(PRIMARY).encrypt("secret")
         plaintext = vault.decrypt(legacy_token)
         assert vault.encrypt(plaintext).startswith("vault:v2:")
 
     def test_plaintext_still_passes_through(self) -> None:
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         assert vault.decrypt("not-encrypted-at-all") == "not-encrypted-at-all"
 
 
@@ -113,19 +113,19 @@ class TestFailClosed:
         if it were a credential, producing a vendor auth failure that looks
         like a customer configuration problem.
         """
-        token = CredentialVault(PRIMARY, envelope=_envelope()).encrypt("secret")
+        token = CredentialVault.with_envelope(PRIMARY, _envelope()).encrypt("secret")
         plain_vault = CredentialVault(PRIMARY)
         with pytest.raises(CredentialVaultError, match="envelope encryption is disabled"):
             plain_vault.decrypt(token)
 
     def test_wrong_kek_fails_closed(self) -> None:
-        token = CredentialVault(PRIMARY, envelope=_envelope()).encrypt("secret")
+        token = CredentialVault.with_envelope(PRIMARY, _envelope()).encrypt("secret")
         other = EnvelopeCipher(LocalKeyManager(Fernet.generate_key()))
         with pytest.raises(CredentialVaultError, match="envelope decrypt failed"):
-            CredentialVault(PRIMARY, envelope=other).decrypt(token)
+            CredentialVault.with_envelope(PRIMARY, other).decrypt(token)
 
     def test_tampered_v2_token_fails_closed(self) -> None:
-        vault = CredentialVault(PRIMARY, envelope=_envelope())
+        vault = CredentialVault.with_envelope(PRIMARY, _envelope())
         token = vault.encrypt("secret")
         head, _, tail = token.rpartition(":")
         tampered = f"{head}:{'A' + tail[1:]}"
