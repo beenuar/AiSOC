@@ -10,6 +10,10 @@ overrides:
   ws: '>=8.21.0'
   hono: '>=4.13.5'
   '@hono/node-server': '>=1.19.15 <2'
+  '@vitest/mocker': '>=4.1.11 <5'
+  colord: '>=2.9.4'
+  joi: '>=17.13.6 <18'
+  qs: '>=6.16.0 <7'
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4 <8'
   brace-expansion@1: '>=1.1.18 <2'
   browserslist: '>=4.28.7 <5'
@@ -4101,7 +4105,7 @@ packages:
       '@types/mdast': 4.0.4
       '@types/react': 19.2.17
       commander: 5.1.0
-      joi: 17.13.4
+      joi: 17.13.8
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       react-helmet-async: /@slorber/react-helmet-async@1.3.0(react-dom@19.3.0)(react@19.3.0)
@@ -4136,7 +4140,7 @@ packages:
       '@types/mdast': 4.0.4
       '@types/react': 19.2.17
       commander: 5.1.0
-      joi: 17.13.4
+      joi: 17.13.8
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       react-helmet-async: /@slorber/react-helmet-async@1.3.0(react-dom@19.3.0)(react@19.3.0)
@@ -4170,7 +4174,7 @@ packages:
       '@types/mdast': 4.0.4
       '@types/react': 19.2.17
       commander: 5.1.0
-      joi: 17.13.4
+      joi: 17.13.8
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
       react-helmet-async: /@slorber/react-helmet-async@1.3.0(react-dom@19.3.0)(react@19.3.0)
@@ -4277,7 +4281,7 @@ packages:
       '@docusaurus/utils': 3.10.2(postcss@8.5.26)(react-dom@19.3.0)(react@19.3.0)
       '@docusaurus/utils-common': 3.10.2(postcss@8.5.26)(react-dom@19.3.0)(react@19.3.0)
       fs-extra: 11.3.4
-      joi: 17.13.4
+      joi: 17.13.8
       js-yaml: 4.3.2
       lodash: 4.18.1
       tslib: 2.8.1
@@ -4308,7 +4312,7 @@ packages:
       '@docusaurus/utils': 3.10.2(postcss@8.5.28)(react-dom@19.3.0)(react@19.3.0)
       '@docusaurus/utils-common': 3.10.2(postcss@8.5.28)(react-dom@19.3.0)(react@19.3.0)
       fs-extra: 11.3.4
-      joi: 17.13.4
+      joi: 17.13.8
       js-yaml: 4.3.2
       lodash: 4.18.1
       tslib: 2.8.1
@@ -9094,25 +9098,25 @@ packages:
       tinyrainbow: 3.1.0
     dev: true
 
-  /@vitest/mocker@3.2.4(vite@8.1.4):
-    resolution: {integrity: sha512-46ryTE9RZO/rfDd7pEqFl7etuyzekzEhUbTW3BvmeO/BcCMEgq59BKhek3dXDWgAj4oMK6OZi+vRr1wPW6qjEQ==}
+  /@vitest/mocker@4.1.11(vite@8.1.4):
+    resolution: {integrity: sha512-2XJVD55d1o5AZous5CCGKS74g/riOj9odEt2bQpCVZeblHyHdnMeFl4jl0XjU21stf4mbjUkew2eXQZt65g5CQ==}
     peerDependencies:
       msw: ^2.4.9
-      vite: ^5.0.0 || ^6.0.0 || ^7.0.0-0
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
     peerDependenciesMeta:
       msw:
         optional: true
       vite:
         optional: true
     dependencies:
-      '@vitest/spy': 3.2.4
+      '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
       vite: 8.1.4(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
     dev: true
 
-  /@vitest/mocker@4.1.10(vite@8.1.4):
-    resolution: {integrity: sha512-v0xaezt+DKEmKfaxg133ldzADrwLGd7Ze1MfQQTYfvs8OqZIwbxyxaYURivwV7sWy5fqn3rH5uOrSp07bp44Ow==}
+  /@vitest/mocker@4.1.11(vite@8.3.0):
+    resolution: {integrity: sha512-2XJVD55d1o5AZous5CCGKS74g/riOj9odEt2bQpCVZeblHyHdnMeFl4jl0XjU21stf4mbjUkew2eXQZt65g5CQ==}
     peerDependencies:
       msw: ^2.4.9
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
@@ -9122,41 +9126,7 @@ packages:
       vite:
         optional: true
     dependencies:
-      '@vitest/spy': 4.1.10
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-      vite: 8.1.4(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
-    dev: true
-
-  /@vitest/mocker@4.1.10(vite@8.3.0):
-    resolution: {integrity: sha512-v0xaezt+DKEmKfaxg133ldzADrwLGd7Ze1MfQQTYfvs8OqZIwbxyxaYURivwV7sWy5fqn3rH5uOrSp07bp44Ow==}
-    peerDependencies:
-      msw: ^2.4.9
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-    peerDependenciesMeta:
-      msw:
-        optional: true
-      vite:
-        optional: true
-    dependencies:
-      '@vitest/spy': 4.1.10
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)
-    dev: true
-
-  /@vitest/mocker@4.1.6(vite@8.3.0):
-    resolution: {integrity: sha512-MCFc63czMjEInOlcY2cpQCvCN+KgbAn+60xu9cMgP4sKaLC5JNAKw7JH8QdAnoAC88hW1IiSNZ+GgVXlN1UcMQ==}
-    peerDependencies:
-      msw: ^2.4.9
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
-    peerDependenciesMeta:
-      msw:
-        optional: true
-      vite:
-        optional: true
-    dependencies:
-      '@vitest/spy': 4.1.6
+      '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
       vite: 8.3.0(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)
@@ -9220,6 +9190,10 @@ packages:
 
   /@vitest/spy@4.1.10:
     resolution: {integrity: sha512-PLf/Ugvoq5wO/b4rwYCR1h2PSIdXz7wnkQFMiUpLdtM7l6pqVFcQIBEHyT1+l+cj7mNwAfZHzqXqDyjvOuwbDw==}
+    dev: true
+
+  /@vitest/spy@4.1.11:
+    resolution: {integrity: sha512-apNa/prQy2qCeywhnixOHPRCgGNhvg7T4Dapfl1GahLp/R+uhBm5cPyFoNVyqsNd2h1nJxL6BqqdIjiABL60YA==}
     dev: true
 
   /@vitest/spy@4.1.6:
@@ -10074,7 +10048,7 @@ packages:
       http-errors: 2.0.1
       iconv-lite: 0.4.24
       on-finished: 2.4.1
-      qs: 6.15.1
+      qs: 6.16.0
       raw-body: 2.5.3
       type-is: 1.6.18
       unpipe: 1.0.0
@@ -10092,7 +10066,7 @@ packages:
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       on-finished: 2.4.1
-      qs: 6.15.1
+      qs: 6.16.0
       raw-body: 3.0.2
       type-is: 2.0.1
     transitivePeerDependencies:
@@ -10554,8 +10528,8 @@ packages:
   /color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
-  /colord@2.9.3:
-    resolution: {integrity: sha512-jeC1axXpnb0/2nn/Y1LPuLdgXBLH7aDcHu4KEKfqw3CUhX7ZpfBSlPKyqXE6btIgEzfWtrX3/tyBCaCvXvMkOw==}
+  /colord@2.10.0:
+    resolution: {integrity: sha512-AidJptpBJmjTclAp9BkLwJi0T93fo5epJnbaZslpg6QVzpHjAiveF55mE9AcUJiGMqRHgMDY8soMsQtuNYMHfw==}
     dev: false
 
   /colorette@1.4.0:
@@ -12566,7 +12540,7 @@ packages:
       parseurl: 1.3.3
       path-to-regexp: 0.1.13
       proxy-addr: 2.0.7
-      qs: 6.14.2
+      qs: 6.16.0
       range-parser: 1.2.1
       safe-buffer: 5.2.1
       send: 0.19.2
@@ -12604,7 +12578,7 @@ packages:
       once: 1.4.0
       parseurl: 1.3.3
       proxy-addr: 2.0.7
-      qs: 6.15.1
+      qs: 6.16.0
       range-parser: 1.2.1
       router: 2.2.0
       send: 1.2.1
@@ -14892,8 +14866,8 @@ packages:
     hasBin: true
     dev: true
 
-  /joi@17.13.4:
-    resolution: {integrity: sha512-1RuuER6kmt8K8I3nIWvPZKi5RQCb568ZPyY4Pwjlua+yo+63ZTmIwxLZH0heBmiKN4uxjvCiarDrjaeH84xicQ==}
+  /joi@17.13.8:
+    resolution: {integrity: sha512-iPKOGmiRw1jxf/JOPwxmCcUQAOdF359mdzYiP2DJ+TMX0YK2zjK3D+zYOaGjpumWxOFF/l2xVWjRVK5bGSLdEw==}
     dependencies:
       '@hapi/hoek': 9.3.0
       '@hapi/topo': 5.1.0
@@ -17307,7 +17281,7 @@ packages:
     dependencies:
       browserslist: 4.29.0
       caniuse-api: 3.0.0
-      colord: 2.9.3
+      colord: 2.10.0
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
     dev: false
@@ -17320,7 +17294,7 @@ packages:
     dependencies:
       browserslist: 4.29.0
       caniuse-api: 3.0.0
-      colord: 2.9.3
+      colord: 2.10.0
       postcss: 8.5.28
       postcss-value-parser: 4.2.0
     dev: false
@@ -17686,7 +17660,7 @@ packages:
     peerDependencies:
       postcss: ^8.4.31
     dependencies:
-      colord: 2.9.3
+      colord: 2.10.0
       cssnano-utils: 4.0.2(postcss@8.5.26)
       postcss: 8.5.26
       postcss-value-parser: 4.2.0
@@ -17698,7 +17672,7 @@ packages:
     peerDependencies:
       postcss: ^8.4.31
     dependencies:
-      colord: 2.9.3
+      colord: 2.10.0
       cssnano-utils: 4.0.2(postcss@8.5.28)
       postcss: 8.5.28
       postcss-value-parser: 4.2.0
@@ -18442,17 +18416,11 @@ packages:
     engines: {node: '>=16.0.0'}
     dev: false
 
-  /qs@6.14.2:
-    resolution: {integrity: sha512-V/yCWTTF7VJ9hIh18Ugr2zhJMP01MY7c5kh4J870L7imm6/DIzBsNLTXzMwUA3yZ5b/KBqLx8Kp3uRvd7xSe3Q==}
+  /qs@6.16.0:
+    resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
     engines: {node: '>=0.6'}
     dependencies:
-      side-channel: 1.1.1
-    dev: false
-
-  /qs@6.15.1:
-    resolution: {integrity: sha512-6YHEFRL9mfgcAvql/XhwTvf5jKcOiiupt2FiJxHkiX1z4j7WL8J/jRHYLluORvc1XxB5rV20KoeK00gVJamspg==}
-    engines: {node: '>=0.6'}
-    dependencies:
+      es-define-property: 1.0.1
       side-channel: 1.1.1
 
   /queue-microtask@1.2.3:
@@ -19849,7 +19817,7 @@ packages:
       '@testing-library/jest-dom': 6.9.1
       '@testing-library/user-event': 14.6.4(@testing-library/dom@10.4.2)
       '@vitest/expect': 3.2.4
-      '@vitest/mocker': 3.2.4(vite@8.1.4)
+      '@vitest/mocker': 4.1.11(vite@8.1.4)
       '@vitest/spy': 3.2.4
       better-opn: 3.0.2
       esbuild: 0.25.12
@@ -20681,7 +20649,7 @@ packages:
     resolution: {integrity: sha512-N6uOhuW6zO95P3Mel2I2zMsbsanvvtgn6jVqJv4vbVcz/JN0OkL9suomjQGmWtxJQXOCqUJvquc1sMeNz/IwlA==}
     engines: {node: '>= 0.8.0'}
     dependencies:
-      qs: 6.15.1
+      qs: 6.16.0
     dev: true
 
   /unique-string@3.0.0:
@@ -21131,7 +21099,7 @@ packages:
       '@types/node': 26.1.1
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.4)
+      '@vitest/mocker': 4.1.11(vite@8.1.4)
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -21198,7 +21166,7 @@ packages:
     dependencies:
       '@types/node': 26.1.1
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.3.0)
+      '@vitest/mocker': 4.1.11(vite@8.3.0)
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -21264,7 +21232,7 @@ packages:
     dependencies:
       '@types/node': 26.1.1
       '@vitest/expect': 4.1.6
-      '@vitest/mocker': 4.1.6(vite@8.3.0)
+      '@vitest/mocker': 4.1.11(vite@8.3.0)
       '@vitest/pretty-format': 4.1.6
       '@vitest/runner': 4.1.6
       '@vitest/snapshot': 4.1.6
@@ -21300,7 +21268,7 @@ packages:
     hasBin: true
     dependencies:
       axios: 1.18.1
-      joi: 17.13.4
+      joi: 17.13.8
       lodash: 4.18.1
       minimist: 1.2.8
       rxjs: 7.8.2
