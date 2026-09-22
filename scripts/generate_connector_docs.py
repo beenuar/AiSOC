@@ -204,9 +204,7 @@ def render(schema, human: str) -> str:
         lines += [
             ":::note Credential handling",
             (
-                f"{names} "
-                + ("is" if len(secret_fields) == 1 else "are")
-                + " encrypted at rest by the credential vault before the row is "
+                f"{names} " + ("is" if len(secret_fields) == 1 else "are") + " encrypted at rest by the credential vault before the row is "
                 "written, and decrypted only at poll time. The value is never "
                 "logged and never returned by the API — a read of the saved "
                 "connector shows the field as set, not its contents. See "
@@ -224,20 +222,33 @@ def render(schema, human: str) -> str:
             "",
         ]
 
-    lines += [
-        "## Setup",
-        "",
-        "1. In the console, go to **Connectors → Add connector** and pick " f"**{title}**.",
-        "2. Fill in the fields above and run **Test connection**. The test is " "read-only and does not save anything.",
+    # Built as named strings rather than inline. Adjacent string literals
+    # inside a list are implicitly concatenated, which is indistinguishable
+    # from a missing comma — the reader cannot tell three list items from
+    # one, and neither can a reviewer.
+    step_pick = f"1. In the console, go to **Connectors → Add connector** and pick **{title}**."
+    step_test = "2. Fill in the fields above and run **Test connection**. " "The test is read-only and does not save anything."
+    step_save = (
         "3. Save. Polling starts on a jittered schedule within about a minute; "
-        "the connector row shows `last_sync` once the first poll completes.",
-        "",
-        ":::tip If `last_sync` stays empty",
+        "the connector row shows `last_sync` once the first poll completes."
+    )
+    empty_sync_tip = (
         "The first poll is the honest signal that the credential works. A "
         "connector that saves cleanly and never syncs usually means the "
         "credential lacks a scope the vendor requires for reads — check the "
         "connectors service log for the vendor's own error, which is passed "
-        "through verbatim rather than summarised.",
+        "through verbatim rather than summarised."
+    )
+
+    lines += [
+        "## Setup",
+        "",
+        step_pick,
+        step_test,
+        step_save,
+        "",
+        ":::tip If `last_sync` stays empty",
+        empty_sync_tip,
         ":::",
         "",
         HUMAN_START,
@@ -283,9 +294,7 @@ def render_field_reference(schema) -> str:
         lines += [
             ":::note Credential handling",
             (
-                f"{names} "
-                + ("is" if len(secret_fields) == 1 else "are")
-                + " encrypted at rest by the credential vault before the row is "
+                f"{names} " + ("is" if len(secret_fields) == 1 else "are") + " encrypted at rest by the credential vault before the row is "
                 "written, and decrypted only at poll time. The value is never "
                 "logged and never returned by the API. See "
                 "[credential vault](../operations/credentials.md)."
