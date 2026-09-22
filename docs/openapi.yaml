@@ -4002,6 +4002,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/investigate/tools:
+    get:
+      tags:
+      - graph
+      summary: List the investigation primitives and which are backed by data
+      description: 'Enumerate the toolset, separating what can answer from what cannot.
+
+
+        The split is part of the contract. A tool whose data class is not
+
+        ingested reports that rather than returning an empty result, because an
+
+        empty result reads as "I checked and found nothing" — which is how an
+
+        investigation concludes benign on evidence it never had.'
+      operationId: list_investigation_tools_api_v1_graph_investigate_tools_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Investigation Tools Api V1 Graph Investigate
+                  Tools Get
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/investigate/query:
+    post:
+      tags:
+      - graph
+      summary: Run one typed investigation primitive against the event lake
+      description: Execute one pivot. Tenant comes from the session, never the request.
+      operationId: run_investigation_tool_api_v1_graph_investigate_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigationToolRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Run Investigation Tool Api V1 Graph Investigate Query
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/graph/neighbors/{entity_type}/{entity_id}:
     get:
       tags:
@@ -20406,6 +20465,31 @@ components:
           default: ''
       type: object
       title: InvestigateRequest
+    InvestigationToolRequest:
+      properties:
+        tool:
+          type: string
+          title: Tool
+        args:
+          additionalProperties: true
+          type: object
+          title: Args
+      type: object
+      required:
+      - tool
+      title: InvestigationToolRequest
+      description: 'One typed investigation pivot.
+
+
+        ``tool`` names a primitive; ``args`` are its typed arguments. Deliberately
+
+        not SQL: handing a model the lake query endpoint puts prompt-injectable
+
+        text one step from the query planner, and the tenant predicate is the only
+
+        thing between two customers'' data. ``tenant_id`` is taken from the
+
+        authenticated session and any value supplied here is discarded.'
     KBChunk:
       properties:
         doc_id:

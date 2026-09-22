@@ -339,6 +339,7 @@ jobs:
             tests/test_privacy_redactor.py \
             tests/test_cost_governor.py \
             tests/test_bundle_incident_context.py \
+            tests/test_deep_investigation.py \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
@@ -346,6 +347,17 @@ jobs:
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
+      - name: Gate investigation depth (Pillar 2)
+        # run_with_tools shipped working, guarded and instrumented with zero
+        # production callers, so the platform's deepest capability was
+        # reachable only from tests. This asserts it still has one, that every
+        # strategy names real tools, that every tool the model is offered has
+        # a strategy telling it when to reach for one, and that selection
+        # discriminates rather than always returning the fallback. Structure,
+        # not prose: an investigation that summarises the alert reads exactly
+        # like one that pivoted five times.
+        run: python3 scripts/check_investigation_depth.py
+
       - name: Gate the public benchmark scoreboard (Phase E1)
         # Ties apps/docs/static/data/scoreboard.json to a real deterministic
         # live-agent MITRE-accuracy run: the newest substrate row must match a

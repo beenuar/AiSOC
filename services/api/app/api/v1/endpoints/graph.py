@@ -15,6 +15,7 @@ from sqlalchemy import text
 from app.api.v1.deps import CurrentUser, DBSession, get_current_user
 from app.services import graph_service
 from app.services.incident_context import get_incident_context
+from app.services.investigation_tools import BACKED_TOOLS, TOOLS, dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +379,54 @@ async def incident_context(
     payload = context.as_dict()
     payload["narrative"] = context.narrative_lines()
     return IncidentContextResponse(**payload)
+
+
+class InvestigationToolRequest(BaseModel):
+    """One typed investigation pivot.
+
+    ``tool`` names a primitive; ``args`` are its typed arguments. Deliberately
+    not SQL: handing a model the lake query endpoint puts prompt-injectable
+    text one step from the query planner, and the tenant predicate is the only
+    thing between two customers' data. ``tenant_id`` is taken from the
+    authenticated session and any value supplied here is discarded.
+    """
+
+    tool: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get(
+    "/investigate/tools",
+    summary="List the investigation primitives and which are backed by data",
+)
+async def list_investigation_tools(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Enumerate the toolset, separating what can answer from what cannot.
+
+    The split is part of the contract. A tool whose data class is not
+    ingested reports that rather than returning an empty result, because an
+    empty result reads as "I checked and found nothing" — which is how an
+    investigation concludes benign on evidence it never had.
+    """
+    return {
+        "tools": sorted(TOOLS),
+        "backed_by_data": sorted(BACKED_TOOLS),
+        "not_ingested": sorted(set(TOOLS) - BACKED_TOOLS),
+    }
+
+
+@router.post(
+    "/investigate/query",
+    summary="Run one typed investigation primitive against the event lake",
+)
+async def run_investigation_tool(
+    request: InvestigationToolRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Execute one pivot. Tenant comes from the session, never the request."""
+    result = await dispatch(request.tool, str(current_user.tenant_id), request.args)
+    return result.as_dict()
 
 
 @router.get(

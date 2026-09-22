@@ -96,6 +96,15 @@ class InvestigationState(BaseModel):
     # ungrounded auto-closure is visible after the fact, not just at the time.
     groundedness: float | None = None
 
+    # What the recursive investigation actually did: which strategy was
+    # selected, how many distinct pivots it took, whether it hit its
+    # iteration cap or time budget, and which data classes it could not
+    # check. Recorded rather than inferred, because a narrative is not
+    # evidence that anything was looked at — an investigation that called
+    # one tool and wrote three paragraphs reads identically to one that
+    # pivoted five times. This is what the depth gate grades.
+    investigation_depth: dict[str, Any] | None = None
+
     # Metadata
     iteration_count: int = 0
     max_iterations: int = 10

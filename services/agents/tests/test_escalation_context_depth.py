@@ -25,8 +25,13 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from app.agents import tool_loop
 from app.agents.investigation_agent import _bundle_findings
+
+# The implementation lives in app.llm; app.agents.tool_loop re-exports it.
+# This test patches a module attribute, so it must target the real module —
+# patching the re-export would be a no-op and the test would pass while
+# asserting nothing.
+from app.llm import tool_loop
 from app.models.state import AgentStatus, InvestigationState
 from app.workers import fused_alert_consumer as consumer
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker
