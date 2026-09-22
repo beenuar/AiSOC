@@ -11,7 +11,7 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-09-22T15:25:14Z`
+Generated: `2026-09-22T15:40:57Z`
 
 ## Headline numbers
 
