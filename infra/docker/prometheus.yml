@@ -118,3 +118,11 @@ scrape_configs:
   # up before they appear in this file (and the audit script will
   # remind any future contributor who adds the route to also add
   # the scrape target here).
+  # The auto-triage worker. Its counters were already being kept and were
+  # readable only from a shutdown log line — dead_lettered rising means
+  # alerts are dropped rather than triaged, and deterministic climbing while
+  # llm stays flat means the LLM path is failing open to the fallback, which
+  # looks fine from outside because alerts still get verdicts.
+  - job_name: aisoc-agents
+    static_configs:
+      - targets: ["agents:8084"]
