@@ -203,6 +203,60 @@ def check_approval_matrix() -> list[str]:
     return errors
 
 
+def check_verification_probes() -> list[str]:
+    """A declared verification probe must actually exist.
+
+    The contract marks nine capabilities `has_verification_probe=True` and
+    three probes are registered. Nothing compared the two, so the declaration
+    was a claim rather than a fact — and it is the specific claim the whole
+    contract exists to make trustworthy: "this action is checked against the
+    vendor rather than assumed from a 200".
+
+    A capability that cannot be verified is allowed. Saying it is verified
+    when it is not is what this rejects.
+    """
+    from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
+    from app.models.action import ActionType
+    from app.services.verification import _DEFAULT_PROBES
+
+    errors: list[str] = []
+    registered = {a.value for a in _DEFAULT_PROBES}
+    known_action_types = {a.value for a in ActionType}
+
+    for capability, contract in sorted(CAPABILITY_CONTRACTS.items()):
+        if not contract.has_verification_probe:
+            continue
+        if capability in registered:
+            continue
+        # A capability with no matching ActionType cannot be probed at all,
+        # which is a different problem and worth naming differently.
+        if capability not in known_action_types:
+            errors.append(
+                f"{capability}: declares has_verification_probe=True but has no "
+                f"ActionType, so the verifier can never be reached for it"
+            )
+        else:
+            errors.append(
+                f"{capability}: declares has_verification_probe=True but no probe is "
+                f"registered in verification._DEFAULT_PROBES. The action would report "
+                f"success on an accepted request with nothing checking the effect — "
+                f"which is the claim this contract exists to make true."
+            )
+
+    # And the reverse: a probe nobody declares is a probe nobody runs
+    # through the contract, so the capability is silently unverified in
+    # every governance decision that reads the declaration.
+    for action in sorted(registered):
+        contract = CAPABILITY_CONTRACTS.get(action)
+        if contract is not None and not contract.has_verification_probe:
+            errors.append(
+                f"{action}: a probe is registered but the contract declares "
+                f"has_verification_probe=False, so governance treats it as unverified"
+            )
+
+    return errors
+
+
 def check_capability_mirror() -> list[str]:
     """The actions mirror must match the connectors Capability enum.
 
@@ -259,7 +313,12 @@ def main(argv: list[str] | None = None) -> int:
     argparse.ArgumentParser(description=__doc__).parse_args(argv)
 
     try:
-        errors = check_contracts() + check_approval_matrix() + check_capability_mirror()
+        errors = (
+            check_contracts()
+            + check_approval_matrix()
+            + check_capability_mirror()
+            + check_verification_probes()
+        )
     except ImportError as exc:
         print(f"action-contract: cannot import the actions package: {exc}", file=sys.stderr)
         return 2

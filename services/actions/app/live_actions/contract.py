@@ -127,6 +127,20 @@ MUST_HAVE_A_ROUTE_BACK: frozenset[ActionImpact] = frozenset({ActionImpact.MODERA
 MUST_BE_REVERSIBLE = MUST_HAVE_A_ROUTE_BACK
 
 
+_IMPACT_ORDER: tuple[ActionImpact, ...] = (
+    ActionImpact.READ_ONLY,
+    ActionImpact.LOW,
+    ActionImpact.MODERATE,
+    ActionImpact.HIGH,
+    ActionImpact.SEVERE,
+    ActionImpact.IRREVERSIBLE,
+)
+
+
+def _impact_rank(impact: ActionImpact) -> int:
+    return _IMPACT_ORDER.index(impact)
+
+
 class ActionContract:
     """Declarative contract mixed into every ``LiveActionExecutor``.
 
@@ -165,6 +179,13 @@ class ActionContract:
     #: confirm the effect landed. Without one, "succeeded" means "the API
     #: accepted the request", which is not the same claim.
     has_verification_probe: bool = False
+
+    #: Why no probe exists, for an action disruptive enough to need one.
+    #: Required when a HIGH or SEVERE action declares no probe, so the
+    #: absence is a recorded decision rather than an omission nobody
+    #: noticed. Some vendors genuinely expose no read-back; that is an
+    #: acceptable answer and an unacceptable silence.
+    verification_gap: str = ""
 
     #: Whether ``execute()`` honours ``dry_run`` by making no state change.
     #: Declared rather than assumed because a dry run that still calls the
@@ -236,13 +257,44 @@ class ActionContract:
         # human who approved it is watching. HIGH impact is never waived: that
         # is the containment tier, where believing a host is contained when it
         # is not is the specific failure this contract exists to prevent.
-        probe_waived = impact == ActionImpact.SEVERE and human_gated and cls.reversal == Reversal.MANUAL_ONLY
-        if impact in (ActionImpact.HIGH, ActionImpact.SEVERE) and not cls.has_verification_probe and not probe_waived:
+        # An action that can execute without a human *and* disrupts something
+        # must be verifiable: nothing else is checking, so "the API returned
+        # 200" becomes the whole of the evidence.
+        #
+        # Scoped to MODERATE and above on purpose. Creating a ticket or
+        # posting a message returns the created object's id, so the response
+        # genuinely is the confirmation — demanding a second read there would
+        # be ceremony, and a rule that fires on cases nobody can act on is a
+        # rule people learn to suppress.
+        if (
+            approval == ApprovalRequirement.AUTOMATIC
+            and _impact_rank(impact) >= _impact_rank(ActionImpact.MODERATE)
+            and not cls.has_verification_probe
+        ):
+            # Unverifiable means not autonomous. A verification_gap explains
+            # why no probe exists; it does not buy back the right to execute
+            # without anyone checking. Downgrade the action to analyst
+            # approval and the contract is coherent again.
             problems.append(
-                f"impact is {impact.value} but no verification probe is declared; "
-                f"the action would report success on an HTTP 200 without any check "
-                f"that the effect landed, which is how a SOC comes to believe a "
-                f"host is contained when it is not"
+                "approval is automatic at "
+                f"{impact.value} impact with no verification probe. Nothing would "
+                "check the effect, so the action certifies itself. Either add a "
+                "probe or require analyst approval — an unverifiable action is not "
+                "an autonomous one, whatever the confidence."
+            )
+
+        # For the containment tiers, an absent probe is allowed but must be
+        # explained. Some vendors genuinely expose no read-back — that is an
+        # acceptable answer. Silence is not, because an omission and a
+        # deliberate decision look identical afterwards, and this is the
+        # claim the whole contract exists to make trustworthy.
+        if impact in (ActionImpact.HIGH, ActionImpact.SEVERE) and not cls.has_verification_probe and not cls.verification_gap.strip():
+            problems.append(
+                f"impact is {impact.value} and no verification probe is declared, "
+                f"with no verification_gap explaining why. The action would report "
+                f"success on an accepted request with nothing checking the effect — "
+                f"which is how a SOC comes to believe a host is contained when it is "
+                f"not. State the reason if the vendor offers no read-back."
             )
 
         if not cls.supports_dry_run and approval != ApprovalRequirement.PROHIBITED:

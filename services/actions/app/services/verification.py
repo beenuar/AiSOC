@@ -30,6 +30,7 @@ from typing import Any
 
 import structlog
 
+from app.clients.factories import _entra_client, _okta_client
 from app.executors.endpoint import _cs_client
 from app.models.action import ActionType
 
@@ -99,9 +100,71 @@ async def _probe_block_ip(target: str, params: dict[str, Any]) -> bool | None:
     return await read_back_blocked_ip(target, params)
 
 
+#: Okta lifecycle states that mean sign-in is actually blocked. ACTIVE,
+#: PROVISIONED and RECOVERY all permit sign-in and must not count.
+_OKTA_BLOCKED_STATES = {"SUSPENDED", "DEPROVISIONED", "LOCKED_OUT"}
+
+
+async def _probe_disable_user(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an account is actually blocked by re-reading the directory.
+
+    Both vendors return success on an accepted request, which says nothing
+    about whether sign-in is blocked — and for Entra, directory replication
+    means the two genuinely differ for a short window. That window is exactly
+    what a responder needs told rather than guessed at.
+
+    Vendor is chosen by which credentials are present, in the same order the
+    executor uses. Absent both, this is indeterminate rather than a failure:
+    "we cannot check" and "the disable did not take" are different facts and
+    the dispatcher treats them differently.
+    """
+    okta = _okta_client(params)
+    if okta is not None:
+        status = await okta.get_user_status(target)
+        if status is None:
+            return None
+        return status.upper() in _OKTA_BLOCKED_STATES
+
+    entra = _entra_client(params)
+    if entra is not None:
+        enabled = await entra.get_user_enabled(target)
+        if enabled is None:
+            return None
+        return not enabled
+
+    return None
+
+
+async def _probe_enable_user(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an account is usable again. The inverse of the above.
+
+    Worth verifying in its own right: a rollback that silently fails leaves
+    someone locked out after the incident is closed, and nobody is watching
+    for that.
+    """
+    blocked = await _probe_disable_user(target, params)
+    return None if blocked is None else not blocked
+
+
+async def _probe_allow_ip(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an IP block was actually removed.
+
+    The inverse of the block probe, against the same read-back. Worth having
+    in its own right: a rollback that silently fails leaves a production
+    address blocked after the incident closes, and nobody is watching for
+    that the way they watch a containment.
+    """
+    from app.executors.network import read_back_blocked_ip  # noqa: PLC0415
+
+    still_blocked = await read_back_blocked_ip(target, params)
+    return None if still_blocked is None else not still_blocked
+
+
 _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.ISOLATE_HOST: _probe_isolate,
     ActionType.BLOCK_IP: _probe_block_ip,
+    ActionType.DISABLE_USER: _probe_disable_user,
+    ActionType.ALLOW_IP: _probe_allow_ip,
 }
 
 

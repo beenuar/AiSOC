@@ -55,6 +55,27 @@ class OktaClient:
             raise ValueError(f"No Okta user found for: {login_or_id}")
         return users[0]
 
+    async def get_user_status(self, login_or_id: str) -> str | None:
+        """Read the user's lifecycle status, for post-action verification.
+
+        The action APIs return 200 on an accepted request, which says the
+        request was accepted and nothing about whether the account is now
+        blocked. Okta already returns the status on the user object, so
+        verification costs one read.
+
+        Returns ``None`` when the user cannot be found or the read fails:
+        indeterminate, never a confirmation. A renamed or deprovisioned
+        account is not the same fact as "the disable did not take".
+        """
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                user = await self._find_user(client, login_or_id)
+                status = user.get("status")
+                return str(status) if status else None
+        except Exception as exc:  # noqa: BLE001 - indeterminate, never a false VERIFIED
+            logger.warning("okta.get_user_status.failed", login=login_or_id, error=str(exc))
+            return None
+
     async def suspend_user(self, login_or_id: str) -> dict[str, Any]:
         """Suspend an Okta user (blocks sign-in without deactivating)."""
         async with httpx.AsyncClient(timeout=20.0) as client:
