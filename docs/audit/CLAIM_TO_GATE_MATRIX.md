@@ -16,7 +16,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: api tests` (`audit_hash`, audit immutability) | PARTIAL (write path gated; UI replay only in hermetic e2e) | Phase 3.2 |
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | GATED (but suites are self-consistency; see reality report) | Phase 4 |
 | Alert-reduction is a real measurement | README L62 | `ci.yml :: p1-eval` (`alert_reduction`) | PARTIAL (gates an in-test fusion re-impl, not `services/fusion`) | Phase 4 |
-| Runs entirely on your infrastructure / no data exfiltration | README L63 | `ci.yml :: python-test` (agents) runs `test_privacy_redactor.py` (zero raw PII survives) | PARTIAL (redaction gated + README made precise per mode; air-gapped egress-blocked CI + Helm NetworkPolicy in continuation/Phase 2) | Phase 2 |
+| Runs entirely on your infrastructure / no data exfiltration | README L63 | `ci.yml :: python-test` (agents) runs `test_privacy_redactor.py` (zero raw PII survives) | PARTIAL (redaction gated; the CLI now has no default telemetry endpoint and `telemetry.test.ts` pins that an enabled-but-unconfigured run makes zero network calls; platform-wide air-gapped egress-blocked CI + Helm NetworkPolicy still outstanding) | Phase 2 |
 | Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: python-test` (`test_detection_eval.py` — candidate `rule_body` run through the real engine vs its own positive/negative fixtures; approval requires it) + `p1-eval` w2-dac baseline | GATED | - |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
 | 6000+ imported detection rules | README L78 | `validate-detections.yml` (parse/provenance + `detection_truth_table.py --check`); README cites the executable figure (939) not the on-disk figure for coverage | GATED | - |
@@ -60,19 +60,43 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Actions-service mutating routes are authenticated (fail-closed in prod) | README (autonomy + safety) | `actions` job (`test_authz.py` — `require_service_auth` returns 401 on a bad/absent bearer token, 503 when unconfigured in production, open only in dev mode) | GATED | - |
 | Approvals are bound to a qualified approver (separation of duties) | README (autonomy + safety) | `actions` job (`test_authz.py` — `authorize_approver` requires the action's permission and rejects the requester approving their own action) | GATED | - |
 | Customizable dashboard / report builder validates + renders | README (analytics + reporting) | `ci.yml` api job (`test_report_builder.py` — whitelisted widget types + data sources, unique widget ids, bounded size; render resolves each widget and is resilient to a failing/missing resolver; `/report-builder/render` wires the real tenant-scoped `alerts_by_severity`) | GATED | - |
-
 | Agentless CSPM scans a cloud snapshot for misconfigurations | README (cloud posture) | `ci.yml` api job (`test_compliance_cspm.py` — public S3, world-open security groups on sensitive ports, IAM users without MFA / stale keys, public/unencrypted RDS + EBS all flagged with severity + control refs; clean resources yield nothing) | GATED | - |
 | Security findings/detections map to compliance controls with auto-evidence | README (compliance) | `ci.yml` api job (`test_compliance_cspm.py` — MITRE→control mapping, per-control evidence records for detections + CSPM findings, unknown controls skipped) | GATED | - |
 | Alerts fan out to Opsgenie / email / external-SOAR destinations (SSRF-guarded) | README (destinations + SOAR) | `ci.yml` api job (`test_compliance_cspm.py` — Opsgenie priority mapping, email subject/recipients, `aisoc.handoff.v1` SOAR envelope; outbound webhook guard blocks non-http(s) schemes + private/loopback targets) | GATED | - |
-
 | Per-tenant configurable data retention with tenant-scoped purge | README (data lifecycle) | `ci.yml` api job (`test_retention.py` — defaults + tenant override merge, clamps to [1, 3650] days, mandatory tenant predicate in the ClickHouse purge, parameterised Postgres cutoff never string-interpolated) | GATED | - |
 | Self-service field-extraction / transform pipelines (custom parsers) | README (data lifecycle) | `ci.yml` api job (`test_pipeline_transforms.py` — the whitelisted DSL renames/maps/extracts onto OCSF with dotted paths + ReDoS-proof grok `extract` (re.escape'd literals + fixed token map, no raw user regex); validation rejects unknown ops/tokens / oversized pipelines; fail-open per op never drops an event; input never mutated) | GATED | - |
+| Every package the README tells a visitor to install is published | README (Try AiSOC in 60 seconds) | `release.yml :: npm-publish` + `:: pypi-publish` (all eight distributions are built, packed and `twine check`ed on every release whether or not the upload is armed, so a package that stops being publishable fails the release rather than silently vanishing from the registry) | GATED | - |
+| The install commands the README advertises actually run | README (on-ramp table) | `readme-gates.yml :: published-onramp` (runs `npx aisoc@latest triage --demo` and `pip install aisoc-sandbox && aisoc-sandbox demo` against the public registries on a clean runner with no checkout, Linux + macOS, daily as well as on diff; self-arming — warns while a package is unpublished, hard-fails once it exists and breaks) | GATED | - |
+| Documentation links on the front door resolve | README / SUPPORT / CONTRIBUTING | `link-check.yml :: front-door` (hard gate over the five files a new visitor reads; `:: docs-tree` observes the wider documentation tree so pre-existing rot is burned down deliberately rather than blocking unrelated PRs) | GATED | - |
+| The CLI makes no network call unless an endpoint is configured | `packages/aisoc-lite/TELEMETRY.md` | `ci.yml` aisoc-lite vitest (`telemetry.test.ts` — there is no default endpoint, and an enabled-but-unconfigured run is asserted to make zero `fetch` calls) | GATED | - |
+| The visual assets the README embeds exist | README (console tiles + walkthrough) | `readme-gates.yml :: static` (`gate_demo_asset_references` covers `apps/web/public/screenshots/` as well as `demo/`, so a renamed or deleted tile fails instead of rendering as a broken image) | GATED | - |
+| Groundedness: the agent asserts no indicator absent from the evidence it was given | README (groundedness axis) | `live-agent-eval.yml` (scored per incident on the live path via `app.confidence.groundedness`; deliberately not scored on the dry-run path, where there is no agent text and a 1.0 would be flattering fiction) | PARTIAL (computed and published on a scheduled local-model run; not yet a PR gate because a blocking floor has to be derived from real runs rather than invented) | floor from scheduled runs |
+| A live-agent eval can run with no funded provider key | (implied by the public eval harness) | `live-agent-eval.yml` (Ollama-hosted local model reached through `OPENAI_BASE_URL`; `--wet-limit` keeps it inside a CI budget and `--wet-require-live` stops a degraded run publishing substrate numbers as live-agent performance) | PARTIAL (scheduled + on-demand; promotion to `pull_request` tracked with the floor above) | floor from scheduled runs |
 
 ## Summary
 
-- GATED: 46
-- PARTIAL: 9
-- NO GATE: 0 (**every claim is now backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The full Fully-Operational roadmap (Phases A1–E1) is complete. The 7 remaining PARTIAL rows are honest, named deferrals to future phases outside the A–E scope — each states the specific gap and the phase that closes it — not unproven claims.)
+- GATED: 53
+- PARTIAL: 11
+- NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
+
+> **Counting note.** These figures previously read 46 / 9, which did not match
+> what the ratchet script counted. `_parse_status_rows` stops at the first
+> non-table line, and three blank lines had crept in between rows, so the last
+> three sections of the table were invisible to it — the script was scoring 43
+> GATED while the summary claimed 46. The blank lines are removed and the
+> counts above are what `scripts/check_claim_gate_matrix.py` now reports.
+> A governance artifact whose own totals are unverified is the exact failure
+> mode it exists to prevent, so the numbers are now derived rather than typed.
+
+### On the PARTIAL rows
+
+They are not closed by editing this column. Each names a gate that does not
+exist yet — a live-DB cross-tenant test, a hermetic ledger-replay e2e, a
+per-language SDK contract-drift check, a 150-payload adversarial eval, an
+egress-blocked air-gapped job. Relabelling any of them GATED without building
+the gate would make this file a liability rather than a control, since its
+whole value is that a reader can trust the Status column without reading the
+workflows.
 
 The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
 
