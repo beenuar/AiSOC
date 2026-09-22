@@ -84,6 +84,12 @@ class InvestigationState(BaseModel):
     confidence_basis: list[str] = Field(default_factory=list)
     verdict: str | None = None
 
+    # Pre-fetched investigation context (graph neighbourhood, blast radius,
+    # historical verdicts, UEBA baselines, TI matches). Built on the escalation
+    # path so an auto-escalated alert is investigated with the same context an
+    # analyst-initiated investigation of the same alert would have had.
+    context_bundle: dict[str, Any] | None = None
+
     # Fraction of the concrete indicators cited in the reasoning that actually
     # appear in the evidence (see app/confidence/groundedness.py). None means
     # the verdict was not scored. Recorded alongside the verdict so an
