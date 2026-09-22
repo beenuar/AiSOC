@@ -100,6 +100,14 @@ Returns:
   "correlation_efficiency": 0.777,
   "alert_yield": 0.00208,
   "mitre_coverage": { "covered": 71, "total": 100, "ratio": 0.71 },
+  "repeat_alerts_suppressed": 18,
+  "repeat_suppression_rate": 0.105,
+  "triaged_alerts": 153,
+  "abstentions": 9,
+  "abstention_rate": 0.0588,
+  "ungrounded_demotions": 4,
+  "mean_groundedness": 0.9124,
+  "scored_verdicts": 144,
   "deltas": {
     "events_of_interest": 0.037,
     "correlation_instances": 0.012,
@@ -112,6 +120,28 @@ Returns:
 }
 ```
 
+#### Suppression and triage-quality fields
+
+Eight fields shipped in v7.7 and v8.0 and were absent from this page, which
+matters more than a documentation gap usually does: they are the fields that
+say whether the automation is working *honestly*, and a number nobody
+documents is a number nobody checks.
+
+| Field | Meaning | What a bad value looks like |
+|-------|---------|------------------------------|
+| `repeat_alerts_suppressed` | Alerts auto-resolved because an identical signature already had a trusted benign or false-positive disposition. | Flat zero. That is the value this reported for the whole of v7.7, because the evidence fingerprint included the alert id so no two alerts ever matched. A zero here means the mechanism is not firing, not that there are no repeats. |
+| `repeat_suppression_rate` | `repeat_alerts_suppressed / alerts_generated`. | Climbing past roughly 0.4 without a corresponding drop in queue depth suggests a prior is being trusted too broadly. |
+| `triaged_alerts` | Alerts the auto-triage worker reached a verdict on in the window. | Materially below `alerts_generated` means the worker is behind, or the tenant is at its plan's triage cap — which fails quietly, so this is where it shows. |
+| `abstentions` | Verdicts where the agent declined to conclude. | Zero. An agent that never abstains is guessing on the cases it cannot decide, and those are the cases that matter. |
+| `abstention_rate` | `abstentions / triaged_alerts`. | Above roughly 0.3 usually means missing context rather than a cautious model — check whether a connector stopped polling. |
+| `ungrounded_demotions` | Verdicts demoted to human review because they cited indicators the evidence did not contain. | Rising sharply is a model or prompt regression. Persistent zero alongside a low `scored_verdicts` means the check is not running, not that nothing is ungrounded. |
+| `mean_groundedness` | Mean fraction of cited indicators that appear in the evidence, across scored verdicts. `null` when nothing was scored. | Below ~0.8 means a meaningful share of reasoning rests on indicators that were not in the evidence. |
+| `scored_verdicts` | How many verdicts groundedness was computed for. | The denominator for the two fields above. If it is far below `triaged_alerts`, most verdicts are unscored and `mean_groundedness` describes a minority. |
+
+`mean_groundedness` is deliberately nullable rather than defaulting to `0.0`
+or `1.0`. Both defaults are a claim: zero says every verdict was ungrounded,
+one says every verdict was perfect, and the truth is that none were measured.
+
 Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
 
 - Tenant-scoped via `AuthUser`; every query joins on `tenant_id` or — for ClickHouse — passes through `services/api/app/services/lake_sql.py:rewrite_for_tenant` which uses `sqlglot` to enforce the tenant clause before the query reaches the lake.
@@ -119,6 +149,8 @@ Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
 - `mttd_seconds` reuses the exact same `AVG(EXTRACT EPOCH FROM (created_at - first_seen_at))` expression as the existing SOC metrics endpoint so the two never disagree.
 - `signal_to_noise` is `1 − (FP count / total dispositioned)` — alerts with `disposition` in `false_positive` divided by alerts with any disposition. Returns `0.0` when there is no dispositioned alert (no work done yet).
 - Deltas are signed fractions, not percent: `0.05` means +5%. The previous-period window is the same duration immediately before the current one.
+- `deltas` covers the six tiles only. The suppression and triage-quality fields have no delta, because a period-over-period change in, say, `mean_groundedness` reads as a trend when it is usually a change in which alerts happened to arrive.
+- The field list on this page is gated: `scripts/check_funnel_contract.py` compares it against the keys the endpoint actually returns, so a field cannot ship undocumented again.
 
 ### `GET /api/v1/health/pipeline`
 

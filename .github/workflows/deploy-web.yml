@@ -46,12 +46,42 @@ jobs:
             echo "::warning title=deploy-web::FLY_API_TOKEN not set — skipping deploy (demo not provisioned)."
             exit 0
           fi
+          # Self-provision rather than skip. The previous behaviour printed a
+          # warning and exited 0 when the app was absent, which is how the
+          # public demo stayed down for weeks while every deploy run showed
+          # green: nothing distinguished "nothing to deploy to" from
+          # "deployed fine", and a warning in a passing run is a warning
+          # nobody reads.
           if ! flyctl status --app aisoc-demo-web >/dev/null 2>&1; then
-            echo "::warning title=deploy-web::Fly app 'aisoc-demo-web' not found — skipping deploy. Recreate it (flyctl apps create aisoc-demo-web) or refresh FLY_API_TOKEN to auto-resume deploys."
-            exit 0
+            echo "Fly app 'aisoc-demo-web' not found — creating it."
+            if ! flyctl apps create aisoc-demo-web --org personal; then
+              echo "::error title=deploy-web::Could not create 'aisoc-demo-web'. The token may lack org permissions, or the name may be taken."
+              exit 1
+            fi
           fi
+
           flyctl deploy \
             --remote-only \
             --dockerfile apps/web/Dockerfile \
             --config apps/web/fly.toml \
             .
+
+      # A deploy that returns zero is not a demo that works. The app can boot,
+      # fail its first request and sit there — which is indistinguishable from
+      # success unless something asks it.
+      - name: Verify the demo actually responds
+        run: |
+          set -uo pipefail
+          URL="https://aisoc-demo-web.fly.dev"
+          for attempt in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+              -A 'AiSOC-deploy-check/1.0' "$URL" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "demo responding: HTTP 200 after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "  attempt ${attempt}: HTTP ${code} — waiting for the machine to start"
+            sleep 15
+          done
+          echo "::error title=deploy-web::Deploy succeeded but ${URL} never returned 200. The demo is down; a green deploy that leaves the demo unreachable is the failure this check exists to surface."
+          exit 1

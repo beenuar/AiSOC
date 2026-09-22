@@ -28,6 +28,16 @@ jobs:
       - name: Install PyYAML
         run: pip install pyyaml
 
+      - name: Rule ids must be stable
+        # Ids were positional, so inserting a rule renumbered every rule
+        # after it — and ids appear in alert rows, suppression priors and
+        # customer-written exceptions, so a renumber makes a historical
+        # alert reference a different rule than the one that fired. The
+        # workaround was "append, never insert", which nothing enforced.
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_detection_id_stability.py -q
+
       - name: Run detection rule validator (strict fixture replay)
         run: python3 scripts/validate_detections.py --strict-fixtures
 

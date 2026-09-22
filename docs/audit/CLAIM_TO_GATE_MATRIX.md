@@ -25,7 +25,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Weekly benchmark scoreboard runs live against `main` | README L173 | `ci.yml` agents job (Phase E1 — `scripts/check_scoreboard.py` runs the deterministic live-agent MITRE-accuracy eval over the 200-incident corpus and fails if the published `scoreboard.json` substrate row drifts > 0.02, the schema is invalid, or a substrate row is mislabelled) + `wet-eval.yml` (weekly funded LLM rows) | GATED | - |
 | MCP server exposes 13 tools | README L179 | `ci.yml :: mcp` | GATED | - |
 | Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; OpenAPI breaking-change now gated via `openapi-breaking.yml`, so a spec change that would break the generated SDKs is caught; per-language generated-client contract-drift is 11b) | Phase 11b |
-| Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py` + `test_prompt_envelope.py` | PARTIAL (unit-level nonce envelope + guard gated; 150-payload adversarial eval + tool-call provenance in Phase 4 Tier 2) | Phase 4 |
+| Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py`, `test_prompt_envelope.py` and `tests/adversarial/` — a 32-payload corpus grouped by attacker goal, enforcing a recall floor **and** a false-positive ceiling on real security content that reads adversarially. Action-trigger and exfiltration payloads are individually required rather than averaged, because an injected containment turns the SOC into a denial-of-service tool pointed at its own estate | GATED | obfuscation is an arms race and is recorded rather than individually required; two payloads are currently xfail and counted in the recall rate |
 | Cross-tenant isolation (Postgres) | (implied by multi-tenant) | `cross-tenant-rbac.yml` (nightly, 3 endpoints) + `ci.yml` | PARTIAL (Postgres only, compiled-SQL not live DB) | Phase 1.3 |
 | Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | `isolation.yml` (offline: read paths construct a tenant scope) + `isolation-live.yml` (live A-vs-B replay: Neo4j property filter, Redis keyspace namespacing, ClickHouse via production `lake_sql.rewrite_for_tenant`, Kafka per-tenant envelope filter) | GATED | - |
 | SAST | README badge (CodeQL) | `codeql.yml` | GATED | - |
@@ -113,8 +113,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 91
-- PARTIAL: 11
+- GATED: 92
+- PARTIAL: 10
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 
 > **Counting note.** These figures previously read 46 / 9, which did not match

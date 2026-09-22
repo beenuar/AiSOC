@@ -52,8 +52,9 @@ def test_register_builtin_executors_returns_full_count() -> None:
     """
     count = register_builtin_executors()
     # 19 original + 10 Phase B2 vendors (SentinelOne/Entra/GWS/PAN-OS/FortiGate/
-    # Cloudflare/Jira/ServiceNow/PagerDuty/Slack).
-    assert count == 29
+    # Cloudflare/Jira/ServiceNow/PagerDuty/Slack) + 6 read/rollback verbs
+    # (4 read-only investigation reads, 2 unisolate arms).
+    assert count == 35
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -102,6 +103,18 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("servicenow", "create_ticket"),
         ("pagerduty", "create_ticket"),
         ("slack", "notify"),
+        # Read-only investigation verbs. Twenty-nine executors could change
+        # the estate and exactly one could ask it a question, so an
+        # investigation could only ever reach the lake.
+        ("crowdstrike", "get_host"),
+        ("crowdstrike", "get_detections"),
+        ("defender", "get_host"),
+        ("okta", "get_user_activity"),
+        # The rollback for the most disruptive action, which had no
+        # executor: isolate_host declared unisolate_host as its reverse and
+        # dispatch answered executor_not_found.
+        ("crowdstrike", "unisolate_host"),
+        ("defender", "unisolate_host"),
     }
     assert pairs == expected
 
@@ -132,7 +145,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 29
+    assert count == 35
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

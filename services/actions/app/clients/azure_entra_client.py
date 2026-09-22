@@ -108,6 +108,31 @@ class AzureEntraClient:
         if not self._token:
             await self._authenticate(client)
 
+    async def get_user_enabled(self, user_principal_name: str) -> bool | None:
+        """Read ``accountEnabled``, for post-action verification.
+
+        Graph returns 204 on a successful PATCH, which confirms the request
+        was accepted rather than that sign-in is blocked. Directory
+        replication also means the two can differ briefly, which is exactly
+        the window a caller needs to be told about rather than guessed at.
+
+        Returns ``None`` on any failure: indeterminate, never a confirmation.
+        """
+        try:
+            token = await self._ensure_token()
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(
+                    f"https://graph.microsoft.com/v1.0/users/{user_principal_name}" "?$select=accountEnabled",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if resp.status_code != 200:
+                    return None
+                value = resp.json().get("accountEnabled")
+                return bool(value) if value is not None else None
+        except Exception as exc:  # noqa: BLE001 - indeterminate, never a false VERIFIED
+            logger.warning("entra.get_user_enabled.failed", upn=user_principal_name, error=str(exc))
+            return None
+
     async def disable_user(self, user_id: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=20.0) as client:
             await self._ensure_token(client)

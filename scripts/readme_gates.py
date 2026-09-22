@@ -32,9 +32,9 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -127,8 +127,7 @@ def gate_readme_line_count() -> list[GateFailure]:
         return [
             GateFailure(
                 "readme-line-count",
-                f"README has {actual} lines; budget is {README_MAX_LINES}. "
-                f"Move detail to apps/docs/ or RELEASES.md.",
+                f"README has {actual} lines; budget is {README_MAX_LINES}. " f"Move detail to apps/docs/ or RELEASES.md.",
             )
         ]
     return []
@@ -199,9 +198,7 @@ def gate_package_references(check_network: bool) -> list[GateFailure]:
         exists: Callable[[str], bool],
         known_unpublished: set[str],
     ) -> None:
-        any_line_guarded = any(
-            _has_guard(_surrounding_lines(text, idx)) for idx in line_idxs
-        )
+        any_line_guarded = any(_has_guard(_surrounding_lines(text, idx)) for idx in line_idxs)
         if any_line_guarded:
             return
         if name in known_unpublished:
@@ -242,8 +239,7 @@ def gate_package_references(check_network: bool) -> list[GateFailure]:
 # renamed or deleted tile would have rendered as a broken image on the busiest
 # page the project has without failing anything.
 _VISUAL_ASSET_PATTERN = re.compile(
-    r"apps/web/public/(?P<dir>demo|screenshots)/"
-    r"(?P<asset>[A-Za-z0-9._-]+\.(?:mp4|gif|webm|webp|png|jpg|svg))"
+    r"apps/web/public/(?P<dir>demo|screenshots)/" r"(?P<asset>[A-Za-z0-9._-]+\.(?:mp4|gif|webm|webp|png|jpg|svg))"
 )
 
 
@@ -293,8 +289,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
         return [
             GateFailure(
                 "sandbox-offline",
-                "packages/aisoc-sandbox/src is missing — the sandbox package "
-                "was deleted or moved. Check phase3-sandbox.",
+                "packages/aisoc-sandbox/src is missing — the sandbox package " "was deleted or moved. Check phase3-sandbox.",
             )
         ]
     failures: list[GateFailure] = []
@@ -326,8 +321,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
                 GateFailure(
                     "sandbox-offline",
                     f"`aisoc-sandbox demo --scenario {scenario}` exited "
-                    f"with code {result.returncode}:\n"
-                    + result.stderr.decode("utf-8", errors="replace")[:400],
+                    f"with code {result.returncode}:\n" + result.stderr.decode("utf-8", errors="replace")[:400],
                 )
             )
             continue
@@ -337,8 +331,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
             failures.append(
                 GateFailure(
                     "sandbox-offline",
-                    f"`aisoc-sandbox demo --scenario {scenario}` did not "
-                    f"emit valid JSON: {exc}",
+                    f"`aisoc-sandbox demo --scenario {scenario}` did not " f"emit valid JSON: {exc}",
                 )
             )
             continue
@@ -347,9 +340,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
             failures.append(
                 GateFailure(
                     "sandbox-offline",
-                    f"Scenario {scenario} produced {len(steps)} ledger "
-                    f"steps; expected exactly 4 (Detect/Triage/Hunt/"
-                    f"Respond).",
+                    f"Scenario {scenario} produced {len(steps)} ledger " f"steps; expected exactly 4 (Detect/Triage/Hunt/" f"Respond).",
                 )
             )
     return failures
@@ -370,6 +361,12 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
 
 TRUTH_TABLE = REPO_ROOT / "docs" / "detections" / "truth-table.md"
 CLAIM_MATRIX = REPO_ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
+
+#: Other documents that quote the claim-gate tally. Each is checked the
+#: same way the README is: a figure repeated in prose drifts from its
+#: source the first time the source changes, and a compliance page
+#: quoting a stale number is worse than one quoting none.
+FIGURE_DOCS = (REPO_ROOT / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md",)
 
 
 def _truth_table_executable() -> int | None:
@@ -409,9 +406,7 @@ def gate_readme_figures() -> list[GateFailure]:
     if executable is not None:
         # Any "<n> executable" or "corpus (<n> rules)" phrasing in the README.
         quoted = {
-            int(n)
-            for n in re.findall(r"(\d{3,5})\s+executable", readme)
-            + re.findall(r"detection corpus \((\d{3,5}) rules\)", readme)
+            int(n) for n in re.findall(r"(\d{3,5})\s+executable", readme) + re.findall(r"detection corpus \((\d{3,5}) rules\)", readme)
         }
         for n in sorted(quoted - {executable}):
             failures.append(
@@ -426,16 +421,29 @@ def gate_readme_figures() -> list[GateFailure]:
     counts = _matrix_counts()
     if counts is not None:
         gated, partial = counts
-        for m in re.finditer(r"(\d+)\s+GATED\s*/\s*(\d+)\s+PARTIAL", readme):
-            if (int(m.group(1)), int(m.group(2))) != (gated, partial):
-                failures.append(
-                    GateFailure(
-                        "readme-figures",
-                        f"README claims {m.group(1)} GATED / {m.group(2)} PARTIAL; "
-                        f"docs/audit/CLAIM_TO_GATE_MATRIX.md has {gated} GATED / "
-                        f"{partial} PARTIAL.",
+        sources: list[tuple[str, str]] = [("README", readme)]
+        for path in FIGURE_DOCS:
+            if not path.exists():
+                continue
+            try:
+                label = str(path.relative_to(REPO_ROOT))
+            except ValueError:
+                # The tests repoint REPO_ROOT at a scratch tree; the label is
+                # cosmetic and must not take the gate down with it.
+                label = path.name
+            sources.append((label, _read(path)))
+
+        for label, text in sources:
+            for m in re.finditer(r"(\d+)\s+(?:rows\s+)?`?GATED`?[,/\s]+(?:and\s+)?(\d+)\s+`?PARTIAL", text):
+                if (int(m.group(1)), int(m.group(2))) != (gated, partial):
+                    failures.append(
+                        GateFailure(
+                            "readme-figures",
+                            f"{label} claims {m.group(1)} GATED / {m.group(2)} "
+                            f"PARTIAL; docs/audit/CLAIM_TO_GATE_MATRIX.md has "
+                            f"{gated} GATED / {partial} PARTIAL.",
+                        )
                     )
-                )
 
     return failures
 
@@ -461,8 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-sandbox",
         action="store_true",
-        help="Skip the local aisoc-sandbox offline smoke test (the CI "
-        "matrix runs this independently).",
+        help="Skip the local aisoc-sandbox offline smoke test (the CI " "matrix runs this independently).",
     )
     args = parser.parse_args(argv)
     failures = _run_all(

@@ -220,6 +220,44 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # The count claim above says how many connectors exist; this says
+      # whether a reader can find out how to use them. 35 of 84 had no page
+      # at all and the sidebar listed 34 of 96, so most connector
+      # documentation either did not exist or could not be navigated to.
+      #
+      # Pages are generated from the schema rather than written by hand: a
+      # hand-written field list is correct on the day it is written and says
+      # nothing when a field is added or made secret. Pages that predate the
+      # generator keep their prose and receive a generated field reference,
+      # so the human half stays human and the mechanical half cannot drift.
+      - name: Verify connector docs cover every connector
+        # The gate imports every connector class to read its schema(), so it
+        # needs what those modules import at module scope. Failing closed on
+        # a missing dep is right — a gate that skips when it cannot import is
+        # a gate that silently stops checking.
+        run: |
+          # Verified as the complete set in a clean venv: the import closure
+          # is app.connectors.* plus app.federated.*, and nothing in it
+          # reaches for a database driver or a web framework.
+          python -m pip install --quiet httpx pydantic structlog cryptography
+          python scripts/generate_connector_docs.py --check
+      # Eight fields shipped across v7.7 and v8.0 without reaching the funnel
+      # docs, and they are the eight that say whether the automation is
+      # working honestly — suppression, abstention, groundedness. A number
+      # nobody documents is a number nobody checks, and
+      # repeat_alerts_suppressed reported a flat zero for a whole release
+      # without anyone noticing.
+      - name: Verify the funnel response contract is documented
+        run: python scripts/check_funnel_contract.py
+      # A support bundle is the most concentrated pile of configuration a
+      # deployment produces, and its whole purpose is to leave the building.
+      # Redaction is allow-list rather than deny-list, so a setting added
+      # tomorrow is redacted by default rather than exposed until someone
+      # remembers — and these tests are what keep it that way.
+      - name: Support bundle must not leak
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_support_bundle.py -q
       # Phase 8 — a production prompt cannot change without a version bump +
       # lock regeneration (the signal that must trigger an eval re-grade).
       - name: Verify prompt lock is current (Phase 8)
@@ -325,7 +363,13 @@ jobs:
         # so both packages are required at import time, even though the
         # fusion-client test itself only calls into `app.tools.fusion`.
         run: |
-          pip install --quiet pytest pytest-asyncio respx langchain-core langchain-openai langgraph jsonschema
+          # langchain-core floored at 1.2.22: the high-severity advisory on
+          # the 0.3.x line has no patch there, so the pin had to move before
+          # the alert could close. The deterministic eval suites are the
+          # re-grade — MITRE accuracy is unchanged at 97.0%.
+          pip install --quiet pytest pytest-asyncio respx \
+            'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
+            jsonschema
           cd services/agents
           python3 -m pytest \
             tests/test_mitre_accuracy.py \
@@ -340,6 +384,7 @@ jobs:
             tests/test_cost_governor.py \
             tests/test_bundle_incident_context.py \
             tests/test_deep_investigation.py \
+            tests/adversarial/ \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \

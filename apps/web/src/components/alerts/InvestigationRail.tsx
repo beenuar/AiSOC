@@ -44,6 +44,7 @@ import {
   type RecommendedAction,
   type RelatedEntity,
 } from '@/lib/api';
+import { AttackStory } from './AttackStory';
 import { ExplainDrawer } from './ExplainDrawer';
 import { Skeleton } from '@/components/ui/Skeleton';
 
@@ -88,6 +89,7 @@ export interface InvestigationRailProps {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) {
+  const [view, setView] = useState<RailView>('story');
   // The drawer is mounted on demand and closed by default; we don't
   // burn the LLM call until the analyst explicitly asks for it.
   const [deepExplainOpen, setDeepExplainOpen] = useState(false);
@@ -130,10 +132,25 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
     <>
       <RailShell title={alert.title} onClose={onClose}>
         <RailHeader alert={alert} onDeepExplain={() => setDeepExplainOpen(true)} />
-        <NarrativeSection narrative={alert.narrative ?? null} />
-        <RelatedEntitiesSection entities={alert.relatedEntities ?? []} />
-        <MiniTimelineSection events={alert.miniTimeline ?? []} />
-        <RecommendedActionsSection actions={alert.recommendedActions ?? []} />
+        {/*
+         * Story first, detail behind a toggle. An analyst holds "what
+         * happened" in their head, not "what fields does this row have" —
+         * and the fields are still one click away, which is the right
+         * trade in the direction nobody was offering.
+         */}
+        <ViewToggle view={view} onChange={setView} />
+        {view === 'story' ? (
+          <div className="p-4">
+            <AttackStory alert={alert} showHeader={false} />
+          </div>
+        ) : (
+          <>
+            <NarrativeSection narrative={alert.narrative ?? null} />
+            <RelatedEntitiesSection entities={alert.relatedEntities ?? []} />
+            <MiniTimelineSection events={alert.miniTimeline ?? []} />
+            <RecommendedActionsSection actions={alert.recommendedActions ?? []} />
+          </>
+        )}
       </RailShell>
       {/*
        * Deep Explain is mounted only when requested — keeping it inside the
@@ -149,6 +166,47 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
         />
       )}
     </>
+  );
+}
+
+/** Which face of the rail is showing. */
+type RailView = 'story' | 'details';
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: RailView;
+  onChange: (next: RailView) => void;
+}) {
+  const tabs: { id: RailView; label: string }[] = [
+    { id: 'story', label: 'Story' },
+    { id: 'details', label: 'Details' },
+  ];
+  return (
+    <div
+      className="flex gap-1 border-b border-gray-800/60 px-4 py-2"
+      role="tablist"
+      aria-label="Investigation view"
+    >
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={view === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={clsx(
+            'rounded px-2.5 py-1 text-xs transition-colors',
+            view === tab.id
+              ? 'bg-gray-800 text-gray-100'
+              : 'text-gray-500 hover:bg-gray-800/40 hover:text-gray-300',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -229,7 +287,15 @@ function RailHeader({
   onDeepExplain: () => void;
 }) {
   return (
-    <div className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/40">
+    // Labelled as a region so the summary metadata is addressable on its
+    // own. The source and severity also appear inside the story's evidence
+    // list, which is correct in both places but ambiguous without a
+    // landmark to distinguish them.
+    <div
+      className="px-4 py-3 border-b border-gray-800/60 bg-gray-900/40"
+      role="region"
+      aria-label="Alert summary"
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
         <span className="capitalize text-gray-300">{alert.severity}</span>
         <span>·</span>

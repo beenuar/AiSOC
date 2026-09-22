@@ -99,6 +99,110 @@ class CrowdStrikeRTRClient:
             status = resources[0].get("status")
             return str(status) if status is not None else None
 
+    async def get_device(self, device_id: str) -> dict[str, Any] | None:
+        """The full device record, for investigation rather than verification.
+
+        ``get_containment_status`` returns one field because that is all a
+        verifier should look at. An investigation needs more — OS, last
+        seen, agent version, local IP — and asking a responder to infer
+        those from a containment string is how an agent ends up guessing.
+
+        Returns ``None`` when the device cannot be read. Never a partial
+        record with invented fields.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await self._get_with_retry(client, "/devices/entities/devices/v2", {"ids": device_id})
+            if resp is None:
+                return None
+            resources = resp.json().get("resources", [])
+            if not resources:
+                return None
+            device = resources[0]
+            # An explicit projection rather than the raw record: the vendor
+            # payload carries ~90 fields, most of them noise in a prompt,
+            # and an unbounded dict is an unbounded token cost.
+            return {
+                "device_id": device.get("device_id"),
+                "hostname": device.get("hostname"),
+                "platform": device.get("platform_name"),
+                "os_version": device.get("os_version"),
+                "agent_version": device.get("agent_version"),
+                "local_ip": device.get("local_ip"),
+                "external_ip": device.get("external_ip"),
+                "last_seen": device.get("last_seen"),
+                "first_seen": device.get("first_seen"),
+                "containment_status": device.get("status"),
+                "tags": device.get("tags") or [],
+            }
+
+    async def get_detections(self, device_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Recent detections for one device, newest first.
+
+        Returns an empty list both when the device has no detections and
+        when the read fails; the caller cannot distinguish those, which is
+        why failures are logged rather than swallowed silently. A read error
+        surfacing as "no detections" would be an investigation concluding a
+        host is clean because the API was down.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            found = await self._get_with_retry(
+                client,
+                "/detects/queries/detects/v1",
+                {
+                    "filter": f"device.device_id:'{device_id}'",
+                    "limit": max(1, min(limit, 100)),
+                    "sort": "last_behavior|desc",
+                },
+            )
+            if found is None:
+                logger.warning("crowdstrike.get_detections.query_failed", device_id=device_id)
+                return []
+            ids = found.json().get("resources", [])
+            if not ids:
+                return []
+
+            resp = await client.post(
+                f"{self._base_url}/detects/entities/summaries/GET/v1",
+                headers=self._auth_headers(),
+                json={"ids": ids},
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "crowdstrike.get_detections.summary_failed",
+                    device_id=device_id,
+                    status=resp.status_code,
+                )
+                return []
+
+            return [
+                {
+                    "detection_id": d.get("detection_id"),
+                    "severity": d.get("max_severity_displayname"),
+                    "tactic": d.get("behaviors", [{}])[0].get("tactic"),
+                    "technique": d.get("behaviors", [{}])[0].get("technique"),
+                    "filename": d.get("behaviors", [{}])[0].get("filename"),
+                    "sha256": d.get("behaviors", [{}])[0].get("sha256"),
+                    "last_behavior": d.get("last_behavior"),
+                    "status": d.get("status"),
+                }
+                for d in resp.json().get("resources", [])
+            ]
+
+    async def _get_with_retry(self, client: httpx.AsyncClient, path: str, params: dict[str, Any]) -> httpx.Response | None:
+        """GET with one re-auth retry. Returns None on a non-200.
+
+        The re-auth-on-401 dance was duplicated at every call site, and a
+        copy that forgets it fails intermittently once the token ages past
+        thirty minutes — which is the hardest kind of bug to reproduce.
+        """
+        resp = await client.get(f"{self._base_url}{path}", headers=self._auth_headers(), params=params)
+        if resp.status_code == 401:
+            await self._authenticate(client)
+            resp = await client.get(f"{self._base_url}{path}", headers=self._auth_headers(), params=params)
+        return resp if resp.status_code == 200 else None
+
     async def contain_host(self, device_id: str) -> dict[str, Any]:
         """Put a host into network containment via RTR."""
         async with httpx.AsyncClient(timeout=30.0) as client:

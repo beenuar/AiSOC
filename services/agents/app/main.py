@@ -14,6 +14,7 @@ from app.api.explain import router as explain_router
 from app.api.hunt_search import router as hunt_search_router
 from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
+from app.api.metrics import router as metrics_router
 from app.api.playbooks import router as playbook_router
 from app.api.router import router
 from app.api.triage import router as triage_router
@@ -171,6 +172,9 @@ app.add_middleware(
 # OpenTelemetry auto-instrumentation (FastAPI + httpx)
 instrument_app(app)
 
+# Unprefixed: Prometheus scrapes /metrics, not /api/v1/metrics, and the
+# scrape config is shared shape across services.
+app.include_router(metrics_router)
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
 app.include_router(triage_router)  # prefix: /api/v1  (POST /cases/{id}/triage — router topology, T2.2)

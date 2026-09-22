@@ -31,6 +31,11 @@ def _load_gates(tmp_root: Path):
     module.README = tmp_root / "README.md"
     module.TRUTH_TABLE = tmp_root / "docs" / "detections" / "truth-table.md"
     module.CLAIM_MATRIX = tmp_root / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
+    # Every module-level path, not just REPO_ROOT: leaving FIGURE_DOCS
+    # pointing at the real tree made the gate read the live compliance page
+    # against a scratch matrix, and every test failed for a reason that had
+    # nothing to do with what it was testing.
+    module.FIGURE_DOCS = (tmp_root / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md",)
     return module
 
 
@@ -109,3 +114,30 @@ def test_live_repo_is_consistent() -> None:
     """The gate must pass against the real tree, not only fixtures."""
     module = _load_gates(REPO_ROOT)
     assert module.gate_readme_figures() == []
+
+
+def test_other_docs_quoting_the_tally_are_checked(tree: Path) -> None:
+    """A compliance page quoting a stale number is worse than one quoting none."""
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    pack = tree / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md"
+    pack.parent.mkdir(parents=True, exist_ok=True)
+    pack.write_text("The honest index: 62 rows\n`GATED`, 11 `PARTIAL` with gaps named.\n")
+
+    failures = _load_gates(tree).gate_readme_figures()
+    assert len(failures) == 1
+    assert "evidence-pack.md" in failures[0].detail
+    assert "62" in failures[0].detail
+
+
+def test_a_matching_compliance_page_passes(tree: Path) -> None:
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    pack = tree / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md"
+    pack.parent.mkdir(parents=True, exist_ok=True)
+    pack.write_text("The honest index: 2 rows\n`GATED`, 1 `PARTIAL` with gaps named.\n")
+    assert _load_gates(tree).gate_readme_figures() == []
+
+
+def test_an_absent_compliance_page_is_not_a_failure(tree: Path) -> None:
+    """A partial checkout must skip the check, not fail it."""
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    assert _load_gates(tree).gate_readme_figures() == []
