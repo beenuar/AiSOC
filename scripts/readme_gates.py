@@ -358,11 +358,94 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
 # ── Driver ──────────────────────────────────────────────────────────────────
 
 
+# ── Gate 4: README figures must match their generated source of truth ────────
+#
+# The README quotes two numbers that are generated elsewhere: how many detection
+# rules actually execute, and how many product claims are CI-gated. Both drifted
+# — the README advertised 947 executable rules while the truth table said 833,
+# and 62 GATED while the matrix said 72. Neither is a typo class of error: a
+# reader has no way to tell the front page from the generated artifact, so the
+# larger number is simply believed. This gate makes the README unable to quote a
+# figure its source disagrees with.
+
+TRUTH_TABLE = REPO_ROOT / "docs" / "detections" / "truth-table.md"
+CLAIM_MATRIX = REPO_ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
+
+
+def _truth_table_executable() -> int | None:
+    """The executable-rule count from the generated truth table."""
+    if not TRUTH_TABLE.exists():
+        return None
+    m = re.search(
+        r"\|\s*\*\*executable \(loaded by the engine\)\*\*\s*\|\s*\*\*(\d+)\*\*",
+        _read(TRUTH_TABLE),
+    )
+    return int(m.group(1)) if m else None
+
+
+def _matrix_counts() -> tuple[int, int] | None:
+    """(gated, partial) counted from the matrix rows themselves, not its prose."""
+    if not CLAIM_MATRIX.exists():
+        return None
+    gated = partial = 0
+    for line in _read(CLAIM_MATRIX).splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        if "NO GATE" in line:
+            continue
+        if "PARTIAL" in line:
+            partial += 1
+        elif "GATED" in line:
+            gated += 1
+    return (gated, partial) if (gated or partial) else None
+
+
+def gate_readme_figures() -> list[GateFailure]:
+    """Detection and claim-gate figures in the README must match their source."""
+    failures: list[GateFailure] = []
+    readme = _read(README)
+
+    executable = _truth_table_executable()
+    if executable is not None:
+        # Any "<n> executable" or "corpus (<n> rules)" phrasing in the README.
+        quoted = {
+            int(n)
+            for n in re.findall(r"(\d{3,5})\s+executable", readme)
+            + re.findall(r"detection corpus \((\d{3,5}) rules\)", readme)
+        }
+        for n in sorted(quoted - {executable}):
+            failures.append(
+                GateFailure(
+                    "readme-figures",
+                    f"README claims {n} executable detection rules; "
+                    f"docs/detections/truth-table.md says {executable}. "
+                    f"Regenerate with scripts/detection_truth_table.py and use its number.",
+                )
+            )
+
+    counts = _matrix_counts()
+    if counts is not None:
+        gated, partial = counts
+        for m in re.finditer(r"(\d+)\s+GATED\s*/\s*(\d+)\s+PARTIAL", readme):
+            if (int(m.group(1)), int(m.group(2))) != (gated, partial):
+                failures.append(
+                    GateFailure(
+                        "readme-figures",
+                        f"README claims {m.group(1)} GATED / {m.group(2)} PARTIAL; "
+                        f"docs/audit/CLAIM_TO_GATE_MATRIX.md has {gated} GATED / "
+                        f"{partial} PARTIAL.",
+                    )
+                )
+
+    return failures
+
+
 def _run_all(check_network: bool, skip_sandbox: bool) -> list[GateFailure]:
     failures: list[GateFailure] = []
     failures.extend(gate_readme_line_count())
     failures.extend(gate_package_references(check_network))
     failures.extend(gate_demo_asset_references())
+    failures.extend(gate_readme_figures())
     if not skip_sandbox:
         failures.extend(gate_sandbox_offline_smoke())
     return failures

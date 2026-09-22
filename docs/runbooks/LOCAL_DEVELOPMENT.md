@@ -121,7 +121,7 @@ Then run individual services on the host where iteration is fastest.
 ```bash
 cd services/api
 poetry install
-poetry run alembic upgrade head            # apply DB migrations
+poetry run python -m app.scripts.run_migrations   # apply DB migrations (forward-only)
 poetry run uvicorn app.main:app --reload --port 8000
 ```
 
@@ -289,7 +289,7 @@ docker exec -it aisoc-neo4j cypher-shell -u neo4j -p neo4j_dev_secret
 
 ```bash
 cd services/api
-poetry run alembic upgrade head
+poetry run python -m app.scripts.run_migrations
 ```
 
 ---
@@ -298,7 +298,7 @@ poetry run alembic upgrade head
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `api` container restarts | Postgres not ready or migrations failed | `docker compose logs api` and run `alembic upgrade head` |
+| `api` container restarts | Postgres not ready or migrations failed | `docker compose logs api` and run `python -m app.scripts.run_migrations` |
 | `fusion` 500 on `/ml/feedback` | DB schema missing | Run migrations (above) |
 | `agents` boot loop | No `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | Set one in `.env`, `docker compose up -d agents` |
 | OpenSearch refuses connection | Memory ulimit | Run `sysctl -w vm.max_map_count=262144` (Linux) |

@@ -42,8 +42,8 @@ flowchart LR
 ### Information disclosure (top risk for this asset)
 - Threats: a DB dump or leaked `AISOC_CREDENTIAL_KEY` exposes every connector credential; plaintext secrets in logs.
 - Controls:
-  - **Envelope encryption** (`services/api/app/security/envelope_cipher.py`, Phase 1.6): each secret is encrypted with a per-secret DEK; the DEK is wrapped by a KEK that never leaves KMS/HSM (`AwsKmsKeyManager`; GCP KMS / Vault Transit implement the same `KeyManager` protocol). A DB dump yields only wrapped DEKs + ciphertext — useless without KMS `decrypt` permission. `LocalKeyManager` remains the default for hobby deploys.
-  - Per-secret DEKs mean a single compromised DEK exposes one secret, not the whole vault.
+  - **Fernet authenticated encryption** (`services/api/app/security/credential_vault.py`): every connector credential is stored as `vault:v1:<ciphertext>` under `AISOC_CREDENTIAL_KEY`, with `MultiFernet` key rotation. A DB dump without that key yields nothing usable. This is the control that is actually deployed.
+  - **Envelope encryption is NOT yet a deployed control.** `services/api/app/security/envelope_cipher.py` implements per-secret DEKs wrapped by a KEK in KMS (`AwsKmsKeyManager`, with GCP KMS and Vault Transit implementing the same `KeyManager` protocol), and it is unit-tested — but `credential_vault.py` does not import it and no secret is written or read through it. Until it is wired, the residual risk is that a leaked `AISOC_CREDENTIAL_KEY` exposes every credential, which per-secret DEKs would otherwise contain to one. Tracked as a gap rather than a mitigation.
   - Leaf-level encryption keeps structural fields queryable while every secret value is ciphertext.
   - The vault refuses to boot without a key outside development; plaintext keys never log.
 

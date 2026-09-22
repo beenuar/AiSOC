@@ -27,14 +27,13 @@ For each service we track the standard golden signals:
 
 ## Single trace across services
 
-The critical path — `ingest → fusion → realtime → api → agents → actions` — is
-instrumented with **OpenTelemetry**, so one incident is one distributed trace
-from raw event to agent decision to response action. Traces export via OTLP to
-Jaeger/Tempo; spans carry the tenant and run/incident ids so a trace can be
-pulled up from any alert or investigation.
+**Partial today.** `api`, `agents`, `ueba` and `honeytokens` are instrumented with **OpenTelemetry** and export via OTLP. `ingest` (Go) and `realtime` (TypeScript) are **not instrumented**, and they are the two ends of the Kafka spine — so a trace does not yet run unbroken from raw event to response action. Spans that are emitted carry the tenant and run/incident ids.
 
-- Trace context propagates across the Kafka spine (event → fused alert → alert
-  row) and the HTTP hops (api ↔ agents ↔ actions ↔ fusion).
+Note also that the default exporter endpoint is `http://otel-collector:4317` and **no collector ships in any compose file**, so out of the box spans are emitted into a connection error. Bring your own collector, or expect no traces.
+
+- Trace context does **not** yet propagate across the Kafka spine, because the producing
+  and consuming ends are the two uninstrumented services. HTTP hops between the
+  instrumented services (api ↔ agents) do propagate.
 - The Investigation Ledger records per-step model/tool attribution (see the
   [model router](../concepts/model-router.md) and
   [LLMOps](../concepts/llmops.md) docs), so the reasoning path inside the
