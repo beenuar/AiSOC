@@ -48,6 +48,26 @@ def workflow_go_versions() -> dict[str, set[str]]:
     return found
 
 
+def dockerfile_go_images() -> dict[str, str]:
+    """Every ``FROM golang:X.Y`` base image in the repo.
+
+    Added because the first version of this gate checked go.mod against the
+    CI workflows and stopped there. Bumping the modules to 1.26 then broke
+    the compose build: three Dockerfiles still pinned golang:1.21, 1.24 and
+    1.25, and ``go mod download`` failed inside the image against a module
+    requiring a newer toolchain. A gate that covers two of the three places
+    a version is written finds the drift it was not looking for.
+    """
+    found: dict[str, str] = {}
+    for path in sorted(REPO_ROOT.rglob("Dockerfile*")):
+        if any(part in ("node_modules", ".git", "plans") for part in path.parts):
+            continue
+        match = re.search(r"FROM\s+golang:(\d+\.\d+(?:\.\d+)?)", path.read_text(encoding="utf-8"))
+        if match:
+            found[str(path.relative_to(REPO_ROOT))] = match.group(1)
+    return found
+
+
 def _minor(version: str) -> tuple[int, int]:
     parts = version.split(".")
     return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 0)
@@ -84,13 +104,24 @@ def main(argv: list[str] | None = None) -> int:
                     f"CI provides."
                 )
 
+    for dockerfile, version in dockerfile_go_images().items():
+        if _minor(version) < target_minor:
+            errors.append(
+                f"{dockerfile} builds on golang:{version}, but a module declares "
+                f"{target}. `go mod download` fails inside the image."
+            )
+
     if errors:
         print("TOOLCHAIN VERSION GATE FAILED:", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    print(f"toolchain: OK — {len(modules)} Go modules on {target}, CI installs it")
+    images = dockerfile_go_images()
+    print(
+        f"toolchain: OK — {len(modules)} Go modules on {target}; CI and "
+        f"{len(images)} Dockerfile(s) install it"
+    )
     return 0
 
 
