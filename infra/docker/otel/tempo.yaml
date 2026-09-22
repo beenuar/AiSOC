@@ -1,0 +1,29 @@
+# Minimal single-binary Tempo for the local stack. Local storage only:
+# this exists so a developer can follow a trace, not to retain them.
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9096
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    # Short on purpose. A dev stack that silently fills a volume with traces
+    # is a worse experience than one that forgets them.
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal

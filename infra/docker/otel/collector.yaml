@@ -1,0 +1,60 @@
+# OpenTelemetry Collector for the local stack.
+#
+# The services default their exporter to http://otel-collector:4317 and no
+# collector shipped in any compose file, so out of the box every span went
+# into a connection error. That is worse than having no tracing: the code
+# looks instrumented, the logs fill with export failures, and nobody can
+# tell whether a missing trace means a missing span or a missing collector.
+#
+# Scope note, because the docs previously overstated it: `api`, `agents`,
+# `ueba` and `honeytokens` are instrumented. `ingest` (Go) and `realtime`
+# (TypeScript) are not, and they are the two ends of the Kafka spine — so a
+# trace does not yet run unbroken from raw event to response action.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Bounded so a burst cannot push the collector into an OOM kill, which in
+  # a dev stack looks identical to "tracing is broken".
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 96
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  # Span counts, so the Prometheus stack can answer "is anything being
+  # traced at all" without opening Grafana.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: warn

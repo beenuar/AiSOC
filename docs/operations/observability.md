@@ -29,7 +29,9 @@ For each service we track the standard golden signals:
 
 **Partial today.** `api`, `agents`, `ueba` and `honeytokens` are instrumented with **OpenTelemetry** and export via OTLP. `ingest` (Go) and `realtime` (TypeScript) are **not instrumented**, and they are the two ends of the Kafka spine — so a trace does not yet run unbroken from raw event to response action. Spans that are emitted carry the tenant and run/incident ids.
 
-Note also that the default exporter endpoint is `http://otel-collector:4317` and **no collector ships in any compose file**, so out of the box spans are emitted into a connection error. Bring your own collector, or expect no traces.
+A collector now ships: `docker compose --profile monitoring up` starts an OpenTelemetry Collector on `otel-collector:4317` (the endpoint the services already default to) forwarding into Grafana Tempo, with Tempo wired into Grafana as a datasource alongside Prometheus. Previously no collector existed in any compose file, so out of the box every span went into a connection error — which is worse than no tracing, because the code looks instrumented and nobody can tell a missing span from a missing collector.
+
+Tempo's retention in the dev stack is 24 hours. It is there so a developer can follow a trace, not to retain them.
 
 - Trace context does **not** yet propagate across the Kafka spine, because the producing
   and consuming ends are the two uninstrumented services. HTTP hops between the
