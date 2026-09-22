@@ -61,6 +61,7 @@ import structlog
 import yaml
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.services.business_context import (
@@ -231,32 +232,110 @@ def _envelope(
 
 
 _RuleStoreEntry = dict[str, Any]
+
+#: Cache of the last read per tenant, so a GET that immediately follows a PUT
+#: in the same request cycle sees the write without a second round trip. It is
+#: NOT the store: `aisoc_business_context_rule_sets` is.
 _rule_store: dict[UUID, _RuleStoreEntry] = {}
 
 
-def _persist_for(tenant_id: UUID, *, yaml_text: str, enabled: bool) -> datetime:
+async def _persist_for(
+    db: Any,  # noqa: ANN401 — AsyncSession; kept loose so tests can stub
+    tenant_id: UUID,
+    *,
+    yaml_text: str,
+    enabled: bool,
+) -> datetime:
+    """Write the tenant's rules to Postgres.
+
+    These used to live only in `_rule_store`, a module-level dict inside
+    whichever API process served the write. So they were lost on restart,
+    invisible to every other replica, and — the part that mattered — invisible
+    to the auto-triage worker, which loads business-context rules from a YAML
+    file path that nothing sets. A tenant could author a rule, see it saved,
+    preview it against their last 50 alerts, and have it apply to no triage
+    decision ever.
+    """
     now = datetime.now(UTC)
-    _rule_store[tenant_id] = {
-        "yaml": yaml_text,
-        "enabled": enabled,
-        "updated_at": now,
-    }
+    _rule_store[tenant_id] = {"yaml": yaml_text, "enabled": enabled, "updated_at": now}
+    try:
+        await db.execute(
+            text(
+                """
+                INSERT INTO aisoc_business_context_rule_sets
+                    (tenant_id, yaml_text, enabled, updated_at)
+                VALUES (:tenant_id, :yaml_text, :enabled, :updated_at)
+                ON CONFLICT (tenant_id) DO UPDATE SET
+                    yaml_text = EXCLUDED.yaml_text,
+                    enabled = EXCLUDED.enabled,
+                    updated_at = EXCLUDED.updated_at
+                """
+            ),
+            {
+                "tenant_id": str(tenant_id),
+                "yaml_text": yaml_text,
+                "enabled": enabled,
+                "updated_at": now,
+            },
+        )
+        await db.commit()
+    except Exception as exc:  # noqa: BLE001 — surfaced below, never silently dropped
+        logger.error(
+            "business_context.persist_failed",
+            tenant_id=str(tenant_id),
+            error=str(exc).replace("\r", " ").replace("\n", " ")[:500],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=("Could not save business-context rules. They were not persisted, " "so nothing has changed."),
+        ) from exc
     return now
 
 
-def _load_for(tenant_id: UUID) -> _RuleStoreEntry:
-    entry = _rule_store.get(tenant_id)
-    if entry is None:
-        return {
-            "yaml": "",
-            "enabled": True,  # default-on per spec
-            "updated_at": datetime.now(UTC),
-        }
+async def _load_for(
+    db: Any,  # noqa: ANN401 — AsyncSession; kept loose so tests can stub
+    tenant_id: UUID,
+) -> _RuleStoreEntry:
+    """Read the tenant's rules from Postgres, falling back to the defaults."""
+    default: _RuleStoreEntry = {
+        "yaml": "",
+        "enabled": True,  # default-on per spec
+        "updated_at": datetime.now(UTC),
+    }
+    try:
+        result = await db.execute(
+            text(
+                """
+                SELECT yaml_text, enabled, updated_at
+                FROM aisoc_business_context_rule_sets
+                WHERE tenant_id = :tenant_id
+                """
+            ),
+            {"tenant_id": str(tenant_id)},
+        )
+        row = result.first()
+    except Exception as exc:  # noqa: BLE001 — a read failure falls back to cache
+        logger.warning(
+            "business_context.load_failed",
+            tenant_id=str(tenant_id),
+            error=str(exc).replace("\r", " ").replace("\n", " ")[:500],
+        )
+        return _rule_store.get(tenant_id, default)
+
+    if row is None:
+        return _rule_store.get(tenant_id, default)
+
+    entry: _RuleStoreEntry = {
+        "yaml": row[0] or "",
+        "enabled": bool(row[1]),
+        "updated_at": row[2] or datetime.now(UTC),
+    }
+    _rule_store[tenant_id] = entry
     return entry
 
 
 def _reset_store_for_tests() -> None:
-    """Clear in-process state — only safe in test code."""
+    """Clear the read cache — only safe in test code."""
     _rule_store.clear()
 
 
@@ -282,8 +361,6 @@ async def _fetch_sample_alerts(
     (test envs without the schema, demo Fly.io stack) — the UI then
     falls back to its built-in illustrative samples.
     """
-    from sqlalchemy import text  # noqa: PLC0415
-
     try:
         result = await db.execute(
             text(
@@ -355,7 +432,7 @@ async def get_rules(
     """
     await user.require_permission_db("settings:read", db)
 
-    entry = _load_for(user.tenant_id)
+    entry = await _load_for(db, user.tenant_id)
     yaml_text = entry["yaml"]
     enabled = entry["enabled"]
 
@@ -400,10 +477,11 @@ async def replace_rules(
             detail=str(exc),
         ) from exc
 
-    updated_at = _persist_for(
+    updated_at = await _persist_for(
+        db,
         user.tenant_id,
         yaml_text=payload.yaml,
-        enabled=_load_for(user.tenant_id)["enabled"],
+        enabled=(await _load_for(db, user.tenant_id))["enabled"],
     )
     snapshot = _engine().replace(user.tenant_id, rules)
 
@@ -417,7 +495,7 @@ async def replace_rules(
         user.tenant_id,
         snapshot,
         yaml_text=payload.yaml,
-        enabled=_load_for(user.tenant_id)["enabled"],
+        enabled=(await _load_for(db, user.tenant_id))["enabled"],
         updated_at=updated_at,
     )
 
@@ -458,16 +536,17 @@ async def update_rule(
             detail=(f"rule id in URL ({rule_id!r}) must match rule id in body " f"({new_rule.id!r})"),
         )
 
-    existing_yaml = _load_for(user.tenant_id)["yaml"]
+    existing_yaml = (await _load_for(db, user.tenant_id))["yaml"]
     existing_rules = load_rules_from_yaml(existing_yaml) if existing_yaml else []
     by_id = {r.id: r for r in existing_rules}
     by_id[new_rule.id] = new_rule
     next_yaml = _serialise_rules(list(by_id.values()))
 
-    updated_at = _persist_for(
+    updated_at = await _persist_for(
+        db,
         user.tenant_id,
         yaml_text=next_yaml,
-        enabled=_load_for(user.tenant_id)["enabled"],
+        enabled=(await _load_for(db, user.tenant_id))["enabled"],
     )
     snapshot = _engine().replace(user.tenant_id, by_id.values())
 
@@ -481,7 +560,7 @@ async def update_rule(
         user.tenant_id,
         snapshot,
         yaml_text=next_yaml,
-        enabled=_load_for(user.tenant_id)["enabled"],
+        enabled=(await _load_for(db, user.tenant_id))["enabled"],
         updated_at=updated_at,
     )
 
@@ -498,7 +577,7 @@ async def delete_rule(
 ) -> None:
     await user.require_permission_db("settings:write", db)
 
-    existing_yaml = _load_for(user.tenant_id)["yaml"]
+    existing_yaml = (await _load_for(db, user.tenant_id))["yaml"]
     existing_rules = load_rules_from_yaml(existing_yaml) if existing_yaml else []
     remaining = [r for r in existing_rules if r.id != rule_id]
     if len(remaining) == len(existing_rules):
@@ -508,10 +587,11 @@ async def delete_rule(
         )
 
     next_yaml = _serialise_rules(remaining)
-    _persist_for(
+    await _persist_for(
+        db,
         user.tenant_id,
         yaml_text=next_yaml,
-        enabled=_load_for(user.tenant_id)["enabled"],
+        enabled=(await _load_for(db, user.tenant_id))["enabled"],
     )
     _engine().replace(user.tenant_id, remaining)
     logger.info(
