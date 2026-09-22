@@ -148,7 +148,6 @@ class SOCAgent(Protocol):
         benchmark distinguishes "declined" from "crashed", and an exception
         is scored as a crash.
         """
-        ...
 
 
 class HTTPAgent:

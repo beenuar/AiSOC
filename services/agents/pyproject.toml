@@ -24,6 +24,11 @@ langchain-openai = ">=0.2.0,<2.0.0"
 # resolved to <0.1.0 which silently broke the import at runtime.
 langgraph = ">=0.2.40,<2.0.0"
 langchain-community = ">=0.3.0,<2.0.0"
+# Transitive through langchain-community, floored explicitly: the
+# resolver picked 3.14.1, which is inside the advisory range
+# (<= 3.14.2). A transitive dependency with a known fix is still a
+# known fix nobody applied.
+aiohttp = ">=3.14.3"
 openai = ">=1.12,<3.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<9.0.0"}
 httpx = ">=0.26,<0.29"

@@ -160,13 +160,10 @@ def load_yaml_schema(path: Path) -> Schema:
 
 # Heuristic regex: match string literals on the right-hand side of a Go
 # constant or variable assignment. We deliberately do not try to fully parse
-# Go — the T1.1 file may declare these as ``const ( Label = "..." )``,
-# ``var Label = "..."``, or as map keys. We collect every quoted string and
-# bucket it by simple shape conventions:
-#   * CamelCase tokens (``Identity``, ``ServiceAccount``)  → node label
-#   * UPPER_SNAKE_CASE tokens (``HAS_PERMISSION``)         → relationship
-# Anything else is ignored.
-_STRING_LITERAL_RE = re.compile(r'"([A-Za-z][A-Za-z0-9_]*)"')
+# Go — labels and relationships are classified by their declared type
+# (``NodeLabel`` vs ``RelType``), not by the shape of the string. The
+# previous approach bucketed CamelCase as a label and UPPER_SNAKE as a
+# relationship, which misfiled ``IOC`` — an all-caps node label.
 
 
 def parse_go_source(path: Path) -> tuple[set[str], set[str]] | None:
