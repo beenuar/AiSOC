@@ -7,7 +7,11 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = ">=0.109,<0.137"
+# Aligned with services/api. The previous `<0.137` cap held starlette at
+# 1.0.0, which carries six advisories (PYSEC-2026-161/248/249/2280/2281),
+# and because a stale poetry.lock kept this service out of the dependency
+# scan entirely, nothing in CI ever said so (#650).
+fastapi = ">=0.111,<0.142"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
