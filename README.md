@@ -31,23 +31,23 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 
 ## Try AiSOC in 60 seconds
 
-One command — no clone, no Docker, no keys (`npx aisoc` lands on npm with the v8.1 packaging release; today it builds from [`packages/aisoc-lite/`](packages/aisoc-lite/)):
+No Docker, no keys, under five seconds:
 
 ```bash
-npx aisoc triage --demo
-# ✓ AiSOC triaged 200 alerts: 12 TP, 171 FP suppressed (85.5% noise), 17 need review — in 0.1s
+git clone https://github.com/beenuar/AiSOC && cd AiSOC
+pip install -e packages/aisoc-sandbox && aisoc-sandbox demo
 ```
 
-The wedge CLI scores a batch of alerts to verdicts (escalate / review / suppress) with a deterministic engine ported from the production triage scorer — zero LLM key required. Or pick whichever path matches what you already have on your machine:
+One alert through the four-stage agent funnel — Detect → Triage → Hunt → Respond — with a deterministic offline reasoner, printing the Investigation Ledger. No API key, no network, nothing to tear down. Prefer not to clone? [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1) and run the same command in the browser. Or pick whichever path matches what you already have:
 
 | If you have…                          | Run this                                                                                                 | What you get                                                                                       |
 |---------------------------------------|----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| **Python 3.10+** (no Docker)          | `pip install -e packages/aisoc-sandbox && aisoc-sandbox demo`                                            | Offline agent investigation walked through Detect → Triage → Hunt → Respond and printed to stdout. **< 5 s.** No API key, no network. |
+| **npm, and v8.1 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
 | **A browser** (zero install)          | [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)                                  | Browser IDE → `pnpm aisoc:demo --no-open` → click forwarded port `3000`. ~5 min cold.              |
 | **Docker + pnpm**                     | `git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo`                              | Local stack on Postgres + Redis + Kafka + api + agents + web. Browser opens at `INC-RT-001`.       |
 | **Nothing** (clean Linux/macOS/Win)   | `curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh \| bash`                     | Bootstraps Docker, Node, pnpm, git for you; then runs `pnpm aisoc:demo`.                           |
 
-The first row is new: [`aisoc-sandbox`](packages/aisoc-sandbox/) is a zero-dependency, in-memory simulator of the agent funnel. Pick a [bundled scenario](packages/aisoc-sandbox/README.md#bundled-scenarios) (`lateral-movement`, `aws-credential-exfil`, `phishing-payload`, `kubernetes-privesc`, `github-token-theft`) or feed in your own JSON via `--file`. The other three rows boot the real stack and land you on `/cases/INC-RT-001?tab=ledger` — a LockBit 3.0 ransomware case mid-investigation, with the AI agent's prompts, tool calls, and rationale streaming into the [Investigation Ledger](apps/docs/docs/console/investigation-rail.md). Stop the real stack with `pnpm aisoc:demo:down`.
+[`aisoc-sandbox`](packages/aisoc-sandbox/) is a zero-dependency, in-memory simulator of the agent funnel. Pick a [bundled scenario](packages/aisoc-sandbox/README.md#bundled-scenarios) (`lateral-movement`, `aws-credential-exfil`, `phishing-payload`, `kubernetes-privesc`, `github-token-theft`) or feed in your own JSON via `--file`. The remaining rows boot the real stack and land you on `/cases/INC-RT-001?tab=ledger` — a LockBit 3.0 ransomware case mid-investigation, with the AI agent's prompts, tool calls, and rationale streaming into the [Investigation Ledger](apps/docs/docs/console/investigation-rail.md). Stop the real stack with `pnpm aisoc:demo:down`.
 
 > **Does the demo still boot on `main`?** Every push runs [`compose-smoke`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml) (the same `pnpm aisoc:demo` path you'd run locally) and [`e2e`](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml) against the seeded console; nightly [`compose-smoke-nightly`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml) repeats it with cold caches. A red badge below is a release-blocker.
 >

@@ -44,12 +44,23 @@ jobs:
         id: flycheck
         run: |
           set -uo pipefail
+          # Without a token there is nothing to do, so skipping is the only
+          # option. A missing *app* is different: self-provision it. Exiting
+          # 0 on a missing app is how the public demo stayed down for weeks
+          # while every run showed green — nothing in the history
+          # distinguished "nothing to deploy to" from "deployed fine", and a
+          # warning inside a passing run is a warning nobody reads.
           if [ -z "${FLY_API_TOKEN:-}" ]; then
-            echo "::warning title=deploy-api::FLY_API_TOKEN not set — skipping deploy (demo not provisioned)."
+            echo "::warning title=deploy-api::FLY_API_TOKEN not set — skipping deploy (nothing to deploy to)."
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           elif ! flyctl status --app aisoc-demo-api >/dev/null 2>&1; then
-            echo "::warning title=deploy-api::Fly app 'aisoc-demo-api' not found — skipping deploy. Recreate it (flyctl apps create aisoc-demo-api) or refresh FLY_API_TOKEN to auto-resume deploys."
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Fly app 'aisoc-demo-api' not found — creating it."
+            if flyctl apps create aisoc-demo-api --org personal; then
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error title=deploy-api::Could not create 'aisoc-demo-api'. The token may lack org permissions, or the name may be taken."
+              exit 1
+            fi
           else
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           fi
@@ -86,3 +97,24 @@ jobs:
             --remote-only \
             --config "${GITHUB_WORKSPACE}/infra/fly/api/fly.toml" \
             --app aisoc-demo-api
+
+      # A deploy that returns zero is not an API that works. /health is the
+      # cheapest thing that tells the two apart, and without it a green run
+      # says nothing about whether the demo is reachable.
+      - name: Verify the API actually responds
+        if: steps.flycheck.outputs.deploy == 'true'
+        run: |
+          set -uo pipefail
+          URL="https://aisoc-demo-api.fly.dev/health"
+          for attempt in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+              -A 'AiSOC-deploy-check/1.0' "$URL" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "api responding: HTTP 200 after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "  attempt ${attempt}: HTTP ${code} — waiting for the machine to start"
+            sleep 15
+          done
+          echo "::error title=deploy-api::Deploy succeeded but ${URL} never returned 200. Fly Postgres autostop can leave the database unwakeable, which 500s every data-backed route while the deploy itself looks clean."
+          exit 1
