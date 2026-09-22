@@ -7,7 +7,168 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0] — 2026-09-22
+
+**Close the loop.** v8.0 was reserved for the package-publish milestone. That
+turned out to be the wrong thing to name a major release after, because a
+competitive read of the AI-SOC market says buyers are not choosing on
+distribution — they are choosing on whether the platform can prove it did
+what it said. So v8.0 is the release that connects capabilities the codebase
+already contained but never wired together, and the npm/PyPI publish moves to
+v8.1 where it belongs.
+
+The pattern across almost every item below is the same, and it is worth
+stating plainly: the mechanism existed, was tested in isolation, and had no
+caller on the path that needed it. A passing unit test on an uncalled function
+is indistinguishable from a working feature until someone traces the call
+graph.
+
+### Added
+
+- **Response actions are verified against the vendor.** Outcome verification is
+  the line the market draws between a tool that recommends and one that
+  responds. `AutonomyDecision.requires_verification` was computed for every
+  auto-executed action at MEDIUM blast radius and above, and the dispatcher
+  dropped it; `PostActionVerifier` had no caller outside its own test. The
+  dispatcher now re-queries after a real, successful execution and records the
+  outcome. A vendor that accepts the call while the effect is absent downgrades
+  the action to FAILED instead of leaving it reported as succeeded — that gap
+  is how a SOC comes to believe a host is contained when it is not.
+  `unverified` stays `unverified` and is never upgraded to a confirmation.
+- **The isolation probe reads real containment state.** It previously returned
+  `bool(device_id)`, true for every host in the fleet, so it would certify an
+  uncontained host as verified. Adds `get_containment_status` to the
+  CrowdStrike client; `containment_pending` deliberately does not count. A new
+  probe covers `block_ip` by re-reading the enforcing security-group rules.
+- **Autonomy is governed by the tenant's own policy.** The console has written
+  a per-tenant L0–L4 tier, per-action overrides and a HIGH-blast whitelist to
+  Postgres since v7.6; the dispatcher read none of it and resolved autonomy
+  from one deployment-wide `AISOC_MATURITY_TIER`. Every tenant in a
+  multi-tenant install shared a posture, and a tenant who selected L2 in the UI
+  got whatever the operator had exported. `maturity.evaluate_gate` — the
+  function that does understand per-tenant policy — had no callers anywhere.
+  The `whitelisted` flag is now passed to `decide()`; it had been left at its
+  default of False, which made the L4 break-glass path unreachable.
+- **Analysts can hunt the events AiSOC itself ingested.** Every connector's
+  events are archived to ClickHouse `aisoc.raw_events`, and nothing could query
+  them: `/nl-query/execute` only ever executed against Elasticsearch, so a
+  tenant whose data lives in the platform's own lake got "ES_URL not
+  configured" and could not query anything they had ingested. The translator's
+  structured IR now compiles to parameterised ClickHouse SQL, with the tenant
+  predicate generated as part of the WHERE clause rather than rewritten in
+  afterwards, and no analyst text reaching the SQL string.
+- **Auto-escalated alerts get the context manual ones get.** The manual
+  investigator has built a `ContextBundle` — graph neighbourhood, blast radius,
+  historical verdicts for the same entities, UEBA baselines — since v7.5. The
+  escalation path never did, so the high-volume automatic route investigated a
+  true positive knowing nothing about how identical alerts had resolved before.
+
 ### Fixed
+
+- **Repeat-alert suppression could never fire.** v7.7 shipped the compounding
+  loop as "a repeat alert matching a trusted benign prior is auto-resolved
+  without re-triage", measured as `repeat_alerts_suppressed` on
+  `/metrics/funnel`. The signature was `evidence_fingerprint(tenant,
+  raw_alert)`, and `raw_alert` carries the alert row id, the source event ids
+  and the raw event payload — all unique per alert. Every alert hashed to a
+  unique fingerprint, so each outcome prior was written under a key nothing
+  would look up again and the metric could only ever report zero. Two features
+  were dead, not one: every repeat also paid for a fresh LLM triage the dedup
+  cache should have served for nothing. `test_outcome_memory.py` missed it
+  because it calls `record_outcome` and `lookup_prior` with the same literal
+  signature string, which holds for any key scheme including a broken one.
+- **Three services were fully unauthenticated.** `purple-team`, `honeytokens`
+  and `ueba` each mounted their entire API with no authentication, so anyone
+  who could reach the port could launch attack simulations, mint or read
+  honeytokens, and read per-user behavioural risk scores. Auth is applied at
+  the router level so a route added later is protected by default.
+- **The live-action router had no authentication.** `/api/v1/live-actions`
+  reaches `dispatch()`, which isolates hosts, disables accounts and blocks IPs
+  against live vendors, while the legacy actions router mounted beside it had
+  required a service token on every mutating route since it was written.
+- **Two cross-tenant leaks in the entity graph.** `get_entity_neighbors`
+  accepted a `tenant_id` and never used it — no predicate in the Cypher, and
+  the parameter was not even passed to the driver — so naming any node id
+  returned another tenant's host, user or IOC plus every neighbour with full
+  properties. `get_blast_radius` filtered only the traversal's start node and
+  accepted `tenant_id IS NULL`, so an APOC expansion could leave the tenant's
+  estate through a shared entity and enumerate another tenant's hosts and
+  users. Every node of every path is now scoped, through one shared predicate.
+- **Business-context rules never reached triage.** The API stored them in a
+  module-level dict inside whichever process served the write, and the
+  auto-triage worker loaded rules only from a YAML file whose path nothing
+  sets. A tenant could author "this host is a domain controller, escalate
+  anything touching it", see it saved, preview it against their last 50
+  alerts, and have it apply to no triage decision ever. Migration 050 adds
+  `aisoc_business_context_rule_sets` and the worker resolves per tenant from it.
+- **Verdicts could auto-close on reasoning the evidence contradicts.**
+  `score_groundedness` measures what fraction of the indicators an output
+  asserts actually appear in the evidence, and had no caller in the service. A
+  confident `false_positive` citing an IP that appeared nowhere in the alert
+  was persisted, written back as a prior that would suppress future alerts, and
+  closed. Auto-closing verdicts below the floor are now demoted to
+  `needs_review` with the unsupported indicators named in the findings.
+- **The tool-calling loop bypassed the LLM input contract.** `run_with_tools`
+  feeds tool output straight back into the prompt, and tool output is
+  untrusted: a SIEM row or threat-intel record can carry text that reads as an
+  instruction. Calling `bound.ainvoke` directly skipped injection validation on
+  the highest-risk content in the system and lost cost telemetry for every turn.
+- **QRadar could never be federated to.** `to_aql` is written, exported and
+  tested, and the QRadar connector implements `federated_search` with it. The
+  type was missing from the API's `FEDERATED_CAPABLE_TYPES`, so a tenant with
+  an enabled QRadar connector was silently excluded from every federated search.
+- **The API-keys panel issued keys that authenticated nothing.** It generated
+  an `aisoc_live_…` secret in the browser with `crypto.getRandomValues`, told
+  the user to save it because it would not be shown again, and never sent it
+  anywhere. Someone would paste it into a CI pipeline or a forwarder and get
+  silent 401s while believing they held a working credential. Revoking filtered
+  a row out of local state. The real CRUD backend existed all along.
+- **Fabricated security data rendered as tenant state across 24 components.**
+  Alerts, cases, connectors, playbooks, detections, hunt, attack graph, threat
+  intel, SLA, audit, RBAC, purple team, identity permissions, EASM and shift
+  handoff each served a `MOCK_*` / `DEMO_*` array when the API call failed,
+  none of it gated on demo mode. A fabricated alert is indistinguishable from a
+  real one, and the worst of them invented things a customer makes decisions
+  from: MITRE coverage claiming which techniques they can detect, SLA
+  percentages, an external attack surface with a risk score. It also persisted
+  — SWR v2 disables `revalidateOnMount` whenever `fallbackData` is supplied, so
+  most of these were not first-paint placeholders but what the view showed.
+- **Executor rollbacks did not call the vendor.** `isolate_host`,
+  `disable_user` and `suspend_session` logged an intent and returned True, so
+  an operator who rolled back a lockout was told the account was restored while
+  it stayed disabled. The real reverse calls existed in `app.services.rollback`
+  with no caller outside their own test.
+- **Three unreachable routes.** `GET /assets/vulnerabilities` and the agents'
+  `/hunts/runs` and `/hunts/findings` were registered after a parameterised
+  `/{id}` route that shadowed them.
+- **The osquery playbook step crashed on import.** It imported client modules
+  from `app.clients.*`, which does not exist in `services/agents`, so every
+  such step died with an unhandled `ModuleNotFoundError` — and the NL playbook
+  drafter actively offers this step type.
+- **A saved hunt's "run" button ran nothing.** It re-translated the question,
+  stamped `last_run_at` and returned, so the console showed "last run just now"
+  for a hunt that had queried nothing.
+- **Generated content was presented as real findings.** A fabricated APT
+  attribution in the alert detail view, synthetic hunt hits, and
+  template-fallback copilot replies now declare their provenance.
+
+### Changed
+
+- **The v8.0 milestone is the close-the-loop release; package publishing moves
+  to v8.1.** `@aisoc/mcp`, `@aisoc/sdk`, `aisoc-cli`, `aisoc-sdk`,
+  `aisoc-plugin-sdk` and `aisoc-sandbox` remain unpublished and the README
+  points at monorepo-local invocations. `publish-cli.yml` is OIDC-provenance
+  ready and no-ops with a clear notice rather than faking a publish; it needs
+  an `NPM_TOKEN` secret and a PyPI trusted publisher, which are account-level
+  settings rather than code.
+- **Nine new rows in the claim-to-gate matrix**, one per capability above, each
+  naming the test that fails if the wiring regresses. 73 rows: 62 GATED, 11
+  PARTIAL, 0 NO GATE.
+- **New CI gate `check_mock_data_gated.py`** fails the build on a
+  `fallbackData` receiving sample data un-wrapped, or sample data assigned to
+  state with no demo-mode check.
+
+### Fixed (carried from the unreleased section)
 
 - **UEBA can no longer read an unscoreable baseline as normal behaviour.** A
   feature that had never been observed, had too few samples, or had zero
