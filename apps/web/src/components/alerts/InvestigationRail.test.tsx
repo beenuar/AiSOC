@@ -30,7 +30,7 @@
 // Author: Beenu Arora <beenu@cyble.com>
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
@@ -230,6 +230,19 @@ beforeEach(() => {
   explainDrawerProps.lastProps = null;
 });
 
+/**
+ * Render the rail and switch to the Details face.
+ *
+ * Story is the default view now, so the section tests below — narrative,
+ * entities, timeline, actions — have to ask for the face that shows them.
+ * The toggle itself is covered at the end of the file.
+ */
+function renderDetails(onClose: () => void = vi.fn()) {
+  const result = render(<InvestigationRail alertId="ALERT-W6-0001" onClose={onClose} />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+  return result;
+}
+
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 describe('InvestigationRail — empty state', () => {
@@ -323,10 +336,13 @@ describe('InvestigationRail — header', () => {
         name: /impossible travel — frankfurt then tokyo/i,
       }),
     ).toBeInTheDocument();
-    // Severity 'high' is unique — the fixture priorities are {critical, low,
-    // info}, so 'high' appears exactly once (in the severity span).
-    expect(screen.getByText('high')).toBeInTheDocument();
-    expect(screen.getByText('okta')).toBeInTheDocument();
+    // Scoped to the summary region. Severity and source legitimately appear
+    // again in the story's evidence list, so an unscoped query now matches
+    // twice — and asserting "somewhere on screen" would stop testing the
+    // header at all.
+    const summary = within(screen.getByRole('region', { name: 'Alert summary' }));
+    expect(summary.getByText('high')).toBeInTheDocument();
+    expect(summary.getByText('okta')).toBeInTheDocument();
     // Risk score is rounded — 87 stays 87, but the prefix is the contract.
     expect(screen.getByText(/^risk 87$/)).toBeInTheDocument();
   });
@@ -365,7 +381,7 @@ describe('InvestigationRail — header', () => {
 describe('InvestigationRail — narrative section', () => {
   it('renders the narrative when present', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.getByText('Narrative')).toBeInTheDocument();
     expect(
       screen.getByText(/fusion promoted this alert because two sign-ins/i),
@@ -374,13 +390,13 @@ describe('InvestigationRail — narrative section', () => {
 
   it('omits the narrative section when narrative is null', () => {
     swrState.data = buildAlert({ narrative: null });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText('Narrative')).toBeNull();
   });
 
   it('omits the narrative section when narrative is only whitespace', () => {
     swrState.data = buildAlert({ narrative: '   \n  ' });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText('Narrative')).toBeNull();
   });
 });
@@ -390,7 +406,7 @@ describe('InvestigationRail — narrative section', () => {
 describe('InvestigationRail — related entities section', () => {
   it('renders related entities grouped by kind with a count', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     expect(screen.getByText(/related entities/i)).toBeInTheDocument();
     // 5 entities total in the fixture.
@@ -405,7 +421,7 @@ describe('InvestigationRail — related entities section', () => {
 
   it('renders the principal chips with their display labels', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     // Display label wins over raw value when present.
     expect(screen.getByText('Alice (Finance)')).toBeInTheDocument();
     // No label → fall back to raw value.
@@ -414,7 +430,7 @@ describe('InvestigationRail — related entities section', () => {
 
   it('wraps entities with pivotPath in a link and leaves the rest as plain chips', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     // The pivotable principal renders an anchor.
     const aliceLink = screen.getByText('Alice (Finance)').closest('a');
@@ -436,7 +452,7 @@ describe('InvestigationRail — related entities section', () => {
 
   it('omits the section entirely when no related entities are returned', () => {
     swrState.data = buildAlert({ relatedEntities: [] });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText(/related entities/i)).toBeNull();
   });
 
@@ -448,9 +464,7 @@ describe('InvestigationRail — related entities section', () => {
       { kind: 'principal', type: 'host', value: 'box-1' },
     ];
     swrState.data = buildAlert({ relatedEntities: shuffled });
-    const { container } = render(
-      <InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />,
-    );
+    const { container } = renderDetails();
 
     // The three group headers present in the fixture appear; the workflow
     // group is skipped because there are no workflow entities.
@@ -476,7 +490,7 @@ describe('InvestigationRail — related entities section', () => {
 describe('InvestigationRail — mini-timeline section', () => {
   it('renders the mini-timeline rows with badges, titles, and actors', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     expect(screen.getByText(/recent events/i)).toBeInTheDocument();
     expect(screen.getByText('(2)')).toBeInTheDocument();
@@ -506,14 +520,14 @@ describe('InvestigationRail — mini-timeline section', () => {
         },
       ],
     });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     // The title still surfaces so the row isn't lost.
     expect(screen.getByText('Analyst added a note')).toBeInTheDocument();
   });
 
   it('omits the section when there are no timeline events', () => {
     swrState.data = buildAlert({ miniTimeline: [] });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText(/recent events/i)).toBeNull();
   });
 });
@@ -523,7 +537,7 @@ describe('InvestigationRail — mini-timeline section', () => {
 describe('InvestigationRail — recommended actions section', () => {
   it('renders recommended actions with priority chips, rationale, and risk', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     expect(screen.getByText(/recommended actions/i)).toBeInTheDocument();
     expect(screen.getByText('(3)')).toBeInTheDocument();
@@ -570,7 +584,7 @@ describe('InvestigationRail — recommended actions section', () => {
         },
       ],
     });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     // The chip still renders with the raw priority text — the fallback is
     // about the tone class, not about hiding the row.
     expect(screen.getByText('urgent')).toBeInTheDocument();
@@ -579,7 +593,7 @@ describe('InvestigationRail — recommended actions section', () => {
 
   it('omits the section when there are no recommended actions', () => {
     swrState.data = buildAlert({ recommendedActions: [] });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText(/recommended actions/i)).toBeNull();
   });
 });
@@ -589,7 +603,7 @@ describe('InvestigationRail — recommended actions section', () => {
 describe('InvestigationRail — Deep Explain drawer', () => {
   it('does not mount the drawer on initial render', () => {
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByTestId('explain-drawer-mock')).toBeNull();
     expect(explainDrawerProps.lastProps).toBeNull();
   });
@@ -597,7 +611,7 @@ describe('InvestigationRail — Deep Explain drawer', () => {
   it('mounts the drawer with the loaded alert when Deep Explain is clicked', async () => {
     const user = userEvent.setup();
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     await user.click(screen.getByRole('button', { name: /deep explain/i }));
 
@@ -609,7 +623,7 @@ describe('InvestigationRail — Deep Explain drawer', () => {
   it('closes the drawer when the drawer fires onClose', async () => {
     const user = userEvent.setup();
     swrState.data = buildAlert();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     await user.click(screen.getByRole('button', { name: /deep explain/i }));
     expect(screen.getByTestId('explain-drawer-mock')).toBeInTheDocument();
@@ -624,7 +638,7 @@ describe('InvestigationRail — Deep Explain drawer', () => {
     const user = userEvent.setup();
     swrState.data = buildAlert();
     const onClose = vi.fn();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={onClose} />);
+    renderDetails(onClose);
 
     await user.click(screen.getByRole('button', { name: /deep explain/i }));
     await user.click(screen.getByTestId('explain-drawer-close'));
@@ -640,7 +654,7 @@ describe('InvestigationRail — rail close button', () => {
     const user = userEvent.setup();
     swrState.data = buildAlert();
     const onClose = vi.fn();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={onClose} />);
+    renderDetails(onClose);
 
     // The shell exposes one Close affordance — the loaded rail uses the same
     // aria-label as the loading shell, so we can target it the same way.
@@ -655,7 +669,7 @@ describe('InvestigationRail — rail close button', () => {
     // pins that contract so refactors don't accidentally short-circuit it.
     swrState.data = buildAlert();
     const onClose = vi.fn();
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={onClose} />);
+    renderDetails(onClose);
 
     expect(
       screen.getByRole('heading', { name: /impossible travel/i }),
@@ -676,7 +690,7 @@ describe('InvestigationRail — degrades gracefully on legacy envelopes', () => 
       miniTimeline: [],
       recommendedActions: [],
     });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
 
     // Header still renders.
     expect(
@@ -702,10 +716,42 @@ describe('InvestigationRail — degrades gracefully on legacy envelopes', () => 
       miniTimeline: undefined,
       recommendedActions: undefined,
     });
-    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    renderDetails(vi.fn());
     expect(screen.queryByText('Narrative')).toBeNull();
     expect(screen.queryByText(/related entities/i)).toBeNull();
     expect(screen.queryByText(/recent events/i)).toBeNull();
     expect(screen.queryByText(/recommended actions/i)).toBeNull();
+  });
+});
+
+// ─── View toggle ─────────────────────────────────────────────────────────────
+
+describe('InvestigationRail — story is the primary view', () => {
+  it('opens on the story, not the field list', () => {
+    swrState.data = buildAlert();
+    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    expect(screen.getByRole('tab', { name: 'Story' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByLabelText('Attack story')).toBeInTheDocument();
+  });
+
+  it('keeps the detail sections one click away', () => {
+    swrState.data = buildAlert();
+    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    expect(screen.queryByText('Narrative')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+    expect(screen.getByText('Narrative')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Attack story')).not.toBeInTheDocument();
+  });
+
+  it('can switch back', () => {
+    swrState.data = buildAlert();
+    render(<InvestigationRail alertId="ALERT-W6-0001" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Story' }));
+    expect(screen.getByLabelText('Attack story')).toBeInTheDocument();
   });
 });
