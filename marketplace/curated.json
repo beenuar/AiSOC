@@ -1,39 +1,38 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-13T06:40:32Z",
+  "generated": "2026-09-22T15:54:13Z",
   "stats": {
-    "considered": 1062,
-    "eligible": 1058,
-    "selected": 417,
+    "considered": 1054,
+    "eligible": 1051,
+    "selected": 418,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
     "unique_techniques": 117,
     "selected_by_tier": {
-      "imported": 42,
-      "native": 375
+      "imported": 41,
+      "native": 377
     },
     "selected_by_severity": {
-      "critical": 99,
-      "high": 208,
+      "critical": 100,
+      "high": 209,
       "low": 6,
-      "medium": 104
+      "medium": 103
     },
     "selected_by_category": {
-      "_migrated": 1,
-      "application": 33,
+      "application": 36,
       "cloud": 164,
       "data-exfil": 20,
       "endpoint": 117,
-      "identity": 70,
+      "identity": 69,
       "network": 12
     }
   },
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 49,
+      "count": 48,
       "rule_ids": [
         "det-application-050",
         "det-application-078",
@@ -82,21 +81,21 @@
         "sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e",
         "sigmahq-sigma-87df9ee1-5416-453a-8a08-e8d4a51e9ce1",
         "sigmahq-sigma-add64136-62e5-48ea-807e-88638d02df1e",
-        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2",
-        "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d"
+        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2"
       ],
       "min_target": 25,
       "covered": true
     },
     "credential-access": {
       "label": "Credential Access",
-      "count": 85,
+      "count": 86,
       "rule_ids": [
         "det-application-004",
         "det-application-008",
         "det-application-020",
         "det-application-040",
         "det-application-075",
+        "det-application-085",
         "det-cloud-047",
         "det-cloud-074",
         "det-cloud-101",
@@ -224,8 +223,9 @@
     },
     "exfil": {
       "label": "Data Exfiltration",
-      "count": 41,
+      "count": 42,
       "rule_ids": [
+        "det-application-081",
         "det-cloud-058",
         "det-cloud-062",
         "det-cloud-063",
@@ -391,6 +391,7 @@
         "det-application-072",
         "det-application-073",
         "det-application-075",
+        "det-application-080",
         "det-cloud-001",
         "det-cloud-007",
         "det-cloud-014",
@@ -459,7 +460,6 @@
         "det-endpoint-301",
         "det-endpoint-302",
         "det-identity-001",
-        "det-identity-002",
         "det-identity-009",
         "det-identity-020",
         "det-identity-021",
@@ -683,7 +683,7 @@
     "T1484.002": 1,
     "T1485": 31,
     "T1486": 5,
-    "T1489": 3,
+    "T1489": 2,
     "T1490": 11,
     "T1496": 6,
     "T1505.003": 2,
@@ -698,7 +698,7 @@
     "T1548.003": 1,
     "T1550": 4,
     "T1550.003": 1,
-    "T1552": 2,
+    "T1552": 3,
     "T1552.001": 5,
     "T1552.005": 1,
     "T1552.007": 1,
@@ -720,7 +720,7 @@
     "T1562.008": 8,
     "T1565": 1,
     "T1565.001": 1,
-    "T1567": 10,
+    "T1567": 11,
     "T1567.002": 2,
     "T1569": 1,
     "T1570": 6,
@@ -1566,6 +1566,81 @@
         "executable(+0.15)"
       ],
       "log_source_product": "openai",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-080",
+      "name": "AI Agent Took Action Beyond Its Granted Scope",
+      "path": "detections/application/ai-agent-excessive-agency.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_guardrail",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-081",
+      "name": "Sensitive Data Left via an AI Agent",
+      "path": "detections/application/ai-sensitive-data-egress.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1567"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 1.0,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_guardrail",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-085",
+      "name": "Credential Material Present in an AI Prompt",
+      "path": "detections/application/ai-prompt-contained-credential.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1552"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_runtime",
       "has_executable_body": true
     },
     {
@@ -8332,32 +8407,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-002",
-      "name": "Impossible Travel Between Two Authentications",
-      "path": "detections/identity/impossible-travel.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-003",
       "name": "Password Spray Across Many Users from Single IP",
       "path": "detections/identity/password-spray.yaml",
@@ -11482,31 +11531,6 @@
       ],
       "log_source_product": "windows",
       "has_executable_body": true
-    },
-    {
-      "id": "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d",
-      "name": "Linux Auditd Osquery Service Stop",
-      "path": "detections/splunk-imports/_migrated/linux-auditd-osquery-service-stop.yaml",
-      "tier": "imported",
-      "source": "splunk-security-content",
-      "category": "_migrated",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1489"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": "splunk",
-      "has_executable_body": false
     }
   ]
 }
