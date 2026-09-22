@@ -347,6 +347,27 @@ jobs:
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
+      - name: Benchmark harness (Pillar 4)
+        # The harness must stay runnable against an agent that is not ours,
+        # and must keep refusing the ways a scoring harness quietly hands out
+        # credit: abstaining to raise accuracy, citing unverifiable
+        # indicators, self-reporting a flattering latency, and publishing a
+        # figure without saying the corpus was synthetic.
+        run: |
+          python3 -m pip install --quiet httpx
+          cd packages/aisoc-benchmark
+          PYTHONPATH=. python3 -m pytest tests/ -q
+
+      - name: Corpus must match its generator
+        # Two hand-edited copies of 200 incidents drift within a release, and
+        # the published figure then describes a corpus nobody has.
+        run: |
+          python3 packages/aisoc-benchmark/build_corpus.py
+          git diff --exit-code packages/aisoc-benchmark/corpus/ || {
+            echo "::error::the benchmark corpus is out of date; run build_corpus.py and commit"
+            exit 1
+          }
+
       - name: Gate the action contract (Pillar 3)
         # Four properties of every response action were previously inferred
         # rather than declared: risk (from the capability name in one place
