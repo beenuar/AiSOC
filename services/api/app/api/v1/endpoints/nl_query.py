@@ -26,21 +26,28 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
+import structlog
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
+from app.db.clickhouse import (
+    LakeQueryError,
+    LakeQueryTimeoutError,
+    execute_lake_query,
+)
 from app.services.esql_runner import (
     ESQLExecutionError,
     ESQLNotConfigured,
     resolve_es_credentials,
     run_esql_query,
 )
+from app.services.lake_hunt import HuntCompileError, compile_hunt
 
 if TYPE_CHECKING:
     # Static-only re-export so type checkers can see the dataclass fields and
@@ -146,6 +153,8 @@ if not TYPE_CHECKING:
     enhance_with_llm = _nl_query.enhance_with_llm
     deterministic_translate = _nl_query.translate
 
+logger = structlog.get_logger(__name__)
+
 router = APIRouter(prefix="/nl-query", tags=["nl_query"])
 
 
@@ -208,6 +217,13 @@ class QueryResult(BaseModel):
 class NLQueryExecuteResponse(NLQueryTranslateResponse):
     result: QueryResult | None = None
     execution_error: str | None = None
+    #: Which backend produced `result`. An analyst must be able to tell
+    #: "nothing matched in your SIEM" from "nothing matched in AiSOC's lake".
+    executed_against: Literal["elasticsearch", "lake"] | None = None
+    #: Translator fields the lake does not store, when executing against the
+    #: lake. A hunt that quietly drops half its filters returns more rows than
+    #: was asked for, which reads as "nothing was filtered out".
+    unsupported_filters: list[str] = Field(default_factory=list)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -293,6 +309,55 @@ async def _execute_esql(esql: str, es_url: str, es_api_key: str, max_rows: int) 
 # ────────────────────────────────────────────────────────────────────────────
 
 
+async def _execute_against_lake(
+    base: NLQueryExecuteResponse,
+    translated: TranslatedQuery,
+    body: NLQueryExecuteRequest,
+    user: AuthUser,
+) -> NLQueryExecuteResponse:
+    """Run the hunt against AiSOC's own event lake.
+
+    The translator's structured IR compiles straight to parameterised
+    ClickHouse SQL, so no part of the analyst's question reaches the SQL
+    string. The tenant predicate is generated as part of the WHERE clause
+    rather than rewritten in afterwards.
+    """
+    base.executed_against = "lake"
+    try:
+        compiled = compile_hunt(
+            translated.intents,
+            tenant_id=str(user.tenant_id),
+            hours=body.time_range_hours,
+            limit=body.max_rows,
+        )
+    except HuntCompileError as exc:
+        base.execution_error = f"Could not compile this question into a lake query: {exc}"
+        return base
+
+    base.unsupported_filters = compiled.unsupported_fields
+
+    try:
+        result = await execute_lake_query(compiled.sql, params=compiled.params)
+    except LakeQueryTimeoutError as exc:
+        base.execution_error = f"Lake query timed out: {exc}"
+        return base
+    except LakeQueryError as exc:
+        base.execution_error = f"Lake query failed: {exc}"
+        return base
+    except Exception as exc:  # noqa: BLE001 — surface, never fabricate rows
+        logger.warning("nl_query.lake_execution_failed", error=str(exc))
+        base.execution_error = f"Lake query failed: {exc}. Configure ES_URL to hunt an external SIEM instead."
+        return base
+
+    base.result = QueryResult(
+        columns=list(result.columns),
+        rows=[list(row) for row in result.rows],
+        total_rows=result.row_count,
+        took_ms=result.elapsed_ms,
+    )
+    return base
+
+
 @router.post(
     "/translate",
     response_model=NLQueryTranslateResponse,
@@ -347,9 +412,13 @@ async def execute_query(
     try:
         es_url, es_api_key = resolve_es_credentials()
     except ESQLNotConfigured:
-        base.execution_error = "ES_URL or ES_API_KEY not configured. Set them in environment variables."
-        return base
+        # No external SIEM configured. Every connector's events are archived
+        # to AiSOC's own ClickHouse lake, so hunt that instead of refusing.
+        # This endpoint used to return "ES_URL not configured" and stop, which
+        # left a tenant unable to query any of the data they had ingested.
+        return await _execute_against_lake(base, translated, body, user)
 
+    base.executed_against = "elasticsearch"
     try:
         base.result = await _execute_esql(
             translated.esql,

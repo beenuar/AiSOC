@@ -58,8 +58,10 @@ from app.api.v1.deps import AuthUser
 from app.api.v1.endpoints.nl_query import (  # noqa: E402
     deterministic_translate,
 )
+from app.db.clickhouse import execute_lake_query
 from app.db.rls import TenantDBSession
 from app.models.saved_hunt import SavedHunt
+from app.services.lake_hunt import HuntCompileError, compile_hunt
 
 logger = structlog.get_logger()
 
@@ -192,14 +194,27 @@ class CreateSavedHuntRequest(BaseModel):
     schedule: str | None = Field(default=None, max_length=_MAX_SCHEDULE_LEN)
 
 
+class SavedHuntRunResult(BaseModel):
+    """Rows the hunt actually returned."""
+
+    columns: list[str] = Field(default_factory=list)
+    rows: list[list[Any]] = Field(default_factory=list)
+    total_rows: int = 0
+    took_ms: int | None = None
+
+
 class RunSavedHuntResponse(BaseModel):
     """Synchronous run result returned by ``POST /saved-hunts/{id}/run``.
 
-    The endpoint *does not* execute the underlying ES|QL — that path is the
-    job of :mod:`app.api.v1.endpoints.nl_query` (``/nl-query/execute``) and
-    requires a configured Elasticsearch URL. The ``/run`` endpoint here only
-    re-translates and stamps ``last_run_at`` so the UI can show "last run
-    just now" and so the scheduler treats a manual run as resetting cadence.
+    This endpoint used to re-translate the question, stamp ``last_run_at`` and
+    return — executing nothing. The UI then displayed "last run just now" for
+    a hunt that had queried no data at all, which is indistinguishable from a
+    hunt that ran and found nothing.
+
+    It now runs the compiled query against AiSOC's own event lake, which is
+    where every connector's events are archived. ``executed`` says plainly
+    whether rows were fetched, so a lake that is unreachable or unconfigured
+    reports that instead of looking like a clean run with zero hits.
     """
 
     id: str
@@ -207,6 +222,14 @@ class RunSavedHuntResponse(BaseModel):
     nl_query: str
     translated_query: TranslatedQueryEnvelope
     last_run_at: str
+    #: True only when a query really ran against the lake.
+    executed: bool = False
+    result: SavedHuntRunResult | None = None
+    #: Why no rows were fetched, when that is the case.
+    execution_error: str | None = None
+    #: Translator fields the lake does not store. A hunt that silently drops
+    #: filters returns more rows than the analyst asked for.
+    unsupported_filters: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +256,43 @@ def _translate(nl_query: str) -> TranslatedQueryEnvelope:
     """
     tq = deterministic_translate(nl_query)
     return TranslatedQueryEnvelope.from_translator(tq)
+
+
+async def _execute_on_lake(
+    nl_query: str,
+    tenant_id: str,
+) -> tuple[bool, SavedHuntRunResult | None, str | None, list[str]]:
+    """Run the hunt against the tenant's slice of the event lake.
+
+    Returns ``(executed, result, error, unsupported_fields)``. Never raises:
+    a hunt run must not 500 because the lake is down, but it also must not
+    report a successful run that did not happen.
+    """
+    try:
+        compiled = compile_hunt(deterministic_translate(nl_query).intents, tenant_id=tenant_id)
+    except HuntCompileError as exc:
+        return False, None, f"Could not compile this hunt into a lake query: {exc}", []
+    except Exception as exc:  # noqa: BLE001 — report, never fabricate a run
+        logger.warning("saved_hunt.compile_failed", error=str(exc))
+        return False, None, f"Could not compile this hunt into a lake query: {exc}", []
+
+    try:
+        lake_result = await execute_lake_query(compiled.sql, params=compiled.params)
+    except Exception as exc:  # noqa: BLE001 — surface the real reason
+        logger.warning("saved_hunt.lake_execution_failed", error=str(exc))
+        return False, None, f"Lake query failed: {exc}", compiled.unsupported_fields
+
+    return (
+        True,
+        SavedHuntRunResult(
+            columns=list(lake_result.columns),
+            rows=[list(r) for r in lake_result.rows],
+            total_rows=lake_result.row_count,
+            took_ms=lake_result.elapsed_ms,
+        ),
+        None,
+        compiled.unsupported_fields,
+    )
 
 
 async def _load_owned_hunt(
@@ -407,6 +467,7 @@ async def run_saved_hunt(
 
     translated = _translate(row.nl_query)
     now = datetime.now(UTC)
+    executed, result, execution_error, unsupported = await _execute_on_lake(row.nl_query, str(user.tenant_id))
 
     # Persist the refreshed translation alongside the run timestamp so the
     # next list call surfaces the latest envelope. The schedule worker uses
@@ -430,4 +491,8 @@ async def run_saved_hunt(
         nl_query=row.nl_query,
         translated_query=translated,
         last_run_at=now.isoformat(),
+        executed=executed,
+        result=result,
+        execution_error=execution_error,
+        unsupported_filters=unsupported,
     )
