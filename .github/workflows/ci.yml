@@ -236,7 +236,10 @@ jobs:
         # a missing dep is right — a gate that skips when it cannot import is
         # a gate that silently stops checking.
         run: |
-          python -m pip install --quiet httpx pydantic
+          # Verified as the complete set in a clean venv: the import closure
+          # is app.connectors.* plus app.federated.*, and nothing in it
+          # reaches for a database driver or a web framework.
+          python -m pip install --quiet httpx pydantic structlog cryptography
           python scripts/generate_connector_docs.py --check
       # Eight fields shipped across v7.7 and v8.0 without reaching the funnel
       # docs, and they are the eight that say whether the automation is
