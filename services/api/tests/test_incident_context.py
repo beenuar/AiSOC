@@ -21,7 +21,6 @@ import re
 from typing import Any
 
 import pytest
-
 from app.services.incident_context import (
     _DIMENSIONS,
     GLOBAL_LABELS,
@@ -113,8 +112,7 @@ class TestTenantScoping:
                 # tenant-scoped, never a global label.
                 for var, label in _bound_variables(line).items():
                     assert label not in GLOBAL_LABELS, (
-                        f"{name}: variable-length pattern binds global label "
-                        f"{label} as {var!r}; that node can bridge tenants"
+                        f"{name}: variable-length pattern binds global label " f"{label} as {var!r}; that node can bridge tenants"
                     )
 
     def test_null_tenant_is_not_treated_as_readable(self) -> None:
@@ -129,8 +127,7 @@ class TestTenantScoping:
         # MITRE vocabulary and public intel are shared; tenant data is not.
         assert "Technique" in GLOBAL_LABELS and "ThreatActor" in GLOBAL_LABELS
         assert not any(
-            label in GLOBAL_LABELS
-            for label in ("Employee", "Application", "CloudAccount", "Secret", "IOC")
+            label in GLOBAL_LABELS for label in ("Employee", "Application", "CloudAccount", "Secret", "IOC")
         ), "a tenant-scoped label was exempted from scoping"
 
     async def test_tenant_id_is_bound_as_a_parameter(self) -> None:
@@ -166,9 +163,7 @@ class TestPartialResults:
                     raise RuntimeError("threat store unavailable")
                 return await super().run(cypher, **params)
 
-        session = PartlyBroken(
-            {"identities": [{"account": "svc_backup", "employee": "Dana Reed"}]}
-        )
+        session = PartlyBroken({"identities": [{"account": "svc_backup", "employee": "Dana Reed"}]})
         ctx = await get_incident_context(ALERT, TENANT, session=session)
 
         assert ctx.identities, "a failure in one dimension discarded another"
@@ -217,9 +212,7 @@ class TestNarrative:
     def test_departed_employee_with_a_live_account_is_called_out(self) -> None:
         """The single highest-signal fact this traversal can produce."""
         ctx = IncidentContext(alert_id=ALERT, tenant_id=TENANT)
-        ctx.identities = [
-            {"account": "j.doe", "employee": "Jordan Doe", "is_active": False}
-        ]
+        ctx.identities = [{"account": "j.doe", "employee": "Jordan Doe", "is_active": False}]
         text = "\n".join(ctx.narrative_lines())
         assert "no longer active" in text
 
@@ -261,9 +254,7 @@ class TestNarrative:
 
 async def test_null_columns_are_dropped_from_rows() -> None:
     """Neo4j returns every RETURN key even when an OPTIONAL MATCH missed."""
-    session = FakeSession(
-        {"identities": [{"account": "svc", "employee": None, "manager": None, "title": ""}]}
-    )
+    session = FakeSession({"identities": [{"account": "svc", "employee": None, "manager": None, "title": ""}]})
     ctx = await get_incident_context(ALERT, TENANT, session=session)
     assert ctx.identities == [{"account": "svc"}]
 
