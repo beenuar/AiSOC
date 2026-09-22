@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import CurrentUser, DBSession, get_current_user
 from app.services import graph_service
+from app.services.incident_context import get_incident_context
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,54 @@ async def get_blast_radius(
         ) from exc
 
     return BlastRadiusResponse(**data)
+
+
+class IncidentContextResponse(BaseModel):
+    """The five context dimensions for one alert.
+
+    ``partial`` and ``errors`` are part of the contract, not diagnostics. An
+    empty bundle from an unreachable graph and an empty bundle from an alert
+    with genuinely no context look identical otherwise, and a consumer that
+    cannot tell them apart will treat "we could not look" as "there is
+    nothing to find".
+    """
+
+    alert_id: str
+    tenant_id: str
+    identities: list[dict[str, Any]] = Field(default_factory=list)
+    assets: list[dict[str, Any]] = Field(default_factory=list)
+    cloud: list[dict[str, Any]] = Field(default_factory=list)
+    business: list[dict[str, Any]] = Field(default_factory=list)
+    threat: list[dict[str, Any]] = Field(default_factory=list)
+    dimensions_resolved: int = 0
+    partial: bool = False
+    errors: list[str] = Field(default_factory=list)
+    narrative: list[str] = Field(default_factory=list)
+
+
+@router.get(
+    "/incident-context/{alert_id}",
+    response_model=IncidentContextResponse,
+    summary="Traverse an alert into identity, asset, cloud, business and threat context",
+)
+async def incident_context(
+    alert_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> IncidentContextResponse:
+    """Resolve one alert into the five dimensions an investigation needs.
+
+    Each dimension runs as its own bounded, tenant-scoped traversal, and they
+    run concurrently. A dimension that fails or times out names itself in
+    ``errors`` while the rest still return: this is on the hot path of every
+    escalated alert, so one slow leg must not take the bundle with it.
+
+    Returns 200 with ``partial: true`` rather than an error status when some
+    dimensions failed — the caller asked for context and got some.
+    """
+    context = await get_incident_context(alert_id, str(current_user.tenant_id))
+    payload = context.as_dict()
+    payload["narrative"] = context.narrative_lines()
+    return IncidentContextResponse(**payload)
 
 
 @router.get(

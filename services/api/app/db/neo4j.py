@@ -14,6 +14,7 @@ from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
 from neo4j.exceptions import ServiceUnavailable
 
 from app.core.config import settings
+from app.db.graph_migrations import pending_ids, run_migrations
 
 logger = logging.getLogger(__name__)
 
@@ -77,33 +78,30 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def _create_schema() -> None:
-    """Create constraints and indexes for the graph schema."""
-    constraints = [
-        # Uniqueness constraints
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (h:Host) REQUIRE h.id IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Alert) REQUIRE a.id IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:IOC) REQUIRE i.value IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Technique) REQUIRE t.technique_id IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Case) REQUIRE c.id IS UNIQUE",
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Process) REQUIRE p.id IS UNIQUE",
-        # Indexes for common lookups
-        "CREATE INDEX IF NOT EXISTS FOR (h:Host) ON (h.hostname)",
-        "CREATE INDEX IF NOT EXISTS FOR (h:Host) ON (h.tenant_id)",
-        "CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.username)",
-        "CREATE INDEX IF NOT EXISTS FOR (u:User) ON (u.tenant_id)",
-        "CREATE INDEX IF NOT EXISTS FOR (a:Alert) ON (a.tenant_id)",
-        "CREATE INDEX IF NOT EXISTS FOR (a:Alert) ON (a.severity)",
-        "CREATE INDEX IF NOT EXISTS FOR (i:IOC) ON (i.ioc_type)",
-        "CREATE INDEX IF NOT EXISTS FOR (i:IOC) ON (i.tenant_id)",
-        "CREATE INDEX IF NOT EXISTS FOR (t:Technique) ON (t.tactic)",
-    ]
+    """Apply any pending graph migrations.
 
+    This used to be a fixed list of ``CREATE … IF NOT EXISTS`` statements with
+    every failure swallowed at ``debug``, which meant a schema change could
+    only ever land on a fresh install and a constraint that failed to create
+    left the deployment running without a guarantee the code assumes. The
+    statements now live in ``app.db.graph_migrations`` as numbered, recorded,
+    forward-only migrations.
+
+    Non-strict here on purpose: a migration failure must not take the API
+    down, because the graph is an enrichment surface and the rest of the
+    platform works without it. It is logged at ``error`` rather than
+    ``debug``, and the pending list is readable for diagnostics.
+    """
     async with get_session() as session:
-        for cypher in constraints:
-            try:
-                await session.run(cypher)
-            except Exception as exc:
-                logger.debug("Schema statement skipped cypher=%s error=%s", cypher[:60], exc)
+        applied = await run_migrations(session, strict=False)
+        pending = await pending_ids(session)
 
-    logger.info("Neo4j schema constraints and indexes ensured")
+    if applied:
+        logger.info("Neo4j graph migrations applied: %s", ", ".join(applied))
+    if pending:
+        logger.error(
+            "Neo4j graph migrations still pending after startup: %s — " "graph-backed features may be degraded",
+            ", ".join(pending),
+        )
+    else:
+        logger.info("Neo4j schema up to date")

@@ -338,6 +338,7 @@ jobs:
             tests/test_prompt_envelope.py \
             tests/test_privacy_redactor.py \
             tests/test_cost_governor.py \
+            tests/test_bundle_incident_context.py \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
