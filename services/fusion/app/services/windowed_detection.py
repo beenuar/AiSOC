@@ -23,6 +23,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -98,12 +99,81 @@ _BUILTIN_RULES: tuple[WindowRule, ...] = (
 )
 
 
+#: Windowed rules exported from the spec modules, mirroring the stateless
+#: engine's `detection_ruleset.json`. Absent the file, only the builtins load.
+#:
+#: This exists because the windowed engine had three hardcoded rules and no way
+#: to add a fourth without editing this module. That mattered beyond
+#: inconvenience: a large share of the 2,005 quarantined Splunk rules are
+#: `| stats count ... by` aggregations, which cannot be expressed in the
+#: stateless `match_when` at all and have nowhere else to go. The quarantine
+#: README now tells contributors to skip them "until it has one" — this is it.
+_WINDOWED_RULESET_PATH = Path(__file__).resolve().parent.parent / "data" / "windowed_ruleset.json"
+
+
+def load_window_rules(path: Path | None = None) -> tuple[WindowRule, ...]:
+    """Builtins plus any exported windowed rules.
+
+    Fail-soft by design: a missing or malformed ruleset yields the builtins
+    rather than an empty corpus, because silently detecting nothing is worse
+    than detecting only the high-signal three. A malformed entry is skipped
+    individually so one bad rule cannot disable the rest.
+    """
+    target = path or _WINDOWED_RULESET_PATH
+    if not target.exists():
+        return _BUILTIN_RULES
+
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        logger.warning("windowed_detection.ruleset_load_failed", path=str(target), error=str(exc))
+        return _BUILTIN_RULES
+
+    loaded: list[WindowRule] = list(_BUILTIN_RULES)
+    seen = {rule.id for rule in _BUILTIN_RULES}
+    for entry in payload.get("rules") or []:
+        if not isinstance(entry, dict):
+            continue
+        rule_id = str(entry.get("id") or "")
+        if not rule_id or rule_id in seen:
+            continue
+        try:
+            rule = WindowRule(
+                id=rule_id,
+                name=str(entry["name"]),
+                severity=str(entry["severity"]),
+                category=str(entry["category"]),
+                mitre=[str(m).upper() for m in entry.get("mitre") or []],
+                match_when=dict(entry["match_when"]),
+                group_by=str(entry["group_by"]),
+                threshold=int(entry["threshold"]),
+                window_seconds=int(entry["window_seconds"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("windowed_detection.rule_skipped", rule_id=rule_id, error=str(exc))
+            continue
+        if rule.threshold < 1 or rule.window_seconds < 1:
+            # A zero threshold fires on the first event, which is a stateless
+            # rule wearing a windowed rule's clothes, and a zero window never
+            # accumulates. Both are authoring mistakes, not policies.
+            logger.warning("windowed_detection.rule_bounds_invalid", rule_id=rule_id)
+            continue
+        loaded.append(rule)
+        seen.add(rule_id)
+
+    logger.info("windowed_detection.ruleset_loaded", count=len(loaded), builtins=len(_BUILTIN_RULES))
+    return tuple(loaded)
+
+
 class WindowedDetectionEngine:
     """Redis-backed sliding-window threshold detections."""
 
-    def __init__(self, redis: Any, rules: tuple[WindowRule, ...] = _BUILTIN_RULES, *, key_prefix: str = "aisoc:wd") -> None:
+    def __init__(self, redis: Any, rules: tuple[WindowRule, ...] | None = None, *, key_prefix: str = "aisoc:wd") -> None:
         self._redis = redis
-        self._rules = rules
+        # None means "whatever is declared", so a deployment picks up exported
+        # rules without a code change. An explicit tuple still wins, which is
+        # what the tests rely on.
+        self._rules = rules if rules is not None else load_window_rules()
         self._prefix = key_prefix
 
     @property
@@ -112,19 +182,37 @@ class WindowedDetectionEngine:
 
     @staticmethod
     def _fields(message: dict[str, Any]) -> dict[str, Any]:
+        """Flat field namespace, matching the stateless engine exactly.
+
+        Carries the same fix: `raw_data` holds the connector's normalized dict
+        and connectors put the untouched vendor payload one level down under
+        `raw_event`, so a rule naming a vendor field read None and could never
+        fire. Both engines must agree on the namespace, or a rule that works
+        stateless would silently not work windowed.
+
+        Connector-normalized keys win on collision, for the same reason: a
+        connector that mapped a vendor's severity ladder onto AiSOC's five
+        tiers must not have that undone by the raw vendor value.
+        """
         ocsf = message.get("ocsf_event")
         if not isinstance(ocsf, dict):
             return {}
+        fields = ocsf
         raw = ocsf.get("raw_data")
         if isinstance(raw, str) and raw.strip():
             try:
                 parsed = json.loads(raw)
                 if isinstance(parsed, dict):
-                    return parsed
+                    fields = parsed
             except (ValueError, TypeError):
                 # raw_data isn't valid JSON — fall back to the OCSF envelope.
                 pass
-        return ocsf
+        nested = fields.get("raw_event")
+        if isinstance(nested, dict):
+            merged = {k: v for k, v in nested.items() if isinstance(k, str)}
+            merged.update(fields)
+            return merged
+        return fields
 
     async def evaluate(self, message: dict[str, Any]) -> list[DetectionHit]:
         """Count this event into any matching window; return threshold-crossing hits."""
