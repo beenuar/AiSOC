@@ -1,0 +1,28 @@
+# Hosts and patterns the link checker must not treat as failures.
+#
+# Keep this list short and justified. An entry here is a link nobody is
+# verifying, which is exactly the situation that let the docs URL 404 for
+# weeks — so prefer fixing a link over adding it here.
+
+# Badge and one-click-deploy endpoints. They rate-limit aggressive CI callers
+# and return non-200s that say nothing about whether the target is healthy.
+^https://img\.shields\.io/
+^https://api\.securityscorecards\.dev/
+^https://securityscorecards\.dev/
+^https://codespaces\.new/
+^https://render\.com/deploy
+
+# Placeholder and example hosts used in configuration snippets.
+^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal)
+^https?://([a-z0-9-]+\.)*example\.(com|org|net)
+^https?://your-
+^https?://<
+
+# Historical prototype subtree, kept for provenance only. Its links describe a
+# system that no longer exists and are deliberately not maintained.
+plans/cyble-aisoc/
+
+# Vendor docs that block datacentre egress outright.
+^https://www\.linkedin\.com/
+^https://twitter\.com/
+^https://x\.com/
