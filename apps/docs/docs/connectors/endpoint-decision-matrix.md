@@ -189,7 +189,7 @@ can ingest today.
 
 ## Related
 
-- [Connectors overview](/docs/connectors) — the full 83-connector catalog.
+- [Connectors overview](/docs/connectors) — the full 84-connector catalog.
 - [Hello, connector tutorial](/docs/connectors/hello-connector) — write your
   own if none of these fit.
 - [Detection coverage](/docs/detections/coverage) — which endpoint detections
