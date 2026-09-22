@@ -55,6 +55,7 @@ DEFAULT_YAML = REPO_ROOT / "schemas" / "graph-schema.yaml"
 DEFAULT_CURRENT_YAML = REPO_ROOT / "schemas" / "graph-schema-current.yaml"
 DEFAULT_GO_SOURCE = REPO_ROOT / "services" / "ingest" / "internal" / "graph" / "schema.go"
 
+
 def _go_schema_version(path: Path = DEFAULT_GO_SOURCE) -> str:
     """Read SchemaVersion out of schema.go.
 
@@ -330,10 +331,7 @@ def compare_against_go(schema: Schema, go_parsed: tuple[set[str], set[str]]) -> 
 
     missing_in_go_labels = yaml_labels - go_labels
     if missing_in_go_labels:
-        errors.append(
-            f"node labels declared in YAML but missing from Go source: "
-            f"{_format_set(missing_in_go_labels)}"
-        )
+        errors.append(f"node labels declared in YAML but missing from Go source: " f"{_format_set(missing_in_go_labels)}")
 
     missing_in_yaml_labels = go_labels - yaml_labels
     if missing_in_yaml_labels:
@@ -346,10 +344,7 @@ def compare_against_go(schema: Schema, go_parsed: tuple[set[str], set[str]]) -> 
 
     missing_in_go_rels = yaml_rels - go_rels
     if missing_in_go_rels:
-        errors.append(
-            f"relationships declared in YAML but missing from Go source: "
-            f"{_format_set(missing_in_go_rels)}"
-        )
+        errors.append(f"relationships declared in YAML but missing from Go source: " f"{_format_set(missing_in_go_rels)}")
 
     missing_in_yaml_rels = go_rels - yaml_rels
     if missing_in_yaml_rels:
