@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.models.honeytoken import Honeytoken, HoneytokenTrigger
+from app.security.service_auth import require_service_auth
 from app.services.alerting import send_alert
 from app.services.generator import TOKEN_GENERATORS, generate_token
 
-router = APIRouter(prefix="/api/v1/honeytokens", tags=["honeytokens"])
+router = APIRouter(prefix="/api/v1/honeytokens", tags=["honeytokens"], dependencies=[Depends(require_service_auth)])
 
 # ---------------------------------------------------------------------------
 # DB dependency
