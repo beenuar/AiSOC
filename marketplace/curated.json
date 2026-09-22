@@ -1,27 +1,26 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-13T06:40:32Z",
+  "generated": "2026-09-22T15:25:14Z",
   "stats": {
-    "considered": 1062,
-    "eligible": 1058,
-    "selected": 417,
+    "considered": 1046,
+    "eligible": 1043,
+    "selected": 416,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
     "unique_techniques": 117,
     "selected_by_tier": {
-      "imported": 42,
+      "imported": 41,
       "native": 375
     },
     "selected_by_severity": {
       "critical": 99,
       "high": 208,
       "low": 6,
-      "medium": 104
+      "medium": 103
     },
     "selected_by_category": {
-      "_migrated": 1,
       "application": 33,
       "cloud": 164,
       "data-exfil": 20,
@@ -33,7 +32,7 @@
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 49,
+      "count": 48,
       "rule_ids": [
         "det-application-050",
         "det-application-078",
@@ -82,8 +81,7 @@
         "sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e",
         "sigmahq-sigma-87df9ee1-5416-453a-8a08-e8d4a51e9ce1",
         "sigmahq-sigma-add64136-62e5-48ea-807e-88638d02df1e",
-        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2",
-        "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d"
+        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2"
       ],
       "min_target": 25,
       "covered": true
@@ -161,7 +159,7 @@
         "det-identity-160",
         "det-network-004",
         "det-network-026",
-        "det-network-075",
+        "det-network-076",
         "mitre-car-car-2013-04-002",
         "mitre-car-car-2013-07-001",
         "mitre-car-car-2013-09-003",
@@ -198,10 +196,10 @@
         "det-network-005",
         "det-network-022",
         "det-network-030",
-        "det-network-063",
         "det-network-064",
         "det-network-065",
-        "det-network-069",
+        "det-network-066",
+        "det-network-070",
         "mitre-car-car-2013-01-003",
         "mitre-car-car-2013-04-002",
         "mitre-car-car-2013-05-003",
@@ -264,7 +262,7 @@
         "det-endpoint-175",
         "det-endpoint-270",
         "det-identity-152",
-        "det-network-054",
+        "det-network-055",
         "mitre-car-car-2013-04-002",
         "sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641"
       ],
@@ -683,7 +681,7 @@
     "T1484.002": 1,
     "T1485": 31,
     "T1486": 5,
-    "T1489": 3,
+    "T1489": 2,
     "T1490": 11,
     "T1496": 6,
     "T1505.003": 2,
@@ -10252,7 +10250,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-054",
+      "id": "det-network-055",
       "name": "Large HTTP POST From Workstation To Public IP",
       "path": "detections/network/net-http-large-post-from-workstation.yaml",
       "tier": "native",
@@ -10277,7 +10275,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-063",
+      "id": "det-network-064",
       "name": "SMB Version 1 Negotiated In Network Flow",
       "path": "detections/network/net-smbv1-egress.yaml",
       "tier": "native",
@@ -10302,7 +10300,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-064",
+      "id": "det-network-065",
       "name": "SMB Write To NETLOGON Share",
       "path": "detections/network/net-smb-write-netlogon.yaml",
       "tier": "native",
@@ -10327,7 +10325,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-065",
+      "id": "det-network-066",
       "name": "SMB Write To SYSVOL Share From Non-DC",
       "path": "detections/network/net-smb-write-sysvol.yaml",
       "tier": "native",
@@ -10352,7 +10350,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-069",
+      "id": "det-network-070",
       "name": "WinRM HTTPS From Workstation To DC",
       "path": "detections/network/net-winrm-ssl-from-workstation.yaml",
       "tier": "native",
@@ -10377,7 +10375,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-075",
+      "id": "det-network-076",
       "name": "RADIUS Authentication Used PAP (Cleartext Password)",
       "path": "detections/network/net-radius-pap-clear.yaml",
       "tier": "native",
@@ -11482,31 +11480,6 @@
       ],
       "log_source_product": "windows",
       "has_executable_body": true
-    },
-    {
-      "id": "splunk-security-content-0c320fea-6e87-4b99-a884-74d09d4b655d",
-      "name": "Linux Auditd Osquery Service Stop",
-      "path": "detections/splunk-imports/_migrated/linux-auditd-osquery-service-stop.yaml",
-      "tier": "imported",
-      "source": "splunk-security-content",
-      "category": "_migrated",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1489"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": "splunk",
-      "has_executable_body": false
     }
   ]
 }

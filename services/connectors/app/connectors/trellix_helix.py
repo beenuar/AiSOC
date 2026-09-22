@@ -166,5 +166,5 @@ class TrellixHelixConnector(BaseConnector):
             "alert_id": raw.get("id"),
             "host": raw.get("hostname"),
             "user": raw.get("username"),
-            "raw": raw,
+            "raw_event": raw,
         }

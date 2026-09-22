@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-07-13T06:13:47Z",
+  "generated": "2026-09-22T15:25:13Z",
   "categories": [
     {
       "id": "playbooks",
@@ -37,7 +37,7 @@
       "imported": 6113,
       "stable": 894
     },
-    "quarantined": 5921
+    "quarantined": 5937
   },
   "mitre_coverage": {
     "techniques": {
@@ -47656,6 +47656,30 @@
     {
       "id": "det-network-037",
       "type": "detection",
+      "name": "DNS TXT Response Over 250 Bytes From Non-Resolver Host",
+      "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS TXT Response Over 250 Bytes From Non-Resolver Host'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "network",
+      "mitre_techniques": [
+        "T1071.004",
+        "T1048.003"
+      ],
+      "log_source": "dns",
+      "playbook": "tpl-command-and-control",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "path": "detections/network/dns-txt-record.yaml"
+    },
+    {
+      "id": "det-network-038",
+      "type": "detection",
       "name": "DNS Tunnel Indicator: Long Hex Subdomain Sequence",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Tunnel Indicator: Long Hex Subdomain Sequence'. Watch the 1 documented false-positive case before tuning.",
       "version": "1.0.0",
@@ -47677,7 +47701,7 @@
       "path": "detections/network/net-dns-tunnel-pattern-len.yaml"
     },
     {
-      "id": "det-network-038",
+      "id": "det-network-039",
       "type": "detection",
       "name": "DNS-Over-HTTPS Egress To Non-Sanctioned Resolver",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS-Over-HTTPS Egress To Non-Sanctioned Resolver'. Watch the 1 documented false-positive case before tuning.",
@@ -47700,7 +47724,7 @@
       "path": "detections/network/net-dns-doh-non-resolver.yaml"
     },
     {
-      "id": "det-network-039",
+      "id": "det-network-040",
       "type": "detection",
       "name": "DNS-Over-TLS Egress To Public IP",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS-Over-TLS Egress To Public IP'. Watch the 1 documented false-positive case before tuning.",
@@ -47723,7 +47747,7 @@
       "path": "detections/network/net-dns-dot-non-resolver.yaml"
     },
     {
-      "id": "det-network-040",
+      "id": "det-network-041",
       "type": "detection",
       "name": "DNS Query For .onion Address",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Query For .onion Address'. Watch the 1 documented false-positive case before tuning.",
@@ -47746,7 +47770,7 @@
       "path": "detections/network/net-dns-tor-onion.yaml"
     },
     {
-      "id": "det-network-041",
+      "id": "det-network-042",
       "type": "detection",
       "name": "DNS Fast-Flux Pattern (Many A Records, Short TTL)",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Fast-Flux Pattern (Many A Records, Short TTL)'. Watch the 1 documented false-positive case before tuning.",
@@ -47769,7 +47793,7 @@
       "path": "detections/network/net-dns-fast-flux.yaml"
     },
     {
-      "id": "det-network-042",
+      "id": "det-network-043",
       "type": "detection",
       "name": "DNS Rebinding Indicator (Public\u2192RFC1918 In Same TTL Window)",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Rebinding Indicator (Public\u2192RFC1918 In Same TTL Window)'. Watch the 1 documented false-positive case before tuning.",
@@ -47792,7 +47816,7 @@
       "path": "detections/network/net-dns-rebinding.yaml"
     },
     {
-      "id": "det-network-043",
+      "id": "det-network-044",
       "type": "detection",
       "name": "HTTP CONNECT Method Toward Public IP",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP CONNECT Method Toward Public IP'. Watch the 1 documented false-positive case before tuning.",
@@ -47815,7 +47839,7 @@
       "path": "detections/network/net-http-connect-public-ip.yaml"
     },
     {
-      "id": "det-network-044",
+      "id": "det-network-045",
       "type": "detection",
       "name": "HTTP User-Agent Matches PowerShell Default",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP User-Agent Matches PowerShell Default'. Watch the 1 documented false-positive case before tuning.",
@@ -47838,7 +47862,7 @@
       "path": "detections/network/net-http-userag-powershell.yaml"
     },
     {
-      "id": "det-network-045",
+      "id": "det-network-046",
       "type": "detection",
       "name": "curl/wget User-Agent From Workstation Subnet",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'curl/wget User-Agent From Workstation Subnet'. Watch the 1 documented false-positive case before tuning.",
@@ -47861,7 +47885,7 @@
       "path": "detections/network/net-http-userag-curl-internal.yaml"
     },
     {
-      "id": "det-network-046",
+      "id": "det-network-047",
       "type": "detection",
       "name": "HTTP Host Header Is IP Literal",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP Host Header Is IP Literal'. Watch the 1 documented false-positive case before tuning.",
@@ -47884,7 +47908,7 @@
       "path": "detections/network/net-http-host-header-ip.yaml"
     },
     {
-      "id": "det-network-047",
+      "id": "det-network-048",
       "type": "detection",
       "name": "TLS Client Offered TLS 1.0 Or 1.1",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'TLS Client Offered TLS 1.0 Or 1.1'. Watch the 1 documented false-positive case before tuning.",
@@ -47907,7 +47931,7 @@
       "path": "detections/network/net-tls-old-client-version.yaml"
     },
     {
-      "id": "det-network-048",
+      "id": "det-network-049",
       "type": "detection",
       "name": "HTTPS Connection To IP Without SNI",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'HTTPS Connection To IP Without SNI'. Watch the 1 documented false-positive case before tuning.",
@@ -47930,7 +47954,7 @@
       "path": "detections/network/net-tls-no-sni.yaml"
     },
     {
-      "id": "det-network-049",
+      "id": "det-network-050",
       "type": "detection",
       "name": "Self-Signed Certificate Presented On Public IP",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Self-Signed Certificate Presented On Public IP'. Watch the 1 documented false-positive case before tuning.",
@@ -47953,7 +47977,7 @@
       "path": "detections/network/net-tls-self-signed-egress.yaml"
     },
     {
-      "id": "det-network-050",
+      "id": "det-network-051",
       "type": "detection",
       "name": "TLS Negotiated Weak Cipher Suite",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'TLS Negotiated Weak Cipher Suite'. Watch the 1 documented false-positive case before tuning.",
@@ -47976,7 +48000,7 @@
       "path": "detections/network/net-tls-suspicious-cipher.yaml"
     },
     {
-      "id": "det-network-051",
+      "id": "det-network-052",
       "type": "detection",
       "name": "JARM Fingerprint Matches Known Cobalt Strike Profile",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint Matches Known Cobalt Strike Profile'. Watch the 1 documented false-positive case before tuning.",
@@ -47999,7 +48023,7 @@
       "path": "detections/network/net-jarm-cobalt-strike.yaml"
     },
     {
-      "id": "det-network-052",
+      "id": "det-network-053",
       "type": "detection",
       "name": "JARM Fingerprint Matches Known Sliver Profile",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint Matches Known Sliver Profile'. Watch the 1 documented false-positive case before tuning.",
@@ -48022,7 +48046,7 @@
       "path": "detections/network/net-jarm-sliver.yaml"
     },
     {
-      "id": "det-network-053",
+      "id": "det-network-054",
       "type": "detection",
       "name": "HTTP Response MIME And Content-Encoding Mismatch",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP Response MIME And Content-Encoding Mismatch'. Watch the 1 documented false-positive case before tuning.",
@@ -48045,7 +48069,7 @@
       "path": "detections/network/net-http-gzip-mime-mismatch.yaml"
     },
     {
-      "id": "det-network-054",
+      "id": "det-network-055",
       "type": "detection",
       "name": "Large HTTP POST From Workstation To Public IP",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Large HTTP POST From Workstation To Public IP'. Watch the 1 documented false-positive case before tuning.",
@@ -48068,7 +48092,7 @@
       "path": "detections/network/net-http-large-post-from-workstation.yaml"
     },
     {
-      "id": "det-network-055",
+      "id": "det-network-056",
       "type": "detection",
       "name": "Outbound SSH With -R Reverse-Tunnel Flag",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound SSH With -R Reverse-Tunnel Flag'. Watch the 1 documented false-positive case before tuning.",
@@ -48091,7 +48115,7 @@
       "path": "detections/network/net-ssh-reverse-tunnel.yaml"
     },
     {
-      "id": "det-network-056",
+      "id": "det-network-057",
       "type": "detection",
       "name": "Tor Connection From Corporate Workstation",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Tor Connection From Corporate Workstation'. Watch the 1 documented false-positive case before tuning.",
@@ -48114,7 +48138,7 @@
       "path": "detections/network/net-tor-egress-corp.yaml"
     },
     {
-      "id": "det-network-057",
+      "id": "det-network-058",
       "type": "detection",
       "name": "ICMP Echo With Unusually Large Payload",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'ICMP Echo With Unusually Large Payload'. Watch the 1 documented false-positive case before tuning.",
@@ -48137,7 +48161,7 @@
       "path": "detections/network/net-icmp-large-payload.yaml"
     },
     {
-      "id": "det-network-058",
+      "id": "det-network-059",
       "type": "detection",
       "name": "GRE Tunnel Initiated By Non-Network Host",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'GRE Tunnel Initiated By Non-Network Host'. Watch the 1 documented false-positive case before tuning.",
@@ -48160,7 +48184,7 @@
       "path": "detections/network/net-gre-from-non-network-device.yaml"
     },
     {
-      "id": "det-network-059",
+      "id": "det-network-060",
       "type": "detection",
       "name": "WireGuard Handshake From User Workstation",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'WireGuard Handshake From User Workstation'. Watch the 1 documented false-positive case before tuning.",
@@ -48183,7 +48207,7 @@
       "path": "detections/network/net-wireguard-handshake-from-user.yaml"
     },
     {
-      "id": "det-network-060",
+      "id": "det-network-061",
       "type": "detection",
       "name": "Corporate VPN Login Originating From Datacenter ASN",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Corporate VPN Login Originating From Datacenter ASN'. Watch the 1 documented false-positive case before tuning.",
@@ -48206,7 +48230,7 @@
       "path": "detections/network/net-vpn-from-datacenter.yaml"
     },
     {
-      "id": "det-network-061",
+      "id": "det-network-062",
       "type": "detection",
       "name": "Tor Introduction To Hidden Service From Corp Host",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Tor Introduction To Hidden Service From Corp Host'. Watch the 1 documented false-positive case before tuning.",
@@ -48229,7 +48253,7 @@
       "path": "detections/network/net-tor-introduction-onion.yaml"
     },
     {
-      "id": "det-network-062",
+      "id": "det-network-063",
       "type": "detection",
       "name": "Cloudflared Tunnel Started From Workstation",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Cloudflared Tunnel Started From Workstation'. Watch the 1 documented false-positive case before tuning.",
@@ -48252,7 +48276,7 @@
       "path": "detections/network/net-cloudflared-tunnel-egress.yaml"
     },
     {
-      "id": "det-network-063",
+      "id": "det-network-064",
       "type": "detection",
       "name": "SMB Version 1 Negotiated In Network Flow",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'SMB Version 1 Negotiated In Network Flow'. Watch the 1 documented false-positive case before tuning.",
@@ -48275,7 +48299,7 @@
       "path": "detections/network/net-smbv1-egress.yaml"
     },
     {
-      "id": "det-network-064",
+      "id": "det-network-065",
       "type": "detection",
       "name": "SMB Write To NETLOGON Share",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'SMB Write To NETLOGON Share'. Watch the 1 documented false-positive case before tuning.",
@@ -48298,7 +48322,7 @@
       "path": "detections/network/net-smb-write-netlogon.yaml"
     },
     {
-      "id": "det-network-065",
+      "id": "det-network-066",
       "type": "detection",
       "name": "SMB Write To SYSVOL Share From Non-DC",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'SMB Write To SYSVOL Share From Non-DC'. Watch the 1 documented false-positive case before tuning.",
@@ -48321,7 +48345,7 @@
       "path": "detections/network/net-smb-write-sysvol.yaml"
     },
     {
-      "id": "det-network-066",
+      "id": "det-network-067",
       "type": "detection",
       "name": "NTLM Relay Indicator (Same Challenge Reused Across Hosts)",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'NTLM Relay Indicator (Same Challenge Reused Across Hosts)'. Watch the 1 documented false-positive case before tuning.",
@@ -48344,7 +48368,7 @@
       "path": "detections/network/net-ntlm-relay-pattern.yaml"
     },
     {
-      "id": "det-network-067",
+      "id": "det-network-068",
       "type": "detection",
       "name": "RPC Remote Registry Write From Workstation Subnet",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'RPC Remote Registry Write From Workstation Subnet'. Watch the 1 documented false-positive case before tuning.",
@@ -48367,7 +48391,7 @@
       "path": "detections/network/net-rpc-remote-registry.yaml"
     },
     {
-      "id": "det-network-068",
+      "id": "det-network-069",
       "type": "detection",
       "name": "RPC Task Scheduler Create From Workstation",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'RPC Task Scheduler Create From Workstation'. Watch the 1 documented false-positive case before tuning.",
@@ -48390,7 +48414,7 @@
       "path": "detections/network/net-rpc-task-scheduler-remote.yaml"
     },
     {
-      "id": "det-network-069",
+      "id": "det-network-070",
       "type": "detection",
       "name": "WinRM HTTPS From Workstation To DC",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'WinRM HTTPS From Workstation To DC'. Watch the 1 documented false-positive case before tuning.",
@@ -48413,7 +48437,7 @@
       "path": "detections/network/net-winrm-ssl-from-workstation.yaml"
     },
     {
-      "id": "det-network-070",
+      "id": "det-network-071",
       "type": "detection",
       "name": "Cobalt Strike Default Named Pipe Pattern",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Cobalt Strike Default Named Pipe Pattern'. Watch the 1 documented false-positive case before tuning.",
@@ -48436,7 +48460,7 @@
       "path": "detections/network/net-cobalt-strike-named-pipe.yaml"
     },
     {
-      "id": "det-network-071",
+      "id": "det-network-072",
       "type": "detection",
       "name": "Sliver Default Named Pipe Pattern",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Sliver Default Named Pipe Pattern'. Watch the 1 documented false-positive case before tuning.",
@@ -48459,7 +48483,7 @@
       "path": "detections/network/net-sliver-named-pipe.yaml"
     },
     {
-      "id": "det-network-072",
+      "id": "det-network-073",
       "type": "detection",
       "name": "Empire C2 Default URI Pattern Observed",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Empire C2 Default URI Pattern Observed'. Watch the 1 documented false-positive case before tuning.",
@@ -48482,7 +48506,7 @@
       "path": "detections/network/net-empire-default-uri.yaml"
     },
     {
-      "id": "det-network-073",
+      "id": "det-network-074",
       "type": "detection",
       "name": "Kerberos Service Ticket Issued With RC4 Encryption",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Kerberos Service Ticket Issued With RC4 Encryption'. Watch the 1 documented false-positive case before tuning.",
@@ -48505,7 +48529,7 @@
       "path": "detections/network/net-kerberos-rc4-ticket.yaml"
     },
     {
-      "id": "det-network-074",
+      "id": "det-network-075",
       "type": "detection",
       "name": "Kerberos Account With Pre-Auth Disabled Used",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'Kerberos Account With Pre-Auth Disabled Used'. Watch the 1 documented false-positive case before tuning.",
@@ -48528,7 +48552,7 @@
       "path": "detections/network/net-kerberos-pre-auth-disabled.yaml"
     },
     {
-      "id": "det-network-075",
+      "id": "det-network-076",
       "type": "detection",
       "name": "RADIUS Authentication Used PAP (Cleartext Password)",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'RADIUS Authentication Used PAP (Cleartext Password)'. Watch the 1 documented false-positive case before tuning.",
@@ -48551,7 +48575,7 @@
       "path": "detections/network/net-radius-pap-clear.yaml"
     },
     {
-      "id": "det-network-076",
+      "id": "det-network-077",
       "type": "detection",
       "name": "LDAP Signing Disabled On Domain Controller",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'LDAP Signing Disabled On Domain Controller'. Watch the 1 documented false-positive case before tuning.",
@@ -48574,7 +48598,7 @@
       "path": "detections/network/net-ldap-signing-disabled.yaml"
     },
     {
-      "id": "det-network-077",
+      "id": "det-network-078",
       "type": "detection",
       "name": "LDAP Search Pattern Matches BloodHound Collection",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'LDAP Search Pattern Matches BloodHound Collection'. Watch the 1 documented false-positive case before tuning.",
@@ -48597,7 +48621,7 @@
       "path": "detections/network/net-ldap-bloodhound-pattern.yaml"
     },
     {
-      "id": "det-network-078",
+      "id": "det-network-079",
       "type": "detection",
       "name": "ICMP Echo With High-Entropy Payload",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'ICMP Echo With High-Entropy Payload'. Watch the 1 documented false-positive case before tuning.",
@@ -48620,7 +48644,7 @@
       "path": "detections/network/net-icmp-high-entropy-payload.yaml"
     },
     {
-      "id": "det-network-079",
+      "id": "det-network-080",
       "type": "detection",
       "name": "DHCP Starvation: Rapid Lease Churn From Single MAC Range",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'DHCP Starvation: Rapid Lease Churn From Single MAC Range'. Watch the 1 documented false-positive case before tuning.",
@@ -48643,7 +48667,7 @@
       "path": "detections/network/net-dhcp-starvation.yaml"
     },
     {
-      "id": "det-network-080",
+      "id": "det-network-081",
       "type": "detection",
       "name": "STP Topology Change Advertised By Edge Port",
       "description": "AiSOC v1 curated detection. Triggers on the network signal described by 'STP Topology Change Advertised By Edge Port'. Watch the 1 documented false-positive case before tuning.",
@@ -48664,30 +48688,6 @@
       "tier": "stable",
       "enabled": true,
       "path": "detections/network/net-stp-topology-change-from-edge.yaml"
-    },
-    {
-      "id": "det-network-081",
-      "type": "detection",
-      "name": "DNS TXT Response Over 250 Bytes From Non-Resolver Host",
-      "description": "Triggers on the network signal described by 'DNS TXT Response Over 250 Bytes From Non-Resolver Host'. Watch the 1 documented false-positive case before tuning.",
-      "version": "1.0.0",
-      "author": "Josh Fishman",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "network",
-      "mitre_techniques": [
-        "T1071.004",
-        "T1048.003"
-      ],
-      "log_source": "dns",
-      "playbook": "tpl-command-and-control",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "path": "detections/network/dns-txt-record.yaml"
     },
     {
       "id": "dlp-violation-response-v1",
@@ -158845,7 +158845,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1489"
       ],
@@ -158855,7 +158855,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/linux-auditd-osquery-service-stop.yaml",
+      "path": "detections/splunk-imports/_quarantine/linux-auditd-osquery-service-stop.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "0c320fea-6e87-4b99-a884-74d09d4b655d",
@@ -163991,7 +163992,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1068"
       ],
@@ -164001,7 +164002,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/detect-baron-samedit-cve-2021-3156-via-osquery.yaml",
+      "path": "detections/splunk-imports/_quarantine/detect-baron-samedit-cve-2021-3156-via-osquery.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "1de31d5d-8fa6-4ee0-af89-17069134118a",
@@ -164825,7 +164827,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1543.001"
       ],
@@ -164835,7 +164837,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/suspicious-plistbuddy-usage-via-osquery.yaml",
+      "path": "detections/splunk-imports/_quarantine/suspicious-plistbuddy-usage-via-osquery.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "20ba6c32-c733-4a32-b64e-2688cf231399",
@@ -167124,7 +167127,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [],
       "log_source": null,
       "playbook": null,
@@ -167132,7 +167135,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/processes-tapping-keyboard-events.yaml",
+      "path": "detections/splunk-imports/_quarantine/processes-tapping-keyboard-events.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "2a371608-331d-4034-ae2c-21dda8f1d0ec",
@@ -167780,7 +167784,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1553.001"
       ],
@@ -167790,7 +167794,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-gatekeeper-bypass.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-gatekeeper-bypass.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "2c9346f3-bbeb-48ce-8411-fc13d09d83a5",
@@ -174408,7 +174413,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1136"
       ],
@@ -174418,7 +174423,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-account-created.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-account-created.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "491004ae-694f-453e-b1e0-fc1e65daeea1",
@@ -175772,7 +175778,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1059.002"
       ],
@@ -175782,7 +175788,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-amos-stealer-virtual-machine-check-activity.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-amos-stealer-virtual-machine-check-activity.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "4e41ad21-9761-426d-8aa1-083712ff9f30",
@@ -176535,7 +176542,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1564.001"
       ],
@@ -176545,7 +176552,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-hidden-files-and-directories.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-hidden-files-and-directories.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "51c43b7b-e406-45d2-9bad-5c67f07e6528",
@@ -178362,7 +178370,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1059.004"
       ],
@@ -178372,7 +178380,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-lolbin.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-lolbin.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "58d270fb-5b39-418e-a855-4b8ac046805e",
@@ -187489,7 +187498,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1030"
       ],
@@ -187499,7 +187508,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-data-chunking.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-data-chunking.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "7f1c8bed-9bd4-40b0-a1df-c262cbade0fc",
@@ -195857,7 +195867,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1543"
       ],
@@ -195867,7 +195877,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-kextload-usage.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-kextload-usage.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "9d680775-84a6-4625-a8ea-8182b9427ce4",
@@ -196591,7 +196602,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1037.002"
       ],
@@ -196601,7 +196612,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-loginhook-persistence.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-loginhook-persistence.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a04832e7-9d1d-49b1-a684-e31bcd775c77",
@@ -198420,7 +198432,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1135"
       ],
@@ -198430,7 +198442,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-network-share-discovery.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-network-share-discovery.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a5f5fe52-8e50-4fb0-ad1b-780be6c0d857",
@@ -198785,7 +198798,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1070"
       ],
@@ -198795,7 +198808,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-log-removal.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-log-removal.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "a7f2e891-3c4d-4a1b-9e6f-2b8d0c5a1f3e",
@@ -205687,7 +205701,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1647"
       ],
@@ -205697,7 +205711,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-plutil.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-plutil.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "c11f2b57-92c1-4cd2-b46c-064eafb833ac",
@@ -213404,7 +213419,7 @@
         "categories.endpoint"
       ],
       "severity": "medium",
-      "category": "_migrated",
+      "category": "_quarantine",
       "mitre_techniques": [
         "T1555.001"
       ],
@@ -213414,7 +213429,8 @@
       "source": "splunk-security-content",
       "tier": "imported",
       "enabled": false,
-      "path": "detections/splunk-imports/_migrated/macos-keychains-dumped.yaml",
+      "path": "detections/splunk-imports/_quarantine/macos-keychains-dumped.yaml",
+      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "splunk/security_content",
         "source_id": "dcb45a09-5e6f-441e-b2f8-cbbf923e36d9",

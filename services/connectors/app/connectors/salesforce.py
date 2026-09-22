@@ -179,5 +179,5 @@ class SalesforceConnector(BaseConnector):
             "description": raw.get("Display"),
             "alert_id": raw.get("Id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

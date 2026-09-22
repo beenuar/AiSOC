@@ -152,5 +152,5 @@ class Auth0Connector(BaseConnector):
             "description": raw.get("user_name") or raw.get("ip"),
             "alert_id": raw.get("_id") or raw.get("log_id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

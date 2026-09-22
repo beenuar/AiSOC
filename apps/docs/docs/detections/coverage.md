@@ -11,19 +11,19 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-07-13T06:40:32Z`
+Generated: `2026-09-22T15:25:14Z`
 
 ## Headline numbers
 
-- **Curated v1.0 detections**: `417` (target: ≥ 300)
-- **Total rules considered**: `1062` (quality floor: 0.55)
+- **Curated v1.0 detections**: `416` (target: ≥ 300)
+- **Total rules considered**: `1046` (quality floor: 0.55)
 - **Unique MITRE techniques covered**: `117`
 
 ## Coverage by buyer family
 
 | Family | Count | Target | Covered |
 |---|---|---|---|
-| **Ransomware** | 49 | ≥ 25 | ✅ |
+| **Ransomware** | 48 | ≥ 25 | ✅ |
 | **Credential Access** | 85 | ≥ 25 | ✅ |
 | **Lateral Movement** | 33 | ≥ 25 | ✅ |
 | **Data Exfiltration** | 41 | ≥ 25 | ✅ |
@@ -36,7 +36,7 @@ Generated: `2026-07-13T06:40:32Z`
 
 ### By tier
 
-- `imported`: 42
+- `imported`: 41
 - `native`: 375
 
 ### By severity
@@ -44,11 +44,10 @@ Generated: `2026-07-13T06:40:32Z`
 - `critical`: 99
 - `high`: 208
 - `low`: 6
-- `medium`: 104
+- `medium`: 103
 
 ### By category
 
-- `_migrated`: 1
 - `application`: 33
 - `cloud`: 164
 - `data-exfil`: 20

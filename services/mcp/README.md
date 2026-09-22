@@ -197,7 +197,19 @@ npx -y @aisoc/mcp doctor
 
 - **Your API key never leaves the machine** running this server. It's read from env or the host's local config file (mode `0600`) and used to sign requests to your AiSOC instance.
 - **Read-only by default** unless your API key has write scopes. `aisoc_run_investigation` requires `cases:investigate`; everything else only needs `cases:read` / `alerts:read`.
-- **Audit trail.** Every tool call logged through this server lands in the AiSOC audit log with the calling user and the tool name. You can revoke the key and replay every action it took.
+- **Audit trail.** Every tool call this server makes emits a structured
+  `mcp.tool_call` record carrying the tool name, the calling key's subject, the
+  argument keys (not values), latency and outcome. Note what the API's own
+  audit log does *not* cover: `audit_middleware` only records mutating methods
+  carrying a valid JWT, so the ten read tools (`aisoc_list_*`, `aisoc_get_*`,
+  `aisoc_lake_query`) produce no server-side audit row, and what it does record
+  is an HTTP path rather than a tool name. The tool-call records above are what
+  gives you per-tool attribution.
+  Set `AISOC_MCP_TELEMETRY_URL` to an AiSOC inbox token using the `ai-runtime`
+  template to collect them; unset, nothing is emitted. `AISOC_MCP_AGENT_ID`
+  names this server in the AI-estate inventory. Argument *keys* are recorded
+  and values are not, because which tool ran with which parameters is the
+  signal while the values are often the sensitive part.
 
 ---
 

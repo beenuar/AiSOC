@@ -130,5 +130,5 @@ class WindowsEventConnector(BaseConnector):
             "process_name": data.get("Image") or data.get("NewProcessName"),
             "event_type": f"windows.{(channel or 'event').lower()}.{event_id}",
             "created_at": raw.get("TimeCreated") or system.get("TimeCreated"),
-            "raw": raw,
+            "raw_event": raw,
         }

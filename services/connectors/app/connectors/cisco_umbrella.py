@@ -154,5 +154,5 @@ class CiscoUmbrellaConnector(BaseConnector):
             "description": raw.get("threats") or raw.get("categories"),
             "alert_id": str(raw.get("id") or raw.get("timestamp") or ""),
             "host": raw.get("internalIp") or raw.get("device") or None,
-            "raw": raw,
+            "raw_event": raw,
         }

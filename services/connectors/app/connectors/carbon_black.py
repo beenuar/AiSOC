@@ -241,7 +241,7 @@ class CarbonBlackConnector(BaseConnector):
                 "alert_id": raw.get("id"),
                 "host": raw.get("device_name"),
                 "user": raw.get("device_username"),
-                "raw": raw,
+                "raw_event": raw,
             }
         # audit log
         return {
@@ -250,5 +250,5 @@ class CarbonBlackConnector(BaseConnector):
             "severity": "info",
             "title": raw.get("description") or raw.get("flagged") or "Carbon Black audit event",
             "user": raw.get("loginName"),
-            "raw": raw,
+            "raw_event": raw,
         }

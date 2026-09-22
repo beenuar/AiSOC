@@ -14,12 +14,34 @@ coverage-mapping only), then renders an honest breakdown to
 drifts from the on-disk reality — so the headline number can never quietly
 diverge from what actually runs.
 
-A rule is EXECUTABLE when it is not quarantined (not under `_quarantine/`, not
-`enabled: false`) AND its `detection` body is in a form the engine evaluates:
-the native AiSOC `condition` DSL, a Sigma `selection`/`condition`, or one of the
-runtime-engine languages. A rule is NON-EXECUTABLE when quarantined or when its
-only body is an untranslated upstream language (`splunk_spl`, `chronicle_yaral`,
-CAR pseudocode).
+A rule is EXECUTABLE when the engine actually loads it — that is, when its id
+appears in `services/fusion/app/data/detection_ruleset.json`, the compiled
+ruleset `DetectionEngine` reads at startup.
+
+That definition is deliberate, and it replaces an earlier one that classified a
+rule by its file path and the key names inside its `detection:` body. The
+earlier definition was wrong in a way that mattered, because the YAML under
+`detections/` is a *generated projection* of the Python spec modules in
+`scripts/detection_specs*.py` — the engine never reads it. So a rule could
+carry `enabled: true` and a rendered `condition:` block, be counted here as
+executable, and be entirely unknown to the engine. Three concrete cases this
+file used to over-report:
+
+* **77 imported Sigma rules** were counted because their body has a `selection`
+  key. There is no Sigma evaluator anywhere in the repo.
+* **44 native rules** have YAML and fixtures but no Python spec, so
+  `export_detection_ruleset.py` never emitted them.
+* The headline read **947** while the engine loaded **825**.
+
+The practical consequence was worse than a wrong number: because the old
+classifier keyed off `_quarantine/` membership, moving files out of quarantine
+would have raised the published figure without changing what fires. A gate that
+certifies a no-op is the specific failure this project's governance forbids, so
+the count is now derived from the artifact the engine consumes.
+
+Rules that look executable but are not loaded are reported separately as
+`counted_but_not_loaded` rather than silently folded into either side — they
+are real work items, and a reader deserves to see them.
 
 Usage:
     python3 scripts/detection_truth_table.py            # regenerate the doc
@@ -41,6 +63,10 @@ ROOT = Path(__file__).resolve().parent.parent
 DETECTIONS = ROOT / "detections"
 DOC = ROOT / "docs" / "detections" / "truth-table.md"
 
+#: The compiled ruleset `services/fusion` loads at startup. This is the only
+#: artifact that determines what fires, so it is the source of truth here.
+RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
+
 # Directories under detections/ that are not rules.
 SKIP_DIRS = {"fixtures", "playbooks"}
 
@@ -61,9 +87,41 @@ class Counts:
     by_tier: dict[str, int] = field(default_factory=dict)
     executable_by_tier: dict[str, int] = field(default_factory=dict)
     non_exec_reason: dict[str, int] = field(default_factory=dict)
+    #: Rules whose body shape looks evaluable but whose id is absent from the
+    #: compiled ruleset, so the engine has never seen them. Reported separately
+    #: because they are the work items the old classifier was hiding.
+    counted_but_not_loaded: int = 0
+    not_loaded_by_tier: dict[str, int] = field(default_factory=dict)
+    #: Ids present in the compiled ruleset with no corresponding YAML file.
+    #: Should be zero; a non-zero value means the projection is out of sync.
+    loaded_without_yaml: int = 0
+    engine_rule_count: int = 0
 
     def bump(self, d: dict[str, int], key: str) -> None:
         d[key] = d.get(key, 0) + 1
+
+
+def _engine_rule_ids() -> set[str]:
+    """Ids the detection engine actually loads.
+
+    An empty set is returned when the ruleset is missing, which makes the
+    headline read zero rather than falling back to the body-shape heuristic.
+    Reporting zero executable rules is loud and obviously wrong; quietly
+    reverting to a heuristic that over-reports is not.
+    """
+    if not RULESET.exists():
+        print(
+            f"WARNING: {RULESET.relative_to(ROOT)} is missing — run "
+            "scripts/export_detection_ruleset.py. Reporting zero executable rules.",
+            file=sys.stderr,
+        )
+        return set()
+    try:
+        data = json.loads(RULESET.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        print(f"WARNING: could not read {RULESET.relative_to(ROOT)}: {exc}", file=sys.stderr)
+        return set()
+    return {str(rule["id"]) for rule in data.get("rules") or [] if rule.get("id")}
 
 
 def _tier_for(path: Path) -> str:
@@ -116,6 +174,10 @@ def _iter_rule_files() -> list[Path]:
 
 def compute() -> Counts:
     counts = Counts()
+    engine_ids = _engine_rule_ids()
+    counts.engine_rule_count = len(engine_ids)
+    seen_ids: set[str] = set()
+
     for path in _iter_rule_files():
         counts.total += 1
         try:
@@ -134,17 +196,31 @@ def compute() -> Counts:
         tier = _tier_for(path)
         counts.bump(counts.by_tier, tier)
 
-        quarantined, reason = _is_quarantined(path, data)
-        if quarantined:
-            counts.non_executable += 1
-            counts.bump(counts.non_exec_reason, reason)
-            continue
-        if _has_executable_body(data):
+        rule_id = str(data.get("id") or "")
+        if rule_id:
+            seen_ids.add(rule_id)
+
+        # Engine membership decides executability. Everything else is a reason.
+        if rule_id and rule_id in engine_ids:
             counts.executable += 1
             counts.bump(counts.executable_by_tier, tier)
+            continue
+
+        counts.non_executable += 1
+        quarantined, reason = _is_quarantined(path, data)
+        if quarantined:
+            counts.bump(counts.non_exec_reason, reason)
+        elif _has_executable_body(data):
+            # The case the old classifier called executable: an enabled rule
+            # with an evaluable-looking body that the engine does not load,
+            # because no Python spec produced a `match_when` for it.
+            counts.counted_but_not_loaded += 1
+            counts.bump(counts.not_loaded_by_tier, tier)
+            counts.bump(counts.non_exec_reason, "no_compiled_spec")
         else:
-            counts.non_executable += 1
             counts.bump(counts.non_exec_reason, "untranslated_upstream_language")
+
+    counts.loaded_without_yaml = len(engine_ids - seen_ids)
     return counts
 
 
@@ -156,27 +232,43 @@ def render_markdown(c: Counts) -> str:
     lines.append("> file in `validate-detections.yml`, so the numbers below can never quietly")
     lines.append("> diverge from what the engine actually runs. **Do not edit by hand.**")
     lines.append("")
-    lines.append("A rule is **executable** when it fires in AiSOC today: not quarantined")
-    lines.append("(`_quarantine/` or `enabled: false`) and its `detection` body is the native")
-    lines.append("AiSOC condition DSL, a Sigma selection/condition, or a runtime-engine language.")
-    lines.append("A rule is **non-executable** when quarantined or when its only body is an")
-    lines.append("untranslated upstream language (SPL / YARA-L / CAR pseudocode) — present for")
-    lines.append("provenance and coverage-mapping, not firing.")
+    lines.append("A rule is **executable** when the detection engine actually loads it — when")
+    lines.append("its id appears in `services/fusion/app/data/detection_ruleset.json`, the")
+    lines.append("compiled ruleset `DetectionEngine` reads at startup.")
+    lines.append("")
+    lines.append("That is the only definition that means anything, because the YAML under")
+    lines.append("`detections/` is a *generated projection* of the Python spec modules in")
+    lines.append("`scripts/detection_specs*.py` — the engine never reads it. Editing a")
+    lines.append("`condition:` block or flipping `enabled:` has no effect on what fires. The")
+    lines.append("lever that reaches the engine is adding a spec and re-running")
+    lines.append("`scripts/export_detection_ruleset.py`.")
     lines.append("")
     lines.append("## Headline")
     lines.append("")
     lines.append("| metric | count |")
     lines.append("|--------|------:|")
     lines.append(f"| rules on disk (total) | {c.total} |")
-    lines.append(f"| **executable (fire today)** | **{c.executable}** |")
+    lines.append(f"| **executable (loaded by the engine)** | **{c.executable}** |")
     lines.append(f"| non-executable (provenance/coverage only) | {c.non_executable} |")
+    lines.append(f"| — of which: enabled, but no compiled spec | {c.counted_but_not_loaded} |")
     lines.append("")
+    if c.counted_but_not_loaded:
+        lines.append(f"Those {c.counted_but_not_loaded} rules are the ones an earlier version of this")
+        lines.append("table counted as executable. They carry `enabled: true` and a body whose")
+        lines.append("shape looks evaluable, and the engine has never seen them because no spec")
+        lines.append("produced a `match_when` for them. They are genuine work items, listed by")
+        lines.append("tier below, not a rounding error.")
+        lines.append("")
+    if c.loaded_without_yaml:
+        lines.append(f"**{c.loaded_without_yaml} ids are in the compiled ruleset with no YAML file.**")
+        lines.append("The projection is out of sync — re-run `scripts/generate_detections.py`.")
+        lines.append("")
     lines.append("## By tier")
     lines.append("")
-    lines.append("| tier | on disk | executable |")
-    lines.append("|------|--------:|-----------:|")
+    lines.append("| tier | on disk | executable | enabled but not loaded |")
+    lines.append("|------|--------:|-----------:|-----------------------:|")
     for tier in sorted(c.by_tier):
-        lines.append(f"| {tier} | {c.by_tier[tier]} | {c.executable_by_tier.get(tier, 0)} |")
+        lines.append(f"| {tier} | {c.by_tier[tier]} | {c.executable_by_tier.get(tier, 0)} " f"| {c.not_loaded_by_tier.get(tier, 0)} |")
     lines.append("")
     lines.append("## Why rules are non-executable")
     lines.append("")
@@ -186,6 +278,7 @@ def render_markdown(c: Counts) -> str:
         "quarantine_dir": "under `_quarantine/` (untranslated on import)",
         "disabled": "`enabled: false`",
         "untranslated_upstream_language": "body is an untranslated upstream language",
+        "no_compiled_spec": "enabled, but no compiled spec — the engine does not load it",
         "unparseable": "unparseable YAML",
     }
     for reason in sorted(c.non_exec_reason):
@@ -197,9 +290,16 @@ def render_markdown(c: Counts) -> str:
     lines.append(f"The imported corpus is large ({c.total} rules on disk) and valuable as a")
     lines.append("provenance-tracked ATT&CK-mapped library, but the number that matters")
     lines.append(f"operationally is **{c.executable} executable rules** — the ones the engine")
-    lines.append("fires against live telemetry. The README and marketplace must cite the")
-    lines.append("executable figure when describing detection *coverage*, and may cite the")
+    lines.append("loads and fires against live telemetry. The README and marketplace must cite")
+    lines.append("the executable figure when describing detection *coverage*, and may cite the")
     lines.append("on-disk figure only when explicitly describing the imported *library*.")
+    lines.append("")
+    lines.append("Two things this table cannot tell you, stated so nobody infers them:")
+    lines.append("")
+    lines.append("1. A loaded rule still has to match on a field some connector emits. That")
+    lines.append("   property is enforced separately by `scripts/check_detection_fields.py`.")
+    lines.append("2. Executable is not the same as tuned. `false_positives:` is prose and is")
+    lines.append("   not machine-checked; there is no per-rule false-positive-rate gate.")
     lines.append("")
     return "\n".join(lines)
 
@@ -224,6 +324,10 @@ def main() -> int:
                     "by_tier": counts.by_tier,
                     "executable_by_tier": counts.executable_by_tier,
                     "non_exec_reason": counts.non_exec_reason,
+                    "counted_but_not_loaded": counts.counted_but_not_loaded,
+                    "not_loaded_by_tier": counts.not_loaded_by_tier,
+                    "loaded_without_yaml": counts.loaded_without_yaml,
+                    "engine_rule_count": counts.engine_rule_count,
                 },
                 indent=2,
                 sort_keys=True,

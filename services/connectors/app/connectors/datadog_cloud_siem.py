@@ -152,5 +152,5 @@ class DatadogCloudSIEMConnector(BaseConnector):
             "description": attrs.get("message"),
             "alert_id": raw.get("id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

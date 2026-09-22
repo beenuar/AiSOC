@@ -184,6 +184,65 @@ var connectorProfiles = map[string]connectorProfile{
 			"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFORMATIONAL": 1,
 		},
 	},
+	// ai_runtime / ai_guardrail — the customer's AI estate.
+	//
+	// Two profiles rather than one, and the split is load-bearing. Routine AI
+	// activity (a tool call, a model invocation, an MCP request) is 6003 API
+	// Activity: category 6, so should_promote() leaves it in the lake unless
+	// severity reaches high, and analysts hunt it. A guardrail finding is 2001
+	// Security Finding: category 2, which the promoter always promotes,
+	// because something has already judged it worth a human's attention.
+	//
+	// Collapsing them would fail in one of two ways. All-2001 means a chatty
+	// agent floods the alert queue with its own normal operation. All-6003
+	// means a detected prompt injection sits silently in the lake.
+	//
+	// Field names match the ai-runtime.yaml / ai-finding.yaml webhook
+	// templates so the pull and push paths produce the same OCSF shape.
+	"ai_runtime": {
+		product:   OcsfProduct{Name: "AI Runtime", VendorName: "AiSOC"},
+		classUID:  6003,
+		className: "API Activity",
+		fieldMap: map[string]string{
+			"agent_id":     "actor.process.name",
+			"agent_name":   "actor.process.path",
+			"on_behalf_of": "actor.user.name",
+			"tool_name":    "activity_name",
+			"model":        "metadata.product.feature.name",
+			"provider":     "cloud.provider",
+			"server_name":  "resource.name",
+			"source_ip":    "src_endpoint.ip",
+			"hostname":     "src_endpoint.hostname",
+			"outcome":      "status_detail",
+			"latency_ms":   "duration",
+			"timestamp":    "time",
+		},
+		severityMap: map[string]int{
+			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
+		},
+	},
+	"ai_guardrail": {
+		product:   OcsfProduct{Name: "AI Guardrail", VendorName: "AiSOC"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"finding_id":   "finding.uid",
+			"finding_type": "activity_name",
+			"title":        "message",
+			"description":  "finding.desc",
+			"agent_id":     "actor.process.name",
+			"on_behalf_of": "actor.user.name",
+			"model":        "metadata.product.feature.name",
+			"provider":     "cloud.provider",
+			"server_name":  "resource.name",
+			"source_ip":    "src_endpoint.ip",
+			"hostname":     "src_endpoint.hostname",
+			"timestamp":    "time",
+		},
+		severityMap: map[string]int{
+			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
+		},
+	},
 	// kubernetes_audit — Track D, v7.1.0.
 	//
 	// The apiserver POSTs a v1 EventList batch and we explode it into
@@ -305,6 +364,42 @@ func isCanonicalEnvelope(p map[string]interface{}) bool {
 	return hasRaw && hasSource
 }
 
+// genericProfile is the fallback for a connector type with no declared
+// profile. It replaces a borrow of the splunk_enterprise profile, which was
+// wrong in two compounding ways.
+//
+// First, attribution: splunk_enterprise stamps
+// OcsfProduct{Name: "Splunk Enterprise", VendorName: "Splunk"}, and the
+// promoter derives alert.source from metadata.product. Every profile-less
+// connector's alerts therefore read as coming from Splunk. Only eight profiles
+// are declared, so that was the majority of the catalogue.
+//
+// Second, and worse, promotion: splunk_enterprise is classUID 4001 (Network
+// Activity) with an EMPTY severityMap. should_promote() requires OCSF category
+// 2 or severity_id >= 4, and an empty map yields severity_id 0 — so category 4
+// with severity 0 can satisfy neither branch. Those events were archived to the
+// lake and could never become alerts, silently, for any connector without a
+// profile.
+//
+// The generic profile uses 2001 Security Finding because a connector's
+// fetch_alerts() contract is to return findings rather than raw telemetry, and
+// carries the five-tier severity ladder so a vendor severity string maps.
+// Product identity is derived from the connector type, so attribution is at
+// worst uninformative rather than actively wrong.
+func genericProfile(connectorType string) connectorProfile {
+	name := connectorType
+	if name == "" {
+		name = "Connector"
+	}
+	return connectorProfile{
+		product:     OcsfProduct{Name: name, VendorName: name},
+		classUID:    2001,
+		className:   "Security Finding",
+		fieldMap:    _canonicalFieldMap,
+		severityMap: _canonicalSeverityMap,
+	}
+}
+
 func canonicalProfile(connectorType string) connectorProfile {
 	classUID, className := 2001, "Security Finding"
 	if override, ok := canonicalClassByConnector[connectorType]; ok {
@@ -340,8 +435,11 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 			if n.cfg.NormalizerMode == "strict" {
 				return nil, fmt.Errorf("unknown connector type: %s", raw.ConnectorType)
 			}
-			// Lenient: use generic profile
-			profile = connectorProfiles["splunk_enterprise"]
+			// Lenient: a vendor-neutral generic profile. This used to borrow
+			// splunk_enterprise, which mis-attributed every profile-less
+			// connector to Splunk and — because that profile is category 4
+			// with an empty severity map — made its events unpromotable.
+			profile = genericProfile(raw.ConnectorType)
 			log.Warn().Str("connector_type", raw.ConnectorType).Msg("Using generic profile for unknown connector")
 		}
 	}

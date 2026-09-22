@@ -121,5 +121,5 @@ class SecuronixConnector(BaseConnector):
             "actor": entity,
             "event_type": "securonix.incident",
             "created_at": raw.get("lastUpdateDate"),
-            "raw": raw,
+            "raw_event": raw,
         }
