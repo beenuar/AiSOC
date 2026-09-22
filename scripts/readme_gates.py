@@ -53,16 +53,31 @@ KNOWN_UNPUBLISHED = {
 README_MAX_LINES = 250
 
 # Phrases that count as a "this is intentionally not yet published" guard.
+# v8.0 shipped as the close-the-loop release, so the packaging milestone moved
+# to v8.1 and the guard phrases moved with it. The v8.0 spellings are kept so
+# older docs and blog posts that still carry them are not flagged, but new
+# README text should use the v8.1 wording — a README shipped *as* v8.0 cannot
+# coherently promise that something "lands in v8.0".
 V8_GUARDS = (
     "coming in v8.0",
+    "coming in v8.1",
     "coming to npm in v8.0",
+    "coming to npm in v8.1",
     "lands in v8.0",
+    "lands in v8.1",
     "lands with v8.0",
+    "lands with v8.1",
     "lands with the v8.0",
+    "lands with the v8.1",
+    "packaging release",
     "publish lands in v8.0",
+    "publish lands in v8.1",
     "ships in v8.0",
+    "ships in v8.1",
     "ships with v8.0",
+    "ships with v8.1",
     "ships with the v8.0",
+    "ships with the v8.1",
     "v8.0 launch",
     "with the next phase 2 visuals rollup",
     # Treat explicit monorepo-source-install references as their own guard:
