@@ -26,8 +26,11 @@ aiokafka = "^0.10.0"
 mmh3 = "^4.1.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-pytest-asyncio = "^0.23.0"
+# Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
+# pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
+# resolve together or not at all.
+pytest = ">=9.0.3,<10.0"
+pytest-asyncio = ">=1.0,<2.0"
 
 [build-system]
 requires = ["poetry-core"]
