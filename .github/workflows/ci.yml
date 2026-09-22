@@ -240,6 +240,15 @@ jobs:
       # without anyone noticing.
       - name: Verify the funnel response contract is documented
         run: python scripts/check_funnel_contract.py
+      # A support bundle is the most concentrated pile of configuration a
+      # deployment produces, and its whole purpose is to leave the building.
+      # Redaction is allow-list rather than deny-list, so a setting added
+      # tomorrow is redacted by default rather than exposed until someone
+      # remembers — and these tests are what keep it that way.
+      - name: Support bundle must not leak
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_support_bundle.py -q
       # Phase 8 — a production prompt cannot change without a version bump +
       # lock regeneration (the signal that must trigger an eval re-grade).
       - name: Verify prompt lock is current (Phase 8)
