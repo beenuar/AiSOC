@@ -93,7 +93,44 @@ class DetectionEngine:
 
     @staticmethod
     def _raw_fields(ocsf: dict[str, Any]) -> dict[str, Any]:
-        """Recover the connector-normalized flat fields the specs match on."""
+        """Recover the flat field namespace the specs match on.
+
+        `raw_data` carries the connector's own normalized dict, and connectors
+        put the untouched vendor payload under `raw_event`. The matcher does a
+        plain `event.get(field)` with no path traversal, so a rule naming a
+        vendor field — `request_uri`, `target_image`, `call_trace` — read
+        `None` and could never fire, however correct the rule was.
+
+        The scale of that was not obvious: 663 of the 825 loaded rules
+        referenced at least one field that was not visible, and fixture replay
+        could not catch any of them because fixtures are synthesized from the
+        rule rather than from real telemetry.
+
+        The workaround in use was per-field hoisting inside individual
+        connectors, e.g. in `llm_usage.normalize()`:
+
+            # Emit the dotted event_type at the TOP LEVEL so the llm-*
+            # detection rules (which match on `event_type`) fire
+
+        which only ever fixed the one field someone noticed. Merging the nested
+        payload once, here, fixes the class.
+
+        Connector-normalized keys win on collision. The connector has already
+        made a deliberate decision about `severity` or `title`, and a vendor
+        field of the same name must not silently override it.
+        """
+        fields = DetectionEngine._decode_raw_data(ocsf)
+
+        nested = fields.get("raw_event")
+        if isinstance(nested, dict):
+            merged = {k: v for k, v in nested.items() if isinstance(k, str)}
+            merged.update(fields)
+            return merged
+        return fields
+
+    @staticmethod
+    def _decode_raw_data(ocsf: dict[str, Any]) -> dict[str, Any]:
+        """The connector's normalized dict, or the OCSF top level as fallback."""
         raw = ocsf.get("raw_data")
         if isinstance(raw, str) and raw.strip():
             try:

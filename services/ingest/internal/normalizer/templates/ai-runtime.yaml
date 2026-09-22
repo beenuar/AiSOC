@@ -1,0 +1,73 @@
+# AI runtime activity — an agent or LLM app calling a tool or a model.
+#
+# This is the routine, high-volume half of AI-estate telemetry: every tool
+# invocation, model call and MCP request the customer's AI makes. It is modelled
+# on k8s-audit because the shape is the same question — which principal invoked
+# which verb against which resource, and what came back.
+#
+# class_uid 6003 (API Activity) is deliberate. Category 6 is not Findings, so
+# `should_promote()` requires severity_id >= 4 and routine activity stays in the
+# ClickHouse lake where it is hunted rather than alerted on. A guardrail
+# violation or an injection detection is a *finding* and uses ai-finding.yaml,
+# which is category 2 and therefore always promoted.
+#
+# Prompt and response text are deliberately absent from the field map. The SDK
+# sends hashes and lengths by default; an operator who opts into full capture
+# gets the text under `raw_event`, which the detection engine can match on but
+# which nothing here lifts into indexed OCSF fields.
+id: ai-runtime
+vendor_name: AiSOC
+product_name: AI Runtime
+class_uid: 6003
+class_name: API Activity
+activity_id: 1
+field_map:
+  # Identity of the calling principal. `agent_id` is the AI itself;
+  # `actor.user.name` is the human on whose behalf it acted, when there is one.
+  # Both matter: an agent acting autonomously and an agent acting for a user
+  # are different risks.
+  agent_id: actor.process.name
+  agent_name: actor.process.path
+  on_behalf_of: actor.user.name
+  session_id: finding.uid
+  # What was invoked.
+  tool_name: activity_name
+  model: metadata.product.feature.name
+  provider: cloud.provider
+  server_name: resource.name
+  resource: finding.title
+  # Where from.
+  source_ip: src_endpoint.ip
+  hostname: src_endpoint.hostname
+  # Outcome and cost. Token counts are the closest thing to a blast-radius
+  # signal an AI call has, so they are mapped rather than left in raw_event.
+  outcome: status_detail
+  status_code: status_code
+  prompt_tokens: finding.evidence.prompt_tokens
+  completion_tokens: finding.evidence.completion_tokens
+  latency_ms: duration
+  # Content provenance without the content.
+  prompt_sha256: finding.evidence.prompt_sha256
+  response_sha256: finding.evidence.response_sha256
+  # Which secret shapes the prompt contained. The SDK computes this
+  # locally and reports the pattern names while sending only a digest of
+  # the prompt, so credential-in-prompt detection works even under the
+  # default hashed capture mode where the text never leaves the process.
+  prompt_secret_kinds: finding.evidence.prompt_secret_kinds
+  argument_keys: finding.evidence.argument_keys
+severity_field: severity
+severity_map:
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  warning: 3
+  high: 4
+  critical: 5
+  fatal: 6
+time_field: timestamp
+message_field: tool_name
+constants:
+  source_type: ai-runtime
+  metadata.product.vendor_name: AiSOC
+  metadata.product.name: AI Runtime
