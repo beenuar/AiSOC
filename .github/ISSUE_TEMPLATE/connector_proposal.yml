@@ -1,0 +1,109 @@
+name: Connector proposal
+description: Propose a new data connector, or claim one from the wishlist.
+title: "[connector] <vendor / product>"
+labels: ["enhancement", "connector", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A connector is one of the three single-file contribution surfaces in
+        this repo, and CI validates every one of them. The walkthrough is at
+        [`apps/docs/docs/connectors/`](../tree/main/apps/docs/docs/connectors);
+        the shape you are implementing is `BaseConnector` in
+        [`services/connectors/app/connectors/`](../tree/main/services/connectors/app/connectors).
+
+        Open this before writing code so nobody duplicates your work — the
+        [connector wishlist](../issues/356) is the running list of what people
+        have asked for.
+
+  - type: input
+    id: vendor
+    attributes:
+      label: Vendor and product
+      description: The exact product name, and a link to its API docs.
+      placeholder: "Acme XDR — https://developer.acme.example/api"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: Determines where it lands in the marketplace catalogue.
+      options:
+        - edr
+        - siem
+        - cloud
+        - iam
+        - saas
+        - vcs
+        - network
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Authentication
+      description: |
+        Secret-bearing fields must be declared `secret=True` in `schema()` so
+        the credential vault encrypts them. A conformance test checks this.
+      options:
+        - API key / token
+        - Basic auth
+        - OAuth2 client credentials
+        - OAuth2 authorization code
+        - Cloud IAM role
+        - mTLS / client certificate
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: severity-ladder
+    attributes:
+      label: Vendor severity values, and how they map
+      description: |
+        AiSOC's ladder is exactly five tiers: `info | low | medium | high | critical`.
+        If the vendor publishes a distinct critical tier it must map to
+        `critical` and must not be collapsed into `high` — that has been a
+        recurring source of under-triaged alerts.
+      placeholder: |
+        Acme: informational -> info, low -> low, medium -> medium,
+              high -> high, severe -> critical
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample alert payload
+      description: |
+        A redacted example response from the vendor's alert endpoint. This
+        becomes the normalisation fixture. **Remove every credential, real
+        hostname, internal IP and customer identifier first.**
+      render: json
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: What you are signing up for
+      description: Each item has a CI gate, so none of them are optional.
+      options:
+        - label: A `schema()` classmethod declaring the config fields, with secrets marked
+        - label: An async `test_connection()` implementation
+        - label: A `fetch_alerts()` implementation that paginates and handles HTTP errors without crashing the poller
+        - label: A `normalize()` mapping to OCSF, preserving all five severity tiers
+        - label: Registration in `_CONNECTOR_CLASSES`
+        - label: A `plugins/<id>/plugin.yaml` marketplace manifest
+        - label: A docs page under `apps/docs/docs/connectors/`
+
+  - type: checkboxes
+    id: claiming
+    attributes:
+      label: Are you implementing this?
+      options:
+        - label: I intend to open the PR myself
+        - label: I am proposing it for someone else to pick up
