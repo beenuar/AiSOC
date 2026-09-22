@@ -1,0 +1,81 @@
+{
+  "count": 5,
+  "rules": [
+    {
+      "category": "application",
+      "group_by": "agent_id",
+      "id": "wd-ai-agent-tool-denials",
+      "match_when": {
+        "outcome": "denied"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI agent repeatedly denied a tool call",
+      "severity": "high",
+      "threshold": 10,
+      "window_seconds": 300
+    },
+    {
+      "category": "application",
+      "group_by": "agent_id",
+      "id": "wd-ai-model-fanout",
+      "match_when": {
+        "tool_name_startswith": "model:"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI agent called an unusual number of distinct models",
+      "severity": "medium",
+      "threshold": 50,
+      "window_seconds": 300
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-mfa-fatigue",
+      "match_when": {
+        "event_type": "authentication",
+        "outcome": "denied"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "MFA fatigue: repeated push denials for one account",
+      "severity": "high",
+      "threshold": 8,
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-impossible-travel-volume",
+      "match_when": {
+        "event_type": "authentication"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Many distinct source IPs authenticating one account",
+      "severity": "medium",
+      "threshold": 25,
+      "window_seconds": 900
+    },
+    {
+      "category": "data-exfil",
+      "group_by": "hostname",
+      "id": "wd-data-egress-burst",
+      "match_when": {
+        "event_type": "network"
+      },
+      "mitre": [
+        "T1041"
+      ],
+      "name": "Burst of outbound transfers from one host",
+      "severity": "high",
+      "threshold": 200,
+      "window_seconds": 300
+    }
+  ]
+}

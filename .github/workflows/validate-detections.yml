@@ -57,6 +57,13 @@ jobs:
       - name: Verify detection rules match on fields that exist
         run: python3 scripts/check_detection_fields.py
 
+      # The windowed engine loads its corpus from a JSON artifact the same way
+      # the stateless one does, so it needs the same drift gate: a spec change
+      # without a re-export would leave the deployed engine running a corpus
+      # nobody reviewed.
+      - name: Verify exported windowed ruleset is current
+        run: python3 scripts/export_windowed_ruleset.py --check
+
       - name: Count rules by severity
         if: always()
         run: |
