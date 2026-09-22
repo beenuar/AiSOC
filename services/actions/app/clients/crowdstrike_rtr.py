@@ -66,6 +66,39 @@ class CrowdStrikeRTRClient:
             resources = resp.json().get("resources", [])
             return resources[0] if resources else None
 
+    async def get_containment_status(self, device_id: str) -> str | None:
+        """Read a device's actual containment state.
+
+        Returns CrowdStrike's ``status`` string — ``"contained"``,
+        ``"containment_pending"``, ``"lift_containment_pending"`` or
+        ``"normal"`` — or ``None`` when the device cannot be read.
+
+        This exists so post-action verification can prove containment took
+        effect. Resolving a hostname to a device id (``get_device_id``) only
+        proves the host exists, so a verifier built on it would certify an
+        uncontained host as verified.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{self._base_url}/devices/entities/devices/v2",
+                headers=self._auth_headers(),
+                params={"ids": device_id},
+            )
+            if resp.status_code == 401:
+                await self._authenticate(client)
+                resp = await client.get(
+                    f"{self._base_url}/devices/entities/devices/v2",
+                    headers=self._auth_headers(),
+                    params={"ids": device_id},
+                )
+            resp.raise_for_status()
+            resources = resp.json().get("resources", [])
+            if not resources:
+                return None
+            status = resources[0].get("status")
+            return str(status) if status is not None else None
+
     async def contain_host(self, device_id: str) -> dict[str, Any]:
         """Put a host into network containment via RTR."""
         async with httpx.AsyncClient(timeout=30.0) as client:

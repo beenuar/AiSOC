@@ -277,6 +277,40 @@ class BlockIPExecutor(BaseExecutor):
         return True
 
 
+async def read_back_blocked_ip(ip: str, params: dict) -> bool | None:
+    """Re-read the enforcing rule set to confirm an IP block is actually in place.
+
+    Used by post-action verification. Returns True when a rule covering ``ip``
+    is present, False when the rule set is readable and the IP is absent (the
+    block silently did not take, or was removed), and None when we cannot tell.
+
+    Only AWS security groups expose a read-back today. The PAN-OS, FortiGate
+    and Cloudflare arms return None rather than a guess, because reporting
+    VERIFIED without a confirming query is the exact failure this is meant to
+    prevent.
+    """
+    aws = _aws_client(params)
+    if aws is None:
+        return None
+    try:
+        rules = await aws.describe_rules(params.get("aws_sg_id"))
+    except Exception as exc:  # noqa: BLE001 — indeterminate, never a false VERIFIED
+        logger.warning("block_ip.read_back_failed", ip=ip, error=str(exc))
+        return None
+    if not rules:
+        # An empty list also means "boto3 unavailable" in this client, so it is
+        # not safe to read as "the rule is absent".
+        return None
+    needle = f"{ip}/32" if "/" not in ip else ip
+    for rule in rules:
+        if rule.get("IsEgress"):
+            continue
+        cidr = rule.get("CidrIpv4") or rule.get("CidrIpv6") or ""
+        if cidr in {needle, ip}:
+            return True
+    return False
+
+
 class AllowIPExecutor(BaseExecutor):
     """Allows an IP address through an AWS Security Group (removes a block rule).
 

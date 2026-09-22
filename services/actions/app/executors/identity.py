@@ -42,7 +42,7 @@ from app.clients.azure_entra_client import AzureEntraClient
 from app.clients.google_workspace_client import GoogleWorkspaceClient
 from app.clients.okta_client import OktaClient
 from app.executors.base import _SIM_FUNNEL_CTA, BaseExecutor
-from app.models.action import ActionRequest, ActionResult, ActionStatus, BlastRadius
+from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType, BlastRadius
 
 logger = structlog.get_logger()
 
@@ -403,10 +403,19 @@ class SuspendSessionExecutor(BaseExecutor):
         )
 
     async def rollback(self, result: ActionResult) -> bool:
+        """Un-suspend the session by actually calling the identity provider."""
+        # Imported inline, not at module scope: app.services.rollback imports
+        # the vendor client factories from this module, so a top-level import
+        # here would be circular.
+        from app.services.rollback import reverse_via_rollback_service  # noqa: PLC0415
+
         user_id = result.rollback_data.get("user_id")
-        vendor = result.rollback_data.get("vendor")
-        logger.info("Rolling back suspend_session (un-suspending)", user=user_id, vendor=vendor)
-        return True
+        return await reverse_via_rollback_service(
+            ActionType.SUSPEND_SESSION,
+            user_id,
+            result.rollback_data,
+            logger,
+        )
 
 
 class ForceMFAExecutor(BaseExecutor):
