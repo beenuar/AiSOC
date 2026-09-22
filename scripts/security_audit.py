@@ -37,9 +37,7 @@ from typing import Any
 
 SEVERITY_ORDER = {"info": 0, "low": 1, "moderate": 2, "high": 3, "critical": 4}
 
-IGNORE_ID_PATTERN = re.compile(
-    r"^(CVE-\d{4}-\d{4,}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}|GO-\d{4}-\d{4,}|PYSEC-\d{4}-\d+)$"
-)
+IGNORE_ID_PATTERN = re.compile(r"^(CVE-\d{4}-\d{4,}|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}|GO-\d{4}-\d{4,}|PYSEC-\d{4}-\d+)$")
 
 
 @dataclass
@@ -65,6 +63,16 @@ class Report:
     findings: list[Finding] = field(default_factory=list)
     ignored: list[Finding] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: Services that could not be scanned at all. Tracked separately from
+    #: `warnings` because they mean something categorically different: not "we
+    #: scanned and found something questionable" but "we did not scan this".
+    #:
+    #: A dependency gate that quietly skips a service is worse than one that
+    #: fails, because it reads as coverage that is not there. `services/slack-bot`
+    #: was dropped this way by a stale poetry.lock, and while it was missing its
+    #: lock resolved an idna and a pydantic-settings version with known
+    #: advisories that every other service had already moved past (#650).
+    unscanned: list[str] = field(default_factory=list)
 
     @property
     def high_critical(self) -> list[Finding]:
@@ -105,21 +113,16 @@ def load_ignores(path: Path, today: dt.date | None = None) -> list[Ignore]:
 
         parts = [p.strip() for p in line.split("|")]
         if len(parts) != 4:
-            raise ValueError(
-                f"Line {line_no}: expected 4 pipe-delimited fields, got {len(parts)}"
-            )
+            raise ValueError(f"Line {line_no}: expected 4 pipe-delimited fields, got {len(parts)}")
 
         tool, vuln_id, reason, expiry_str = parts
 
         if tool not in allowed_tools:
-            raise ValueError(
-                f"Line {line_no}: invalid tool '{tool}' (expected: {sorted(allowed_tools)})"
-            )
+            raise ValueError(f"Line {line_no}: invalid tool '{tool}' (expected: {sorted(allowed_tools)})")
 
         if not IGNORE_ID_PATTERN.match(vuln_id):
             raise ValueError(
-                f"Line {line_no}: invalid ID '{vuln_id}' "
-                "(expected CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N)"
+                f"Line {line_no}: invalid ID '{vuln_id}' " "(expected CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N)"
             )
 
         if not reason:
@@ -134,9 +137,7 @@ def load_ignores(path: Path, today: dt.date | None = None) -> list[Ignore]:
             raise ValueError(f"Line {line_no}: ignore for {vuln_id} expired on {expiry_str}")
 
         if expiry > max_expiry:
-            raise ValueError(
-                f"Line {line_no}: expiry {expiry_str} exceeds 90-day maximum from today ({max_expiry})"
-            )
+            raise ValueError(f"Line {line_no}: expiry {expiry_str} exceeds 90-day maximum from today ({max_expiry})")
 
         ignores.append(Ignore(tool=tool, vuln_id=vuln_id, reason=reason, expires=expiry))
 
@@ -236,9 +237,7 @@ def parse_pip_audit_json(raw: str) -> list[dict[str, Any]]:
     return []
 
 
-def classify_pip_audit(
-    target: str, dependencies: list[dict[str, Any]], ignores: list[Ignore]
-) -> Report:
+def classify_pip_audit(target: str, dependencies: list[dict[str, Any]], ignores: list[Ignore]) -> Report:
     """Classify pip-audit findings. All findings are treated as high (fail-closed)."""
     report = Report()
 
@@ -295,10 +294,13 @@ def _export_requirements(service_dir: Path, work_dir: Path) -> Path | None:
         req_path = work_dir / "requirements.txt"
         proc = subprocess.run(
             [
-                "poetry", "export",
-                "--format", "requirements.txt",
+                "poetry",
+                "export",
+                "--format",
+                "requirements.txt",
                 "--without-hashes",
-                "--output", str(req_path),
+                "--output",
+                str(req_path),
             ],
             cwd=work_dir,
             capture_output=True,
@@ -342,28 +344,34 @@ def run_pip_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
 
                 req_path = _export_requirements(child, work_dir)
                 if req_path is None:
-                    combined.warnings.append(
-                        f"poetry export failed for {target}; skipping pip-audit"
-                    )
+                    # Not a warning: this service is now unscanned, and the
+                    # usual cause is a poetry.lock whose content hash no longer
+                    # matches pyproject.toml. Recorded so `exit_code_for` can
+                    # fail rather than letting coverage silently shrink.
+                    combined.unscanned.append(f"{target}: poetry export failed (stale poetry.lock?) — NOT scanned")
                     continue
 
                 try:
                     cmd = [
                         "pip-audit",
-                        "-r", str(req_path),
-                        "--format", "json",
-                        "--progress-spinner", "off",
+                        "-r",
+                        str(req_path),
+                        "--format",
+                        "json",
+                        "--progress-spinner",
+                        "off",
                     ]
 
                     proc = subprocess.run(cmd, capture_output=True, text=True, cwd=repo_root)
                 except FileNotFoundError:
-                    combined.warnings.append("pip-audit not found on PATH; skipping Python audit")
+                    combined.unscanned.append("pip-audit not found on PATH — NO Python service was scanned")
                     break
 
                 if proc.returncode not in (0, 1):
-                    # pip-audit returns 1 when vulns found, other codes are errors
-                    combined.warnings.append(
-                        f"pip-audit on {target} exited {proc.returncode}: {proc.stderr[:200]}"
+                    # pip-audit returns 1 when vulns found; anything else means
+                    # it did not complete, so this service is unscanned too.
+                    combined.unscanned.append(
+                        f"{target}: pip-audit exited {proc.returncode} — NOT scanned " f"({proc.stderr[:160].strip()})"
                     )
                     continue
 
@@ -401,18 +409,18 @@ def parse_govulncheck_json(stdout: str) -> list[dict[str, Any]]:
     results = []
     for osv_id in sorted(finding_ids):
         osv = osv_by_id.get(osv_id, {})
-        results.append({
-            "id": osv_id,
-            "aliases": osv.get("aliases", []),
-            "summary": osv.get("summary", ""),
-        })
+        results.append(
+            {
+                "id": osv_id,
+                "aliases": osv.get("aliases", []),
+                "summary": osv.get("summary", ""),
+            }
+        )
 
     return results
 
 
-def classify_govulncheck(
-    module: str, vulns: list[dict[str, Any]], ignores: list[Ignore]
-) -> Report:
+def classify_govulncheck(module: str, vulns: list[dict[str, Any]], ignores: list[Ignore]) -> Report:
     """Classify govulncheck findings. All findings are treated as high (fail-closed)."""
     report = Report()
 
@@ -460,13 +468,11 @@ def run_govulncheck(repo_root: Path, ignores: list[Ignore]) -> Report:
                 text=True,
             )
         except FileNotFoundError:
-            combined.warnings.append("govulncheck not found on PATH; skipping Go audit")
+            combined.unscanned.append("govulncheck not found on PATH — NO Go module was scanned")
             break
 
         if proc.returncode not in (0, 3):
-            combined.warnings.append(
-                f"govulncheck on {module} exited {proc.returncode}: {proc.stderr[:200]}"
-            )
+            combined.warnings.append(f"govulncheck on {module} exited {proc.returncode}: {proc.stderr[:200]}")
             continue
 
         vulns = parse_govulncheck_json(proc.stdout)
@@ -490,6 +496,10 @@ def emit_annotations(report: Report) -> None:
         print(f"::notice title=security-audit::{f.tool} {f.severity}: {f.vuln_id} in {f.package}")
     for w in report.warnings:
         print(f"::warning title=security-audit::{w}")
+    for gap in report.unscanned:
+        # An error, because an unscanned service is a hole in the gate rather
+        # than a noteworthy observation about it.
+        print(f"::error title=security-audit-coverage::{gap}")
 
 
 def emit_summary(report: Report) -> None:
@@ -506,6 +516,15 @@ def emit_summary(report: Report) -> None:
         f"- **Ignored**: {len(report.ignored)}",
         "",
     ]
+
+    if report.unscanned:
+        lines.append("### Not scanned — coverage gap")
+        lines.append("")
+        lines.append("These were skipped, so no claim is made about them:")
+        lines.append("")
+        for gap in report.unscanned:
+            lines.append(f"- `{gap}`")
+        lines.append("")
 
     if report.findings:
         lines.append("| Tool | Severity | ID | Package | Location |")
@@ -527,8 +546,21 @@ def emit_summary(report: Report) -> None:
 
 
 def exit_code_for(report: Report) -> int:
-    """Staged policy: high/critical → 1, everything else → 0."""
+    """Staged policy: high/critical → 1, a coverage gap → 1, otherwise 0.
+
+    A service that could not be scanned fails the job. That is a deliberate
+    change from treating it as a warning, because the two failure modes are
+    not comparable: a finding means the gate worked, while an unscanned
+    service means the gate did not run and reported success anyway.
+
+    `services/slack-bot` sat in that state — dropped by a stale poetry.lock —
+    and while it was missing, its lock resolved an idna and a
+    pydantic-settings version with known advisories that every other service
+    had already moved past. Nothing in CI would ever have said so (#650).
+    """
     if report.high_critical:
+        return 1
+    if report.unscanned:
         return 1
     return 0
 
@@ -568,9 +600,11 @@ def cmd_pnpm(args: argparse.Namespace) -> int:
     emit_summary(report)
     code = exit_code_for(report)
     n = len(report.findings)
-    print(f"pnpm: {n} findings ({len(report.high_critical)} high/critical, "
-          f"{len(report.moderate)} moderate, {len(report.low_info)} low/info), "
-          f"{len(report.ignored)} ignored")
+    print(
+        f"pnpm: {n} findings ({len(report.high_critical)} high/critical, "
+        f"{len(report.moderate)} moderate, {len(report.low_info)} low/info), "
+        f"{len(report.ignored)} ignored"
+    )
     return code
 
 
