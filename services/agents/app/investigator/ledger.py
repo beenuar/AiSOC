@@ -399,6 +399,8 @@ async def persist_auto_triage(
     iterations: int = 0,
     tokens: int = 0,
     cost_usd: float = 0.0,
+    groundedness: float | None = None,
+    ungrounded: bool | None = None,
 ) -> bool:
     """Durably record an auto-triage outcome (issue #571) in ONE transaction:
 
@@ -500,6 +502,13 @@ async def persist_auto_triage(
                                ai_recommendations = $6::jsonb,
                                status = CASE WHEN $7 THEN 'resolved' ELSE status END,
                                resolved_at = CASE WHEN $7 THEN now() ELSE resolved_at END,
+                               -- Nullable on purpose: NULL is "not scored",
+                               -- which is a different fact from "scored zero".
+                               -- The deterministic path never assesses
+                               -- groundedness, and defaulting it would read as
+                               -- every such verdict being unsupported.
+                               triage_groundedness = $8,
+                               triage_ungrounded = $9,
                                updated_at = now()
                          WHERE id = $1 AND tenant_id = $2
                         """,
@@ -510,6 +519,8 @@ async def persist_auto_triage(
                         (rationale or "")[:8000] or None,
                         json.dumps(recommendations),
                         auto_closed,
+                        float(groundedness) if groundedness is not None else None,
+                        ungrounded,
                     )
         logger.info(
             "ledger.auto_triage_persisted",
