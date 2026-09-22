@@ -73,7 +73,41 @@ If you get stuck, [open a Q&A discussion](https://github.com/beenuar/AiSOC/discu
 
 ## Development Setup
 
-See [README.md](README.md#development) for detailed setup instructions.
+### Prerequisites
+
+These are the versions CI installs. A mismatch usually shows up as a test
+that passes locally and fails in the pipeline, which is an expensive way to
+discover it.
+
+| Tool   | Version  | Why this one                                            |
+|--------|----------|---------------------------------------------------------|
+| Python | 3.12     | The API and agent services; 3.11 also works locally      |
+| Node   | 22       | `apps/web`, `services/realtime`, `services/mcp`          |
+| pnpm   | 8.15.1   | Pinned in `package.json`; a different major resolves differently |
+| Go     | 1.26     | Every `go.mod`, gated by `scripts/check_toolchain_versions.py` |
+| Docker | 24+      | Compose v2 for the local stack and the integration gates |
+
+`scripts/check_toolchain_versions.py` asserts every `go.mod` agrees with
+itself and with what CI installs. Six modules previously declared five
+different Go versions while CI installed a sixth, so one module could not be
+built by the toolchain the pipeline provided.
+
+### Running the stack
+
+```bash
+pnpm install --frozen-lockfile
+docker compose up -d                 # Postgres, Redis, Kafka, ClickHouse, Neo4j
+(cd services/api && uv sync && uv run python -m app.scripts.run_migrations)
+```
+
+The API migration runner is forward-only and is **not** Alembic — there is no
+`alembic.ini` under `services/api`. Set `AISOC_MIGRATIONS_STRICT=1` so a
+failed migration aborts; without it the runner logs the failure, continues,
+and exits 0 with a partially-applied schema.
+
+For the fastest possible loop with no Docker at all, `aisoc-sandbox demo`
+runs the four-stage agent funnel offline in under five seconds. See
+[`packages/aisoc-sandbox/README.md`](packages/aisoc-sandbox/README.md).
 
 ## Making Changes
 

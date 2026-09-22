@@ -347,6 +347,12 @@ jobs:
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
+      - name: Toolchain versions must agree
+        # Six go.mod files declared five different Go versions while the Go
+        # matrix installed a sixth, so one module could not be built by the
+        # toolchain CI provides. Nothing compared the two.
+        run: python3 scripts/check_toolchain_versions.py
+
       - name: Benchmark harness (Pillar 4)
         # The harness must stay runnable against an agent that is not ours,
         # and must keep refusing the ways a scoring harness quietly hands out
@@ -655,7 +661,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: services/${{ matrix.service }}/go.sum
       - name: Build
         run: |
@@ -683,7 +689,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: packages/plugin-sdk-go/go.sum
       - name: Build
         run: |
