@@ -231,7 +231,13 @@ jobs:
       # generator keep their prose and receive a generated field reference,
       # so the human half stays human and the mechanical half cannot drift.
       - name: Verify connector docs cover every connector
-        run: python scripts/generate_connector_docs.py --check
+        # The gate imports every connector class to read its schema(), so it
+        # needs what those modules import at module scope. Failing closed on
+        # a missing dep is right — a gate that skips when it cannot import is
+        # a gate that silently stops checking.
+        run: |
+          python -m pip install --quiet httpx pydantic
+          python scripts/generate_connector_docs.py --check
       # Eight fields shipped across v7.7 and v8.0 without reaching the funnel
       # docs, and they are the eight that say whether the automation is
       # working honestly — suppression, abstention, groundedness. A number

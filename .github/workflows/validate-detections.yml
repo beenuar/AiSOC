@@ -25,6 +25,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install PyYAML
+        run: pip install pyyaml
+
       - name: Rule ids must be stable
         # Ids were positional, so inserting a rule renumbered every rule
         # after it — and ids appear in alert rows, suppression priors and
@@ -34,9 +37,6 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest
           python3 -m pytest tests/test_detection_id_stability.py -q
-
-      - name: Install PyYAML
-        run: pip install pyyaml
 
       - name: Run detection rule validator (strict fixture replay)
         run: python3 scripts/validate_detections.py --strict-fixtures
