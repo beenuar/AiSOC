@@ -1,0 +1,167 @@
+name: Console visuals (screenshots + hero)
+
+# The README embeds four console tiles and a walkthrough thumbnail. All five
+# are placeholders: apps/web/public/screenshots/ holds SVGs and
+# apps/web/public/demo/ holds nothing but a .gitkeep. A SOC console with no
+# screenshot loses a visitor in ten seconds, and this is the most-viewed page
+# the project has.
+#
+# The capture machinery already existed and was simply never automated:
+# `pnpm aisoc:demo --screenshots` boots the seeded stack, drives
+# apps/web/e2e/screenshots/console.spec.ts, and lifts the four PNGs into
+# apps/web/public/screenshots/. `--record` does the same for the screencast
+# and hero.gif. Both required a human to remember to run them, so nobody did.
+#
+# This workflow runs them on a clock and opens a PR with whatever changed, so
+# the visuals track the product instead of rotting. It never pushes straight
+# to main: a screenshot is a marketing surface and deserves a human look.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to capture'
+        type: choice
+        default: screenshots
+        options: [screenshots, record, both]
+      open_pr:
+        description: 'Open a PR with the refreshed assets'
+        type: boolean
+        default: true
+  # Monthly, so the console tiles cannot silently drift a whole release behind
+  # the product they are advertising.
+  schedule:
+    - cron: '0 4 1 * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: console-visuals
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture console visuals
+    runs-on: ubuntu-latest
+    # Booting the full compose stack cold is the slow part; compose-smoke
+    # budgets 25 minutes for the same work.
+    timeout-minutes: 45
+    env:
+      MODE: ${{ github.event.inputs.mode || 'screenshots' }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install ffmpeg
+        if: env.MODE != 'screenshots'
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+
+      - name: Record what the assets look like before the run
+        id: before
+        run: |
+          set -euo pipefail
+          mkdir -p apps/web/public/screenshots apps/web/public/demo
+          find apps/web/public/screenshots apps/web/public/demo -type f \
+            | sort | xargs -r sha256sum > "$RUNNER_TEMP/before.txt" || true
+          cat "$RUNNER_TEMP/before.txt"
+
+      - name: Capture screenshots
+        if: env.MODE == 'screenshots' || env.MODE == 'both'
+        run: pnpm aisoc:demo --screenshots --no-open
+
+      - name: Record screencast + hero.gif
+        if: env.MODE == 'record' || env.MODE == 'both'
+        run: pnpm aisoc:demo --record --no-open
+
+      # Diagnostics before teardown — a failed capture is almost always a
+      # stack that never converged, and the compose logs say why.
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose logs --tail 120 || true
+
+      - name: Tear down the stack
+        if: always()
+        run: docker compose down -v || true
+
+      - name: Upload captured assets
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: console-visuals-${{ github.run_id }}
+          path: |
+            apps/web/public/screenshots/
+            apps/web/public/demo/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Did anything change?
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps/web/public/screenshots apps/web/public/demo; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=visuals::Captured assets are byte-identical to what is committed — nothing to open a PR for."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- apps/web/public/screenshots apps/web/public/demo
+          fi
+
+      - name: Open a PR with the refreshed assets
+        if: steps.diff.outputs.changed == 'true' && github.event.inputs.open_pr != 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BRANCH="chore/console-visuals-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add apps/web/public/screenshots apps/web/public/demo
+
+          cat > "$RUNNER_TEMP/commit.txt" <<MSG
+          chore(visuals): refresh console screenshots from the seeded demo stack
+
+          Captured by .github/workflows/console-visuals.yml (mode: ${MODE})
+          against a freshly booted demo stack on the seeded INC-RT-001
+          LockBit case.
+
+          Review the images before merging - this is a marketing surface.
+          MSG
+          sed -i 's/^          //' "$RUNNER_TEMP/commit.txt"
+          git commit -F "$RUNNER_TEMP/commit.txt"
+          git push origin "$BRANCH"
+
+          cat > "$RUNNER_TEMP/body.md" <<MSG
+          Automated capture from the seeded demo stack (mode: \`${MODE}\`).
+
+          These are the images the README embeds above the fold. Please eyeball
+          all four before merging - a broken or empty-state screenshot is worse
+          than the placeholder it replaces.
+
+          Generated by \`.github/workflows/console-visuals.yml\`, run
+          \`${GITHUB_RUN_ID}\`.
+          MSG
+          sed -i 's/^          //' "$RUNNER_TEMP/body.md"
+
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "$BRANCH" \
+            --title "chore(visuals): refresh console screenshots" \
+            --body-file "$RUNNER_TEMP/body.md"

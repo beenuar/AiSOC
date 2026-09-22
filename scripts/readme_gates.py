@@ -222,20 +222,26 @@ def gate_package_references(check_network: bool) -> list[GateFailure]:
 # ── Gate 3: Demo asset references are honest ────────────────────────────────
 
 
-_DEMO_ASSET_PATTERN = re.compile(
-    r"apps/web/public/demo/(?P<asset>[A-Za-z0-9._-]+\.(?:mp4|gif|webm|webp|png|jpg))"
+# Both directories the README embeds from. `screenshots/` carries the four
+# console tiles above the fold and was previously unchecked entirely, so a
+# renamed or deleted tile would have rendered as a broken image on the busiest
+# page the project has without failing anything.
+_VISUAL_ASSET_PATTERN = re.compile(
+    r"apps/web/public/(?P<dir>demo|screenshots)/"
+    r"(?P<asset>[A-Za-z0-9._-]+\.(?:mp4|gif|webm|webp|png|jpg|svg))"
 )
 
 
 def gate_demo_asset_references() -> list[GateFailure]:
-    """If README points at an `apps/web/public/demo/<asset>` file, the file
-    must either exist on disk or sit next to an explicit "rendered ... lands
-    with v8.0" guard."""
+    """If README points at an `apps/web/public/{demo,screenshots}/<asset>`
+    file, the file must either exist on disk or sit next to an explicit
+    "rendered ... lands with v8.0" guard."""
     text = _read(README)
     failures: list[GateFailure] = []
-    for match in _DEMO_ASSET_PATTERN.finditer(text):
+    for match in _VISUAL_ASSET_PATTERN.finditer(text):
+        directory = match.group("dir")
         asset = match.group("asset")
-        path = REPO_ROOT / "apps" / "web" / "public" / "demo" / asset
+        path = REPO_ROOT / "apps" / "web" / "public" / directory / asset
         if path.exists():
             continue
         # Find the line containing this match.
@@ -246,9 +252,10 @@ def gate_demo_asset_references() -> list[GateFailure]:
         failures.append(
             GateFailure(
                 "demo-asset",
-                f"README references apps/web/public/demo/{asset} but the "
-                f"file does not exist and no v8.0 guard was found within "
-                f"4 lines of the reference.",
+                f"README references apps/web/public/{directory}/{asset} but "
+                f"the file does not exist and no v8.0 guard was found within "
+                f"4 lines of the reference. Refresh the visuals with the "
+                f"console-visuals workflow, or fix the path.",
             )
         )
     return failures
