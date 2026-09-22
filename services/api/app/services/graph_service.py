@@ -279,12 +279,17 @@ async def _attack_path_fallback(case_id: str, tenant_id: str) -> dict[str, Any]:
         nodes.append({"id": case_id, "label": "Case", "properties": dict(rec["c"])})
 
         # Alerts
+        # Defence in depth: the Case anchor above is already tenant-verified,
+        # so these alerts are the tenant's own. Scoping anyway means a
+        # mis-tagged CONTAINS_ALERT edge cannot pull in a foreign alert.
         r2 = await s.run(
             """
             MATCH (c:Case {id: $id})-[:CONTAINS_ALERT]->(a:Alert)
+            WHERE a.tenant_id = $tid
             RETURN a
             """,
             id=case_id,
+            tid=tenant_id,
         )
         alert_ids = []
         async for record in r2:
@@ -326,6 +331,30 @@ async def _attack_path_fallback(case_id: str, tenant_id: str) -> dict[str, Any]:
     }
 
 
+#: Labels that are global reference data rather than tenant-owned estate.
+#: MITRE techniques are shared by every tenant, so requiring a tenant_id on
+#: them would make technique nodes unreachable for everyone.
+_GLOBAL_LABELS = ("Technique", "Tactic", "Mitigation")
+
+#: Cypher predicate asserting a node belongs to the querying tenant.
+#:
+#: `tenant_id IS NULL` is deliberately NOT accepted. An untagged node would
+#: otherwise act as a bridge between tenants: a traversal could enter it from
+#: tenant A and leave it into tenant B's estate.
+#:
+#: The Go graph writer MERGEs on `natural_key` alone with `tenant_id` as a
+#: property, so shared entities such as a public IP are last-writer-wins. A
+#: strict read filter therefore fails closed — safe, never leaking, at the cost
+#: of some completeness on shared infrastructure nodes. Re-keying those nodes
+#: on `(tenant_id, natural_key)` is the proper fix and needs a migration.
+_TENANT_SCOPED = "({var}.tenant_id = $tenant_id OR any(l IN labels({var}) WHERE l IN $global_labels))"
+
+
+def _scoped(var: str) -> str:
+    """Tenant-scoping predicate for one Cypher variable."""
+    return _TENANT_SCOPED.format(var=var)
+
+
 async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hops: int = 3) -> dict[str, Any]:
     """
     Compute blast radius: all entities reachable from an IOC/Host/User within N hops.
@@ -340,15 +369,21 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
     label = label_map.get(entity_type.lower(), "Host")
     id_prop = "value" if label == "IOC" else "id"
 
+    # Every node of every path is scoped, not just the start node. Filtering
+    # only `start` let the APOC expansion walk out through a shared entity —
+    # a public IP seen by two tenants, for instance — and enumerate the other
+    # tenant's hosts and users, returning their full properties. Blast radius
+    # is exactly the query an attacker would want for reconnaissance.
     cypher = f"""
     MATCH (start:{label} {{{id_prop}: $entity_id}})
-    WHERE start.tenant_id = $tenant_id OR start.tenant_id IS NULL
+    WHERE {_scoped("start")}
     CALL apoc.path.expandConfig(start, {{
         maxLevel: $hops,
         bfs: true,
         uniqueness: 'NODE_GLOBAL'
     }})
     YIELD path
+    WHERE all(pn IN nodes(path) WHERE {_scoped("pn")})
     WITH nodes(path) AS path_nodes, relationships(path) AS path_rels
     UNWIND path_nodes AS n
     WITH COLLECT(DISTINCT {{
@@ -360,7 +395,13 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
     """
 
     async with get_session() as s:
-        result = await s.run(cypher, entity_id=entity_id, tenant_id=tenant_id, hops=hops)
+        result = await s.run(
+            cypher,
+            entity_id=entity_id,
+            tenant_id=tenant_id,
+            hops=hops,
+            global_labels=list(_GLOBAL_LABELS),
+        )
         record = await result.single()
 
     if not record:
@@ -389,10 +430,16 @@ async def _blast_radius_fallback(entity_id: str, entity_type: str, tenant_id: st
     label = label_map.get(entity_type.lower(), "Host")
     id_prop = "value" if label == "IOC" else "id"
 
+    # Scoped the same way as the APOC path above. Previously `start` had no
+    # tenant predicate at all, the intermediate nodes of the variable-length
+    # path were unchecked, and `tenant_id IS NULL` was accepted on the
+    # endpoint — so an untagged node bridged straight into another tenant's
+    # estate. Binding the path lets us assert every node on it.
     cypher = f"""
     MATCH (start:{label} {{{id_prop}: $entity_id}})
-    MATCH (start)-[*1..{hops}]-(n)
-    WHERE n.tenant_id = $tenant_id OR n.tenant_id IS NULL
+    WHERE {_scoped("start")}
+    MATCH path = (start)-[*1..{hops}]-(n)
+    WHERE all(pn IN nodes(path) WHERE {_scoped("pn")})
     RETURN COLLECT(DISTINCT {{
         id: coalesce(n.id, n.value, n.technique_id),
         label: labels(n)[0],
@@ -400,7 +447,12 @@ async def _blast_radius_fallback(entity_id: str, entity_type: str, tenant_id: st
     }}) AS affected
     """
     async with get_session() as s:
-        result = await s.run(cypher, entity_id=entity_id, tenant_id=tenant_id)
+        result = await s.run(
+            cypher,
+            entity_id=entity_id,
+            tenant_id=tenant_id,
+            global_labels=list(_GLOBAL_LABELS),
+        )
         record = await result.single()
 
     affected = record["affected"] if record else []
@@ -440,9 +492,16 @@ async def get_entity_neighbors(
     label = label_map.get(entity_type.lower(), "Host")
     id_prop = "value" if label == "IOC" else "id"
 
+    # This function accepted `tenant_id` and never bound or used it: the query
+    # had no tenant predicate and the parameter was not even passed to
+    # `s.run`. Any authenticated user could read any other tenant's host, user
+    # or IOC node and all of its neighbours, with full node properties, just by
+    # naming the id. Both the anchor node and each neighbour are now scoped.
     cypher = f"""
     MATCH (n:{label} {{{id_prop}: $entity_id}})
+    WHERE {_scoped("n")}
     MATCH (n)-[r]-(neighbor)
+    WHERE {_scoped("neighbor")}
     RETURN
         {{id: coalesce(n.id, n.value), label: labels(n)[0], properties: properties(n)}} AS source,
         COLLECT(DISTINCT {{
@@ -453,7 +512,12 @@ async def get_entity_neighbors(
         }}) AS neighbors
     """
     async with get_session() as s:
-        result = await s.run(cypher, entity_id=entity_id)
+        result = await s.run(
+            cypher,
+            entity_id=entity_id,
+            tenant_id=tenant_id,
+            global_labels=list(_GLOBAL_LABELS),
+        )
         record = await result.single()
 
     if not record:
