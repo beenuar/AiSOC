@@ -15,7 +15,10 @@ cryptography = ">=42,<51"
 httpx = ">=0.27,<0.29"
 
 [tool.poetry.group.dev.dependencies]
-pytest = ">=8.2,<10.0"
+# Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
+# pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
+# resolve together or not at all.
+pytest = ">=9.0.3,<10.0"
 
 [build-system]
 requires = ["poetry-core"]
