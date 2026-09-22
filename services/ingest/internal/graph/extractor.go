@@ -1,6 +1,6 @@
 // extractor.go — pull entity references out of normalised OCSF events.
 //
-// Each connector type gets its own ``extractFromX`` helper so we can fill
+// Each connector type gets its own “extractFromX“ helper so we can fill
 // connectors in incrementally as the v8.0 program rolls out. v1.0 ships
 // real coverage for the four most-used connectors:
 //
@@ -27,8 +27,8 @@ import (
 )
 
 // ExtractFromOCSF walks a normalised OCSF event and produces the graph
-// projection. ``connectorType`` is the same string the normaliser keys on
-// (e.g. ``aws_security_hub``); ``ocsf`` is the ``NormalizedEvent.OcsfEvent``
+// projection. “connectorType“ is the same string the normaliser keys on
+// (e.g. “aws_security_hub“); “ocsf“ is the “NormalizedEvent.OcsfEvent“
 // map.
 //
 // Returns nil if the event has no extractable entities — caller should treat
@@ -141,6 +141,35 @@ func extractGeneric(ev *Event, ocsf map[string]interface{}) {
 //   - Resource (Resources[].Id, ARN) → :Resource
 //   - Alert (finding) → :Alert
 //   - Edges: User -[:OWNS]-> Resource, Alert -[:OCCURRED_ON]-> Resource
+//
+// awsAccountFromARN pulls the 12-digit account id out of an ARN.
+//
+// Format: arn:partition:service:region:account-id:resource. Some ARNs
+// legitimately carry an empty account field (S3 buckets, for one), so an
+// empty return is a normal outcome rather than a parse failure.
+func awsAccountFromARN(arn string) string {
+	if !strings.HasPrefix(arn, "arn:") {
+		return ""
+	}
+	parts := strings.SplitN(arn, ":", 6)
+	if len(parts) < 6 {
+		return ""
+	}
+	account := parts[4]
+	// Guard against a resource id landing here on a malformed ARN: an AWS
+	// account id is exactly twelve digits, and writing anything else would
+	// create a CloudAccount node per resource.
+	if len(account) != 12 {
+		return ""
+	}
+	for _, c := range account {
+		if c < '0' || c > '9' {
+			return ""
+		}
+	}
+	return account
+}
+
 func extractFromAWS(ev *Event, ocsf map[string]interface{}) {
 	resources, _ := ocsf["Resources"].([]interface{})
 	if len(resources) == 0 {
@@ -192,6 +221,27 @@ func extractFromAWS(ev *Event, ocsf map[string]interface{}) {
 				ToLabel: NodeResource, ToKey: key,
 			})
 		}
+
+		// The account id is already in the ARN, so the cloud dimension costs
+		// nothing to populate here — and without it a compromised workload
+		// resolves to a resource id rather than to a blast radius.
+		if accountID := awsAccountFromARN(arn); accountID != "" {
+			accountKey := fmt.Sprintf("cloudaccount:%s:aws:%s", ev.TenantID, accountID)
+			ev.Nodes = append(ev.Nodes, Node{
+				Label:      NodeCloudAccount,
+				NaturalKey: accountKey,
+				TenantID:   ev.TenantID,
+				Properties: map[string]interface{}{
+					"provider":   "aws",
+					"account_id": accountID,
+				},
+			})
+			ev.Edges = append(ev.Edges, Edge{
+				Type:      RelInAccount,
+				FromLabel: NodeResource, FromKey: key,
+				ToLabel: NodeCloudAccount, ToKey: accountKey,
+			})
+		}
 		// Alert -> Resource edge
 		alertID := getString(ocsf, "event_id")
 		if alertID != "" {
@@ -221,7 +271,7 @@ func extractFromAWS(ev *Event, ocsf map[string]interface{}) {
 //   - User from actor → :User
 //   - Repo from repo (org/name) → :Repo
 //   - Edge: User -[:READS_FROM]-> Repo for read actions
-//           User -[:WRITES_TO]-> Repo for write actions
+//     User -[:WRITES_TO]-> Repo for write actions
 //
 // We can fill in :ServiceAccount for app/bot actors in T1.2.
 func extractFromGitHub(ev *Event, ocsf map[string]interface{}) {
@@ -282,7 +332,7 @@ func extractFromGitHub(ev *Event, ocsf map[string]interface{}) {
 //   - User from actor.alternateId / displayName → :User
 //   - Endpoint from src_endpoint.ip → :Endpoint (NetworkPath)
 //   - Edge: Identity -[:ASSUMED_BY]-> User
-//           User -[:ACCESSES]-> SaaSApp (when target is an app)
+//     User -[:ACCESSES]-> SaaSApp (when target is an app)
 func extractFromOkta(ev *Event, ocsf map[string]interface{}) {
 	identityID := getString(ocsf, "actor.id")
 	if identityID == "" {
@@ -427,7 +477,7 @@ func extractFromKubernetes(ev *Event, ocsf map[string]interface{}) {
 }
 
 // extractMITRE adds a Detection node and Triggered edge per ATT&CK technique
-// the normaliser already attached to ``mitre_attck``. Universal across
+// the normaliser already attached to “mitre_attck“. Universal across
 // connectors so every event with a technique gets the link.
 func extractMITRE(ev *Event, ocsf map[string]interface{}) {
 	techs, ok := ocsf["mitre_attck"].([]interface{})

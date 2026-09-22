@@ -7,10 +7,10 @@ import (
 
 func TestExtractFromOCSF_AWS(t *testing.T) {
 	ocsf := map[string]interface{}{
-		"time":       "2026-05-13T10:00:00Z",
-		"event_id":   "alert-123",
-		"message":    "S3 bucket public",
-		"severity":   "HIGH",
+		"time":     "2026-05-13T10:00:00Z",
+		"event_id": "alert-123",
+		"message":  "S3 bucket public",
+		"severity": "HIGH",
 		"actor": map[string]interface{}{
 			"user": map[string]interface{}{"name": "alice"},
 		},
@@ -289,5 +289,82 @@ func TestExtractFromOCSF_TimeFallback(t *testing.T) {
 	}
 	if time.Since(ev.TS) > time.Minute {
 		t.Errorf("fallback TS too old: %v", ev.TS)
+	}
+}
+
+// The cloud dimension: a workload's blast radius starts with which account
+// it lives in, and the account id is already in every ARN.
+func TestAWSAccountFromARN(t *testing.T) {
+	cases := []struct {
+		name string
+		arn  string
+		want string
+	}{
+		{"standard", "arn:aws:ec2:us-east-1:123456789012:instance/i-abc", "123456789012"},
+		{"iam has no region", "arn:aws:iam::123456789012:role/admin", "123456789012"},
+		{"govcloud partition", "arn:aws-us-gov:s3:us-gov-west-1:123456789012:bucket", "123456789012"},
+		// S3 bucket ARNs legitimately omit the account. Empty is a normal
+		// outcome, not a parse failure.
+		{"s3 bucket omits account", "arn:aws:s3:::my-bucket", ""},
+		{"not an arn", "i-0123456789abcdef", ""},
+		{"truncated", "arn:aws:ec2:us-east-1", ""},
+		{"empty", "", ""},
+		// An account id is exactly twelve digits. Without that guard a
+		// malformed ARN creates a CloudAccount node per resource.
+		{"too short", "arn:aws:ec2:us-east-1:12345:instance/i-abc", ""},
+		{"too long", "arn:aws:ec2:us-east-1:1234567890123:instance/i-abc", ""},
+		{"non-numeric", "arn:aws:ec2:us-east-1:notanaccount:instance/i-abc", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := awsAccountFromARN(c.arn); got != c.want {
+				t.Errorf("awsAccountFromARN(%q) = %q, want %q", c.arn, got, c.want)
+			}
+		})
+	}
+}
+
+func TestAWSExtractionEmitsCloudAccount(t *testing.T) {
+	ocsf := map[string]interface{}{
+		"time":     "2026-09-22T12:00:00Z",
+		"event_id": "finding-1",
+		"actor":    map[string]interface{}{"user": map[string]interface{}{"name": "deploy-bot"}},
+		"Resources": []interface{}{
+			map[string]interface{}{
+				"Id":     "arn:aws:ec2:us-east-1:123456789012:instance/i-abc",
+				"Type":   "AwsEc2Instance",
+				"Region": "us-east-1",
+			},
+		},
+	}
+	ev := ExtractFromOCSF("evt-1", "tenant-a", "aws_security_hub", ocsf)
+	if ev == nil {
+		t.Fatal("extraction produced no event")
+	}
+
+	var account *Node
+	for i := range ev.Nodes {
+		if ev.Nodes[i].Label == NodeCloudAccount {
+			account = &ev.Nodes[i]
+		}
+	}
+	if account == nil {
+		t.Fatal("no CloudAccount node emitted; the cloud dimension stays empty")
+	}
+	if account.Properties["account_id"] != "123456789012" {
+		t.Errorf("account_id = %v", account.Properties["account_id"])
+	}
+	if account.TenantID != "tenant-a" {
+		t.Errorf("CloudAccount is not tenant-scoped: %q", account.TenantID)
+	}
+
+	var linked bool
+	for _, e := range ev.Edges {
+		if e.Type == RelInAccount && e.FromLabel == NodeResource && e.ToLabel == NodeCloudAccount {
+			linked = true
+		}
+	}
+	if !linked {
+		t.Error("no Resource -[:IN_ACCOUNT]-> CloudAccount edge; the node is unreachable from the resource")
 	}
 }

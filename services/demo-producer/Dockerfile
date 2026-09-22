@@ -1,6 +1,6 @@
 # AiSOC Demo Event Producer
 # Multi-stage Go build → tiny distroless runtime image.
-FROM golang:1.21-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /src
 COPY go.mod ./
 RUN go mod download

@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.security import get_password_hash
 from app.models.tenant import Tenant, User
+from app.services.tenant_deletion import delete_tenant
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -127,6 +128,56 @@ async def update_tenant_settings(
 
     result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
     return TenantResponse.model_validate(result.scalar_one())
+
+
+class TenantDeletionRequest(BaseModel):
+    """Offboarding request.
+
+    ``confirm_tenant_id`` must equal the tenant being erased. Typing the id is
+    the only thing standing between "preview the erase" and "erase", and this
+    endpoint has no undo.
+    """
+
+    dry_run: bool = True
+    confirm_tenant_id: uuid.UUID | None = None
+
+
+@router.post("/me/delete", response_model=dict)
+async def delete_my_tenant(
+    request: TenantDeletionRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+    db: DBSession,
+) -> dict:
+    """Erase this tenant from Postgres, ClickHouse, Neo4j, Qdrant and Redis.
+
+    Defaults to a dry run, which counts what would be removed per store
+    without deleting. A live run requires ``confirm_tenant_id`` to match, and
+    reports per-store results: if any store fails, the Postgres transaction is
+    rolled back so the tenant record still names whatever data survived
+    elsewhere, and ``complete`` is false.
+    """
+    tenant_id = current_user.tenant_id
+
+    if not request.dry_run and request.confirm_tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "confirm_tenant_id must match the tenant being deleted. " "This operation is irreversible; run with dry_run=true first."
+            ),
+        )
+
+    report = await delete_tenant(db, tenant_id, dry_run=request.dry_run)
+
+    if not request.dry_run and not report.complete:
+        # 207: Postgres rolled back, but a satellite store may have deleted
+        # before another failed. Reporting 200 would tell an operator the
+        # erase succeeded when it partially did.
+        raise HTTPException(
+            status_code=status.HTTP_207_MULTI_STATUS,
+            detail=report.as_dict(),
+        )
+
+    return report.as_dict()
 
 
 @router.get("/me/users", response_model=list[UserResponse])

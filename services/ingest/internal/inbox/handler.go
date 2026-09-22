@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ type Handler struct {
 	registry    *Registry
 	pub         *publisher.Publisher
 	maxBodySize int64
+	limiter     *Limiter
 }
 
 // NewHandler wires the inbox handler. maxBodySize caps a single request
@@ -47,6 +49,14 @@ func NewHandler(store *Store, registry *Registry, pub *publisher.Publisher, maxB
 		pub:         pub,
 		maxBodySize: maxBodySize,
 	}
+}
+
+// WithLimiter attaches per-tenant rate limiting. A nil limiter allows
+// everything, so this is safe to skip in tests and in deployments that
+// terminate limiting at the edge.
+func (h *Handler) WithLimiter(l *Limiter) *Handler {
+	h.limiter = l
+	return h
 }
 
 // Prometheus counters track the universal-capture path so freshness SLOs
@@ -66,6 +76,13 @@ var (
 			Help: "Events accepted via the universal-capture inbox by template.",
 		},
 		[]string{"template"},
+	)
+	inboxRateLimited = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "aisoc_ingest_inbox_rate_limited_total",
+			Help: "Inbox requests rejected by the per-tenant limiter, by dimension.",
+		},
+		[]string{"route", "dimension"},
 	)
 )
 
@@ -273,6 +290,19 @@ func (h *Handler) resolveOrFail(w http.ResponseWriter, r *http.Request, route, t
 		}
 		return nil
 	}
+
+	// Checked here rather than per route: all four routes resolve before
+	// they parse, so one gate covers them and cannot drift out of sync
+	// with a fifth route added later.
+	if ok, wait := h.limiter.AllowRequest(tok.TenantID); !ok {
+		inboxRequests.WithLabelValues(route, tok.TemplateID, "rate_limited").Inc()
+		inboxRateLimited.WithLabelValues(route, "requests").Inc()
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(wait)))
+		writeErr(w, http.StatusTooManyRequests,
+			"inbox: request rate limit exceeded for this tenant; retry after the interval in Retry-After")
+		return nil
+	}
+
 	return tok
 }
 
@@ -356,6 +386,22 @@ func (h *Handler) publishMany(ctx context.Context, w http.ResponseWriter, route 
 			"template_id": tok.TemplateID,
 			"label":       tok.Label,
 		})
+		return
+	}
+
+	// Event quota is applied after parsing because the count is not
+	// knowable before then, and before normalising because rejecting is
+	// cheaper than building events we will throw away. The batch is
+	// rejected whole: a partial accept would split a vendor's payload
+	// across a boundary it cannot observe, and make its retry duplicate
+	// the accepted half.
+	if ok, wait := h.limiter.AllowEvents(tok.TenantID, len(events)); !ok {
+		inboxRequests.WithLabelValues(route, tok.TemplateID, "rate_limited").Inc()
+		inboxRateLimited.WithLabelValues(route, "events").Inc()
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(wait)))
+		writeErr(w, http.StatusTooManyRequests,
+			fmt.Sprintf("inbox: event quota exceeded for this tenant (%d events in this batch); "+
+				"retry after the interval in Retry-After", len(events)))
 		return
 	}
 

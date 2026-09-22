@@ -27,14 +27,15 @@ For each service we track the standard golden signals:
 
 ## Single trace across services
 
-The critical path — `ingest → fusion → realtime → api → agents → actions` — is
-instrumented with **OpenTelemetry**, so one incident is one distributed trace
-from raw event to agent decision to response action. Traces export via OTLP to
-Jaeger/Tempo; spans carry the tenant and run/incident ids so a trace can be
-pulled up from any alert or investigation.
+**Partial today.** `api`, `agents`, `ueba` and `honeytokens` are instrumented with **OpenTelemetry** and export via OTLP. `ingest` (Go) and `realtime` (TypeScript) are **not instrumented**, and they are the two ends of the Kafka spine — so a trace does not yet run unbroken from raw event to response action. Spans that are emitted carry the tenant and run/incident ids.
 
-- Trace context propagates across the Kafka spine (event → fused alert → alert
-  row) and the HTTP hops (api ↔ agents ↔ actions ↔ fusion).
+A collector now ships: `docker compose --profile monitoring up` starts an OpenTelemetry Collector on `otel-collector:4317` (the endpoint the services already default to) forwarding into Grafana Tempo, with Tempo wired into Grafana as a datasource alongside Prometheus. Previously no collector existed in any compose file, so out of the box every span went into a connection error — which is worse than no tracing, because the code looks instrumented and nobody can tell a missing span from a missing collector.
+
+Tempo's retention in the dev stack is 24 hours. It is there so a developer can follow a trace, not to retain them.
+
+- Trace context does **not** yet propagate across the Kafka spine, because the producing
+  and consuming ends are the two uninstrumented services. HTTP hops between the
+  instrumented services (api ↔ agents) do propagate.
 - The Investigation Ledger records per-step model/tool attribution (see the
   [model router](../concepts/model-router.md) and
   [LLMOps](../concepts/llmops.md) docs), so the reasoning path inside the

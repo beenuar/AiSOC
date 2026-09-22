@@ -72,6 +72,7 @@ from app.executors.siem import (
 from app.models.action import ActionRequest, ActionStatus, ActionType
 
 from . import registry
+from .capability_contracts import apply_contract
 from .executor import LiveActionExecutor
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
 
@@ -202,6 +203,7 @@ class _LegacyExecutorAdapter(LiveActionExecutor):
 # ``dry_run`` strips the right keys.
 
 
+@apply_contract
 class CrowdStrikeIsolateHost(_LegacyExecutorAdapter):
     vendor_id = "crowdstrike"
     capability = "isolate_host"
@@ -212,6 +214,7 @@ class CrowdStrikeIsolateHost(_LegacyExecutorAdapter):
     _credential_keys = ("cs_client_id", "cs_client_secret", "cs_base_url")
 
 
+@apply_contract
 class DefenderIsolateHost(_LegacyExecutorAdapter):
     vendor_id = "defender"
     capability = "isolate_host"
@@ -222,6 +225,7 @@ class DefenderIsolateHost(_LegacyExecutorAdapter):
     _credential_keys = ("mde_tenant_id", "mde_client_id", "mde_client_secret")
 
 
+@apply_contract
 class CrowdStrikeQuarantineFile(_LegacyExecutorAdapter):
     vendor_id = "crowdstrike"
     capability = "quarantine_file"
@@ -232,6 +236,7 @@ class CrowdStrikeQuarantineFile(_LegacyExecutorAdapter):
     _credential_keys = ("cs_client_id", "cs_client_secret", "cs_base_url")
 
 
+@apply_contract
 class CrowdStrikeKillProcess(_LegacyExecutorAdapter):
     vendor_id = "crowdstrike"
     capability = "kill_process"
@@ -242,6 +247,7 @@ class CrowdStrikeKillProcess(_LegacyExecutorAdapter):
     _credential_keys = ("cs_client_id", "cs_client_secret", "cs_base_url")
 
 
+@apply_contract
 class CrowdStrikeRunScript(_LegacyExecutorAdapter):
     vendor_id = "crowdstrike"
     capability = "run_script"
@@ -252,6 +258,7 @@ class CrowdStrikeRunScript(_LegacyExecutorAdapter):
     _credential_keys = ("cs_client_id", "cs_client_secret", "cs_base_url")
 
 
+@apply_contract
 class DefenderRunAVScan(_LegacyExecutorAdapter):
     vendor_id = "defender"
     capability = "run_av_scan"
@@ -270,6 +277,7 @@ class DefenderRunAVScan(_LegacyExecutorAdapter):
 _OKTA_KEYS = ("okta_domain", "okta_api_token")
 
 
+@apply_contract
 class OktaDisableUser(_LegacyExecutorAdapter):
     vendor_id = "okta"
     capability = "disable_user"
@@ -280,6 +288,7 @@ class OktaDisableUser(_LegacyExecutorAdapter):
     _credential_keys = _OKTA_KEYS
 
 
+@apply_contract
 class OktaResetPassword(_LegacyExecutorAdapter):
     vendor_id = "okta"
     capability = "reset_password"
@@ -290,6 +299,7 @@ class OktaResetPassword(_LegacyExecutorAdapter):
     _credential_keys = _OKTA_KEYS
 
 
+@apply_contract
 class OktaSuspendSession(_LegacyExecutorAdapter):
     vendor_id = "okta"
     capability = "suspend_session"
@@ -300,6 +310,7 @@ class OktaSuspendSession(_LegacyExecutorAdapter):
     _credential_keys = _OKTA_KEYS
 
 
+@apply_contract
 class OktaForceMFA(_LegacyExecutorAdapter):
     vendor_id = "okta"
     capability = "force_mfa"
@@ -323,6 +334,7 @@ _AWS_SG_KEYS = (
 )
 
 
+@apply_contract
 class AwsSecurityGroupBlockIP(_LegacyExecutorAdapter):
     vendor_id = "aws_security_groups"
     capability = "block_ip"
@@ -333,6 +345,7 @@ class AwsSecurityGroupBlockIP(_LegacyExecutorAdapter):
     _credential_keys = _AWS_SG_KEYS
 
 
+@apply_contract
 class AwsSecurityGroupAllowIP(_LegacyExecutorAdapter):
     vendor_id = "aws_security_groups"
     capability = "allow_ip"
@@ -343,6 +356,7 @@ class AwsSecurityGroupAllowIP(_LegacyExecutorAdapter):
     _credential_keys = _AWS_SG_KEYS
 
 
+@apply_contract
 class GenericBlockDomain(_LegacyExecutorAdapter):
     vendor_id = "generic"
     capability = "block_domain"
@@ -368,6 +382,7 @@ _ELASTIC_KEYS = ("elastic_host", "elastic_api_key", "elastic_index")
 _DEFENDER_IOC_KEYS = ("mde_tenant_id", "mde_client_id", "mde_client_secret")
 
 
+@apply_contract
 class SplunkSearchSIEM(_LegacyExecutorAdapter):
     vendor_id = "splunk"
     capability = "search_siem"
@@ -378,6 +393,7 @@ class SplunkSearchSIEM(_LegacyExecutorAdapter):
     _credential_keys = _SPLUNK_KEYS
 
 
+@apply_contract
 class ElasticSearchSIEM(_LegacyExecutorAdapter):
     vendor_id = "elastic"
     capability = "search_siem"
@@ -388,6 +404,7 @@ class ElasticSearchSIEM(_LegacyExecutorAdapter):
     _credential_keys = _ELASTIC_KEYS
 
 
+@apply_contract
 class SplunkCreateNotable(_LegacyExecutorAdapter):
     vendor_id = "splunk"
     capability = "create_notable_event"
@@ -398,6 +415,7 @@ class SplunkCreateNotable(_LegacyExecutorAdapter):
     _credential_keys = _SPLUNK_KEYS
 
 
+@apply_contract
 class SplunkSyncDetectionRule(_LegacyExecutorAdapter):
     vendor_id = "splunk"
     capability = "sync_detection_rule"
@@ -408,6 +426,7 @@ class SplunkSyncDetectionRule(_LegacyExecutorAdapter):
     _credential_keys = _SPLUNK_KEYS
 
 
+@apply_contract
 class ElasticUpdateWatcher(_LegacyExecutorAdapter):
     vendor_id = "elastic"
     capability = "update_watcher"
@@ -418,6 +437,7 @@ class ElasticUpdateWatcher(_LegacyExecutorAdapter):
     _credential_keys = _ELASTIC_KEYS
 
 
+@apply_contract
 class DefenderBlockIOC(_LegacyExecutorAdapter):
     vendor_id = "defender"
     capability = "block_ioc"
@@ -442,6 +462,7 @@ class DefenderBlockIOC(_LegacyExecutorAdapter):
 # ---------------------------------------------------------------------------
 
 
+@apply_contract
 class SentinelOneIsolateHost(_LegacyExecutorAdapter):
     vendor_id = "sentinelone"
     capability = "isolate_host"
@@ -452,6 +473,7 @@ class SentinelOneIsolateHost(_LegacyExecutorAdapter):
     _credential_keys = ("s1_console_url", "s1_api_token")
 
 
+@apply_contract
 class EntraDisableUser(_LegacyExecutorAdapter):
     vendor_id = "azure_entra"
     capability = "disable_user"
@@ -462,6 +484,7 @@ class EntraDisableUser(_LegacyExecutorAdapter):
     _credential_keys = ("azure_tenant_id", "azure_client_id", "azure_client_secret")
 
 
+@apply_contract
 class GoogleWorkspaceDisableUser(_LegacyExecutorAdapter):
     vendor_id = "google_workspace"
     capability = "disable_user"
@@ -472,6 +495,7 @@ class GoogleWorkspaceDisableUser(_LegacyExecutorAdapter):
     _credential_keys = ("gws_service_account_key", "gws_subject_email")
 
 
+@apply_contract
 class PanOsBlockIP(_LegacyExecutorAdapter):
     vendor_id = "panos"
     capability = "block_ip"
@@ -482,6 +506,7 @@ class PanOsBlockIP(_LegacyExecutorAdapter):
     _credential_keys = ("panos_host", "panos_api_key", "panos_tag")
 
 
+@apply_contract
 class FortiGateBlockIP(_LegacyExecutorAdapter):
     vendor_id = "fortigate"
     capability = "block_ip"
@@ -492,6 +517,7 @@ class FortiGateBlockIP(_LegacyExecutorAdapter):
     _credential_keys = ("fgt_host", "fgt_api_token", "fgt_address_group")
 
 
+@apply_contract
 class CloudflareBlockIP(_LegacyExecutorAdapter):
     vendor_id = "cloudflare"
     capability = "block_ip"
@@ -502,6 +528,7 @@ class CloudflareBlockIP(_LegacyExecutorAdapter):
     _credential_keys = ("cf_api_token", "cf_zone_id")
 
 
+@apply_contract
 class JiraCreateTicket(_LegacyExecutorAdapter):
     vendor_id = "jira"
     capability = "create_ticket"
@@ -512,6 +539,7 @@ class JiraCreateTicket(_LegacyExecutorAdapter):
     _credential_keys = ("jira_base_url", "jira_email", "jira_api_token")
 
 
+@apply_contract
 class ServiceNowCreateTicket(_LegacyExecutorAdapter):
     vendor_id = "servicenow"
     capability = "create_ticket"
@@ -522,6 +550,7 @@ class ServiceNowCreateTicket(_LegacyExecutorAdapter):
     _credential_keys = ("snow_instance_url", "snow_username", "snow_password")
 
 
+@apply_contract
 class PagerDutyCreateTicket(_LegacyExecutorAdapter):
     vendor_id = "pagerduty"
     capability = "create_ticket"
@@ -532,6 +561,7 @@ class PagerDutyCreateTicket(_LegacyExecutorAdapter):
     _credential_keys = ("pd_routing_key",)
 
 
+@apply_contract
 class SlackNotify(_LegacyExecutorAdapter):
     vendor_id = "slack"
     capability = "notify"

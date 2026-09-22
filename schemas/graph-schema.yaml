@@ -1,4 +1,4 @@
-# AiSOC Security Knowledge Graph — schema v1.0
+# AiSOC Security Knowledge Graph — schema v1.1
 #
 # This file is the machine-readable source of truth for the graph that
 # `services/ingest` materialises into Neo4j at ingest time. It is consumed by
@@ -20,7 +20,7 @@
 # are reconciled from configuration snapshots and carry `snapshot_id` and a
 # `valid_from`/`valid_to` window instead.
 
-version: v1.0
+version: v1.1
 
 # ---------------------------------------------------------------------------
 # Node labels
@@ -241,6 +241,164 @@ node_labels:
 # ---------------------------------------------------------------------------
 # event_edge: true relationships always carry {ts, source_event_id,
 # snapshot_id}. Structural edges carry {snapshot_id, valid_from, valid_to}.
+  # ── v1.1: identity depth ───────────────────────────────────────────────────
+  # An Identity is an account. An Employee is the person holding it. Keeping
+  # them separate is what lets an investigation ask whether activity on one
+  # account is consistent with the same human's activity elsewhere, and who
+  # to escalate to.
+  - label: Employee
+    description: >-
+      The human behind one or more Identities. Sourced from the HR or
+      directory system of record (Entra, Okta, Workday) rather than from
+      observed events, because an event can only ever show an account.
+    properties:
+      - { name: id,             type: string,   required: true  }
+      - { name: tenant_id,      type: string,   required: true  }
+      - { name: email,          type: string,   required: false }
+      - { name: display_name,   type: string,   required: false }
+      - { name: title,          type: string,   required: false }
+      - { name: employment_type, type: string,  required: false }
+      - { name: location,       type: string,   required: false }
+      - { name: start_date,     type: datetime, required: false }
+      # A departed employee whose accounts are still active is one of the
+      # highest-signal findings the graph can produce, so this is recorded
+      # rather than the row being deleted.
+      - { name: end_date,       type: datetime, required: false }
+      - { name: is_active,      type: bool,     required: false }
+
+  - label: Department
+    description: >-
+      Organisational unit. Gives an investigation a peer group: "is this
+      behaviour normal for finance" is answerable where "is this normal" is
+      not.
+    properties:
+      - { name: id,          type: string, required: true  }
+      - { name: tenant_id,   type: string, required: true  }
+      - { name: name,        type: string, required: true  }
+      - { name: cost_centre, type: string, required: false }
+
+  # ── v1.1: asset depth ──────────────────────────────────────────────────────
+  - label: Vulnerability
+    description: >-
+      A CVE or vendor finding present on a Resource. Turns "suspicious
+      process on host X" into "suspicious process on a host with an
+      unpatched, known-exploited RCE", which is a different alert.
+    properties:
+      - { name: id,              type: string,   required: true  }
+      - { name: cve_id,          type: string,   required: false }
+      - { name: cvss_score,      type: float,    required: false }
+      - { name: severity,        type: string,   required: false }
+      # Known-exploited (CISA KEV) is the single most useful field here and
+      # is deliberately first-class rather than buried in a tag.
+      - { name: known_exploited, type: bool,     required: false }
+      - { name: published_at,    type: datetime, required: false }
+      - { name: source,          type: string,   required: false }
+
+  - label: Application
+    description: >-
+      A business application or service. Carries the business context that
+      turns a technical severity into a priority: who owns it, how critical
+      it is, what class of data it holds, and what an outage costs.
+    properties:
+      - { name: id,                  type: string, required: true  }
+      - { name: tenant_id,           type: string, required: true  }
+      - { name: name,                type: string, required: true  }
+      - { name: criticality,         type: string, required: false }
+      - { name: data_classification, type: string, required: false }
+      - { name: revenue_impact,      type: string, required: false }
+      - { name: environment,         type: string, required: false }
+      - { name: internet_facing,     type: bool,   required: false }
+      - { name: compliance_scope,    type: list,   required: false }
+
+  # ── v1.1: cloud depth ──────────────────────────────────────────────────────
+  - label: CloudAccount
+    description: >-
+      An AWS account, GCP project, or Azure subscription. The boundary that
+      determines how far a compromised workload's credentials reach.
+    properties:
+      - { name: id,          type: string, required: true  }
+      - { name: tenant_id,   type: string, required: true  }
+      - { name: provider,    type: string, required: true  }
+      - { name: account_id,  type: string, required: true  }
+      - { name: name,        type: string, required: false }
+      - { name: environment, type: string, required: false }
+
+  - label: Secret
+    description: >-
+      A *reference* to a secret — never its value. Name, store, and rotation
+      age only. The graph is read by agents and rendered in a UI, so a schema
+      that can hold a credential will eventually hold one.
+    properties:
+      - { name: id,            type: string,   required: true  }
+      - { name: tenant_id,     type: string,   required: true  }
+      - { name: name,          type: string,   required: true  }
+      - { name: store,         type: string,   required: false }
+      - { name: last_rotated,  type: datetime, required: false }
+      - { name: rotation_days, type: int,      required: false }
+
+  # ── v1.1: threat depth ─────────────────────────────────────────────────────
+  # Malware, Campaign, ThreatActor, Technique and Tactic are *global*
+  # reference entities: they carry no tenant_id, tenant-scoped reads must
+  # exempt them, and an offboarding purge must not delete them.
+  - label: IOC
+    description: >-
+      An observed indicator — hash, IP, domain, URL. Tenant-scoped, because
+      the observation belongs to the tenant even when the indicator is public.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: tenant_id,   type: string,   required: true  }
+      - { name: type,        type: string,   required: true  }
+      - { name: value,       type: string,   required: true  }
+      - { name: first_seen,  type: datetime, required: false }
+      - { name: last_seen,   type: datetime, required: false }
+      - { name: confidence,  type: int,      required: false }
+
+  - label: Malware
+    description: >-
+      A malware family. Global reference data, shared across tenants.
+    properties:
+      - { name: id,       type: string, required: true  }
+      - { name: name,     type: string, required: true  }
+      - { name: aliases,  type: list,   required: false }
+      - { name: category, type: string, required: false }
+
+  - label: Campaign
+    description: >-
+      A named intrusion campaign. Global reference data.
+    properties:
+      - { name: id,          type: string,   required: true  }
+      - { name: name,        type: string,   required: true  }
+      - { name: first_seen,  type: datetime, required: false }
+      - { name: last_seen,   type: datetime, required: false }
+
+  - label: ThreatActor
+    description: >-
+      An attributed actor or group. Global reference data. Attribution is
+      recorded with its confidence because it is frequently contested.
+    properties:
+      - { name: id,          type: string, required: true  }
+      - { name: name,        type: string, required: true  }
+      - { name: aliases,     type: list,   required: false }
+      - { name: motivation,  type: string, required: false }
+      - { name: origin,      type: string, required: false }
+
+  - label: Technique
+    description: >-
+      A MITRE ATT&CK technique or sub-technique. Global reference data.
+    properties:
+      - { name: id,          type: string, required: true  }
+      - { name: name,        type: string, required: true  }
+      - { name: is_subtechnique, type: bool, required: false }
+
+  - label: Tactic
+    description: >-
+      A MITRE ATT&CK tactic — the kill-chain stage a Technique belongs to.
+      Global reference data.
+    properties:
+      - { name: id,        type: string, required: true  }
+      - { name: name,      type: string, required: true  }
+      - { name: shortname, type: string, required: false }
+
 relationships:
   - name: ASSUMED_BY
     source_label: Role
@@ -461,3 +619,144 @@ relationships:
       - { name: policy_chain_ids, type: list,     required: false }
       - { name: last_resolved,    type: datetime, required: true  }
       - { name: resolver_version, type: string,   required: false }
+
+  # ── v1.1: identity depth ───────────────────────────────────────────────────
+  - name: AUTHENTICATES_AS
+    source_label: Employee
+    target_label: Identity
+    event_edge: false
+    description: >-
+      One person, many accounts: corporate SSO, a break-glass admin, a
+      service account they own. Joining them is what makes "this person also
+      did X in another system" answerable at all.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: is_primary,  type: bool,   required: false }
+
+  - name: BELONGS_TO
+    source_label: Employee
+    target_label: Department
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  - name: MANAGES
+    source_label: Employee
+    target_label: Employee
+    event_edge: false
+    description: >-
+      The reporting line. Walking it upward is how an escalation finds a
+      human with authority to approve a containment action.
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  # ── v1.1: asset depth ──────────────────────────────────────────────────────
+  - name: AFFECTED_BY
+    source_label: Resource
+    target_label: Vulnerability
+    event_edge: false
+    properties:
+      - { name: snapshot_id,   type: string,   required: true  }
+      - { name: detected_at,   type: datetime, required: false }
+      - { name: status,        type: string,   required: false }
+
+  - name: RUNS
+    source_label: Resource
+    target_label: Application
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  # ── v1.1: cloud depth ──────────────────────────────────────────────────────
+  - name: IN_ACCOUNT
+    source_label: Resource
+    target_label: CloudAccount
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: region,      type: string, required: false }
+
+  - name: STORES
+    source_label: Resource
+    target_label: Secret
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  # ── v1.1: business depth ───────────────────────────────────────────────────
+  - name: OWNED_BY
+    source_label: Application
+    target_label: Employee
+    event_edge: false
+    description: >-
+      Who is accountable for the service. This is who an escalation actually
+      goes to, as distinct from whoever happens to be on shift.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: role,        type: string, required: false }
+
+  # ── v1.1: threat depth ─────────────────────────────────────────────────────
+  - name: OBSERVED_IOC
+    source_label: Alert
+    target_label: IOC
+    event_edge: true
+    properties:
+      - { name: ts,              type: datetime, required: true  }
+      - { name: source_event_id, type: string,   required: true  }
+      - { name: snapshot_id,     type: string,   required: true  }
+
+  - name: INDICATES
+    source_label: IOC
+    target_label: Malware
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: confidence,  type: int,    required: false }
+      - { name: source,      type: string, required: false }
+
+  - name: PART_OF
+    source_label: Malware
+    target_label: Campaign
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  - name: ATTRIBUTED_TO
+    source_label: Campaign
+    target_label: ThreatActor
+    event_edge: false
+    description: >-
+      Attribution carries its confidence because it is frequently contested
+      and frequently revised. A traversal that presents it as fact is worse
+      than one that does not traverse it.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: confidence,  type: int,    required: false }
+      - { name: source,      type: string, required: false }
+
+  - name: USES_TECHNIQUE
+    source_label: Malware
+    target_label: Technique
+    event_edge: false
+    description: >-
+      Also written from ThreatActor to Technique. The source label here is
+      the common case; both are valid.
+    properties:
+      - { name: snapshot_id, type: string, required: true }
+
+  - name: MAPS_TO
+    source_label: Alert
+    target_label: Technique
+    event_edge: false
+    description: >-
+      Also written from Detection to Technique.
+    properties:
+      - { name: snapshot_id, type: string, required: true  }
+      - { name: confidence,  type: int,    required: false }
+
+  - name: IN_TACTIC
+    source_label: Technique
+    target_label: Tactic
+    event_edge: false
+    properties:
+      - { name: snapshot_id, type: string, required: true }

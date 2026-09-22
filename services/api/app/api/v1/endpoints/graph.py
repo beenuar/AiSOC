@@ -12,8 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import CurrentUser, DBSession, get_current_user
+from app.api.v1.deps import CurrentUser, DBSession, get_current_user, require_permission
 from app.services import graph_service
+from app.services.context_import import import_context
+from app.services.incident_context import get_incident_context
+from app.services.investigation_tools import BACKED_TOOLS, TOOLS, dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +332,142 @@ async def get_blast_radius(
         ) from exc
 
     return BlastRadiusResponse(**data)
+
+
+class IncidentContextResponse(BaseModel):
+    """The five context dimensions for one alert.
+
+    ``partial`` and ``errors`` are part of the contract, not diagnostics. An
+    empty bundle from an unreachable graph and an empty bundle from an alert
+    with genuinely no context look identical otherwise, and a consumer that
+    cannot tell them apart will treat "we could not look" as "there is
+    nothing to find".
+    """
+
+    alert_id: str
+    tenant_id: str
+    identities: list[dict[str, Any]] = Field(default_factory=list)
+    assets: list[dict[str, Any]] = Field(default_factory=list)
+    cloud: list[dict[str, Any]] = Field(default_factory=list)
+    business: list[dict[str, Any]] = Field(default_factory=list)
+    threat: list[dict[str, Any]] = Field(default_factory=list)
+    dimensions_resolved: int = 0
+    partial: bool = False
+    errors: list[str] = Field(default_factory=list)
+    narrative: list[str] = Field(default_factory=list)
+
+
+@router.get(
+    "/incident-context/{alert_id}",
+    response_model=IncidentContextResponse,
+    summary="Traverse an alert into identity, asset, cloud, business and threat context",
+)
+async def incident_context(
+    alert_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> IncidentContextResponse:
+    """Resolve one alert into the five dimensions an investigation needs.
+
+    Each dimension runs as its own bounded, tenant-scoped traversal, and they
+    run concurrently. A dimension that fails or times out names itself in
+    ``errors`` while the rest still return: this is on the hot path of every
+    escalated alert, so one slow leg must not take the bundle with it.
+
+    Returns 200 with ``partial: true`` rather than an error status when some
+    dimensions failed — the caller asked for context and got some.
+    """
+    context = await get_incident_context(alert_id, str(current_user.tenant_id))
+    payload = context.as_dict()
+    payload["narrative"] = context.narrative_lines()
+    return IncidentContextResponse(**payload)
+
+
+class InvestigationToolRequest(BaseModel):
+    """One typed investigation pivot.
+
+    ``tool`` names a primitive; ``args`` are its typed arguments. Deliberately
+    not SQL: handing a model the lake query endpoint puts prompt-injectable
+    text one step from the query planner, and the tenant predicate is the only
+    thing between two customers' data. ``tenant_id`` is taken from the
+    authenticated session and any value supplied here is discarded.
+    """
+
+    tool: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get(
+    "/investigate/tools",
+    summary="List the investigation primitives and which are backed by data",
+)
+async def list_investigation_tools(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Enumerate the toolset, separating what can answer from what cannot.
+
+    The split is part of the contract. A tool whose data class is not
+    ingested reports that rather than returning an empty result, because an
+    empty result reads as "I checked and found nothing" — which is how an
+    investigation concludes benign on evidence it never had.
+    """
+    return {
+        "tools": sorted(TOOLS),
+        "backed_by_data": sorted(BACKED_TOOLS),
+        "not_ingested": sorted(set(TOOLS) - BACKED_TOOLS),
+    }
+
+
+@router.post(
+    "/investigate/query",
+    summary="Run one typed investigation primitive against the event lake",
+)
+async def run_investigation_tool(
+    request: InvestigationToolRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Execute one pivot. Tenant comes from the session, never the request."""
+    result = await dispatch(request.tool, str(current_user.tenant_id), request.args)
+    return result.as_dict()
+
+
+class ContextImportRequest(BaseModel):
+    """Directory, HR and CMDB context the event stream cannot carry.
+
+    An event can say an account authenticated. It cannot say which person
+    holds that account, whether they still work here, which business
+    application the host serves, or what an outage of it costs. That is the
+    difference between "unusual login for svc_deploy" and "unusual login for
+    svc_deploy, owned by a contractor whose last day was Friday, on the host
+    running the tier-1 payments service".
+    """
+
+    departments: list[dict[str, Any]] = Field(default_factory=list)
+    employees: list[dict[str, Any]] = Field(default_factory=list)
+    applications: list[dict[str, Any]] = Field(default_factory=list)
+    cloud_accounts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post(
+    "/context/import",
+    summary="Import identity, organisational and business context into the graph",
+)
+async def import_graph_context(
+    request: ContextImportRequest,
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
+) -> dict[str, Any]:
+    """Upsert context records. Safe to run repeatedly on a schedule.
+
+    Records are merged rather than replaced: an import runs against a source
+    of record that may be partial, and replacing the tenant's context with
+    whatever one run produced would delete a department because an HR export
+    timed out.
+
+    Every rejected record is returned with its reason. A partially-applied
+    import reporting success is worse than a rejected one, because afterwards
+    the gaps are invisible.
+    """
+    report = await import_context(str(current_user.tenant_id), request.model_dump())
+    return report.as_dict()
 
 
 @router.get(

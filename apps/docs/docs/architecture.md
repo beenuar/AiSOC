@@ -316,7 +316,7 @@ The push pipeline lives in
 - **Immutable Audit Log** — Postgres trigger + `SECURITY DEFINER` function prevents UPDATE/DELETE on `audit_log`.
 - **Replayable agent decisions** — The Investigation Ledger is append-only and tenant-scoped.
 - **OpenTelemetry** — All services emit traces, metrics, and structured logs to a configurable OTLP endpoint.
-- **Backup & Restore** — `scripts/backup.sh` / `restore.sh` with AES-256-GCM encryption and SHA-256 manifest.
+- **Backup & Restore** — `scripts/backup.sh` / `restore.sh`. Artifacts are encrypted with **AES-256-GCM** before leaving the host and recorded in a **SHA-256 manifest**; restore verifies the digest, decrypts, and refuses a tampered or truncated archive rather than restoring a partial database. Gated end-to-end in `integration.yml`: seed 500 rows, back up, assert the object in the bucket is unreadable (no gzip magic, no schema names), drop the schema, restore, assert 500 rows, then flip a bit and assert the restore is refused. Covers Postgres, ClickHouse, the plugin store, the **Neo4j entity graph** (APOC cypher export), **Qdrant** (per-collection snapshot) and **Redis** (RDB). Scheduled by the `backup` CronJob in the Helm chart — disabled by default because it needs a bucket, credentials and a key only the operator can supply. The RPO is the schedule interval. **Kafka is not backed up**: it is a transport, and its retained window is replayable from the lake rather than restorable.
 - **High-Availability Helm** — Multi-replica deployments, HPA, PDB, anti-affinity, and readiness probes.
 
 ## Plugin Extension Points

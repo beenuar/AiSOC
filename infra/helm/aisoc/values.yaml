@@ -270,6 +270,147 @@ ingress:
       hosts:
         - aisoc.example.com
 
+# ─── Standalone service deployments ───────────────────────────────────────────
+# ueba-deployment.yaml, honeytokens-deployment.yaml and purple-team-deployment.yaml
+# have shipped referencing .Values.ueba / .Values.honeytokens / .Values.purpleTeam,
+# none of which existed here. `helm lint` failed and `helm template` errored on
+# a nil pointer, so the chart could not be rendered at all, let alone installed —
+# which is also why nobody noticed the missing keys.
+ueba:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/beenuar/aisoc-ueba
+    tag: ""              # defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPU: 70
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+honeytokens:
+  enabled: false
+  replicaCount: 1
+  tokenTtlDays: 90
+  otelEndpoint: ""
+  image:
+    repository: ghcr.io/beenuar/aisoc-honeytokens
+    tag: ""
+    pullPolicy: IfNotPresent
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+purpleTeam:
+  enabled: false
+  replicaCount: 1
+  calderaUrl: ""
+  artAtomicsPath: /opt/atomics
+  otelEndpoint: ""
+  image:
+    repository: ghcr.io/beenuar/aisoc-purple-team
+    tag: ""
+    pullPolicy: IfNotPresent
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Referenced by ueba-deployment.yaml; also absent until now.
+kafka:
+  bootstrapServers: "kafka:9092"
+
+otel:
+  endpoint: ""
+
+# ─── Scheduled backups ────────────────────────────────────────────────────────
+# scripts/backup.sh has been correct and unscheduled: every deployment guide
+# said "run it on a cron" and none shipped one, so the realistic state of a
+# self-hosted install was no backups. This is the same script the DR gate
+# exercises in CI, so what runs here is what has been proven to restore.
+#
+# Disabled by default because it needs a bucket, credentials and an encryption
+# key that only the operator can supply — and a CronJob that fails every night
+# is worse than an absent one.
+backup:
+  enabled: false
+  # 02:30 daily. The RPO this implies is the schedule interval: anything
+  # ingested since the last successful run is lost in a full-restore scenario.
+  schedule: "30 2 * * *"
+  timeZone: "UTC"
+  component: all          # postgres|clickhouse|plugins|neo4j|qdrant|redis|all
+  retentionDays: 30
+
+  image:
+    repository: ghcr.io/beenuar/aisoc-core-api
+    tag: ""               # defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  s3:
+    bucket: ""            # s3://your-bucket (required)
+    prefix: "aisoc-backups"
+    region: "us-east-1"
+    endpointUrl: ""       # set for R2 / MinIO / any S3-compatible store
+
+  encryption:
+    mode: "on"            # "off" only if the bucket provides equivalent protection
+    existingSecret: ""    # holds the 64-hex AES-256-GCM key
+    secretKey: "backup-encryption-key"
+
+  # Credentials and store URLs, by secret reference. Values are never inlined
+  # here: a backup job reads every database in the deployment, so its env is
+  # the highest-value secret set in the chart.
+  #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / POSTGRES_URL /
+  #   CLICKHOUSE_PASSWORD / NEO4J_PASSWORD / REDIS_URL
+  secretEnv: {}
+  #   AWS_ACCESS_KEY_ID:
+  #     secretName: aisoc-backup-secret
+  #     secretKey: aws-access-key-id
+
+  # Non-secret endpoints (NEO4J_URI, NEO4J_HTTP_URL, QDRANT_URL, CLICKHOUSE_HOST…).
+  extraEnv: {}
+
+  # A stuck job blocks every later run because concurrencyPolicy is Forbid.
+  activeDeadlineSeconds: 7200
+  startingDeadlineSeconds: 3600
+  backoffLimit: 2
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 7
+  scratchSize: 20Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
 # ─── Bundled Infrastructure (disable in production; use managed services) ─────
 postgresql:
   enabled: false

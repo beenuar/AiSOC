@@ -73,7 +73,10 @@ pnpm install --frozen-lockfile
 # 4. Run database migrations.
 #    From v7.3.1 onwards you can use the CLI directly:
 aisoc db upgrade
-#    (Equivalent to: cd services/api && uv run alembic upgrade head)
+#    (Equivalent to: cd services/api && uv run python -m app.scripts.run_migrations)
+#    Set AISOC_MIGRATIONS_STRICT=1 so a failed migration aborts. Without it the
+#    runner logs the failure, rolls that statement back, continues, and exits 0 —
+#    which ships a partially-applied schema silently.
 
 # 5. Start the API service back up.
 docker compose -f infra/compose/docker-compose.dev.yml up -d api
@@ -103,7 +106,7 @@ After a successful upgrade you should be able to:
 - Open the analyst console and see the version footer match the new tag.
 - Check `/api/v1/system/version` and see the same number.
 
-If any of those fail, see [Troubleshooting](./troubleshooting) — the upgrade can almost always be rolled back by checking out the previous tag and reverting the last migration with `alembic downgrade -1`.
+If any of those fail, see [Troubleshooting](./troubleshooting). Note what rollback does and does not mean here: `services/api` uses a **forward-only** SQL migration runner (`services/api/app/scripts/run_migrations.py`), not Alembic — there is no `alembic.ini`, no `alembic/` directory, and no downgrade concept. The only services with Alembic are `ueba`, `honeytokens`, `purple-team` and `osquery-tls`. Reverting the **code** to the previous tag is supported; reverting the **schema** is not, so a rollback that needs the old schema means restoring the snapshot taken in step 2 of the pre-upgrade checklist.
 
 ## Rolling back
 
@@ -113,7 +116,10 @@ Patch and minor releases are designed to roll back cleanly. The procedure mirror
 git checkout v7.3.0           # the previous tag
 pnpm install --frozen-lockfile
 (cd services/api && uv sync)
-(cd services/api && uv run alembic downgrade <previous_revision>)
+# No schema downgrade step: the API migration runner is forward-only.
+# Additive migrations (the common case) are backward compatible, so the previous
+# code runs against the newer schema. If a migration was destructive, restore the
+# snapshot instead — the CHANGELOG flags those as irreversible.
 docker compose -f infra/compose/docker-compose.dev.yml up -d api
 ```
 

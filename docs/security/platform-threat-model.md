@@ -42,8 +42,9 @@ flowchart LR
 ### Information disclosure (top risk for this asset)
 - Threats: a DB dump or leaked `AISOC_CREDENTIAL_KEY` exposes every connector credential; plaintext secrets in logs.
 - Controls:
-  - **Envelope encryption** (`services/api/app/security/envelope_cipher.py`, Phase 1.6): each secret is encrypted with a per-secret DEK; the DEK is wrapped by a KEK that never leaves KMS/HSM (`AwsKmsKeyManager`; GCP KMS / Vault Transit implement the same `KeyManager` protocol). A DB dump yields only wrapped DEKs + ciphertext — useless without KMS `decrypt` permission. `LocalKeyManager` remains the default for hobby deploys.
-  - Per-secret DEKs mean a single compromised DEK exposes one secret, not the whole vault.
+  - **Envelope encryption** (`services/api/app/security/envelope_cipher.py`), opt-in via `AISOC_CREDENTIAL_ENVELOPE=local|aws`. Each secret is encrypted under its own data-encryption key; only the *wrapped* DEK is stored beside the ciphertext. With `aws`, the KEK never leaves KMS, so a database dump yields wrapped DEKs and ciphertext that are useless without KMS `decrypt` permission. Per-secret DEKs also bound the blast radius: one compromised DEK exposes one secret, not the vault. Rotation is re-wrapping the DEKs (`EnvelopeCipher.rewrap`), which never touches plaintext. Written as `vault:v2:`.
+  - **Fernet authenticated encryption** (`services/api/app/security/credential_vault.py`) is the default and the read path for everything written before envelope mode was enabled (`vault:v1:`). Under v1 the risk a dump poses is bounded by `AISOC_CREDENTIAL_KEY` alone, which is why v2 exists.
+  - Enabling v2 needs no migration — v1 tokens keep decrypting and rows upgrade the next time they are written. Disabling it after v2 rows exist **fails closed** rather than handing ciphertext to a connector as if it were a credential.
   - Leaf-level encryption keeps structural fields queryable while every secret value is ciphertext.
   - The vault refuses to boot without a key outside development; plaintext keys never log.
 

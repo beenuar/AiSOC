@@ -14,6 +14,7 @@ import structlog
 from app.agents.dispositions import BENIGN, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, NEEDS_REVIEW
 from app.confidence import score_investigation
 from app.context.bundle import ContextBundle
+from app.investigator.deep_investigation import run_deep_investigation
 from app.investigator.splunk_evidence import collect_splunk_evidence
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import lookup_technique
@@ -90,6 +91,23 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
     # or how identical alerts had previously resolved.
     for line in _bundle_findings(state.context_bundle):
         state.add_finding(line)
+
+    # --- Recursive, tool-driven investigation ---
+    # Everything above is deterministic: it reasons over evidence already
+    # gathered. This is the part that goes and looks — the model pivots
+    # through the estate via the investigation toolset, following the
+    # strategy selected for this alert shape.
+    #
+    # Additive and fail-soft by construction. A deep investigation that
+    # errors, times out or is disabled leaves the deterministic findings
+    # untouched; it never removes a conclusion, only adds evidence for one.
+    deep = await run_deep_investigation(state)
+    for line in deep.findings():
+        state.add_finding(line)
+    # Recorded on the state so the depth gate can grade the run and the
+    # ledger can show what was actually checked, rather than the narrative
+    # being the only evidence that anything was.
+    state.investigation_depth = deep.as_dict()
 
     # --- Generate narrative findings ---
     if malicious_iocs:

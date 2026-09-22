@@ -338,6 +338,8 @@ jobs:
             tests/test_prompt_envelope.py \
             tests/test_privacy_redactor.py \
             tests/test_cost_governor.py \
+            tests/test_bundle_incident_context.py \
+            tests/test_deep_investigation.py \
             tests/test_model_router.py \
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
@@ -345,6 +347,57 @@ jobs:
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
+      - name: Toolchain versions must agree
+        # Six go.mod files declared five different Go versions while the Go
+        # matrix installed a sixth, so one module could not be built by the
+        # toolchain CI provides. Nothing compared the two.
+        run: python3 scripts/check_toolchain_versions.py
+
+      - name: Benchmark harness (Pillar 4)
+        # The harness must stay runnable against an agent that is not ours,
+        # and must keep refusing the ways a scoring harness quietly hands out
+        # credit: abstaining to raise accuracy, citing unverifiable
+        # indicators, self-reporting a flattering latency, and publishing a
+        # figure without saying the corpus was synthetic.
+        run: |
+          python3 -m pip install --quiet httpx
+          cd packages/aisoc-benchmark
+          PYTHONPATH=. python3 -m pytest tests/ -q
+
+      - name: Corpus must match its generator
+        # Two hand-edited copies of 200 incidents drift within a release, and
+        # the published figure then describes a corpus nobody has.
+        run: |
+          python3 packages/aisoc-benchmark/build_corpus.py
+          git diff --exit-code packages/aisoc-benchmark/corpus/ || {
+            echo "::error::the benchmark corpus is out of date; run build_corpus.py and commit"
+            exit 1
+          }
+
+      - name: Gate the action contract (Pillar 3)
+        # Four properties of every response action were previously inferred
+        # rather than declared: risk (from the capability name in one place
+        # and a policy table in another, which can disagree), reversibility
+        # (a hardcoded list of four actions), verification (absent, so an
+        # action reported success on an HTTP 200), and whether any tier may
+        # ever auto-execute it. This asserts each executor declares a
+        # coherent contract, that the approval matrix can only ever raise a
+        # requirement, and that the capability mirror matches the connectors
+        # enum — a check capabilities.py has documented for months against a
+        # test file that does not exist.
+        run: python3 scripts/check_action_contract.py
+
+      - name: Gate investigation depth (Pillar 2)
+        # run_with_tools shipped working, guarded and instrumented with zero
+        # production callers, so the platform's deepest capability was
+        # reachable only from tests. This asserts it still has one, that every
+        # strategy names real tools, that every tool the model is offered has
+        # a strategy telling it when to reach for one, and that selection
+        # discriminates rather than always returning the fallback. Structure,
+        # not prose: an investigation that summarises the alert reads exactly
+        # like one that pivoted five times.
+        run: python3 scripts/check_investigation_depth.py
+
       - name: Gate the public benchmark scoreboard (Phase E1)
         # Ties apps/docs/static/data/scoreboard.json to a real deterministic
         # live-agent MITRE-accuracy run: the newest substrate row must match a
@@ -608,7 +661,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: services/${{ matrix.service }}/go.sum
       - name: Build
         run: |
@@ -636,7 +689,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache-dependency-path: packages/plugin-sdk-go/go.sum
       - name: Build
         run: |

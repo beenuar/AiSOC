@@ -63,6 +63,15 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "revoke_session",
         "revoke_token",
         "unisolate_host",
+        # Reverse verbs. Added because the action contract names them as
+        # the rollback for quarantine_file, disable_user, block_domain and
+        # block_ioc — and a declared reverse that is not in the vocabulary
+        # is worse than none, because the rollback path believes it has one.
+        "allow_domain",
+        "allow_hash",
+        "allow_ioc",
+        "enable_user",
+        "restore_file",
         # WS-E live action verbs
         "allow_ip",
         "block_ioc",

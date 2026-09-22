@@ -44,6 +44,12 @@ from typing import Any, Final
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
 from app.core.config import is_dev_env, settings
+from app.security.envelope_cipher import (
+    AwsKmsKeyManager,
+    EnvelopeCipher,
+    EnvelopeError,
+    LocalKeyManager,
+)
 
 logger = logging.getLogger("aisoc.credential_vault")
 
@@ -54,6 +60,11 @@ logger = logging.getLogger("aisoc.credential_vault")
 # deliberately not a valid Fernet token start byte (``gAAAAA...``) so we
 # can never accidentally interpret a real ciphertext as plaintext.
 _CIPHER_PREFIX: Final[str] = "vault:v1:"
+
+# Envelope tokens (per-secret DEK, wrapped by a KEK). Reads always accept
+# both prefixes; which one a *write* produces depends on configuration.
+# See ``app.security.envelope_cipher``.
+_ENVELOPE_PREFIX: Final[str] = "vault:v2:"
 
 
 class CredentialVaultError(RuntimeError):
@@ -88,7 +99,12 @@ class CredentialVault:
     don't race to generate a development-only ephemeral key.
     """
 
-    def __init__(self, primary_key: bytes, historical_keys: list[bytes] | None = None) -> None:
+    def __init__(
+        self,
+        primary_key: bytes,
+        historical_keys: list[bytes] | None = None,
+        envelope: EnvelopeCipher | None = None,
+    ) -> None:
         if not primary_key:
             raise CredentialVaultError("CredentialVault requires a non-empty primary key")
         try:
@@ -107,6 +123,34 @@ class CredentialVault:
                 logger.warning("ignoring invalid rotation key: %s", exc)
 
         self._fernet = MultiFernet(keyring) if len(keyring) > 1 else primary
+        # When set, new writes are envelope-encrypted. The Fernet keyring
+        # stays live regardless so v1 rows written before the switch still
+        # read — enabling envelope mode must never strand existing secrets.
+        self._envelope = envelope
+
+    @classmethod
+    def with_envelope(
+        cls,
+        primary_key: bytes,
+        envelope: EnvelopeCipher,
+        *,
+        historical_keys: list[bytes] | None = None,
+    ) -> CredentialVault:
+        """Build a vault whose *writes* are envelope-encrypted.
+
+        A named constructor rather than a keyword argument on ``__init__``.
+        Four modules in this repo are importable as
+        ``app.security.credential_vault`` — the API owns the write path and
+        services/actions, agents and connectors ship vendored read-path
+        copies — so a call site passing ``envelope=`` is ambiguous to any
+        reader, and to static analysis, about which class it means. The
+        vendored copies have no such classmethod, which makes the intent
+        unambiguous at the call site.
+
+        Reads remain backward compatible either way: a ``vault:v1`` token
+        written before envelope mode was enabled still decrypts.
+        """
+        return cls(primary_key, historical_keys=historical_keys, envelope=envelope)
 
     # --------------------------------------------------------------------- core
 
@@ -118,8 +162,15 @@ class CredentialVault:
         """
         if not isinstance(value, str):
             raise CredentialVaultError(f"vault.encrypt expects str, got {type(value).__name__}")
-        if value.startswith(_CIPHER_PREFIX):
+        if value.startswith(_CIPHER_PREFIX) or value.startswith(_ENVELOPE_PREFIX):
             return value
+        if self._envelope is not None:
+            try:
+                return self._envelope.encrypt(value)
+            except EnvelopeError as exc:
+                # Falling back to v1 here would quietly downgrade the control
+                # an operator explicitly enabled, so refuse instead.
+                raise CredentialVaultError(f"envelope encryption failed: {exc}") from exc
         token = self._fernet.encrypt(value.encode("utf-8")).decode("ascii")
         return f"{_CIPHER_PREFIX}{token}"
 
@@ -132,6 +183,17 @@ class CredentialVault:
         """
         if not isinstance(value, str):
             raise CredentialVaultError(f"vault.decrypt expects str, got {type(value).__name__}")
+        if value.startswith(_ENVELOPE_PREFIX):
+            if self._envelope is None:
+                raise CredentialVaultError(
+                    "found a vault:v2 envelope token but envelope encryption is disabled. "
+                    "Set AISOC_CREDENTIAL_ENVELOPE (and the matching KEK) to the "
+                    "configuration these secrets were written under."
+                )
+            try:
+                return self._envelope.decrypt(value)
+            except EnvelopeError as exc:
+                raise CredentialVaultError(f"envelope decrypt failed: {exc}") from exc
         if not value.startswith(_CIPHER_PREFIX):
             return value
         token = value[len(_CIPHER_PREFIX) :].encode("ascii")
@@ -187,6 +249,43 @@ _vault_singleton: CredentialVault | None = None
 _vault_lock = Lock()
 
 
+def _build_envelope() -> EnvelopeCipher | None:
+    """Construct the envelope cipher from configuration, or ``None`` when off.
+
+    Refuses to start rather than silently degrading: an operator who sets
+    AISOC_CREDENTIAL_ENVELOPE=aws and mistypes the key id should get a boot
+    failure, not connector secrets written under the weaker v1 scheme while
+    the deployment believes KMS is in the path.
+    """
+    mode = (settings.AISOC_CREDENTIAL_ENVELOPE or "off").strip().lower()
+    if mode in ("", "off", "false", "0", "none"):
+        return None
+
+    if mode == "local":
+        kek = (settings.AISOC_CREDENTIAL_KEK or "").strip().encode("ascii")
+        if not kek:
+            raise CredentialVaultError(
+                "AISOC_CREDENTIAL_ENVELOPE=local requires AISOC_CREDENTIAL_KEK "
+                "(a Fernet key). Generate one with: python -c "
+                '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        historical: dict[str, bytes] = {}
+        for index, key in enumerate(_split_keys(settings.AISOC_CREDENTIAL_KEK_ROTATION_FROM or "")):
+            historical[f"local-{index}"] = key
+        try:
+            return EnvelopeCipher(LocalKeyManager(kek, historical=historical or None))
+        except EnvelopeError as exc:
+            raise CredentialVaultError(f"invalid AISOC_CREDENTIAL_KEK: {exc}") from exc
+
+    if mode in ("aws", "kms", "aws-kms"):
+        key_id = (settings.AISOC_KMS_KEY_ID or "").strip()
+        if not key_id:
+            raise CredentialVaultError("AISOC_CREDENTIAL_ENVELOPE=aws requires AISOC_KMS_KEY_ID " "(a KMS key id, alias or ARN).")
+        return EnvelopeCipher(AwsKmsKeyManager(key_id))
+
+    raise CredentialVaultError(f"AISOC_CREDENTIAL_ENVELOPE={mode!r} is not recognised; expected off, local or aws.")
+
+
 def get_vault() -> CredentialVault:
     """Return the process-wide :class:`CredentialVault`.
 
@@ -223,7 +322,13 @@ def get_vault() -> CredentialVault:
                 " and set AISOC_CREDENTIAL_KEY."
             )
         rotation = _split_keys(settings.AISOC_CREDENTIAL_KEY_ROTATION_FROM or "")
-        _vault_singleton = CredentialVault(primary, historical_keys=rotation)
+        envelope = _build_envelope()
+        if envelope is not None:
+            logger.info(
+                "credential vault: envelope encryption enabled (%s); new writes use vault:v2",
+                (settings.AISOC_CREDENTIAL_ENVELOPE or "").strip().lower(),
+            )
+        _vault_singleton = CredentialVault(primary, historical_keys=rotation, envelope=envelope)
         return _vault_singleton
 
 

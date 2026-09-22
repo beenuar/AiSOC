@@ -55,7 +55,23 @@ DEFAULT_YAML = REPO_ROOT / "schemas" / "graph-schema.yaml"
 DEFAULT_CURRENT_YAML = REPO_ROOT / "schemas" / "graph-schema-current.yaml"
 DEFAULT_GO_SOURCE = REPO_ROOT / "services" / "ingest" / "internal" / "graph" / "schema.go"
 
-SCHEMA_VERSION = "v1.0"
+def _go_schema_version(path: Path = DEFAULT_GO_SOURCE) -> str:
+    """Read SchemaVersion out of schema.go.
+
+    Derived rather than duplicated. The version previously lived here as a
+    literal as well as in the Go source and the YAML, so a bump meant editing
+    three files and the gate's failure message was a reminder to edit the
+    third. Two representations that must agree is a gate; three, one of which
+    is the gate itself, is a chore.
+    """
+    if path.exists():
+        match = re.search(r'SchemaVersion\s*=\s*"([^"]+)"', path.read_text(encoding="utf-8"))
+        if match:
+            return match.group(1)
+    return "v1.0"
+
+
+SCHEMA_VERSION = _go_schema_version()
 
 # Required event-edge property set. Every relationship marked
 # ``event_edge: true`` must declare all three.
@@ -154,26 +170,51 @@ _STRING_LITERAL_RE = re.compile(r'"([A-Za-z][A-Za-z0-9_]*)"')
 
 
 def parse_go_source(path: Path) -> tuple[set[str], set[str]] | None:
-    """Extract candidate node labels and relationship names from a Go file.
+    """Extract node labels and relationship names from the Go enums.
+
+    Classifies by the declared Go type (``NodeLabel`` / ``RelType``) rather
+    than by the shape of the string. The previous heuristic — "contains a
+    lowercase letter, so it is a CamelCase label, otherwise ALL_CAPS, so it
+    is a relationship" — put the ``IOC`` node label in the relationship set,
+    and would do the same to any acronym label added later. The type is
+    already in the source and is not a guess.
+
+    Go permits omitting the type on subsequent entries in a ``const`` block,
+    so the last explicit type carries forward, as the compiler does.
 
     Returns ``None`` when the file does not exist (T1.1 not yet landed).
     """
     if not path.exists():
         return None
-    content = path.read_text(encoding="utf-8")
+
     labels: set[str] = set()
     rels: set[str] = set()
-    for match in _STRING_LITERAL_RE.finditer(content):
-        token = match.group(1)
-        # Heuristic: any lowercase letter → CamelCase label; otherwise an
-        # ALL_CAPS (or ALLCAPS) token → relationship name. This handles
-        # both ``HAS_PERMISSION`` and single-word relationships like
-        # ``ACCESSES`` or ``OWNS`` without misclassifying ``SaaSApp``.
-        if re.search(r"[a-z]", token):
-            if re.fullmatch(r"[A-Z][a-zA-Z0-9]*", token):
-                labels.add(token)
-        elif re.fullmatch(r"[A-Z][A-Z0-9_]*", token):
-            rels.add(token)
+
+    typed = re.compile(r'^\s*\w+\s+(NodeLabel|RelType)\s*=\s*"([^"]+)"')
+    untyped = re.compile(r'^\s*\w+\s*=\s*"([^"]+)"')
+
+    current: str | None = None
+    in_const = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("const ("):
+            in_const, current = True, None
+            continue
+        if in_const and stripped == ")":
+            in_const, current = False, None
+            continue
+
+        match = typed.match(line)
+        if match:
+            current = match.group(1)
+            (labels if current == "NodeLabel" else rels).add(match.group(2))
+            continue
+
+        if in_const and current:
+            match = untyped.match(line)
+            if match:
+                (labels if current == "NodeLabel" else rels).add(match.group(1))
+
     return labels, rels
 
 
@@ -249,8 +290,8 @@ def validate_yaml_internal(schema: Schema) -> list[str]:
     if schema.version != SCHEMA_VERSION:
         errors.append(
             f"schema version mismatch: YAML declares {schema.version!r}, "
-            f"script expects {SCHEMA_VERSION!r}. Bump SCHEMA_VERSION in "
-            f"scripts/export_graph_schema.py if this is intentional."
+            f"Go source declares {SCHEMA_VERSION!r}. Update the `version:` "
+            f"field in schemas/graph-schema.yaml to match schema.go."
         )
 
     duplicates = [name for name in schema.node_labels if schema.node_labels.count(name) > 1]
@@ -271,14 +312,18 @@ def validate_yaml_internal(schema: Schema) -> list[str]:
 
 
 def compare_against_go(schema: Schema, go_parsed: tuple[set[str], set[str]]) -> list[str]:
-    """Compare the YAML against parsed Go enums.
+    """Compare the YAML against the parsed Go enums, in both directions.
 
-    The comparison is intentionally lenient on the Go side: Go may declare
-    labels we already cover in the YAML (no error). Drift fires when:
+    This used to check one direction only — a YAML label missing from Go —
+    and called it "intentionally lenient". The leniency had no upside: if Go
+    declares a label the YAML already covers, the set difference is empty
+    anyway, so the only thing the missing direction permitted was the failure
+    case. And it is the direction the code actually moves in: someone adds a
+    label to schema.go, ships it, and the YAML and docs silently fall behind
+    while the gate reports the schema consistent. That happened — the Go
+    source carried 28 labels against the YAML's 17 and this printed OK.
 
-    * A YAML node label is not present anywhere in Go (Go forgot to declare
-      it).
-    * A YAML relationship is not present anywhere in Go.
+    Both directions now fail.
     """
     errors: list[str] = []
     go_labels, go_rels = go_parsed
@@ -288,11 +333,35 @@ def compare_against_go(schema: Schema, go_parsed: tuple[set[str], set[str]]) -> 
 
     missing_in_go_labels = yaml_labels - go_labels
     if missing_in_go_labels:
-        errors.append(f"node labels declared in YAML but missing from Go source: {_format_set(missing_in_go_labels)}")
+        errors.append(
+            f"node labels declared in YAML but missing from Go source: "
+            f"{_format_set(missing_in_go_labels)}"
+        )
+
+    missing_in_yaml_labels = go_labels - yaml_labels
+    if missing_in_yaml_labels:
+        errors.append(
+            f"node labels declared in Go source but missing from YAML: "
+            f"{_format_set(missing_in_yaml_labels)} — run "
+            f"`python scripts/export_graph_schema.py --write` and update "
+            f"apps/docs/docs/architecture/graph-schema.md"
+        )
 
     missing_in_go_rels = yaml_rels - go_rels
     if missing_in_go_rels:
-        errors.append(f"relationships declared in YAML but missing from Go source: {_format_set(missing_in_go_rels)}")
+        errors.append(
+            f"relationships declared in YAML but missing from Go source: "
+            f"{_format_set(missing_in_go_rels)}"
+        )
+
+    missing_in_yaml_rels = go_rels - yaml_rels
+    if missing_in_yaml_rels:
+        errors.append(
+            f"relationships declared in Go source but missing from YAML: "
+            f"{_format_set(missing_in_yaml_rels)} — run "
+            f"`python scripts/export_graph_schema.py --write` and update "
+            f"apps/docs/docs/architecture/graph-schema.md"
+        )
 
     return errors
 

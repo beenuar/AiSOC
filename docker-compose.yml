@@ -20,6 +20,7 @@ networks:
     driver: bridge
 
 volumes:
+  tempo_data:
   postgres_data:
   redis_data:
   kafka_data:
@@ -769,11 +770,59 @@ services:
     profiles:
       - monitoring
 
+  # ── Tracing ────────────────────────────────────────────────────────────────
+  # The services default OTEL_EXPORTER_OTLP_ENDPOINT to
+  # http://otel-collector:4317 and no collector shipped in any compose file,
+  # so out of the box every span went into a connection error. That is worse
+  # than having no tracing at all: the code looks instrumented, the logs fill
+  # with export failures, and nobody can tell whether a missing trace means a
+  # missing span or a missing collector.
+  #
+  # Scope, stated because the docs previously overstated it: api, agents,
+  # ueba and honeytokens are instrumented. ingest (Go) and realtime
+  # (TypeScript) are not, and they are the two ends of the Kafka spine.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: aisoc-otel-collector
+    command: ["--config=/etc/otel/collector.yaml"]
+    depends_on:
+      - tempo
+    volumes:
+      - ./infra/docker/otel/collector.yaml:/etc/otel/collector.yaml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: aisoc-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0:0"
+    volumes:
+      - ./infra/docker/otel/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "127.0.0.1:3200:3200"
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
   grafana:
     image: grafana/grafana:10.2.0
     container_name: aisoc-grafana
     depends_on:
       - prometheus
+      - tempo
     ports:
       - "127.0.0.1:3001:3000"
     # Default admin password is intentionally weak for the dev compose stack;

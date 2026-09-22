@@ -44,6 +44,21 @@ type Config struct {
 	// bigger gets a 413; vendors that page through alerts should batch
 	// at the source rather than push 50MB at once.
 	InboxMaxBodyBytes  int64
+	// Per-tenant rate limits on the inbox. /v1/inbox/* is the one route
+	// deliberately open to the internet, authenticated only by a bearer
+	// token that lives in a vendor's webhook config, and it previously had
+	// no ceiling at all — one noisy or compromised integration could fill
+	// Kafka and the lake for every tenant sharing the spine.
+	//
+	// Two dimensions: requests bound parse and connection cost, events
+	// bound what actually reaches Kafka (one request can carry thousands).
+	// Zero disables that dimension. Limits are per replica, so the
+	// effective ceiling is rate x replicas; set accordingly or terminate
+	// at the edge if an exact global cap is required.
+	InboxRateRequestsPerSecond float64
+	InboxRateRequestBurst      float64
+	InboxRateEventsPerSecond   float64
+	InboxRateEventBurst        float64
 
 	// Kubernetes audit webhook (Track D, v7.1.0).
 	//
@@ -162,6 +177,14 @@ func Load() (*Config, error) {
 		InboxEnabled:      getEnv("INBOX_ENABLED", "true") == "true",
 		InboxTemplatesDir: getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
 		InboxMaxBodyBytes: int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),
+		// Defaults sized to be invisible to a well-behaved vendor and
+		// firmly bounding to a runaway one: 50 req/s sustained with a
+		// 200 burst, and 5k events/s with a 20k burst (one large batch
+		// passes; a sustained flood does not).
+		InboxRateRequestsPerSecond: float64(mustGetEnvInt("INBOX_RATE_REQUESTS_PER_SECOND", 50)),
+		InboxRateRequestBurst:      float64(mustGetEnvInt("INBOX_RATE_REQUEST_BURST", 200)),
+		InboxRateEventsPerSecond:   float64(mustGetEnvInt("INBOX_RATE_EVENTS_PER_SECOND", 5000)),
+		InboxRateEventBurst:        float64(mustGetEnvInt("INBOX_RATE_EVENT_BURST", 20000)),
 
 		// Kubernetes audit webhook (Track D, v7.1.0).
 		K8sAuditSharedSecret: getEnv("K8S_AUDIT_SHARED_SECRET", ""),

@@ -33,6 +33,7 @@ from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.retention_purge import run_forever as run_retention_purge
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
 _metrics_bearer = HTTPBearer(auto_error=False)
@@ -50,6 +51,10 @@ _WEEKLY_DIGEST_LOCK_TTL_SECONDS = 5400
 # Hunt sweep can execute multiple saved hunts + case opens in one tick; 5m
 # covers slow sweeps while still recovering quickly after replica loss.
 _HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
+# A purge sweep scans and deletes across every tenant with a policy, and a
+# ClickHouse mutation with mutations_sync=1 blocks until it lands. 30m keeps
+# a second replica from starting a concurrent sweep mid-delete.
+_RETENTION_PURGE_LOCK_TTL_SECONDS = 1800
 
 
 async def _run_guarded_scheduler_worker(
@@ -383,6 +388,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # T3.4: Saved-hunt scheduler. Sweeps aisoc_saved_hunts on a tick and
     # fires any hunt whose cron schedule says it's due. Default off until
     # the executor is wired (see app.workers.hunt_scheduler TODO).
+    # Retention purge. Default off: retention policies were storable (and
+    # documented as enforced) long before anything deleted, so switching this
+    # on by default would turn an upgrade into unannounced data loss.
+    retention_purge_task: asyncio.Task | None = None
+    if settings.RETENTION_WORKER_ENABLED:
+        try:
+            retention_purge_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="retention_purge",
+                    ttl_seconds=_RETENTION_PURGE_LOCK_TTL_SECONDS,
+                    worker=run_retention_purge,
+                ),
+                name="retention_purge_worker",
+            )
+            logger.info(
+                "retention_purge worker started",
+                dry_run=settings.RETENTION_WORKER_DRY_RUN,
+            )
+        except Exception as exc:
+            logger.warning("retention_purge worker failed to start", error=str(exc))
+
     hunt_scheduler_task: asyncio.Task | None = None
     if settings.HUNT_SCHEDULER_ENABLED:
         try:
@@ -438,6 +464,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("hunt_scheduler worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("hunt_scheduler worker shutdown error", error=type(exc).__name__)
+
+    if retention_purge_task is not None and not retention_purge_task.done():
+        retention_purge_task.cancel()
+        try:
+            await retention_purge_task
+        except asyncio.CancelledError:
+            logger.debug("retention_purge worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("retention_purge worker shutdown error", error=type(exc).__name__)
 
     if demo_bootstrap_task is not None and not demo_bootstrap_task.done():
         demo_bootstrap_task.cancel()

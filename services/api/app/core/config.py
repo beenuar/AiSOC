@@ -167,6 +167,25 @@ class Settings(BaseSettings):
     AISOC_CREDENTIAL_KEY: str = ""
     AISOC_CREDENTIAL_KEY_ROTATION_FROM: str = ""
 
+    # Envelope encryption (``vault:v2``). When enabled each secret gets its own
+    # data-encryption key, and only the *wrapped* DEK is stored alongside the
+    # ciphertext — so a database dump is useless without the ability to unwrap,
+    # and one leaked DEK exposes one secret rather than the whole vault.
+    #
+    #   off   — Fernet under AISOC_CREDENTIAL_KEY (default; ``vault:v1``)
+    #   local — DEKs wrapped by a KEK held in AISOC_CREDENTIAL_KEK. Better blast
+    #           radius than v1, but the KEK is still on the host.
+    #   aws   — DEKs wrapped by AWS KMS; the KEK never leaves the HSM.
+    #
+    # Reads are always backward compatible: a ``vault:v1`` token written before
+    # this was enabled still decrypts under AISOC_CREDENTIAL_KEY. Turning it on
+    # is therefore safe without a migration; existing rows upgrade to v2 the
+    # next time they are written.
+    AISOC_CREDENTIAL_ENVELOPE: str = "off"
+    AISOC_CREDENTIAL_KEK: str = ""
+    AISOC_CREDENTIAL_KEK_ROTATION_FROM: str = ""
+    AISOC_KMS_KEY_ID: str = ""
+
     # Internal URL for the connectors microservice. The API service proxies
     # catalog lookups (``GET /connectors``) and stateless connection tests
     # (``POST /connectors/{type}/test``) to this URL so the wizard UI can
@@ -258,6 +277,31 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("HUNT_SCHEDULER_ENABLED", "AISOC_HUNT_SCHEDULER_ENABLED"),
     )
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
+
+    # Retention purge worker. Applies each tenant's configured retention
+    # window by deleting aged rows from the ClickHouse lake and the Postgres
+    # alerts table.
+    #
+    # Default **off**, and dry-run when first switched on. Retention policies
+    # have been storable (and described as enforced) for several releases
+    # while nothing deleted anything, so arming this on upgrade would turn a
+    # version bump into unannounced data loss. Enable it deliberately, read
+    # the dry-run counts, then set RETENTION_WORKER_DRY_RUN=false.
+    #
+    # Only tenants with an explicit `retention_policies` row are purged; the
+    # defaults in app.services.retention pre-fill a form, they are not an
+    # instruction to delete. `audit_days` is stored but not purged — the audit
+    # log is an append-only hash chain and truncating it invalidates every
+    # subsequent verification.
+    RETENTION_WORKER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETENTION_WORKER_ENABLED", "AISOC_RETENTION_WORKER_ENABLED"),
+    )
+    RETENTION_WORKER_DRY_RUN: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RETENTION_WORKER_DRY_RUN", "AISOC_RETENTION_WORKER_DRY_RUN"),
+    )
+    RETENTION_WORKER_INTERVAL_SECONDS: int = 21600  # 6h
 
     # Database
     # The default points at the bundled compose Postgres with its dev password.

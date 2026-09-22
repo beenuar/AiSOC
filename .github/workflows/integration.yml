@@ -361,12 +361,15 @@ jobs:
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_ENDPOINT_URL: http://localhost:9000
       AWS_DEFAULT_REGION: us-east-1
+      # Backups are encrypted by default. A CI key is fine: the bucket is
+      # ephemeral and holds nothing but the probe table.
+      BACKUP_ENCRYPTION_KEY: 2b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install tooling (awscli + postgres client)
         run: |
-          pip install --quiet awscli
+          pip install --quiet awscli cryptography
           sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
 
       # MinIO needs a `server /data` command, which the GitHub `services:`
@@ -403,6 +406,54 @@ jobs:
       - name: Backup (scripts/backup.sh)
         run: ./scripts/backup.sh --component postgres
 
+      # The restore assertion below proves the dump round-trips. It cannot
+      # prove the object in the bucket is unreadable to whoever can list the
+      # bucket, which is the property the encryption exists for — and which
+      # architecture.md claimed for months while backup.sh shipped plaintext.
+      - name: Assert the uploaded artifact is encrypted and manifested
+        run: |
+          set -euo pipefail
+          KEY=$(aws s3 ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/" \
+            | awk '{print $4}' | tail -1)
+          echo "uploaded object: ${KEY}"
+          case "$KEY" in
+            *.enc) ;;
+            *) echo "::error::backup uploaded without the .enc suffix: ${KEY}"; exit 1 ;;
+          esac
+
+          aws s3 cp "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/${KEY}" /tmp/artifact.enc
+
+          # gzip magic would mean the dump went up in the clear.
+          if head -c 2 /tmp/artifact.enc | od -An -tx1 | grep -q '1f 8b'; then
+            echo "::error::artifact begins with gzip magic; it is not encrypted"
+            exit 1
+          fi
+          head -c 8 /tmp/artifact.enc | grep -q 'AISOCBK1' || {
+            echo "::error::artifact is missing the AiSOC backup header"; exit 1; }
+
+          # And the table name must not be readable in the ciphertext.
+          if grep -aq 'dr_probe' /tmp/artifact.enc; then
+            echo "::error::plaintext schema leaked into the encrypted artifact"
+            exit 1
+          fi
+
+          MANIFEST=$(aws s3 ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/manifests/" \
+            | awk '{print $4}' | tail -1)
+          [ -n "$MANIFEST" ] || { echo "::error::no manifest uploaded"; exit 1; }
+          aws s3 cp "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/manifests/${MANIFEST}" /tmp/manifest.json
+          python3 -c "
+          import json, sys
+          doc = json.load(open('/tmp/manifest.json'))
+          assert doc['encryption'] == 'aes-256-gcm', doc
+          arts = doc['artifacts']
+          assert arts, 'manifest lists no artifacts'
+          for a in arts:
+              assert a['encrypted'] is True, a
+              assert len(a['sha256_plaintext']) == 64, a
+              assert len(a['sha256_ciphertext']) == 64, a
+          print(f'manifest ok: {len(arts)} artifact(s), aes-256-gcm')
+          "
+
       - name: Destroy all data
         run: |
           PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc \
@@ -427,6 +478,32 @@ jobs:
           echo "rows after restore: ${COUNT}"
           [ "${COUNT}" = "500" ] || { echo "::error::data loss after restore (${COUNT}/500 rows)"; exit 1; }
 
+      # A backup that restores is necessary but not sufficient: a corrupted
+      # backup must refuse to restore rather than produce a partial database,
+      # which is the failure that gets discovered during an incident.
+      - name: Assert a tampered backup is refused
+        run: |
+          set -uo pipefail
+          KEY=$(aws s3 ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/" \
+            | awk '{print $4}' | tail -1)
+          aws s3 cp "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/${KEY}" /tmp/tamper.enc
+
+          # Flip one bit deep inside the ciphertext.
+          python3 -c "
+          import pathlib
+          p = pathlib.Path('/tmp/tamper.enc')
+          b = bytearray(p.read_bytes())
+          b[len(b) // 2] ^= 0x01
+          p.write_bytes(bytes(b))
+          "
+          aws s3 cp /tmp/tamper.enc "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/${KEY}"
+
+          if ./scripts/restore.sh --latest --component postgres < /dev/null; then
+            echo "::error::restore accepted a tampered backup"
+            exit 1
+          fi
+          echo "tampered backup correctly refused"
+
       - name: Publish DR summary
         run: |
           {
@@ -437,6 +514,8 @@ jobs:
             echo "| rows seeded | 500 |"
             echo "| rows after restore | 500 |"
             echo "| measured RTO | ${RTO_SECONDS}s |"
+            echo "| artifact encryption | AES-256-GCM (asserted unreadable in the bucket) |"
+            echo "| integrity | SHA-256 manifest; tampered artifact refused |"
             echo "| RPO | last completed backup (event-loss window = backup cadence) |"
           } >> "$GITHUB_STEP_SUMMARY"
 

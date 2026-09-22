@@ -2349,6 +2349,48 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/tenants/me/delete:
+    post:
+      tags:
+      - tenants
+      summary: Delete My Tenant
+      description: 'Erase this tenant from Postgres, ClickHouse, Neo4j, Qdrant and
+        Redis.
+
+
+        Defaults to a dry run, which counts what would be removed per store
+
+        without deleting. A live run requires ``confirm_tenant_id`` to match, and
+
+        reports per-store results: if any store fails, the Postgres transaction is
+
+        rolled back so the tenant record still names whatever data survived
+
+        elsewhere, and ``complete`` is false.'
+      operationId: delete_my_tenant_api_v1_tenants_me_delete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantDeletionRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Delete My Tenant Api V1 Tenants Me Delete Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/tenants/me/users:
     get:
       tags:
@@ -3916,6 +3958,155 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/incident-context/{alert_id}:
+    get:
+      tags:
+      - graph
+      summary: Traverse an alert into identity, asset, cloud, business and threat
+        context
+      description: 'Resolve one alert into the five dimensions an investigation needs.
+
+
+        Each dimension runs as its own bounded, tenant-scoped traversal, and they
+
+        run concurrently. A dimension that fails or times out names itself in
+
+        ``errors`` while the rest still return: this is on the hot path of every
+
+        escalated alert, so one slow leg must not take the bundle with it.
+
+
+        Returns 200 with ``partial: true`` rather than an error status when some
+
+        dimensions failed — the caller asked for context and got some.'
+      operationId: incident_context_api_v1_graph_incident_context__alert_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentContextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/investigate/tools:
+    get:
+      tags:
+      - graph
+      summary: List the investigation primitives and which are backed by data
+      description: 'Enumerate the toolset, separating what can answer from what cannot.
+
+
+        The split is part of the contract. A tool whose data class is not
+
+        ingested reports that rather than returning an empty result, because an
+
+        empty result reads as "I checked and found nothing" — which is how an
+
+        investigation concludes benign on evidence it never had.'
+      operationId: list_investigation_tools_api_v1_graph_investigate_tools_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Investigation Tools Api V1 Graph Investigate
+                  Tools Get
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/investigate/query:
+    post:
+      tags:
+      - graph
+      summary: Run one typed investigation primitive against the event lake
+      description: Execute one pivot. Tenant comes from the session, never the request.
+      operationId: run_investigation_tool_api_v1_graph_investigate_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestigationToolRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Run Investigation Tool Api V1 Graph Investigate Query
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/graph/context/import:
+    post:
+      tags:
+      - graph
+      summary: Import identity, organisational and business context into the graph
+      description: 'Upsert context records. Safe to run repeatedly on a schedule.
+
+
+        Records are merged rather than replaced: an import runs against a source
+
+        of record that may be partial, and replacing the tenant''s context with
+
+        whatever one run produced would delete a department because an HR export
+
+        timed out.
+
+
+        Every rejected record is returned with its reason. A partially-applied
+
+        import reporting success is worse than a rejected one, because afterwards
+
+        the gaps are invisible.'
+      operationId: import_graph_context_api_v1_graph_context_import_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextImportRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Import Graph Context Api V1 Graph Context Import Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/graph/neighbors/{entity_type}/{entity_id}:
     get:
       tags:
@@ -16644,6 +16835,48 @@ components:
         knobs (poll interval, region, log filters) that the wizard surfaces
 
         so an operator can tweak them without re-pasting credentials.'
+    ContextImportRequest:
+      properties:
+        departments:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Departments
+        employees:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Employees
+        applications:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Applications
+        cloud_accounts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Cloud Accounts
+      type: object
+      title: ContextImportRequest
+      description: 'Directory, HR and CMDB context the event stream cannot carry.
+
+
+        An event can say an account authenticated. It cannot say which person
+
+        holds that account, whether they still work here, which business
+
+        application the host serves, or what an outage of it costs. That is the
+
+        difference between "unusual login for svc_deploy" and "unusual login for
+
+        svc_deploy, owned by a contractor whose last day was Friday, on the host
+
+        running the tier-1 payments service".'
     ControlItem:
       properties:
         control_id:
@@ -19915,6 +20148,79 @@ components:
         fingerprint instead, which is enough to identify the row but not
 
         enough to forge inbound traffic.'
+    IncidentContextResponse:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        identities:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Identities
+        assets:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Assets
+        cloud:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Cloud
+        business:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Business
+        threat:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Threat
+        dimensions_resolved:
+          type: integer
+          title: Dimensions Resolved
+          default: 0
+        partial:
+          type: boolean
+          title: Partial
+          default: false
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+        narrative:
+          items:
+            type: string
+          type: array
+          title: Narrative
+      type: object
+      required:
+      - alert_id
+      - tenant_id
+      title: IncidentContextResponse
+      description: 'The five context dimensions for one alert.
+
+
+        ``partial`` and ``errors`` are part of the contract, not diagnostics. An
+
+        empty bundle from an unreachable graph and an empty bundle from an alert
+
+        with genuinely no context look identical otherwise, and a consumer that
+
+        cannot tell them apart will treat "we could not look" as "there is
+
+        nothing to find".'
     IndicatorCreate:
       properties:
         profile_id:
@@ -20247,6 +20553,31 @@ components:
           default: ''
       type: object
       title: InvestigateRequest
+    InvestigationToolRequest:
+      properties:
+        tool:
+          type: string
+          title: Tool
+        args:
+          additionalProperties: true
+          type: object
+          title: Args
+      type: object
+      required:
+      - tool
+      title: InvestigationToolRequest
+      description: 'One typed investigation pivot.
+
+
+        ``tool`` names a primitive; ``args`` are its typed arguments. Deliberately
+
+        not SQL: handing a model the lake query endpoint puts prompt-injectable
+
+        text one step from the query planner, and the tenant predicate is the only
+
+        thing between two customers'' data. ``tenant_id`` is taken from the
+
+        authenticated session and any value supplied here is discarded.'
     KBChunk:
       properties:
         doc_id:
@@ -25505,6 +25836,28 @@ components:
       - created_at
       - updated_at
       title: TemplateOut
+    TenantDeletionRequest:
+      properties:
+        dry_run:
+          type: boolean
+          title: Dry Run
+          default: true
+        confirm_tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Confirm Tenant Id
+      type: object
+      title: TenantDeletionRequest
+      description: 'Offboarding request.
+
+
+        ``confirm_tenant_id`` must equal the tenant being erased. Typing the id is
+
+        the only thing standing between "preview the erase" and "erase", and this
+
+        endpoint has no undo.'
     TenantHeaderResponse:
       properties:
         id:

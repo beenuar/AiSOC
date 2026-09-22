@@ -107,15 +107,18 @@ v4 introduces new tables (`api_keys`, `playbook_runs`, `investigation_steps`).
 Run Alembic:
 
 ```bash
-docker compose run --rm api alembic upgrade head
+docker compose run --rm api python -m app.scripts.run_migrations
 ```
 
-Expected output:
+Expected output. Note this is the forward-only SQL runner, not Alembic — migrations are
+tracked by filename in `aisoc_schema_migrations` and there is no downgrade:
 
 ```
-INFO  [alembic.runtime.migration] Running upgrade abc123 -> def456, add api_keys table
-INFO  [alembic.runtime.migration] Running upgrade def456 -> ghi789, add playbook_runs table
-INFO  [alembic.runtime.migration] Running upgrade ghi789 -> jkl012, add investigation_steps table
+INFO  Found 62 migration files
+INFO  59 migrations already applied; 3 pending
+INFO  ✓ applied 047_alerts_rule_provenance.sql
+INFO  ✓ applied 048_outcome_suppressions.sql
+INFO  ✓ applied 049_data_lifecycle.sql
 ```
 
 ---
