@@ -37,12 +37,57 @@ class CapabilityContract:
 
 _READ = "actions:read"
 _CONTAIN = "actions:contain"
+#: Reading a vendor is not containment and should not require the
+#: permission that isolates a host — bundling them means anyone who
+#: can look can also act.
+_INVESTIGATE = "actions:investigate"
 _IDENTITY = "actions:identity"
 _NETWORK = "actions:network"
 _TICKET = "actions:ticket"
 
 CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
     # ── Read-only ──────────────────────────────────────────────────────────
+    # ── Read-only investigation verbs ───────────────────────────────────
+    #
+    # Twenty-nine executors could change the estate and exactly one could
+    # ask it a question. That shapes an agent: with no way to read a
+    # vendor, an investigation can only reach the lake, and anything the
+    # lake did not ingest is invisible to it.
+    #
+    # These are automatic by construction. They change nothing, so there is
+    # nothing to verify and nothing to approve — and gating a read behind
+    # an analyst is how an agent learns to conclude without looking.
+    "get_host": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note="Device record from the EDR: OS, agent version, last seen, containment state.",
+    ),
+    "get_detections": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note=(
+            "Recent vendor detections for a host. What the EDR already "
+            "concluded, which is context an investigation should start from "
+            "rather than rediscover."
+        ),
+    ),
+    # search_hash is deliberately absent. Fleet-wide hash prevalence is
+    # the most useful read of the four — first-seen timestamps clustered
+    # in one morning mean something different from a binary present for
+    # a year — but CrowdStrike exposes it through an endpoint whose shape
+    # I could not verify, and a declared capability with no working
+    # executor is the exact defect this contract exists to prevent.
+    "get_user_activity": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note="Recent authentication events for a principal, from the IdP.",
+    ),
     "search_siem": CapabilityContract(
         impact=ActionImpact.READ_ONLY,
         approval=ApprovalRequirement.AUTOMATIC,

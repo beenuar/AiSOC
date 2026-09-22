@@ -124,6 +124,14 @@ class Capability(str, Enum):
     SUSPEND_SESSION = "suspend_session"
     FORCE_MFA = "force_mfa"
     # SIEM response (Splunk + Elastic)
+    # Read-only investigation verbs. Mirrored from the actions service,
+    # where a CI check asserts the two vocabularies stay identical — a
+    # verb present on one side only resolves to executor_not_found at
+    # dispatch, which reads as a missing integration rather than a
+    # missing enum member.
+    GET_HOST = "get_host"
+    GET_DETECTIONS = "get_detections"
+    GET_USER_ACTIVITY = "get_user_activity"
     SEARCH_SIEM = "search_siem"
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"

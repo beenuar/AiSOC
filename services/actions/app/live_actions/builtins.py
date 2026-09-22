@@ -74,6 +74,14 @@ from app.models.action import ActionRequest, ActionStatus, ActionType
 from . import registry
 from .capability_contracts import apply_contract
 from .executor import LiveActionExecutor
+from .investigation_reads import (
+    CrowdStrikeGetDetections,
+    CrowdStrikeGetHost,
+    CrowdStrikeUnisolateHost,
+    DefenderGetHost,
+    DefenderUnisolateHost,
+    OktaGetUserActivity,
+)
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
 
 logger = structlog.get_logger(__name__)
@@ -578,6 +586,15 @@ class SlackNotify(_LegacyExecutorAdapter):
 
 
 _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
+    # Read-only investigation verbs. Registered first because they are
+    # the ones an agent should reach for before anything below them.
+    CrowdStrikeGetHost,
+    CrowdStrikeGetDetections,
+    DefenderGetHost,
+    OktaGetUserActivity,
+    # Rollback for the most disruptive action, which had no executor.
+    CrowdStrikeUnisolateHost,
+    DefenderUnisolateHost,
     # Endpoint
     CrowdStrikeIsolateHost,
     DefenderIsolateHost,

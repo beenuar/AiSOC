@@ -78,10 +78,7 @@ def check_contracts() -> list[str]:
             f"default to irreversible so an undeclared action fails closed"
         )
     if ActionContract.approval != ApprovalRequirement.PROHIBITED:
-        errors.append(
-            f"ActionContract.approval defaults to {ActionContract.approval.value}; it "
-            f"must default to prohibited"
-        )
+        errors.append(f"ActionContract.approval defaults to {ActionContract.approval.value}; it " f"must default to prohibited")
     if ActionContract.has_verification_probe is not False:
         errors.append("ActionContract.has_verification_probe must default to False")
 
@@ -89,17 +86,12 @@ def check_contracts() -> list[str]:
     overlap = NEVER_AUTONOMOUS & MUST_BE_REVERSIBLE
     if ActionImpact.IRREVERSIBLE in overlap:
         errors.append(
-            "ActionImpact.IRREVERSIBLE appears in MUST_BE_REVERSIBLE; an "
-            "irreversible action cannot be required to declare a reverse"
+            "ActionImpact.IRREVERSIBLE appears in MUST_BE_REVERSIBLE; an " "irreversible action cannot be required to declare a reverse"
         )
 
     # Every concrete executor's own declaration.
     _import_builtin_executors()
-    subclasses = [
-        cls
-        for cls in _all_subclasses(LiveActionExecutor)
-        if not getattr(cls, "__abstractmethods__", None)
-    ]
+    subclasses = [cls for cls in _all_subclasses(LiveActionExecutor) if not getattr(cls, "__abstractmethods__", None)]
 
     for cls in subclasses:
         name = f"{cls.__module__}.{cls.__name__}"
@@ -110,9 +102,7 @@ def check_contracts() -> list[str]:
         if not cls.vendor_id and not cls.capability:
             continue
         if not cls.vendor_id or not cls.capability:
-            errors.append(
-                f"{name}: declares one of vendor_id/capability but not the other"
-            )
+            errors.append(f"{name}: declares one of vendor_id/capability but not the other")
             continue
 
         for problem in cls.contract_violations():
@@ -146,19 +136,13 @@ def check_approval_matrix() -> list[str]:
     # No tier may auto-execute severe or irreversible impact.
     for tier, ceiling in TIER_MAX_AUTOMATIC.items():
         if ceiling in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
-            errors.append(
-                f"tier {tier} permits automatic execution up to {ceiling.value}; "
-                f"no tier may auto-execute at that impact"
-            )
+            errors.append(f"tier {tier} permits automatic execution up to {ceiling.value}; " f"no tier may auto-execute at that impact")
 
     # Severe and irreversible must have no confidence floor at all —
     # an unreachable threshold invites someone to lower it.
     for impact in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
         if impact in AUTOMATIC_CONFIDENCE_FLOOR:
-            errors.append(
-                f"{impact.value} has a confidence floor defined; it must have none, "
-                f"because no confidence makes it automatic"
-            )
+            errors.append(f"{impact.value} has a confidence floor defined; it must have none, " f"because no confidence makes it automatic")
 
     # Full confidence at the highest tier must still not auto-execute these.
     for impact in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
@@ -170,8 +154,7 @@ def check_approval_matrix() -> list[str]:
         )
         if decision.can_auto_execute:
             errors.append(
-                f"{impact.value} at 100% confidence and tier L4 auto-executed; "
-                f"the matrix lowered a requirement it must only raise"
+                f"{impact.value} at 100% confidence and tier L4 auto-executed; " f"the matrix lowered a requirement it must only raise"
             )
 
     # A contract demanding a human must survive any tier and confidence.
@@ -182,10 +165,7 @@ def check_approval_matrix() -> list[str]:
         tier="L4",
     )
     if decision.can_auto_execute:
-        errors.append(
-            "a MANDATORY_HUMAN contract auto-executed at L4/100%; the tier "
-            "overrode the action's own declaration"
-        )
+        errors.append("a MANDATORY_HUMAN contract auto-executed at L4/100%; the tier " "overrode the action's own declaration")
 
     # Absent confidence must behave as the lowest band.
     decision = evaluate(
@@ -195,9 +175,85 @@ def check_approval_matrix() -> list[str]:
         tier="L4",
     )
     if decision.can_auto_execute:
+        errors.append("an action with no confidence score auto-executed; a scoring bug " "would become an autonomous action")
+
+    return errors
+
+
+#: Capabilities with a contract and no executor, as of the read-only-verb
+#: work. Every one is a declared rollback or integration that answers
+#: `executor_not_found` at dispatch, which reads as a misconfiguration
+#: rather than a capability that was never built.
+#:
+#: A baseline rather than a pass: the gate fails on anything new, and fails
+#: again when one of these gains an executor and is not removed from the
+#: list. `unisolate_host` was in this set and is not any more — the rollback
+#: for the platform's most disruptive action resolved to nothing, and both
+#: clients already supported it.
+#:
+#: Ordered by what it costs to be missing:
+#:   restore_file  — the reverse of quarantine_file; a quarantined file
+#:                   cannot be released through the platform that took it
+#:   allow_domain  — the reverse of block_domain, whose forward arm is
+#:   allow_hash      itself a placeholder
+#:   allow_ioc     — the reverse of block_ioc, which Defender does implement
+#:   block_hash    — declared as allow_hash's reverse, never built
+#:   enable_user   — the reverse of disable_user; an account disabled in an
+#:                   incident has no platform route back
+#:   revoke_session, block_user_signin — identity verbs with no arm
+#:   push_case, push_status — ITSM sync, never wired
+KNOWN_ORPHANS: frozenset[str] = frozenset(
+    {
+        "restore_file",
+        "allow_domain",
+        "allow_hash",
+        "allow_ioc",
+        "block_hash",
+        "enable_user",
+        "revoke_session",
+        "block_user_signin",
+        "push_case",
+        "push_status",
+    }
+)
+
+
+def check_no_orphan_capabilities() -> list[str]:
+    """A declared capability must have at least one executor.
+
+    The recurring defect in this repository, in its purest form: a
+    capability with a contract, a permission and a place in the vocabulary,
+    and nothing that runs it. It reads as a supported integration
+    everywhere it is listed, and answers `executor_not_found` at dispatch —
+    which looks like a configuration problem rather than a capability that
+    was never built.
+
+    Caught this on the read-only verbs while adding them: `search_hash` had
+    a contract describing exactly why fleet-wide hash prevalence matters,
+    and no implementation behind it.
+    """
+    from app.live_actions import builtins
+    from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
+
+    implemented = {cls.capability for cls in builtins._BUILTIN_ADAPTERS}  # noqa: SLF001
+    orphans = sorted(set(CAPABILITY_CONTRACTS) - implemented)
+
+    errors = [
+        f"{capability}: has a capability contract but no executor implements it. "
+        f"It reads as supported wherever capabilities are listed and answers "
+        f"executor_not_found at dispatch. Implement it or remove the contract."
+        for capability in orphans
+        if capability not in KNOWN_ORPHANS
+    ]
+
+    # Ratchet. A capability that finds an implementation must leave the
+    # baseline, or the list becomes a place to hide new orphans.
+    resolved = sorted(KNOWN_ORPHANS & implemented)
+    if resolved:
         errors.append(
-            "an action with no confidence score auto-executed; a scoring bug "
-            "would become an autonomous action"
+            f"KNOWN_ORPHANS lists {', '.join(resolved)}, which now have "
+            f"executors. Remove them from the baseline — a stale exemption is "
+            f"a gate that stops checking."
         )
 
     return errors
@@ -232,8 +288,7 @@ def check_verification_probes() -> list[str]:
         # which is a different problem and worth naming differently.
         if capability not in known_action_types:
             errors.append(
-                f"{capability}: declares has_verification_probe=True but has no "
-                f"ActionType, so the verifier can never be reached for it"
+                f"{capability}: declares has_verification_probe=True but has no " f"ActionType, so the verifier can never be reached for it"
             )
         else:
             errors.append(
@@ -288,15 +343,11 @@ def check_capability_mirror() -> list[str]:
 
     missing_here = connector_caps - KNOWN_CAPABILITIES
     if missing_here:
-        errors.append(
-            f"capabilities declared in connectors but missing from the actions "
-            f"mirror: {', '.join(sorted(missing_here))}"
-        )
+        errors.append(f"capabilities declared in connectors but missing from the actions " f"mirror: {', '.join(sorted(missing_here))}")
     missing_there = KNOWN_CAPABILITIES - connector_caps
     if missing_there:
         errors.append(
-            f"capabilities in the actions mirror but missing from the connectors "
-            f"Capability enum: {', '.join(sorted(missing_there))}"
+            f"capabilities in the actions mirror but missing from the connectors " f"Capability enum: {', '.join(sorted(missing_there))}"
         )
     return errors
 
@@ -318,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
             + check_approval_matrix()
             + check_capability_mirror()
             + check_verification_probes()
+            + check_no_orphan_capabilities()
         )
     except ImportError as exc:
         print(f"action-contract: cannot import the actions package: {exc}", file=sys.stderr)
@@ -331,12 +383,9 @@ def main(argv: list[str] | None = None) -> int:
 
     from app.live_actions.executor import LiveActionExecutor
 
-    concrete = [
-        c for c in _all_subclasses(LiveActionExecutor) if not getattr(c, "__abstractmethods__", None)
-    ]
+    concrete = [c for c in _all_subclasses(LiveActionExecutor) if not getattr(c, "__abstractmethods__", None)]
     print(
-        f"action-contract: OK — {len(concrete)} executors declare a coherent "
-        f"contract; the approval matrix cannot lower a requirement"
+        f"action-contract: OK — {len(concrete)} executors declare a coherent " f"contract; the approval matrix cannot lower a requirement"
     )
     return 0
 
