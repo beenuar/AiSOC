@@ -3958,6 +3958,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/graph/incident-context/{alert_id}:
+    get:
+      tags:
+      - graph
+      summary: Traverse an alert into identity, asset, cloud, business and threat
+        context
+      description: 'Resolve one alert into the five dimensions an investigation needs.
+
+
+        Each dimension runs as its own bounded, tenant-scoped traversal, and they
+
+        run concurrently. A dimension that fails or times out names itself in
+
+        ``errors`` while the rest still return: this is on the hot path of every
+
+        escalated alert, so one slow leg must not take the bundle with it.
+
+
+        Returns 200 with ``partial: true`` rather than an error status when some
+
+        dimensions failed — the caller asked for context and got some.'
+      operationId: incident_context_api_v1_graph_incident_context__alert_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentContextResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/graph/neighbors/{entity_type}/{entity_id}:
     get:
       tags:
@@ -19957,6 +20001,79 @@ components:
         fingerprint instead, which is enough to identify the row but not
 
         enough to forge inbound traffic.'
+    IncidentContextResponse:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        identities:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Identities
+        assets:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Assets
+        cloud:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Cloud
+        business:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Business
+        threat:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Threat
+        dimensions_resolved:
+          type: integer
+          title: Dimensions Resolved
+          default: 0
+        partial:
+          type: boolean
+          title: Partial
+          default: false
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+        narrative:
+          items:
+            type: string
+          type: array
+          title: Narrative
+      type: object
+      required:
+      - alert_id
+      - tenant_id
+      title: IncidentContextResponse
+      description: 'The five context dimensions for one alert.
+
+
+        ``partial`` and ``errors`` are part of the contract, not diagnostics. An
+
+        empty bundle from an unreachable graph and an empty bundle from an alert
+
+        with genuinely no context look identical otherwise, and a consumer that
+
+        cannot tell them apart will treat "we could not look" as "there is
+
+        nothing to find".'
     IndicatorCreate:
       properties:
         profile_id:
