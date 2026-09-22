@@ -8,7 +8,8 @@ overrides:
   shell-quote: '>=1.8.4'
   form-data: '>=4.0.6'
   ws: '>=8.21.0'
-  hono: '>=4.12.25'
+  hono: '>=4.13.5'
+  '@hono/node-server': '>=1.19.15 <2'
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4 <8'
   brace-expansion@1: '>=1.1.18 <2'
   browserslist: '>=4.28.7 <5'
@@ -3885,7 +3886,7 @@ packages:
     peerDependencies:
       react: '*'
     dependencies:
-      '@types/react': 19.2.17
+      '@types/react': 19.3.0
       react: 19.3.0
 
   /@docusaurus/theme-classic@3.10.2(@types/react@19.3.0)(react-dom@19.3.0)(react@19.3.0)(typescript@6.0.3):
@@ -5325,13 +5326,13 @@ packages:
     dependencies:
       '@hapi/hoek': 9.3.0
 
-  /@hono/node-server@1.19.14(hono@4.12.27):
-    resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
+  /@hono/node-server@1.19.17(hono@4.13.8):
+    resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: '>=4.12.25'
+      hono: '>=4.13.5'
     dependencies:
-      hono: 4.12.27
+      hono: 4.13.8
     dev: false
 
   /@humanfs/core@0.19.2:
@@ -6240,7 +6241,7 @@ packages:
       '@cfworker/json-schema':
         optional: true
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.27)
+      '@hono/node-server': 1.19.17(hono@4.13.8)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -6250,7 +6251,7 @@ packages:
       eventsource-parser: 3.0.8
       express: 5.2.1
       express-rate-limit: 8.4.1(express@5.2.1)
-      hono: 4.12.27
+      hono: 4.13.8
       jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -13460,8 +13461,8 @@ packages:
       parse-passwd: 1.0.0
     dev: true
 
-  /hono@4.12.27:
-    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
+  /hono@4.13.8:
+    resolution: {integrity: sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ==}
     engines: {node: '>=16.9.0'}
     dev: false
 
