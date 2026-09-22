@@ -22,6 +22,7 @@ import {
   type EntityRiskStats,
   type EntityType,
 } from '@/lib/api';
+import { demoFallback } from '@/lib/demoFallback';
 
 // ─── Visual config ───────────────────────────────────────────────────────────
 
@@ -467,12 +468,15 @@ export function EntityRiskQueue() {
   const { data: queue, error: queueError, isLoading: queueLoading } = useSWR(
     ['entity-risk-queue', promotedOnly],
     () => entityRiskApi.queue({ limit: 50, promotedOnly }),
-    { refreshInterval: 30000, fallbackData: { tenant_id: 'demo', entities: MOCK_ENTITIES, threshold: 80 } },
+    {
+      refreshInterval: 30000,
+      fallbackData: demoFallback({ tenant_id: 'demo', entities: MOCK_ENTITIES, threshold: 80 }),
+    },
   );
   const { data: stats } = useSWR<EntityRiskStats>(
     'entity-risk-stats',
     () => entityRiskApi.stats(),
-    { refreshInterval: 30000, fallbackData: MOCK_ENTITY_STATS },
+    { refreshInterval: 30000, fallbackData: demoFallback(MOCK_ENTITY_STATS) },
   );
 
   const entities = queue?.entities ?? [];

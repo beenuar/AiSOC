@@ -18,6 +18,7 @@ import { ContributorLeaderboard } from './ContributorLeaderboard';
 import { MitreRuleHeatmap } from './MitreRuleHeatmap';
 import { ConfidenceTrends } from './ConfidenceTrends';
 import { DriftInbox } from './DriftInbox';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 // ─── Demo fallback ────────────────────────────────────────────────────────────
 
@@ -177,7 +178,10 @@ export function DetectionsView() {
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
-  const useFallback = !!error;
+  // Only the hosted demo substitutes sample rules on error. Elsewhere a
+  // load failure must show as a failure: a fabricated rule list tells an
+  // operator their detection coverage is fine when the service is down.
+  const useFallback = !!error && canUseDemoData();
   // Memoise so `useMemo(filtered)` and selection helpers don't see a fresh
   // array reference on every render — important because we feed `rules`
   // into a downstream useMemo dep array.

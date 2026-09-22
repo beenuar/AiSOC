@@ -39,6 +39,7 @@ import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { clsx } from 'clsx';
 import { safeFetcher } from '@/lib/fetcher';
+import { demoFallback } from '@/lib/demoFallback';
 
 if (typeof window !== 'undefined') {
   try {
@@ -351,7 +352,7 @@ export function EffectivePermissionsView() {
   const { data: providerInfo } = useSWR<{ providers: ProviderInfo[] }>(
     '/api/v1/identity/effective-permissions/providers',
     safeFetcher,
-    { fallbackData: { providers: DEMO_PROVIDERS } },
+    { fallbackData: demoFallback({ providers: DEMO_PROVIDERS }) },
   );
   const providers = providerInfo?.providers ?? DEMO_PROVIDERS;
   const selectedProviderInfo = providers.find((p) => p.name === provider);
@@ -365,7 +366,8 @@ export function EffectivePermissionsView() {
     apiUrl,
     safeFetcher,
     {
-      fallbackData: provider === 'aws' && !isScaffoldProvider ? DEMO_RESULT : undefined,
+      fallbackData:
+        provider === 'aws' && !isScaffoldProvider ? demoFallback(DEMO_RESULT) : undefined,
       shouldRetryOnError: false,
     },
   );

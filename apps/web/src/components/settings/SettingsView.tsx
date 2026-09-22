@@ -47,6 +47,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -755,7 +756,10 @@ function IntegrationsPanel() {
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
-  const useFallback = !!error;
+  // Sample connectors only in the hosted demo. Showing three healthy,
+  // recently-synced connectors when the API is unreachable implies data is
+  // flowing into the platform when none is.
+  const useFallback = !!error && canUseDemoData();
   const connectors = data?.connectors ?? (useFallback ? DEMO_CONNECTORS : []);
 
   const counts = useMemo(() => {
@@ -2259,14 +2263,33 @@ function StatusPill({
 // ─── Panel: Audit ─────────────────────────────────────────────────────────────
 
 function AuditPanel() {
+  // This panel made no API call: it rendered a fixed list of administrative
+  // events directly, so every tenant saw the same invented history of key
+  // rotations and failed syncs. The searchable log at /audit is backed by
+  // /api/v1/audit and is the real thing, so outside the hosted demo this
+  // points there rather than inventing a summary.
+  const entries = canUseDemoData() ? DEMO_AUDIT : [];
   return (
     <div>
       <PanelHeader
         title="Audit log"
         description="Recent administrative events. Full searchable audit history is available via the API."
       />
+      {entries.length === 0 ? (
+        <div className="px-6 py-8 text-center">
+          <p className="text-sm text-gray-400">
+            Administrative events are recorded in the searchable audit log.
+          </p>
+          <Link
+            href="/audit"
+            className="mt-2 inline-block text-sm text-blue-400 hover:text-blue-300"
+          >
+            Open the audit log
+          </Link>
+        </div>
+      ) : (
       <ol className="divide-y divide-gray-800">
-        {DEMO_AUDIT.map((a) => (
+        {entries.map((a) => (
           <li key={a.id} className="flex items-start gap-3 px-6 py-4">
             <span
               aria-hidden
@@ -2292,6 +2315,7 @@ function AuditPanel() {
           </li>
         ))}
       </ol>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { PlaybooksGallery, type PlaybookGalleryFilters } from './PlaybooksGaller
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 import { DraftFromPromptDialog } from './DraftFromPromptDialog';
+import { demoFallback } from '@/lib/demoFallback';
 
 /** Filter snapshot stored by the backend as a saved-view preset. */
 type PlaybookFilterSnapshot = PlaybookGalleryFilters;
@@ -415,7 +416,7 @@ export function PlaybooksView() {
   const [tab, setTab] = useState<'playbooks' | 'runs' | 'community'>('playbooks');
   const { data, isLoading, error } = useSWR<Playbook[]>('/api/v1/playbooks', fetcher, {
     refreshInterval: 30000,
-    fallbackData: MOCK_PLAYBOOKS,
+    fallbackData: demoFallback(MOCK_PLAYBOOKS),
   });
 
   // WS-F3: track the active filter snapshot so SavedViewsBar can capture it,

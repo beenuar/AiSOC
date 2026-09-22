@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import useSWR from 'swr'
+import { demoFallback } from '@/lib/demoFallback';
 
 // Same-origin by default — Next.js rewrites proxy `/api/v1/purple-team/*` to
 // the purple-team service. Override with `NEXT_PUBLIC_PURPLE_TEAM_API` for
@@ -207,7 +208,7 @@ function CoverageHeatmap() {
   const { data } = useSWR<CoverageMatrix>(
     `${API}/api/v1/purple-team/coverage?tenant_id=${TENANT_ID}`,
     fetcher,
-    { refreshInterval: 30000, fallbackData: MOCK_COVERAGE }
+    { refreshInterval: 30000, fallbackData: demoFallback(MOCK_COVERAGE) }
   )
 
   const { data: drift, mutate: mutateDrift } = useSWR<DriftLatestResponse>(

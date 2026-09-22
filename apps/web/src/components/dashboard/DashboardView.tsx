@@ -26,6 +26,7 @@ import { DashboardWelcome } from './DashboardWelcome';
 import { FunnelKpiBar } from './FunnelKpiBar';
 import { EfficiencyReport } from './EfficiencyReport';
 import { PipelineHealth } from './PipelineHealth';
+import { demoFallback } from '@/lib/demoFallback';
 
 const RechartsArea = dynamic(
   () => import('recharts').then((m) => {
@@ -377,7 +378,7 @@ export function DashboardView() {
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     {
-      fallbackData: MOCK_METRICS,
+      fallbackData: demoFallback(MOCK_METRICS),
       refreshInterval: 60000,
       revalidateOnMount: true,
       revalidateOnFocus: false,

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
+import { demoFallback } from '@/lib/demoFallback';
 
 const fetcher = async (url: string) => {
   const r = await fetch(url);
@@ -442,7 +443,7 @@ export function SLADashboard() {
     fetcher,
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_SLA_METRICS,
+      fallbackData: demoFallback(MOCK_SLA_METRICS),
       shouldRetryOnError: false,
       errorRetryCount: 0,
       revalidateOnFocus: false,
@@ -456,7 +457,7 @@ export function SLADashboard() {
   const metrics = isValidMetrics ? rawMetrics : MOCK_SLA_METRICS;
 
   const { data: configs } = useSWR<SLAConfig[]>('/api/v1/sla/config', fetcher, {
-    fallbackData: MOCK_SLA_CONFIGS,
+    fallbackData: demoFallback(MOCK_SLA_CONFIGS),
     shouldRetryOnError: false,
     errorRetryCount: 0,
     revalidateOnFocus: false,

@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useRealtimeChannel, type RealtimeStatus } from '@/lib/realtime';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -224,6 +225,12 @@ export function LiveFeedPanel() {
   const hasReal = events.length > 0;
   const visible = useMemo<LiveEvent[]>(() => {
     if (hasReal) return events;
+    // An idle feed used to render a synthetic event stream with freshly
+    // stamped timestamps, so a tenant with no connected sources — or a broken
+    // realtime socket — watched fabricated detections scroll past as though
+    // the platform were live. Outside the hosted demo the panel now shows its
+    // real state, which the status pill already reports honestly.
+    if (!canUseDemoData()) return [];
     // Refresh demo timestamps so they don't drift to "5h ago" while the dev
     // sits on the page with no realtime backend running.
     return DEMO_EVENTS.map((e, i) => ({

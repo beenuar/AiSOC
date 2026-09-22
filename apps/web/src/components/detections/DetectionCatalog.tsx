@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -246,9 +247,18 @@ export function DetectionCatalog() {
       setRules(data.items ?? []);
       setTotal(data.total ?? 0);
       setFetched(true);
-    } catch {
-      setRules(MOCK_RULES);
-      setTotal(MOCK_RULES.length);
+    } catch (err) {
+      // Outside the hosted demo a failed fetch must read as a failed fetch.
+      // Substituting a plausible catalog told an operator their detection
+      // coverage was fine when the service was unreachable.
+      if (canUseDemoData()) {
+        setRules(MOCK_RULES);
+        setTotal(MOCK_RULES.length);
+      } else {
+        setRules([]);
+        setTotal(0);
+        setError(err instanceof Error ? err.message : 'Could not load the detection catalog.');
+      }
       setFetched(true);
     } finally {
       setLoading(false);
