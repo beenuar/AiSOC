@@ -96,6 +96,15 @@ class Capability(str, Enum):
     QUARANTINE_FILE = "quarantine_file"
     BLOCK_HASH = "block_hash"
     BLOCK_DOMAIN = "block_domain"
+    # Reverse verbs. Every containment action whose contract declares a
+    # platform rollback needs its reverse in the vocabulary, otherwise the
+    # rollback path resolves to nothing while believing it has a route back.
+    # See services/actions/app/live_actions/capability_contracts.py.
+    RESTORE_FILE = "restore_file"
+    ALLOW_HASH = "allow_hash"
+    ALLOW_DOMAIN = "allow_domain"
+    ALLOW_IOC = "allow_ioc"
+    ENABLE_USER = "enable_user"
     BLOCK_USER_SIGNIN = "block_user_signin"
     DISABLE_USER = "disable_user"
     REVOKE_SESSION = "revoke_session"
@@ -171,8 +180,13 @@ CAPABILITY_GROUPS: tuple[tuple[str, tuple[Capability, ...]], ...] = (
             Capability.UNISOLATE_HOST,
             Capability.KILL_PROCESS,
             Capability.QUARANTINE_FILE,
+            Capability.RESTORE_FILE,
             Capability.BLOCK_HASH,
+            Capability.ALLOW_HASH,
             Capability.BLOCK_DOMAIN,
+            Capability.ALLOW_DOMAIN,
+            Capability.ALLOW_IOC,
+            Capability.ENABLE_USER,
         ),
     ),
     (

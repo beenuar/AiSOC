@@ -347,6 +347,19 @@ jobs:
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
+      - name: Gate the action contract (Pillar 3)
+        # Four properties of every response action were previously inferred
+        # rather than declared: risk (from the capability name in one place
+        # and a policy table in another, which can disagree), reversibility
+        # (a hardcoded list of four actions), verification (absent, so an
+        # action reported success on an HTTP 200), and whether any tier may
+        # ever auto-execute it. This asserts each executor declares a
+        # coherent contract, that the approval matrix can only ever raise a
+        # requirement, and that the capability mirror matches the connectors
+        # enum — a check capabilities.py has documented for months against a
+        # test file that does not exist.
+        run: python3 scripts/check_action_contract.py
+
       - name: Gate investigation depth (Pillar 2)
         # run_with_tools shipped working, guarded and instrumented with zero
         # production callers, so the platform's deepest capability was

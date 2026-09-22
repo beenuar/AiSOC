@@ -14,23 +14,32 @@ it has three deliberate differences:
    :class:`LiveActionResult` — both new types decoupled from
    ``ActionType``. Plugin authors don't have to add a member to an enum
    they don't own.
-3. Rollback is intentionally omitted from this layer. The classic
-   approval/rollback workflow lives in ``services/actions/app/api/router.py``
-   and operates on the legacy ``ActionRequest``/``ActionResult`` pair.
-   The live-action surface is a pure execution primitive; if a future
-   workstream needs reversible live actions we'll add an optional
-   ``rollback()`` hook then, rather than forcing every plugin author to
-   stub it out today.
+3. Every executor declares its contract: what it does to the estate if
+   the finding is wrong, who must approve it, which permission the caller
+   needs, which capability undoes it, and whether a probe exists to verify
+   the effect landed. See :mod:`app.live_actions.contract`.
+
+   These were previously inferred elsewhere or not at all — risk from the
+   capability name in one place and a policy table in another, reversibility
+   from a hardcoded list of four actions, and verification not at all. The
+   gap between "the API returned 200" and "the host is actually contained"
+   is how a SOC comes to believe it responded when it did not.
+
+   Defaults are deliberately unsafe: an executor that declares nothing is
+   treated as irreversible and prohibited, so the omission fails closed and
+   ``scripts/check_action_contract.py`` names it, rather than the action
+   quietly defaulting to auto-executable.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from .contract import ActionContract
 from .models import LiveActionRequest, LiveActionResult
 
 
-class LiveActionExecutor(ABC):
+class LiveActionExecutor(ActionContract, ABC):
     """Single-vendor, single-capability action executor."""
 
     #: Connector / vendor ID this executor talks to (e.g. ``"crowdstrike"``).
