@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 const SHIFT_START = '2026-05-07T06:00:00Z';
 const SHIFT_END = '2026-05-07T18:00:00Z';
@@ -45,9 +46,44 @@ const SHIFT_SUMMARY = {
 
 type PriorityFilter = HandoffItem['priority'] | 'all';
 
+
+/**
+ * Honest state for a surface that has no backend yet.
+ *
+ * This view rendered fabricated domain data unconditionally and made no API
+ * call, so there was no request to fail — the fiction was the only thing it
+ * ever showed. Presenting it as tenant state is worse than showing nothing,
+ * because an operator cannot tell it apart from a real inventory.
+ */
+function NotYetWired({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-gray-100">{title}</h1>
+      </div>
+      <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-8 text-center">
+        <p className="text-sm font-medium text-gray-300">Not available yet</p>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-gray-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export function ShiftsView() {
   const [items] = useState(MOCK_HANDOFF_ITEMS);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+
+  // Shift handoff has no backend yet. A fabricated handoff board is
+  // particularly misleading: an incoming analyst would believe these are the
+  // items the previous shift actually escalated to them.
+  if (!canUseDemoData()) {
+    return (
+      <NotYetWired
+        title="Shift handoff"
+        description="Shift handoff is not backed by a live service in this build, so there is nothing to hand over for your tenant. The sample board is available in the hosted demo."
+      />
+    );
+  }
 
   const filteredItems = priorityFilter === 'all'
     ? items

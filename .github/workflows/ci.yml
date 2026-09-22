@@ -191,6 +191,14 @@ jobs:
       # `python scripts/sync_vendored_nl_query.py` locally to fix.
       - name: Verify vendored nl_query is in sync
         run: python scripts/sync_vendored_nl_query.py --check
+      # Fabricated security data must never render as a tenant's real state.
+      # Around three dozen console components served a `MOCK_*` / `DEMO_*`
+      # array of plausible alerts, connectors and coverage numbers whenever the
+      # API call failed, none of it gated on demo mode — and because SWR v2
+      # disables `revalidateOnMount` when `fallbackData` is set, several never
+      # fetched at all. This gate fails the build if that shape reappears.
+      - name: Verify sample data is gated behind demo mode
+        run: python scripts/check_mock_data_gated.py
       # Same story for the correlation-narrative builder. It lives canonically
       # in `services/fusion/app/services/narrative.py` (called at fusion time
       # to populate `FusedAlert.narrative`) and is mirrored into

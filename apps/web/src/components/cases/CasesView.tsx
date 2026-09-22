@@ -9,6 +9,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
+import { demoFallback } from '@/lib/demoFallback';
 
 // WS-F3 — the saved-views API stores an opaque filter blob per view, so we
 // flatten the three filter slices Cases tracks today into a single shape the
@@ -164,7 +165,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
     ['cases', statusFilter, severityFilter],
     () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
     {
-      fallbackData: fallback,
+      fallbackData: demoFallback(fallback),
     }
   );
 

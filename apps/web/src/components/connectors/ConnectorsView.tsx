@@ -28,6 +28,7 @@ import {
 import { AddConnectorModal } from './AddConnectorModal';
 import { ConnectorInstanceList } from './ConnectorInstanceList';
 import { InboxTokensPanel } from './InboxTokensPanel';
+import { demoFallback } from '@/lib/demoFallback';
 
 const DEMO_CONNECTORS: Connector[] = [
   {
@@ -74,7 +75,10 @@ export function ConnectorsView() {
   const { data, error, isLoading, mutate } = useSWR(
     'connectors',
     () => connectorsApi.list(),
-    { revalidateOnFocus: false, fallbackData: { connectors: DEMO_CONNECTORS, total: DEMO_CONNECTORS.length } },
+    {
+      revalidateOnFocus: false,
+      fallbackData: demoFallback({ connectors: DEMO_CONNECTORS, total: DEMO_CONNECTORS.length }),
+    },
   );
 
   // Health summary is a separate endpoint so the empty/error case is silent —

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { demoFallback } from '@/lib/demoFallback';
 
 interface Permission {
   id: string;
@@ -253,10 +254,10 @@ const MOCK_ROLES: Role[] = [
 
 export function RBACView() {
   const { data: roles, error: rolesError } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher, {
-    fallbackData: MOCK_ROLES,
+    fallbackData: demoFallback(MOCK_ROLES),
   });
   const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher, {
-    fallbackData: MOCK_PERMISSIONS,
+    fallbackData: demoFallback(MOCK_PERMISSIONS),
   });
 
   const [showCreate, setShowCreate] = useState(false);

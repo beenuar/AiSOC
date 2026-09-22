@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { auditApi, ApiError, type AuditExportFilters } from '@/lib/api';
+import { demoFallback } from '@/lib/demoFallback';
 
 interface AuditEvent {
   id: string;
@@ -87,10 +88,21 @@ export function AuditLogView() {
   const { data: raw, error, isLoading } = useSWR<AuditListResponse>(
     `/api/v1/audit?${params}`,
     fetcher,
-    { refreshInterval: 30_000, fallbackData: MOCK_AUDIT, shouldRetryOnError: false, errorRetryCount: 0, revalidateOnFocus: false }
+    {
+      refreshInterval: 30_000,
+      fallbackData: demoFallback(MOCK_AUDIT),
+      shouldRetryOnError: false,
+      errorRetryCount: 0,
+      revalidateOnFocus: false,
+    }
   );
   const isValid = raw && Array.isArray(raw.items) && typeof raw.total === 'number';
-  const data = isValid ? raw : MOCK_AUDIT;
+  // An unexpected response shape used to fall through to fabricated entries
+  // regardless of demo mode, so a malformed payload produced a plausible
+  // audit trail. An audit log is the one surface that must never show events
+  // that did not happen.
+  const emptyAudit: AuditListResponse = { items: [], total: 0, page: 1, page_size: 0, total_pages: 0 };
+  const data = isValid ? raw : (demoFallback(MOCK_AUDIT) ?? emptyAudit);
 
   const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();

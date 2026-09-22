@@ -11,6 +11,7 @@ import {
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { demoFallback } from '@/lib/demoFallback';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 // Static timestamps avoid SSR/client hydration mismatches (React error #418)
@@ -235,7 +236,7 @@ export function ThreatIntelView() {
   const { data } = useSWR(
     'threat-intel-indicators',
     () => threatIntelApi.list(),
-    { fallbackData: { indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length } },
+    { fallbackData: demoFallback({ indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length }) },
   );
 
   const allIndicators = data?.indicators ?? MOCK_INDICATORS;

@@ -32,6 +32,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 // Register fcose once on the client.
 if (typeof window !== 'undefined') {
@@ -339,8 +340,12 @@ export function AttackGraphView() {
       try {
         return await graphApi.getOverview({ depth: 3 });
       } catch (err) {
-        // Fall back to demo data so the UI is always alive.
-        return DEMO_GRAPH;
+        // "So the UI is always alive" meant a fabricated attack graph — named
+        // hosts, users and edges — rendered as the tenant's real estate
+        // whenever the graph backend was down. Re-throw so SWR surfaces the
+        // error; only the hosted demo substitutes sample topology.
+        if (canUseDemoData()) return DEMO_GRAPH;
+        throw err;
       }
     },
     { revalidateOnFocus: false, refreshInterval: 30_000 },
@@ -351,8 +356,11 @@ export function AttackGraphView() {
     async () => {
       try {
         return await graphApi.getMitreCoverage();
-      } catch {
-        return buildDemoCoverage();
+      } catch (err) {
+        // Fabricated coverage is the worst kind to invent: it tells a customer
+        // which techniques they can detect.
+        if (canUseDemoData()) return buildDemoCoverage();
+        throw err;
       }
     },
     { revalidateOnFocus: false, refreshInterval: 60_000 },

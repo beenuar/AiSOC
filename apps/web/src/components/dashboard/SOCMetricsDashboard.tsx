@@ -11,6 +11,7 @@ import {
   type CalibrationBucket,
   type CostAggregate,
 } from "@/lib/api";
+import { demoFallback } from '@/lib/demoFallback';
 
 const MOCK_SOC_METRICS: SOCMetrics = {
   kpis: {
@@ -163,7 +164,7 @@ export function SOCMetricsDashboard() {
     () => metricsApi.getSOC(),
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_SOC_METRICS,
+      fallbackData: demoFallback(MOCK_SOC_METRICS),
       shouldRetryOnError: true,
       errorRetryCount: 3,
       errorRetryInterval: 4000,
@@ -331,7 +332,7 @@ function CostTelemetryPanel() {
     () => investigationsApi.getCostAggregate(30),
     {
       refreshInterval: 60_000,
-      fallbackData: MOCK_COST_AGGREGATE,
+      fallbackData: demoFallback(MOCK_COST_AGGREGATE),
       shouldRetryOnError: true,
       errorRetryCount: 3,
       errorRetryInterval: 4000,

@@ -11,6 +11,7 @@ import { InvestigationRail } from './InvestigationRail';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
+import { demoFallback } from '@/lib/demoFallback';
 
 // Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
 // rolled-up Risk-Based Alerting queue — alerts contribute time-decayed risk
@@ -266,12 +267,12 @@ export function AlertsView() {
     ['alerts', filters],
     () => alertsApi.list(filters),
     {
-      fallbackData: {
+      fallbackData: demoFallback({
         alerts: MOCK_ALERTS,
         total: MOCK_ALERTS.length,
         page: 1,
         pageSize: 25,
-      },
+      }),
       refreshInterval: 30000,
     }
   );

@@ -21,6 +21,7 @@ import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
 import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
+import { demoFallback } from '@/lib/demoFallback';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -767,7 +768,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
   const { data: alert, isLoading, mutate } = useSWR(
     ['alert', alertId],
     () => alertsApi.get(alertId),
-    { fallbackData: { ...MOCK_ALERT, id: alertId, status } }
+    { fallbackData: demoFallback({ ...MOCK_ALERT, id: alertId, status }) }
   );
 
   const handleStatusChange = async (newStatus: Alert['status']) => {
