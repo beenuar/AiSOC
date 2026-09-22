@@ -636,6 +636,9 @@ export function HuntView() {
   const [activeSavedHuntId, setActiveSavedHuntId] = useState<string | null>(null);
   const editorRef = useRef<unknown>(null);
   const [demoMode, setDemoMode] = useState(false);
+  // Reason the results are not live, surfaced verbatim from the backend so
+  // the console never has to guess why it is showing sample data.
+  const [sampleNotice, setSampleNotice] = useState<string | null>(null);
 
   // Natural-language hero state.
   const [nlInput, setNlInput] = useState('');
@@ -659,6 +662,7 @@ export function HuntView() {
       } catch (err) {
         // First-load fallback to demo so the UI is never empty.
         setDemoMode(true);
+        setSampleNotice('Saved searches could not be loaded from the backend.');
         throw err;
       }
     },
@@ -769,7 +773,15 @@ export function HuntView() {
         limit: 200,
       });
       setResults(res);
-      setDemoMode(false);
+      // A 200 is not the same as real data. The search endpoint currently
+      // generates illustrative events rather than querying the lake, and says
+      // so with `source: "sample"` — trusting the status code alone is how a
+      // green "Live backend" pill ended up sitting over fabricated telemetry.
+      setDemoMode(
+        (res as { source?: string }).source === 'sample' ||
+          Boolean((res as { notice?: string }).notice),
+      );
+      setSampleNotice((res as { notice?: string }).notice ?? null);
     } catch (err) {
       // Demo fallback so the page still feels alive without a seeded backend.
       setResults({
@@ -778,8 +790,11 @@ export function HuntView() {
         hits: DEMO_RESULTS,
       });
       setDemoMode(true);
+      setSampleNotice(
+        'The hunt backend is unreachable, so these are illustrative sample events rather than results from your telemetry.',
+      );
       setRunError(err);
-      toast('Backend unreachable — showing demo results');
+      toast('Backend unreachable — showing sample results');
     } finally {
       setRunning(false);
     }
@@ -950,8 +965,11 @@ export function HuntView() {
                   demoMode ? 'bg-amber-400' : 'bg-emerald-400 animate-ping-slow',
                 )}
               />
-              {demoMode ? 'Demo data' : 'Live backend'}
+              {demoMode ? 'Sample data' : 'Live backend'}
             </span>
+            {demoMode && sampleNotice && (
+              <p className="mt-1 text-[11px] leading-snug text-amber-300/80">{sampleNotice}</p>
+            )}
           </div>
         </div>
       )}

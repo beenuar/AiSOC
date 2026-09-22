@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   alertsApi,
-  agentsApi,
+  casesApi,
   ledgerApi,
   feedbackApi,
   type Alert,
-  type AgentInvestigation,
   type ConfidenceFactor,
   type ConfidenceLabel,
   type AnalystVerdict,
@@ -342,144 +342,74 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
 
 // ─── AI Investigation Panel ───────────────────────────────────────────────────
 
-function AIInvestigation({ alertId }: { alertId: string }) {
-  const [investigation, setInvestigation] = useState<AgentInvestigation | null>(null);
+function AIInvestigation({ alertId, alertTitle }: { alertId: string; alertTitle?: string }) {
+  const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Investigations are owned by a case, not by a bare alert: the agent writes
+  // its prompts, tool calls and rationale into that case's ledger, and the case
+  // workspace is where they are rendered and replayed. So promote the alert to
+  // a case, launch the real run, and hand the analyst to the surface that can
+  // actually show it.
+  //
+  // This previously called `POST /api/v1/agents/investigate`, a route that
+  // exists on no backend. The 404 was caught and the catch block rendered a
+  // hardcoded "Advanced Persistent Threat - High Confidence" verdict naming a
+  // specific IP, a specific C2 domain and three pending response actions, with
+  // status 'completed' and no disclaimer. A security product must never invent
+  // a finding about a customer's environment.
   const startInvestigation = async () => {
     setIsRunning(true);
+    setError(null);
     try {
-      const result = await agentsApi.investigate(alertId);
-      setInvestigation(result);
-    } catch (err) {
-      // Show mock investigation for demo
-      setInvestigation({
-        id: 'inv-1',
-        alertId,
-        status: 'completed',
-        findings: `## AI Investigation Summary
-
-**Threat Classification:** Advanced Persistent Threat (APT) - High Confidence
-
-### Executive Summary
-The PowerShell execution event represents a multi-stage attack with C2 communication. The attacker leveraged legitimate administrative credentials obtained via credential stuffing to execute an obfuscated downloader script.
-
-### Key Findings
-1. **Initial Access**: Credential abuse from IP 185.220.101.45 (known Tor exit node)
-2. **Execution**: Obfuscated PowerShell base64 encoded payload downloading secondary stage
-3. **C2 Communication**: Established encrypted channel to payload-c2.xyz (newly registered domain, 3 days old)
-4. **Lateral Movement Risk**: Current user has admin rights on 12 additional systems
-
-### MITRE ATT&CK Coverage
-- T1059.001 (PowerShell) → Active
-- T1027 (Obfuscation) → Active  
-- T1071 (Application Layer Protocol) → Active
-
-### Recommended Actions
-1. Isolate affected endpoint immediately
-2. Block IP 185.220.101.45 at perimeter firewall
-3. Block domain payload-c2.xyz at DNS level
-4. Reset credentials for affected user account
-5. Hunt for similar PowerShell patterns across fleet`,
-        recommendations: [
-          'Isolate endpoint DESKTOP-ABC123 from network immediately',
-          'Block IP 185.220.101.45 at firewall',
-          'Block domain payload-c2.xyz at DNS',
-          'Reset password for user john.doe@company.com',
-          'Review admin rights across all systems',
-        ],
-        actions: [
-          { type: 'isolate_endpoint', target: 'DESKTOP-ABC123', status: 'pending' },
-          { type: 'block_ip', target: '185.220.101.45', status: 'pending' },
-          { type: 'block_domain', target: 'payload-c2.xyz', status: 'pending' },
-        ],
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
+      const summary = alertTitle ? `Investigate alert: ${alertTitle}` : 'Investigate alert';
+      const createdCase = await casesApi.create({
+        title: alertTitle ? `Investigation — ${alertTitle}` : `Investigation — alert ${alertId}`,
+        description: summary,
+        alertIds: [alertId],
       });
+      await casesApi.investigate(createdCase.id, summary);
+      router.push(`/cases/${createdCase.id}?tab=ledger`);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not start the investigation. Check that the agents service is reachable.',
+      );
+      setIsRunning(false);
     }
-    setIsRunning(false);
   };
 
-  if (!investigation) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-sm text-gray-400 mb-1">Agent investigation</p>
-        <p className="text-xs text-gray-600 mb-4">Run the agent on this alert to produce a markdown report, MITRE mapping, and a list of recommended actions. Every step is recorded in the case ledger.</p>
-        <button
-          onClick={startInvestigation}
-          disabled={isRunning}
-          className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRunning ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Investigating...
-            </span>
-          ) : (
-            'Start AI Investigation'
-          )}
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={clsx(
-            'w-2 h-2 rounded-full',
-            investigation.status === 'completed' ? 'bg-green-500' :
-            investigation.status === 'running' ? 'bg-blue-500 animate-pulse' :
-            'bg-red-500'
-          )} />
-          <span className="text-xs text-gray-400 capitalize">{investigation.status}</span>
-        </div>
-        <button
-          onClick={startInvestigation}
-          className="text-xs text-blue-400 hover:text-blue-300"
-        >
-          Re-investigate
-        </button>
-      </div>
+    <div className="py-6">
+      <p className="text-sm text-gray-400 mb-1">Agent investigation</p>
+      <p className="text-xs text-gray-600 mb-4">
+        Promotes this alert to a case and runs the agent against it. Every prompt, tool call and
+        piece of cited evidence is written to that case&apos;s ledger, where the run can be replayed
+        step by step. You&apos;ll be taken to the case when it starts.
+      </p>
 
-      {/* Findings */}
-      {investigation.findings && (
-        <div className="bg-gray-950/60 rounded-lg p-4 text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
-          {investigation.findings}
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+          {error}
         </div>
       )}
 
-      {/* Recommendations */}
-      {investigation.recommendations && investigation.recommendations.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-gray-400">Recommended Actions</p>
-          {investigation.recommendations.map((rec, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs text-gray-300">
-              <span className="text-blue-400 shrink-0 mt-0.5">→</span>
-              {rec}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Actions */}
-      {investigation.actions && investigation.actions.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-gray-400">Automated Actions Available</p>
-          {investigation.actions.map((action, i) => (
-            <div key={i} className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-blue-400 font-mono">{action.type}</span>
-                <span className="text-xs text-gray-500">→</span>
-                <span className="text-xs text-gray-300 font-mono">{action.target}</span>
-              </div>
-              <button className="text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-2 py-1 rounded transition-colors">
-                Execute
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <button
+        onClick={startInvestigation}
+        disabled={isRunning}
+        className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isRunning ? (
+          <span className="flex items-center gap-2">
+            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            Starting investigation...
+          </span>
+        ) : (
+          'Start AI investigation'
+        )}
+      </button>
     </div>
   );
 }
@@ -1055,7 +985,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           {/* Right column - 1/3 */}
           <div className="space-y-4">
             <Section title="AI Investigation">
-              <AIInvestigation alertId={alertId} />
+              <AIInvestigation alertId={alertId} alertTitle={alert?.title} />
             </Section>
 
             <Section title="Verdict & feedback">
