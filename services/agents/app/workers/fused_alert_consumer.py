@@ -49,6 +49,7 @@ from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
+from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
 from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_suppress
 from app.models.state import AgentStatus, InvestigationState
@@ -562,6 +563,18 @@ class FusedAlertTriageWorker:
         """
         if not _escalation_enabled():
             return
+        # Pre-fetch the same context an analyst-initiated investigation gets.
+        # The manual orchestrator has built a ContextBundle since T2.1; the
+        # escalation path never did, so the high-volume automatic route
+        # investigated with strictly less context — no graph neighbourhood, no
+        # blast radius, no historical verdicts for the same entities — than a
+        # human clicking "investigate" on the identical alert.
+        state.context_bundle = await prefetch_context_bundle_dict(
+            case_id=str(state.incident_id),
+            tenant_id=str(state.tenant_id),
+            alert_summary=state.alert_summary or "",
+            raw_alert=state.raw_alert or {},
+        )
         try:
             async with CostTracker(run_id=str(state.run_id), tenant_id=str(state.tenant_id)):
                 await run_escalation(state, budget=default_budget(), seq_start=1)

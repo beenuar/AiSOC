@@ -65,6 +65,13 @@ FEDERATED_CAPABLE_TYPES: frozenset[str] = frozenset(
         "splunk",
         "microsoft_sentinel",
         "elastic",
+        # QRadar's AQL translator has been written, exported from
+        # app.federated.translators and covered by tests since the federated
+        # search shipped, but the type was never added here. A tenant with an
+        # enabled QRadar connector was silently excluded from every federated
+        # search, and naming it explicitly in `connector_ids` returned "not
+        # federated-capable".
+        "qradar",
     }
 )
 

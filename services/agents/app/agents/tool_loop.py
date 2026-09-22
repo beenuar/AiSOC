@@ -18,6 +18,7 @@ from typing import Any
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from app.llm.contract import safe_ainvoke
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -41,7 +42,14 @@ async def run_with_tools(
     trace: list[dict[str, Any]] = []
 
     for iteration in range(1, max_iters + 1):
-        response = await bound.ainvoke(messages)
+        # Routed through safe_ainvoke rather than calling bound.ainvoke
+        # directly. This loop feeds tool output straight back into the prompt,
+        # and that output is untrusted: a SIEM row, a graph property or a
+        # threat-intel record can carry text that reads as an instruction.
+        # Skipping the contract here skipped injection validation on precisely
+        # the highest-risk content in the system, and lost the token/cost
+        # telemetry for every tool-calling turn.
+        response = await safe_ainvoke(bound, messages)
         messages.append(response)
         tool_calls = getattr(response, "tool_calls", None) or []
         if not tool_calls:

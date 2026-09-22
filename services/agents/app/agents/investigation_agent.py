@@ -13,6 +13,7 @@ import structlog
 
 from app.agents.dispositions import BENIGN, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, NEEDS_REVIEW
 from app.confidence import score_investigation
+from app.context.bundle import ContextBundle
 from app.investigator.splunk_evidence import collect_splunk_evidence
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import lookup_technique
@@ -29,6 +30,32 @@ ATTRIBUTION_TIMEOUT_SECONDS = float(os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS
 # ``AISOC_THREATINTEL_SERVICE_TOKEN``). Left empty for internal-only
 # deployments, where the endpoints accept unauthenticated calls.
 THREAT_INTEL_SERVICE_TOKEN = os.getenv("AISOC_THREATINTEL_SERVICE_TOKEN", "").strip()
+
+
+def _bundle_findings(bundle: dict[str, Any] | None) -> list[str]:
+    """Salient facts from a ContextBundle, as investigation findings.
+
+    Deliberately narrow: only the summary fields the bundle itself declares
+    safe to surface, never raw OCSF or log payloads.
+    """
+    if not bundle:
+        return []
+    try:
+        summary = ContextBundle.model_validate(bundle).summary_for_llm()
+    except Exception as exc:  # noqa: BLE001 — context is additive, never fatal
+        logger.debug("investigation.bundle_unreadable", error=str(exc))
+        return []
+
+    findings: list[str] = []
+    if summary.get("blast_radius_max"):
+        findings.append(f"Blast radius of the affected entities scores {summary['blast_radius_max']:.2f}.")
+    for line in (summary.get("neighborhood_summaries") or [])[:3]:
+        findings.append(f"Graph context: {line}")
+    historical = summary.get("historical_verdicts") or []
+    if historical:
+        verdicts = ", ".join(f"{h['verdict']} (similarity {h['similarity']:.2f})" for h in historical[:3])
+        findings.append(f"{len(historical)} similar historical case(s) resolved as: {verdicts}.")
+    return findings
 
 
 async def run_investigation(state: InvestigationState) -> InvestigationState:
@@ -55,6 +82,14 @@ async def run_investigation(state: InvestigationState) -> InvestigationState:
 
     # --- Perform threat actor attribution (best-effort, non-blocking on error) ---
     await _perform_threat_actor_attribution(state, malicious_iocs)
+
+    # --- Pre-fetched context, when the escalation path supplied it ---
+    # This agent is deterministic, so the bundle is surfaced as findings
+    # rather than appended to a prompt. Without it, an auto-escalated alert
+    # was investigated with no knowledge of the entity's graph neighbourhood
+    # or how identical alerts had previously resolved.
+    for line in _bundle_findings(state.context_bundle):
+        state.add_finding(line)
 
     # --- Generate narrative findings ---
     if malicious_iocs:
