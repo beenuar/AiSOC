@@ -70,6 +70,22 @@ async def list_hunts() -> list[dict[str, Any]]:
     return [_hunt_summary(h) for h in corpus.list()]
 
 
+@router.get("/runs", summary="Recent hunt runs")
+async def list_runs(
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    return await hunt_store.list_recent_runs(limit=limit)
+
+
+@router.get("/findings", summary="Recent hunt findings")
+async def list_findings(
+    hunt_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict[str, Any]]:
+    return await hunt_store.list_recent_findings(hunt_id=hunt_id, status=status, limit=limit)
+
+
 @router.get("/{hunt_id}", summary="Get a single hunt definition")
 async def get_hunt(hunt_id: str) -> dict[str, Any]:
     corpus = HuntCorpus.default()
@@ -104,19 +120,3 @@ async def run_hunt(hunt_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Read-side (DB-backed)
 # ---------------------------------------------------------------------------
-
-
-@router.get("/runs", summary="Recent hunt runs")
-async def list_runs(
-    limit: int = Query(default=50, ge=1, le=500),
-) -> list[dict[str, Any]]:
-    return await hunt_store.list_recent_runs(limit=limit)
-
-
-@router.get("/findings", summary="Recent hunt findings")
-async def list_findings(
-    hunt_id: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-) -> list[dict[str, Any]]:
-    return await hunt_store.list_recent_findings(hunt_id=hunt_id, status=status, limit=limit)

@@ -434,11 +434,32 @@ async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any]
     timeout_seconds : int, optional
         How long to wait for all hosts to respond (default: 60).
     """
-    # Import clients here to avoid circular imports at module load time.
-    from app.clients.aisoc_direct_client import AiSOCDirectClient  # noqa: PLC0415
-    from app.clients.fleetdm_client import FleetDMClient  # noqa: PLC0415
-    from app.clients.osctrl_client import OsctrlClient  # noqa: PLC0415
-    from app.clients.osquery_allowlist import AllowlistError  # noqa: PLC0415
+    # These osquery clients live in `services/actions`, not in this service —
+    # `services/agents/app/clients/` does not exist. Every `osquery_live_query`
+    # step therefore died with an unhandled ModuleNotFoundError at execution
+    # time, and the `except AllowlistError` handler below referenced a name
+    # that could never bind. The NL playbook drafter actively offers this step
+    # type, so a user could author a playbook that was guaranteed to crash.
+    #
+    # Fail with an actionable message instead of a traceback. Wiring this
+    # properly means dispatching through the actions service over HTTP, the
+    # same way SIEM writeback already does, rather than importing across a
+    # service boundary that does not exist in this image.
+    try:
+        from app.clients.aisoc_direct_client import AiSOCDirectClient  # noqa: PLC0415
+        from app.clients.fleetdm_client import FleetDMClient  # noqa: PLC0415
+        from app.clients.osctrl_client import OsctrlClient  # noqa: PLC0415
+        from app.clients.osquery_allowlist import AllowlistError  # noqa: PLC0415
+    except ModuleNotFoundError as exc:
+        logger.error("playbook.osquery_clients_unavailable: %s", exc)
+        return {
+            "error": (
+                "osquery_live_query is not executable in the agents service: the "
+                "osquery backend clients ship in services/actions. Run this step "
+                "through the actions service, or remove it from the playbook."
+            ),
+            "partial": True,
+        }
 
     backend: str = step.params.get("backend", "osctrl")
     target_hosts: list[str] = step.params.get("target_hosts") or [context.get("host_id") or context.get("host", "")]
