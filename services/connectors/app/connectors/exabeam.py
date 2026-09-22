@@ -125,5 +125,5 @@ class ExabeamConnector(BaseConnector):
             "actor": user,
             "event_type": "exabeam.notable_session",
             "created_at": raw.get("startTime") or raw.get("start_time"),
-            "raw": raw,
+            "raw_event": raw,
         }

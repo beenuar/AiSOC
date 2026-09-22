@@ -144,5 +144,13 @@ class LlmUsageConnector(BaseConnector):
             "actor": actor_email,
             "actor_email": actor_email,
             "created_at": raw.get("effective_at") or raw.get("occurred_at") or raw.get("timestamp"),
-            "raw": raw,
+            # `raw_event`, not `raw`. The Go normalizer's isCanonicalEnvelope
+            # check looks for `raw_event` + `source`; emitting `raw` missed it,
+            # so these events fell through to the lenient fallback, borrowed the
+            # splunk_enterprise profile, and were stamped Splunk / Network
+            # Activity (class_uid 4001). Category 4 is not a finding, so the
+            # promoter never turned any of them into an alert unless the
+            # severity map happened to reach 4. The key name is also what
+            # DetectionEngine._raw_fields merges into the match namespace.
+            "raw_event": raw,
         }

@@ -142,5 +142,5 @@ class Rapid7InsightIDRConnector(BaseConnector):
             "description": raw.get("disposition"),
             "alert_id": raw.get("rrn") or raw.get("id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

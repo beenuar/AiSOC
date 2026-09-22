@@ -125,5 +125,5 @@ class DevoConnector(BaseConnector):
             "username": ctx.get("username") or ctx.get("user"),
             "event_type": f"devo.alert.{raw.get('name') or 'triggered'}",
             "created_at": raw.get("createDate") or raw.get("timestamp"),
-            "raw": raw,
+            "raw_event": raw,
         }

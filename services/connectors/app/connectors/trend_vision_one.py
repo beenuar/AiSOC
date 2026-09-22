@@ -183,5 +183,5 @@ class TrendVisionOneConnector(BaseConnector):
             "description": raw.get("description"),
             "alert_id": raw.get("id") or raw.get("uuid"),
             "host": (raw.get("impactScope") or {}).get("entityValue"),
-            "raw": raw,
+            "raw_event": raw,
         }

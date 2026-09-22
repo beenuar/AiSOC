@@ -162,7 +162,7 @@ class SyslogCefConnector(BaseConnector):
                 "description": message[:500],
                 "external_id": "",
                 "event_type": "syslog_cef.raw",
-                "raw": raw,
+                "raw_event": raw,
             }
         ext = cef["ext"]
         return {
@@ -177,5 +177,5 @@ class SyslogCefConnector(BaseConnector):
             "username": ext.get("suser") or ext.get("sourceUserName"),
             "actor": ext.get("suser") or ext.get("sourceUserName"),
             "event_type": f"syslog_cef.{(cef['device_product'] or 'cef').lower().replace(' ', '_')}",
-            "raw": raw,
+            "raw_event": raw,
         }

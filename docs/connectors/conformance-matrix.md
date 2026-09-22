@@ -6,11 +6,12 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**83 / 83 connectors conform** to the runtime contract.
+**84 / 84 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
 | abnormal_security | saas | 2 | 1 | 3 | ✅ | ✅ | ✅ |
+| ai_gateway | ai | 4 | 1 | 0 | ✅ | ✅ | ✅ |
 | auditd | edr | 3 | 0 | 2 | ✅ | ✅ | ✅ |
 | auth0 | iam | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | aws_cloudtrail | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |

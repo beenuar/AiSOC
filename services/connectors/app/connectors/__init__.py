@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from app.connectors.abnormal_security import AbnormalSecurityConnector
+from app.connectors.ai_gateway import AIGatewayConnector
 from app.connectors.auditd import AuditdConnector
 from app.connectors.auth0 import Auth0Connector
 from app.connectors.aws_cloudtrail import AWSCloudTrailConnector
@@ -150,6 +151,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     JumpCloudConnector,
     KubernetesAuditConnector,
     LaceworkConnector,
+    AIGatewayConnector,
     LlmUsageConnector,
     M365AuditConnector,
     MicrosoftSentinelConnector,

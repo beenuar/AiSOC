@@ -153,5 +153,5 @@ class MimecastConnector(BaseConnector):
             "description": raw.get("url"),
             "alert_id": raw.get("id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }
