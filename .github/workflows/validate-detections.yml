@@ -47,6 +47,16 @@ jobs:
         # worker can't silently drift from the committed corpus.
         run: python3 scripts/export_detection_ruleset.py --check
 
+      # A rule can be loaded by the engine, pass fixture replay, count toward
+      # the published executable total, and still never fire — because the
+      # matcher does a flat `event.get(field)` and nothing ever computes the
+      # field. Fixture replay cannot catch this: fixtures are synthesized from
+      # the rule they test, so replaying them is a tautology. Ratcheted rather
+      # than clean, because the corpus already contains such rules and blocking
+      # every unrelated PR on them would only invite weakening the gate.
+      - name: Verify detection rules match on fields that exist
+        run: python3 scripts/check_detection_fields.py
+
       - name: Count rules by severity
         if: always()
         run: |
