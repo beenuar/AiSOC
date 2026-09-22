@@ -500,6 +500,28 @@ class TestPreview:
 # ---------------------------------------------------------------------------
 
 
+def _db() -> MagicMock:
+    """A session stub whose `execute`/`commit` are awaitable.
+
+    The rules used to live in a module-level dict, so a bare `MagicMock()` was
+    a sufficient stand-in for the session. They are now persisted to
+    `aisoc_business_context_rule_sets` — the console and the auto-triage worker
+    were previously reading two different places, and the worker's was always
+    empty — so these tests exercise a real async session shape.
+
+    `first()` returns None: a tenant with no stored row, which is the state
+    every one of these tests starts from. The endpoint's read cache then serves
+    what the test just wrote, matching production behaviour for a
+    write-then-read inside one request cycle.
+    """
+    db = MagicMock()
+    result = MagicMock()
+    result.first.return_value = None
+    db.execute = AsyncMock(return_value=result)
+    db.commit = AsyncMock()
+    return db
+
+
 def _run(coro):  # type: ignore[no-untyped-def]
     """Drive an async endpoint coroutine to completion in a fresh loop.
 
@@ -516,7 +538,7 @@ def _run(coro):  # type: ignore[no-untyped-def]
 class TestEndpoints:
     def test_get_returns_empty_envelope_when_no_rules(self) -> None:
         user = _user()
-        env = _run(endpoint.get_rules(user, MagicMock()))
+        env = _run(endpoint.get_rules(user, _db()))
         assert env.tenant_id == str(user.tenant_id)
         assert env.rules == []
         assert env.yaml == ""
@@ -535,7 +557,7 @@ class TestEndpoints:
             endpoint.replace_rules(
                 endpoint.ReplaceRulesRequest(yaml=yaml_text),
                 user,
-                MagicMock(),
+                _db(),
             )
         )
         assert env.yaml == yaml_text
@@ -543,7 +565,7 @@ class TestEndpoints:
         assert env.rules[0].id == "prod-critical"
         assert env.rules[0].then.set_severity == "critical"
         # Subsequent GET sees the same persisted YAML.
-        env2 = _run(endpoint.get_rules(user, MagicMock()))
+        env2 = _run(endpoint.get_rules(user, _db()))
         assert env2.yaml == yaml_text
         assert env2.rules[0].id == "prod-critical"
 
@@ -554,7 +576,7 @@ class TestEndpoints:
                 endpoint.replace_rules(
                     endpoint.ReplaceRulesRequest(yaml="id: BAD\nthen: { tag: t }"),
                     user,
-                    MagicMock(),
+                    _db(),
                 )
             )
         assert exc_info.value.status_code == 422
@@ -576,7 +598,7 @@ class TestEndpoints:
             endpoint.replace_rules(
                 endpoint.ReplaceRulesRequest(yaml=seed),
                 user,
-                MagicMock(),
+                _db(),
             )
         )
         # Patch rule-a only.
@@ -587,7 +609,7 @@ class TestEndpoints:
                     yaml=("id: rule-a\n" "when: { field: alert.severity, op: eq, value: high }\n" "then: { route_to: tier3 }\n")
                 ),
                 user,
-                MagicMock(),
+                _db(),
             )
         )
         rules_by_id = {r.id: r for r in env.rules}
@@ -604,7 +626,7 @@ class TestEndpoints:
                     "rule-a",
                     endpoint.UpdateRuleRequest(yaml=("id: rule-other\n" "when: { field: x, op: eq, value: 1 }\n" "then: { tag: t }\n")),
                     user,
-                    MagicMock(),
+                    _db(),
                 )
             )
         assert exc_info.value.status_code == 422
@@ -625,18 +647,18 @@ class TestEndpoints:
             endpoint.replace_rules(
                 endpoint.ReplaceRulesRequest(yaml=seed),
                 user,
-                MagicMock(),
+                _db(),
             )
         )
-        result = _run(endpoint.delete_rule("drop", user, MagicMock()))
+        result = _run(endpoint.delete_rule("drop", user, _db()))
         assert result is None
-        env = _run(endpoint.get_rules(user, MagicMock()))
+        env = _run(endpoint.get_rules(user, _db()))
         assert [r.id for r in env.rules] == ["keep"]
 
     def test_delete_404_when_rule_missing(self) -> None:
         user = _user()
         with pytest.raises(HTTPException) as exc_info:
-            _run(endpoint.delete_rule("never-existed", user, MagicMock()))
+            _run(endpoint.delete_rule("never-existed", user, _db()))
         assert exc_info.value.status_code == 404
 
     def test_preview_against_supplied_alerts(self) -> None:
@@ -648,7 +670,7 @@ class TestEndpoints:
                 _alert("b", target_tag="dev", severity="medium"),
             ],
         )
-        resp = _run(endpoint.preview_rules(req, user, MagicMock()))
+        resp = _run(endpoint.preview_rules(req, user, _db()))
         assert resp.sample_size == 2
         assert resp.changed_count == 1
         assert resp.suppressed_count == 0
@@ -666,7 +688,7 @@ class TestEndpoints:
                 endpoint.preview_rules(
                     endpoint.PreviewRequest(yaml="id: BAD\nthen: { tag: t }"),
                     user,
-                    MagicMock(),
+                    _db(),
                 )
             )
         assert exc_info.value.status_code == 422
@@ -714,7 +736,7 @@ class TestEndpoints:
             endpoint.replace_rules(
                 endpoint.ReplaceRulesRequest(yaml=yaml_text),
                 user,
-                MagicMock(),
+                _db(),
             )
         )
         engine = get_engine()

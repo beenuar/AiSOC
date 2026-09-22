@@ -27,6 +27,8 @@ Everything is fail-soft: a missing/invalid rules file or a bad rule degrades to
 from __future__ import annotations
 
 import os
+import time
+import uuid
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
@@ -224,14 +226,105 @@ def apply_rules(alert: dict[str, Any], rules: list[BusinessContextRule]) -> Busi
     return BusinessContextResult(out, matched, False, severity_before, out.get("severity"))
 
 
+#: How long a tenant's rules are cached before re-reading Postgres. Business
+#: context changes rarely and this sits on the hot path for every fused alert.
+_TENANT_CACHE_TTL_SECONDS = 30.0
+
+
 class BusinessContextApplier:
-    """Loads rules from a YAML file (mtime-reloaded) and applies them."""
+    """Applies business-context rules from Postgres, and from a YAML file.
+
+    Rules authored in the console are stored per tenant in
+    `aisoc_business_context_rule_sets`. This class only ever read a YAML file
+    whose path comes from `AISOC_BUSINESS_CONTEXT_RULES_FILE` — which nothing
+    sets — so a tenant could author a rule ("this host is a domain controller,
+    escalate anything touching it"), see it saved, preview it against their
+    last 50 alerts, and have it apply to no triage decision ever. The console
+    and the worker were looking at two different places.
+
+    The file path is kept as an operator-level override: an air-gapped install
+    that ships rules on disk should keep working, and its rules apply to every
+    tenant. Tenant rules are evaluated first, because a tenant's own statement
+    about their estate is more specific than a deployment-wide default.
+    """
 
     def __init__(self, rules_file: str | None = None) -> None:
         self._path = rules_file or os.environ.get(_RULES_FILE_ENV, "")
         self._rules: list[BusinessContextRule] = []
         self._mtime: float | None = None
+        self._tenant_rules: dict[str, tuple[float, list[BusinessContextRule]]] = {}
         self._load()
+
+    # ── tenant rules (Postgres) ───────────────────────────────────────────
+
+    async def _load_tenant_rules(self, tenant_id: str) -> list[BusinessContextRule]:
+        """Read and cache the tenant's authored rules. Never raises."""
+        cached = self._tenant_rules.get(tenant_id)
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < _TENANT_CACHE_TTL_SECONDS:
+            return cached[1]
+
+        dsn = os.environ.get("DATABASE_DSN") or os.environ.get("DATABASE_URL") or ""
+        dsn = dsn.strip().replace("postgresql+asyncpg://", "postgresql://")
+        if not dsn:
+            return []
+
+        try:
+            import asyncpg  # noqa: PLC0415 — optional at import time
+
+            conn = await asyncpg.connect(dsn, timeout=5.0)
+            try:
+                row = await conn.fetchrow(
+                    """
+                    SELECT yaml_text, enabled
+                    FROM aisoc_business_context_rule_sets
+                    WHERE tenant_id = $1
+                    """,
+                    uuid.UUID(tenant_id),
+                )
+            finally:
+                await conn.close()
+        except Exception as exc:  # noqa: BLE001 — fail-soft: no tenant rules applied
+            logger.warning(
+                "business_context.tenant_load_failed",
+                tenant_id=tenant_id,
+                error=str(exc),
+            )
+            # Serve the last known rules rather than silently dropping a
+            # tenant's suppressions during a brief outage.
+            return cached[1] if cached else []
+
+        rules: list[BusinessContextRule] = []
+        if row is not None and row["enabled"] and row["yaml_text"]:
+            try:
+                rules = load_rules_from_yaml(row["yaml_text"])
+            except Exception as exc:  # noqa: BLE001 — a bad rule set applies none
+                logger.warning(
+                    "business_context.tenant_parse_failed",
+                    tenant_id=tenant_id,
+                    error=str(exc),
+                )
+                rules = []
+
+        self._tenant_rules[tenant_id] = (now, rules)
+        return rules
+
+    async def apply_for_tenant(self, tenant_id: str | None, alert: dict[str, Any]) -> BusinessContextResult:
+        """Apply this tenant's authored rules, then any deployment-wide ones."""
+        self._load()  # cheap mtime check on the file-based rules
+        tenant_rules = await self._load_tenant_rules(str(tenant_id)) if tenant_id else []
+        rules = [*tenant_rules, *self._rules]
+        if not rules:
+            return BusinessContextResult(dict(alert), [], False, alert.get("severity"), alert.get("severity"))
+        try:
+            return apply_rules(alert, rules)
+        except Exception as exc:  # noqa: BLE001 — never break triage
+            logger.warning("business_context.apply_failed", error=str(exc))
+            return BusinessContextResult(dict(alert), [], False, alert.get("severity"), alert.get("severity"))
+
+    def clear_tenant_cache(self) -> None:
+        """Drop cached tenant rules. Used by tests."""
+        self._tenant_rules.clear()
 
     def _load(self) -> None:
         if not self._path:

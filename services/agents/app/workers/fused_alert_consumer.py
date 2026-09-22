@@ -349,7 +349,14 @@ class FusedAlertTriageWorker:
         # severity/route/tag rule mutates the alert the agent reasons over.
         bc_matched: list[str] = []
         if self._business_context is not None and isinstance(message, dict) and isinstance(message.get("alert"), dict):
-            bc = self._business_context.apply(message["alert"])
+            # Per tenant, not one global rule set. The console writes
+            # business-context rules per tenant and this worker only ever read
+            # a YAML file whose path nothing sets, so authored rules applied to
+            # no triage decision.
+            bc = await self._business_context.apply_for_tenant(
+                message.get("tenant_id") or message["alert"].get("tenant_id"),
+                message["alert"],
+            )
             bc_matched = bc.matched_rule_ids
             if bc.suppressed:
                 _METRICS["bc_suppressed"] += 1
