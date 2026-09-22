@@ -203,11 +203,15 @@ def render(schema, human: str) -> str:
         names = ", ".join(f"`{f.name}`" for f in secret_fields)
         lines += [
             ":::note Credential handling",
-            f"{names} " + ("is" if len(secret_fields) == 1 else "are") + " encrypted at "
-            "rest by the credential vault before the row is written, and decrypted only "
-            "at poll time. The value is never logged and never returned by the API — a "
-            "read of the saved connector shows the field as set, not its contents. See "
-            "[credential vault](../operations/credentials.md).",
+            (
+                f"{names} "
+                + ("is" if len(secret_fields) == 1 else "are")
+                + " encrypted at rest by the credential vault before the row is "
+                "written, and decrypted only at poll time. The value is never "
+                "logged and never returned by the API — a read of the saved "
+                "connector shows the field as set, not its contents. See "
+                "[credential vault](../operations/credentials.md)."
+            ),
             ":::",
             "",
         ]
@@ -278,10 +282,14 @@ def render_field_reference(schema) -> str:
         names = ", ".join(f"`{f.name}`" for f in secret_fields)
         lines += [
             ":::note Credential handling",
-            f"{names} " + ("is" if len(secret_fields) == 1 else "are") + " encrypted "
-            "at rest by the credential vault before the row is written, and decrypted "
-            "only at poll time. The value is never logged and never returned by the "
-            "API. See [credential vault](../operations/credentials.md).",
+            (
+                f"{names} "
+                + ("is" if len(secret_fields) == 1 else "are")
+                + " encrypted at rest by the credential vault before the row is "
+                "written, and decrypted only at poll time. The value is never "
+                "logged and never returned by the API. See "
+                "[credential vault](../operations/credentials.md)."
+            ),
             ":::",
             "",
         ]

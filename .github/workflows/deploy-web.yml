@@ -54,8 +54,14 @@ jobs:
           # nobody reads.
           if ! flyctl status --app aisoc-demo-web >/dev/null 2>&1; then
             echo "Fly app 'aisoc-demo-web' not found — creating it."
-            if ! flyctl apps create aisoc-demo-web --org personal; then
-              echo "::error title=deploy-web::Could not create 'aisoc-demo-web'. The token may lack org permissions, or the name may be taken."
+            # Capture the vendor's own error rather than guessing at the
+            # cause. The first real run of this said "Your account has
+            # overdue invoices", which no list of plausible reasons would
+            # have included — and which is the actual reason the public
+            # demo has been unreachable.
+            if ! create_output=$(flyctl apps create aisoc-demo-web --org personal 2>&1); then
+              echo "$create_output"
+              echo "::error title=deploy-web::Could not create 'aisoc-demo-web'. Fly said: ${create_output//$'\n'/ }"
               exit 1
             fi
           fi

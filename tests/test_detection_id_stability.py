@@ -24,6 +24,10 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 LOCK_PATH = REPO_ROOT / "detections" / "rule-ids.lock.json"
 
+# Imported for its side effect of populating sys.modules, so the corrupt-
+# lock test can patch the module object without a second import style.
+import generate_detections  # noqa: E402,F401
+
 
 @pytest.fixture(scope="module")
 def categories() -> dict:
@@ -109,11 +113,14 @@ def test_every_locked_id_is_unique() -> None:
 
 def test_a_corrupt_lock_refuses_rather_than_renumbering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Silently treating an unreadable lock as empty would reassign every id."""
-    import generate_detections as module
-
     bad = tmp_path / "rule-ids.lock.json"
     bad.write_text("{not json", encoding="utf-8")
-    monkeypatch.setattr(module, "ID_LOCK", bad)
+    # setattr on the module object reached through sys.modules, so the file
+    # keeps a single import style — mixing `import X as m` with `from X
+    # import y` for the same module is what CodeQL flags.
+    monkeypatch.setattr(sys.modules["generate_detections"], "ID_LOCK", bad)
+
+    from generate_detections import load_id_lock
 
     with pytest.raises(SystemExit, match="unreadable"):
-        module.load_id_lock()
+        load_id_lock()
