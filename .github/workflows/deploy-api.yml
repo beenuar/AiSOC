@@ -55,10 +55,15 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
           elif ! flyctl status --app aisoc-demo-api >/dev/null 2>&1; then
             echo "Fly app 'aisoc-demo-api' not found — creating it."
-            if flyctl apps create aisoc-demo-api --org personal; then
+            # Capture the vendor's own error rather than guessing. The
+            # first real run of this said "Your account has overdue
+            # invoices", which no list of plausible reasons would have
+            # included, and which is the actual reason the demo is down.
+            if create_output=$(flyctl apps create aisoc-demo-api --org personal 2>&1); then
               echo "deploy=true" >> "$GITHUB_OUTPUT"
             else
-              echo "::error title=deploy-api::Could not create 'aisoc-demo-api'. The token may lack org permissions, or the name may be taken."
+              echo "$create_output"
+              echo "::error title=deploy-api::Could not create 'aisoc-demo-api'. Fly said: ${create_output//$'\n'/ }"
               exit 1
             fi
           else

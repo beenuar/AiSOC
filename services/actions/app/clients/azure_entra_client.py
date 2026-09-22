@@ -119,11 +119,17 @@ class AzureEntraClient:
         Returns ``None`` on any failure: indeterminate, never a confirmation.
         """
         try:
-            token = await self._ensure_token()
             async with httpx.AsyncClient(timeout=20.0) as client:
+                # _ensure_token takes the client and stores the token on the
+                # instance; it does not return one. Calling it bare and using
+                # the result as a bearer token raised TypeError on every live
+                # call — invisible in simulation, which never constructs a
+                # client. Same class as the executor/client signature drift
+                # the autospec'd tests exist to catch.
+                await self._ensure_token(client)
                 resp = await client.get(
-                    f"https://graph.microsoft.com/v1.0/users/{user_principal_name}" "?$select=accountEnabled",
-                    headers={"Authorization": f"Bearer {token}"},
+                    f"{_GRAPH}/users/{user_principal_name}?$select=accountEnabled",
+                    headers=self._headers(),
                 )
                 if resp.status_code != 200:
                     return None
