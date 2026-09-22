@@ -53,7 +53,8 @@ class _DB:
         row = self._row
 
         class _Result:
-            def first(self_inner):  # noqa: N805
+            @staticmethod
+            def first():
                 return row
 
         return _Result()
