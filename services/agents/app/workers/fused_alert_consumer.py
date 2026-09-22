@@ -143,6 +143,12 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         summary = f"{summary} — {message['narrative']}"[:1000] if summary else str(message["narrative"])[:1000]
     raw_alert = {
         "id": alert_row_id,
+        # Rule identity travels with the alert so the evidence fingerprint can
+        # tell two different detections on the same host apart. Without it, a
+        # benign prior for one detection would suppress an unrelated one.
+        "title": alert.get("title"),
+        "rule_id": alert.get("rule_id"),
+        "rule_name": alert.get("rule_name"),
         "severity": alert.get("severity"),
         "src_ip": alert.get("src_ip"),
         "dst_ip": alert.get("dst_ip"),
