@@ -2,9 +2,19 @@
 # backup.sh — AiSOC full-stack backup to S3/R2
 #
 # Backs up:
-#   1. PostgreSQL (pg_dump → gzip → upload)
-#   2. ClickHouse (BACKUP TABLE/DATABASE via HTTP API → upload)
+#   1. PostgreSQL (pg_dump → gzip → encrypt → upload)
+#   2. ClickHouse (SELECT … FORMAT TSV → gzip → encrypt → upload)
 #   3. Plugin store (marketplace/index.json + community plugin artifacts → upload)
+#
+# Every artifact is encrypted with AES-256-GCM before it leaves the host, and
+# every artifact is recorded in a SHA-256 manifest uploaded alongside it. The
+# manifest holds the digest of the plaintext and of the ciphertext, so restore
+# can prove the bytes it fetched are the bytes that were written *and* that the
+# dump inside them is the dump that was taken.
+#
+# Encryption is on by default. Set BACKUP_ENCRYPTION=off only if the bucket
+# provides equivalent protection and you accept that anyone who can read the
+# bucket can read every credential and event row in the dump.
 #
 # Required environment variables:
 #   BACKUP_S3_BUCKET      — s3://your-bucket or r2://your-bucket (s3-compatible)
@@ -18,6 +28,11 @@
 #   AWS_ACCESS_KEY_ID     — S3/R2 access key
 #   AWS_SECRET_ACCESS_KEY — S3/R2 secret key
 #   AWS_ENDPOINT_URL      — R2 or custom S3 endpoint (optional)
+#   BACKUP_ENCRYPTION_KEY — 64 hex chars (32 bytes) for AES-256-GCM; or
+#   BACKUP_ENCRYPTION_KEY_FILE — path to a file containing the same
+#                           (preferred: an env var shows up in `ps`)
+#                           Generate: python3 scripts/backup_crypt.py keygen
+#   BACKUP_ENCRYPTION     — 'on' (default) or 'off' to skip encryption
 #   BACKUP_RETENTION_DAYS — how many days to keep backups (default: 30)
 #   SLACK_WEBHOOK_URL     — notify on completion/failure (optional)
 #
@@ -36,12 +51,15 @@ CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
 CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-}"
 CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-aisoc}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+BACKUP_ENCRYPTION="${BACKUP_ENCRYPTION:-on}"
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
 DRY_RUN=false
 COMPONENT="all"
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 BACKUP_DIR="/tmp/aisoc-backup-${TIMESTAMP}"
 ERRORS=0
+MANIFEST=""          # set after BACKUP_DIR exists
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── arg parsing ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -55,7 +73,11 @@ done
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 log()  { echo "[$(date -u +%T)] $*"; }
-fail() { echo "[ERROR] $*" >&2; ((ERRORS++)); }
+# NB: ERRORS=$((...)) not ((ERRORS++)). The latter evaluates to the value
+# *before* the increment, so the first call returns 0 -> exit status 1 ->
+# set -e kills the script mid-handler. The whole error-accumulation design
+# below (keep going, report N failures at the end) never ran because of it.
+fail() { echo "[ERROR] $*" >&2; ERRORS=$((ERRORS + 1)); }
 
 require() {
   command -v "$1" &>/dev/null || { echo "Missing required command: $1" >&2; exit 1; }
@@ -110,6 +132,60 @@ notify_slack() {
     || true
 }
 
+
+# ── artifact sealing: encrypt + record ────────────────────────────────────────
+# Everything that gets uploaded goes through seal_artifact first, so a new
+# component cannot be added that quietly ships plaintext.
+
+manifest_add() {
+  # path, plaintext sha256, ciphertext sha256 (empty when unencrypted), bytes
+  local name="$1" plain_sha="$2" cipher_sha="$3" bytes="$4"
+  python3 - "$MANIFEST" "$name" "$plain_sha" "$cipher_sha" "$bytes" <<'PYEOF'
+import json, pathlib, sys
+path, name, plain_sha, cipher_sha, size = sys.argv[1:6]
+p = pathlib.Path(path)
+doc = json.loads(p.read_text()) if p.exists() else {"artifacts": []}
+doc["artifacts"].append({
+    "name": name,
+    "sha256_plaintext": plain_sha,
+    "sha256_ciphertext": cipher_sha or None,
+    "encrypted": bool(cipher_sha),
+    "bytes": int(size),
+})
+p.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+PYEOF
+}
+
+seal_artifact() {
+  # Encrypts $1 in place (producing $1.enc) when enabled, records the digests,
+  # and echoes the path that should actually be uploaded.
+  local src="$1"
+  local plain_sha cipher_sha out
+
+  plain_sha=$(python3 "${SCRIPT_DIR}/backup_crypt.py" sha256 "$src")
+
+  if [[ "$BACKUP_ENCRYPTION" == "off" ]]; then
+    manifest_add "$(basename "$src")" "$plain_sha" "" "$(wc -c < "$src")"
+    echo "$src"
+    return
+  fi
+
+  out="${src}.enc"
+  # backup_crypt prints "<plain>\t<cipher>\t<path>"
+  cipher_sha=$(python3 "${SCRIPT_DIR}/backup_crypt.py" encrypt "$src" --output "$out" | cut -f2)
+  rm -f "$src"
+  manifest_add "$(basename "$out")" "$plain_sha" "$cipher_sha" "$(wc -c < "$out")"
+  echo "$out"
+}
+
+upload_sealed() {
+  # seal then upload, keeping the .enc suffix on the remote key
+  local src="$1" dest_dir="$2"
+  local sealed
+  sealed=$(seal_artifact "$src")
+  s3_upload "$sealed" "${dest_dir}/$(basename "$sealed")"
+}
+
 # ── pre-flight ────────────────────────────────────────────────────────────────
 require aws
 require pg_dump
@@ -118,7 +194,26 @@ require curl
 
 [[ -z "$BACKUP_S3_BUCKET" ]] && { echo "BACKUP_S3_BUCKET is required" >&2; exit 1; }
 
+# Fail before dumping anything rather than after, so an operator who has not
+# set a key does not discover it once the dump is already on disk.
+if [[ "$BACKUP_ENCRYPTION" != "off" ]]; then
+  require python3
+  if ! python3 "${SCRIPT_DIR}/backup_crypt.py" keygen >/dev/null 2>&1; then
+    echo "The 'cryptography' package is required for backup encryption." >&2
+    echo "Install it, or set BACKUP_ENCRYPTION=off to accept plaintext backups." >&2
+    exit 1
+  fi
+  if [[ -z "${BACKUP_ENCRYPTION_KEY:-}${BACKUP_ENCRYPTION_KEY_FILE:-}" ]]; then
+    echo "BACKUP_ENCRYPTION is on but no key is set." >&2
+    echo "  Generate one:  python3 scripts/backup_crypt.py keygen" >&2
+    echo "  Then set BACKUP_ENCRYPTION_KEY_FILE (preferred) or BACKUP_ENCRYPTION_KEY." >&2
+    echo "  To back up without encryption, set BACKUP_ENCRYPTION=off explicitly." >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$BACKUP_DIR"
+MANIFEST="${BACKUP_DIR}/manifest-${TIMESTAMP}.json"
 trap 'rm -rf "$BACKUP_DIR"' EXIT
 
 log "=== AiSOC Backup started: ${TIMESTAMP} ==="
@@ -130,24 +225,44 @@ backup_postgres() {
   log "--- PostgreSQL backup ---"
   local outfile="${BACKUP_DIR}/postgres-${TIMESTAMP}.sql.gz"
   local s3dest="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/postgres-${TIMESTAMP}.sql.gz"
+  # NB: when encryption is on the uploaded key gains a .enc suffix.
 
   log "Dumping database…"
   if [[ "$DRY_RUN" == "true" ]]; then
     log "[dry-run] pg_dump $POSTGRES_URL | gzip > $outfile"
   else
-    pg_dump "$POSTGRES_URL" \
+    # pg_dump's stderr carries --verbose progress *and* the reason for any
+    # failure. Discarding it meant a failed backup exited non-zero with no
+    # explanation at all — including the common case of a pg_dump older than
+    # the server, which aborts before writing a byte. Keep it, and surface it
+    # on failure.
+    local dump_log="${BACKUP_DIR}/pg_dump.stderr"
+    if ! pg_dump "$POSTGRES_URL" \
       --format=plain \
       --no-owner \
       --no-acl \
       --verbose \
-      2>/dev/null \
-      | gzip > "$outfile"
+      2>"$dump_log" \
+      | gzip > "$outfile"; then
+      fail "pg_dump failed:"
+      sed 's/^/        /' "$dump_log" >&2
+      return
+    fi
+    if [[ ! -s "$outfile" ]]; then
+      fail "pg_dump produced an empty archive; refusing to upload it."
+      sed 's/^/        /' "$dump_log" >&2
+      return
+    fi
     log "Dump size: $(du -sh "$outfile" | cut -f1)"
   fi
 
-  s3_upload "$outfile" "$s3dest"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    s3_upload "$outfile" "$s3dest"
+  else
+    upload_sealed "$outfile" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres"
+  fi
   s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres"
-  log "PostgreSQL backup complete → $s3dest"
+  log "PostgreSQL backup complete → ${s3dest}${BACKUP_ENCRYPTION:+.enc}"
 }
 
 # ── 2. ClickHouse ─────────────────────────────────────────────────────────────
@@ -185,8 +300,8 @@ backup_clickhouse() {
         ${auth_args[@]+"${auth_args[@]}"} \
         | gzip > "$outfile"
       log "    Size: $(du -sh "$outfile" | cut -f1)"
-      s3_upload "$outfile" \
-        "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/clickhouse/${table}/${table}-${TIMESTAMP}.tsv.gz"
+      upload_sealed "$outfile" \
+        "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/clickhouse/${table}"
     fi
   done <<< "$tables"
 
@@ -240,8 +355,11 @@ backup_plugins() {
   # Upload all artifacts
   for f in "${outdir}"/*; do
     [[ -f "$f" ]] || continue
-    s3_upload "$f" \
-      "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/plugins/$(basename "$f")"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      s3_upload "$f" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/plugins/$(basename "$f")"
+    else
+      upload_sealed "$f" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/plugins"
+    fi
   done
 
   s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/plugins"
@@ -263,6 +381,25 @@ case "$COMPONENT" in
     exit 1
     ;;
 esac
+
+# ── manifest ──────────────────────────────────────────────────────────────────
+# Uploaded last and deliberately unencrypted: it carries digests, not data, and
+# restore needs to read it before it has proved it holds the right key.
+if [[ "$DRY_RUN" != "true" ]] && [[ -f "$MANIFEST" ]]; then
+  python3 - "$MANIFEST" "$TIMESTAMP" "$BACKUP_ENCRYPTION" <<'PYEOF'
+import json, pathlib, sys
+path, ts, enc = sys.argv[1:4]
+p = pathlib.Path(path)
+doc = json.loads(p.read_text())
+doc["timestamp"] = ts
+doc["encryption"] = "aes-256-gcm" if enc != "off" else "none"
+doc["format_version"] = 1
+p.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+PYEOF
+  s3_upload "$MANIFEST" \
+    "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/manifests/manifest-${TIMESTAMP}.json"
+  log "Manifest uploaded ($(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['artifacts']))" "$MANIFEST") artifacts)"
+fi
 
 # ── summary ───────────────────────────────────────────────────────────────────
 if [[ "$ERRORS" -eq 0 ]]; then

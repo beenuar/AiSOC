@@ -19,6 +19,7 @@ make any network calls.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -222,19 +223,30 @@ def _confidence_band(*, severity: str, technique_count: int) -> dict[str, Any]:
     return {"score": score, "band": band}
 
 
+def _stable_int(key: str) -> int:
+    """A process-independent integer for a string key.
+
+    Not ``hash()``: CPython salts string hashing per process unless
+    PYTHONHASHSEED is pinned, so these figures changed on every run while
+    the package advertised a deterministic reasoner. That also silently
+    undermines the reproducibility the evaluation harness rests on, since
+    a "deterministic" baseline that moves cannot be a baseline.
+    """
+    return int.from_bytes(hashlib.blake2b(key.encode(), digest_size=8).digest(), "big")
+
+
 def _synthetic_related_cases(sid: str) -> int:
-    # Stable per-scenario but believable. Production fetches from
-    # Qdrant; we just hash the id.
-    return abs(hash(sid)) % 7
+    # Stable per-scenario but believable. Production fetches from Qdrant.
+    return _stable_int(sid) % 7
 
 
 def _synthetic_entity_risk(entities: dict[str, str]) -> dict[str, int]:
-    # Risk score 0-100 per entity. Deterministic.
-    return {k: 30 + (abs(hash(v)) % 60) for k, v in entities.items()}
+    # Risk score 0-100 per entity.
+    return {k: 30 + (_stable_int(v) % 60) for k, v in entities.items()}
 
 
 def _synthetic_hunt_matches(sid: str) -> int:
-    return abs(hash(f"hunt:{sid}")) % 4
+    return _stable_int(f"hunt:{sid}") % 4
 
 
 def _automation_tier(severity: str) -> str:

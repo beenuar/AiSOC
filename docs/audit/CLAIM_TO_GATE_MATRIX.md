@@ -92,10 +92,12 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Windowed detection rules are declarable without editing the engine | `detections/splunk-imports/_quarantine/README.md` | `validate-detections.yml` (`export_windowed_ruleset.py --check`) + `ci.yml` fusion tests (`test_windowed_ruleset_loader.py` — a malformed rule is skipped individually, a duplicate id cannot shadow a builtin threshold, and zero thresholds/windows are refused) | GATED | - |
 | The agent's abstention rate and groundedness are published | `/metrics/funnel` | `ci.yml :: api tests` (`test_triage_quality_metrics.py` — asserts `mean_groundedness` averages only scored verdicts, so the deterministic path is not counted as zero, and that a missing column degrades rather than failing the funnel) | GATED | - |
 | UEBA baselines non-human principals (service accounts, AI agents) | `apps/docs/docs/` (UEBA) | `ci.yml` ueba tests (`test_non_human_entities.py` — the entity-type list widened without becoming free text, and a zero-variance baseline returns None rather than a 0.0 that would read as permanently normal) | GATED | - |
+| Envelope encryption: per-secret DEKs wrapped by a KEK in KMS | platform-threat-model.md (information disclosure) | `ci.yml` api job (`test_credential_vault_envelope.py`) — vault writes `vault:v2` when enabled, distinct DEK per secret, `vault:v1` rows still decrypt after the switch, a v2 row fails closed if envelope mode is later disabled, and an unrecognised mode refuses to boot rather than silently writing v1 | GATED | KMS backends beyond AWS are implemented against the same protocol but not integration-tested |
+| Backup artifacts are encrypted at rest and integrity-checked | architecture.md (backup & restore) | `integration.yml` backup-restore job: asserts the uploaded object carries the AiSOC AEAD header, has no gzip magic, leaks no schema names, and is listed in a SHA-256 manifest; then flips a bit and asserts restore refuses it | GATED | - |
 
 ## Summary
 
-- GATED: 72
+- GATED: 74
 - PARTIAL: 12
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 

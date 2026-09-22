@@ -316,7 +316,7 @@ The push pipeline lives in
 - **Immutable Audit Log** — Postgres trigger + `SECURITY DEFINER` function prevents UPDATE/DELETE on `audit_log`.
 - **Replayable agent decisions** — The Investigation Ledger is append-only and tenant-scoped.
 - **OpenTelemetry** — All services emit traces, metrics, and structured logs to a configurable OTLP endpoint.
-- **Backup & Restore** — `scripts/backup.sh` / `restore.sh`. Covers Postgres (gated end-to-end in `integration.yml`, which seeds rows, drops the schema, restores and asserts the row count) plus ClickHouse and the plugin store. Today the archive is gzipped and uploaded as-is: **encryption at rest in the bucket is the operator's responsibility**, and there is no integrity manifest. Neo4j, Qdrant, Redis and Kafka have no backup path at all.
+- **Backup & Restore** — `scripts/backup.sh` / `restore.sh`. Artifacts are encrypted with **AES-256-GCM** before leaving the host and recorded in a **SHA-256 manifest**; restore verifies the digest, decrypts, and refuses a tampered or truncated archive rather than restoring a partial database. Gated end-to-end in `integration.yml`: seed 500 rows, back up, assert the object in the bucket is unreadable (no gzip magic, no schema names), drop the schema, restore, assert 500 rows, then flip a bit and assert the restore is refused. Covers Postgres, ClickHouse and the plugin store; **Neo4j, Qdrant, Redis and Kafka have no backup path yet**.
 - **High-Availability Helm** — Multi-replica deployments, HPA, PDB, anti-affinity, and readiness probes.
 
 ## Plugin Extension Points

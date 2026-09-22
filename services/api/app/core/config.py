@@ -167,6 +167,25 @@ class Settings(BaseSettings):
     AISOC_CREDENTIAL_KEY: str = ""
     AISOC_CREDENTIAL_KEY_ROTATION_FROM: str = ""
 
+    # Envelope encryption (``vault:v2``). When enabled each secret gets its own
+    # data-encryption key, and only the *wrapped* DEK is stored alongside the
+    # ciphertext — so a database dump is useless without the ability to unwrap,
+    # and one leaked DEK exposes one secret rather than the whole vault.
+    #
+    #   off   — Fernet under AISOC_CREDENTIAL_KEY (default; ``vault:v1``)
+    #   local — DEKs wrapped by a KEK held in AISOC_CREDENTIAL_KEK. Better blast
+    #           radius than v1, but the KEK is still on the host.
+    #   aws   — DEKs wrapped by AWS KMS; the KEK never leaves the HSM.
+    #
+    # Reads are always backward compatible: a ``vault:v1`` token written before
+    # this was enabled still decrypts under AISOC_CREDENTIAL_KEY. Turning it on
+    # is therefore safe without a migration; existing rows upgrade to v2 the
+    # next time they are written.
+    AISOC_CREDENTIAL_ENVELOPE: str = "off"
+    AISOC_CREDENTIAL_KEK: str = ""
+    AISOC_CREDENTIAL_KEK_ROTATION_FROM: str = ""
+    AISOC_KMS_KEY_ID: str = ""
+
     # Internal URL for the connectors microservice. The API service proxies
     # catalog lookups (``GET /connectors``) and stateless connection tests
     # (``POST /connectors/{type}/test``) to this URL so the wizard UI can

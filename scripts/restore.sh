@@ -2,8 +2,14 @@
 # restore.sh — AiSOC full-stack restore from S3/R2
 #
 # Restores:
-#   1. PostgreSQL (download + gunzip + psql)
-#   2. ClickHouse (download + gunzip + clickhouse-client INSERT)
+#   1. PostgreSQL (download + verify + decrypt + gunzip + psql)
+#   2. ClickHouse (download + verify + decrypt + gunzip + HTTP INSERT)
+#
+# Artifacts written by backup.sh are AES-256-GCM encrypted and recorded in a
+# SHA-256 manifest. Restore fetches the manifest first and checks the digest of
+# every artifact it downloads against it, then decrypts. A digest mismatch
+# aborts: restoring a corrupted dump is worse than not restoring, because it
+# looks like it worked.
 #   3. Plugin store (download + extract artifacts)
 #
 # Required environment variables (same as backup.sh):
@@ -15,6 +21,8 @@
 #   CLICKHOUSE_USER       — ClickHouse user
 #   CLICKHOUSE_PASSWORD   — ClickHouse password
 #   CLICKHOUSE_DATABASE   — ClickHouse database to restore
+#   BACKUP_ENCRYPTION_KEY / BACKUP_ENCRYPTION_KEY_FILE — the key the backup
+#                           was written with (see scripts/backup_crypt.py)
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_ENDPOINT_URL
 #
 # Usage:
@@ -76,6 +84,87 @@ s3_download() {
   aws s3 cp $(s3_args) "$src" "$dest"
 }
 
+
+# ── manifest verification + decryption ────────────────────────────────────────
+# A backup you cannot verify is a backup you are guessing about. fetch_artifact
+# is the only download path used below, so no component can skip the check.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_FILE=""
+
+load_manifest() {
+  local remote="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/manifests/manifest-${TIMESTAMP}.json"
+  MANIFEST_FILE="${RESTORE_DIR}/manifest.json"
+  if s3_download "$remote" "$MANIFEST_FILE" 2>/dev/null; then
+    log "Manifest loaded: $remote"
+  else
+    MANIFEST_FILE=""
+    log "No manifest at ${remote}."
+    log "  This backup predates manifest support, so its integrity cannot be"
+    log "  verified. Continuing, but treat the restore as unverified."
+  fi
+}
+
+manifest_lookup() {
+  # artifact name -> "<sha256_ciphertext_or_empty>\t<encrypted:true|false>"
+  [[ -z "$MANIFEST_FILE" ]] && { echo -e "\t"; return; }
+  python3 - "$MANIFEST_FILE" "$1" <<'PYEOF'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+for a in doc.get("artifacts", []):
+    if a["name"] == sys.argv[2]:
+        print(f"{a.get('sha256_ciphertext') or ''}\t{'true' if a.get('encrypted') else 'false'}")
+        break
+else:
+    print("\t")
+PYEOF
+}
+
+fetch_artifact() {
+  # Downloads <s3 dir>/<base>[.enc], verifies, decrypts. Echoes the local
+  # plaintext path. Prefers the encrypted object when both exist.
+  local s3dir="$1" base="$2" dest="$3"
+  local remote_enc="${s3dir}/${base}.enc"
+  local local_enc="${dest}.enc"
+
+  if aws s3 ls $(s3_args) "$remote_enc" &>/dev/null; then
+    s3_download "$remote_enc" "$local_enc"
+    verify_artifact "$(basename "$remote_enc")" "$local_enc"
+    require python3
+    python3 "${SCRIPT_DIR}/backup_crypt.py" decrypt "$local_enc" --output "$dest" >/dev/null || {
+      echo "[ERROR] Could not decrypt ${remote_enc}." >&2
+      echo "        Check BACKUP_ENCRYPTION_KEY / BACKUP_ENCRYPTION_KEY_FILE matches" >&2
+      echo "        the key this backup was written with." >&2
+      exit 1
+    }
+    rm -f "$local_enc"
+  else
+    s3_download "${s3dir}/${base}" "$dest"
+    verify_artifact "$base" "$dest"
+  fi
+  echo "$dest"
+}
+
+verify_artifact() {
+  local name="$1" path="$2"
+  [[ -z "$MANIFEST_FILE" ]] && return 0
+  local expected actual
+  expected=$(manifest_lookup "$name" | cut -f1)
+  if [[ -z "$expected" ]]; then
+    log "  ${name}: not listed in the manifest; integrity unverified"
+    return 0
+  fi
+  actual=$(python3 "${SCRIPT_DIR}/backup_crypt.py" sha256 "$path")
+  if [[ "$actual" != "$expected" ]]; then
+    echo "[ERROR] Integrity check failed for ${name}." >&2
+    echo "        manifest: ${expected}" >&2
+    echo "        actual:   ${actual}" >&2
+    echo "        Refusing to restore: a corrupted dump restores as if it worked." >&2
+    exit 1
+  fi
+  log "  ${name}: sha256 verified"
+}
+
 # ── list backups ──────────────────────────────────────────────────────────────
 list_backups() {
   [[ -z "$BACKUP_S3_BUCKET" ]] && { echo "BACKUP_S3_BUCKET is required" >&2; exit 1; }
@@ -102,10 +191,23 @@ fi
 resolve_timestamp() {
   if [[ "$USE_LATEST" == "true" ]]; then
     log "Resolving latest backup timestamp…"
-    TIMESTAMP=$(s3_ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres" \
-      | grep -oP '\d{8}T\d{6}Z' | sort | tail -1 || true)
+    # grep -oE, not -oP: BSD grep (macOS) has no -P, and the `|| true` below
+    # turned that into the misleading "no postgres backups found" rather than
+    # "your grep cannot do this" — on the machine someone is most likely to be
+    # running a recovery from.
+    local listing
+    listing=$(s3_ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres" || true)
+    TIMESTAMP=$(printf '%s\n' "$listing" \
+      | grep -oE '[0-9]{8}T[0-9]{6}Z' | sort | tail -1 || true)
     if [[ -z "$TIMESTAMP" ]]; then
-      echo "No postgres backups found to determine latest timestamp" >&2
+      echo "No postgres backups found to determine latest timestamp." >&2
+      echo "  Looked in: ${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres" >&2
+      if [[ -n "$listing" ]]; then
+        echo "  Objects present but none matched <YYYYMMDD>T<HHMMSS>Z:" >&2
+        printf '%s\n' "$listing" | sed 's/^/    /' >&2
+      else
+        echo "  The prefix is empty or unreadable — check credentials and endpoint." >&2
+      fi
       exit 1
     fi
     log "Latest timestamp: $TIMESTAMP"
@@ -134,6 +236,8 @@ resolve_timestamp
 mkdir -p "$RESTORE_DIR"
 trap 'rm -rf "$RESTORE_DIR"' EXIT
 
+load_manifest
+
 log "=== AiSOC Restore started: timestamp=${TIMESTAMP} ==="
 log "Component: ${COMPONENT}"
 
@@ -149,11 +253,12 @@ fi
 restore_postgres() {
   [[ -z "$POSTGRES_URL" ]] && { echo "POSTGRES_URL is not set; skipping postgres restore" >&2; return; }
   log "--- PostgreSQL restore ---"
-  local s3src="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/postgres-${TIMESTAMP}.sql.gz"
-  local local_file="${RESTORE_DIR}/postgres-${TIMESTAMP}.sql.gz"
+  local s3dir="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres"
+  local base="postgres-${TIMESTAMP}.sql.gz"
+  local local_file="${RESTORE_DIR}/${base}"
 
-  log "Downloading $s3src…"
-  s3_download "$s3src" "$local_file"
+  log "Downloading ${s3dir}/${base}…"
+  fetch_artifact "$s3dir" "$base" "$local_file" >/dev/null
   log "Download complete ($(du -sh "$local_file" | cut -f1))"
 
   log "Restoring to ${POSTGRES_URL}…"
@@ -183,22 +288,36 @@ restore_clickhouse() {
 
   while IFS= read -r table; do
     [[ -z "$table" ]] && continue
-    local s3src="${ch_s3_prefix}/${table}/${table}-${TIMESTAMP}.tsv.gz"
-    local local_file="${RESTORE_DIR}/ch-${table}-${TIMESTAMP}.tsv.gz"
+    local s3dir="${ch_s3_prefix}/${table}"
+    local base="${table}-${TIMESTAMP}.tsv.gz"
+    local local_file="${RESTORE_DIR}/ch-${base}"
 
     log "  Restoring table: ${CLICKHOUSE_DATABASE}.${table}"
-    if ! aws s3 ls $(s3_args) "$s3src" &>/dev/null; then
-      log "  Skipping ${table}: file not found at ${s3src}"
+    # shellcheck disable=SC2046
+    if ! aws s3 ls $(s3_args) "${s3dir}/${base}" &>/dev/null \
+       && ! aws s3 ls $(s3_args) "${s3dir}/${base}.enc" &>/dev/null; then
+      log "  Skipping ${table}: no object at ${s3dir}/${base}[.enc]"
       continue
     fi
 
-    s3_download "$s3src" "$local_file"
+    fetch_artifact "$s3dir" "$base" "$local_file" >/dev/null
 
-    gunzip -c "$local_file" | curl -sf "${ch_url}/" \
+    # The query goes in the URL and the data goes in the body. The previous
+    # form combined --data-binary with --get, which turns the request into a
+    # GET and URL-encodes the entire gzipped dump into the query string: every
+    # ClickHouse restore failed, and the failure was masked because curl -sf
+    # was the last command in a loop body.
+    local encoded_query
+    encoded_query=$(python3 -c \
+      "import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))" \
+      "INSERT INTO ${CLICKHOUSE_DATABASE}.${table} FORMAT TabSeparatedWithNames")
+
+    if ! gunzip -c "$local_file" | curl -sf -X POST "${ch_url}/?query=${encoded_query}" \
       ${auth_args[@]+"${auth_args[@]}"} \
-      --data-binary @- \
-      --get \
-      --data-urlencode "query=INSERT INTO ${CLICKHOUSE_DATABASE}.${table} FORMAT TabSeparatedWithNames"
+      --data-binary @-; then
+      echo "[ERROR] ClickHouse INSERT failed for table ${table}" >&2
+      exit 1
+    fi
 
     log "  Table ${table} restored"
   done <<< "$tables"
