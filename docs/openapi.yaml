@@ -4061,6 +4061,52 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/graph/context/import:
+    post:
+      tags:
+      - graph
+      summary: Import identity, organisational and business context into the graph
+      description: 'Upsert context records. Safe to run repeatedly on a schedule.
+
+
+        Records are merged rather than replaced: an import runs against a source
+
+        of record that may be partial, and replacing the tenant''s context with
+
+        whatever one run produced would delete a department because an HR export
+
+        timed out.
+
+
+        Every rejected record is returned with its reason. A partially-applied
+
+        import reporting success is worse than a rejected one, because afterwards
+
+        the gaps are invisible.'
+      operationId: import_graph_context_api_v1_graph_context_import_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContextImportRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Import Graph Context Api V1 Graph Context Import Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/graph/neighbors/{entity_type}/{entity_id}:
     get:
       tags:
@@ -16789,6 +16835,48 @@ components:
         knobs (poll interval, region, log filters) that the wizard surfaces
 
         so an operator can tweak them without re-pasting credentials.'
+    ContextImportRequest:
+      properties:
+        departments:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Departments
+        employees:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Employees
+        applications:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Applications
+        cloud_accounts:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Cloud Accounts
+      type: object
+      title: ContextImportRequest
+      description: 'Directory, HR and CMDB context the event stream cannot carry.
+
+
+        An event can say an account authenticated. It cannot say which person
+
+        holds that account, whether they still work here, which business
+
+        application the host serves, or what an outage of it costs. That is the
+
+        difference between "unusual login for svc_deploy" and "unusual login for
+
+        svc_deploy, owned by a contractor whose last day was Friday, on the host
+
+        running the tier-1 payments service".'
     ControlItem:
       properties:
         control_id:

@@ -12,8 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import CurrentUser, DBSession, get_current_user
+from app.api.v1.deps import CurrentUser, DBSession, get_current_user, require_permission
 from app.services import graph_service
+from app.services.context_import import import_context
 from app.services.incident_context import get_incident_context
 from app.services.investigation_tools import BACKED_TOOLS, TOOLS, dispatch
 
@@ -427,6 +428,46 @@ async def run_investigation_tool(
     """Execute one pivot. Tenant comes from the session, never the request."""
     result = await dispatch(request.tool, str(current_user.tenant_id), request.args)
     return result.as_dict()
+
+
+class ContextImportRequest(BaseModel):
+    """Directory, HR and CMDB context the event stream cannot carry.
+
+    An event can say an account authenticated. It cannot say which person
+    holds that account, whether they still work here, which business
+    application the host serves, or what an outage of it costs. That is the
+    difference between "unusual login for svc_deploy" and "unusual login for
+    svc_deploy, owned by a contractor whose last day was Friday, on the host
+    running the tier-1 payments service".
+    """
+
+    departments: list[dict[str, Any]] = Field(default_factory=list)
+    employees: list[dict[str, Any]] = Field(default_factory=list)
+    applications: list[dict[str, Any]] = Field(default_factory=list)
+    cloud_accounts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post(
+    "/context/import",
+    summary="Import identity, organisational and business context into the graph",
+)
+async def import_graph_context(
+    request: ContextImportRequest,
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
+) -> dict[str, Any]:
+    """Upsert context records. Safe to run repeatedly on a schedule.
+
+    Records are merged rather than replaced: an import runs against a source
+    of record that may be partial, and replacing the tenant's context with
+    whatever one run produced would delete a department because an HR export
+    timed out.
+
+    Every rejected record is returned with its reason. A partially-applied
+    import reporting success is worse than a rejected one, because afterwards
+    the gaps are invisible.
+    """
+    report = await import_context(str(current_user.tenant_id), request.model_dump())
+    return report.as_dict()
 
 
 @router.get(
