@@ -278,6 +278,31 @@ class Settings(BaseSettings):
     )
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 
+    # Retention purge worker. Applies each tenant's configured retention
+    # window by deleting aged rows from the ClickHouse lake and the Postgres
+    # alerts table.
+    #
+    # Default **off**, and dry-run when first switched on. Retention policies
+    # have been storable (and described as enforced) for several releases
+    # while nothing deleted anything, so arming this on upgrade would turn a
+    # version bump into unannounced data loss. Enable it deliberately, read
+    # the dry-run counts, then set RETENTION_WORKER_DRY_RUN=false.
+    #
+    # Only tenants with an explicit `retention_policies` row are purged; the
+    # defaults in app.services.retention pre-fill a form, they are not an
+    # instruction to delete. `audit_days` is stored but not purged — the audit
+    # log is an append-only hash chain and truncating it invalidates every
+    # subsequent verification.
+    RETENTION_WORKER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETENTION_WORKER_ENABLED", "AISOC_RETENTION_WORKER_ENABLED"),
+    )
+    RETENTION_WORKER_DRY_RUN: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RETENTION_WORKER_DRY_RUN", "AISOC_RETENTION_WORKER_DRY_RUN"),
+    )
+    RETENTION_WORKER_INTERVAL_SECONDS: int = 21600  # 6h
+
     # Database
     # The default points at the bundled compose Postgres with its dev password.
     # In docker-compose.yml and .env.example the password is parameterised via

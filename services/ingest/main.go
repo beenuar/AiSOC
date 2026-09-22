@@ -162,8 +162,16 @@ func main() {
 			log.Info().
 				Strs("templates", registry.IDs()).
 				Int64("max_body_bytes", cfg.InboxMaxBodyBytes).
+				Float64("rate_requests_per_second", cfg.InboxRateRequestsPerSecond).
+				Float64("rate_events_per_second", cfg.InboxRateEventsPerSecond).
 				Msg("inbox: universal-capture push paths enabled")
-			inboxHandler = inbox.NewHandler(store, registry, pub, cfg.InboxMaxBodyBytes)
+			inboxHandler = inbox.NewHandler(store, registry, pub, cfg.InboxMaxBodyBytes).
+				WithLimiter(inbox.NewLimiter(
+					cfg.InboxRateRequestsPerSecond,
+					cfg.InboxRateRequestBurst,
+					cfg.InboxRateEventsPerSecond,
+					cfg.InboxRateEventBurst,
+				))
 		}
 	} else if !cfg.InboxEnabled {
 		log.Info().Msg("inbox: disabled via INBOX_ENABLED=false")
