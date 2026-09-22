@@ -130,5 +130,5 @@ class SlackAuditConnector(BaseConnector):
             "description": f"actor={actor}" if actor else None,
             "alert_id": raw.get("id"),
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

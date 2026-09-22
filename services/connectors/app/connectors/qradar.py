@@ -178,5 +178,5 @@ class QRadarConnector(BaseConnector):
             "src_ip": (raw.get("offense_source") if raw.get("offense_source_summary") == "IP" else None),
             "event_type": f"qradar.offense.{raw.get('offense_type', 'unknown')}",
             "created_at": raw.get("start_time"),
-            "raw": raw,
+            "raw_event": raw,
         }

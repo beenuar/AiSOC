@@ -1,6 +1,7 @@
 {
-  "count": 83,
+  "count": 84,
   "categories": {
+    "ai": 1,
     "cloud": 15,
     "edr": 10,
     "iam": 7,

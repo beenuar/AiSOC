@@ -130,7 +130,7 @@ class ZeekSuricataConnector(BaseConnector):
             "dst_ip": raw.get("dest_ip"),
             "event_type": "zeek_suricata.suricata.alert",
             "created_at": raw.get("timestamp"),
-            "raw": raw,
+            "raw_event": raw,
         }
 
     def _normalize_zeek(self, raw: dict[str, Any]) -> dict[str, Any]:
@@ -148,5 +148,5 @@ class ZeekSuricataConnector(BaseConnector):
             "dst_ip": raw.get("id.resp_h") or raw.get("dst"),
             "event_type": "zeek_suricata.zeek.notice",
             "created_at": raw.get("ts"),
-            "raw": raw,
+            "raw_event": raw,
         }

@@ -4,45 +4,64 @@
 > file in `validate-detections.yml`, so the numbers below can never quietly
 > diverge from what the engine actually runs. **Do not edit by hand.**
 
-A rule is **executable** when it fires in AiSOC today: not quarantined
-(`_quarantine/` or `enabled: false`) and its `detection` body is the native
-AiSOC condition DSL, a Sigma selection/condition, or a runtime-engine language.
-A rule is **non-executable** when quarantined or when its only body is an
-untranslated upstream language (SPL / YARA-L / CAR pseudocode) — present for
-provenance and coverage-mapping, not firing.
+A rule is **executable** when the detection engine actually loads it — when
+its id appears in `services/fusion/app/data/detection_ruleset.json`, the
+compiled ruleset `DetectionEngine` reads at startup.
+
+That is the only definition that means anything, because the YAML under
+`detections/` is a *generated projection* of the Python spec modules in
+`scripts/detection_specs*.py` — the engine never reads it. Editing a
+`condition:` block or flipping `enabled:` has no effect on what fires. The
+lever that reaches the engine is adding a spec and re-running
+`scripts/export_detection_ruleset.py`.
 
 ## Headline
 
 | metric | count |
 |--------|------:|
-| rules on disk (total) | 6983 |
-| **executable (fire today)** | **947** |
-| non-executable (provenance/coverage only) | 6036 |
+| rules on disk (total) | 6991 |
+| **executable (loaded by the engine)** | **833** |
+| non-executable (provenance/coverage only) | 6158 |
+| — of which: enabled, but no compiled spec | 122 |
+
+Those 122 rules are the ones an earlier version of this
+table counted as executable. They carry `enabled: true` and a body whose
+shape looks evaluable, and the engine has never seen them because no spec
+produced a `match_when` for them. They are genuine work items, listed by
+tier below, not a rounding error.
 
 ## By tier
 
-| tier | on disk | executable |
-|------|--------:|-----------:|
-| car (imported) | 99 | 0 |
-| chronicle (imported) | 877 | 0 |
-| community | 1 | 1 |
-| native | 869 | 869 |
-| sigma (imported) | 3132 | 77 |
-| splunk (imported) | 2005 | 0 |
+| tier | on disk | executable | enabled but not loaded |
+|------|--------:|-----------:|-----------------------:|
+| car (imported) | 99 | 0 | 0 |
+| chronicle (imported) | 877 | 0 | 0 |
+| community | 1 | 0 | 1 |
+| native | 877 | 833 | 44 |
+| sigma (imported) | 3132 | 0 | 77 |
+| splunk (imported) | 2005 | 0 | 0 |
 
 ## Why rules are non-executable
 
 | reason | count |
 |--------|------:|
-| `enabled: false` | 115 |
-| under `_quarantine/` (untranslated on import) | 5921 |
+| `enabled: false` | 99 |
+| enabled, but no compiled spec — the engine does not load it | 122 |
+| under `_quarantine/` (untranslated on import) | 5937 |
 
 ## How to read the README claim
 
-The imported corpus is large (6983 rules on disk) and valuable as a
+The imported corpus is large (6991 rules on disk) and valuable as a
 provenance-tracked ATT&CK-mapped library, but the number that matters
-operationally is **947 executable rules** — the ones the engine
-fires against live telemetry. The README and marketplace must cite the
-executable figure when describing detection *coverage*, and may cite the
+operationally is **833 executable rules** — the ones the engine
+loads and fires against live telemetry. The README and marketplace must cite
+the executable figure when describing detection *coverage*, and may cite the
 on-disk figure only when explicitly describing the imported *library*.
+
+Two things this table cannot tell you, stated so nobody infers them:
+
+1. A loaded rule still has to match on a field some connector emits. That
+   property is enforced separately by `scripts/check_detection_fields.py`.
+2. Executable is not the same as tuned. `false_positives:` is prose and is
+   not machine-checked; there is no per-rule false-positive-rate gate.
 

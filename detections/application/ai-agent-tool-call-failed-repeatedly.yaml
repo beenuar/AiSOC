@@ -1,0 +1,24 @@
+id: det-application-086
+name: AI Agent Tool Call Denied
+description: A tool call was refused. Low on its own, and deliberately so — the value is as a building
+  block once the windowed engine can express 'N denials in M minutes', which is the shape that distinguishes
+  a probing agent from a misconfigured one.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: application
+log_source:
+  product: ai_runtime
+  service: runtime
+detection:
+  condition: |
+    outcome == "denied"
+false_positives:
+- Agent retry logic against a transiently unavailable tool
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

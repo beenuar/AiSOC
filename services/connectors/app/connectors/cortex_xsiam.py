@@ -140,5 +140,5 @@ class CortexXSIAMConnector(BaseConnector):
             "description": raw.get("xdr_url"),
             "alert_id": str(raw.get("incident_id") or ""),
             "host": (raw.get("hosts") or [None])[0],
-            "raw": raw,
+            "raw_event": raw,
         }

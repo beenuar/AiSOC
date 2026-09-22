@@ -1,0 +1,25 @@
+id: det-application-079
+name: Prompt Injection Detected in AI Agent Context
+description: A guardrail flagged instruction-override content reaching an agent's context. Injection is
+  the delivery mechanism for every other agent abuse, so this is the earliest point at which the chain
+  is visible.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1059
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "prompt_injection"
+false_positives:
+- Security team testing the guardrail with a known payload
+- A document legitimately quoting injection text, e.g. an awareness training page
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

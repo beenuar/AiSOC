@@ -211,7 +211,7 @@ class LaceworkConnector(BaseConnector):
             "alert_id": raw.get("alertId") or raw.get("id"),
             "host": None,
             "stream": "alerts",
-            "raw": raw,
+            "raw_event": raw,
         }
 
     def _normalize_policy(self, raw: dict[str, Any]) -> dict[str, Any]:
@@ -239,5 +239,5 @@ class LaceworkConnector(BaseConnector):
             "policy_id": raw.get("policyId"),
             "resource_id": raw.get("resourceId"),
             "resource_type": raw.get("resourceType"),
-            "raw": raw,
+            "raw_event": raw,
         }

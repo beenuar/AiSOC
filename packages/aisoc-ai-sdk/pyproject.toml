@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisoc-ai-sdk"
+version = "0.1.0"
+description = "Emit AI runtime telemetry — agent tool calls, model invocations, guardrail findings — to AiSOC"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Beenu Arora", email = "beenu@cyble.com" },
+]
+keywords = ["aisoc", "soc", "security", "ai-security", "llm", "agents", "mcp", "ai-spm"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+requires-python = ">=3.11"
+# Deliberately zero dependencies. This runs inside somebody else's agent
+# process, so it must not drag a transport library into their resolution.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/beenuar/AiSOC"
+Source = "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-ai-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["aisoc_ai"]

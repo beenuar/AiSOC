@@ -1,0 +1,68 @@
+name: AI SDK
+
+# `packages/aisoc-ai-sdk` runs inside somebody else's agent process, which
+# makes two of its properties load-bearing enough to gate on every change:
+#
+#   1. Prompt and response content does not leave that process by default. A
+#      SOC needs to detect abuse of the AI without becoming the largest single
+#      collection of user and retrieval text in the organisation.
+#   2. Instrumentation never breaks the host application. A network failure, a
+#      bad token or an unreachable AiSOC degrades to a dropped span, never to
+#      an exception escaping into the caller's request path.
+#
+# Both are the kind of property that is easy to regress with a well-meant
+# change, and expensive to discover in production.
+
+on:
+  pull_request:
+    paths:
+      - "packages/aisoc-ai-sdk/**"
+      - ".github/workflows/ai-sdk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/aisoc-ai-sdk/**"
+      - ".github/workflows/ai-sdk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: AI SDK — redaction + fail-soft gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test deps
+        # The SDK itself has zero dependencies on purpose — it must not drag a
+        # transport library into a customer's dependency resolution — so only
+        # the test tooling is installed here.
+        run: pip install --quiet pytest "ruff>=0.4.4,<0.5"
+      - name: Verify the package declares no runtime dependencies
+        working-directory: packages/aisoc-ai-sdk
+        run: |
+          python - <<'PY'
+          import re, pathlib
+          text = pathlib.Path("pyproject.toml").read_text()
+          match = re.search(r"^dependencies = \[(.*?)\]", text, re.S | re.M)
+          assert match, "dependencies key missing from pyproject.toml"
+          body = match.group(1).strip()
+          assert not body, (
+              "aisoc-ai-sdk declares runtime dependencies: "
+              f"{body!r}. This package is imported into a customer's agent "
+              "process, so it must stay dependency-free."
+          )
+          print("no runtime dependencies")
+          PY
+      - name: Run the test suite
+        working-directory: packages/aisoc-ai-sdk
+        run: PYTHONPATH=. python -m pytest tests/ -v --tb=short
+      - name: Lint
+        working-directory: packages/aisoc-ai-sdk
+        run: |
+          ruff check aisoc_ai tests
+          ruff format --check aisoc_ai tests

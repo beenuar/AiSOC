@@ -1,0 +1,40 @@
+id: ai-gateway
+name: AI Gateway / MCP Runtime
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pulls request logs from an LLM gateway or MCP server (LiteLLM, Portkey,
+  Helicone, or an in-house proxy) so a SOC can see which agents call which
+  tools and models, on whose behalf. One connector covers every application
+  behind the gateway, which matters because the apps most in need of
+  visibility are the ones nobody will retrofit an SDK into. For applications
+  you do control, packages/aisoc-ai-sdk is the lower-friction push path.
+  Routine activity is archived to the event lake and hunted; a guardrail
+  violation becomes an alert.
+author: AiSOC Core Team
+tags: [ai, ai-spm, llm, agents, mcp, guardrails, runtime, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/ai_gateway.py
+license: MIT
+min_aisoc_version: "8.0.0"
+config_schema:
+  type: object
+  required: [base_url, api_key]
+  properties:
+    base_url:
+      type: string
+      description: "Gateway base URL including scheme (e.g. https://llm-gateway.internal)"
+    api_key:
+      type: string
+      description: "Gateway API key with read access to request logs"
+      secret: true
+    approved_models:
+      type: string
+      description: >
+        Comma-separated list of approved models. Any model outside the list
+        raises an unapproved_model finding. Leave blank to disable the check
+        rather than flag every model.
+    verify_tls:
+      type: boolean
+      default: true
+      description: "Disable only for an internal gateway using a private CA"

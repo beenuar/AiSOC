@@ -126,5 +126,5 @@ class TenableConnector(BaseConnector):
             "description": raw.get("plugin_family"),
             "alert_id": str(raw.get("plugin_id")) if raw.get("plugin_id") else None,
             "host": None,
-            "raw": raw,
+            "raw_event": raw,
         }

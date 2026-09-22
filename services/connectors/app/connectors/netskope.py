@@ -116,5 +116,5 @@ class NetskopeConnector(BaseConnector):
             "actor": raw.get("user"),
             "event_type": f"netskope.alert.{alert_type or 'event'}",
             "created_at": raw.get("timestamp"),
-            "raw": raw,
+            "raw_event": raw,
         }

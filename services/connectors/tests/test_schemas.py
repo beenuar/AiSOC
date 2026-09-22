@@ -12,7 +12,11 @@ import pytest
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
-ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr", "network"}
+# `ai` is the customer's own AI estate: agents, LLM gateways, MCP servers.
+# Deliberately its own category rather than folded into `saas`. A `saas`
+# connector pulls a vendor's audit log; these pull runtime activity from
+# software the customer operates, and the console groups by category.
+ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr", "network", "ai"}
 ALLOWED_FIELD_TYPES = {"string", "secret", "select", "textarea", "boolean", "number"}
 
 
