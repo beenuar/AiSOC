@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resolveTelemetry, buildPayload } from "./telemetry.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveTelemetry, buildPayload, sendTelemetry } from "./telemetry.js";
 import { triageBatch } from "./verdict/engine.js";
 import { loadDemoAlerts } from "./fixtures/index.js";
 
@@ -45,5 +45,22 @@ describe("buildPayload — aggregate only, no alert content", () => {
     expect(Object.keys(payload).sort()).toEqual(
       ["deterministic", "elapsedMs", "event", "needsReview", "source", "suppressed", "total", "truePositive", "version"].sort(),
     );
+  });
+});
+
+describe("sendTelemetry — no endpoint means no network call", () => {
+  // The default endpoint used to be a hosted collector that no longer
+  // resolves, so an opted-in payload was silently discarded while
+  // TELEMETRY.md said it was collected. There is now no default, and this
+  // pins that: enabling telemetry without naming a destination must make
+  // zero network calls rather than fire into a black hole.
+  it("does not call fetch when AISOC_TELEMETRY_ENDPOINT is unset", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    const result = triageBatch(loadDemoAlerts());
+    const sent = await sendTelemetry(buildPayload(result, "demo", "0.0.0-test"));
+
+    expect(sent).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

@@ -40,7 +40,14 @@
  *   3 = success but exceeded --budget-ms (acceptance regression)
  */
 import { execSync, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { join } from "node:path";
 import { platform } from "node:os";
@@ -943,6 +950,21 @@ function printPhaseTable(report: RunReport): void {
 }
 
 function emitReport(flags: Flags, report: RunReport): void {
+  // Always leave a local record of the last run, even without --results-file.
+  //
+  // "The demo didn't work" is the single most common report and the hardest to
+  // act on, because by the time someone opens an issue the stack is gone. This
+  // costs nothing, never leaves the machine, and `pnpm aisoc:doctor --bundle`
+  // picks it up so a bug report carries the phase timings that show where the
+  // boot actually stalled.
+  try {
+    const dir = join(ROOT, ".aisoc");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "last-demo-run.json"), JSON.stringify(report, null, 2) + "\n");
+  } catch {
+    // A missing run record must never be the reason a demo "fails".
+  }
+
   if (!flags.resultsFile) return;
   try {
     writeFileSync(flags.resultsFile, JSON.stringify(report, null, 2) + "\n");
@@ -955,8 +977,6 @@ function emitReport(flags: Flags, report: RunReport): void {
 }
 
 // ---------- Phase 2 quick-win: visual asset capture ----------
-
-import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 
 const WEB_DIR = join(ROOT, "apps", "web");
 const DEMO_PUBLIC_DIR = join(WEB_DIR, "public", "demo");

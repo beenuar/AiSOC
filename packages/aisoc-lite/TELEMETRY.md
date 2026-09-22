@@ -48,7 +48,19 @@ The payload builder is unit-tested (`src/telemetry.test.ts`) to assert that no a
 
 ## Where it goes
 
-If enabled, the payload is POSTed to `https://telemetry.tryaisoc.com/v1/cli` (override with `AISOC_TELEMETRY_ENDPOINT`). The request has a 2-second timeout and can never fail or slow down the CLI — errors are silently ignored.
+**Nowhere, unless you point it somewhere.** There is no default endpoint and
+the project operates no collector. Enabling telemetry without setting
+`AISOC_TELEMETRY_ENDPOINT` performs no network call at all.
+
+If you do set an endpoint — for your own collector, in your own infrastructure
+— the payload above is POSTed to it with a 2-second timeout. The request can
+never fail or slow down the CLI; errors are silently ignored.
+
+> This used to default to a hosted collector that no longer resolves, which
+> meant an opted-in payload was discarded while this page claimed it was
+> collected. Quietly dropping data someone consented to send is a worse trust
+> failure than not collecting it, so sending now requires an explicit
+> destination.
 
 ## Why we ask at all
 
