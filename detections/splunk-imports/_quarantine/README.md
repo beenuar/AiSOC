@@ -1,6 +1,6 @@
 # Splunk-imports — quarantined rules
 
-This directory holds **1,989 raw Splunk Enterprise Security rules** imported from public detection content. They ship **disabled** (`enabled: false`) and the AiSOC engine intentionally skips them at runtime — see [`detections/README.md`](../../README.md#tier-3-quarantined) for the tier definition.
+This directory holds **2,005 raw Splunk Enterprise Security rules** imported from public detection content. They ship **disabled** (`enabled: false`) and the AiSOC engine intentionally skips them at runtime — see [`detections/README.md`](../../README.md#tier-3-quarantined) for the tier definition.
 
 **Why they're in the repo at all.** Detection content is the most valuable artefact a SOC owns, so we'd rather check the upstream lineage in (with attribution and `quarantine_reason`) than silently drop it. Translating these rules into native AiSOC detections is a long-running community workstream tracked through this index.
 
@@ -10,11 +10,11 @@ This directory holds **1,989 raw Splunk Enterprise Security rules** imported fro
 
 | Category | Quarantined rules | Production | Experimental | Translation tracking issue |
 | --- | ---: | ---: | ---: | --- |
-| `endpoint` | 1,374 | 1,346 | 28 | **TBD** — umbrella issue not yet filed |
+| `endpoint` | 1,390 | 1,359 | 31 | **TBD** — umbrella issue not yet filed |
 | `cloud` | 318 | 285 | 33 | **TBD** — umbrella issue not yet filed |
 | `application` | 198 | 164 | 34 | **TBD** — umbrella issue not yet filed |
 | `network` | 99 | 77 | 22 | **TBD** — umbrella issue not yet filed |
-| **Total** | **1,989** | **1,872** | **117** |  |
+| **Total** | **2,005** | **1,885** | **120** |  |
 
 Categories come from the `tags.categories` field on each rule. `production` vs `experimental` reflects the upstream `notes.splunk_status` carried over from Splunk ES.
 
@@ -22,7 +22,9 @@ Categories come from the `tags.categories` field on each rule. `production` vs `
 
 1. **Pick a rule** from one of the per-category sections below. Lower-severity, single-technique rules are the gentlest place to start.
 2. **Read the existing YAML** in this directory. The Splunk SPL is captured under `detection.splunk_spl`; the metadata (MITRE, severity, category, references) is already populated.
-3. **Re-author the detection** under the right native bucket (`detections/<category>/`) using the AiSOC schema documented in [`apps/docs/docs/detections/`](../../../apps/docs/docs/detections/). Map the SPL search to the AiSOC OCSF stream — usually a `logsource` + `detection.condition` block. Carry the original `provenance.upstream_path` over so attribution is preserved.
+3. **Re-author the detection as a Python spec**, not as YAML. This step used to say to write a `detection.condition` block under `detections/<category>/`, which does not work: everything under `detections/` is a *generated projection* of the spec modules and the engine never reads it. A rule authored that way passes CI, is counted by the truth table, and is never loaded — 44 rules in the native tier are in exactly that state. Add an `S(...)` entry to the matching `scripts/detection_specs_part3_<category>.py` with a flat `match_when`, then run `python3 scripts/generate_detections.py` followed by `python3 scripts/export_detection_ruleset.py`. Carry the original `provenance.upstream_path` over so attribution is preserved.
+   - **Check every field name against the emitting connector's `normalize()` output.** `scripts/check_detection_fields.py` gates computed fields — counters, window sizes, allowlist booleans — which cannot fire at all, because nothing in the pipeline computes them. They need a windowed-engine rule or a fusion-time enrichment instead.
+   - **SPL with `| stats` or `| tstats` is not translatable to `match_when`.** Aggregation over a window belongs in `services/fusion/app/services/windowed_detection.py`, which today has three hardcoded rules and no loader. Skip those until it has one.
 4. **Add fixtures** under `detections/fixtures/positive/<rule-id>.json` and `detections/fixtures/negative/<rule-id>.json`. [`scripts/validate_detections.py --strict-fixtures`](../../../scripts/validate_detections.py) will refuse to merge a rule that ships without both.
 5. **Delete the quarantined file** as part of the same PR — the rule now lives in the native tier and the quarantine entry is no longer the source of truth.
 6. **Re-run** `python3 scripts/build_quarantine_index.py` to regenerate this index, then commit the README delta with your translation. CI verifies the index is in sync (`--check` mode).
@@ -40,14 +42,14 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 
 ## Inventory by category
 
-### `endpoint` (1,374 rules)
+### `endpoint` (1,390 rules)
 
 **Translation tracking issue:** **TBD** — umbrella issue not yet filed
 
 **Top MITRE techniques represented:**
 
 - [`T1562`](https://attack.mitre.org/techniques/T1562/) — 114 rules
-- [`T1059`](https://attack.mitre.org/techniques/T1059/) — 103 rules
+- [`T1059`](https://attack.mitre.org/techniques/T1059/) — 105 rules
 - [`T1218`](https://attack.mitre.org/techniques/T1218/) — 88 rules
 - [`T1112`](https://attack.mitre.org/techniques/T1112/) — 78 rules
 - [`T1548`](https://attack.mitre.org/techniques/T1548/) — 63 rules
@@ -56,9 +58,9 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 - [`T1087`](https://attack.mitre.org/techniques/T1087/) — 38 rules
 - [`T1003`](https://attack.mitre.org/techniques/T1003/) — 34 rules
 - [`T1055`](https://attack.mitre.org/techniques/T1055/) — 34 rules
-- _… and 117 more techniques._
+- _… and 118 more techniques._
 
-<details><summary>Full rule list (1,374 rules)</summary>
+<details><summary>Full rule list (1,390 rules)</summary>
 
 | Rule | File | Splunk status | Severity | MITRE |
 | --- | --- | --- | --- | --- |
@@ -151,6 +153,7 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 | Detect AzureHound File Modifications | [`detect-azurehound-file-modifications.yaml`](./detect-azurehound-file-modifications.yaml) | `production` | `medium` | `T1069`, `T1087`, `T1482` |
 | Detect Baron Samedit CVE-2021-3156 | [`detect-baron-samedit-cve-2021-3156.yaml`](./detect-baron-samedit-cve-2021-3156.yaml) | `experimental` | `medium` | `T1068` |
 | Detect Baron Samedit CVE-2021-3156 Segfault | [`detect-baron-samedit-cve-2021-3156-segfault.yaml`](./detect-baron-samedit-cve-2021-3156-segfault.yaml) | `experimental` | `medium` | `T1068` |
+| Detect Baron Samedit CVE-2021-3156 via OSQuery | [`detect-baron-samedit-cve-2021-3156-via-osquery.yaml`](./detect-baron-samedit-cve-2021-3156-via-osquery.yaml) | `experimental` | `medium` | `T1068` |
 | Detect Certify Command Line Arguments | [`detect-certify-command-line-arguments.yaml`](./detect-certify-command-line-arguments.yaml) | `production` | `medium` | `T1649`, `T1105` |
 | Detect Certify With PowerShell Script Block Logging | [`detect-certify-with-powershell-script-block-logging.yaml`](./detect-certify-with-powershell-script-block-logging.yaml) | `production` | `medium` | `T1059`, `T1649` |
 | Detect Certipy File Modifications | [`detect-certipy-file-modifications.yaml`](./detect-certipy-file-modifications.yaml) | `production` | `medium` | `T1649`, `T1560` |
@@ -380,6 +383,7 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 | Linux Auditd Kernel Module Enumeration | [`linux-auditd-kernel-module-enumeration.yaml`](./linux-auditd-kernel-module-enumeration.yaml) | `production` | `medium` | `T1082`, `T1014` |
 | Linux Auditd Kernel Module Using Rmmod Utility | [`linux-auditd-kernel-module-using-rmmod-utility.yaml`](./linux-auditd-kernel-module-using-rmmod-utility.yaml) | `production` | `medium` | `T1547` |
 | Linux Auditd Nopasswd Entry In Sudoers File | [`linux-auditd-nopasswd-entry-in-sudoers-file.yaml`](./linux-auditd-nopasswd-entry-in-sudoers-file.yaml) | `production` | `medium` | `T1548` |
+| Linux Auditd Osquery Service Stop | [`linux-auditd-osquery-service-stop.yaml`](./linux-auditd-osquery-service-stop.yaml) | `production` | `medium` | `T1489` |
 | Linux Auditd Possible Access Or Modification Of Sshd Config File | [`linux-auditd-possible-access-or-modification-of-sshd-config-file.yaml`](./linux-auditd-possible-access-or-modification-of-sshd-config-file.yaml) | `production` | `medium` | `T1098` |
 | Linux Auditd Possible Access To Credential Files | [`linux-auditd-possible-access-to-credential-files.yaml`](./linux-auditd-possible-access-to-credential-files.yaml) | `production` | `medium` | `T1003` |
 | Linux Auditd Possible Access To Sudoers File | [`linux-auditd-possible-access-to-sudoers-file.yaml`](./linux-auditd-possible-access-to-sudoers-file.yaml) | `production` | `medium` | `T1548` |
@@ -501,7 +505,19 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 | Logon Script Event Trigger Execution | [`logon-script-event-trigger-execution.yaml`](./logon-script-event-trigger-execution.yaml) | `production` | `medium` | `T1037` |
 | LOLBAS With Network Traffic | [`lolbas-with-network-traffic.yaml`](./lolbas-with-network-traffic.yaml) | `production` | `medium` | `T1105`, `T1567`, `T1218` |
 | MacOS - Re-opened Applications | [`macos-re-opened-applications.yaml`](./macos-re-opened-applications.yaml) | `experimental` | `medium` | _n/a_ |
+| MacOS Account Created | [`macos-account-created.yaml`](./macos-account-created.yaml) | `production` | `medium` | `T1136` |
+| MacOS AMOS Stealer - Virtual Machine Check Activity | [`macos-amos-stealer-virtual-machine-check-activity.yaml`](./macos-amos-stealer-virtual-machine-check-activity.yaml) | `production` | `medium` | `T1059` |
+| MacOS Data Chunking | [`macos-data-chunking.yaml`](./macos-data-chunking.yaml) | `production` | `medium` | `T1030` |
+| MacOS Gatekeeper Bypass | [`macos-gatekeeper-bypass.yaml`](./macos-gatekeeper-bypass.yaml) | `production` | `medium` | `T1553` |
+| MacOS Hidden Files and Directories | [`macos-hidden-files-and-directories.yaml`](./macos-hidden-files-and-directories.yaml) | `production` | `medium` | `T1564` |
+| MacOS Kextload Usage | [`macos-kextload-usage.yaml`](./macos-kextload-usage.yaml) | `production` | `medium` | `T1543` |
+| MacOS Keychains Dumped | [`macos-keychains-dumped.yaml`](./macos-keychains-dumped.yaml) | `production` | `medium` | `T1555` |
 | MacOS List Firewall Rules | [`macos-list-firewall-rules.yaml`](./macos-list-firewall-rules.yaml) | `production` | `medium` | `T1016` |
+| MacOS Log Removal | [`macos-log-removal.yaml`](./macos-log-removal.yaml) | `production` | `medium` | `T1070` |
+| MacOS LoginHook Persistence | [`macos-loginhook-persistence.yaml`](./macos-loginhook-persistence.yaml) | `production` | `medium` | `T1037` |
+| MacOS LOLbin | [`macos-lolbin.yaml`](./macos-lolbin.yaml) | `production` | `medium` | `T1059` |
+| MacOS Network Share Discovery | [`macos-network-share-discovery.yaml`](./macos-network-share-discovery.yaml) | `production` | `medium` | `T1135` |
+| MacOS plutil | [`macos-plutil.yaml`](./macos-plutil.yaml) | `production` | `medium` | `T1647` |
 | Mailsniper Invoke functions | [`mailsniper-invoke-functions.yaml`](./mailsniper-invoke-functions.yaml) | `production` | `medium` | `T1114` |
 | Malicious InProcServer32 Modification | [`malicious-inprocserver32-modification.yaml`](./malicious-inprocserver32-modification.yaml) | `production` | `medium` | `T1218`, `T1112` |
 | Malicious Powershell Executed As A Service | [`malicious-powershell-executed-as-a-service.yaml`](./malicious-powershell-executed-as-a-service.yaml) | `production` | `medium` | `T1569` |
@@ -586,6 +602,7 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 | Process Execution via WMI | [`process-execution-via-wmi.yaml`](./process-execution-via-wmi.yaml) | `production` | `medium` | `T1047` |
 | Process Kill Base On File Path | [`process-kill-base-on-file-path.yaml`](./process-kill-base-on-file-path.yaml) | `production` | `medium` | `T1562` |
 | Process Writing DynamicWrapperX | [`process-writing-dynamicwrapperx.yaml`](./process-writing-dynamicwrapperx.yaml) | `production` | `medium` | `T1059`, `T1559` |
+| Processes Tapping Keyboard Events | [`processes-tapping-keyboard-events.yaml`](./processes-tapping-keyboard-events.yaml) | `experimental` | `medium` | _n/a_ |
 | Randomly Generated Scheduled Task Name | [`randomly-generated-scheduled-task-name.yaml`](./randomly-generated-scheduled-task-name.yaml) | `experimental` | `medium` | `T1053` |
 | Randomly Generated Windows Service Name | [`randomly-generated-windows-service-name.yaml`](./randomly-generated-windows-service-name.yaml) | `experimental` | `medium` | `T1543` |
 | Ransomware Notes bulk creation | [`ransomware-notes-bulk-creation.yaml`](./ransomware-notes-bulk-creation.yaml) | `production` | `medium` | `T1486` |
@@ -688,6 +705,7 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 | Suspicious mshta child process | [`suspicious-mshta-child-process.yaml`](./suspicious-mshta-child-process.yaml) | `production` | `medium` | `T1218` |
 | Suspicious mshta spawn | [`suspicious-mshta-spawn.yaml`](./suspicious-mshta-spawn.yaml) | `production` | `medium` | `T1218` |
 | Suspicious PlistBuddy Usage | [`suspicious-plistbuddy-usage.yaml`](./suspicious-plistbuddy-usage.yaml) | `experimental` | `medium` | `T1543` |
+| Suspicious PlistBuddy Usage via OSquery | [`suspicious-plistbuddy-usage-via-osquery.yaml`](./suspicious-plistbuddy-usage-via-osquery.yaml) | `experimental` | `medium` | `T1543` |
 | Suspicious Process Executed From Container File | [`suspicious-process-executed-from-container-file.yaml`](./suspicious-process-executed-from-container-file.yaml) | `production` | `medium` | `T1204`, `T1036` |
 | Suspicious Reg exe Process | [`suspicious-reg-exe-process.yaml`](./suspicious-reg-exe-process.yaml) | `production` | `medium` | `T1112` |
 | Suspicious Regsvr32 Register Suspicious Path | [`suspicious-regsvr32-register-suspicious-path.yaml`](./suspicious-regsvr32-register-suspicious-path.yaml) | `production` | `medium` | `T1218` |
@@ -2131,4 +2149,4 @@ Two soft conventions sit on top of the gate (not machine-enforced today, but exp
 
 ---
 
-_Generated by `scripts/build_quarantine_index.py`. Source: 1,989 YAML rules in this directory._
+_Generated by `scripts/build_quarantine_index.py`. Source: 2,005 YAML rules in this directory._
