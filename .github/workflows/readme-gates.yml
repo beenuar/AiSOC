@@ -36,6 +36,11 @@ on:
       - 'scripts/readme_gates.py'
       - '.github/workflows/readme-gates.yml'
   workflow_dispatch:
+  # The published-onramp job below checks the public registries, so it has to
+  # run on a clock as well as on diff — a package can break (or be yanked)
+  # without anyone touching this repo.
+  schedule:
+    - cron: '0 6 * * *'
 
 permissions:
   contents: read
@@ -104,3 +109,77 @@ jobs:
           python3 -m pip install pytest
           cd packages/aisoc-sandbox
           PYTHONPATH=src python3 -m pytest tests/ -q
+
+  # The `static` gate above proves the README does not *reference* a package
+  # that fails to resolve. It cannot prove the advertised command actually
+  # works, and the `sandbox-offline` gate installs from source rather than
+  # from PyPI. Between them, `npx aisoc triage --demo` could sit on the front
+  # page indefinitely while no such package existed — which is exactly what
+  # happened.
+  #
+  # This job closes that by running the on-ramps a visitor would run, against
+  # the public registries, on a clean machine. It is self-arming: while a
+  # package is unpublished it warns and passes, and the moment it exists the
+  # command becomes a hard requirement.
+  published-onramp:
+    name: Published on-ramp · registry install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Deliberately no checkout: a visitor running the README's hero command
+      # does not have the repo, and neither should this job.
+      - name: npx aisoc triage --demo
+        run: |
+          set -uo pipefail
+          if ! npm view aisoc version >/dev/null 2>&1; then
+            echo "::warning title=on-ramp::'aisoc' is not on npm yet, so the README hero command cannot be verified. This gate arms itself on first publish."
+            exit 0
+          fi
+          echo "npm has aisoc@$(npm view aisoc version) — the hero command must work."
+          out=$(npx --yes aisoc@latest triage --demo --no-telemetry 2>&1) || {
+            echo "$out"
+            echo "::error title=on-ramp::'npx aisoc triage --demo' is published but failed. The README's hero command is broken for every visitor."
+            exit 1
+          }
+          echo "$out"
+          echo "$out" | grep -qi 'triaged' || {
+            echo "::error title=on-ramp::'npx aisoc triage --demo' ran but printed no triage summary."
+            exit 1
+          }
+
+      - name: pip install aisoc-sandbox && aisoc-sandbox demo
+        run: |
+          set -uo pipefail
+          if ! python3 -m pip download aisoc-sandbox --no-deps --dest "$RUNNER_TEMP/probe" >/dev/null 2>&1; then
+            echo "::warning title=on-ramp::'aisoc-sandbox' is not on PyPI yet, so the documented pip path cannot be verified. This gate arms itself on first publish."
+            exit 0
+          fi
+          echo "PyPI has aisoc-sandbox — the documented pip path must work."
+          python3 -m pip install --quiet aisoc-sandbox || {
+            echo "::error title=on-ramp::'pip install aisoc-sandbox' is published but failed to install."
+            exit 1
+          }
+          out=$(aisoc-sandbox demo --json 2>&1) || {
+            echo "$out"
+            echo "::error title=on-ramp::'aisoc-sandbox demo' is published but failed to run."
+            exit 1
+          }
+          python3 -c "
+          import json, sys
+          steps = json.loads(sys.argv[1])['ledger']
+          assert len(steps) == 4, f'expected 4 ledger steps, got {len(steps)}'
+          print(f'  {len(steps)} steps · final-agent={steps[-1][\"agent\"]}')
+          " "$out"

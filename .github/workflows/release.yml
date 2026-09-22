@@ -223,3 +223,149 @@ jobs:
             --type cyclonedx \
             --predicate /tmp/sbom.cdx.json \
             "${{ matrix.image }}@${DIGEST}"
+
+  # ── Publish the npm packages ───────────────────────────────────────────────
+  #
+  # Every package is built and packed on every release, whether or not the
+  # upload is enabled, so this job fails the moment a package stops being
+  # publishable — a broken `npx aisoc` must never reach the README again.
+  #
+  # Only the final upload is gated on `NPM_TOKEN`, so the release does not go
+  # red before the registry credential exists. One-time setup (including the
+  # move to token-free trusted publishing after the first release) is in
+  # docs/operations/publishing.md.
+  #
+  # `pnpm pack` rather than `npm pack`: it rewrites `workspace:*` dependency
+  # specifiers to real versions, which npm would otherwise reject. The tarball
+  # is then handed to `npm publish`, which is what supports `--provenance`.
+  npm-publish:
+    name: npm — publish ${{ matrix.pkg }}
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+      id-token: write # npm provenance attestation
+    # Job-level so the step-level `if` guards below can read it. A step cannot
+    # see its own `env` block from its `if` expression.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: aisoc
+            dir: packages/aisoc-lite
+          - pkg: '@aisoc/mcp'
+            dir: services/mcp
+          - pkg: '@aisoc/sdk'
+            dir: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build ${{ matrix.pkg }}
+        run: pnpm --filter ${{ matrix.pkg }} build
+
+      - name: Pack tarball
+        id: pack
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          TARBALL=$(ls -t "$RUNNER_TEMP"/*.tgz | head -1)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+          tar -tzf "$TARBALL" | head -20
+
+      # Republishing an unchanged version is a hard error on npm, and package
+      # versions move independently of the monorepo tag, so most releases will
+      # legitimately have nothing to push for some packages.
+      - name: Is this version already on npm?
+        id: exists
+        run: |
+          set -euo pipefail
+          if npm view "${{ matrix.pkg }}@${{ steps.pack.outputs.version }}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.exists.outputs.already == 'false' && env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --access public --provenance
+
+      - name: Explain a skipped publish
+        if: steps.exists.outputs.already == 'true' || env.NPM_TOKEN == ''
+        run: |
+          if [ "${{ steps.exists.outputs.already }}" = "true" ]; then
+            echo "::notice title=npm::${{ matrix.pkg }}@${{ steps.pack.outputs.version }} is already published — nothing to do."
+          else
+            echo "::warning title=npm::NPM_TOKEN is not configured, so ${{ matrix.pkg }} was built and packed but not uploaded. See docs/operations/publishing.md."
+          fi
+
+  # ── Publish the PyPI packages ──────────────────────────────────────────────
+  #
+  # Uses PyPI Trusted Publishing (OIDC), so there is no API token to store or
+  # rotate. PyPI supports "pending" publishers, which means the trust
+  # relationship can be registered before the project exists — that is how the
+  # first upload of each of these works. Setup: docs/operations/publishing.md.
+  pypi-publish:
+    name: PyPI — publish ${{ matrix.pkg }}
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: aisoc-sandbox
+            dir: packages/aisoc-sandbox
+          - pkg: aisoc-cli
+            dir: packages/aisoc-cli
+          - pkg: aisoc-sdk
+            dir: packages/sdk-py
+          - pkg: aisoc-plugin-sdk
+            dir: packages/plugin-sdk-py
+          - pkg: aisoc-detections
+            dir: packages/aisoc-detections
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Build sdist + wheel
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+          ls -la dist/
+
+      # `skip-existing` because package versions move independently of the
+      # monorepo tag, so a release often has nothing new for a given package.
+      - name: Publish to PyPI
+        if: vars.AISOC_PYPI_TRUSTED_PUBLISHING == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: ${{ matrix.dir }}/dist
+          skip-existing: true
+
+      - name: Explain a skipped publish
+        if: vars.AISOC_PYPI_TRUSTED_PUBLISHING != 'true'
+        run: |
+          echo "::warning title=PyPI::Trusted publishing is not enabled, so ${{ matrix.pkg }} was built and validated but not uploaded. Set the AISOC_PYPI_TRUSTED_PUBLISHING repository variable to 'true' once the pending publishers exist — see docs/operations/publishing.md."
