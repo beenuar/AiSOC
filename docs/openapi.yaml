@@ -21599,6 +21599,19 @@ components:
           - type: string
           - type: 'null'
           title: Execution Error
+        executed_against:
+          anyOf:
+          - type: string
+            enum:
+            - elasticsearch
+            - lake
+          - type: 'null'
+          title: Executed Against
+        unsupported_filters:
+          items:
+            type: string
+          type: array
+          title: Unsupported Filters
       type: object
       required:
       - request_id
@@ -24113,6 +24126,24 @@ components:
         last_run_at:
           type: string
           title: Last Run At
+        executed:
+          type: boolean
+          title: Executed
+          default: false
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/SavedHuntRunResult'
+          - type: 'null'
+        execution_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Execution Error
+        unsupported_filters:
+          items:
+            type: string
+          type: array
+          title: Unsupported Filters
       type: object
       required:
       - id
@@ -24124,15 +24155,22 @@ components:
       description: 'Synchronous run result returned by ``POST /saved-hunts/{id}/run``.
 
 
-        The endpoint *does not* execute the underlying ES|QL — that path is the
+        This endpoint used to re-translate the question, stamp ``last_run_at`` and
 
-        job of :mod:`app.api.v1.endpoints.nl_query` (``/nl-query/execute``) and
+        return — executing nothing. The UI then displayed "last run just now" for
 
-        requires a configured Elasticsearch URL. The ``/run`` endpoint here only
+        a hunt that had queried no data at all, which is indistinguishable from a
 
-        re-translates and stamps ``last_run_at`` so the UI can show "last run
+        hunt that ran and found nothing.
 
-        just now" and so the scheduler treats a manual run as resetting cadence.'
+
+        It now runs the compiled query against AiSOC''s own event lake, which is
+
+        where every connector''s events are archived. ``executed`` says plainly
+
+        whether rows were fetched, so a lake that is unreachable or unconfigured
+
+        reports that instead of looking like a clean run with zero hits.'
     RunSummary:
       properties:
         id:
@@ -24720,6 +24758,31 @@ components:
       - updated_at
       title: SavedHuntModel
       description: Wire format for a saved hunt row.
+    SavedHuntRunResult:
+      properties:
+        columns:
+          items:
+            type: string
+          type: array
+          title: Columns
+        rows:
+          items:
+            items: {}
+            type: array
+          type: array
+          title: Rows
+        total_rows:
+          type: integer
+          title: Total Rows
+          default: 0
+        took_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Took Ms
+      type: object
+      title: SavedHuntRunResult
+      description: Rows the hunt actually returned.
     SavedViewModel:
       properties:
         id:

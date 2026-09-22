@@ -227,6 +227,7 @@ async def execute_lake_query(
     *,
     timeout_seconds: float | None = None,
     extra_settings: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
 ) -> LakeQueryResult:
     """Run a rewritten lake SQL statement and return columns + rows.
 
@@ -261,6 +262,13 @@ async def execute_lake_query(
         :data:`DEFAULT_QUERY_SETTINGS`. Used by the lake endpoints to
         layer in per-tenant overrides (e.g. tighter row caps for
         unprivileged roles).
+    params:
+        Values for ``%(name)s`` placeholders, bound by the driver. Callers
+        that build SQL from untrusted input — an analyst's hunt question, for
+        instance — bind their values here so no user text is ever
+        concatenated into the statement. This includes the tenant predicate:
+        binding it as a parameter is stronger than injecting a literal and
+        hoping the rewrite survived.
 
     Returns
     -------
@@ -301,6 +309,7 @@ async def execute_lake_query(
         # which we need so the API can echo a stable column ordering.
         return client.execute(
             sql,
+            params or {},
             with_column_types=True,
             settings=merged_settings,
         )
