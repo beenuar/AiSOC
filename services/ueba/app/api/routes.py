@@ -38,9 +38,35 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 # ---------------------------------------------------------------------------
 
 
+#: Entity kinds UEBA will baseline.
+#:
+#: `service_account` and `ai_agent` are non-human principals, and they are the
+#: ones most in need of behavioural baselining rather than least. A human's
+#: activity is bounded by working hours and attention; a service account or an
+#: agent runs continuously with standing credentials, which is exactly the
+#: profile an attacker wants and exactly what nobody watches.
+#:
+#: Only this HTTP route constrained the value. The schema column is a plain
+#: `String(32)` with no CHECK constraint, the Welford statistics never inspect
+#: the type (it is an opaque partition key), and the Kafka path already
+#: accepted any string — so the constraint was inconsistent as well as
+#: unhelpfully narrow.
+#:
+#: The degenerate-variance handling added in v8.0 is what makes this safe.
+#: `compute_z_score` returns None rather than 0.0 when a feature has no
+#: variance, and its own docstring names the reason: "service accounts, batch
+#: jobs and automation users converge on a constant stream, so their standard
+#: deviation collapses to zero and every subsequent value, however extreme,
+#: sits zero deviations from the mean." Without that fix, admitting these
+#: entity types would have produced baselines that read every non-human
+#: principal as permanently normal.
+ENTITY_TYPES = ("user", "device", "ip", "service_account", "ai_agent", "mcp_server")
+_ENTITY_TYPE_PATTERN = "^(" + "|".join(ENTITY_TYPES) + ")$"
+
+
 class ScoreEventRequest(BaseModel):
     tenant_id: uuid.UUID
-    entity_type: str = Field(..., pattern="^(user|device|ip)$")
+    entity_type: str = Field(..., pattern=_ENTITY_TYPE_PATTERN)
     entity_id: str
     event_type: str
     features: dict[str, float]

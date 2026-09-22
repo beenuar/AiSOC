@@ -28,7 +28,12 @@ class EntityBaseline(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)  # user | device | ip
+    # See app.api.routes.ENTITY_TYPES. Non-human principals (service
+    # accounts, AI agents, MCP servers) are included deliberately: they run
+    # continuously with standing credentials, which is the profile most in
+    # need of baselining and the one nobody watches. No CHECK constraint, so
+    # a new kind needs no migration.
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(256), nullable=False)
 
     # Feature statistics (JSON: {"feature": {"mean": X, "std": Y, "count": N}})
