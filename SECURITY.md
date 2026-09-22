@@ -27,7 +27,9 @@ Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/
 - Affected version, commit SHA, or container digest
 - Your name / handle if you'd like to be credited
 
-If GitHub's reporting flow is not workable for your situation, you can instead reach the maintainers through the [SECURITY contact in the repository profile](https://github.com/beenuar/AiSOC). Please request our PGP key in your first message and we'll respond out-of-band before you send sensitive details (payloads, tokens, customer data).
+If GitHub's reporting flow is not workable for your situation, open a public issue that says **only** that you have a security finding and how to reach you — no details, no payloads, no affected versions. A maintainer will reply with a private channel, and we will respond out-of-band before you send anything sensitive. Request our PGP key in that first exchange if you want one.
+
+That fallback is deliberately mundane rather than an address, because the previous wording sent researchers to a "SECURITY contact in the repository profile" that did not exist. Combined with private vulnerability reporting being switched off — so the primary path returned HTTP 403 — a researcher holding a Critical finding had no working route at all, which is how [#637](https://github.com/beenuar/AiSOC/issues/637) came to be filed. Private vulnerability reporting is now enabled, and this fallback names a step that cannot silently stop working.
 
 ## What to expect
 
