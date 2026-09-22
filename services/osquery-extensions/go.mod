@@ -6,7 +6,7 @@ require github.com/osquery/osquery-go v0.0.0-20260508130258-3e773449a5d4
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/apache/thrift v0.23.0 // indirect
+	github.com/apache/thrift v0.24.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
