@@ -452,8 +452,71 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+#: Slug → rule id, so a rule's id never depends on where it sits in the spec
+#: list. Ids were positional (``det-{category}-{index}``), which meant
+#: inserting a rule anywhere but the end silently renumbered every rule after
+#: it — re-running the generator on a clean checkout reassigned ids and
+#: tripped the marketplace gate, and the workaround was "append, never
+#: insert", which is a rule nobody remembers.
+#:
+#: The lock is append-only in effect: an existing slug keeps its id forever,
+#: a new slug takes the next free number in its category. Deleting a rule
+#: leaves its id burned rather than recycling it onto something else, because
+#: a recycled id makes a historical alert reference the wrong rule.
+ID_LOCK = DETECTIONS_DIR / "rule-ids.lock.json"
+
+
+def load_id_lock() -> dict[str, str]:
+    if not ID_LOCK.exists():
+        return {}
+    try:
+        return dict(json.loads(ID_LOCK.read_text(encoding="utf-8")))
+    except Exception:  # noqa: BLE001 - a corrupt lock must not silently renumber
+        raise SystemExit(
+            f"{ID_LOCK} is unreadable. Fix or delete it deliberately — "
+            f"regenerating without it reassigns every rule id."
+        ) from None
+
+
+def assign_ids(categories: dict) -> tuple[dict[str, str], list[str]]:
+    """Resolve a stable id for every spec. Returns (lock, newly assigned).
+
+    Reads the lock, keeps every id it already holds, and allocates the next
+    free number per category for anything new.
+    """
+    lock = load_id_lock()
+    newly: list[str] = []
+
+    for category, specs in sorted(categories.items()):
+        used = {
+            int(rid.rsplit("-", 1)[1])
+            for key, rid in lock.items()
+            if key.startswith(f"{category}/") and rid.rsplit("-", 1)[-1].isdigit()
+        }
+        next_free = max(used) + 1 if used else 1
+
+        for spec in specs:
+            key = f"{category}/{spec['slug']}"
+            if key in lock:
+                continue
+            while next_free in used:
+                next_free += 1
+            lock[key] = f"det-{category}-{next_free:03d}"
+            used.add(next_free)
+            newly.append(key)
+
+    return lock, newly
+
+
 def write_pack(*, dry_run: bool = False) -> dict[str, int]:
     """Generate the full pack to disk. Returns counts per category."""
+    id_lock, newly_assigned = assign_ids(CATEGORIES)
+    if newly_assigned and not dry_run:
+        ID_LOCK.write_text(
+            json.dumps(id_lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(f"  assigned {len(newly_assigned)} new rule id(s)")
+
     counts: dict[str, int] = {}
     for category, specs in sorted(CATEGORIES.items()):
         cat_dir = DETECTIONS_DIR / category
@@ -464,9 +527,10 @@ def write_pack(*, dry_run: bool = False) -> dict[str, int]:
             _ensure_dir(pos_dir)
             _ensure_dir(neg_dir)
 
-        for idx, spec in enumerate(specs, start=1):
+        for spec in specs:
             slug = spec["slug"]
-            rule_id = f"det-{category}-{idx:03d}"
+            # Looked up, not computed from position. See ID_LOCK.
+            rule_id = id_lock[f"{category}/{slug}"]
 
             yaml_text = render_rule_yaml(
                 rule_id=rule_id, category=category, spec=spec
