@@ -42,6 +42,7 @@ import {
   formatErrorForTool,
 } from "./errors.js";
 import { ALL_TOOLS, TOOL_BY_NAME } from "./tools/index.js";
+import { ToolCallTelemetry, argumentKeys } from "./telemetry.js";
 import type { ToolResult } from "./tools/types.js";
 
 /** Server instructions surfaced to MCP hosts during initialisation. */
@@ -65,6 +66,10 @@ Every agent decision in AiSOC is logged to a persistent ledger; \
  */
 export function buildServer(cfg: ServerConfig, log: Logger): Server {
   const client = new AisocClient(cfg, log);
+  // This server is a standing read path into a customer's alerts, cases and
+  // event lake, and until now nothing recorded what it read. Off unless
+  // AISOC_MCP_TELEMETRY_URL is set.
+  const telemetry = new ToolCallTelemetry(log);
   const server = new Server(
     { name: "@aisoc/mcp", version: packageVersion() },
     {
@@ -88,8 +93,19 @@ export function buildServer(cfg: ServerConfig, log: Logger): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;
+    // Every exit path below records, including the failures. A tool call that
+    // was refused is as much a part of the account of what this key did as one
+    // that succeeded.
+    const startedAt = Date.now();
+    const keys = argumentKeys(request.params.arguments);
     const tool = TOOL_BY_NAME[name];
     if (!tool) {
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "unknown_tool",
+        latency_ms: Date.now() - startedAt,
+      });
       // Unknown tool. Return as a tool-failure rather than throwing so the
       // agent gets a clear human message instead of a transport error.
       return toErrorResult(
@@ -103,6 +119,12 @@ export function buildServer(cfg: ServerConfig, log: Logger): Server {
       const issues = parse.error.issues.map(
         (i) => `${i.path.join(".") || "<root>"}: ${i.message}`,
       );
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "invalid_arguments",
+        latency_ms: Date.now() - startedAt,
+      });
       return toErrorResult(
         formatErrorForTool(new InvalidArgumentsError(name, issues)),
       );
@@ -110,8 +132,21 @@ export function buildServer(cfg: ServerConfig, log: Logger): Server {
 
     try {
       const result = await tool.handle({ client, log }, parse.data);
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "success",
+        latency_ms: Date.now() - startedAt,
+      });
       return toSuccessResult(result);
     } catch (err) {
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "error",
+        latency_ms: Date.now() - startedAt,
+        error_kind: err instanceof Error ? err.constructor.name : "unknown",
+      });
       // Log full error to stderr for debugging; surface a sanitised message
       // to the agent. We deliberately don't include stack traces in the
       // MCP response (PII / secrets risk).
