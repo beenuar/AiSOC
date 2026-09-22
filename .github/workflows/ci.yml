@@ -220,6 +220,18 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # The count claim above says how many connectors exist; this says
+      # whether a reader can find out how to use them. 35 of 84 had no page
+      # at all and the sidebar listed 34 of 96, so most connector
+      # documentation either did not exist or could not be navigated to.
+      #
+      # Pages are generated from the schema rather than written by hand: a
+      # hand-written field list is correct on the day it is written and says
+      # nothing when a field is added or made secret. Pages that predate the
+      # generator keep their prose and receive a generated field reference,
+      # so the human half stays human and the mechanical half cannot drift.
+      - name: Verify connector docs cover every connector
+        run: python scripts/generate_connector_docs.py --check
       # Phase 8 — a production prompt cannot change without a version bump +
       # lock regeneration (the signal that must trigger an eval re-grade).
       - name: Verify prompt lock is current (Phase 8)
