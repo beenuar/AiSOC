@@ -9,9 +9,18 @@ because that matcher evaluates one event in isolation, and until now they had
 nowhere else to go — which is most of why the quarantine has stayed at ~2,000
 rules.
 
-This mirrors `export_detection_ruleset.py` exactly: specs are the source of
-truth, the JSON is a build artifact, and `--check` fails CI when the two drift
-so the deployed engine cannot silently diverge from the committed corpus.
+The JSON is a build artifact and `--check` fails CI when it drifts from this
+file, so the deployed engine cannot silently diverge from the committed
+corpus.
+
+This used to claim it "mirrors `export_detection_ruleset.py` exactly: specs
+are the source of truth". It does not, and the difference is worth stating
+rather than papering over: the stateless exporter reads spec *modules*, while
+the rules here are a literal list in this script. That is a deliberate
+tradeoff at this corpus size — eight rules do not need a module per rule, and
+a reader can see the whole windowed corpus on one screen — but it is a
+different arrangement, and describing it as identical sent anyone looking for
+`detections/windowed/` somewhere that does not exist.
 
 A windowed rule is deliberately a narrow shape — match, group by one entity,
 count, threshold, window. It is not a general aggregation language. Anything
@@ -112,6 +121,69 @@ WINDOWED_RULES: list[dict] = [
         "match_when": {"event_type": "network"},
         "group_by": "hostname",
         "threshold": 200,
+        "window_seconds": 300,
+    },
+    {
+        # `events_per_minute_gt` is the single largest unreachable family —
+        # sixteen `det-*` rules name it and none of them can fire, because
+        # nothing computes a per-minute rate for a single event.
+        "id": "wd-high-rate-activity-per-actor",
+        "name": "Sustained high-rate activity from one actor",
+        "severity": "medium",
+        "category": "identity",
+        "mitre": ["T1078"],
+        "match_when": {},
+        "group_by": "user",
+        "threshold": 120,
+        "window_seconds": 60,
+    },
+    {
+        "id": "wd-high-rate-activity-per-source",
+        "name": "Sustained high-rate activity from one source address",
+        "severity": "medium",
+        "category": "network",
+        "mitre": ["T1071"],
+        "match_when": {},
+        "group_by": "src_ip",
+        "threshold": 300,
+        "window_seconds": 60,
+    },
+    {
+        # Distinct, not count. "Fifty reads by one principal" is a script
+        # retrying; "fifty *different* secrets read by one principal" is a
+        # vault being walked. Counting events cannot tell those apart.
+        "id": "wd-secret-enumeration",
+        "name": "Many distinct secrets read by one principal",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1552.007"],
+        "match_when": {"event_type": "secret_access"},
+        "group_by": "user",
+        "distinct_by": "secret_name",
+        "threshold": 15,
+        "window_seconds": 300,
+    },
+    {
+        "id": "wd-horizontal-scan",
+        "name": "One source touching many distinct destinations",
+        "severity": "medium",
+        "category": "network",
+        "mitre": ["T1046"],
+        "match_when": {"event_type": "network"},
+        "group_by": "src_ip",
+        "distinct_by": "dst_ip",
+        "threshold": 40,
+        "window_seconds": 120,
+    },
+    {
+        "id": "wd-bulk-object-deletion",
+        "name": "Bulk object deletion by one principal",
+        "severity": "high",
+        "category": "cloud",
+        "mitre": ["T1485"],
+        "match_when": {"event_type": "delete"},
+        "group_by": "user",
+        "threshold": 50,
         "window_seconds": 300,
     },
 ]

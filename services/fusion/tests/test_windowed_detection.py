@@ -7,7 +7,7 @@ import json
 from uuid import uuid4
 
 import pytest
-from app.services.windowed_detection import WindowedDetectionEngine
+from app.services.windowed_detection import WindowedDetectionEngine, WindowRule
 
 
 class _FakeRedis:
@@ -102,3 +102,87 @@ async def test_build_alert_from_hit():
     assert alert is not None
     assert alert.source == "detection:wd-bruteforce-auth"
     assert alert.username == "alice"
+
+
+# ── distinct counting ────────────────────────────────────────────────────────
+#
+# "Fifty reads by one principal" is a script retrying. "Fifty *different*
+# secrets read by one principal" is a vault being walked. Counting events
+# cannot tell those apart, and 21 of the rules the reachability gate lists as
+# needing a windowed evaluator name a `distinct_*` field — so without this
+# they had nowhere to go even after the engine existed.
+
+
+_TENANT = str(uuid4())
+
+
+def _secret_event(user: str, secret: str) -> dict:
+    return {
+        "tenant_id": _TENANT,
+        "ocsf_event": {
+            "raw_event": {"event_type": "secret_access", "user": user, "secret_name": secret},
+        },
+    }
+
+
+DISTINCT_RULE = WindowRule(
+    id="wd-test-distinct",
+    name="Many distinct secrets by one principal",
+    severity="high",
+    category="identity",
+    mitre=["T1552.007"],
+    match_when={"event_type": "secret_access"},
+    group_by="user",
+    distinct_by="secret_name",
+    threshold=3,
+    window_seconds=300,
+)
+
+
+@pytest.mark.asyncio
+async def test_repeating_one_value_never_crosses_a_distinct_threshold():
+    """The regression this exists for: a script reading the same secret in a
+    loop is not enumeration, and must not be reported as it."""
+    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    for _ in range(20):
+        assert await engine.evaluate(_secret_event("alice", "db-password")) == []
+
+
+@pytest.mark.asyncio
+async def test_distinct_values_cross_the_threshold():
+    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    assert await engine.evaluate(_secret_event("alice", "s1")) == []
+    assert await engine.evaluate(_secret_event("alice", "s2")) == []
+    hits = await engine.evaluate(_secret_event("alice", "s3"))
+    assert [h.rule_id for h in hits] == ["wd-test-distinct"]
+
+
+@pytest.mark.asyncio
+async def test_distinct_counts_are_per_entity():
+    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    for secret in ("s1", "s2"):
+        await engine.evaluate(_secret_event("alice", secret))
+    # Bob's two are his own; neither principal has reached three.
+    for secret in ("s1", "s2"):
+        assert await engine.evaluate(_secret_event("bob", secret)) == []
+
+
+@pytest.mark.asyncio
+async def test_an_event_missing_the_distinct_field_is_skipped_not_counted():
+    """Falling back to counting events would be a different, louder detection
+    wearing this one's id."""
+    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    bare = {"tenant_id": _TENANT, "ocsf_event": {"raw_event": {"event_type": "secret_access", "user": "alice"}}}
+    for _ in range(10):
+        assert await engine.evaluate(bare) == []
+
+
+def test_the_loader_carries_distinct_by():
+    from app.services.windowed_detection import load_window_rules
+
+    rules = load_window_rules()
+    distinct = [r for r in rules if r.distinct_by]
+    assert distinct, "no exported rule uses distinct_by; the capability has no corpus"
+    assert all(
+        r.group_by and r.distinct_by != r.group_by for r in distinct
+    ), "a rule counting distinct values of its own grouping key counts 1 forever"

@@ -1,5 +1,5 @@
 {
-  "count": 5,
+  "count": 10,
   "rules": [
     {
       "category": "application",
@@ -75,6 +75,79 @@
       "name": "Burst of outbound transfers from one host",
       "severity": "high",
       "threshold": 200,
+      "window_seconds": 300
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-high-rate-activity-per-actor",
+      "match_when": {},
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Sustained high-rate activity from one actor",
+      "severity": "medium",
+      "threshold": 120,
+      "window_seconds": 60
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-high-rate-activity-per-source",
+      "match_when": {},
+      "mitre": [
+        "T1071"
+      ],
+      "name": "Sustained high-rate activity from one source address",
+      "severity": "medium",
+      "threshold": 300,
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "distinct_by": "secret_name",
+      "group_by": "user",
+      "id": "wd-secret-enumeration",
+      "match_when": {
+        "event_type": "secret_access"
+      },
+      "mitre": [
+        "T1552.007"
+      ],
+      "name": "Many distinct secrets read by one principal",
+      "severity": "high",
+      "threshold": 15,
+      "window_seconds": 300
+    },
+    {
+      "category": "network",
+      "distinct_by": "dst_ip",
+      "group_by": "src_ip",
+      "id": "wd-horizontal-scan",
+      "match_when": {
+        "event_type": "network"
+      },
+      "mitre": [
+        "T1046"
+      ],
+      "name": "One source touching many distinct destinations",
+      "severity": "medium",
+      "threshold": 40,
+      "window_seconds": 120
+    },
+    {
+      "category": "cloud",
+      "group_by": "user",
+      "id": "wd-bulk-object-deletion",
+      "match_when": {
+        "event_type": "delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Bulk object deletion by one principal",
+      "severity": "high",
+      "threshold": 50,
       "window_seconds": 300
     }
   ]

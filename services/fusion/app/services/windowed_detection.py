@@ -57,6 +57,16 @@ class WindowRule:
     group_by: str
     threshold: int
     window_seconds: int
+    # When set, count DISTINCT values of this field rather than events.
+    #
+    # "Fifty requests from one source" and "fifty *different* secrets read by
+    # one principal" are different detections, and the second is the one that
+    # says enumeration. Counting events conflates a script retrying once with
+    # a script walking a vault: the first is noise, the second is the
+    # incident. Twenty-one of the rules the reachability gate lists as
+    # needing a windowed evaluator name a `distinct_*` field, so without this
+    # they had nowhere to go even after the engine existed.
+    distinct_by: str = ""
 
 
 # Built-in windowed rules. Intentionally small + high-signal; the corpus can grow
@@ -148,6 +158,7 @@ def load_window_rules(path: Path | None = None) -> tuple[WindowRule, ...]:
                 group_by=str(entry["group_by"]),
                 threshold=int(entry["threshold"]),
                 window_seconds=int(entry["window_seconds"]),
+                distinct_by=str(entry.get("distinct_by") or ""),
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning("windowed_detection.rule_skipped", rule_id=rule_id, error=str(exc))
@@ -232,7 +243,17 @@ class WindowedDetectionEngine:
                 entity = fields.get(rule.group_by)
                 if not entity:
                     continue
-                if await self._observe_and_check(rule, tenant, str(entity), now):
+                observed = str(entity)
+                member: str | None = None
+                if rule.distinct_by:
+                    value = fields.get(rule.distinct_by)
+                    if not value:
+                        # A distinct rule with nothing to be distinct about
+                        # must not fall back to counting events — that is a
+                        # different, louder detection wearing this one's id.
+                        continue
+                    member = str(value)
+                if await self._observe_and_check(rule, tenant, observed, now, member=member):
                     hits.append(
                         DetectionHit(
                             rule_id=rule.id,
@@ -246,9 +267,21 @@ class WindowedDetectionEngine:
                 logger.debug("windowed_detection.rule_error", rule=rule.id, error=str(exc))
         return hits
 
-    async def _observe_and_check(self, rule: WindowRule, tenant: str, entity: str, now: float) -> bool:
+    async def _observe_and_check(
+        self,
+        rule: WindowRule,
+        tenant: str,
+        entity: str,
+        now: float,
+        *,
+        member: str | None = None,
+    ) -> bool:
         key = f"{self._prefix}:{tenant}:{rule.id}:{entity}"
-        member = uuid.uuid4().hex
+        # A random member counts events; the observed value counts distinct
+        # ones, because ZADD on an existing member updates its score instead
+        # of adding a row. So the same sorted set serves both, and a repeated
+        # value refreshes its recency rather than inflating the count.
+        member = member if member is not None else uuid.uuid4().hex
         await self._redis.zadd(key, {member: now})
         await self._redis.zremrangebyscore(key, 0, now - rule.window_seconds)
         # Expire the key a window after the last event so idle entities are reaped.
