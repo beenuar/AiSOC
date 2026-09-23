@@ -6,7 +6,7 @@ description: Per-connector capability coverage — which connectors can pull ale
 
 # Capability matrix
 
-Every connector in AiSOC declares a set of **capabilities** — concrete verbs the orchestrator and agents are allowed to ask it to perform. Capabilities are not free text; they are members of the [`Capability` enum](https://github.com/AiSOC-community/AiSOC/blob/main/services/connectors/app/connectors/base.py) defined in `services/connectors/app/connectors/base.py`. The agent runtime, the federated-search planner, and the case-fanout service all consult this set before dispatching work; a connector that does not declare `PUSH_CASE`, for example, will simply be skipped when AiSOC tries to mint an ITSM ticket.
+Every connector in AiSOC declares a set of **capabilities** — concrete verbs the orchestrator and agents are allowed to ask it to perform. Capabilities are not free text; they are members of the [`Capability` enum](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/base.py) defined in `services/connectors/app/connectors/base.py`. The agent runtime, the federated-search planner, and the case-fanout service all consult this set before dispatching work; a connector that does not declare `PUSH_CASE`, for example, will simply be skipped when AiSOC tries to mint an ITSM ticket.
 
 This page is the canonical "what works where" reference. It is generated from the connector source and is kept in sync with the registry in `services/connectors/app/connectors/__init__.py`.
 
@@ -125,4 +125,4 @@ If you are extending an existing connector to do more (e.g. teaching SentinelOne
 3. Add a focused unit test under `services/connectors/tests/` — happy path, error path, and one vendor-specific edge case (status mapping, ID resolution, transitions).
 4. Update this page so the matrix stays honest. The capability column is the contract the rest of the system relies on; if the matrix says `ISOLATE_HOST`, the runtime will route isolation requests to that connector.
 
-The full method signatures and contracts are in [`base.py`](https://github.com/AiSOC-community/AiSOC/blob/main/services/connectors/app/connectors/base.py); for end-to-end ITSM examples see the [Jira](/docs/connectors/) and [ServiceNow](/docs/connectors/) connector docs (per-vendor walkthroughs).
+The full method signatures and contracts are in [`base.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/base.py); for end-to-end ITSM examples see the [Jira](/docs/connectors/) and [ServiceNow](/docs/connectors/) connector docs (per-vendor walkthroughs).

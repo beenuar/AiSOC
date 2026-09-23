@@ -17,8 +17,12 @@ the AiSOC engine can run as-is.
 | Quarantined | `detections/<source>-imports/_quarantine/<category>/`  | `enabled: false` | schema + provenance, plus a populated `quarantine_reason`            |
 | Community   | `detections/community/<category>/`                     | `enabled: false` | schema only (provenance encouraged)                                  |
 
-The native tier is the strict-quality, AiSOC-authored layer (currently 800
-fixture-tested rules with 1,200 positive/negative fixtures). Imported tiers are
+The native tier is the strict-quality, AiSOC-authored layer: 877 rules on disk,
+of which **833 are executable** — the count the detection engine actually loads —
+backed by 1,756 positive/negative fixtures. The 44-rule gap is native rules that
+ship YAML and fixtures but have no compiled spec, so the engine never loads them;
+[`docs/detections/truth-table.md`](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)
+cross-checks these counts against the loaded ruleset. Imported tiers are
 normalized into the AiSOC schema by
 the source-specific importers under [`tools/detection_import/`](https://github.com/beenuar/AiSOC/blob/main/tools/detection_import/README.md)
 and remain empty in a fresh checkout until you run them.
@@ -133,8 +137,8 @@ The summary line breaks the count down by tier and quarantine state so a
 typical green CI run looks like:
 
 ```
-Validated 6913 rules — 6913 passed, 0 failed, 0 fixture warnings
-  Tiers: native=800 imported=6113 (quarantined=5937)
+Validated 6991 rules — 6991 passed, 0 failed, 0 fixture warnings
+  Tiers: native=877 imported=6113 community=1 (quarantined=5937)
 ```
 
 Counts move as importers refresh upstream sources; the line above is a

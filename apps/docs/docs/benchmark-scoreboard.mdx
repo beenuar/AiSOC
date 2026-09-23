@@ -19,10 +19,16 @@ Rows tagged `substrate` are the deterministic CI gate — they execute in
 microseconds with no LLM call, no money. Their token and USD figures are
 **budget projections** computed from the [4-chars/token estimator and the
 illustrative public rate card](./benchmark-methodology.md#rate-card),
-not real bills. Wet-eval rows (real agent, real LLM) start arriving the
-moment the [T5.5 weekly job](./benchmark-methodology.md#3-substrate-vs-wet-eval)
-lands in CI. The two row types share the same columns so the table reads
+not real bills. The two row types share the same columns so the table reads
 uniformly, but **never quote a substrate row as live agent performance**.
+
+**There are no wet-eval rows yet.** The
+[T5.5 weekly job](./benchmark-methodology.md#3-substrate-vs-wet-eval) has
+landed and runs every Monday, but this repository has no `WET_EVAL_OPENAI_KEY`
+configured, so every run exits cleanly at the credential gate without calling a
+model. Until a funded key is in place, every row you see below is a substrate
+row. We would rather publish an empty wet-eval history than fill it with
+projections relabelled as measurements.
 :::
 
 :::info Per-PR freshness gate (Phase E1)
@@ -51,9 +57,9 @@ There are two ways a row reaches that file:
    tagging and committed by hand under `feat(eval): scoreboard substrate row
    for v<X.Y.Z>`.
 2. **Wet-eval rows (T5.5 weekly job).** The
-   [`wet-eval-weekly.yml`](./benchmark-methodology.md#3-substrate-vs-wet-eval)
+   [`wet-eval.yml`](./benchmark-methodology.md#3-substrate-vs-wet-eval)
    GitHub Action runs the live agent against the same 200-incident corpus
-   on a Sunday cadence, captures real latency / token / USD telemetry,
+   on a Monday 07:00 UTC cadence, captures real latency / token / USD telemetry,
    and opens an auto-PR appending one row to `scoreboard.json`. Wet-eval
    rows show up at the top of the table and on the trend chart.
 

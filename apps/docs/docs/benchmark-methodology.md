@@ -130,13 +130,13 @@ network round trips.
 | Dataset           | Same `synthetic_incidents.json` (deterministic) |
 | LLMs              | Configurable via env (`AISOC_BENCH_PROVIDER=openai\|anthropic\|ollama`) |
 | Telemetry captured | Wall-clock latency p50/p95/p99, prompt + completion tokens, USD cost |
-| CI gate           | [`.github/workflows/wet-eval-weekly.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval-weekly.yml) (T5.5) |
+| CI gate           | [`.github/workflows/wet-eval.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval.yml) (T5.5) |
 | Output            | `eval_report.json -> wet_eval` block + render to `apps/docs/static/eval/` |
 
 The weekly job pushes its results into the same `eval-results` branch as the
 substrate run, so historical trend lines stay in one place.
 
-Cross-link: [`wet-eval-weekly.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval-weekly.yml)
+Cross-link: [`wet-eval.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/wet-eval.yml)
 is added by **T5.5** in the v8.0 plan. Until that lands, the per-template
 latency / token / USD cells on the benchmark page are placeholders rather
 than imputed numbers.

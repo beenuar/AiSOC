@@ -859,7 +859,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("")
     lines.append(
         "The curated rule IDs are listed in "
-        "[`marketplace/curated.json`](https://github.com/aisoc-platform/aisoc/blob/main/marketplace/curated.json) "
+        "[`marketplace/curated.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/curated.json) "
         "under each family. Every entry has a `path` field pointing at the "
         "on-disk YAML. Run `pnpm marketplace:curate --check` in CI to enforce "
         "drift; run `python3 scripts/curate_detections.py` locally to regenerate."

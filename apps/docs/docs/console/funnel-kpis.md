@@ -194,7 +194,7 @@ A few design choices are worth calling out:
 
 1. **One endpoint, two widgets.** `FunnelKpiBar` and `EfficiencyReport` are split for layout reasons, not data-fetching reasons. Sharing the SWR key means the dashboard makes one network call for both. If we ever need to refresh the efficiency report independently, the cache key would split.
 2. **No mock data, anywhere.** The previous `34%` SNR in `NoiseTuningView` was the only mocked KPI left in v1.4. It now reads from this endpoint and falls back to a deterministic local computation only when the API is unreachable — never to a fixed constant.
-3. **Stages, not connectors.** The reference SOC console renders pipeline health per-stage, not per-connector, because operators want to know "is fusion behind?" — not "which of 47 connectors is having a bad day." The connector health page (`/health`) still exists for the per-connector drill-down.
+3. **Stages, not connectors.** The reference SOC console renders pipeline health per-stage, not per-connector, because operators want to know "is fusion behind?" — not "which of 84 connectors is having a bad day." The connector health page (`/health`) still exists for the per-connector drill-down.
 4. **Worst-status badge.** The top-of-rail status is intentionally pessimistic. A single red stage flips the rail to red, because in SOC operations the worst link defines the chain.
 
 ## Operator playbook

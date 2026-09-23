@@ -6,12 +6,15 @@ sidebar_label: Public replays
 # Public investigation replays
 
 Turn any investigation ledger into an **immutable, redacted, public share link**
-at `tryaisoc.com/r/<slug>` so you can show how the agent reasoned through a case —
-in a blog post, an incident write-up, or a talk — without exposing your
+at `<your-console>/r/<slug>` so you can show how the agent reasoned through a
+case — in a blog post, an incident write-up, or a talk — without exposing your
 environment.
 
-The canonical demo replay is the seeded LockBit 3.0 case:
-[`tryaisoc.com/r/demo-lockbit`](https://tryaisoc.com/r/demo-lockbit).
+Replays are served by your own deployment, so the host is whatever
+`CONSOLE_PUBLIC_BASE_URL` points at. On a local stack that is
+`http://localhost:3000/r/<slug>`. The seeded LockBit 3.0 case ships with the
+demo data as slug `demo-lockbit`; there is no hosted public instance to link
+to right now, so run the demo seed locally to see it.
 
 ## What a viewer sees
 
@@ -69,12 +72,13 @@ redacted snapshot is persisted; the alias map is returned in the preview and is
 
 ## Badges
 
-shields.io-compatible endpoint badges live at `tryaisoc.com/api/badge/<kind>`
+shields.io-compatible endpoint badges live at `<your-console>/api/badge/<kind>`
 (`triaged`, `noise-suppressed`, `benchmark`, `verified-detection`, `self-play`).
-Embed one in a README:
+The endpoint must be publicly reachable for shields.io to render it. Embed one
+in a README:
 
 ```markdown
-![AiSOC](https://img.shields.io/endpoint?url=https://tryaisoc.com/api/badge/triaged)
+![AiSOC](https://img.shields.io/endpoint?url=https://your-console.example.com/api/badge/triaged)
 ```
 
 Callers can override the message/label/color via query params (e.g. the GitHub
