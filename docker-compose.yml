@@ -116,6 +116,8 @@ services:
       retries: 5
 
   kafka-ui:
+    # full profile — Kafka topic browser. A debugging convenience, not a pipeline component.
+    profiles: ["full"]
     image: provectuslabs/kafka-ui:latest
     container_name: aisoc-kafka-ui
     depends_on:
@@ -130,6 +132,8 @@ services:
       - aisoc
 
   clickhouse:
+    # full profile — Event lake. Backs /lake/sql and the hunt surface; alerting does not read it.
+    profiles: ["full"]
     image: clickhouse/clickhouse-server:23.8
     container_name: aisoc-clickhouse
     ports:
@@ -153,6 +157,8 @@ services:
     mem_reservation: 768m
 
   opensearch:
+    # full profile — Full-text search over archived events. No CORE code path queries it.
+    profiles: ["full"]
     image: opensearchproject/opensearch:2.11.0
     container_name: aisoc-opensearch
     environment:
@@ -177,6 +183,8 @@ services:
     mem_reservation: 768m
 
   qdrant:
+    # full profile — Vector store for threat-intel embeddings (services/threatintel).
+    profiles: ["full"]
     image: qdrant/qdrant:v1.7.0
     container_name: aisoc-qdrant
     ports:
@@ -187,6 +195,8 @@ services:
       - aisoc
 
   neo4j:
+    # full profile — Entity graph. Backs graph traversals and blast radius, not alert generation.
+    profiles: ["full"]
     image: neo4j:5.15-community
     container_name: aisoc-neo4j
     ports:
@@ -274,8 +284,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      neo4j:
-        condition: service_healthy
     ports:
       - "127.0.0.1:8081:8080"
       - "127.0.0.1:9090:9090"
@@ -288,10 +296,11 @@ services:
       LOG_LEVEL: info
       JWT_SECRET: dev_secret_key_change_in_production
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
-      # Phase A3 — graph-at-ingest is ON by default so a cold `up` builds the
-      # entity graph out of the box. Soft-fails (writer disabled) if Neo4j is
-      # unreachable, so this never blocks ingest.
-      AISOC_GRAPH_ENABLED: "true"
+      # Graph-at-ingest needs Neo4j, which is a `full`-profile service. It is
+      # off in CORE and switched on by the `full` overlay. It used to be
+      # hardcoded "true" with a hard `depends_on: neo4j`, which is why the
+      # minimal stack could not start without the graph database.
+      AISOC_GRAPH_ENABLED: "${AISOC_GRAPH_ENABLED:-false}"
       AISOC_NEO4J_URI: bolt://neo4j:7687
       AISOC_NEO4J_USER: neo4j
       AISOC_NEO4J_PASSWORD: neo4j_dev_secret
@@ -300,6 +309,8 @@ services:
     restart: unless-stopped
 
   enrichment:
+    # full profile — Fuse-time threat-intel and vulnerability enrichment. Alerts fire without it.
+    profiles: ["full"]
     build:
       context: ./services/enrichment
       dockerfile: Dockerfile
@@ -332,24 +343,36 @@ services:
     pull_policy: missing
     container_name: aisoc-fusion
     depends_on:
+      # Postgres was missing here, so during a cold boot fusion tried to write
+      # alerts before the database accepted connections and logged the failure
+      # exactly once.
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      clickhouse:
-        condition: service_started
     ports:
       - "127.0.0.1:8003:8003"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
-      # Phase A1 — populate the ClickHouse event lake from the raw-events stream.
+      # The ClickHouse event lake is a `full`-profile capability: it backs
+      # /lake/sql and the hunt surface, not alerting. CORE runs without it and
+      # the writer disables itself.
+      AISOC_LAKE_WRITER_ENABLED: "${AISOC_LAKE_WRITER_ENABLED:-false}"
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_PORT: "9000"
       CLICKHOUSE_DATABASE: aisoc
       CLICKHOUSE_USER: aisoc
       CLICKHOUSE_PASSWORD: clickhouse_dev_secret
+      # Fusion defaulted to http://localhost:8082, which inside its own
+      # container is fusion itself — so fuse-time enrichment always failed and
+      # the failure was swallowed at DEBUG. `enrichment` is a `full`-profile
+      # service; in CORE this resolves to nothing and enrichment is skipped,
+      # which is the same outcome as before but now deliberate.
+      ENRICHMENT_SERVICE_URL: ${ENRICHMENT_SERVICE_URL:-http://enrichment:8082}
     networks:
       - aisoc
     restart: unless-stopped
@@ -406,6 +429,8 @@ services:
   # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
   # `agents` service above.
   litellm:
+    # full profile — LLM gateway. Only needed when a provider key is configured.
+    profiles: ["full"]
     image: ghcr.io/berriai/litellm:main-stable
     container_name: aisoc-litellm
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
@@ -462,6 +487,11 @@ services:
     restart: unless-stopped
 
   actions:
+    # Response execution. Governed and copilot-default; nothing in CORE
+    # dispatches to it, so it is not part of the minimal pipeline. Carries the
+    # `chatops` profile too because slack-bot depends on it, and a profile
+    # whose dependency is not in the same profile fails to render at all.
+    profiles: ["full", "chatops"]
     build:
       context: ./services/actions
       dockerfile: Dockerfile
@@ -485,6 +515,8 @@ services:
     restart: unless-stopped
 
   connectors:
+    # full profile — Scheduled vendor polling. CORE accepts events over the ingest HTTP API instead.
+    profiles: ["full"]
     build:
       context: ./services/connectors
       dockerfile: Dockerfile
@@ -516,6 +548,8 @@ services:
     restart: unless-stopped
 
   threatintel:
+    # full profile — IOC harvesting and actor attribution. Needs Qdrant.
+    profiles: ["full"]
     build:
       context: ./services/threatintel
       dockerfile: Dockerfile
@@ -548,6 +582,8 @@ services:
     restart: unless-stopped
 
   ueba:
+    # full profile — Behavioural baselining. Consumes its own topic; see docs/audit/REPOSITORY_REALITY.md.
+    profiles: ["full"]
     build:
       context: ./services/ueba
       dockerfile: Dockerfile

@@ -22,6 +22,7 @@ import {
   type CopilotMessage,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 
@@ -406,10 +407,16 @@ export function CopilotView() {
           : res.reply;
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
-      // Backend not reachable / not implemented yet — fall back to a demo
-      // reply so the dock still feels alive in local dev.
-      const demo = buildDemoReply(trimmed);
-      setMessages((prev) => [...prev, demo]);
+      // This used to substitute `buildDemoReply(trimmed)` unconditionally, so
+      // a backend outage produced an invented investigation — a named host, a
+      // named user, ATT&CK techniques and three alert "citations" — rendered
+      // in the same style as a real answer. An analyst had no way to tell.
+      //
+      // Outside demo mode the error is now surfaced as an error. The dock
+      // feeling alive is not worth a fabricated verdict.
+      if (canUseDemoData()) {
+        setMessages((prev) => [...prev, buildDemoReply(trimmed)]);
+      }
       setError(err);
     } finally {
       setSending(false);

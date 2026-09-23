@@ -796,10 +796,52 @@ run_demo() {
 
 # ─── Final banner ────────────────────────────────────────────────────────────
 
+# ─── Post-install verification ───────────────────────────────────────────────
+#
+# "The containers started" is not "the application works", and this installer
+# used to print a success banner purely because `pnpm aisoc:demo` exited 0.
+# A user whose pipeline was broken was told everything was fine.
+#
+# The golden pipeline posts one real event and follows it through Kafka,
+# fusion, detection and Postgres, then reads the alert back from the API. If
+# that fails, the install has failed, whatever the containers say.
+run_smoke_test() {
+  if [ "$NO_LAUNCH" = "1" ]; then
+    return 0
+  fi
+  section "Verifying the pipeline end to end"
+  local runner="$REPO_ROOT/tests/e2e/golden_pipeline/run_golden_pipeline.py"
+  if [ ! -f "$runner" ]; then
+    warn "Golden pipeline runner not found at $runner — skipping verification."
+    return 0
+  fi
+  if ! have python3; then
+    warn "python3 not on PATH — skipping pipeline verification."
+    warn "Verify manually once python3 is available:  make smoke"
+    return 0
+  fi
+
+  if ( cd "$REPO_ROOT" && python3 "$runner" ); then
+    ok "Pipeline verified: a real event became a retrievable alert."
+    return 0
+  fi
+
+  err ""
+  err "The stack started, but a real event did not become an alert."
+  err "This is a genuine failure, not a warning: AiSOC is not working yet."
+  err ""
+  err "Diagnose it with:"
+  err "    cd $REPO_ROOT && make doctor"
+  err ""
+  err "Then re-run the check:"
+  err "    make smoke"
+  exit 5
+}
+
 print_success() {
   cat <<EOF
 
-${C_BOLD}${C_GREEN}AiSOC is up and running.${C_RESET}
+${C_BOLD}${C_GREEN}AiSOC is up and running${C_RESET}${C_GREEN}, and a real event reached the API.${C_RESET}
 
   ${C_BOLD}Web console:${C_RESET}     http://localhost:3000
   ${C_BOLD}Showcase case:${C_RESET}   http://localhost:3000/cases/INC-RT-001?tab=ledger
@@ -807,10 +849,17 @@ ${C_BOLD}${C_GREEN}AiSOC is up and running.${C_RESET}
   ${C_BOLD}Realtime WS:${C_RESET}     ws://localhost:8086
 
 ${C_DIM}Useful commands (run from $REPO_ROOT):${C_RESET}
-  pnpm aisoc:doctor                          # health-check the stack
-  pnpm aisoc:demo:logs                       # tail logs
-  pnpm aisoc:demo:down                       # stop everything and wipe demo data
-  ./scripts/install/uninstall.sh             # full uninstall (containers + images + repo)
+  make doctor          # diagnose every dependency, with the fix for each
+  make smoke           # re-run the end-to-end pipeline check
+  make status          # every service and its health
+  make logs            # follow logs (SERVICE=fusion to narrow)
+  make demo            # load clearly-labelled synthetic data
+  make down            # stop the stack, keep your data
+  make clean           # stop the stack and delete all volumes
+  ./uninstall.sh       # full uninstall (containers + images + repo)
+
+${C_DIM}The demo dataset is synthetic. Every row is marked is_synthetic=true and
+labelled in the console. See "Real vs synthetic data" in README.md.${C_RESET}
 
 EOF
   if [ "$DOCKER_NEEDS_NEWGRP" = "1" ]; then
@@ -861,6 +910,7 @@ main() {
   ensure_env_file
   run_pnpm_install
   run_demo
+  run_smoke_test
   print_success
 }
 

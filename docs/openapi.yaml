@@ -9087,7 +9087,14 @@ paths:
       tags:
       - mssp
       summary: Mssp Overview
-      description: Cross-tenant KPI summary for the MSSP parent dashboard.
+      description: 'Cross-tenant KPI summary for the MSSP parent dashboard.
+
+
+        Not yet implemented against real data. Returns zeros outside demo mode
+
+        rather than the sample figures, because a dashboard reading 23.4 minutes
+
+        MTTR that nobody measured is worse than one reading nothing.'
       operationId: mssp_overview_api_v1_mssp_overview_get
       responses:
         '200':
@@ -9103,7 +9110,12 @@ paths:
       tags:
       - mssp
       summary: List Managed Tenants
-      description: List managed tenants with health scores for the parent dashboard.
+      description: 'List managed tenants with health scores for the parent dashboard.
+
+
+        Empty outside demo mode. `GET /api/v1/mssp/children` is the route backed
+
+        by real rows.'
       operationId: list_managed_tenants_api_v1_mssp_tenants_get
       responses:
         '200':
@@ -9122,7 +9134,8 @@ paths:
       tags:
       - mssp
       summary: List Cross Tenant Incidents
-      description: Critical incidents across all managed tenants.
+      description: Critical incidents across all managed tenants. Empty outside demo
+        mode.
       operationId: list_cross_tenant_incidents_api_v1_mssp_incidents_get
       security:
       - HTTPBearer: []

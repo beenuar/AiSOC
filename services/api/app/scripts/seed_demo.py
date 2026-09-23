@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import os
 import random
 import sys
 import uuid
@@ -3322,6 +3323,33 @@ async def _main_async(args: argparse.Namespace) -> None:
         await _run_full_seed()
 
 
+def _refuse_in_production() -> None:
+    """Refuse to write synthetic incidents into a production database.
+
+    This script had no guard at all: it parsed its arguments and ran against
+    whatever `DATABASE_URL` resolved to. Containment rested entirely on it
+    targeting a hardcoded demo tenant id, which is a convention rather than a
+    control — and the rows it writes are deliberately realistic, which is
+    exactly what makes them dangerous in the wrong database.
+
+    Set `AISOC_ALLOW_SEED=1` to override (that is what `make demo` does).
+    """
+    allow = os.environ.get("AISOC_ALLOW_SEED", "").strip().lower() in {"1", "true", "yes"}
+    if allow:
+        return
+    env = (os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "").strip().lower()
+    demo_mode = os.environ.get("AISOC_DEMO_MODE", "").strip().lower() in {"1", "true", "yes"}
+    if demo_mode or env in {"", "dev", "development", "local", "test"}:
+        return
+    print(
+        f"[seed] refusing to run: ENVIRONMENT={env!r} is not a development environment.\n"
+        f"[seed] This writes synthetic security incidents. If that is genuinely what\n"
+        f"[seed] you want here, re-run with AISOC_ALLOW_SEED=1.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def main(argv: list[str] | None = None) -> None:
     # `parse_known_args` is intentional — `app.scripts.demo_seed` (the
     # hosted-demo wrapper) imports this `main` and calls it without
@@ -3330,6 +3358,7 @@ def main(argv: list[str] | None = None) -> None:
     # Silently ignoring unknown tokens keeps that path working without
     # having to coordinate two argparse surfaces.
     args, _unknown = _build_arg_parser().parse_known_args(argv)
+    _refuse_in_production()
     asyncio.run(_main_async(args))
 
 
