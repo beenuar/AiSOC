@@ -28,6 +28,8 @@ from app.security.authz import (
 )
 from app.security.chatops_identity import resolve_approver
 from app.security.chatops_token import ChatOpsTokenError, verify_token
+from app.services import action_store
+from app.services.approval_gate import apply_matrix
 from app.services.blast_radius import BlastRadiusGate
 from app.services.executor_registry import EXECUTOR_REGISTRY
 from app.services.timeline_client import TimelineClientError, post_timeline_event
@@ -36,8 +38,12 @@ logger = structlog.get_logger()
 router = APIRouter()
 gate = BlastRadiusGate()
 
-# In-memory action store (replace with DB in production)
-_actions: dict[str, dict[str, Any]] = {}
+# Kept as a module attribute because tests and other modules reach for it by
+# name. It is now the in-memory *tier* of `app.services.action_store`, which
+# persists to Postgres when a DSN is configured — a restart used to lose every
+# action awaiting approval, so an analyst tapping Approve on a Slack card got
+# "Action not found" for an incident that was still live.
+_actions = action_store._MEMORY
 
 # Replay-protection set: action IDs that have already received a response.
 # Single-use enforcement is layered on top of HMAC + expiry. Anything more
@@ -57,6 +63,11 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     status, blast_radius, reason = gate.evaluate(request)
+    # Second axis: confidence against the action's declared impact, under the
+    # tenant's autonomy tier. The matrix that implements this was written,
+    # tested, and called by nothing — so the gate the docs described was not
+    # the gate that ran. It can only raise a requirement, never lower one.
+    status, reason = await apply_matrix(request, status, blast_radius, reason)
 
     record = {
         "id": str(request.id),
@@ -78,7 +89,7 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
         # approval that silently changes what it approved is not an approval.
         "parameters": dict(request.parameters or {}),
     }
-    _actions[str(request.id)] = record
+    await action_store.save(record)
 
     # Auto-execute if approved
     if status == ActionStatus.APPROVED:
@@ -101,6 +112,9 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
         else:
             record["status"] = ActionStatus.FAILED
             record["error"] = f"No executor found for action type: {request.action_type}"
+
+    # Persist again so the executed status is durable, not just the pending one.
+    await action_store.save(record)
 
     logger.info(
         "Action submitted",
@@ -177,7 +191,7 @@ async def approve_action(
     (``AISOC_ACTIONS_REQUIRE_APPROVER``), because separation of duties cannot
     be evaluated against nobody. ChatOps callers send ``chatops_approver``
     (verified platform identity) and the mapping supplies the permissions."""
-    record = _actions.get(action_id)
+    record = await action_store.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
     if record["status"] != ActionStatus.AWAITING_APPROVAL:
@@ -212,6 +226,7 @@ async def approve_action(
         record["status"] = ActionStatus.FAILED
         record["error"] = "No executor available"
 
+    await action_store.save(record)
     logger.info("Action approved and executed", action_id=action_id, status=record["status"])
     return record
 
@@ -230,7 +245,7 @@ async def reject_action(
     host, and were they entitled to" had no answer — which matters as much as
     the approve side during an incident review.
     """
-    record = _actions.get(action_id)
+    record = await action_store.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
 
@@ -239,6 +254,7 @@ async def reject_action(
         record["rejected_by_user_id"] = bound.user_id
 
     record["status"] = ActionStatus.REJECTED
+    await action_store.save(record)
     logger.info(
         "Action rejected",
         action_id=action_id,
@@ -250,7 +266,7 @@ async def reject_action(
 @router.get("/actions/{action_id}")
 async def get_action(action_id: str):
     """Get action status and result."""
-    record = _actions.get(action_id)
+    record = await action_store.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
     return record
@@ -344,10 +360,11 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
             status_code=200,
         )
 
-    record = _actions.get(action_id_str)
-    # We still record on the timeline even if the in-memory record is gone
-    # (e.g. service restart). The case timeline is the durable store —
-    # losing the local record shouldn't lose the user's reply.
+    record = await action_store.get(action_id_str)
+    # We still record on the timeline even if the record is gone entirely
+    # (no database configured, and this replica did not handle the submit).
+    # The case timeline is durable either way — losing the local record
+    # must not lose the user's reply.
 
     timeline_warning: str | None = None
     try:

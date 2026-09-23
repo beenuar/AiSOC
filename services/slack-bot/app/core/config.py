@@ -79,6 +79,27 @@ class SlackBotSettings(BaseSettings):
         description="Public web app URL used to deep-link case cards.",
     )
 
+    # --- Proactive notification -------------------------------------------
+
+    SLACK_APPROVALS_CHANNEL: str = Field(
+        default="",
+        description=(
+            "Channel the bot posts approval cards into when an agent raises "
+            "one. Empty disables proactive posting, which is the correct "
+            "default: a bot that posts into a channel nobody chose is worse "
+            "than one that posts nowhere."
+        ),
+    )
+    AISOC_INTERNAL_TOKEN: str = Field(
+        default="",
+        description=(
+            "Shared secret for /internal/* routes. These are called by other "
+            "AiSOC services, never by Slack, so they carry no Slack signature "
+            "and need their own check. Empty refuses every internal call "
+            "outside dev mode."
+        ),
+    )
+
     # --- Service plumbing --------------------------------------------------
 
     AISOC_SLACK_BOT_PORT: int = Field(
