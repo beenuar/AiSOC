@@ -38,10 +38,15 @@ jobs:
         with:
           version: v3.18.5
 
-      # The step the docs never told anyone to run, which is why the chart
-      # appeared to work and did not.
+      # The two steps the docs never told anyone to run, which is why the
+      # chart appeared to work and did not. A clean machine has no repository
+      # definitions at all, so `helm dependency build` fails before it starts
+      # — which is exactly what a first-time user hits.
       - name: Fetch chart dependencies
-        run: helm dependency build infra/helm/aisoc
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          helm dependency build infra/helm/aisoc
 
       - name: Lint
         run: helm lint infra/helm/aisoc
@@ -125,7 +130,10 @@ jobs:
           cluster_name: aisoc-helm
 
       - name: Fetch chart dependencies
-        run: helm dependency build infra/helm/aisoc
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          helm dependency build infra/helm/aisoc
 
       # --dry-run=server is the honest bar for a CI runner. The images are not
       # published for every PR and the datastores would not fit anyway, so a

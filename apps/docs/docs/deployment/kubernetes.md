@@ -12,6 +12,14 @@ The supported way to run AiSOC on Kubernetes is the Helm chart shipped at [`infr
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC
 
+# The chart depends on the Bitnami postgresql and redis charts. A clean
+# machine has no repository definitions, so `helm dependency update` fails
+# with "no repository definition for https://charts.bitnami.com/bitnami"
+# before it starts. This line was missing, which meant the documented
+# Kubernetes path failed at its first command.
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
 helm dependency update infra/helm/aisoc
 
 helm install aisoc infra/helm/aisoc \
