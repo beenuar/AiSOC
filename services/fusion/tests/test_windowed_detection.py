@@ -7,7 +7,7 @@ import json
 from uuid import uuid4
 
 import pytest
-from app.services.windowed_detection import WindowRule, WindowedDetectionEngine
+from app.services.windowed_detection import WindowedDetectionEngine, WindowRule
 
 
 class _FakeRedis:
@@ -183,6 +183,6 @@ def test_the_loader_carries_distinct_by():
     rules = load_window_rules()
     distinct = [r for r in rules if r.distinct_by]
     assert distinct, "no exported rule uses distinct_by; the capability has no corpus"
-    assert all(r.group_by and r.distinct_by != r.group_by for r in distinct), (
-        "a rule counting distinct values of its own grouping key counts 1 forever"
-    )
+    assert all(
+        r.group_by and r.distinct_by != r.group_by for r in distinct
+    ), "a rule counting distinct values of its own grouping key counts 1 forever"
