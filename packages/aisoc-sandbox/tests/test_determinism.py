@@ -36,12 +36,27 @@ SCENARIOS = [
 
 # Wall-clock fields are expected to differ between runs. Everything else is
 # reasoning output and must not.
-VOLATILE = {"latency_ms", "timestamp_utc", "total_latency_ms", "duration_ms"}
+#
+# This was an exact-name list of four fields, none of which the CLI emits: the
+# actual field is `elapsed_ms`. So the test compared a timer and failed
+# whenever two runs happened to straddle a millisecond boundary — reporting
+# "Something in the reasoner depends on salted hashing again", which sends a
+# reader to look for a `hash()` call that is not there.
+#
+# Matched by suffix rather than by name so a newly-added timing field cannot
+# reintroduce the flake. Names are the thing that drifts; the `_ms` convention
+# is not.
+VOLATILE = {"timestamp_utc", "started_at", "finished_at"}
+VOLATILE_SUFFIXES = ("_ms", "_seconds", "_at", "_duration")
+
+
+def _is_volatile(key: str) -> bool:
+    return key in VOLATILE or key.endswith(VOLATILE_SUFFIXES)
 
 
 def _strip_volatile(value: Any) -> Any:
     if isinstance(value, dict):
-        return {k: _strip_volatile(v) for k, v in value.items() if k not in VOLATILE}
+        return {k: _strip_volatile(v) for k, v in value.items() if not _is_volatile(k)}
     if isinstance(value, list):
         return [_strip_volatile(v) for v in value]
     return value
@@ -67,7 +82,9 @@ def test_reasoning_is_identical_under_different_hash_seeds(scenario: str) -> Non
     second = _run(scenario, "987654")
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True), (
         f"{scenario} produced different reasoning under a different PYTHONHASHSEED. "
-        f"Something in the reasoner depends on salted hashing again."
+        f"Something in the reasoner depends on salted hashing again — look for "
+        f"hash(), set iteration order, or dict ordering derived from one. If the "
+        f"only difference is a timer, add its field to VOLATILE instead."
     )
 
 

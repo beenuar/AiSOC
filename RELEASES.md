@@ -2,13 +2,31 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v8.0.0`, released 2026-09-22 — the **Close the loop** release. It connected capabilities the codebase already contained but never called: response actions are verified against the vendor rather than assumed from a 200, autonomy is governed by each tenant's own L0–L4 policy instead of one deployment-wide environment variable, repeat-alert suppression can fire at all, and analysts can hunt the events AiSOC itself ingested. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v8.1.0`, released 2026-09-23 — wave-2 features plus the gaps behind them. Every wave-2 backlog item was audited against the tree before any code was written, and the backlog was wrong in both directions: two items were already built, four had the capability present with the path that feeds it broken. One inverted what the feature appeared to do — a Slack or Teams approval authorized nobody. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `8.0.0`. The **v8.0.0** release (2026-09-22) is the **Close the loop** release. v8.0 had been reserved for the package-publish milestone; nothing can publish without registry credentials, so the milestone was re-scoped and distribution/packaging moved out. What v8.0 does instead is close the gap between what the codebase contains and what it actually runs.
+`VERSION` is `8.1.0`. The **v8.1.0** release (2026-09-23) delivers the wave-2 backlog and the defects auditing it surfaced.
+
+**v8.1.0 highlights (September 23, 2026)**
+- **A ChatOps approval authorized nobody.** The Slack and Teams bots verified who clicked — Slack signs every interaction payload, Teams payloads carry an HMAC — recorded that person in an audit event, and then called the actions service with no approver. The permission-tier check and separation of duties were both skipped. A bot cannot supply permissions (it knows a Slack user id and has no idea what that person may do in AiSOC), so it now asserts identity only and the actions service maps it through operator configuration. **If you use ChatOps approvals you must populate `AISOC_CHATOPS_APPROVERS` or they will be refused** — that is the intended failure.
+- **The signed email-approval fallback linked to a 404.** `approval_url()` pointed at a path no router served, so the documented answer to "Slack is unreachable" failed at the moment it was needed. The route exists, and the recipient is signed into the token, because a bare signed link is a bearer credential that approves as nobody.
+- **The API service had no LLM input contract at all.** Seven endpoints POSTed untrusted input straight to a provider, including a submitted email body. The rules are now shared with `services/agents` rather than reimplemented, and the no-bypass gate — which walked the AST for `.ainvoke`/`.astream` and so could not see a raw-HTTP call — has a second half.
+- **One `not` rule silently discarded a tenant's entire business-context rule set** at triage, suppressions included, because two evaluators disagreed about whether `not` takes a mapping or a list.
+- **A rule id named one rule in the engine and a different one in the catalogue** for 45 network rules, so an analyst looking up an id off an alert read the wrong rule's description and playbook.
+- **First-run fixes.** The Codespaces quickstart could never start Docker (capabilities are granted at container creation and cannot be self-granted from an image), and service images were published amd64-only, so Apple Silicon could not pull a single one.
+
+Packaging moves to **v8.2**. The blocker is registry credentials, not code — `release.yml` already builds, packs and would upload all eight packages — and a release cannot schedule an account action by writing a version number.
+
+The full inventory lives under `[8.1.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v8.0.0 (2026-09-22)
+
+`VERSION` was `8.0.0`. The **v8.0.0** release (2026-09-22) is the **Close the loop** release. v8.0 had been reserved for the package-publish milestone; nothing can publish without registry credentials, so the milestone was re-scoped and distribution/packaging moved out. What v8.0 does instead is close the gap between what the codebase contains and what it actually runs.
 
 **v8.0.0 highlights (September 22, 2026)**
 - **The finding worth remembering, because it repeated a dozen times:** the mechanism existed, was unit-tested, and had no caller on the path that needed it. A passing test on an uncalled function is indistinguishable from a working feature until someone traces the call graph. `evidence_fingerprint` promised volatile fields were excluded while its only caller hashed the alert row id plus the whole raw event, so no two alerts ever matched and v7.7's repeat-alert suppression could only ever report zero. `PostActionVerifier` had no caller, and its isolation probe returned `bool(device_id)` — it would have certified an uncontained host. The console wrote per-tenant L0–L4 autonomy tiers to Postgres while the dispatcher read one global environment variable. `get_entity_neighbors` accepted a `tenant_id` and never passed it to the driver.

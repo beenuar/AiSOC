@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.0] — 2026-09-23
+
+**Wave-2 features, and the gaps behind them.** Every item in the wave-2
+backlog ([#362](https://github.com/beenuar/AiSOC/issues/362)) was audited
+against the tree before any code was written, and the backlog turned out to be
+wrong in both directions: two items were already built, and four had the
+capability present with the path that feeds it broken. That is the same shape
+v8.0 found a dozen times — the mechanism exists, is unit-tested, and has no
+caller on the path that needs it — so auditing first is now the opening step
+of a wave rather than an optional one.
+
+Three of those gaps had security consequences, and one is worth stating
+plainly because it inverts what the feature appeared to do: **a Slack or Teams
+approval authorized nobody.** The bots verified who clicked, recorded them in
+an audit event, and called the actions service with no approver, so the
+permission-tier check and separation of duties were both skipped. An approval
+path that does not authorize is worse than none, because it reads as a
+control.
+
+:::warning Breaking change for ChatOps approvals
+`AISOC_ACTIONS_REQUIRE_APPROVER` defaults to `true`. If you use Slack or Teams
+approvals you **must** populate `AISOC_CHATOPS_APPROVERS` or approvals will be
+refused with a 403. Setup: `apps/docs/docs/operations/action-approvals.md`.
+:::
+
+Also in this release: the Codespaces quickstart can start Docker for the first
+time, service images are published for arm64 so Apple Silicon can run
+`pnpm aisoc:demo` at all, and packaging moves to v8.2 — the blocker is
+registry credentials rather than code, and a release cannot schedule an
+account action by writing a version number.
+
+Claim-to-gate matrix: **108 rows — 99 GATED, 9 PARTIAL, 0 NO GATE**.
+
 ### Added
 
 - **Securing the customer's AI estate.** AiSOC could already ingest an
@@ -151,6 +184,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The sandbox determinism test compared a timer.** Its `VOLATILE` list named
+  four fields the CLI does not emit — the real one is `elapsed_ms` — so the
+  comparison included a wall-clock value and failed whenever two runs
+  straddled a millisecond boundary, reporting "Something in the reasoner
+  depends on salted hashing again" and sending a reader after a `hash()` call
+  that was not there. Volatile fields are matched by suffix now, because names
+  are the thing that drifts and the `_ms` convention is not.
+- **The devcontainer cold-start gate could only ever validate the previous
+  image.** It probed the published `:latest` even on a pull request, by design
+  — so a Dockerfile change was unverifiable until after it shipped, which is
+  how a devcontainer whose non-root user was not in the `docker` group reached
+  `main`. A PR touching `.devcontainer/**` now builds from its own source and
+  probes that, and the trigger includes `.devcontainer/**` at all (it fired
+  only on changes to the workflow file).
 - **The Codespaces quickstart could never start Docker
   ([#716](https://github.com/beenuar/AiSOC/issues/716)).** The README
   advertises Codespaces as "the zero-install way to drive the real stack in a

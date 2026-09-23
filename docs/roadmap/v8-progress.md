@@ -1,7 +1,7 @@
 # AiSOC v8 — progress tracker
 
 **Last updated:** 2026-09-23
-**Current release:** `v8.0.0` (2026-09-22) · **In progress:** `v8.1`
+**Current release:** `v8.1.0` (2026-09-23) · **Next:** `v8.2` (packaging)
 
 This tracker is the at-a-glance view of what has landed across the v8 line and
 what is still open. It is deliberately short and dated. When it disagrees with
@@ -54,7 +54,7 @@ not code.
 
 ---
 
-## v8.1 — in progress
+## v8.1 — shipped 2026-09-23
 
 ### Wave-2 features (issue [#362](https://github.com/beenuar/AiSOC/issues/362))
 
@@ -92,7 +92,7 @@ optional one.
 
 ---
 
-## Not in v8.1: packaging
+## Not in v8.1 either: packaging
 
 `release.yml` already builds, packs and would upload all eight packages on
 every tag. The repository's only secret is `FLY_API_TOKEN` — there is no
