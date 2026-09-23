@@ -20,6 +20,12 @@ from app.services.plugin_manager import (
     PluginManifest,
 )
 
+# v9.0 requires a digest-pinned OCI reference; a mutable tag means "what is
+# this deployment running" has no answer after the fact, and the signature
+# gate does not close that hole because it verifies whatever arrived. The
+# pinning rule itself is tested in tests/test_marketplace_supply_chain.py.
+PINNED_REF = "ghcr.io/owner/plugin@sha256:" + "a" * 64
+
 # ── shared fixtures ───────────────────────────────────────────────────────────
 
 
@@ -705,7 +711,7 @@ class TestValidateOciRef:
     @pytest.mark.parametrize(
         "good",
         [
-            "ghcr.io/owner/plugin:v1",
+            PINNED_REF,
             "registry.example.com:5000/team/plugin:1.2.3",
             "ghcr.io/owner/plugin@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
             "r/p",
@@ -971,6 +977,12 @@ def _stub_oras_pull(monkeypatch, fake):
     monkeypatch.setattr(pm.subprocess, "run", fake)
 
 
+# The OCI references in this class are digest-pinned. v9.0 made that a
+# requirement — a mutable tag means "what is this deployment running" has no
+# answer after the fact, and the signature gate does not close that hole
+# because it verifies whatever arrived. These tests exercise the ingest
+# pipeline rather than the pinning rule, which has its own tests in
+# tests/test_marketplace_supply_chain.py.
 class TestInstallFromOciHardening:
     """Defensive behaviours added in Batch 6 (H-3)."""
 
@@ -997,7 +1009,7 @@ class TestInstallFromOciHardening:
 
         mgr = PluginManager(plugins_dir=tmp_path / "plugins")
         with pytest.raises(PluginError, match="invalid plugin id"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="../escape")
+            await mgr.install_from_oci(PINNED_REF, plugin_id_hint="../escape")
         assert fake.calls == []  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
@@ -1022,7 +1034,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="oras pull failed"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+            await mgr.install_from_oci(PINNED_REF)
 
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
 
@@ -1048,7 +1060,7 @@ class TestInstallFromOciHardening:
         _stub_oras_pull(monkeypatch, fake)
 
         mgr = PluginManager(plugins_dir=tmp_path / "plugins")
-        await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.argv-shape")
+        await mgr.install_from_oci(PINNED_REF, plugin_id_hint="test.argv-shape")
 
         assert len(fake.calls) == 1  # type: ignore[attr-defined]
         argv = fake.calls[0]  # type: ignore[attr-defined]
@@ -1060,7 +1072,7 @@ class TestInstallFromOciHardening:
         # --output / <path> come before --, so they are parsed as a flag pair.
         assert out_idx < sep_idx
         # The ref must be the sole positional, immediately after --.
-        assert argv[sep_idx + 1] == "ghcr.io/owner/plugin:v1"
+        assert argv[sep_idx + 1] == PINNED_REF
         assert sep_idx + 2 == len(argv), "ref must be the only positional"
 
     @pytest.mark.asyncio
@@ -1082,7 +1094,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="symlink"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+            await mgr.install_from_oci(PINNED_REF)
 
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
 
@@ -1099,7 +1111,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="does not match plugin_id_hint"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.wrong-id")
+            await mgr.install_from_oci(PINNED_REF, plugin_id_hint="test.wrong-id")
 
         # Mismatch fails AFTER pull but BEFORE copy.
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
@@ -1131,7 +1143,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="invalid plugin id"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+            await mgr.install_from_oci(PINNED_REF)
 
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []
 
@@ -1153,7 +1165,7 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+            await mgr.install_from_oci(PINNED_REF)
 
         # The signature gate fires inside the ``with tempfile.TemporaryDirectory``
         # block, before ``_safe_copytree`` is reached. PLUGINS_DIR must be
@@ -1175,7 +1187,7 @@ class TestInstallFromOciHardening:
 
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
-        loaded_id = await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+        loaded_id = await mgr.install_from_oci(PINNED_REF)
 
         assert loaded_id == "test.happy"
         assert (plugins_dir / "test.happy" / "plugin.py").exists()
@@ -1202,7 +1214,7 @@ class TestInstallFromOciHardening:
 
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
-        loaded_id = await mgr.install_from_oci("ghcr.io/owner/plugin:v1", plugin_id_hint="test.real-plugin")
+        loaded_id = await mgr.install_from_oci(PINNED_REF, plugin_id_hint="test.real-plugin")
 
         assert loaded_id == "test.real-plugin"
         assert (plugins_dir / "test.real-plugin" / "plugin.py").exists()
@@ -1225,6 +1237,6 @@ class TestInstallFromOciHardening:
         plugins_dir = tmp_path / "plugins"
         mgr = PluginManager(plugins_dir=plugins_dir)
         with pytest.raises(PluginError, match="multiple plugin directories"):
-            await mgr.install_from_oci("ghcr.io/owner/plugin:v1")
+            await mgr.install_from_oci(PINNED_REF)
 
         assert not plugins_dir.exists() or list(plugins_dir.iterdir()) == []

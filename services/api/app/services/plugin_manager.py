@@ -117,6 +117,35 @@ _OCI_FORBIDDEN_HOST_SUBSTRINGS = (
     "metadata.azure.com",
 )
 
+#: Registries an operator permits plugins to be installed from.
+#:
+#: Empty means "any registry", which is the historical behaviour and stays
+#: the default so this does not break an existing deployment on upgrade. The
+#: documentation had claimed an allow-list existed; it did not, and only a
+#: metadata-host *deny* list was present. A deny list answers "is this one of
+#: three known-bad hosts" — an allow-list answers "is this a registry we
+#: chose", which is the question worth asking about code that runs in-process.
+_OCI_REGISTRY_ALLOWLIST_ENV = "AISOC_PLUGIN_REGISTRY_ALLOWLIST"
+
+#: A pinned reference names an immutable digest.
+_OCI_DIGEST_RE = re.compile(r"@sha256:[a-f0-9]{64}$")
+
+
+def _registry_allowlist() -> tuple[str, ...]:
+    raw = os.environ.get(_OCI_REGISTRY_ALLOWLIST_ENV, "")
+    return tuple(entry.strip().lower() for entry in raw.split(",") if entry.strip())
+
+
+def _registry_of(oci_ref: str) -> str:
+    """The host portion of a reference, lower-cased.
+
+    A reference with no host — ``library/thing:1.0`` — resolves to Docker Hub
+    implicitly. Returning an empty string for that case means it fails an
+    allow-list rather than passing one by accident.
+    """
+    head = oci_ref.split("/", 1)[0]
+    return head.lower() if ("." in head or ":" in head or head == "localhost") else ""
+
 
 def _validate_plugin_id(plugin_id: str) -> str:
     """Return ``plugin_id`` if it is a safe path/module component.
@@ -156,7 +185,47 @@ def _validate_oci_ref(oci_ref: str) -> str:
     lowered = oci_ref.lower()
     if any(bad in lowered for bad in _OCI_FORBIDDEN_HOST_SUBSTRINGS):
         raise PluginError(oci_ref, "oci_ref host is on the forbidden metadata-service deny list")
+
+    allowlist = _registry_allowlist()
+    if allowlist:
+        registry = _registry_of(oci_ref)
+        if registry not in allowlist:
+            raise PluginError(
+                oci_ref,
+                f"registry {registry or '(implicit docker hub)'} is not in {_OCI_REGISTRY_ALLOWLIST_ENV}",
+            )
     return oci_ref
+
+
+def _require_pinned(oci_ref: str) -> str:
+    """Reject a reference that does not name an immutable digest.
+
+    A tag is mutable: ``:latest`` resolves to one image at install time and a
+    different one tomorrow, so "what plugin is this deployment running" has
+    no answer after the fact, and a publisher — or anyone who takes their
+    account — can change in-process code without touching this system.
+
+    The signature gate does not close this. It verifies whatever arrived; it
+    cannot tell you that what arrived is what was reviewed.
+
+    Opt-out exists (``AISOC_PLUGIN_ALLOW_UNPINNED=1``) because requiring
+    digests unconditionally would break every existing tag-based install on
+    upgrade, and a control that forces an operator to disable it wholesale is
+    worse than one they can adopt.
+    """
+    if _OCI_DIGEST_RE.search(oci_ref):
+        return oci_ref
+    if os.environ.get("AISOC_PLUGIN_ALLOW_UNPINNED", "").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.warning(
+            "plugin.oci_unpinned",
+            oci_ref=oci_ref,
+            note="installed from a mutable tag; the running code can change without this system being told",
+        )
+        return oci_ref
+    raise PluginError(
+        oci_ref,
+        "oci_ref must be pinned to a digest (repo@sha256:...); " "set AISOC_PLUGIN_ALLOW_UNPINNED=1 to accept a mutable tag",
+    )
 
 
 def _assert_no_symlinks(root: Path) -> None:
@@ -647,8 +716,10 @@ class PluginManager:
 
         Returns the plugin_id after successful installation.
         """
-        # 1) Input validation — argv hygiene before any subprocess work.
+        # 1) Input validation — argv hygiene, an operator-chosen registry, and
+        #    an immutable reference, all before any subprocess work.
         _validate_oci_ref(oci_ref)
+        _require_pinned(oci_ref)
         if plugin_id_hint is not None:
             _validate_plugin_id(plugin_id_hint)
 

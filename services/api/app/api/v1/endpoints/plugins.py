@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.services.plugin_manager import (
@@ -161,6 +161,38 @@ async def reload_plugin(
     except PluginError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_plugin_out(_mgr().get_plugin(plugin_id))  # type: ignore[arg-type]
+
+
+class OciInstallRequest(BaseModel):
+    oci_ref: str = Field(
+        ...,
+        description=(
+            "Registry reference, pinned to a digest: host[:port]/repo@sha256:... "
+            "A mutable tag is refused unless AISOC_PLUGIN_ALLOW_UNPINNED is set."
+        ),
+    )
+    plugin_id: str | None = Field(default=None, description="Override the id in the manifest.")
+
+
+@router.post("/install/oci", status_code=status.HTTP_201_CREATED)
+async def install_plugin_from_oci(
+    body: OciInstallRequest,
+    _: Annotated[AuthUser, Depends(require_permission("plugins:admin"))] = None,
+) -> dict[str, str]:
+    """Install a plugin from an OCI registry.
+
+    `PluginManager.install_from_oci` was 220 lines of hardened ingest —
+    argv-safe `oras` invocation, symlink rejection, Ed25519 manifest
+    verification against a trusted-keys directory, re-verified at load — with
+    **no HTTP caller anywhere**. There was no way to reach it short of a
+    Python shell inside the container, so every bit of that hardening
+    protected a path nobody could take.
+    """
+    try:
+        plugin_id = await _mgr().install_from_oci(body.oci_ref, plugin_id_hint=body.plugin_id)
+    except PluginError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"plugin_id": plugin_id, "oci_ref": body.oci_ref}
 
 
 @router.delete("/{plugin_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
