@@ -42,7 +42,14 @@ on:
     - cron: '0 3 * * 2'
 
 permissions:
-  contents: read
+  # `write` so this job can do the thing the docs already promised and nothing
+  # implemented: append a row to the public scoreboard. It previously had
+  # `read`, so even a perfectly successful run could not have published its
+  # result if it tried — which is why the table sat frozen at 2026-07-13 for
+  # ten weeks across three releases while the page above it advertised a
+  # weekly cadence.
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: live-agent-eval-${{ github.ref }}
@@ -148,6 +155,35 @@ jobs:
             live-agent-eval.wet.json
           if-no-files-found: warn
           retention-days: 30
+
+      # Substrate, and labelled as such. The row carries substrate:true and
+      # eval_mode:substrate-only, and check_scoreboard's honesty check refuses
+      # any other combination — appending a deterministic row must never look
+      # like live-agent performance. The live half stays unpublished until
+      # there is a funded provider key, which is an account action.
+      - name: Append a substrate row to the public scoreboard
+        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          cd services/agents
+          python3 ../../scripts/check_scoreboard.py --append
+          cd ../..
+          if git diff --quiet apps/docs/static/data/scoreboard.json; then
+            echo "No change to append."
+            exit 0
+          fi
+          git config user.name "aisoc-bot"
+          git config user.email "bot@users.noreply.github.com"
+          BRANCH="scoreboard/$(date -u +%Y-%m-%d)"
+          git checkout -b "$BRANCH"
+          git add apps/docs/static/data/scoreboard.json
+          git commit -m "chore(scoreboard): append substrate row for $(date -u +%Y-%m-%d)"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(scoreboard): substrate row for $(date -u +%Y-%m-%d)" \
+            --body "Appended by \`live-agent-eval.yml\`. Substrate row (deterministic, no LLM) — not live-agent performance."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Ollama log on failure
         if: failure()

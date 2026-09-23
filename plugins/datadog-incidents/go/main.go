@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // DatadogConnector implements aisoc.Connector for the Datadog Incidents/Signals APIs.

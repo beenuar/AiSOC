@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // TwilioAction implements aisoc.Action for sending SMS via Twilio.

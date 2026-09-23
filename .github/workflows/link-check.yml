@@ -106,3 +106,11 @@ jobs:
 
       - name: Every github.com/beenuar/AiSOC link resolves to a real path
         run: python3 scripts/check_repo_self_links.py
+
+      # The same failure shape, one layer down. Both published Go SDKs
+      # declared `github.com/beenuar/aisoc/<name>` — wrong case, missing the
+      # `packages/` prefix — so `go get` resolved neither. Nothing caught it
+      # because every in-repo consumer used a replace directive: the tree
+      # built perfectly and the published artifact did not exist.
+      - name: Every published Go module path resolves
+        run: python3 scripts/check_go_module_paths.py

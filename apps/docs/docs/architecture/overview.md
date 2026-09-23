@@ -39,10 +39,10 @@ AiSOC/
 │   ├── ocsf/             # OCSF normalization helpers
 │   ├── sdk-ts/           # TypeScript client SDK for AiSOC API (npm: @aisoc/sdk, lands in v8.0)
 │   ├── sdk-py/           # Async Python client SDK (PyPI: aisoc-sdk, lands in v8.0)
-│   ├── sdk-go/           # Go client SDK + models (module: github.com/beenuar/aisoc/sdk-go)
+│   ├── sdk-go/           # Go client SDK + models (module: github.com/beenuar/AiSOC/packages/sdk-go)
 │   ├── plugin-sdk-ts/    # TypeScript plugin development SDK
 │   ├── plugin-sdk-py/    # Python plugin development SDK (PyPI: aisoc-plugin-sdk, lands in v8.0)
-│   ├── plugin-sdk-go/    # Go plugin development SDK (module: github.com/beenuar/aisoc/plugin-sdk-go)
+│   ├── plugin-sdk-go/    # Go plugin development SDK (module: github.com/beenuar/AiSOC/packages/plugin-sdk-go)
 │   └── aisoc-cli/        # CLI: scaffold / validate / publish plugins & detections (PyPI: aisoc-cli, lands in v8.0)
 ├── detections/           # Community Sigma detection rules (YAML) — 800+ native
 ├── hunts/                # Hunt-as-Code YAML definitions (hypothesis + indicators + schedule)

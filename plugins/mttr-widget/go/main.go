@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 const defaultAPIBase = "http://api:8000"

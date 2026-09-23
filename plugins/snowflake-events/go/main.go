@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 	// _ "github.com/snowflakedb/gosnowflake"
 )
 
