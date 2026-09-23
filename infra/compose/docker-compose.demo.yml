@@ -1,14 +1,34 @@
 ###############################################################################
-# AiSOC - AI Security Operations Center
-# Docker Compose - Slim Demo Profile (time-to-wow under 5 minutes)
+# AiSOC - UI preview over a pre-seeded database. NOT the product pipeline.
 #
-# This profile pulls prebuilt images from GHCR instead of building locally,
-# and only includes the 6 services required to demo a triaging investigation:
-#   postgres, redis, zookeeper, kafka, api, agents, realtime, web
+#   ┌───────────────────────────────────────────────────────────────────┐
+#   │  This stack does NOT run the AiSOC pipeline.                      │
+#   │                                                                   │
+#   │  It has no ingest service and no fusion service, and it sets      │
+#   │  AISOC_DISABLE_KAFKA=true. Everything visible in the console came │
+#   │  from `seed_demo.py` writing synthetic rows straight into         │
+#   │  Postgres. No event is normalized, detected, correlated or        │
+#   │  promoted, because none of the code that does those things is     │
+#   │  running.                                                         │
+#   │                                                                   │
+#   │  Use it to look at the interface. Do not use it to evaluate       │
+#   │  whether AiSOC works — it cannot answer that question.            │
+#   └───────────────────────────────────────────────────────────────────┘
 #
-# Optional heavyweights (clickhouse, opensearch, qdrant, neo4j, kafka-ui,
-# enrichment, fusion, ingest, threatintel, ueba, honeytokens, purple-team,
-# actions, connectors, monitoring) are intentionally excluded.
+# For a stack that actually processes events, use the CORE profile, which is
+# the default and what `install.sh`, the README and CI all use:
+#
+#     make up      # 10 services, the real pipeline
+#     make smoke   # prove it: one real event -> a retrievable alert
+#     make demo    # then add the same synthetic data, clearly labelled
+#
+# This file was the documented quick start until v8.2. A user followed the
+# README, saw a populated console, and concluded the platform worked having
+# never run the platform. It is kept only for screenshots and UI work.
+#
+# Included: postgres, redis, zookeeper, kafka, api, agents, realtime, web, seed
+# Absent:   ingest, fusion, connectors, enrichment, clickhouse, neo4j, qdrant,
+#           opensearch, threatintel, ueba, actions — i.e. most of the product
 #
 # Usage:
 #   pnpm aisoc:demo

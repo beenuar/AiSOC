@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 	"github.com/beenuar/aisoc/services/ingest/internal/enrichment"
@@ -16,10 +18,10 @@ import (
 
 // Publisher sends normalized events to Kafka
 type Publisher struct {
-	writer       *kafka.Writer
-	vulnWriter   *kafka.Writer // dedicated writer for VULNERABILITY_MATCH topic
-	graphWriter  *kafka.Writer // dedicated writer for security.graph_updates (T1.1, v8.0)
-	cfg          *config.Config
+	writer      *kafka.Writer
+	vulnWriter  *kafka.Writer // dedicated writer for VULNERABILITY_MATCH topic
+	graphWriter *kafka.Writer // dedicated writer for security.graph_updates (T1.1, v8.0)
+	cfg         *config.Config
 }
 
 // New creates a new Kafka publisher
@@ -194,6 +196,30 @@ func (p *Publisher) PublishBatch(ctx context.Context, events []*normalizer.Norma
 
 	log.Info().Int("count", len(msgs)).Msg("Batch published to Kafka")
 	return nil
+}
+
+// Ready reports whether the Kafka broker is actually reachable.
+//
+// This is the difference between liveness and readiness for this service:
+// the process can be perfectly alive while the broker is unreachable, and in
+// that state every ingested event is accepted and then dropped. An operator
+// or a load balancer needs to tell those apart, and /health could not --- it
+// returned 200 unconditionally.
+//
+// Dialing is deliberate rather than reading a cached connection state:
+// kafka-go reconnects lazily, so a cached "connected" flag is stale in
+// exactly the situation this is meant to catch.
+func (p *Publisher) Ready(ctx context.Context) error {
+	addr := p.writer.Addr
+	if addr == nil {
+		return fmt.Errorf("no kafka address configured")
+	}
+	d := &net.Dialer{Timeout: 2 * time.Second}
+	conn, err := d.DialContext(ctx, addr.Network(), addr.String())
+	if err != nil {
+		return fmt.Errorf("kafka unreachable at %s: %w", addr.String(), err)
+	}
+	return conn.Close()
 }
 
 // Close shuts down the Kafka writers

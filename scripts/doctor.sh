@@ -228,6 +228,19 @@ check_http_service() {
 check_http_service api          "${AISOC_API_URL:-http://localhost:8000}/health"   "docker compose logs api | tail -40"
 check_http_service ingest-worker "${AISOC_INGEST_URL:-http://localhost:8081}/health" "docker compose logs ingest-worker | tail -40"
 
+# Liveness says the process is up. Readiness says it can do its job. For
+# ingest the difference is Kafka: without it every accepted event is dropped
+# while /health keeps answering 200.
+if svc_running ingest-worker; then
+  ready_code="$(http_ok "${AISOC_INGEST_URL:-http://localhost:8081}/readyz" 8)"
+  case "$ready_code" in
+    200) pass "ingest-worker ready (kafka reachable)" ;;
+    503) fail "ingest-worker is alive but NOT ready — it cannot reach Kafka, so ingested events are dropped" "curl -s ${AISOC_INGEST_URL:-http://localhost:8081}/readyz   # prints the reason" ;;
+    404) warn "ingest-worker has no /readyz — running an image older than v8.2" "docker compose build ingest-worker && docker compose up -d ingest-worker" ;;
+    *)   warn "ingest-worker /readyz returned $ready_code" "docker compose logs ingest-worker | tail -30" ;;
+  esac
+fi
+
 # Fusion has no HTTP health route in every build, so it is checked by whether
 # its consumer actually joined the group — the thing that matters.
 if svc_running fusion; then

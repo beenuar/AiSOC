@@ -173,10 +173,56 @@ func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // Health handles GET /health
+// Health is liveness: is this process running at all? It deliberately checks
+// nothing else, so a restart loop is distinguishable from a dependency
+// outage.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "ok",
 		"service":   "ingest",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// Livez is the Kubernetes spelling of Health. Same answer, conventional name.
+func (h *Handler) Livez(w http.ResponseWriter, r *http.Request) {
+	h.Health(w, r)
+}
+
+// Readyz is readiness: can this service do its job right now?
+//
+// For ingest that means one thing — is Kafka reachable. Without it every
+// accepted event is dropped, and the service used to report a cheerful 200
+// throughout, so "ingest is healthy" and "nothing is reaching the pipeline"
+// were simultaneously true with no way to tell from the outside.
+//
+// 503 with the reason, rather than 200 with a status field, so a load
+// balancer and a human both get a usable answer.
+func (h *Handler) Readyz(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	if h.pub == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status":  "not_ready",
+			"service": "ingest",
+			"reason":  "no kafka publisher configured",
+		})
+		return
+	}
+	if err := h.pub.Ready(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status":  "not_ready",
+			"service": "ingest",
+			"reason":  err.Error(),
+			"hint":    "docker compose logs kafka | tail -40",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":    "ready",
+		"service":   "ingest",
+		"checks":    map[string]string{"kafka": "reachable"},
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
 }
