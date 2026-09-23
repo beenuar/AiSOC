@@ -11,14 +11,25 @@ Routes
 ------
 
 ``GET /v1/identity/effective-permissions/providers``
-    Return the supported provider list + per-provider coverage status. The
-    UI uses this to render the provider switcher and grey-out the
-    scaffolded providers.
+    Return the supported provider list + per-provider coverage status.
+    The UI uses this to render the provider switcher.
 
 ``GET /v1/identity/{principal_id}/effective-permissions?provider=...``
-    Return a :class:`ResolverResult` JSON envelope. Scaffolded providers
-    (Azure, GCP, Okta, GWS) return HTTP 501 with the same envelope shape so
-    the UI can still render the empty state.
+    Return a :class:`ResolverResult` JSON envelope.
+
+All five resolvers — AWS, Azure, GCP, Okta and Google Workspace — are
+implemented and report ``coverage: "full"``. This docstring described Azure,
+GCP, Okta and GWS as scaffolds returning HTTP 501 long after they stopped
+being scaffolds, and the ``NotImplementedError`` branch below has been
+unreachable for as long.
+
+What *is* still limited is the **snapshot**, not the resolver. A resolver is a
+pure function over a provider snapshot, and only Okta's is assembled from a
+live connector today — the other four expect a connector to answer the
+``__posture_snapshot__`` sentinel, and no connector implements it. With
+``AISOC_EFFECTIVE_PERMISSIONS_LIVE=1`` those four therefore return **412**
+("no policy snapshot ingested yet") rather than a fabricated snapshot. See
+``app/services/effective_permissions/posture_loader.py``.
 
 The endpoint deliberately accepts an optional ``snapshot_b64`` query param
 (base64-encoded JSON) so an analyst can dry-run the resolver against a
@@ -181,6 +192,15 @@ async def get_effective_permissions(
             snapshot=snapshot,
         )
     except NotImplementedError as exc:
+        # Kept as a guard, not as a documented behaviour. Every registered
+        # resolver is implemented, so reaching this means a new provider was
+        # added to SUPPORTED_PROVIDERS without one — which should surface
+        # loudly rather than as an empty result the UI renders as "no access".
+        logger.error(
+            "effective_permissions.resolver_not_implemented provider=%s err=%s",
+            str(provider).replace("\r", "").replace("\n", " ")[:64],
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail={

@@ -46,6 +46,14 @@ FALLBACK_WITH_MOCK = re.compile(rf"fallbackData:.*{MOCK_NAME}")
 #: An assignment of a mock inside a file, e.g. `setRules(MOCK_RULES)`.
 MOCK_ASSIGN = re.compile(rf"\bset[A-Z]\w*\(\s*{MOCK_NAME}")
 
+#: A *factory* that builds sample data, e.g. `setTimeline(makeDemoTimeline())`.
+#: The two patterns above match a constant by name, which is one of the two
+#: ways to render fabricated state — `InvestigationTimeline.tsx` used the other
+#: and passed this gate while rendering a fully invented investigation
+#: (a named analyst, a routable source IP, "Session suspended; email
+#: dispatched") whenever no run was selected.
+MOCK_FACTORY_ASSIGN = re.compile(r"\bset[A-Z]\w*\(\s*(?:make|build|get|create)(?:Mock|Demo|Sample|Fake|Fallback)\w*\(")
+
 #: Files exempt by nature: the gate helper itself, tests, and stories.
 EXEMPT_SUFFIXES = (".test.ts", ".test.tsx", ".stories.tsx", "demoFallback.ts")
 
@@ -96,6 +104,12 @@ def scan(root: pathlib.Path) -> list[str]:
                 problems.append(
                     f"{rel}:{number}: sample data assigned to state with no canUseDemoData() "
                     f"check in this file. Show an error or empty state instead."
+                )
+
+            if MOCK_FACTORY_ASSIGN.search(line) and not file_has_guard:
+                problems.append(
+                    f"{rel}:{number}: a sample-data factory is assigned to state with no "
+                    f"canUseDemoData() check in this file. Show an error or empty state instead."
                 )
 
     return problems

@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { canUseDemoData } from "@/lib/demoFallback";
+
 // ---------------------------------------------------------------------------
 // Types (mirror backend TimelineResponse / TimelineNode)
 // ---------------------------------------------------------------------------
@@ -562,7 +564,20 @@ export default function InvestigationTimeline({
 
   useEffect(() => {
     if (!runId) {
-      setTimeline(makeDemoTimeline());
+      // `makeDemoTimeline()` returns a fully invented investigation — a named
+      // analyst, a routable source IP, "Session suspended; email dispatched".
+      // It rendered unconditionally whenever `runId` was absent, so an
+      // operator with no run selected read fabricated activity as their own
+      // tenant's. Gated now; without demo mode the panel says it has nothing
+      // rather than inventing something.
+      //
+      // `check_mock_data_gated.py` did not catch this: it matches `MOCK_*` /
+      // `DEMO_*` constant *names*, and this is a function call.
+      if (canUseDemoData()) {
+        setTimeline(makeDemoTimeline());
+      } else {
+        setTimeline(null);
+      }
       return;
     }
     setLoading(true);

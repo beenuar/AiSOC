@@ -195,6 +195,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `beenuar/AiSOC/packages/aisoc-action@v8.1.0`, which is what both show now;
   `docs/operations/publishing.md` records what the short alias would actually
   require, since a Marketplace listing resolves to a repository root.
+- **Config snapshots could never run, and reported themselves enabled.** The
+  Go config-snapshotter called `GET {base}/v1/connectors/{id}/resource-config`;
+  the connectors service serves `POST /api/v1/connectors/{id}/resource_config`.
+  Four mismatches at once — method, prefix, separator, payload — and the last
+  is not a typo: that endpoint requires decrypted `auth_config` in the body and
+  the ingest service has no vault, so it could never have called that route at
+  all. Renaming the URL would have turned a silent 404 into a silent 422.
+  Silent either way, because a 404 maps to `ErrNotImplemented`, which the
+  snapshotter treats as a soft skip — so an operator saw "T1.2 config snapshots
+  enabled" on boot and zero `Configuration` nodes in the graph, with nothing
+  connecting the two. Fixed with an instance-scoped route on the connectors
+  service that resolves the saved instance and decrypts credentials the way
+  `ConnectorScheduler` does at poll time, so the ingest service needs no
+  secrets. Query values are escaped: an ARN containing `&` or `#` would
+  otherwise truncate the URL or inject a parameter.
+- **The documented "latest configuration" graph query matched zero edges.**
+  `is_current`, `valid_from` and `valid_to` are declared in
+  `schemas/graph-schema.yaml` and the published schema doc advertised an O(1)
+  lookup via `:CONFIGURED_AS {is_current: true}`. Nothing wrote any of the
+  three. The drift gate could not catch it, because it validates properties
+  only on edges declared `event_edge: true` and this one is structural. All
+  three are written now, with the limitation stated rather than implied:
+  closing the previous interval needs a read-modify-write the ingest hot path
+  deliberately does not do, so `valid_to` is **absent** while the interval is
+  open — an open interval is not one that closed at the epoch — and the doc
+  now shows the `ORDER BY valid_from DESC` query that actually works.
+- **Four effective-permissions resolvers were documented as scaffolds long
+  after they were implemented.** The endpoint docstring described Azure, GCP,
+  Okta and GWS as returning HTTP 501, and the `NotImplementedError` branch had
+  been unreachable for as long. All five resolvers report `coverage: "full"`.
+  What is still limited is the *snapshot*, not the resolver: only Okta's is
+  assembled from a live connector, because the other four expect a connector
+  to answer the `__posture_snapshot__` sentinel and **no connector implements
+  it**, so with live mode on they return 412 rather than a fabricated
+  snapshot. That was honest but unrecorded, so `coverage: full` was the only
+  figure a reader saw. A new gate pins the real shape of the gap in both
+  directions — a resolver registered without a snapshot source fails, and so
+  does a stale entry on the allow-list once its connector starts answering the
+  sentinel. The gap is allowed to exist; it is not allowed to be invisible.
+- **A fabricated investigation rendered whenever no run was selected.**
+  `InvestigationTimeline.tsx` called `makeDemoTimeline()` — a named analyst, a
+  routable source IP, "Session suspended; email dispatched" — with no demo
+  gate. `check_mock_data_gated.py` missed it because it matches `MOCK_*` /
+  `DEMO_*` constant *names* and this is a function call, which is the other of
+  the two ways to render invented state. Gated, and the gate now also catches
+  a `set*(makeDemo*())` factory. Verified by reverting the component: the
+  widened gate names the exact line.
 - **A ChatOps approval authorized nobody.** The Slack and Teams bots verified
   who clicked — Slack signs every interaction payload, Teams payloads carry an
   HMAC — recorded that person in an audit event, and then called
