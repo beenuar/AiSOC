@@ -35,7 +35,7 @@ aiohttp = ">=3.14.3"
 # permits the fix is not the same as a lock that takes it.
 langgraph-checkpoint = ">=4.1.1"
 langgraph-sdk = ">=0.3.15"
-openai = ">=1.12,<3.0"
+openai = ">=1.12,<4.0"
 redis = {extras = ["hiredis"], version = ">=5.0.1,<9.0.0"}
 httpx = ">=0.26,<0.29"
 structlog = ">=24.1,<27.0"
