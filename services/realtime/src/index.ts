@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 
 import { PushManager } from './push';
 import { resolveTicketSecret, verifyRealtimeTicket } from './auth';
+import { setupTelemetry, type Shutdown } from './telemetry';
 
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -693,8 +694,16 @@ app.get('/healthz', reportHealth);
 // Node defaults to "::" when IPv6 is available, but be explicit to match the
 // other services and avoid surprises if a future Node release changes the
 // default or the container is launched with IPv6 disabled.
+// Tracing. `ingest` and `realtime` were the two uninstrumented ends of the
+// Kafka spine, so a trace started at the API stopped at the pipeline
+// boundary — exactly where the interesting latency is. No-ops unless
+// OTEL_EXPORTER_OTLP_ENDPOINT is set.
+let shutdownTelemetry: Shutdown = async () => {};
+
 server.listen(PORT, '::', async () => {
   log.info({ port: PORT, host: '::' }, 'AiSOC Real-time service started');
+
+  shutdownTelemetry = await setupTelemetry(log);
 
   // Start the two Kafka consumers concurrently. Each is wrapped in its own
   // try/catch so a failure on the graph topic (e.g. it doesn't exist yet on
@@ -721,3 +730,20 @@ server.listen(PORT, '::', async () => {
     }
   })();
 });
+
+// Flush spans on the way out. Without this the exporter drops the spans
+// from the final seconds before a restart, which are disproportionately
+// the ones someone is looking for.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    log.info({ signal }, 'shutting down');
+    void shutdownTelemetry().finally(() => {
+      server.close(() => process.exit(0));
+      // Do not wait forever on lingering WebSocket connections: a
+      // fan-out service always has open sockets, so close() alone may
+      // never resolve and the container would be SIGKILLed with spans
+      // still buffered.
+      setTimeout(() => process.exit(0), 5000).unref();
+    });
+  });
+}

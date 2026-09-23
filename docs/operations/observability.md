@@ -49,7 +49,13 @@ For each service we track the standard golden signals:
 
 ## Single trace across services
 
-**Partial today.** `api`, `agents`, `ueba` and `honeytokens` are instrumented with **OpenTelemetry** and export via OTLP. `ingest` (Go) and `realtime` (TypeScript) are **not instrumented**, and they are the two ends of the Kafka spine — so a trace does not yet run unbroken from raw event to response action. Spans that are emitted carry the tenant and run/incident ids.
+`api`, `agents`, `ueba`, `honeytokens`, `ingest` (Go) and `realtime` (TypeScript) are instrumented with **OpenTelemetry** and export via OTLP. The last two were the ends of the Kafka spine, so a trace used to begin at the API and stop at the pipeline boundary — which is where the interesting latency lives: an event that takes four seconds to become an alert is invisible if nothing spans the part that took four seconds.
+
+All six share `OTEL_EXPORTER_OTLP_ENDPOINT` and propagate W3C `traceparent`, so a request continues as one trace rather than becoming several disconnected ones. Tracing is **off unless that variable is set**: emitting spans into a connection error is worse than emitting none, because it fills the logs and makes a missing trace ambiguous between "no span" and "no collector".
+
+Sampling is parent-based at 5% by default (`OTEL_TRACES_SAMPLER_ARG`). Parent-based matters more than the ratio — a trace sampled at one service and re-decided at the next produces gaps that look like a service not participating.
+
+Spans carry the tenant and run/incident ids.
 
 A collector now ships: `docker compose --profile monitoring up` starts an OpenTelemetry Collector on `otel-collector:4317` (the endpoint the services already default to) forwarding into Grafana Tempo, with Tempo wired into Grafana as a datasource alongside Prometheus. Previously no collector existed in any compose file, so out of the box every span went into a connection error — which is worse than no tracing, because the code looks instrumented and nobody can tell a missing span from a missing collector.
 

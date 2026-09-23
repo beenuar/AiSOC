@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // resolveCORSOrigins mirrors the shared Python helper in services/api/app/core/cors.py:
@@ -74,6 +75,14 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 	// Middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	// Continues a trace started upstream rather than beginning a new one:
+	// the propagator reads W3C traceparent, so an API request that reaches
+	// ingest stays one trace instead of becoming two disconnected ones.
+	// No-op when tracing is disabled, since the global provider is a
+	// no-op provider in that case.
+	r.Use(func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "ingest")
+	})
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	// Allow-list is resolved from AISOC_CORS_ORIGINS (canonical) / CORS_ORIGINS
