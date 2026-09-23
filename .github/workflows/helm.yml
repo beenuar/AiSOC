@@ -1,0 +1,143 @@
+name: Helm
+
+# The chart was never exercised. `docs/audit/REPOSITORY_REALITY.md` recorded
+# it as "renders; whether it runs was not tested", and it turned out not even
+# to render: `helm template` fails outright with "missing in charts/
+# directory: postgresql, redis" until dependencies are fetched. So the chart
+# in this repository could not be installed by anyone who cloned it and
+# followed the docs, and nothing said so.
+#
+# This job does the fetch, renders, validates the output as Kubernetes
+# objects, and installs into a real cluster.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/helm/**'
+      - '.github/workflows/helm.yml'
+  pull_request:
+    paths:
+      - 'infra/helm/**'
+      - '.github/workflows/helm.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: Helm — lint, render, validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
+
+      # The step the docs never told anyone to run, which is why the chart
+      # appeared to work and did not.
+      - name: Fetch chart dependencies
+        run: helm dependency build infra/helm/aisoc
+
+      - name: Lint
+        run: helm lint infra/helm/aisoc
+
+      - name: Render with defaults
+        run: helm template aisoc infra/helm/aisoc > /tmp/default.yaml
+
+      # The Helm chart could not install at all on main before v8.1: the
+      # deployment template read .Values.ueba.replicaCount and values.yaml had
+      # no `ueba` key. Rendering every switched-on path is how that class is
+      # caught, rather than the default path alone.
+      - name: Render with every optional subsystem on
+        run: |
+          helm template aisoc infra/helm/aisoc \
+            --set networkPolicy.enabled=true \
+            --set 'networkPolicy.allowedEgressCIDRs={10.0.0.0/8}' \
+            --set hpa.enabled=true \
+            --set ingress.enabled=true \
+            > /tmp/full.yaml
+
+      - name: Validate the rendered objects against the Kubernetes schema
+        run: |
+          set -euo pipefail
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          /tmp/kubeconform -strict -summary /tmp/default.yaml
+          /tmp/kubeconform -strict -summary /tmp/full.yaml
+
+      # The egress policy is the network half of "runs entirely on your
+      # infrastructure". Asserting it renders is not the same as asserting it
+      # is correct, so check the two properties that make it worth having.
+      - name: The egress policy denies by default and excludes metadata
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys, yaml
+          docs = [d for d in yaml.safe_load_all(open("/tmp/full.yaml")) if d]
+          policies = [d for d in docs if d.get("kind") == "NetworkPolicy"]
+          if not policies:
+              sys.exit("no NetworkPolicy rendered with networkPolicy.enabled=true")
+          policy = policies[0]
+
+          if policy["spec"].get("policyTypes") != ["Egress"]:
+              sys.exit("policy does not declare Egress; an empty egress list would not deny")
+
+          blocks = [
+              block
+              for rule in policy["spec"]["egress"]
+              for dest in rule.get("to", [])
+              if (block := dest.get("ipBlock"))
+          ]
+          if not blocks:
+              sys.exit("no ipBlock rendered from allowedEgressCIDRs")
+          for block in blocks:
+              if "169.254.169.254/32" not in block.get("except", []):
+                  sys.exit(f"cidr {block['cidr']} does not exclude the metadata service")
+
+          # Default render must NOT emit one — it is opt-in because a CNI that
+          # does not enforce NetworkPolicy ignores it silently, and a control
+          # that is silently ignored reads as protection while providing none.
+          default = [d for d in yaml.safe_load_all(open("/tmp/default.yaml")) if d]
+          if any(d.get("kind") == "NetworkPolicy" for d in default):
+              sys.exit("NetworkPolicy rendered by default; it must stay opt-in")
+
+          print("OK: egress policy denies by default, excludes metadata, and is opt-in")
+          PY
+
+  install:
+    name: Helm — install into a real cluster
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
+
+      - name: Start a kind cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          cluster_name: aisoc-helm
+
+      - name: Fetch chart dependencies
+        run: helm dependency build infra/helm/aisoc
+
+      # --dry-run=server is the honest bar for a CI runner. The images are not
+      # published for every PR and the datastores would not fit anyway, so a
+      # full rollout would test the runner's disk rather than the chart. What
+      # this does test is the thing that was never tested: that the API server
+      # accepts every object the chart produces — admission, defaulting, RBAC
+      # and schema — which `helm template` alone cannot tell you.
+      - name: Install (server dry-run)
+        run: |
+          helm install aisoc infra/helm/aisoc \
+            --dry-run=server \
+            --set networkPolicy.enabled=true \
+            --set 'networkPolicy.allowedEgressCIDRs={10.0.0.0/8}' \
+            > /dev/null
+          echo "OK: the API server accepted every object in the chart."
