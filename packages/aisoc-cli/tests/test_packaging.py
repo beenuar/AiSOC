@@ -19,7 +19,7 @@ redundant mapping is only safe if something checks the templates still arrive.
 
 from __future__ import annotations
 
-import shutil
+import importlib.util
 import subprocess
 import sys
 import zipfile
@@ -43,7 +43,7 @@ def test_the_source_tree_has_a_template_for_every_plugin_type() -> None:
     assert EXPECTED_TYPES <= present, f"missing template dirs: {sorted(EXPECTED_TYPES - present)}"
 
 
-@pytest.mark.skipif(shutil.which("pip") is None, reason="pip is required to build the wheel")
+@pytest.mark.skipif(importlib.util.find_spec("build") is None, reason="python -m build is required to build the wheel")
 def test_templates_reach_the_wheel(tmp_path: Path) -> None:
     """Build the real wheel and look inside it.
 
@@ -60,8 +60,6 @@ def test_templates_reach_the_wheel(tmp_path: Path) -> None:
             text=True,
             timeout=600,
         )
-    except FileNotFoundError:  # pragma: no cover - environment without `build`
-        pytest.skip("python -m build is not available")
     except subprocess.CalledProcessError as exc:  # pragma: no cover - real failure
         pytest.fail(f"wheel build failed:\n{exc.stdout}\n{exc.stderr}")
 
