@@ -17,6 +17,7 @@ from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
 from app.services.detection_engine import DetectionEngine
+from app.services.dlq_sink import PostgresDLQ
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.services.lake_writer import LakeWriter
@@ -92,9 +93,20 @@ async def lifespan(app: FastAPI):
     detector = DetectionEngine() if settings.detection_engine_enabled else None
     # Wave 2 — windowed detections share the fusion Redis for sliding-window state.
     windowed_detector = WindowedDetectionEngine(redis_client) if settings.windowed_detection_enabled else None
+    # Dead letters go to Postgres so they can be read back. Until now the
+    # worker defaulted to LoggingDLQ, so a dropped event produced a log
+    # line and nothing else — and an invisible drop is indistinguishable
+    # from an event that never arrived.
+    #
+    # The pool is passed as a callable because `sink.start()` opens it
+    # during `worker.start()`, after this point; capturing it eagerly would
+    # capture None and drop every dead letter.
+    dlq = PostgresDLQ(lambda: sink._pool) if sink is not None else None
+
     worker = FusionWorker(
         engine,
         sink=sink,
+        dlq=dlq,
         lake=lake,
         detector=detector,
         windowed_detector=windowed_detector,

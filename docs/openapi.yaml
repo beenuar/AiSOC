@@ -6396,6 +6396,63 @@ paths:
                 title: Response Get Fleet Health Api V1 Health Fleet Get
       security:
       - HTTPBearer: []
+  /api/v1/health/dead-letters:
+    get:
+      tags:
+      - health
+      summary: Get Dead Letters
+      description: 'Events the pipeline refused, and why.
+
+
+        Three DLQ implementations existed and none could answer this: one
+
+        wrote a log line, one wrote to a Kafka topic with no consumer, one
+
+        forgot on restart. Events were being dropped correctly and invisibly —
+
+        and an invisible drop is indistinguishable from an event that never
+
+        arrived, which is the worse of the two and the one nobody investigates.
+
+
+        Returns the breakdown by reason as well as the rows. A list of fifty
+
+        dropped events is data; "forty-eight of them failed schema validation
+
+        on the same topic" is a finding.'
+      operationId: get_dead_letters_api_v1_health_dead_letters_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 50
+          title: Limit
+      - name: hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 24
+          title: Hours
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Dead Letters Api V1 Health Dead Letters Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/insights/soc:
     get:
       tags:
