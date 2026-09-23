@@ -33,8 +33,8 @@ and says so.
 | Prompt-injection resistance | 32-payload adversarial corpus with a recall floor and a false-positive ceiling | `services/agents/tests/adversarial/` |
 | Claim-to-gate traceability | Every product claim mapped to the CI job that fails when it stops being true | `docs/audit/CLAIM_TO_GATE_MATRIX.md` |
 
-The last row is the one worth reading first. It is the honest index: 92 rows
-`GATED`, 10 `PARTIAL` with the specific gap named, and a ratchet that refuses
+The last row is the one worth reading first. It is the honest index: 93 rows
+`GATED`, 9 `PARTIAL` with the specific gap named, and a ratchet that refuses
 to let a row sit at `NO GATE`.
 
 ## Not covered, and not claimed

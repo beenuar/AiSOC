@@ -15,7 +15,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Connectors: live Test connection | README L168 | `ci.yml` connectors matrix (`test_conformance.py` — every connector implements the async `test_connection` contract) + `connector_conformance.py --check` published matrix + `test_live_vendor_smoke.py` (Phase D3 — mock-server conformance: `test_connection()` + paginated `fetch_alerts()` HTTP path exercised against realistic vendor payloads) | GATED | - |
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: api tests` (`audit_hash`, audit immutability) | PARTIAL (write path gated; UI replay only in hermetic e2e) | Phase 3.2 |
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | GATED (but suites are self-consistency; see reality report) | Phase 4 |
-| Alert-reduction is a real measurement | README L62 | `ci.yml :: p1-eval` (`alert_reduction`) | PARTIAL (gates an in-test fusion re-impl, not `services/fusion`) | Phase 4 |
+| Alert-reduction is a real measurement | README / benchmark page | `ci.yml :: python-test` (fusion) runs `test_alert_reduction_real.py`, which groups a 1 000-alert stream with `RawAlert.correlation_key()` — the method `Correlator` actually calls — and bounds the ratio on both sides, because a floor alone is satisfied by a key that collapses everything into one incident | GATED | the legacy suite's 75.3% stays published for continuity and is labelled as not describing this product; the measurement is still a synthetic workload, as the benchmark page states |
 | Runs entirely on your infrastructure / no data exfiltration | README L63 | `ci.yml :: python-test` (agents) runs `test_privacy_redactor.py` (zero raw PII survives) | PARTIAL (redaction gated; the CLI now has no default telemetry endpoint and `telemetry.test.ts` pins that an enabled-but-unconfigured run makes zero network calls; platform-wide air-gapped egress-blocked CI + Helm NetworkPolicy still outstanding) | Phase 2 |
 | Detection-as-Code rejects candidates that regress MITRE accuracy | README L170 | `ci.yml :: python-test` (`test_detection_eval.py` — candidate `rule_body` run through the real engine vs its own positive/negative fixtures; approval requires it) + `p1-eval` w2-dac baseline | GATED | - |
 | 800+ native detection rules | README L78, L170 | `validate-detections.yml` (strict fixture replay) | GATED | - |
@@ -113,8 +113,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 92
-- PARTIAL: 10
+- GATED: 93
+- PARTIAL: 9
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 
 > **Counting note.** These figures previously read 46 / 9, which did not match

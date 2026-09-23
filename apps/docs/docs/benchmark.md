@@ -69,7 +69,7 @@ agent performance**. Every table below is labelled with its class.
 
 :::warning Read this first
 This harness does **not** exercise the live LLM agent (`services/agents`
-LangGraph orchestrator), and the `alert_reduction` suite does **not** call the
+LangGraph orchestrator), and the legacy `alert_reduction` suite does **not** call the
 production `services/fusion` engine — it calls a standalone re-implementation
 of the same Tier 1/2/3 grouping rules that lives in the test file. It runs
 **deterministic substrate code** against **synthetic data** so we can gate
@@ -105,11 +105,40 @@ every PR targeting `main` or `develop`.
 
 | Suite                          | Metric                  | Per-case   | Per-template macro     | Target  | What it checks |
 |--------------------------------|-------------------------|------------|------------------------|---------|----------------|
-| Alert reduction ratio          | reduction               | 75.3 %     | _n/a_                  | ≥ 70 %  | Real measurement of the 3-tier fusion logic on a noisy 1 000-alert stream |
+| Alert reduction (product logic) | reduction              | 33.3 %     | _n/a_                  | 20–95 % | **The number that describes AiSOC.** Groups a noisy 1 000-alert stream with `RawAlert.correlation_key()` — the method `Correlator` actually calls |
+| Alert reduction (legacy suite)  | reduction              | 75.3 %     | _n/a_                  | ≥ 70 %  | A four-tier scheme implemented inside the test. Retained for continuity; **does not describe this product** — see below |
 | MITRE ATT&CK tactic accuracy   | accuracy                | 97.0 %     | 96.4 % (n=55)          | ≥ 80 %  | Substrate self-consistency — keyword extractor vs. dataset written for it |
 | Investigation completeness     | mean keyword coverage   | 94.2 %     | 94.3 % (n=55)          | ≥ 85 %  | Substrate self-consistency — report template wraps the description; judge finds keywords from the description |
 | Response-plan quality          | mean rubric score       | 1.000      | 1.000 (n=55)           | ≥ 0.80  | Substrate self-consistency — synthesizer embeds the keywords the rubric checks for |
 | Playbook completion rate       | completion rate         | 50.5 %     | 100 % H/C (mapped)     | ≥ 50 %  | Operational coverage gate — every incident in scope has a matching playbook with aligned response action; orphan playbooks/templates fail CI |
+
+### Why there are two alert-reduction numbers
+
+The original suite was honest about being synthetic and always carried a
+`PARTIAL` row saying it gated "an in-test fusion re-impl". Reading it
+closely, the gap was wider than that wording admitted: the test did not
+merely reimplement fusion's grouping, it implemented **different**
+grouping.
+
+Its four tiers key on `(rule_id, host, user)` with 10/30/5-minute windows.
+`RawAlert.correlation_key()` — what `Correlator` actually calls — keys on
+`{tenant}:{entity}:{tactic}` over a one-hour window. Different dimensions,
+different windows, different answer. So the 75.3 % described an algorithm
+the product does not run, and a reimplementation can drift from the thing
+it stands for without any test failing.
+
+`services/fusion/tests/test_alert_reduction_real.py` measures the real key.
+It reports **33.3 %** on a comparable stream. That is less flattering and it
+is ours.
+
+The new gate is bounded on both sides rather than floored. A floor alone is
+satisfied by a key that collapses everything into one incident — 99.9 %
+reduction and a useless SOC — so "more reduction is better" is only true up
+to a point, and the gate says where.
+
+Both numbers stay published. Deleting the old one would make the history
+unreadable; presenting it without this note would be the thing this page
+exists to prevent.
 
 > The synthetic telemetry suite is a **schema/coverage gate**, not a scoring
 > suite, so it does not appear in the table. It checks that every incident has
