@@ -1,5 +1,6 @@
 {
   "auth_type": "NTLMv2",
   "event_id": 8004,
-  "workstation_neq_source_address": true
+  "source_address": "principal-b",
+  "workstation": "principal-a"
 }

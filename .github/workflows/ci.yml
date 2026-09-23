@@ -254,6 +254,13 @@ jobs:
       # Redaction is allow-list rather than deny-list, so a setting added
       # tomorrow is redacted by default rather than exposed until someone
       # remembers — and these tests are what keep it that way.
+      # A panel for a metric nothing exports reads "No data" forever,
+      # which teaches people that empty panels are normal — and then a
+      # genuinely dead service looks like an uninstrumented one. Also
+      # checks datasource uids resolve: Grafana does not warn about a
+      # dangling reference, the link just silently does nothing.
+      - name: Grafana dashboards query metrics that exist
+        run: python scripts/check_grafana_dashboards.py
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest

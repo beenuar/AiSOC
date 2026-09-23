@@ -64,7 +64,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from detection_specs_index import all_specs  # type: ignore[import-not-found]  # noqa: E402
-from generate_detections import matches  # type: ignore[import-not-found]  # noqa: E402
+from generate_detections import enrich, matches, requested_derived_fields  # type: ignore[import-not-found]  # noqa: E402
 
 # CI gate (lower-is-better). Tighten only with a corresponding allowlist
 # entry or rule-narrowing PR. The 5% ceiling is a deliberate compromise:
@@ -179,6 +179,14 @@ def evaluate_per_rule_fp(
         positive = spec["positive"]
         negative = spec.get("negative")
 
+        # Enriched the way the engine enriches. This is the third replay
+        # path that read fixtures through the bare matcher; each one tests
+        # a pipeline production does not run, so a rule matching a derived
+        # field fails here while working live.
+        wanted = requested_derived_fields([{"match_when": match_when}])
+        positive = enrich(positive, wanted)
+        negative = enrich(negative, wanted) if negative else negative
+
         own_pos = bool(matches(match_when, positive))
         own_neg = bool(matches(match_when, negative)) if negative else False
 
@@ -190,7 +198,7 @@ def evaluate_per_rule_fp(
             cross_total += 1
             if (slug, other_slug) in allowlist:
                 continue
-            if matches(match_when, other_positive):
+            if matches(match_when, enrich(other_positive, wanted)):
                 cross_fires.append((other_slug, "positive"))
 
         per_rule.append(

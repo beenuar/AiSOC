@@ -86,6 +86,7 @@ from app.core.config import settings
 from app.models.alert import Alert
 from app.models.connector import Connector
 from app.services.connector_freshness import compute_freshness
+from app.services.fleet_health import assess_fleet
 
 logger = logging.getLogger(__name__)
 
@@ -509,3 +510,26 @@ async def get_pipeline_health(
         stages=stages,
         generated_at=now,
     )
+
+
+@router.get("/fleet")
+async def get_fleet_health(
+    user: AuthUser,
+    db: DBSession,
+) -> dict[str, Any]:
+    """Which connectors have quietly stopped working.
+
+    Every field this reads was already being written — `last_sync`,
+    `error_count`, `oauth_refresh_failures`, `last_schema_drift_at` — and
+    nothing read them together. That produces the failure this platform is
+    least able to tolerate: a connector stops polling, alerts from that
+    source stop arriving, and the console looks calm, because an absence of
+    alerts is indistinguishable from an absence of threats.
+
+    Staleness is judged per connector against its own configured cadence.
+    A single global threshold would page constantly on daily connectors or
+    stay silent on five-minute ones, and a surface that pages constantly is
+    a surface that gets muted.
+    """
+    rows = (await db.execute(select(Connector).where(Connector.tenant_id == user.tenant_id))).scalars().all()
+    return assess_fleet(list(rows)).to_dict()

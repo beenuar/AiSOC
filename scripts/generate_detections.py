@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 import sys
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,14 @@ OPERATORS: list[tuple[str, str, str]] = sorted(
         ("_has_any", "has_any", "HAS_ANY"),
         ("_not_in", "not_in", "NOT IN"),
         ("_match", "match", "MATCH"),
+        # `neq` is used by rules in the shipped corpus and had no
+        # operator, so `approver_role_neq: "codeowner"` was read as a
+        # field literally named `approver_role_neq` — which nothing
+        # emits, so the rule could not fire. There is deliberately no
+        # `_eq` counterpart: bare equality is already the default, and
+        # adding the suffix would split any field whose name happens to
+        # end in `_eq` for no gain.
+        ("_neq", "neq", "!="),
         ("_gte", "gte", ">="),
         ("_lte", "lte", "<="),
         ("_in", "in", "IN"),
@@ -183,6 +192,13 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
         if expected is None:
             return actual is None
         return actual == expected
+
+    if op == "neq":
+        # A missing field is not "different from X". Returning True would
+        # make every neq rule fire on every event lacking the field.
+        if actual is None:
+            return False
+        return actual != expected
 
     if op in {"gt", "gte", "lt", "lte"}:
         if not isinstance(actual, (int, float)) or isinstance(actual, bool):
@@ -325,15 +341,11 @@ def _eval_clause(clause: dict[str, Any], event: dict[str, Any]) -> bool:
     """Evaluate a clause dict (possibly nested) against an event."""
     for key, expected in clause.items():
         if key == "any_of":
-            if not isinstance(expected, list) or not any(
-                _eval_clause(sub, event) for sub in expected
-            ):
+            if not isinstance(expected, list) or not any(_eval_clause(sub, event) for sub in expected):
                 return False
             continue
         if key == "all_of":
-            if not isinstance(expected, list) or not all(
-                _eval_clause(sub, event) for sub in expected
-            ):
+            if not isinstance(expected, list) or not all(_eval_clause(sub, event) for sub in expected):
                 return False
             continue
         field, op = _split_op(key)
@@ -367,16 +379,8 @@ def _description_for(spec: dict, category: str) -> str:
     name = spec["name"]
     fp_count = len(spec.get("fp", []))
     plural = "s" if fp_count != 1 else ""
-    fp_clause = (
-        f" Watch the {fp_count} documented false-positive case{plural} "
-        f"before tuning."
-        if fp_count
-        else ""
-    )
-    return (
-        f"AiSOC v1 curated detection. Triggers on the {category} signal "
-        f"described by '{name}'.{fp_clause}"
-    )
+    fp_clause = f" Watch the {fp_count} documented false-positive case{plural} " f"before tuning." if fp_count else ""
+    return f"AiSOC v1 curated detection. Triggers on the {category} signal " f"described by '{name}'.{fp_clause}"
 
 
 def _yaml_safe_value(value: Any) -> Any:
@@ -390,17 +394,13 @@ class _LiteralStr(str):
 
 
 def _literal_str_representer(dumper: yaml.Dumper, data: _LiteralStr):  # type: ignore[name-defined]
-    return dumper.represent_scalar(
-        "tag:yaml.org,2002:str", str(data), style="|"
-    )
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data), style="|")
 
 
 yaml.add_representer(_LiteralStr, _literal_str_representer)  # type: ignore[arg-type]
 
 
-def render_rule_yaml(
-    *, rule_id: str, category: str, spec: dict
-) -> str:
+def render_rule_yaml(*, rule_id: str, category: str, spec: dict) -> str:
     """Render the canonical YAML for one detection rule."""
     name: str = spec["name"]
     severity: str = spec["severity"]
@@ -473,8 +473,7 @@ def load_id_lock() -> dict[str, str]:
         return dict(json.loads(ID_LOCK.read_text(encoding="utf-8")))
     except Exception:  # noqa: BLE001 - a corrupt lock must not silently renumber
         raise SystemExit(
-            f"{ID_LOCK} is unreadable. Fix or delete it deliberately — "
-            f"regenerating without it reassigns every rule id."
+            f"{ID_LOCK} is unreadable. Fix or delete it deliberately — " f"regenerating without it reassigns every rule id."
         ) from None
 
 
@@ -489,9 +488,7 @@ def assign_ids(categories: dict) -> tuple[dict[str, str], list[str]]:
 
     for category, specs in sorted(categories.items()):
         used = {
-            int(rid.rsplit("-", 1)[1])
-            for key, rid in lock.items()
-            if key.startswith(f"{category}/") and rid.rsplit("-", 1)[-1].isdigit()
+            int(rid.rsplit("-", 1)[1]) for key, rid in lock.items() if key.startswith(f"{category}/") and rid.rsplit("-", 1)[-1].isdigit()
         }
         next_free = max(used) + 1 if used else 1
 
@@ -508,13 +505,145 @@ def assign_ids(categories: dict) -> tuple[dict[str, str], list[str]]:
     return lock, newly
 
 
+# ─── Derived fields ──────────────────────────────────────────────────────────
+#
+# Vendored into `services/fusion/app/services/derived_fields.py`, and kept in
+# parity by `services/fusion/tests/test_detection_matcher_parity.py` — the
+# same arrangement as `matches()` itself, for the same reason: services
+# cannot import repo-root scripts at runtime, and two copies that can drift
+# silently are worse than one copy plus a gate.
+#
+# These compute fields the engine can derive from an event it already has,
+# so a rule matching `actor_eq_target` or `is_business_hours` is reachable
+# even though no connector emits either.
+
+_COMPARISON_RE = re.compile(r"^(?P<left>.+?)_(?P<op>eq|neq)_(?P<right>.+)$")
+
+DEFAULT_BUSINESS_START_HOUR = 8
+DEFAULT_BUSINESS_END_HOUR = 18
+
+_TIME_FIELDS = ("event_time", "timestamp", "time", "@timestamp", "ingest_time")
+
+
+def _parse_event_time(event: dict[str, Any]) -> datetime | None:
+    for field in _TIME_FIELDS:
+        raw = event.get(field)
+        if raw is None:
+            continue
+        if isinstance(raw, datetime):
+            return raw
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            try:
+                seconds = raw / 1000 if raw > 1e11 else raw
+                return datetime.fromtimestamp(seconds)  # noqa: DTZ006
+            except (OSError, ValueError, OverflowError):
+                continue
+        if isinstance(raw, str):
+            try:
+                return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+    return None
+
+
+def _normalise_operand(value: Any) -> Any:
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+def comparison_fields(event: dict[str, Any], requested: set[str] | None = None) -> dict[str, bool]:
+    """`<a>_eq_<b>` / `<a>_neq_<b>` for the names some rule asks for.
+
+    A missing operand yields no key rather than False: a rule must not fire
+    because we did not know.
+    """
+    if not requested:
+        return {}
+    out: dict[str, bool] = {}
+    for name in requested:
+        match = _COMPARISON_RE.match(name)
+        if not match:
+            continue
+        left = event.get(match.group("left"))
+        right = event.get(match.group("right"))
+        if left is None or right is None:
+            continue
+        equal = _normalise_operand(left) == _normalise_operand(right)
+        out[name] = equal if match.group("op") == "eq" else not equal
+    return out
+
+
+def time_of_day_fields(
+    event: dict[str, Any],
+    *,
+    business_start: int = DEFAULT_BUSINESS_START_HOUR,
+    business_end: int = DEFAULT_BUSINESS_END_HOUR,
+) -> dict[str, bool]:
+    """`is_business_hours` / `is_after_hours` / `is_weekend`.
+
+    Nothing when the event has no parseable timestamp: an unknown time is
+    not "outside business hours".
+    """
+    when = _parse_event_time(event)
+    if when is None:
+        return {}
+    weekend = when.weekday() >= 5
+    in_hours = (not weekend) and business_start <= when.hour < business_end
+    return {
+        "is_business_hours": in_hours,
+        "is_after_hours": not in_hours,
+        "is_weekend": weekend,
+    }
+
+
+def enrich(
+    event: dict[str, Any],
+    requested: set[str] | None = None,
+    *,
+    business_start: int = DEFAULT_BUSINESS_START_HOUR,
+    business_end: int = DEFAULT_BUSINESS_END_HOUR,
+) -> dict[str, Any]:
+    """`event` plus every derivable field the rules ask for.
+
+    A derived key never overwrites one the connector supplied: a vendor's
+    own answer about its own tenant's hours beats ours.
+    """
+    derived: dict[str, Any] = {}
+    derived.update(time_of_day_fields(event, business_start=business_start, business_end=business_end))
+    derived.update(comparison_fields(event, requested))
+    return event if not derived else {**derived, **event}
+
+
+def requested_derived_fields(rules: list[dict[str, Any]]) -> set[str]:
+    """Derivable field names the ruleset matches on.
+
+    Computed once per ruleset rather than per event: the set changes when
+    rules change, not when traffic arrives.
+    """
+    names: set[str] = set()
+
+    def walk(clause: Any) -> None:
+        if isinstance(clause, dict):
+            for key, value in clause.items():
+                if key in {"any_of", "all_of", "not"}:
+                    walk(value)
+                    continue
+                field, _ = _split_op(key)
+                if _COMPARISON_RE.match(field) or field.startswith("is_"):
+                    names.add(field)
+        elif isinstance(clause, list):
+            for item in clause:
+                walk(item)
+
+    for rule in rules:
+        walk(rule.get("match_when") or {})
+    return names
+
+
 def write_pack(*, dry_run: bool = False) -> dict[str, int]:
     """Generate the full pack to disk. Returns counts per category."""
     id_lock, newly_assigned = assign_ids(CATEGORIES)
     if newly_assigned and not dry_run:
-        ID_LOCK.write_text(
-            json.dumps(id_lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
+        ID_LOCK.write_text(json.dumps(id_lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"  assigned {len(newly_assigned)} new rule id(s)")
 
     counts: dict[str, int] = {}
@@ -532,9 +661,7 @@ def write_pack(*, dry_run: bool = False) -> dict[str, int]:
             # Looked up, not computed from position. See ID_LOCK.
             rule_id = id_lock[f"{category}/{slug}"]
 
-            yaml_text = render_rule_yaml(
-                rule_id=rule_id, category=category, spec=spec
-            )
+            yaml_text = render_rule_yaml(rule_id=rule_id, category=category, spec=spec)
             yaml_path = cat_dir / f"{slug}.yaml"
 
             pos_path = pos_dir / f"{slug}.json"

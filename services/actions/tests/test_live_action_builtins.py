@@ -51,10 +51,12 @@ def test_register_builtin_executors_returns_full_count() -> None:
     cheap reminder to update docs / discovery snapshots.
     """
     count = register_builtin_executors()
-    # 19 original + 10 Phase B2 vendors (SentinelOne/Entra/GWS/PAN-OS/FortiGate/
-    # Cloudflare/Jira/ServiceNow/PagerDuty/Slack) + 6 read/rollback verbs
-    # (4 read-only investigation reads, 2 unisolate arms).
-    assert count == 35
+    # 19 original + 10 Phase B2 vendors + 6 read/rollback verbs + 17
+    # vendor-breadth executors. The last group added no new integrations:
+    # every one calls a client method that already existed and had no
+    # route through the registry — SentinelOne implemented seven
+    # operations with one reachable, Entra six with one.
+    assert count == 52
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -69,52 +71,58 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
     pairs = {(d.vendor_id, d.capability) for d in descriptors}
 
     expected = {
-        # Endpoint
+        ("aws_security_groups", "allow_ip"),
+        ("aws_security_groups", "block_ip"),
+        ("azure_entra", "disable_user"),
+        ("azure_entra", "enable_user"),
+        ("azure_entra", "force_mfa"),
+        ("azure_entra", "reset_password"),
+        ("azure_entra", "revoke_session"),
+        ("cloudflare", "allow_domain"),
+        ("cloudflare", "allow_ip"),
+        ("cloudflare", "block_domain"),
+        ("cloudflare", "block_ip"),
+        ("crowdstrike", "get_detections"),
+        ("crowdstrike", "get_host"),
         ("crowdstrike", "isolate_host"),
-        ("defender", "isolate_host"),
-        ("crowdstrike", "quarantine_file"),
         ("crowdstrike", "kill_process"),
+        ("crowdstrike", "quarantine_file"),
         ("crowdstrike", "run_script"),
+        ("crowdstrike", "unisolate_host"),
+        ("defender", "block_ioc"),
+        ("defender", "get_host"),
+        ("defender", "isolate_host"),
         ("defender", "run_av_scan"),
-        # Identity
+        ("defender", "unisolate_host"),
+        ("elastic", "search_siem"),
+        ("elastic", "update_watcher"),
+        ("fortigate", "allow_ip"),
+        ("fortigate", "block_ip"),
+        ("generic", "block_domain"),
+        ("google_workspace", "disable_user"),
+        ("google_workspace", "enable_user"),
+        ("google_workspace", "reset_password"),
+        ("google_workspace", "revoke_session"),
+        ("jira", "create_ticket"),
         ("okta", "disable_user"),
+        ("okta", "force_mfa"),
+        ("okta", "get_user_activity"),
         ("okta", "reset_password"),
         ("okta", "suspend_session"),
-        ("okta", "force_mfa"),
-        # Network
-        ("aws_security_groups", "block_ip"),
-        ("aws_security_groups", "allow_ip"),
-        ("generic", "block_domain"),
-        # SIEM
-        ("splunk", "search_siem"),
-        ("elastic", "search_siem"),
-        ("splunk", "create_notable_event"),
-        ("splunk", "sync_detection_rule"),
-        ("elastic", "update_watcher"),
-        ("defender", "block_ioc"),
-        # Phase B2 — previously-unregistered vendors
-        ("sentinelone", "isolate_host"),
-        ("azure_entra", "disable_user"),
-        ("google_workspace", "disable_user"),
-        ("panos", "block_ip"),
-        ("fortigate", "block_ip"),
-        ("cloudflare", "block_ip"),
-        ("jira", "create_ticket"),
-        ("servicenow", "create_ticket"),
         ("pagerduty", "create_ticket"),
+        ("panos", "allow_ip"),
+        ("panos", "block_ip"),
+        ("sentinelone", "isolate_host"),
+        ("sentinelone", "kill_process"),
+        ("sentinelone", "quarantine_file"),
+        ("sentinelone", "run_av_scan"),
+        ("sentinelone", "run_script"),
+        ("sentinelone", "unisolate_host"),
+        ("servicenow", "create_ticket"),
         ("slack", "notify"),
-        # Read-only investigation verbs. Twenty-nine executors could change
-        # the estate and exactly one could ask it a question, so an
-        # investigation could only ever reach the lake.
-        ("crowdstrike", "get_host"),
-        ("crowdstrike", "get_detections"),
-        ("defender", "get_host"),
-        ("okta", "get_user_activity"),
-        # The rollback for the most disruptive action, which had no
-        # executor: isolate_host declared unisolate_host as its reverse and
-        # dispatch answered executor_not_found.
-        ("crowdstrike", "unisolate_host"),
-        ("defender", "unisolate_host"),
+        ("splunk", "create_notable_event"),
+        ("splunk", "search_siem"),
+        ("splunk", "sync_detection_rule"),
     }
     assert pairs == expected
 
@@ -145,7 +153,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 35
+    assert count == 52
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

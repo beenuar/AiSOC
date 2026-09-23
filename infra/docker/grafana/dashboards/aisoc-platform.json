@@ -1,0 +1,200 @@
+{
+  "uid": "aisoc-platform",
+  "title": "AiSOC — Platform",
+  "tags": ["aisoc"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "description": "Every panel here queries a metric some service actually emits. Panels for metrics nothing exports render as 'No data' forever, which teaches people that empty panels are normal — and then a genuinely dead service looks the same as an uninstrumented one. Coverage is 5 of 19 services; `scripts/audit_prometheus_targets.py` names the other 14.",
+  "panels": [
+    {
+      "type": "row",
+      "title": "API",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Request rate by status",
+      "description": "Split by status rather than totalled: a flat request rate with a rising 5xx share looks identical to a healthy one on a single line.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(aisoc_http_requests_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request latency (p50 / p95 / p99)",
+      "description": "Three quantiles, not a mean. A mean hides the tail, and the tail is what an analyst waiting on an investigation experiences.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(aisoc_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aisoc_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(aisoc_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "type": "stat",
+      "title": "Error ratio (5m)",
+      "description": "5xx as a share of all requests. Absolute error counts scale with traffic, so a ratio is the thing worth alerting on.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "expr": "sum(rate(aisoc_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(aisoc_http_requests_total[5m])), 0.001)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Ingest",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Inbox events accepted",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (rate(aisoc_ingest_inbox_events_total[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "eps" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Inbox requests rate-limited",
+      "description": "Non-zero is not necessarily wrong — the limiter exists to be hit by a misconfigured client. A sustained rate against one tenant means their integration is retrying into a wall and their events are being dropped.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (rate(aisoc_ingest_inbox_rate_limited_total[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "type": "row",
+      "title": "Auto-triage",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "Triage outcomes",
+      "description": "The agents worker's own counters. Watch two shapes: dead_lettered rising means alerts are being dropped rather than triaged, and deterministic climbing while llm stays flat means the LLM path is failing open to the fallback — which looks fine from outside, because alerts still get verdicts.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(aisoc_agents_triage_total[15m]))",
+          "legendFormat": "{{result}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "LLM vs deterministic share",
+      "description": "The ratio, because the absolute counts move with alert volume and the ratio does not. A fall here is the LLM path degrading.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(aisoc_agents_triage_total{result=\"llm\"}[15m])) / clamp_min(sum(rate(aisoc_agents_triage_total{result=~\"llm|deterministic\"}[15m])), 0.001)",
+          "legendFormat": "LLM share"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0 } }
+    },
+    {
+      "type": "stat",
+      "title": "Dead-lettered (1h)",
+      "description": "Alerts the worker could not process. Any sustained non-zero is alert loss.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 32 },
+      "targets": [
+        { "expr": "sum(increase(aisoc_agents_triage_total{result=\"dead_lettered\"}[1h]))" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Ungrounded demotions (1h)",
+      "description": "Verdicts demoted to human review because they cited indicators the evidence did not contain. A rise is a prompt or model regression. A persistent zero is not automatically good — check that groundedness is scoring at all.",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 32 },
+      "targets": [
+        {
+          "expr": "sum(increase(aisoc_agents_triage_total{result=\"ungrounded_demoted\"}[1h]))"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Threat intel",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "collapsed": false
+    },
+    {
+      "type": "timeseries",
+      "title": "IOCs and actors ingested",
+      "datasource": { "type": "prometheus", "uid": "aisoc-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 38 },
+      "targets": [
+        { "expr": "rate(threatintel_iocs_ingested_total[15m])", "legendFormat": "IOCs" },
+        {
+          "expr": "rate(threatintel_actors_ingested_total[15m])",
+          "legendFormat": "actors"
+        }
+      ]
+    }
+  ]
+}

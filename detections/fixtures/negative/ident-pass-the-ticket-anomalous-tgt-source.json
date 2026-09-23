@@ -1,5 +1,6 @@
 {
-  "event_id": 4625.0,
+  "event_id": 4624,
   "logon_type": 3,
-  "ticket_source_ip_neq_session_ip": true
+  "session_ip": "principal-a",
+  "ticket_source_ip": "principal-a"
 }

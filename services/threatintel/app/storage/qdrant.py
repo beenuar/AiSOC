@@ -63,7 +63,14 @@ class QdrantStore:
         self._use_fastembed = use_fastembed
 
     async def initialize(self) -> None:
-        """Create Qdrant collections if they don't exist."""
+        """Create the collections, then converge the schema.
+
+        Creation is `if not exists`, which is correct for a first run and a
+        no-op afterwards — so on its own it can never change the shape of a
+        collection that already exists. Anything beyond creation (a payload
+        index, a quantization setting, and eventually a re-embed when the
+        embedding model changes) has to come from the migration runner.
+        """
         existing = await self._client.get_collections()
         existing_names = {c.name for c in existing.collections}
 
@@ -74,6 +81,45 @@ class QdrantStore:
                     vectors_config=VectorParams(size=_EMBEDDING_DIM, distance=Distance.COSINE),
                 )
                 logger.info("Created Qdrant collection", collection=col)
+
+        await self._run_migrations()
+
+    async def _run_migrations(self) -> None:
+        """Apply pending vector-store migrations.
+
+        Non-strict, matching the graph and lake runners: threat-intel
+        enrichment degrades rather than taking the service down, and a
+        pending migration is logged at ``error`` so a degraded start is
+        visible rather than assumed.
+        """
+        try:
+            from app.db.vector_migrations import (  # noqa: PLC0415
+                pending_ids,
+                pending_rebuilds,
+                run_migrations,
+            )
+        except ImportError:
+            # The runner lives in services/api and is vendored into
+            # deployments that need it. Its absence means no migrations to
+            # apply, not a broken store.
+            return
+
+        rebuilds = await pending_rebuilds(self._client)
+        if rebuilds:
+            logger.warning(
+                "vector migrations include a re-embed; this is measured in "
+                "hours for a large tenant and the alias keeps the existing "
+                "collection serving until it completes",
+                migrations=rebuilds,
+            )
+
+        applied = await run_migrations(self._client, strict=False)
+        pending = await pending_ids(self._client)
+
+        if applied:
+            logger.info("Qdrant migrations applied", migrations=applied)
+        if pending:
+            logger.error("Qdrant migrations still pending", migrations=pending)
 
     async def upsert_iocs(self, iocs: list[dict[str, Any]], *, tenant_id: str = SHARED_TENANT) -> None:
         """Embed and upsert IOC documents into Qdrant for semantic search.
