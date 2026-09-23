@@ -310,7 +310,15 @@ jobs:
           TARBALL=$(ls -t "$RUNNER_TEMP"/*.tgz | head -1)
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
-          tar -tzf "$TARBALL" | head -20
+          # Listed via a file rather than `tar ... | head`: head closes the pipe
+          # after 20 lines, GNU tar takes EPIPE and exits 2, and pipefail turns
+          # that into a failed release job. It only bites packages with more
+          # than 20 entries, so `aisoc` and `@aisoc/sdk` passed while
+          # `@aisoc/mcp` (78) failed on a diagnostic line.
+          LISTING="$RUNNER_TEMP/tarball-listing.txt"
+          tar -tzf "$TARBALL" > "$LISTING"
+          echo "$(wc -l < "$LISTING") entries; first 20:"
+          head -20 "$LISTING"
 
       # Republishing an unchanged version is a hard error on npm, and package
       # versions move independently of the monorepo tag, so most releases will
