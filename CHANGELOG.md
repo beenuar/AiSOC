@@ -184,6 +184,20 @@ Claim-to-gate matrix: **108 rows — 99 GATED, 9 PARTIAL, 0 NO GATE**.
 
 ### Fixed
 
+- **The sandbox determinism test compared a timer.** Its `VOLATILE` list named
+  four fields the CLI does not emit — the real one is `elapsed_ms` — so the
+  comparison included a wall-clock value and failed whenever two runs
+  straddled a millisecond boundary, reporting "Something in the reasoner
+  depends on salted hashing again" and sending a reader after a `hash()` call
+  that was not there. Volatile fields are matched by suffix now, because names
+  are the thing that drifts and the `_ms` convention is not.
+- **The devcontainer cold-start gate could only ever validate the previous
+  image.** It probed the published `:latest` even on a pull request, by design
+  — so a Dockerfile change was unverifiable until after it shipped, which is
+  how a devcontainer whose non-root user was not in the `docker` group reached
+  `main`. A PR touching `.devcontainer/**` now builds from its own source and
+  probes that, and the trigger includes `.devcontainer/**` at all (it fired
+  only on changes to the workflow file).
 - **The Codespaces quickstart could never start Docker
   ([#716](https://github.com/beenuar/AiSOC/issues/716)).** The README
   advertises Codespaces as "the zero-install way to drive the real stack in a
