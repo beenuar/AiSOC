@@ -164,7 +164,7 @@ makes it easier to wire up "Preview action" buttons in UIs that should
 
 ## Writing a plugin executor
 
-Plugin authors implement [`LiveActionExecutor`](https://github.com/aisoc-platform/aisoc/blob/main/services/actions/app/live_actions/executor.py)
+Plugin authors implement [`LiveActionExecutor`](https://github.com/beenuar/AiSOC/blob/main/services/actions/app/live_actions/executor.py)
 and call `register_executor()` from their plugin's `setup()` hook:
 
 ```python

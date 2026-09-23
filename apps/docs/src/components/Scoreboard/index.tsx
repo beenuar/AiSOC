@@ -147,9 +147,12 @@ function MitreSparkline({ rows }: { rows: ScoreboardRow[] }) {
               r={3.5}
               className={p.row.substrate ? styles.dotSubstrate : styles.dotWet}
             >
+              {/* Single interpolation: multiple children make React emit
+                  comment separators that SVG <title> drops on hydration. */}
               <title>
-                {p.row.date} • {p.row.agent_version} • MITRE {pct(p.y)} •{" "}
-                {p.row.substrate ? "substrate" : "wet eval"}
+                {`${p.row.date} • ${p.row.agent_version} • MITRE ${pct(p.y)} • ${
+                  p.row.substrate ? "substrate" : "wet eval"
+                }`}
               </title>
             </circle>
           </g>
