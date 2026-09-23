@@ -1,5 +1,5 @@
 {
-  "approver_role": "developer",
+  "approver_role": "not-codeowner",
   "event_type": "push",
   "path": "prefix-.github/workflows/-suffix"
 }
