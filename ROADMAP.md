@@ -660,6 +660,35 @@ Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
+## v9.0 — Shipped (2026-09-23)
+
+Ten waves of one audit question: what in this tree exists, is tested, and has
+no caller? v8.0 named that shape and found it a dozen times; v9.0 went looking
+for it deliberately and found it in the approval loop, the marketplace, the
+mobile console, the detection engine and the benchmark scoreboard.
+
+The one worth stating first inverts what the feature appeared to do:
+**approving an action executed nothing.** `decide()` flipped a row and never
+reached the execution service, so every tap of Approve recorded a decision and
+ran nothing — while telling the operator the opposite. Nothing ever created an
+approval either, so the queue had no producer and was structurally empty on
+every deployment.
+
+Also: UEBA consumed a topic nothing writes; a plugin could never be rejected
+for a bad signature; there was no registry allow-list and no digest pinning,
+both of which the notes claimed existed; the public scoreboard was frozen for
+ten weeks with every check passing; neither published Go SDK was installable;
+and the Helm chart did not render at all.
+
+What is knowingly still open is listed under `### Known` in `[9.0.0]` —
+eight `PARTIAL` matrix rows, the migration-on-existing-volume path, 133
+unreachable detection rules, and the OCI install route held back rather than
+shipped with eight unresolved high findings.
+
+Full inventory under `[9.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## Ideas Backlog (unscheduled)
 
 - "Explain this alert" button using LLM with enrichment context

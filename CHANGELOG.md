@@ -7,6 +7,192 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.0.0] — 2026-09-23
+
+**Ten waves, and one finding under nearly all of them: the mechanism existed,
+was tested, and nothing called it.** v8.0 named that shape and found it a
+dozen times. This release went looking for it deliberately, across the whole
+tree, and found it again in the approval loop, the marketplace, the mobile
+console, the detection engine and the benchmark scoreboard. A passing unit
+test on an uncalled function is indistinguishable from a working feature
+until somebody traces the call graph, and the only defence is to trace it.
+
+The one worth stating first, because it inverts what the feature appeared to
+do: **approving an action executed nothing.** `decide()` flipped a row,
+notified the realtime service and returned 200 without ever touching
+`services/actions`. Every tap of Approve in the responder app recorded a
+decision and ran nothing — while telling the operator the opposite. That is
+the most dangerous shape a security control can have, because what it appears
+to say is "the host is contained". And the other end was missing too: nothing
+in the repository ever created an approval, so the queue had no producer
+either and was structurally empty on every deployment.
+
+### Added
+
+- **Approvals reach a human and then reach the estate** ([#731](https://github.com/beenuar/AiSOC/pull/731),
+  [#735](https://github.com/beenuar/AiSOC/pull/735)). The triage worker raises
+  one approval per proposed action that declares `requires_approval`, keyed
+  deterministically so a Kafka replay re-raises the same approval rather than
+  a second copy an operator cannot tell apart. `decide` carries the decision
+  through to `services/actions` and records on the row whether it executed, in
+  four distinct states, so "was this actually done" is answerable from the row
+  rather than by correlating two services' logs. A refusal returns 502 saying
+  the decision was stored and the action was not run.
+- **The confidence × impact approval matrix now runs.** `approval_matrix.evaluate`
+  was written, documented, unit-tested and listed in the claim-to-gate matrix
+  as GATED, with **zero production callers** — `POST /actions` gated on blast
+  radius alone, a property of the verb, so the same answer came back for a
+  40%-confidence guess and a corroborated finding. Both gates run and the
+  stricter wins, which is the composition rule the matrix already stated, so
+  nothing can auto-execute that did not before. Ten action types tighten, and
+  `/actions` becomes tier-aware for the first time.
+- **A browser-facing proxy for the live-action registry.** Every route sat
+  behind a service token, so nothing could answer "what can AiSOC do to my
+  estate". Discovery and dry-run only: a live containment goes through the
+  approval path so an approver is bound to it.
+- **`apps/mobile`, a native responder app** ([#733](https://github.com/beenuar/AiSOC/pull/733)).
+  The roadmap said the mobile console was "not started", which was true about
+  React Native and misleading about the product — the responder console
+  already existed as a PWA with a service worker, an offline approval queue
+  and Web Push. The native app is a distribution channel, and it exists for
+  one reason: iOS Web Push requires an installed PWA and has been unreliable
+  even then. Unit tests and type-check run in CI; **no device build,
+  simulator run or store submission has been performed**, and a CI gate fails
+  if the README stops saying so.
+- **`@aisoc/sdk` gained the namespaces a responder client needs** — approvals,
+  push, on-call, live actions. All were in `docs/openapi.yaml` the whole time,
+  which is why the gap went unnoticed: the generated types were complete and
+  the hand-written surface was three releases behind.
+- **Marketplace publisher identity, paid listings and entitlements**
+  ([#734](https://github.com/beenuar/AiSOC/pull/734)). Migration `056`. There
+  is no payment processor and no stub of one — wiring payments is an account
+  action. What exists is the enforcement point, which is the part that would
+  otherwise be written last and least carefully.
+- **An egress default-deny NetworkPolicy** ([#736](https://github.com/beenuar/AiSOC/pull/736)),
+  gated by `helm.yml`. Off by default, because a cluster whose CNI does not
+  enforce NetworkPolicy ignores it silently and a control that is silently
+  ignored reads as protection while providing none.
+- **Distinct counting in the windowed detection engine**
+  ([#737](https://github.com/beenuar/AiSOC/pull/737)). "Fifty reads by one
+  principal" is a script retrying; "fifty *different* secrets read by one
+  principal" is a vault being walked. Counting events cannot tell those apart,
+  and 21 of the 74 rules awaiting a windowed evaluator name a `distinct_*`
+  field.
+- **`docs/audit/DEFERRED_SUBPHASES.md`** ([#739](https://github.com/beenuar/AiSOC/pull/739)).
+  Six lettered sub-phases were "tracked in `docs/audit/PROGRESS.md`", which is
+  gitignored and was never committed — so six named commitments had no scope
+  anywhere a contributor could read.
+- **New gates:** `helm.yml` (lint, render, kubeconform, server dry-run against
+  a real kind cluster), `mobile.yml`, `check_go_module_paths.py`,
+  `check_published_packages.py`, and scoreboard staleness.
+
+### Fixed
+
+- **UEBA never scored a single message** ([#730](https://github.com/beenuar/AiSOC/pull/730)).
+  It consumed `security.events`, which nothing in the platform writes — ingest
+  writes `aisoc.raw_events`. So `ueba.anomalies` never carried a message and
+  fusion's UEBA confidence boost, on by default and fully built, could only
+  ever be inert. `feature_extraction.py` recovers the entity and features from
+  the OCSF envelope.
+- **The ingest inbox could not have worked on any deployment.** Routes mount
+  only with `DATABASE_DSN`, which no compose file set, and the templates were
+  never copied into the runtime image, so even a correctly-configured
+  deployment answered 503 for every template. Templates are `go:embed`-ed now:
+  a directory cannot be missing from an image.
+- **CrowdStrike alerts were anonymous.** The connector never read
+  `behaviors[].user_name`, and the canonical field map knew only `actor` while
+  11 of the 68 canonical-envelope connectors spell it `username` or `user`.
+  Since the correlation key is `{tenant}:{entity}:{tactic}`, they all
+  correlated as `unknown`. The alias list is a slice, not more map entries,
+  because Go randomises map iteration and three entries pointing at one
+  destination would resolve differently per process.
+- **An approved action was not the action approved.** `approve_action` rebuilt
+  `ActionRequest` without `parameters` or `principal`, so an action gated
+  *because of what it targets* ran against defaults and reported COMPLETED —
+  and the submit path never stored parameters at all, so no rebuild could have
+  recovered them.
+- **Pending actions lived in a module-global dict.** A restart lost every
+  action awaiting approval and a second replica could not see the first one's,
+  so an analyst taps Approve on a Slack card and gets "Action not found" for
+  an incident that is still live. Migration `055`.
+- **Neither ChatOps bot could send an unsolicited message.** Replies go through
+  Bolt's `respond()`, which writes to a `response_url` that only exists inside
+  an inbound interaction, so the bot could answer a question and not ask one —
+  while `rich_approval_card_blocks` sat fully written with no production
+  caller and the Approve/Deny handlers sat wired and waiting.
+- **A plugin could never be rejected for a bad signature.**
+  `_get_registered_pub_key` returned `None` unconditionally, so `publish_plugin`
+  skipped verification entirely. The signing path existed end to end, had a
+  CLI command, and was incapable of saying no.
+- **No registry allow-list and no digest pinning**, both of which the notes
+  claimed existed. There was a deny list of three metadata hostnames, and
+  nothing resolved a tag to a digest — so `:latest` stayed mutable and "what
+  is this deployment running" had no answer after the fact. The signature gate
+  does not close that: it verifies whatever arrived.
+- **`aisoc plugin publish` POSTed to a route no router has ever served.**
+  Broken as shipped.
+- **The public scoreboard was frozen for ten weeks and every check passed**
+  ([#738](https://github.com/beenuar/AiSOC/pull/738)). "Freshness" meant the
+  accuracy value was current and nothing read the row's date; the newest row
+  was taken by file position rather than by date; `--refresh` rewrote only the
+  accuracy, so a refreshed row described today's code and claimed to have been
+  measured in July. And there was no writer at all — `live-agent-eval.yml` had
+  `contents: read`.
+- **Neither published Go SDK was installable.** Both declared
+  `github.com/beenuar/aisoc/<name>` — wrong case against a case-sensitive VCS
+  path, missing the `packages/` prefix. Every in-repo consumer used a `replace`
+  directive, which is the shape that hides this: the tree builds perfectly and
+  the artifact does not exist.
+- **The Helm chart did not render.** `helm template` fails outright until
+  dependencies are fetched, and no documentation said to fetch them — nor to
+  `helm repo add bitnami` first, which a clean machine also needs.
+- **OpenSearch was recorded as dead code and is not.** The check had been made
+  against `services/api`, which holds no OpenSearch client, and never against
+  `services/threatintel`, which indexes into it in its lifespan with no flag
+  and no `try`. Two real defects were hiding under the wrong verdict: compose
+  set an env var that service discards, so the connection worked by
+  coincidence, and it declared no dependency on OpenSearch so it raced it at
+  boot.
+- **One connectivity check at boot is a coin toss.** The graph writer verified
+  Neo4j once and a failure disabled it for the process lifetime; compose
+  cannot express "depend on neo4j only in the `full` profile", so ingest lost
+  a race it had no way to wait for. The integration gate caught it
+  intermittently — the same branch passed at 21:06 and failed at 21:19.
+- Two stale comments that described working code as broken: the reachability
+  gate's claim that the windowed engine "has three hardcoded rules and no
+  loader", and the windowed exporter's claim to mirror the stateless one
+  "exactly: specs are the source of truth".
+
+### Changed
+
+- **Packaging stops moving the number.** It slipped v8.0 → v8.1 → v8.2 for the
+  same reason each time. The README now states a fact rather than a date —
+  the pipeline builds and packs all eight packages on every tag, and the
+  upload is blocked on registry credentials, which is an account action.
+  `check_published_packages.py` reads actual registry state so that claim
+  cannot go stale in either direction once credentials exist.
+- Vulnerability-match events are opt-in: every stock deployment was
+  downloading the CISA KEV catalogue at boot to publish into a topic with no
+  reader.
+- `aisoc.alerts.raw` is reclassified from dead to external entrypoint. No
+  in-repo producer is what an entrypoint *is*.
+
+### Known
+
+- **Eight of the nine `PARTIAL` claim-to-gate rows remain**, each still naming
+  its own gap. The air-gap row narrowed rather than flipping: the Helm half is
+  built and gated, platform-wide egress-blocked CI is not. Relabelling a row
+  for the half that is done is what that file exists to prevent.
+- Whether migrations 050–056 apply to an *existing* Postgres volume is still
+  untraced. Compose mounts them as `docker-entrypoint-initdb.d`, which runs
+  only on a fresh volume.
+- 133 detection rules remain unreachable. Authoring a `wd-*` rule does not make
+  a `det-*` rule reachable, so `MAX_UNREACHABLE` is unchanged on purpose.
+- The OCI install route is held back. Adding it made CodeQL flag eight
+  `py/path-injection` sites across the plugin-ingest graph; trading "a hardened
+  path with no caller" for "a reachable path with eight unresolved high
+  findings" is the worse position.
+
 ## [8.1.1] — 2026-09-23
 
 **The v8.1.0 notes described a platform its own quick start never started.**
@@ -4171,7 +4357,8 @@ demo profile. Details below.
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v8.1.1...HEAD
+[Unreleased]: https://github.com/beenuar/AiSOC/compare/v9.0.0...HEAD
+[9.0.0]: https://github.com/beenuar/AiSOC/compare/v8.1.1...v9.0.0
 [8.1.1]: https://github.com/beenuar/AiSOC/compare/v8.1.0...v8.1.1
 [8.1.0]: https://github.com/beenuar/AiSOC/compare/v8.0.0...v8.1.0
 [8.0.0]: https://github.com/beenuar/AiSOC/compare/v7.7.0...v8.0.0

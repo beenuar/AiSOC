@@ -61,6 +61,13 @@ README_MAX_LINES = 250
 # text must use the current one — a README shipped *as* vX cannot coherently
 # promise that something lands in vX.
 #
+# v9.0 stops moving the number. The README no longer says packaging "comes
+# in" any version, because a README shipped *as* v9.0 promising v9.0 is the
+# incoherence this list was created to police, and promising v9.1 would just
+# be the fourth slip. It says what is true instead: the pipeline builds and
+# packs all eight packages on every tag, and the upload is blocked on
+# registry credentials — which is an account action and cannot be scheduled.
+#
 # Do not add the next version here speculatively. The phrase should move when
 # the milestone does, so the list is a record of what was actually promised.
 V8_GUARDS = (
@@ -80,6 +87,9 @@ V8_GUARDS = (
     "lands with the v8.1",
     "lands with the v8.2",
     "packaging release",
+    # The v9.0 phrasing: a state, not a date.
+    "blocked on registry credentials",
+    "ready, unpublished",
     "publish lands in v8.0",
     "publish lands in v8.1",
     "publish lands in v8.2",

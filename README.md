@@ -7,7 +7,7 @@
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-8.1.1-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-9.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
@@ -172,8 +172,8 @@ so. They do not fabricate a verdict.
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Scheduled connectors | Beta | Contract tests | `full` profile |
-| UEBA | **Broken** | — | No — [see why](docs/audit/REPOSITORY_REALITY.md) |
-| Package distribution (npm/PyPI) | Planned | — | v8.2 — blocked on registry credentials |
+| UEBA | Beta | Unit | `full` profile |
+| Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
 
 ## What AiSOC is not
 
