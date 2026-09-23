@@ -38,8 +38,8 @@ importers:
         specifier: ^6.0.0
         version: 6.0.24(@expo/metro-runtime@6.1.2)(@types/react@19.1.17)(expo-constants@18.0.14)(expo-linking@8.0.12)(expo@54.0.37)(react-dom@19.3.0)(react-native-safe-area-context@5.10.0)(react-native-screens@4.28.0)(react-native@0.81.4)(react@19.1.0)
       expo-secure-store:
-        specifier: ^15.0.0
-        version: 15.0.8(expo@54.0.37)
+        specifier: ^57.0.4
+        version: 57.0.4(expo@54.0.37)
       expo-status-bar:
         specifier: ^3.0.0
         version: 3.0.9(react-native@0.81.4)(react@19.1.0)
@@ -3830,8 +3830,8 @@ packages:
       - supports-color
     dev: false
 
-  /expo-secure-store@15.0.8(expo@54.0.37):
-    resolution: {integrity: sha512-lHnzvRajBu4u+P99+0GEMijQMFCOYpWRO4dWsXSuMt77+THPIGjzNvVKrGSl6mMrLsfVaKL8BpwYZLGlgA+zAw==}
+  /expo-secure-store@57.0.4(expo@54.0.37):
+    resolution: {integrity: sha512-7zBA1RThURTXdP4w65kBzZNbcSsfArqVd+p+ETAnPRWXO8J296Qd0YaCVyRpJ0HSwlCnGdvOnqO+NgSreHsOhA==}
     peerDependencies:
       expo: '*'
     dependencies:
