@@ -1,0 +1,21 @@
+# Grafana dashboard provisioning.
+#
+# Dashboards are files in this directory rather than state inside Grafana's
+# database, so a rebuilt container comes back with them and a change to one
+# is reviewable in a diff. `allowUiUpdates: false` makes that stick: a
+# dashboard edited in the browser is silently reverted on the next reload,
+# which is the correct outcome but surprises people who do not know the
+# dashboards are provisioned.
+apiVersion: 1
+
+providers:
+  - name: aisoc
+    orgId: 1
+    folder: AiSOC
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
