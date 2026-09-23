@@ -1,6 +1,6 @@
 {
   "event_id": 4624,
   "logon_type": 3,
-  "session_ip": "10.9.1.4",
-  "ticket_source_ip": "10.2.7.31"
+  "session_ip": "principal-b",
+  "ticket_source_ip": "principal-a"
 }
