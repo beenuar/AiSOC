@@ -2,3 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
   - "services/mcp"
+  # apps/mobile is deliberately outside the shared install.
+  #
+  # It is a React Native app: Metro, not Turbopack, and an Expo dependency
+  # tree of its own. Pulling that into the root lockfile adds roughly 3,700
+  # lines and several hundred megabytes of node_modules to *every* TypeScript
+  # CI job — the web build, Storybook, the SDK tests — none of which can use
+  # any of it. The mobile app installs and builds on its own, gated by its own
+  # workflow, which is also how it will be released: through an app store, not
+  # through this repository's npm publish.
+  - "!apps/mobile"

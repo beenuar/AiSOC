@@ -230,11 +230,20 @@ Implemented and reviewed by Beenu Arora <beenu@cyble.com>.
 - [x] Case auto-summary + PDF export (`case_summary.py` + `case_summary_html.py`)
 - [x] Investigation timeline (replayable) (`InvestigationTimeline.tsx`)
 - [x] Playbook gallery with 12 curated packs + GitHub PR integration for detection proposals
-- [ ] Mobile responder console (React Native) — triage and acknowledge from phone
-      _(deferred past v8.0; **not started** — no React Native code exists in the
-      tree. v8.0 shipped without it and nothing in `docs/roadmap/v8-progress.md`
-      claimed otherwise, so the previous "deferred to v8.0" note had quietly
-      become false.)_
+- [x] Mobile responder console — decide an approval from a phone
+      _(shipped in v9.0. The "not started" note this line used to carry was
+      true about React Native and misleading about the product: the responder
+      console already existed as a **PWA** — nine routes under
+      `apps/web/src/app/(responder)/`, a service worker, an IndexedDB offline
+      approval queue, Web Push with VAPID, and passkeys. `apps/mobile` is a
+      distribution channel on top of that, and it exists for one reason worth
+      the build: iOS Web Push requires an installed PWA and has been
+      unreliable even then, which for "approve a containment from your phone"
+      is the same as the feature not existing. Its `src/lib` unit tests and
+      type-check run in CI; **no device build, simulator run or store
+      submission has been performed**, and APNs/FCM credentials are an
+      account action rather than an engineering one — see
+      `apps/mobile/README.md`.)_
 - [ ] Plugin publishing marketplace v3 (commercial plugins, revenue sharing)
       _(deferred past v8.0; **not started**. Revenue sharing is a commercial
       decision rather than an engineering one, and the free packaging path is

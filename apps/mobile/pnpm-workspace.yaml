@@ -1,0 +1,10 @@
+# This file is what makes apps/mobile its own install root.
+#
+# Without it, `pnpm install` run from here walks up, finds the repository's
+# pnpm-workspace.yaml, and installs *that* workspace instead — which is both
+# surprising and wrong, since the root deliberately excludes this directory.
+#
+# An empty package list means "just this project". The mobile app depends on
+# @aisoc/sdk through a file: reference rather than workspace:*, because it is
+# not a member of the root workspace and workspace protocol would not resolve.
+packages: []

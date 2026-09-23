@@ -140,13 +140,19 @@ unrelated project, so the Python side ships as `aisoc-sandbox`, and
 `aisoc-detections` are all free. One-time setup:
 [`docs/operations/publishing.md`](../operations/publishing.md).
 
-## Deferred by decision, not by omission
+## Deferred by decision — both taken up in v9.0
 
-- **Mobile responder console (React Native).** Not started; no React Native
-  code in the tree.
-- **Plugin marketplace v3 (commercial plugins, revenue sharing).** Revenue
-  sharing is a commercial decision rather than an engineering one, and the free
-  packaging path is itself credential-blocked.
+- **Mobile responder console.** Recorded here as "not started; no React Native
+  code in the tree", which was true about React Native and misleading about the
+  product: the responder console already existed as a **PWA** under
+  `apps/web/src/app/(responder)/`, complete with a service worker, an offline
+  approval queue and Web Push. `apps/mobile` shipped in v9.0 as a distribution
+  channel on top of it. Its unit tests and type-check run in CI; no device
+  build has been performed.
+- **Plugin marketplace v3 (commercial plugins, revenue sharing).** Taken up in
+  v9.0. The signing and OCI foundations were real; publisher identity was a
+  stub returning `None`, so a submitted plugin was never rejected for a bad
+  signature, and there was no commerce code of any kind in the repository.
 
 Both were labelled "deferred to v8.0" until that label went stale at the v8.0
-tag. They are scope decisions, not gaps.
+tag.
