@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 #: Vendor payload fields that are behavioural when present. Each is a genuine
@@ -50,9 +50,7 @@ _NUMERIC_FIELDS: tuple[str, ...] = (
 
 #: Outcome spellings that mean "this did not succeed". Failure rate per entity
 #: is one of the strongest behavioural signals there is.
-_FAILURE_VALUES = frozenset(
-    {"failure", "failed", "fail", "denied", "deny", "blocked", "error", "unsuccessful"}
-)
+_FAILURE_VALUES = frozenset({"failure", "failed", "fail", "denied", "deny", "blocked", "error", "unsuccessful"})
 
 #: Fields carrying the acting identity, most specific first.
 _USER_FIELDS: tuple[str, ...] = ("user", "username", "user_name", "actor", "principal", "account")
@@ -125,7 +123,7 @@ def _first_str(fields: dict[str, Any], names: tuple[str, ...]) -> str | None:
 def _coerce_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
@@ -139,12 +137,12 @@ def _parse_time(fields: dict[str, Any], message: dict[str, Any]) -> datetime | N
     for source in (fields, message):
         for name in ("time", "timestamp", "ts", "event_time", "@timestamp"):
             value = source.get(name)
-            if isinstance(value, (int, float)) and value > 0:
+            if isinstance(value, int | float) and value > 0:
                 # OCSF publishes epoch milliseconds; anything past year 2286 in
                 # seconds is really milliseconds.
                 seconds = value / 1000.0 if value > 10_000_000_000 else float(value)
                 try:
-                    return datetime.fromtimestamp(seconds, tz=timezone.utc)
+                    return datetime.fromtimestamp(seconds, tz=UTC)
                 except (OverflowError, OSError, ValueError):
                     continue
             if isinstance(value, str) and value.strip():
