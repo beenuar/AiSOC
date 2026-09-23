@@ -83,6 +83,7 @@ from .investigation_reads import (
     OktaGetUserActivity,
 )
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
+from .vendor_breadth import VENDOR_BREADTH_EXECUTORS
 
 logger = structlog.get_logger(__name__)
 
@@ -595,6 +596,10 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     # Rollback for the most disruptive action, which had no executor.
     CrowdStrikeUnisolateHost,
     DefenderUnisolateHost,
+    # Vendor breadth: capabilities the clients already implemented and
+    # the registry could not reach. SentinelOne exposed seven
+    # operations and one was wired; Entra six and one.
+    *VENDOR_BREADTH_EXECUTORS,
     # Endpoint
     CrowdStrikeIsolateHost,
     DefenderIsolateHost,

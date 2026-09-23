@@ -194,23 +194,22 @@ def check_approval_matrix() -> list[str]:
 #: Ordered by what it costs to be missing:
 #:   restore_file  — the reverse of quarantine_file; a quarantined file
 #:                   cannot be released through the platform that took it
-#:   allow_domain  — the reverse of block_domain, whose forward arm is
-#:   allow_hash      itself a placeholder
-#:   allow_ioc     — the reverse of block_ioc, which Defender does implement
-#:   block_hash    — declared as allow_hash's reverse, never built
-#:   enable_user   — the reverse of disable_user; an account disabled in an
-#:                   incident has no platform route back
-#:   revoke_session, block_user_signin — identity verbs with no arm
+#:   allow_hash    — the reverse of block_hash and vice versa; neither arm
+#:   allow_ioc       exists, and allow_ioc reverses a block Defender does
+#:   block_hash      implement
+#:   block_user_signin — an identity verb with no vendor arm
 #:   push_case, push_status — ITSM sync, never wired
+#:
+#: Left this set when their clients turned out to already implement them:
+#: enable_user (Entra, Google Workspace), revoke_session (both),
+#: allow_domain (Cloudflare), allow_ip (Cloudflare, PAN-OS, FortiGate),
+#: unisolate_host (CrowdStrike, Defender, SentinelOne).
 KNOWN_ORPHANS: frozenset[str] = frozenset(
     {
         "restore_file",
-        "allow_domain",
         "allow_hash",
         "allow_ioc",
         "block_hash",
-        "enable_user",
-        "revoke_session",
         "block_user_signin",
         "push_case",
         "push_status",
