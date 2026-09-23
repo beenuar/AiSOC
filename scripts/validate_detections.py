@@ -59,7 +59,11 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from detection_specs_index import all_specs  # noqa: E402
-from generate_detections import matches  # noqa: E402
+from generate_detections import (  # noqa: E402
+    enrich,
+    matches,
+    requested_derived_fields,
+)
 
 VALID_SEVERITIES = {"low", "medium", "high", "critical"}
 VALID_CATEGORIES = {
@@ -114,9 +118,7 @@ IMPORTED_TIERS: dict[str, dict[str, str]] = {
 # Spec lookup — for native fixture replay only.
 # =============================================================================
 
-_SPEC_BY_KEY: dict[tuple[str, str], dict[str, Any]] = {
-    (cat, spec["slug"]): spec for cat, spec in all_specs()
-}
+_SPEC_BY_KEY: dict[tuple[str, str], dict[str, Any]] = {(cat, spec["slug"]): spec for cat, spec in all_specs()}
 
 
 # =============================================================================
@@ -229,9 +231,7 @@ def validate_rule(
         return [f"YAML parse error: {exc}"], None
 
     if not isinstance(rule, dict):
-        return [
-            "Rule is not a YAML mapping (expected key: value pairs at top level)"
-        ], None
+        return ["Rule is not a YAML mapping (expected key: value pairs at top level)"], None
 
     for field in REQUIRED_FIELDS:
         if field not in rule:
@@ -241,42 +241,23 @@ def validate_rule(
         return errors, rule
 
     if rule["severity"] not in VALID_SEVERITIES:
-        errors.append(
-            f"Invalid severity '{rule['severity']}'; must be one of: "
-            f"{', '.join(sorted(VALID_SEVERITIES))}"
-        )
+        errors.append(f"Invalid severity '{rule['severity']}'; must be one of: " f"{', '.join(sorted(VALID_SEVERITIES))}")
 
     rule_category = rule.get("category")
     if rule_category and rule_category not in VALID_CATEGORIES:
-        errors.append(
-            f"Invalid category '{rule_category}'; must be one of: "
-            f"{', '.join(sorted(VALID_CATEGORIES))}"
-        )
+        errors.append(f"Invalid category '{rule_category}'; must be one of: " f"{', '.join(sorted(VALID_CATEGORIES))}")
 
     expected_category = classification["category"]
-    if (
-        rule_category
-        and expected_category
-        and rule_category != expected_category
-    ):
-        errors.append(
-            f"Rule category '{rule_category}' does not match directory "
-            f"'{expected_category}'"
-        )
+    if rule_category and expected_category and rule_category != expected_category:
+        errors.append(f"Rule category '{rule_category}' does not match directory " f"'{expected_category}'")
 
     rule_id = str(rule["id"])
     expected_prefix = classification["id_prefix"]
     if expected_prefix and not rule_id.startswith(expected_prefix):
-        errors.append(
-            f"Rule id '{rule_id}' must start with '{expected_prefix}' "
-            f"(tier: {classification['tier']})"
-        )
+        errors.append(f"Rule id '{rule_id}' must start with '{expected_prefix}' " f"(tier: {classification['tier']})")
 
     if rule_id in seen_ids:
-        errors.append(
-            f"Duplicate id '{rule_id}' — already defined in "
-            f"{seen_ids[rule_id]}"
-        )
+        errors.append(f"Duplicate id '{rule_id}' — already defined in " f"{seen_ids[rule_id]}")
     else:
         seen_ids[rule_id] = path
 
@@ -299,10 +280,7 @@ def _validate_provenance(rule: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     provenance = rule.get("provenance")
     if not isinstance(provenance, dict):
-        return [
-            "Imported rule is missing required 'provenance' block "
-            "(see tools/detection_import/README.md)"
-        ]
+        return ["Imported rule is missing required 'provenance' block " "(see tools/detection_import/README.md)"]
     for field in REQUIRED_PROVENANCE_FIELDS:
         value = provenance.get(field)
         if value in (None, ""):
@@ -310,9 +288,7 @@ def _validate_provenance(rule: dict[str, Any]) -> list[str]:
     return errors
 
 
-def replay_fixture(
-    rule_path: Path, rule: dict[str, Any], strict: bool
-) -> list[str]:
+def replay_fixture(rule_path: Path, rule: dict[str, Any], strict: bool) -> list[str]:
     """Replay positive + negative fixtures against the canonical spec.
 
     Native tier only. Looks up the spec for this rule by ``(category,
@@ -335,13 +311,9 @@ def replay_fixture(
     if pos_missing or neg_missing:
         msg_parts = []
         if pos_missing:
-            msg_parts.append(
-                f"missing positive fixture {pos_path.relative_to(ROOT)}"
-            )
+            msg_parts.append(f"missing positive fixture {pos_path.relative_to(ROOT)}")
         if neg_missing:
-            msg_parts.append(
-                f"missing negative fixture {neg_path.relative_to(ROOT)}"
-            )
+            msg_parts.append(f"missing negative fixture {neg_path.relative_to(ROOT)}")
         msg = "; ".join(msg_parts)
         if strict:
             errors.append(msg)
@@ -351,10 +323,7 @@ def replay_fixture(
 
     spec = _SPEC_BY_KEY.get((category, slug))
     if spec is None:
-        msg = (
-            f"no canonical spec found for ({category}, {slug}); "
-            f"hand-authored rule — fixture replay skipped"
-        )
+        msg = f"no canonical spec found for ({category}, {slug}); " f"hand-authored rule — fixture replay skipped"
         errors.append(f"WARN: {msg}")
         return errors
 
@@ -371,14 +340,18 @@ def replay_fixture(
         errors.append(f"fixture load error: {exc}")
         return errors
 
+    # Enriched the way the engine enriches. Replaying against the bare
+    # matcher tests a pipeline production does not run — a rule matching a
+    # derived field would fail here while working live, which trains people
+    # to weaken the gate.
+    wanted = requested_derived_fields([{"match_when": match_when}])
+    pos_event = enrich(pos_event, wanted)
+    neg_event = enrich(neg_event, wanted)
+
     if not matches(match_when, pos_event):
-        errors.append(
-            "positive fixture did NOT match match_when (expected match)"
-        )
+        errors.append("positive fixture did NOT match match_when (expected match)")
     if matches(match_when, neg_event):
-        errors.append(
-            "negative fixture DID match match_when (expected no match)"
-        )
+        errors.append("negative fixture DID match match_when (expected no match)")
     return errors
 
 
@@ -432,12 +405,7 @@ def main() -> int:
         rule_failed = bool(errors)
 
         replay_errors: list[str] = []
-        if (
-            rule
-            and not rule_failed
-            and tier == "native"
-            and path.parent.name in VALID_CATEGORIES
-        ):
+        if rule and not rule_failed and tier == "native" and path.parent.name in VALID_CATEGORIES:
             replay_errors = replay_fixture(path, rule, strict=strict)
 
         warnings = [e for e in replay_errors if e.startswith("WARN:")]
@@ -460,18 +428,8 @@ def main() -> int:
                 print(f"    {w}")
 
     print(f"\n{'─' * 60}")
-    print(
-        f"Validated {total} rules — {total - failed} passed, {failed} failed, "
-        f"{fixture_warnings} fixture warnings"
-    )
-    print(
-        "  Tiers: "
-        + ", ".join(
-            f"{tier}={count}"
-            for tier, count in sorted(tier_counts.items())
-            if count > 0
-        )
-    )
+    print(f"Validated {total} rules — {total - failed} passed, {failed} failed, " f"{fixture_warnings} fixture warnings")
+    print("  Tiers: " + ", ".join(f"{tier}={count}" for tier, count in sorted(tier_counts.items()) if count > 0))
     if quarantine_count:
         print(f"  Quarantined (parsed-but-disabled): {quarantine_count}")
 

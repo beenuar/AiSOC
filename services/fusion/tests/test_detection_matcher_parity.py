@@ -100,3 +100,42 @@ def test_positive_fixtures_fire_and_negatives_do_not():
         assert not vendored_matches(mw, event), f"negative fixture fired: {f.stem}"
         negatives += 1
     assert negatives > 100, f"expected to check many negative fixtures, only {negatives}"
+
+
+def test_vendored_derived_fields_match_canonical():
+    """The derived-field helpers are vendored the same way `matches()` is.
+
+    Two copies that can drift silently are worse than one copy plus a gate,
+    and this is the gate. Without it the engine could compute a field the
+    validator does not, so a rule would pass CI and never fire — or fire in
+    CI and never in production.
+    """
+    from app.services import derived_fields as vendored
+
+    canonical = _load_canonical()
+    cases = [
+        ({"actor": "alice", "target": "alice"}, {"actor_eq_target"}),
+        ({"actor": "Alice", "target": "alice "}, {"actor_eq_target"}),
+        ({"actor": "alice"}, {"actor_eq_target"}),
+        ({"actor_uid": 1000, "owner_uid": 0}, {"actor_uid_neq_owner_uid"}),
+        ({"event_time": "2026-09-22T14:00:00"}, set()),
+        ({"event_time": "2026-09-26T14:00:00"}, set()),
+        ({"event_time": "not a date"}, set()),
+        ({"user_name": "x"}, {"a_eq_b"}),
+    ]
+    for event, wanted in cases:
+        assert vendored.enrich(dict(event), set(wanted)) == canonical.enrich(
+            dict(event), set(wanted)
+        ), f"vendored and canonical enrich disagree on {event}"
+
+
+def test_vendored_requested_fields_match_canonical():
+    from app.services import derived_fields as vendored
+
+    canonical = _load_canonical()
+    rules = [
+        {"match_when": {"actor_eq_target": False, "event_name": "CreateAccessKey"}},
+        {"match_when": {"any_of": [{"is_business_hours": False}, {"x": 1}]}},
+        {"match_when": {"actor_uid_neq_owner_uid": True, "syscall": "openat"}},
+    ]
+    assert vendored.requested_derived_fields(rules) == canonical.requested_derived_fields(rules)

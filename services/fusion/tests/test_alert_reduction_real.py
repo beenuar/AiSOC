@@ -99,9 +99,7 @@ def build_stream(size: int = STREAM_SIZE) -> list[tuple[datetime, RawAlert]]:
     return stream
 
 
-def group_by_real_key(
-    stream: list[tuple[datetime, RawAlert]], window: timedelta = WINDOW
-) -> int:
+def group_by_real_key(stream: list[tuple[datetime, RawAlert]], window: timedelta = WINDOW) -> int:
     """Incident count under the real correlation key and window.
 
     Mirrors what `Correlator.correlate` does: look up the incident for this
@@ -133,10 +131,7 @@ def test_reduction_is_measured_against_the_real_correlation_key() -> None:
     incidents = group_by_real_key(stream)
     reduction = 1 - (incidents / len(stream))
 
-    print(
-        f"\n[eval] alert reduction (real correlation_key): "
-        f"{len(stream)} alerts -> {incidents} incidents = {reduction:.1%}"
-    )
+    print(f"\n[eval] alert reduction (real correlation_key): " f"{len(stream)} alerts -> {incidents} incidents = {reduction:.1%}")
 
     # Bounded on both sides. A floor alone would be satisfied by a key that
     # collapses everything into one incident, which is 99.9% reduction and
@@ -167,11 +162,7 @@ def test_entity_precedence_is_src_ip_then_hostname() -> None:
     pinning rather than inferring from the reduction number."""
     base = {"tenant_id": TENANT, "source": "s", "title": "t", "mitre_tactics": ["exec"]}
     assert RawAlert(**base, hostname="ws-1").correlation_key().endswith("ws-1:exec")
-    assert (
-        RawAlert(**base, src_ip="10.0.0.1", hostname="ws-1")
-        .correlation_key()
-        .endswith("10.0.0.1:exec")
-    )
+    assert RawAlert(**base, src_ip="10.0.0.1", hostname="ws-1").correlation_key().endswith("10.0.0.1:exec")
 
 
 def test_alerts_without_a_tactic_do_not_all_collapse_together() -> None:

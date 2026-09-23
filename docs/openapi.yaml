@@ -6356,6 +6356,46 @@ paths:
                 $ref: '#/components/schemas/PipelineHealth'
       security:
       - HTTPBearer: []
+  /api/v1/health/fleet:
+    get:
+      tags:
+      - health
+      summary: Get Fleet Health
+      description: 'Which connectors have quietly stopped working.
+
+
+        Every field this reads was already being written — `last_sync`,
+
+        `error_count`, `oauth_refresh_failures`, `last_schema_drift_at` — and
+
+        nothing read them together. That produces the failure this platform is
+
+        least able to tolerate: a connector stops polling, alerts from that
+
+        source stop arriving, and the console looks calm, because an absence of
+
+        alerts is indistinguishable from an absence of threats.
+
+
+        Staleness is judged per connector against its own configured cadence.
+
+        A single global threshold would page constantly on daily connectors or
+
+        stay silent on five-minute ones, and a surface that pages constantly is
+
+        a surface that gets muted.'
+      operationId: get_fleet_health_api_v1_health_fleet_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Fleet Health Api V1 Health Fleet Get
+      security:
+      - HTTPBearer: []
   /api/v1/insights/soc:
     get:
       tags:
