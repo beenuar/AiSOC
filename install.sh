@@ -436,7 +436,6 @@ ensure_git() {
 #     when invoking docker.
 
 DOCKER_NEEDS_NEWGRP=0
-SMOKE_PASSED=0
 
 ensure_docker() {
   # Compose v2 ships as a docker plugin, exposed as `docker compose` (no
@@ -823,12 +822,10 @@ run_smoke_test() {
   fi
 
   if ( cd "$REPO_ROOT" && python3 "$runner" ); then
-    SMOKE_PASSED=1
     ok "Pipeline verified: a real event became a retrievable alert."
     return 0
   fi
 
-  SMOKE_PASSED=0
   err ""
   err "The stack started, but a real event did not become an alert."
   err "This is a genuine failure, not a warning: AiSOC is not working yet."

@@ -87,11 +87,12 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
                   "host":"WIN-FIN-01","process_name":"powershell.exe"}]}'
 ```
 
-Or pull, by configuring a connector in **Settings → Connectors** (needs the
-`full` profile). Connectors with vendor-specific normalization and live
-setup docs include Splunk, Microsoft Sentinel, Elastic, CrowdStrike, Okta,
-AWS (GuardDuty / CloudTrail / Security Hub), Wiz, and Kubernetes audit logs.
-The full list is in the [connector docs](https://beenuar.github.io/AiSOC/docs/connectors/).
+Or pull, by configuring one of **84 click-and-connect data connectors** in
+**Settings → Connectors** (needs the `full` profile). Those with
+vendor-specific normalization and live setup docs include Splunk, Microsoft
+Sentinel, Elastic, CrowdStrike, Okta, AWS (GuardDuty / CloudTrail / Security
+Hub), Wiz, and Kubernetes audit logs. The full list is in the
+[connector docs](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage).
 
 A connector without a vendor profile still ingests through a generic mapping —
 events flow, but entity extraction is weaker.
@@ -217,9 +218,9 @@ make smoke       # the golden pipeline, against a running stack
 make stats       # recount every figure this README publishes
 ```
 
-Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/overview) ·
-[add a detection](https://beenuar.github.io/AiSOC/docs/detections/authoring) ·
-[add a playbook](https://beenuar.github.io/AiSOC/docs/playbooks/overview) ·
+Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
+[add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
+[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
 [contributing](CONTRIBUTING.md)
 
 Every number in this README is produced by `scripts/project_stats.py` and
