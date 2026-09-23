@@ -159,6 +159,31 @@ jobs:
             --wet-out /tmp/wet-eval/wet-block.json
 
       # ──────────────────────────────────────────────
+      # Step 3b — model matrix (Phase 4c).
+      # The single-model wet eval above says how the agent performs on one
+      # backend; it cannot say whether the result is a property of the
+      # agent or of the model. The matrix grades the same corpus across
+      # several, one variable at a time.
+      #
+      # Wrapper, not a second evaluator: it sets the model pins and
+      # re-invokes run_evals.py, so there is one definition of accuracy
+      # rather than two that can drift.
+      # ──────────────────────────────────────────────
+      - name: Run model matrix
+        if: steps.preflight.outputs.should_run == 'True'
+        env:
+          WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          OPENAI_API_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          AISOC_MATRIX_MODELS: ${{ vars.AISOC_MATRIX_MODELS || 'gpt-4o-mini,gpt-4o' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/run_model_matrix.py \
+            --out /tmp/wet-eval/model-matrix.json \
+            --markdown-out /tmp/wet-eval/model-matrix.md
+          echo "### Model matrix" >> "${GITHUB_STEP_SUMMARY}"
+          cat /tmp/wet-eval/model-matrix.md >> "${GITHUB_STEP_SUMMARY}"
+
+      # ──────────────────────────────────────────────
       # Step 4 — rewrite the wet-eval tables in benchmark.md.
       # The `--check` flag fails the step if the markdown scaffold
       # has drifted from the wet-eval JSON shape (i.e. somebody added
