@@ -32,17 +32,34 @@ OUT = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
 
 def _build() -> list[dict]:
     from detection_specs_index import all_specs  # noqa: PLC0415
+    from generate_detections import load_id_lock  # noqa: PLC0415
 
+    # The id comes from detections/rule-ids.lock.json, the same lookup
+    # generate_detections.py uses for the YAML projection. This used to be
+    # computed positionally here (`seen[category] += 1`) under a comment
+    # claiming it mirrored the generator — which stopped being true when the
+    # generator moved to the lock. The two then numbered rules differently, so
+    # the id the engine stamps onto an alert and the id the catalogue publishes
+    # for the same rule drifted apart, and an analyst looking up a rule id off
+    # an alert read a different rule's description and playbook.
+    #
+    # Positional ids are also unstable by construction: inserting a spec
+    # anywhere but the end shifts every id after it, so an alert's rule id
+    # would not survive a release.
+    id_lock = load_id_lock()
     rules: list[dict] = []
-    seen: dict[str, int] = {}
     for category, spec in all_specs():
         match_when = spec.get("match_when")
         if not match_when:
             continue
         slug = spec["slug"]
-        # Rule id mirrors generate_detections.py: det-{category}-{NNN}.
-        seen[category] = seen.get(category, 0) + 1
-        rule_id = f"det-{category}-{seen[category]:03d}"
+        rule_id = id_lock.get(f"{category}/{slug}")
+        if rule_id is None:
+            raise SystemExit(
+                f"error: no rule id locked for {category}/{slug}.\n"
+                "Run `python3 scripts/generate_detections.py` first — it "
+                "allocates ids for new slugs and writes the lock."
+            )
         log_source = spec.get("log_source") or {}
         rules.append(
             {

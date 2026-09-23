@@ -1,4 +1,4 @@
-id: det-network-073
+id: det-network-074
 name: Kerberos Service Ticket Issued With RC4 Encryption
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'Kerberos Service
   Ticket Issued With RC4 Encryption'. Watch the 1 documented false-positive case before tuning.

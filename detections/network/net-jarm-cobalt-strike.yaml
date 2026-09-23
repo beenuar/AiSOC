@@ -1,4 +1,4 @@
-id: det-network-051
+id: det-network-052
 name: JARM Fingerprint Matches Known Cobalt Strike Profile
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint
   Matches Known Cobalt Strike Profile'. Watch the 1 documented false-positive case before tuning.

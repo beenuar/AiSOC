@@ -1,4 +1,4 @@
-id: det-network-055
+id: det-network-056
 name: Outbound SSH With -R Reverse-Tunnel Flag
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound SSH With
   -R Reverse-Tunnel Flag'. Watch the 1 documented false-positive case before tuning.

@@ -1,4 +1,5 @@
 {
-  "approver_eq_actor": true,
-  "event_type": "not-pim_activation"
+  "actor": "other-principal-a",
+  "approver": "principal-a",
+  "event_type": "pim_activation"
 }

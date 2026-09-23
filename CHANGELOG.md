@@ -365,24 +365,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   eval, not code. Marking it done would be the exact failure the program exists
   to prevent.
 
-### Known
-
-- `scripts/generate_detections.py` still does not reproduce the committed
-  detection pack, and the reason changed. Ids are no longer positional — #697
-  pinned `(category, slug) → rule_id` in `detections/rule-ids.lock.json` — but
-  **nothing reconciled the lock against the YAML already on disk**, and the
-  `--check` mode that would have caught it was never written (nothing outside
-  the generator references the lock). Running the generator on a clean checkout
-  rewrites 57 files and moves 45 network rule ids.
-  The consequence is worse than a regeneration hazard: the engine
-  (`services/fusion/app/data/detection_ruleset.json`, which fires and stamps
-  the id onto the alert) and the published projection **disagree about which
-  rule owns those 45 ids**. `det-network-037` is "DNS TXT Response Over 250
-  Bytes From Non-Resolver Host" to the engine and "DNS Tunnel Indicator: Long
-  Hex Subdomain Sequence" in the YAML and `marketplace/index.json`, so an
-  analyst who takes a rule id off an alert and looks it up in the catalogue
-  reads a different rule's description, false-positive notes and playbook. This
-  is precisely the harm the lock's own docstring warns about.
+- **A rule id named one rule in the engine and a different one in the
+  catalogue.** #697 made ids position-independent by pinning
+  `(category, slug) → rule_id` in `detections/rule-ids.lock.json`, but nothing
+  reconciled the lock against the YAML already on disk and the `--check` mode
+  was never written, so the committed pack fell **45 network rule ids** behind
+  the generator. Because the id is the join key between an alert and its
+  catalogue entry, the effect was not a stale file: `det-network-037` fired as
+  "DNS TXT Response Over 250 Bytes From Non-Resolver Host" and published — in
+  the YAML, `marketplace/index.json` and the curated coverage manifest — as
+  "DNS Tunnel Indicator: Long Hex Subdomain Sequence". An analyst taking a rule
+  id off an alert and looking it up read a different rule's description,
+  false-positive notes and playbook. Precisely the harm the lock's own
+  docstring warns about.
+  Three things were wrong at once, and each hid the next:
+  - `export_detection_ruleset.py` still computed ids **positionally**
+    (`seen[category] += 1`) under a comment saying it mirrored
+    `generate_detections.py` — true when written, false once the generator
+    moved to the lock. Two generators with two numbering schemes. It reads the
+    lock now, so there is one source of id truth, and inserting a spec no
+    longer moves an id the alert table already references.
+  - `generate_detections.py` had no `--check`, so nobody could see the drift.
+    It has one, it reports moved ids separately from other changes because a
+    moved id is the serious case, and it runs in
+    `validate-detections.yml`.
+  - `tests/test_detection_id_stability.py` compared `assign_ids()` output
+    against the lock — and `assign_ids()` reads the lock, so for the property
+    that matters the comparison was circular. Six tests passed throughout,
+    under a docstring describing this exact failure. Four new tests compare the
+    published surfaces against **each other** in both directions: YAML against
+    the lock, the engine against the lock, and — stating the user-visible
+    property directly — that an id names the same rule in the engine and in the
+    catalogue. The reordering test had to *reorder* specs rather than assert a
+    re-export is a no-op, because the lock was seeded from the current spec
+    order, so the two schemes agree until the day someone inserts a rule; it
+    moves 81 engine ids against the old exporter.
 
 
 ## [8.0.0] — 2026-09-22

@@ -1,13 +1,13 @@
-id: det-network-081
+id: det-network-037
 name: DNS TXT Response Over 250 Bytes From Non-Resolver Host
-description: Triggers on the network signal described by 'DNS TXT Response
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'DNS TXT Response
   Over 250 Bytes From Non-Resolver Host'. Watch the 1 documented false-positive case before tuning.
 version: 1.0.0
 severity: medium
 tags:
-  - mitre.attack.t1071.004
-  - mitre.attack.t1048.003
-  - tlp.white
+- mitre.attack.t1071.004
+- mitre.attack.t1048.003
+- tlp.white
 category: network
 log_source:
   product: dns
@@ -19,9 +19,9 @@ detection:
     AND response_size_bytes > 250
     AND src_role NOT IN ["resolver"]
 false_positives:
-  - Approved DNS telemetry or resolver health checks
+- Approved DNS telemetry or resolver health checks
 playbook: tpl-command-and-control
 enabled: true
-author: Josh Fishman
-created: "2026-05-03"
-modified: "2026-05-03"
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,4 +1,4 @@
-id: det-network-047
+id: det-network-048
 name: TLS Client Offered TLS 1.0 Or 1.1
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'TLS Client Offered
   TLS 1.0 Or 1.1'. Watch the 1 documented false-positive case before tuning.

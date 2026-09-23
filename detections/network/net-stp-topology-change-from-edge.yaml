@@ -1,4 +1,4 @@
-id: det-network-080
+id: det-network-081
 name: STP Topology Change Advertised By Edge Port
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'STP Topology Change
   Advertised By Edge Port'. Watch the 1 documented false-positive case before tuning.

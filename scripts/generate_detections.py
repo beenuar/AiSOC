@@ -36,6 +36,7 @@ Design notes
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from datetime import datetime
@@ -639,6 +640,35 @@ def requested_derived_fields(rules: list[dict[str, Any]]) -> set[str]:
     return names
 
 
+def render_pack(id_lock: dict[str, str]) -> tuple[dict[Path, str], dict[str, int]]:
+    """Render every artifact in memory. Returns (path → content, counts).
+
+    Rendering is separated from writing so ``--check`` compares exactly the
+    bytes ``main()`` would have written, rather than re-deriving them through a
+    second code path that can disagree with the first.
+    """
+    artifacts: dict[Path, str] = {}
+    counts: dict[str, int] = {}
+    pos_dir = DETECTIONS_DIR / "fixtures" / "positive"
+    neg_dir = DETECTIONS_DIR / "fixtures" / "negative"
+
+    for category, specs in sorted(CATEGORIES.items()):
+        cat_dir = DETECTIONS_DIR / category
+        for spec in specs:
+            slug = spec["slug"]
+            # Looked up, not computed from position. See ID_LOCK.
+            rule_id = id_lock[f"{category}/{slug}"]
+
+            artifacts[cat_dir / f"{slug}.yaml"] = render_rule_yaml(
+                rule_id=rule_id, category=category, spec=spec
+            )
+            artifacts[pos_dir / f"{slug}.json"] = json.dumps(spec["positive"], indent=2, sort_keys=True) + "\n"
+            artifacts[neg_dir / f"{slug}.json"] = json.dumps(spec["negative"], indent=2, sort_keys=True) + "\n"
+
+        counts[category] = len(specs)
+    return artifacts, counts
+
+
 def write_pack(*, dry_run: bool = False) -> dict[str, int]:
     """Generate the full pack to disk. Returns counts per category."""
     id_lock, newly_assigned = assign_ids(CATEGORIES)
@@ -646,45 +676,100 @@ def write_pack(*, dry_run: bool = False) -> dict[str, int]:
         ID_LOCK.write_text(json.dumps(id_lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"  assigned {len(newly_assigned)} new rule id(s)")
 
-    counts: dict[str, int] = {}
-    for category, specs in sorted(CATEGORIES.items()):
-        cat_dir = DETECTIONS_DIR / category
-        pos_dir = DETECTIONS_DIR / "fixtures" / "positive"
-        neg_dir = DETECTIONS_DIR / "fixtures" / "negative"
-        if not dry_run:
-            _ensure_dir(cat_dir)
-            _ensure_dir(pos_dir)
-            _ensure_dir(neg_dir)
+    artifacts, counts = render_pack(id_lock)
+    if dry_run:
+        return counts
 
-        for spec in specs:
-            slug = spec["slug"]
-            # Looked up, not computed from position. See ID_LOCK.
-            rule_id = id_lock[f"{category}/{slug}"]
+    for path in {DETECTIONS_DIR / c for c in counts} | {
+        DETECTIONS_DIR / "fixtures" / "positive",
+        DETECTIONS_DIR / "fixtures" / "negative",
+    }:
+        _ensure_dir(path)
+    for path, content in artifacts.items():
+        path.write_text(content, encoding="utf-8")
 
-            yaml_text = render_rule_yaml(rule_id=rule_id, category=category, spec=spec)
-            yaml_path = cat_dir / f"{slug}.yaml"
-
-            pos_path = pos_dir / f"{slug}.json"
-            neg_path = neg_dir / f"{slug}.json"
-
-            if dry_run:
-                continue
-
-            yaml_path.write_text(yaml_text, encoding="utf-8")
-            pos_path.write_text(
-                json.dumps(spec["positive"], indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            neg_path.write_text(
-                json.dumps(spec["negative"], indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-
-        counts[category] = len(specs)
     return counts
 
 
+def check_pack() -> int:
+    """Fail if regenerating would change anything already committed.
+
+    Without this, the generator and the committed pack drift silently, and the
+    drift is not cosmetic: the id is the join key between an alert and its
+    catalogue entry. The committed projection had fallen 45 rule ids out of
+    step with the lock, so a rule id taken off an alert resolved to a different
+    rule's description, false-positive notes and playbook.
+    """
+    id_lock, newly_assigned = assign_ids(CATEGORIES)
+    if newly_assigned:
+        print(f"error: {len(newly_assigned)} spec(s) have no locked rule id:")
+        for key in sorted(newly_assigned)[:10]:
+            print(f"  {key}")
+        print("Run `python3 scripts/generate_detections.py` and commit the result.")
+        return 1
+
+    artifacts, _ = render_pack(id_lock)
+    moved: list[tuple[str, str, str]] = []
+    changed: list[Path] = []
+    missing: list[Path] = []
+
+    for path, content in sorted(artifacts.items()):
+        if not path.exists():
+            missing.append(path)
+            continue
+        on_disk = path.read_text(encoding="utf-8")
+        if on_disk == content:
+            continue
+        changed.append(path)
+        if path.suffix == ".yaml":
+            before = _yaml_id(on_disk)
+            after = _yaml_id(content)
+            if before and after and before != after:
+                moved.append((str(path.relative_to(ROOT)), before, after))
+
+    if not (moved or changed or missing):
+        print(f"generate_detections --check: OK — {len(artifacts)} artifacts match the specs")
+        return 0
+
+    if moved:
+        print(f"error: regenerating would MOVE {len(moved)} rule id(s).")
+        print("An id is the join key between an alert and its catalogue entry, so")
+        print("moving one makes historical alerts reference the wrong rule.")
+        for rel, before, after in moved[:10]:
+            print(f"  {rel}: {before} -> {after}")
+        if len(moved) > 10:
+            print(f"  ... and {len(moved) - 10} more")
+    if missing:
+        print(f"error: {len(missing)} generated artifact(s) are not committed, e.g.")
+        for path in missing[:5]:
+            print(f"  {path.relative_to(ROOT)}")
+    other = [p for p in changed if str(p.relative_to(ROOT)) not in {m[0] for m in moved}]
+    if other:
+        print(f"error: {len(other)} committed artifact(s) differ from the specs, e.g.")
+        for path in other[:5]:
+            print(f"  {path.relative_to(ROOT)}")
+    print("Run `python3 scripts/generate_detections.py` and commit the result.")
+    return 1
+
+
+def _yaml_id(text: str) -> str | None:
+    for line in text.splitlines():
+        if line.startswith("id:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate the AiSOC detection pack.")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if regenerating would change the committed pack",
+    )
+    args = parser.parse_args()
+    if args.check:
+        return check_pack()
+
     counts = write_pack(dry_run=False)
     total = sum(counts.values())
     print("AiSOC detection pack regenerated:")

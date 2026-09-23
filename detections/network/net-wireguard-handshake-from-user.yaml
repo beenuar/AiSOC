@@ -1,4 +1,4 @@
-id: det-network-059
+id: det-network-060
 name: WireGuard Handshake From User Workstation
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'WireGuard Handshake
   From User Workstation'. Watch the 1 documented false-positive case before tuning.

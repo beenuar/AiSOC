@@ -1,4 +1,4 @@
-id: det-network-048
+id: det-network-049
 name: HTTPS Connection To IP Without SNI
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'HTTPS Connection
   To IP Without SNI'. Watch the 1 documented false-positive case before tuning.
