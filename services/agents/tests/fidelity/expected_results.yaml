@@ -87,3 +87,41 @@ mitre_engenuity_micro:
   rows_scored_min: 10
   accuracy_min: 0.70
   macro_f1_min: 0.55
+
+ait_lds_full:
+  # Local-only: requires scripts/datasets/download_ait_lds.py to have
+  # populated datasets/ait-lds/. Until this commit there was no way to
+  # fetch the corpus at all, so the only AIT-LDS number anyone could
+  # produce came from the 10-line micro fixture above — which proves
+  # the loader parses and says nothing about the classifier at scale.
+  dataset: ait_lds
+  mode: substrate
+  notes: |
+    UNMEASURED. These are the floors the harness will enforce once
+    somebody runs the full corpus; they are deliberately set at the
+    micro-fixture level rather than guessed higher, because a floor
+    invented above an unmeasured result is a gate that fails on first
+    contact and gets lowered rather than investigated.
+
+    Whoever runs it first should replace these with the observed
+    numbers and drop this note in the same PR.
+  measured: false
+  rows_scored_min: 1000
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+mitre_engenuity_full:
+  # Local-only: requires scripts/datasets/download_mitre_engenuity.py.
+  # Same history as ait_lds_full — a loader that could read the full
+  # round data and no way to obtain it.
+  dataset: mitre_engenuity
+  mode: substrate
+  notes: |
+    UNMEASURED, and carries an additional constraint the other
+    datasets do not: MITRE Engenuity states explicitly that its
+    evaluations do not rank vendors. Any number published from this
+    must carry that caveat, or it misrepresents the source.
+  measured: false
+  rows_scored_min: 500
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
