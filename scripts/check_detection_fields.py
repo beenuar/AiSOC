@@ -56,7 +56,7 @@ NORMALIZER = ROOT / "services" / "ingest" / "internal" / "normalizer" / "normali
 #: Current number of engine-loaded rules that depend on a DERIVED or STATEFUL
 #: field. This may only ever decrease. Lower it in the same PR that fixes
 #: rules; never raise it to make a red build green.
-MAX_UNREACHABLE = 138
+MAX_UNREACHABLE = 133
 
 #: Fields that no telemetry carries because they are computed, not observed:
 #: sliding-window counters, allowlist membership, privilege flags, and
@@ -152,6 +152,66 @@ def _rule_fields(match_when: dict) -> set[str]:
     return found
 
 
+#: Fields the engine derives at match time from an event it already has.
+#: `services/fusion/app/services/derived_fields.py` computes them, so a rule
+#: matching on one is reachable even though no connector emits it.
+#:
+#: Named here rather than imported, for the reason the rest of this file is
+#: parsed rather than imported: a field-coverage gate that needs the fusion
+#: package installed is a gate that gets disabled the first time an import
+#: breaks.
+_DERIVED_TIME_FIELDS = frozenset({"is_business_hours", "is_after_hours", "is_weekend"})
+
+#: `<left>_eq_<right>` / `<left>_neq_<right>`, resolved by comparing two
+#: fields of the same event. Reachable only when *both* sides are in the
+#: namespace — a comparison against a field nothing emits is still dead, and
+#: counting it as covered would be the fake-gate failure this file exists to
+#: prevent.
+_DERIVED_COMPARISON_RE = re.compile(r"^(?P<left>.+?)_(?:eq|neq)_(?P<right>.+)$")
+
+
+def _is_derivable(field: str, namespace: set[str]) -> bool:
+    """True when the engine can compute this field from what it already has."""
+    if field in _DERIVED_TIME_FIELDS:
+        return True
+    match = _DERIVED_COMPARISON_RE.match(field)
+    if not match:
+        return False
+    return match.group("left") in namespace and match.group("right") in namespace
+
+
+#: What each unreachable field would need, so the headline number is
+#: actionable rather than a bare count. "133 rules are dead" invites
+#: someone to delete 133 rules; "73 need the windowed evaluator, 24 need
+#: identity enrichment" names four pieces of work.
+#:
+#: Ordered: first match wins, so the more specific patterns come first.
+_FIELD_FAMILIES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "windowed evaluator",
+        re.compile(r"_count$|^count_|_per_|time_window|_window_|_5min|_ratio$"),
+    ),
+    ("identity enrichment", re.compile(r"_priv$|_is_admin$|_is_dc$")),
+    ("per-tenant allowlist", re.compile(r"_in_allowlist$|_not_in_allowlist$")),
+    ("age / first-seen enrichment", re.compile(r"_age_days$|_age_hours$|_seen_before$")),
+    ("behavioural baseline", re.compile(r"_baseline|_deviation|^active_|_is_first_")),
+    (
+        # Both operands invented by the rule author. Distinct from the rest:
+        # the engine can compute a comparison, it just cannot compare two
+        # fields that do not exist. This is content work, not engine work.
+        "comparison over fields nothing emits",
+        _DERIVED_COMPARISON_RE,
+    ),
+)
+
+
+def _family(field: str) -> str:
+    for name, pattern in _FIELD_FAMILIES:
+        if pattern.search(field):
+            return name
+    return "other"
+
+
 def _connector_namespace() -> set[str]:
     """Every string-literal dict key appearing in a connector module.
 
@@ -243,7 +303,7 @@ def scan() -> tuple[list[tuple[str, list[str]]], list[tuple[str, list[str]]], se
     derived: list[tuple[str, list[str]]] = []
     vendor: list[tuple[str, list[str]]] = []
     for rule in rules:
-        missing = {f for f in _rule_fields(rule.get("match_when") or {}) if f not in namespace}
+        missing = {f for f in _rule_fields(rule.get("match_when") or {}) if f not in namespace and not _is_derivable(f, namespace)}
         if not missing:
             continue
         rule_id = str(rule.get("id", "?"))
@@ -285,6 +345,12 @@ def main() -> int:
 
     print(f"detection fields: {total} engine rules examined")
     print(f"  {len(derived)} depend on a derived/stateful field — cannot fire on any connector (gated)")
+    families: dict[str, int] = {}
+    for _rule_id, fields in derived:
+        for name in {_family(f) for f in fields}:
+            families[name] = families.get(name, 0) + 1
+    for name, count in sorted(families.items(), key=lambda kv: -kv[1]):
+        print(f"      {count:4d} need {name}")
     print(f"  {len(vendor)} reference a vendor-payload field — reachable when that vendor is attached")
 
     if len(derived) > args.max_unreachable:

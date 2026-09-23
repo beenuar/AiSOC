@@ -65,15 +65,38 @@ def test_vendored_matcher_matches_canonical_over_all_fixtures():
 
 
 def test_positive_fixtures_fire_and_negatives_do_not():
-    """Sanity: the vendored matcher upholds the fixture contract directly."""
+    """Sanity: the vendored matcher upholds the fixture contract directly.
+
+    Events go through the same derived-field enrichment
+    ``DetectionEngine.evaluate`` applies. Replaying a fixture against the
+    bare matcher tests a pipeline production does not run — and a rule
+    matching on a derived field would fail here while working live, which
+    trains people to weaken the gate.
+    """
+    from app.services.derived_fields import enrich, requested_derived_fields
+
     fixtures_dir = _REPO / "detections" / "fixtures"
     ruleset = _REPO / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
-    rules = {r["slug"]: r["match_when"] for r in json.loads(ruleset.read_text())["rules"]}
+    all_rules = json.loads(ruleset.read_text())["rules"]
+    rules = {r["slug"]: r["match_when"] for r in all_rules}
+    wanted = requested_derived_fields(all_rules)
+
     checked = 0
     for f in sorted((fixtures_dir / "positive").glob("*.json")):
         mw = rules.get(f.stem)
         if mw is None:
             continue
-        assert vendored_matches(mw, json.loads(f.read_text())), f"positive fixture did not fire: {f.stem}"
+        event = enrich(json.loads(f.read_text()), wanted)
+        assert vendored_matches(mw, event), f"positive fixture did not fire: {f.stem}"
         checked += 1
     assert checked > 100, f"expected to check many positive fixtures, only {checked}"
+
+    negatives = 0
+    for f in sorted((fixtures_dir / "negative").glob("*.json")):
+        mw = rules.get(f.stem)
+        if mw is None:
+            continue
+        event = enrich(json.loads(f.read_text()), wanted)
+        assert not vendored_matches(mw, event), f"negative fixture fired: {f.stem}"
+        negatives += 1
+    assert negatives > 100, f"expected to check many negative fixtures, only {negatives}"

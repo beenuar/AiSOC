@@ -37,6 +37,7 @@ from typing import Any
 import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
+from app.services.derived_fields import enrich, requested_derived_fields
 from app.services.detection_matcher import matches
 from app.services.provenance import extract_provenance
 
@@ -76,6 +77,10 @@ class DetectionEngine:
 
     def __init__(self, rules: list[dict[str, Any]] | None = None) -> None:
         self._rules: list[dict[str, Any]] = rules if rules is not None else _load_ruleset()
+        # Computed once at load, not per event: the set changes when rules
+        # change, not when traffic arrives. Doing it per event would mean a
+        # regex over every rule's clauses for every ingested event.
+        self._derived_wanted: set[str] = requested_derived_fields(self._rules)
 
     @property
     def rule_count(self) -> int:
@@ -149,6 +154,11 @@ class DetectionEngine:
         if not isinstance(ocsf, dict):
             return []
         fields = self._raw_fields(ocsf)
+        # 17 rules match on comparisons between two fields of the same event
+        # (actor_eq_target, actor_uid_neq_owner_uid) or on time of day. Both
+        # values were already present and nothing was computing the answer,
+        # so those rules could never fire.
+        fields = enrich(fields, self._derived_wanted)
         hits: list[DetectionHit] = []
         for rule in self._candidates(""):
             try:

@@ -89,6 +89,14 @@ OPERATORS: list[tuple[str, str, str]] = sorted(
         ("_has_any", "has_any", "HAS_ANY"),
         ("_not_in", "not_in", "NOT IN"),
         ("_match", "match", "MATCH"),
+        # `neq` is used by rules in the shipped corpus and had no
+        # operator, so `approver_role_neq: "codeowner"` was read as a
+        # field literally named `approver_role_neq` — which nothing
+        # emits, so the rule could not fire. There is deliberately no
+        # `_eq` counterpart: bare equality is already the default, and
+        # adding the suffix would split any field whose name happens to
+        # end in `_eq` for no gain.
+        ("_neq", "neq", "!="),
         ("_gte", "gte", ">="),
         ("_lte", "lte", "<="),
         ("_in", "in", "IN"),
@@ -183,6 +191,13 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
         if expected is None:
             return actual is None
         return actual == expected
+
+    if op == "neq":
+        # A missing field is not "different from X". Returning True would
+        # make every neq rule fire on every event lacking the field.
+        if actual is None:
+            return False
+        return actual != expected
 
     if op in {"gt", "gte", "lt", "lte"}:
         if not isinstance(actual, (int, float)) or isinstance(actual, bool):
