@@ -432,6 +432,12 @@ services:
       # provider (unchanged behaviour).
       LLM_GATEWAY_URL: http://litellm:4000/v1
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      # Where to post an approval card when triage raises one. Unset means
+      # no ChatOps notification; the approval is still durable and visible in
+      # the console and the responder app. slack-bot is a `chatops`-profile
+      # service, so this only resolves when that profile is up.
+      AISOC_SLACK_BOT_URL: ${AISOC_SLACK_BOT_URL:-}
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
     networks:
       - aisoc
     restart: unless-stopped
@@ -756,6 +762,13 @@ services:
       AISOC_WEB_BASE_URL: ${AISOC_WEB_BASE_URL:-http://localhost:3000}
       AISOC_SLACK_BOT_PORT: 8089
       AISOC_HTTP_TIMEOUT_SECONDS: 10
+      # Proactive approval cards. Empty channel disables posting, which is
+      # the right default: a bot that posts into a channel nobody chose is
+      # worse than one that posts nowhere.
+      SLACK_APPROVALS_CHANNEL: ${SLACK_APPROVALS_CHANNEL:-}
+      # Shared with the agents service, which calls /internal/approval-card.
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
     networks:
       - aisoc
     restart: unless-stopped
