@@ -1,4 +1,4 @@
-id: det-network-060
+id: det-network-061
 name: Corporate VPN Login Originating From Datacenter ASN
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'Corporate VPN Login
   Originating From Datacenter ASN'. Watch the 1 documented false-positive case before tuning.

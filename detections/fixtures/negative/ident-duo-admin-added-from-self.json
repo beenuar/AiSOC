@@ -1,4 +1,5 @@
 {
-  "actor_eq_target": true,
-  "event_type": "not-admin_create"
+  "actor": "principal-a",
+  "event_type": "admin_create",
+  "target": "other-principal-a"
 }

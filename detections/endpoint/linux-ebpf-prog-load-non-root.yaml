@@ -15,7 +15,7 @@ detection:
   condition: |
     syscall == "bpf"
     AND cmd == "BPF_PROG_LOAD"
-    AND actor_uid_neq == 0
+    AND actor_uid != 0
 false_positives:
 - Sanctioned observability agent
 playbook: tpl-defense-evasion

@@ -38,6 +38,15 @@ jobs:
           python3 -m pip install --quiet pytest
           python3 -m pytest tests/test_detection_id_stability.py -q
 
+      - name: The committed pack must be what the generator emits
+        # The lock made ids position-independent but nothing reconciled it
+        # against the YAML already on disk, and no gate compared the two. The
+        # committed pack fell 45 network ids behind, so the id the engine
+        # stamps onto an alert and the id the catalogue publishes for the same
+        # rule named different rules. Unreviewed drift in a generated artifact
+        # is not cosmetic when the artifact is a join key.
+        run: python3 scripts/generate_detections.py --check
+
       - name: Run detection rule validator (strict fixture replay)
         run: python3 scripts/validate_detections.py --strict-fixtures
 

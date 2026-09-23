@@ -1,4 +1,4 @@
-id: det-network-063
+id: det-network-064
 name: SMB Version 1 Negotiated In Network Flow
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'SMB Version 1 Negotiated
   In Network Flow'. Watch the 1 documented false-positive case before tuning.

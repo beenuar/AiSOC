@@ -1,4 +1,4 @@
-id: det-network-054
+id: det-network-055
 name: Large HTTP POST From Workstation To Public IP
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'Large HTTP POST
   From Workstation To Public IP'. Watch the 1 documented false-positive case before tuning.

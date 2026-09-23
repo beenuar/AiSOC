@@ -1,7 +1,7 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-22T15:54:13Z",
+  "generated": "2026-09-23T14:16:45Z",
   "stats": {
     "considered": 1054,
     "eligible": 1051,
@@ -160,7 +160,7 @@
         "det-identity-160",
         "det-network-004",
         "det-network-026",
-        "det-network-075",
+        "det-network-076",
         "mitre-car-car-2013-04-002",
         "mitre-car-car-2013-07-001",
         "mitre-car-car-2013-09-003",
@@ -197,10 +197,10 @@
         "det-network-005",
         "det-network-022",
         "det-network-030",
-        "det-network-063",
         "det-network-064",
         "det-network-065",
-        "det-network-069",
+        "det-network-066",
+        "det-network-070",
         "mitre-car-car-2013-01-003",
         "mitre-car-car-2013-04-002",
         "mitre-car-car-2013-05-003",
@@ -264,7 +264,7 @@
         "det-endpoint-175",
         "det-endpoint-270",
         "det-identity-152",
-        "det-network-054",
+        "det-network-055",
         "mitre-car-car-2013-04-002",
         "sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641"
       ],
@@ -10301,7 +10301,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-054",
+      "id": "det-network-055",
       "name": "Large HTTP POST From Workstation To Public IP",
       "path": "detections/network/net-http-large-post-from-workstation.yaml",
       "tier": "native",
@@ -10326,7 +10326,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-063",
+      "id": "det-network-064",
       "name": "SMB Version 1 Negotiated In Network Flow",
       "path": "detections/network/net-smbv1-egress.yaml",
       "tier": "native",
@@ -10351,7 +10351,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-064",
+      "id": "det-network-065",
       "name": "SMB Write To NETLOGON Share",
       "path": "detections/network/net-smb-write-netlogon.yaml",
       "tier": "native",
@@ -10376,7 +10376,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-065",
+      "id": "det-network-066",
       "name": "SMB Write To SYSVOL Share From Non-DC",
       "path": "detections/network/net-smb-write-sysvol.yaml",
       "tier": "native",
@@ -10401,7 +10401,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-069",
+      "id": "det-network-070",
       "name": "WinRM HTTPS From Workstation To DC",
       "path": "detections/network/net-winrm-ssl-from-workstation.yaml",
       "tier": "native",
@@ -10426,7 +10426,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-network-075",
+      "id": "det-network-076",
       "name": "RADIUS Authentication Used PAP (Cleartext Password)",
       "path": "detections/network/net-radius-pap-clear.yaml",
       "tier": "native",

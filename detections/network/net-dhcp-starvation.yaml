@@ -1,4 +1,4 @@
-id: det-network-079
+id: det-network-080
 name: 'DHCP Starvation: Rapid Lease Churn From Single MAC Range'
 description: 'AiSOC v1 curated detection. Triggers on the network signal described by ''DHCP Starvation:
   Rapid Lease Churn From Single MAC Range''. Watch the 1 documented false-positive case before tuning.'

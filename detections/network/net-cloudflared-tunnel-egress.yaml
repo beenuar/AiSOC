@@ -1,4 +1,4 @@
-id: det-network-062
+id: det-network-063
 name: Cloudflared Tunnel Started From Workstation
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'Cloudflared Tunnel
   Started From Workstation'. Watch the 1 documented false-positive case before tuning.

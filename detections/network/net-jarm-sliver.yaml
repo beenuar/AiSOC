@@ -1,4 +1,4 @@
-id: det-network-052
+id: det-network-053
 name: JARM Fingerprint Matches Known Sliver Profile
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'JARM Fingerprint
   Matches Known Sliver Profile'. Watch the 1 documented false-positive case before tuning.
