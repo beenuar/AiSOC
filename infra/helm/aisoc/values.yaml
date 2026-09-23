@@ -435,8 +435,20 @@ coreApi:
   enabled: false  # Replaced by services.api above
 
 # ─── Network Policies ─────────────────────────────────────────────────────────
+#
+# Egress default-deny. This is the network half of "runs entirely on your
+# infrastructure": the redaction half is gated by test_privacy_redactor, and
+# until v9.0 nothing stopped a pod opening a socket to anywhere.
+#
+# Off by default on purpose. A cluster whose CNI does not enforce
+# NetworkPolicy ignores this object silently, and a control that is silently
+# ignored is worse than one an operator consciously switched on — it reads as
+# protection while providing none. Check your CNI, then set this.
 networkPolicy:
   enabled: false
+  # Destinations reachable outside the release: vendor APIs, an LLM endpoint,
+  # a SIEM. 169.254.169.254 is excluded from each of these automatically.
+  allowedEgressCIDRs: []
 
 # ─── Pod Security ─────────────────────────────────────────────────────────────
 podSecurityPolicy:
