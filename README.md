@@ -42,7 +42,7 @@ One alert through the four-stage agent funnel — Detect → Triage → Hunt →
 
 | If you have…                          | Run this                                                                                                 | What you get                                                                                       |
 |---------------------------------------|----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| **npm, and v8.1 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
+| **npm, and v8.2 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
 | **A browser** (zero install)          | [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)                                  | Browser IDE → `pnpm aisoc:demo --no-open` → click forwarded port `3000`. ~5 min cold.              |
 | **Docker + pnpm**                     | `git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo`                              | Local stack on Postgres + Redis + Kafka + api + agents + web. Browser opens at `INC-RT-001`.       |
 | **Nothing** (clean Linux/macOS/Win)   | `curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh \| bash`                     | Bootstraps Docker, Node, pnpm, git for you; then runs `pnpm aisoc:demo`.                           |
@@ -191,7 +191,7 @@ A handful of headline capabilities — the rest are catalogued in [`apps/docs/do
 
 AiSOC ships an [MCP server](https://modelcontextprotocol.io) (`services/mcp/`) so analysts can query alerts, run agent investigations, and replay every step the agent took without leaving the IDE or chat. The server exposes 13 tools — discovery, deep-dive, governed lake query, and the action / replay set that walks the agent decision ledger step-by-step.
 
-> **Status — monorepo source build today; npm publish lands in v8.1.** Full setup is in [`apps/docs/docs/integrations/mcp.md`](apps/docs/docs/integrations/mcp.md), which shows the today-vs-published invocations side by side.
+> **Status — monorepo source build today; npm publish lands in v8.2.** Full setup is in [`apps/docs/docs/integrations/mcp.md`](apps/docs/docs/integrations/mcp.md), which shows the today-vs-published invocations side by side.
 
 ---
 
@@ -203,9 +203,9 @@ Three contribution surfaces; each is one file plus optional fixtures, and CI val
 - **Connector.** Subclass `BaseConnector` in [`services/connectors/app/connectors/`](services/connectors/app/connectors/), register it in `_CONNECTOR_CLASSES`, and add a `plugins/<id>/plugin.yaml` manifest. The marketplace picks it up automatically. Walkthrough: [`apps/docs/docs/connectors/`](apps/docs/docs/connectors/).
 - **Playbook.** Drop a YAML under [`playbooks/`](playbooks/); [`validate-playbooks`](https://github.com/beenuar/AiSOC/actions/workflows/validate-playbooks.yml) gates the PR. Schema: [`playbook.schema.json`](playbook.schema.json).
 
-Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/plugins/overview.md`](apps/docs/docs/plugins/overview.md). The CLI (`aisoc-cli`) is in [`packages/aisoc-cli/`](packages/aisoc-cli/); PyPI publish lands in v8.1.
+Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/plugins/overview.md`](apps/docs/docs/plugins/overview.md). The CLI (`aisoc-cli`) is in [`packages/aisoc-cli/`](packages/aisoc-cli/); PyPI publish lands in v8.2.
 
-**In your CI:** add `- uses: beenuar/aisoc-action@v1` to triage your repo's Dependabot / CodeQL / secret-scanning alerts on every PR (deterministic, nothing leaves your runner; dogfooded on this repo, Marketplace publish lands with v8.1). [Docs](apps/docs/docs/integrations/github-action.md).
+**In your CI:** add `- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0` to triage your repo's Dependabot / CodeQL / secret-scanning alerts on every PR (deterministic, nothing leaves your runner). The short `beenuar/aisoc-action@v1` form needs a Marketplace listing, which lands with v8.2 — until then the subdirectory form above is the one that resolves. [Docs](apps/docs/docs/integrations/github-action.md).
 
 ---
 
@@ -214,7 +214,7 @@ Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/p
 - **Latest GitHub release with downloads:** <https://github.com/beenuar/AiSOC/releases/latest>
 - **Per-release narrative:** [`RELEASES.md`](RELEASES.md) (mirrors what used to live in this README)
 - **Machine-readable inventory with file paths, env-var diffs, test counts:** [`CHANGELOG.md`](CHANGELOG.md)
-- **v8.1 packaging work in flight (`[~]` items):** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
+- **v8.1 scope, and why packaging is named against v8.2:** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
 - **Bigger-picture roadmap (BYOC multi-cloud, MSSP rollups, federated search):** [`ROADMAP.md`](ROADMAP.md)
 
 ---
