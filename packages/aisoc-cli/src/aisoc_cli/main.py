@@ -301,7 +301,11 @@ def plugin_publish(path: str, api_url: str, api_key: str, private_key: str) -> N
     console.print(f"Publishing to [bold]{api_url}[/bold]...")
     with httpx.Client(base_url=api_url, headers={"Authorization": f"Bearer {api_key}"}) as client:
         resp = client.post(
-            "/api/v1/plugins/publish",
+            # `/api/v1/plugins/publish` for as long as this command has
+            # existed. No router ever served that path — the real one is
+            # under the community prefix — so `aisoc plugin publish` was
+            # broken as shipped and failed with a 404 nobody could act on.
+            "/api/v1/community/plugins/publish",
             content=tarball,
             headers={
                 "Content-Type": "application/octet-stream",

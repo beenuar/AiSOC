@@ -41,7 +41,17 @@ from fastapi import (
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser, CurrentUser, require_permission
-from app.core.security import verify_ed25519_signature
+from app.db.rls import TenantDBSession
+from app.services.marketplace_publishers import (
+    PublisherKeyError,
+    active_keys,
+    ensure_publisher,
+    keys_for_user,
+    parse_public_key,
+    register_key,
+    revoke_key,
+    verify_against,
+)
 
 router = APIRouter(prefix="/community", tags=["community"])
 
@@ -117,6 +127,83 @@ class CommunityPlaybookOut(BaseModel):
     definition: dict[str, Any] | None = None
 
 
+# ── Publisher identity ────────────────────────────────────────────────────────
+
+
+class PublisherKeyIn(BaseModel):
+    public_key_pem: str = Field(..., description="PEM-encoded Ed25519 public key.")
+    label: str = Field(default="", max_length=120, description="Which machine or CI job holds the private half.")
+    display_name: str = Field(default="", max_length=200)
+    contact_email: str = Field(default="", max_length=320)
+
+
+class PublisherKeyOut(BaseModel):
+    fingerprint: str
+    label: str
+    publisher_id: uuid.UUID
+
+
+@router.post("/publishers/keys", response_model=PublisherKeyOut, status_code=201)
+async def add_publisher_key(
+    body: PublisherKeyIn,
+    current_user: AuthUser,
+    db: TenantDBSession,
+) -> PublisherKeyOut:
+    """Register a public key you will sign submissions with.
+
+    Until a key is registered, submissions are accepted and marked
+    unverified. Once one is, a submission that does not match it is rejected
+    — which is the difference between a signature and a decoration.
+    """
+    try:
+        parse_public_key(body.public_key_pem)
+    except PublisherKeyError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    publisher_id = await ensure_publisher(
+        db,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        display_name=body.display_name or (current_user.email or "Publisher"),
+        contact_email=body.contact_email or (current_user.email or ""),
+    )
+    key = await register_key(db, publisher_id=publisher_id, public_key_pem=body.public_key_pem, label=body.label)
+    return PublisherKeyOut(fingerprint=key.fingerprint, label=key.label, publisher_id=key.publisher_id)
+
+
+@router.get("/publishers/keys", response_model=list[PublisherKeyOut])
+async def list_publisher_keys(
+    current_user: AuthUser,
+    db: TenantDBSession,
+) -> list[PublisherKeyOut]:
+    keys = await keys_for_user(db, tenant_id=current_user.tenant_id, user_id=current_user.user_id)
+    return [PublisherKeyOut(fingerprint=k.fingerprint, label=k.label, publisher_id=k.publisher_id) for k in keys]
+
+
+@router.delete("/publishers/keys/{fingerprint}", status_code=204)
+async def revoke_publisher_key(
+    fingerprint: str,
+    current_user: AuthUser,
+    db: TenantDBSession,
+) -> None:
+    """Revoke a key.
+
+    Recorded as a timestamp, not a delete: "signed by a key we have since
+    revoked" is a more useful statement after the fact than "unknown key".
+    """
+    publisher_id = await ensure_publisher(
+        db,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        display_name=current_user.email or "Publisher",
+        contact_email=current_user.email or "",
+    )
+    keys = await active_keys(db, publisher_id=publisher_id)
+    if not any(k.fingerprint == fingerprint for k in keys):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such active key for this publisher")
+    await revoke_key(db, publisher_id=publisher_id, fingerprint=fingerprint)
+
+
 # ── Plugin endpoints ──────────────────────────────────────────────────────────
 
 
@@ -124,6 +211,7 @@ class CommunityPlaybookOut(BaseModel):
 async def publish_plugin(
     request: Request,
     current_user: AuthUser,
+    db: TenantDBSession,
 ) -> dict[str, Any]:
     """Submit a signed plugin tarball for community review."""
     sig_b64 = request.headers.get("X-Plugin-Signature")
@@ -145,18 +233,28 @@ async def publish_plugin(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid signature or manifest: {exc}") from exc
 
-    # Signature verification — allow submission without registered key (marks as unverified)
+    # Signature verification against this publisher's registered keys.
+    #
+    # Two outcomes that used to be one. A submission from somebody with no
+    # registered key is *unverified* and accepted as such; a submission whose
+    # signature does not match a key they do have is *rejected*. Before the
+    # publisher tables existed, `_get_registered_pub_key` returned None
+    # unconditionally, so the second branch was unreachable and no plugin
+    # could ever be rejected for a bad signature.
     verified = False
-    registered_pub_key = _get_registered_pub_key(str(current_user.user_id))
-    if registered_pub_key:
-        try:
-            verify_ed25519_signature(registered_pub_key, tarball, signature)
-            verified = True
-        except Exception as exc:
+    signing_fingerprint: str | None = None
+    keys = await keys_for_user(db, tenant_id=current_user.tenant_id, user_id=current_user.user_id)
+    if keys:
+        signing_fingerprint = verify_against(keys, tarball, signature)
+        if signing_fingerprint is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Ed25519 signature",
-            ) from exc
+                detail=(
+                    "Signature does not match any key registered to this publisher. "
+                    "Register the key you signed with, or revoke the stale one."
+                ),
+            )
+        verified = True
 
     plugin_id = manifest.get("id", str(uuid.uuid4()))
     entry = {
@@ -172,6 +270,7 @@ async def publish_plugin(
         "rating": 0.0,
         "rating_count": 0,
         "verified": verified,
+        "signing_fingerprint": signing_fingerprint,
         "submitted_by": current_user.user_id,
         "submitted_at": datetime.now(UTC).isoformat(),
         "approved_at": None,
@@ -500,6 +599,8 @@ async def curate_community_playbook(
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _get_registered_pub_key(user_id: str) -> bytes | None:
-    """Retrieve user's registered Ed25519 public key (stub — wire to DB)."""
-    return None
+# `_get_registered_pub_key` used to live here, returning None unconditionally
+# with the comment "(stub — wire to DB)". It is gone rather than fixed in
+# place, because the shape was wrong as well as the body: one key per user
+# cannot express a rotation, and a publisher who cannot rotate will not.
+# `app.services.marketplace_publishers` owns this now.

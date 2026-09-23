@@ -4734,6 +4734,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/community/publishers/keys:
+    get:
+      tags:
+      - community
+      summary: List Publisher Keys
+      operationId: list_publisher_keys_api_v1_community_publishers_keys_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PublisherKeyOut'
+                type: array
+                title: Response List Publisher Keys Api V1 Community Publishers Keys
+                  Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - community
+      summary: Add Publisher Key
+      description: 'Register a public key you will sign submissions with.
+
+
+        Until a key is registered, submissions are accepted and marked
+
+        unverified. Once one is, a submission that does not match it is rejected
+
+        — which is the difference between a signature and a decoration.'
+      operationId: add_publisher_key_api_v1_community_publishers_keys_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublisherKeyIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublisherKeyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/community/publishers/keys/{fingerprint}:
+    delete:
+      tags:
+      - community
+      summary: Revoke Publisher Key
+      description: 'Revoke a key.
+
+
+        Recorded as a timestamp, not a delete: "signed by a key we have since
+
+        revoked" is a more useful statement after the fact than "unknown key".'
+      operationId: revoke_publisher_key_api_v1_community_publishers_keys__fingerprint__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: fingerprint
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Fingerprint
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/community/plugins/publish:
     post:
       tags:
@@ -23496,6 +23579,50 @@ components:
       - view_count
       - created_at
       title: PublishedSummary
+    PublisherKeyIn:
+      properties:
+        public_key_pem:
+          type: string
+          title: Public Key Pem
+          description: PEM-encoded Ed25519 public key.
+        label:
+          type: string
+          maxLength: 120
+          title: Label
+          description: Which machine or CI job holds the private half.
+          default: ''
+        display_name:
+          type: string
+          maxLength: 200
+          title: Display Name
+          default: ''
+        contact_email:
+          type: string
+          maxLength: 320
+          title: Contact Email
+          default: ''
+      type: object
+      required:
+      - public_key_pem
+      title: PublisherKeyIn
+    PublisherKeyOut:
+      properties:
+        fingerprint:
+          type: string
+          title: Fingerprint
+        label:
+          type: string
+          title: Label
+        publisher_id:
+          type: string
+          format: uuid
+          title: Publisher Id
+      type: object
+      required:
+      - fingerprint
+      - label
+      - publisher_id
+      title: PublisherKeyOut
     QueryRequest:
       properties:
         question:
