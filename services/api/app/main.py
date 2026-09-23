@@ -23,7 +23,7 @@ from app.core.cors import build_cors_kwargs
 from app.core.logging import configure_logging
 from app.core.scheduler_lock import scheduler_lock
 from app.core.telemetry import instrument_app
-from app.db.clickhouse import close_clickhouse
+from app.db.clickhouse import close_clickhouse, init_lake_schema
 from app.db.database import engine
 from app.db.neo4j import close_neo4j, init_neo4j
 from app.graphql.schema import graphql_router
@@ -339,6 +339,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await init_neo4j()
     except Exception as exc:
         logger.warning("Neo4j unavailable at startup – graph features disabled", error=str(exc))
+
+    # The lake's schema converges here for the same reason the graph's
+    # does: CREATE TABLE IF NOT EXISTS is a no-op on an existing
+    # deployment, so without this a new column never lands on one.
+    try:
+        await init_lake_schema()
+    except Exception as exc:  # noqa: BLE001 - the lake is not on the critical path
+        logger.warning("lake schema migration skipped", error=str(exc))
 
     # Auto-discover plugins from AISOC_PLUGINS_DIR
     try:

@@ -254,6 +254,16 @@ jobs:
       # Redaction is allow-list rather than deny-list, so a setting added
       # tomorrow is redacted by default rather than exposed until someone
       # remembers — and these tests are what keep it that way.
+      # Three stores hold schema and none had a way to change it: every
+      # init path is CREATE-IF-NOT-EXISTS, which is a no-op once the object
+      # exists, so a new column lands on a fresh deployment and silently
+      # does not land on an existing one.
+      #
+      # The second half of the gate matters more — it asserts each runner is
+      # actually called from a startup path. A runner that exists and is
+      # never invoked is the v8.0 pattern with better test coverage.
+      - name: Every store has a wired migration runner
+        run: python scripts/check_store_migrations.py
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest
