@@ -179,6 +179,13 @@ class ActionRequest(BaseModel):
     rationale: str = ""
     auto_rollback: bool = False
     rollback_after_seconds: int | None = None
+    #: How sure the finding behind this action is, 0.0-1.0.
+    #:
+    #: The second axis of the approval matrix. ``None`` is the lowest band,
+    #: not a free pass — a caller that omits it gets the most restrictive
+    #: treatment, because the alternative is that a scoring bug becomes an
+    #: autonomous containment.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class ActionResult(BaseModel):

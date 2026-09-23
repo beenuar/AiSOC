@@ -61,6 +61,7 @@ from app.interactions import (
     NEED_INFO_ACTION_ID,
     handle_action_decision,
 )
+from app.notify import router as notify_router
 from app.services.aisoc_clients import AisocActionsClient, AisocApiClient
 from app.services.approval_audit import StructlogAuditSink
 from app.services.approval_timeout import ApprovalTimeoutScheduler
@@ -315,6 +316,12 @@ app = FastAPI(
     version="0.1.0",
     lifespan=_lifespan,
 )
+
+# The bot's only outbound route: other AiSOC services call this to have a
+# card posted into a channel. Every other route here is Slack calling in, and
+# Bolt's respond() only works inside an inbound interaction — which is why an
+# agent could not ask for approval until a human asked first.
+app.include_router(notify_router)
 
 # Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
 _mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-slack-bot")

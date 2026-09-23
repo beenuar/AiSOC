@@ -33,6 +33,8 @@ from typing import Any
 import asyncpg
 import structlog
 
+from app.investigator.chatops_notify import notify_chatops
+
 logger = structlog.get_logger()
 
 
@@ -599,10 +601,13 @@ async def raise_approval(
                 risk_level[:20],
                 json.dumps(action),
             )
-            # The id is returned whether the insert landed or the conflict
-            # clause fired: either way this is the approval that governs this
-            # action, and a replay must point at the one already queued.
-            return approval_id
+        # Outside the connection block: the approval is durable now, and
+        # Slack being slow must not hold a database connection open.
+        await notify_chatops(approval_id, title=title, summary=summary, risk_level=risk_level, action=action)
+        # The id is returned whether the insert landed or the conflict
+        # clause fired: either way this is the approval that governs this
+        # action, and a replay must point at the one already queued.
+        return approval_id
     except Exception as exc:  # noqa: BLE001 — an approval write must not fail triage
         logger.warning(
             "ledger.raise_approval_failed",
