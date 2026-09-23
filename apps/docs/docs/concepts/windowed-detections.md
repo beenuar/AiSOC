@@ -37,7 +37,7 @@ make every stateless rule slower and harder to reason about if the two shared
 an evaluator.
 
 Keeping them separate has one consequence worth stating: the executable
-detection count in the [truth table](../../docs/detections/truth-table.md)
+detection count in the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)
 covers the stateless corpus. Windowed rules are counted separately, because
 folding them in would make a number that means "rules the stateless engine
 loaded" quietly mean something else.
@@ -80,4 +80,4 @@ everything.
 ## See also
 
 - [Detection content](./detections.md)
-- [Truth table](../../docs/detections/truth-table.md)
+- [Truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)

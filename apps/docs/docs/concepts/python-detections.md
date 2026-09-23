@@ -81,4 +81,4 @@ audit, and the detection corpus is content other people are trusted to read.
 
 - [Detection content](./detections.md)
 - [Windowed detections](./windowed-detections.md)
-- [Truth table](../../docs/detections/truth-table.md)
+- [Truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)
