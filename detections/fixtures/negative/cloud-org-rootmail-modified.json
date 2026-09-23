@@ -1,4 +1,5 @@
 {
-  "actor_eq_target": false,
-  "event_name": "__benign__"
+  "actor": "principal-a",
+  "event_name": "UpdateAccountEmail",
+  "target": "principal-a"
 }
