@@ -103,6 +103,62 @@ def undescribed_fields(schema, page: str) -> list[str]:
     return gaps
 
 
+def unescaped_jsx_tags(page: str) -> list[str]:
+    """Angle-bracket tags MDX would read as JSX, outside code.
+
+    Docusaurus parses `.md` under MDX, so `<account>` in a vendor's help
+    text is an unclosed JSX element and the **entire docs build** fails —
+    on a page the generator wrote, for a string the vendor chose. That is
+    a build break nobody can trace to its cause without reading the MDX
+    error, so it is checked here rather than discovered on deploy.
+    """
+    found: list[str] = []
+    in_fence = False
+    for number, line in enumerate(page.splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        outside = "".join(
+            part
+            for part in re.split(r"(`{1,3}[^`]*`{1,3})", line)
+            if not part.startswith("`")
+        )
+        for match in re.finditer(r"<([A-Za-z][\w.-]*)>", outside):
+            # Real HTML that MDX accepts.
+            if match.group(1).lower() in {"br", "hr", "img"}:
+                continue
+            found.append(f"line {number}: {match.group(0)}")
+    return found
+
+
+def _mdx_safe(text: str) -> str:
+    """Escape angle brackets so MDX does not read them as JSX.
+
+    Vendor help text carries placeholders like `<account>` and
+    `<your-tenant>`. Docusaurus parses `.md` under MDX, so an unclosed
+    `<account>` is a JSX tag with no closing partner and the whole docs
+    build fails — on a page the generator wrote, for a string the vendor
+    chose.
+
+    Wrapped in backticks rather than HTML-escaped: `&lt;account&gt;` is
+    correct and unreadable, and a placeholder is code-shaped anyway.
+
+    Segments already inside a code span are left alone — MDX does not
+    parse JSX there, and adding backticks inside backticks produces a
+    nested span that renders as literal punctuation.
+    """
+    # Split on code spans (longest fences first) and escape only outside.
+    parts = re.split(r"(`{1,3}[^`]*`{1,3})", text)
+    return "".join(
+        part
+        if part.startswith("`")
+        else re.sub(r"<([A-Za-z][\w.-]*)>", r"`<\1>`", part)
+        for part in parts
+    )
+
+
 def _is_secret(field) -> bool:
     """Whether a field holds a credential.
 
@@ -141,7 +197,7 @@ def _field_rows(schema) -> list[str]:
             # field, so it is not buried in a help string.
             notes.append("**encrypted at rest**")
         if getattr(field, "help_text", None):
-            notes.append(str(field.help_text))
+            notes.append(_mdx_safe(str(field.help_text)))
         options = getattr(field, "options", None)
         if options:
             # Options are either plain strings or {value,label} dicts; render
@@ -154,7 +210,8 @@ def _field_rows(schema) -> list[str]:
                 shown += f", … ({len(values)} total)"
             notes.append("one of: " + shown)
         rows.append(
-            f"| `{field.name}` | {field.label or field.name} | {field.type} | " f"{required} | {default} | {' · '.join(notes) or '—'} |"
+            f"| `{field.name}` | {_mdx_safe(str(field.label or field.name))} "
+            f"| {field.type} | " f"{required} | {default} | {' · '.join(notes) or '—'} |"
         )
     return rows
 
@@ -174,7 +231,7 @@ def render(schema, human: str) -> str:
         "",
         GENERATED_WARNING,
         "",
-        schema.description or f"Ingest security telemetry from {title}.",
+        _mdx_safe(schema.description or f"Ingest security telemetry from {title}."),
         "",
         f"- **Connector id:** `{schema.connector_id}`",
         f"- **Category:** {schema.category}",
@@ -403,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     missing: list[str] = []
     drifted: list[str] = []
     undocumented_fields: list[tuple[str, list[str]]] = []
+    mdx_breaks: list[tuple[str, list[str]]] = []
     written = 0
     generated_pages = 0
     hand_written_seen = 0
@@ -422,6 +480,10 @@ def main(argv: list[str] | None = None) -> int:
                 written += 1
                 generated_pages += 1
             continue
+
+        jsx = unescaped_jsx_tags(existing)
+        if jsx and args.check:
+            mdx_breaks.append((schema.connector_id, jsx))
 
         if not generator_owned:
             # Written by a person, and richer than this can produce. The prose
@@ -486,7 +548,21 @@ def main(argv: list[str] | None = None) -> int:
                 "alone, only the reference table is rewritten.",
                 file=sys.stderr,
             )
-        if missing or drifted or undocumented_fields or not sidebar_ok:
+        if mdx_breaks:
+            print(
+                f"CONNECTOR DOC GATE FAILED: {len(mdx_breaks)} page(s) contain "
+                f"angle-bracket tags MDX reads as unclosed JSX. The whole docs "
+                f"build fails on these:",
+                file=sys.stderr,
+            )
+            for connector_id, tags in mdx_breaks:
+                print(f"  {connector_id}: {', '.join(tags[:4])}", file=sys.stderr)
+            print(
+                "  Wrap them in backticks. Generated pages do this "
+                "automatically; a hand-written page has to.",
+                file=sys.stderr,
+            )
+        if missing or drifted or undocumented_fields or mdx_breaks or not sidebar_ok:
             return 1
         print(
             f"connector-docs: OK — {len(schemas)} connectors documented "

@@ -137,7 +137,7 @@ appear in `/Alerts`; that is expected steady state for a quiet tenant.
 
 | Field | Label | Type | Required | Default | Notes |
 |-------|-------|------|----------|---------|-------|
-| `account` | Account subdomain | string | yes | — | First label of your Lacework console URL: https://<account>.lacework.net |
+| `account` | Account subdomain | string | yes | — | First label of your Lacework console URL: https://`<account>`.lacework.net |
 | `subaccount` | Subaccount (optional) | string | no | — | — |
 | `key_id` | Access Key ID | string | yes | — | — |
 | `secret` | Secret Key | secret | yes | — | **encrypted at rest** |

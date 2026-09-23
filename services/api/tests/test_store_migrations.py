@@ -31,14 +31,14 @@ ALL_RUNNERS = (
 class TestEveryStoreHasARunner:
     """The plan called the absence of these a blocker, not a follow-up."""
 
-    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=lambda x: str(x))
+    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=str)
     def test_runner_exposes_the_same_interface(self, store: str, module: Any) -> None:
         """Three stores, one shape. An operator should not have to learn
         three vocabularies to answer "what has this deployment applied"."""
         for name in ("MIGRATIONS", "run_migrations", "applied_ids", "pending_ids"):
             assert hasattr(module, name), f"{store} runner has no {name}"
 
-    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=lambda x: str(x))
+    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=str)
     def test_ids_are_unique_and_ordered(self, store: str, module: Any) -> None:
         ids = [m.id for m in module.MIGRATIONS]
         assert len(ids) == len(set(ids)), f"{store} has duplicate migration ids"
@@ -48,14 +48,14 @@ class TestEveryStoreHasARunner:
             f"numbering does not describe"
         )
 
-    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=lambda x: str(x))
+    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=str)
     def test_every_migration_is_described(self, store: str, module: Any) -> None:
         """A migration whose purpose nobody wrote down cannot be reviewed,
         and cannot be judged safe to re-run."""
         for migration in module.MIGRATIONS:
             assert migration.description.strip(), f"{store}/{migration.id}"
 
-    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=lambda x: str(x))
+    @pytest.mark.parametrize(("store", "module"), ALL_RUNNERS, ids=str)
     def test_the_first_migration_is_a_baseline(self, store: str, module: Any) -> None:
         """An existing deployment must converge rather than re-run unknown
         statements against a schema that already has them."""
