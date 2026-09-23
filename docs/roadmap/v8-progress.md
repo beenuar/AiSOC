@@ -122,18 +122,24 @@ because it imported a component that only existed on #330.
 
 ## What's still open
 
-- **All five PRs are merged.** Follow-up to re-add the
-  `DraftFromPromptDialog` Storybook story (was split out of #331
-  because of cross-branch dependency on #330) is the only loose
-  end and is staged on `feat/v8-storybook-draftdialog-story`.
+- **All five PRs are merged**, and the `DraftFromPromptDialog`
+  Storybook story that was split out of #331 has since landed too —
+  `apps/web/stories/composite/DraftFromPromptDialog.stories.tsx` is on
+  `main`. This tracker still described it as the outstanding loose end,
+  which had quietly become false.
 - This tracker should be updated on every merge with the PR URL and
   the merge timestamp.
 
 ## Out of scope for this pass
 
 - T1–T2 fidelity work beyond the AIT-LDS + MITRE Engenuity micro
-  fixtures (the full-corpus runs are still local-only with floors
-  committed in `expected_results.yaml`).
+  fixtures. The corpora are now *obtainable*:
+  `scripts/datasets/download_ait_lds.py` and
+  `download_mitre_engenuity.py` close the asymmetry where CICIDS and
+  CTU-13 each had a downloader and these two did not — so their
+  loaders could parse a full corpus nobody could fetch. Running them is
+  still a local, opt-in step, and the `*_full` floors are marked
+  `measured: false` until someone does.
 - Storybook visual-regression in a real browser (pixel-diff) — the
   current gate is jsdom DOM snapshots, which catch structural
   regressions at sub-second cost. Real-browser regression is in the

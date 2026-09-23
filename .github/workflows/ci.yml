@@ -265,6 +265,15 @@ jobs:
       # makes the threshold traceable — an alert fires because an
       # objective is being missed, and changing the objective changes the
       # alert.
+      # Two of four fidelity datasets shipped a downloader and two did
+      # not, so two loaders could parse a full corpus nobody could
+      # obtain — and the only numbers for them came from a ten-line
+      # micro fixture. The asymmetry was invisible because each half
+      # looked complete on its own and nothing compared the two sets.
+      - name: Every fidelity dataset is obtainable
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/check_fidelity_datasets.py
       - name: SLO alerts match the declared objectives
         run: |
           python -m pip install --quiet pyyaml
