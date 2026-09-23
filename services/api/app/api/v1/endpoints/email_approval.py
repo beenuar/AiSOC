@@ -144,15 +144,20 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
                 status_code=409,
             )
         if status_code == 403:
+            # Only ``upstream_detail`` reaches the page. The exception message
+            # can carry a transport error with internal hostnames, and this
+            # route is unauthenticated by necessity — the reader is holding an
+            # email, not a session.
+            detail = exc.upstream_detail
             logger.warning(
                 "email_approval.not_authorized",
                 action_id=parsed.action_id,
                 approver=parsed.approver,
-                detail=str(exc),
+                detail=detail,
             )
             return _page(
                 "You are not authorised to decide this action",
-                f"{exc} An email approver must be mapped under 'email' in "
+                f"{detail} An email approver must be mapped under 'email' in "
                 "AISOC_CHATOPS_APPROVERS, and may not approve an action they "
                 "requested themselves.",
                 status_code=403,

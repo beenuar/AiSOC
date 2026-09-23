@@ -28,6 +28,7 @@ actions against another tenant's assets.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any
 
 import httpx
@@ -42,6 +43,26 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/live-actions", tags=["actions"])
 
 _TIMEOUT_SECONDS = 20.0
+
+#: Capability verbs and vendor ids are short identifiers from a closed
+#: vocabulary. Interpolating one into the upstream path unchecked lets the
+#: caller steer the request somewhere else entirely — `../../admin` is a
+#: perfectly good "capability" as far as string formatting is concerned, and
+#: the service token this proxy attaches would go with it.
+#:
+#: Refused at the edge rather than percent-encoded. Encoding would turn a
+#: hostile value into a harmless upstream 404 while still forwarding it;
+#: rejecting says what happened and keeps the request inside this process.
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+
+
+def _safe_segment(value: str, *, field: str) -> str:
+    if not _IDENTIFIER.match(value):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field} must be a short identifier of letters, digits, dot, dash or underscore.",
+        )
+    return value
 
 
 async def _get(path: str, params: dict[str, Any] | None = None) -> Any:
@@ -82,9 +103,9 @@ async def discover(
 ) -> Any:
     params: dict[str, Any] = {}
     if vendor_id:
-        params["vendor_id"] = vendor_id
+        params["vendor_id"] = _safe_segment(vendor_id, field="vendor_id")
     if capability:
-        params["capability"] = capability
+        params["capability"] = _safe_segment(capability, field="capability")
     return await _get("", params or None)
 
 
@@ -93,7 +114,8 @@ async def vendors_for_capability(
     capability: str,
     user: Annotated[AuthUser, Depends(require_permission("actions:read"))],
 ) -> Any:
-    return await _get(f"/by-capability/{capability}")
+    safe = _safe_segment(capability, field="capability")
+    return await _get(f"/by-capability/{safe}")
 
 
 @router.get("/by-vendor/{vendor_id}", summary="Capabilities a vendor supports")
@@ -101,7 +123,8 @@ async def capabilities_for_vendor(
     vendor_id: str,
     user: Annotated[AuthUser, Depends(require_permission("actions:read"))],
 ) -> Any:
-    return await _get(f"/by-vendor/{vendor_id}")
+    safe = _safe_segment(vendor_id, field="vendor_id")
+    return await _get(f"/by-vendor/{safe}")
 
 
 @router.post("/dry-run", summary="Preview a live action without touching a vendor")

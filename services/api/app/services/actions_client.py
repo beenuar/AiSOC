@@ -36,11 +36,25 @@ class ActionsServiceError(RuntimeError):
 
     Carries the upstream status when there was one, so a caller can map a
     refusal (403, 409) differently from an outage (None, 502).
+
+    ``upstream_detail`` is the only field safe to show a user. The exception
+    message can include a transport error, which carries internal hostnames
+    and occasionally a stack frame; the detail is the actions service's own
+    operator-facing string, which it deliberately builds as an error *type*
+    rather than a raw exception. Rendering the wrong one into an HTML page is
+    how an unauthenticated email-approval link starts leaking topology.
     """
 
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        upstream_detail: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.upstream_detail = upstream_detail or "The action service refused the decision."
 
 
 def base_url() -> str:
@@ -70,11 +84,8 @@ async def _post(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
         raise ActionsServiceError(f"actions service unreachable: {exc}") from exc
 
     if response.status_code >= 400:
-        # The upstream detail is operator-facing and safe to carry: the
-        # actions service deliberately returns an error *type* rather than a
-        # raw exception message.
         detail = _detail(response)
-        raise ActionsServiceError(detail, status_code=response.status_code)
+        raise ActionsServiceError(detail, status_code=response.status_code, upstream_detail=detail)
 
     try:
         body = response.json()
