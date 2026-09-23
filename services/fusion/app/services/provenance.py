@@ -28,15 +28,34 @@ def _parse_uuid(value: Any) -> uuid.UUID | None:
         return None
 
 
-def _product_label(ocsf: dict[str, Any]) -> str | None:
+def product_label(ocsf: dict[str, Any]) -> str | None:
+    """Vendor + product, deduplicated.
+
+    Most connectors set `vendor_name` and `name` to the same string, so a
+    naive join produced `connector_type = "crowdstrike crowdstrike"` on every
+    alert. Verified on a live stack.
+
+    This is the single implementation. `promoter._source()` delegates here;
+    there used to be two copies of the join and only one of them was fixed,
+    which is why the doubled label survived the first repair.
+    """
     meta = ocsf.get("metadata") if isinstance(ocsf, dict) else None
     product = meta.get("product") if isinstance(meta, dict) else None
     if not isinstance(product, dict):
         return None
-    vendor = product.get("vendor_name")
-    name = product.get("name")
-    parts = [p for p in (vendor, name) if isinstance(p, str) and p]
+    parts: list[str] = []
+    for value in (product.get("vendor_name"), product.get("name")):
+        if not isinstance(value, str) or not value.strip():
+            continue
+        cleaned = value.strip()
+        if any(cleaned.lower() == seen.lower() for seen in parts):
+            continue
+        parts.append(cleaned)
     return " ".join(parts) or None
+
+
+#: Retained so existing imports keep working.
+_product_label = product_label
 
 
 def extract_provenance(

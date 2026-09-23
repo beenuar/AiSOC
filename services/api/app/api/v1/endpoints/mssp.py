@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
+from app.core.config import settings
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
 from app.models.tenant import Tenant, User
@@ -762,12 +763,43 @@ _MSSP_INCIDENTS_MOCK = [
 ]
 
 
+# The three rollup routes below have no implementation behind them — the
+# cross-tenant aggregation query was never written. They returned the
+# hardcoded rows above to *authenticated* callers with no demo check and no
+# marker, so "Acme Corp, health 92.4, 12 open alerts" was indistinguishable
+# from a measurement. Fabricated security posture presented as real is the one
+# thing this project will not ship.
+#
+# They now serve that sample only in demo mode, and return empty outside it.
+# An empty rollup is the truthful answer: nothing has been aggregated.
+
+
+def _mssp_sample_allowed() -> bool:
+    return bool(settings.AISOC_DEMO_MODE)
+
+
 @router.get("/overview", response_model=MSSPKpiOverview)
 async def mssp_overview(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MSSPKpiOverview:
-    """Cross-tenant KPI summary for the MSSP parent dashboard."""
+    """Cross-tenant KPI summary for the MSSP parent dashboard.
+
+    Not yet implemented against real data. Returns zeros outside demo mode
+    rather than the sample figures, because a dashboard reading 23.4 minutes
+    MTTR that nobody measured is worse than one reading nothing.
+    """
+    if not _mssp_sample_allowed():
+        return MSSPKpiOverview(
+            total_tenants=0,
+            total_open_alerts=0,
+            total_critical_incidents=0,
+            avg_health_score=0.0,
+            avg_mttr_minutes=0.0,
+            sla_breach_count=0,
+            connectors_online=0,
+            connectors_degraded=0,
+        )
     tenants = _MSSP_TENANTS_MOCK
     return MSSPKpiOverview(
         total_tenants=len(tenants),
@@ -786,7 +818,13 @@ async def list_managed_tenants(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ManagedTenantRow]:
-    """List managed tenants with health scores for the parent dashboard."""
+    """List managed tenants with health scores for the parent dashboard.
+
+    Empty outside demo mode. `GET /api/v1/mssp/children` is the route backed
+    by real rows.
+    """
+    if not _mssp_sample_allowed():
+        return []
     return _MSSP_TENANTS_MOCK
 
 
@@ -796,7 +834,9 @@ async def list_cross_tenant_incidents(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[CrossTenantIncident]:
-    """Critical incidents across all managed tenants."""
+    """Critical incidents across all managed tenants. Empty outside demo mode."""
+    if not _mssp_sample_allowed():
+        return []
     incidents = _MSSP_INCIDENTS_MOCK
     if severity:
         incidents = [i for i in incidents if i.severity == severity]

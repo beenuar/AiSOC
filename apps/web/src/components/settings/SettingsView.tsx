@@ -112,10 +112,13 @@ interface ProfileData {
   timezone: string;
 }
 
+// A user who had never saved a profile was shown 'Sasha Lin
+// <sasha.lin@example.com>' as their own account. Empty fields are correct:
+// the form is asking the user to fill them in, not telling them who they are.
 const DEFAULT_PROFILE: ProfileData = {
-  displayName: 'Sasha Lin',
-  email: 'sasha.lin@example.com',
-  title: 'Senior SOC Analyst',
+  displayName: '',
+  email: '',
+  title: '',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
 };
 

@@ -123,15 +123,24 @@ async def get_airgap_status() -> AirgapStatus:
             "passed": local_llm_up,
             "detail": "Local LLM running" if local_llm_up else "No local LLM configured",
         },
+        # These two used to report `passed: True` with invented detail
+        # strings ("Bundle v2025.05.30 available", "487 rules loaded from
+        # offline bundle"). Nothing was measured — the booleans were literals,
+        # and the rule count contradicted the real corpus. An operator
+        # planning an air-gapped cutover would have read a green check for a
+        # bundle that was never inspected.
+        #
+        # Reported as not-checked until a real probe exists. "We did not
+        # verify this" is a usable answer; a fabricated pass is not.
         {
             "name": "offline_bundle",
-            "passed": True,
-            "detail": "Bundle v2025.05.30 available",
+            "passed": False,
+            "detail": "Not checked — no offline-bundle probe is implemented yet.",
         },
         {
             "name": "detection_rules",
-            "passed": True,
-            "detail": "487 rules loaded from offline bundle",
+            "passed": False,
+            "detail": ("Not checked — the running rule count is reported by the fusion detection engine, not by this endpoint."),
         },
         {
             "name": "threat_intel",

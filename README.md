@@ -4,247 +4,227 @@
 
 # AiSOC
 
-An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and rationale are logged step-by-step and replayable. MIT-licensed.
+**An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-8.1.0-f59e0b?style=flat-square)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
-[![Discussions](https://img.shields.io/github/discussions/beenuar/AiSOC?style=flat-square&label=discussions&color=ec4899)](https://github.com/beenuar/AiSOC/discussions)
 
-[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-24292e?style=for-the-badge&logo=github)](https://codespaces.new/beenuar/AiSOC?quickstart=1)
-[![Docs](https://img.shields.io/badge/Docs-beenuar.github.io-7b2bbe?style=for-the-badge&logo=readthedocs&logoColor=white)](https://beenuar.github.io/AiSOC/)
-[![Render demo (one-click)](https://img.shields.io/badge/Render-one--click-46e3b7?style=for-the-badge&logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/beenuar/AiSOC)
-
-<sub>Codespaces is the zero-install way to drive the real stack in a browser — nothing to install locally, nothing to clean up. Full documentation is published from this repo to <a href="https://beenuar.github.io/AiSOC/">beenuar.github.io/AiSOC</a>.</sub>
-
-<br />
-
-<a href="apps/web/public/demo/"><img src="apps/web/public/demo-thumbnail.svg" alt="90-second AiSOC product walkthrough — agent investigating the seeded LockBit 3.0 case" width="720" /></a>
-
-<sub><em>90-second walkthrough — agent investigates the seeded LockBit 3.0 case end-to-end. <strong>This is a placeholder diagram, not a recording.</strong> The shot list is in <a href="docs/demo/SCREENCAST_SHOTLIST.md">docs/demo/SCREENCAST_SHOTLIST.md</a> and the recorder is <a href=".github/workflows/screencast.yml">screencast.yml</a>; the cut ships in v8.2, because recording needs a running stack to point a browser at and the hosted OSS demo is down pending a billing action on the account. Run it yourself with <code>pnpm aisoc:demo</code> and you are looking at the same thing.</em></sub>
+[Docs](https://beenuar.github.io/AiSOC/) · [Architecture](docs/architecture/README.md) · [What actually works](docs/audit/REPOSITORY_REALITY.md) · [Discussions](https://github.com/beenuar/AiSOC/discussions)
 
 </div>
 
 ---
 
-## Try AiSOC in 60 seconds
+## What AiSOC does
 
-No Docker, no keys, under five seconds:
+```
+   Your security tools  (EDR, cloud, identity, network, SIEM)
+             |
+             v
+   ┌──────────────────────────────────────────────────────┐
+   │  normalize -> detect -> correlate -> investigate -> respond  │
+   └──────────────────────────────────────────────────────┘
+             |
+             v
+   SOC analyst: one incident, with the evidence and the reasoning
+```
+
+An alert arrives. AiSOC works out whether it matters, groups it with related
+signals, investigates it with an AI agent whose every prompt and tool call is
+recorded, and proposes an action. A human approves before anything executes.
+
+## Quick start
 
 ```bash
 git clone https://github.com/beenuar/AiSOC && cd AiSOC
-pip install -e packages/aisoc-sandbox && aisoc-sandbox demo
+make up
 ```
 
-One alert through the four-stage agent funnel — Detect → Triage → Hunt → Respond — with a deterministic offline reasoner, printing the Investigation Ledger. No API key, no network, nothing to tear down. Prefer not to clone? [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1) and run the same command in the browser. Or pick whichever path matches what you already have:
+Then **prove it actually works** — this is the part that matters:
 
-| If you have…                          | Run this                                                                                                 | What you get                                                                                       |
-|---------------------------------------|----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| **npm, and v8.2 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
-| **A browser** (zero install)          | [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)                                  | Browser IDE → `pnpm aisoc:demo --no-open` → click forwarded port `3000`. ~5 min cold.              |
-| **Docker + pnpm**                     | `git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo`                              | Local stack on Postgres + Redis + Kafka + api + agents + web. Browser opens at `INC-RT-001`.       |
-| **Nothing** (clean Linux/macOS/Win)   | `curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh \| bash`                     | Bootstraps Docker, Node, pnpm, git for you; then runs `pnpm aisoc:demo`.                           |
+```bash
+make smoke
+```
 
-[`aisoc-sandbox`](packages/aisoc-sandbox/) is a zero-dependency, in-memory simulator of the agent funnel. Pick a [bundled scenario](packages/aisoc-sandbox/README.md#bundled-scenarios) (`lateral-movement`, `aws-credential-exfil`, `phishing-payload`, `kubernetes-privesc`, `github-token-theft`) or feed in your own JSON via `--file`. The remaining rows boot the real stack and land you on `/cases/INC-RT-001?tab=ledger` — a LockBit 3.0 ransomware case mid-investigation, with the AI agent's prompts, tool calls, and rationale streaming into the [Investigation Ledger](apps/docs/docs/console/investigation-rail.md). Stop the real stack with `pnpm aisoc:demo:down`.
+That posts one real event to the ingest API and follows it through Kafka,
+detection, correlation and Postgres, then reads the resulting alert back out
+of the public API. Every stage reports PASS or FAIL:
 
-> **Does the demo still boot on `main`?** Every push runs [`compose-smoke`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml) (the same `pnpm aisoc:demo` path you'd run locally) and [`e2e`](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml) against the seeded console; nightly [`compose-smoke-nightly`](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml) repeats it with cold caches. A red badge below is a release-blocker.
->
-> [![Compose Smoke](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/compose-smoke.yml?branch=main&label=compose-smoke%20%28main%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke.yml)
-> [![Nightly cold cache](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/compose-smoke-nightly.yml?branch=main&label=compose-smoke%20%28nightly%2C%20cold%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/compose-smoke-nightly.yml)
-> [![E2E](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/e2e.yml?branch=main&label=e2e%20%28seeded%20console%29&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/e2e.yml)
+```
+[PASS] raw telemetry accepted by ingest
+[PASS] event traversed the spine and became an alert
+[PASS] alert is retrievable by id from the API
+```
 
-Full multi-platform deploy guide is in [`apps/docs/docs/installation.md`](apps/docs/docs/installation.md) (Render, Fly.io, Docker Compose, Kubernetes, Terraform). Production-grade install with full storage tier: [`infra/helm/`](infra/helm/) or [`infra/terraform/`](infra/terraform/).
+Open **http://localhost:3000** (API docs at **http://localhost:8000/docs**).
 
----
+Something wrong? `make doctor` checks every dependency and tells you what to
+run next. Requires Docker with ~6 GB of RAM.
 
-## What AiSOC is
+## Try it without connecting anything
 
-AiSOC is a single self-hostable stack that ingests security events, correlates them, runs AI-driven investigation, and surfaces the result in a SOC console. The agent and the substrate are MIT-licensed, so you can read, fork, or replace either of them.
+```bash
+make demo
+```
 
-Three properties distinguish it from closed-source AI SOC vendors:
+> **The demo dataset is synthetic.** It exists to show the pipeline shape, not
+> to represent real activity. Every row it writes is marked
+> `is_synthetic = true` in the database and labelled in the console. It is not
+> a benchmark, a customer, or a real incident.
 
-1. **Agent decisions are logged.** The Investigation Ledger stores the LLM prompt, the response, the evidence cited, and the downstream tool calls for every step of every run. Replays are available later.
-2. **The substrate has a public eval harness in CI.** Five suites gate every PR targeting `main` / `develop` — alert reduction is a real measurement against a fixed 1 000-alert stream; three rubric-based suites are substrate self-consistency gates over a deterministic 200-incident dataset (55 templates) with per-template macros; a fifth gate validates the backing telemetry corpus. The [benchmark page](apps/docs/docs/benchmark.md) documents exactly what each suite measures and what it does not.
-3. **You control what leaves your perimeter.** No callbacks to a vendor cloud and no "model improvement" telemetry. With a hosted LLM, evidence is pseudonymized by default (internal IPs, hostnames, emails, paths, secrets, usernames become opaque tokens); run a local model (Ollama/vLLM) for a fully air-gapped path. Exactly what leaves under each mode: [`docs/trust/data-flows.md`](docs/trust/data-flows.md).
+## Connect real data
 
-The orchestrator is a ~600-line LangGraph in [`services/agents/`](services/agents/). It is small enough to read end-to-end, swap models in, and patch.
+Two ways in. Push, from anything that can make an HTTP request:
 
----
+```bash
+curl -X POST http://localhost:8081/v1/ingest/batch \
+  -H 'Content-Type: application/json' -H 'X-Tenant-ID: <tenant>' \
+  -d '{"connector_id":"edr-1","connector_type":"crowdstrike","source_format":"json",
+       "events":[{"severity":"high","title":"Encoded PowerShell from Office",
+                  "host":"WIN-FIN-01","process_name":"powershell.exe"}]}'
+```
 
-## How AiSOC compares
+Or pull, by configuring a connector in **Settings → Connectors** (needs the
+`full` profile). Connectors with vendor-specific normalization and live
+setup docs include Splunk, Microsoft Sentinel, Elastic, CrowdStrike, Okta,
+AWS (GuardDuty / CloudTrail / Security Hub), Wiz, and Kubernetes audit logs.
+The full list is in the [connector docs](https://beenuar.github.io/AiSOC/docs/connectors/).
 
-| Capability | AiSOC | Wazuh | Splunk ES | Closed-source AI SOC |
+A connector without a vendor profile still ingests through a generic mapping —
+events flow, but entity extraction is weaker.
+
+## How it works
+
+See **[docs/architecture/README.md](docs/architecture/README.md)** — it walks
+one event through the whole system and every box in its diagrams links to the
+code that implements it.
+
+The short version: ingest normalizes to a common shape → Kafka carries it →
+fusion runs 833 executable detection rules and decides what becomes an alert →
+correlation groups related alerts into one incident → an agent investigates
+and writes its reasoning to the Investigation Ledger → a human approves any
+response.
+
+## Deployment profiles
+
+One architecture, three profiles of it.
+
+| Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| Open-source license | MIT | GPL-2 | proprietary | proprietary |
-| Self-hostable | yes | yes | enterprise-only | cloud-only |
-| Autonomous AI investigation | LangGraph | no | partial (Splunk AI) | yes |
-| Agent decision audit trail | public Investigation Ledger | n/a | n/a | not published |
-| Public substrate eval harness | CI-gated, reproducible, with synthetic telemetry corpus + per-template macros | n/a | n/a | not published |
-| Detection content | 833 executable firing on the live stream + 6 000-rule provenance-tracked imported library ([truth table](docs/detections/truth-table.md)) | 1 200+ rules | 1 000+ apps | curated |
-| Plugin SDK | Python / TypeScript / Go | YAML rules only | apps | proprietary |
-| Data residency | your infra | your infra | partial | vendor cloud |
-| Pricing | $0 (self-host) | $0 (self-host) | per ingest GB | enterprise |
+| **core** | `make up` | 10 | ~6 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console |
+| **full** | `make up-full` | 30 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, scheduled connectors |
+| **demo** | `make up && make demo` | 10 | ~6 GB | Core plus labelled synthetic data |
 
-Closed-source AI SOC vendors ship working products. AiSOC's contribution is making the agent itself open, the per-step decision trail readable, and the substrate gated by a public eval harness on every PR targeting `main` / `develop`.
+CORE is not a cut-down toy — it is the smallest deployment that takes a real
+event and produces a real alert.
 
----
+## Real vs synthetic data
 
-## What you'll see in the console
+This matters more than any feature, so it is stated plainly.
 
-<div align="center">
+| Kind | Where | How you can tell |
+|---|---|---|
+| **Real** | Your connectors and the ingest API | `is_synthetic = false` (the default) |
+| **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
+| **Benchmark** | `services/agents/tests/eval_data/` | Every published row carries `substrate: true` |
+| **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
 
-| <a href="apps/docs/docs/console/queue.md"><img src="apps/web/public/screenshots/01-alerts-queue.svg" alt="Alerts queue with SLA countdowns" width="100%" /></a> | <a href="apps/docs/docs/console/investigation-rail.md"><img src="apps/web/public/screenshots/02-investigation-rail.svg" alt="Investigation Rail with deterministic correlation narrative" width="100%" /></a> |
-|:---:|:---:|
-| **Alerts queue** — server-anchored SLA countdowns, atomic claim, one-click triage. [Docs](apps/docs/docs/console/queue.md) | **Investigation Rail** — narrative, pivot-path entity chips, 6-event timeline, recommended actions. [Docs](apps/docs/docs/console/investigation-rail.md) |
-| <a href="apps/docs/docs/console/rule-tuning.md"><img src="apps/web/public/screenshots/03-hunt-workbench.svg" alt="Natural-language /hunt workbench" width="100%" /></a> | <a href="apps/docs/docs/plugins/overview.md"><img src="apps/web/public/screenshots/04-marketplace.svg" alt="Plugin and detection marketplace" width="100%" /></a> |
-| **`/hunt` workbench** — type a hypothesis in English, get ES&#124;QL / SPL / KQL back, save + schedule. [Docs](apps/docs/docs/console/rule-tuning.md) | **Marketplace** — plugins, playbooks, detections with one-click tenant install. [Docs](apps/docs/docs/plugins/overview.md) |
+**Production never silently falls back to synthetic data.** When a backend is
+unreachable the console shows an error, not an invented investigation. That
+was not always true — see [the reality audit](docs/audit/REPOSITORY_REALITY.md)
+for the five places it was wrong and how each was fixed.
 
-<sub><em>The four tiles above are SVG placeholders. Real PNG screenshots ship with the next Phase 2 visuals rollup; the [walkthrough video](apps/web/public/demo/) at the top of this README is the canonical reference until then.</em></sub>
+## AI agents
 
-</div>
+Agents triage alerts and investigate incidents. What they can and cannot do:
 
----
+- **They read** the alert, its correlated siblings, entity context, and prior
+  verdicts for the same signature.
+- **They call typed tools** — lake queries, graph traversals, enrichment
+  lookups. The model chooses a tool and passes arguments; it never writes SQL.
+- **Everything is logged** to the Investigation Ledger: prompts, tool calls,
+  citations, the verdict, and token cost.
+- **Grounding is checked.** A verdict citing an indicator the evidence never
+  contained is demoted to human review rather than auto-closed.
+- **A prompt is validated before it is sent.** Raw logs, OCSF payloads and
+  secret-shaped values are refused, not redacted after the fact.
+- **Nothing executes without a human.** Response actions are proposed. An
+  approver must hold the required permission tier and must not be the person
+  who requested the action.
 
-## Architecture
+Without a model provider key, agents run a deterministic offline path and say
+so. They do not fabricate a verdict.
 
-```mermaid
-flowchart LR
-    subgraph Sources["Sources"]
-        EDR["EDR / XDR"]
-        SIEM["SIEM"]
-        Cloud["Cloud APIs"]
-        IDP["Identity"]
-        Net["Network"]
-    end
+## Project maturity
 
-    subgraph Ingest["Ingest & Normalize"]
-        Connectors["Connectors\n(Python · 78 vendors)"]
-        OsqueryTLS["osquery-tls\n(Python · host telemetry)"]
-        IngestSvc["Ingest worker\n(Go · OCSF)"]
-        Enrich["Enrichment\n(Go · IOC + Shodan)"]
-    end
+| Capability | Status | Tested | Production ready |
+|---|---|---|---|
+| Ingest → detect → correlate → alert | Stable | E2E + unit | Yes |
+| Detection engine (833 executable rules) | Stable | Fixture replay + unit | Yes |
+| Alert correlation into incidents | Stable | Unit | Yes |
+| REST API + web console | Stable | Unit + integration | Yes |
+| AI triage + Investigation Ledger | Beta | Unit + substrate eval | Yes, copilot mode |
+| Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
+| Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
+| Governed response actions | Beta | Unit | Human-approved only |
+| Scheduled connectors | Beta | Contract tests | `full` profile |
+| UEBA | **Broken** | — | No — [see why](docs/audit/REPOSITORY_REALITY.md) |
+| Package distribution (npm/PyPI) | Planned | — | v8.2 — blocked on registry credentials |
 
-    subgraph Spine["Event Spine"]
-        Kafka[("Apache Kafka")]
-    end
+## What AiSOC is not
 
-    subgraph Detect["Detect & Reason"]
-        Fusion["Fusion\n(Python · ML)"]
-        UEBA["UEBA\n(Python · baseline)"]
-        Rules["Rule engine\n(Sigma · YARA · KQL)"]
-        Agents["AI Agents\n(LangGraph)"]
-    end
+- **Not a drop-in SIEM replacement.** It correlates and investigates; it does
+  not replace long-term log retention and compliance search.
+- **Not able to see telemetry you have not connected.** There is no magic
+  discovery.
+- **Not autonomous by default.** Response requires explicit policy
+  authorization and a human approver.
+- **Demo incidents are not real incidents**, and benchmark corpora are not
+  customer telemetry.
+- **Benchmark numbers are substrate self-consistency measures**, not live
+  agent accuracy, and are labelled as such wherever published.
 
-    subgraph Storage["Storage Tier"]
-        PG[("PostgreSQL")]
-        CH[("ClickHouse")]
-        OS[("OpenSearch")]
-        QD[("Qdrant")]
-        N4[("Neo4j")]
-        RD[("Redis")]
-    end
+## Troubleshooting
 
-    subgraph Surface["Surface"]
-        API["Core API\n(FastAPI)"]
-        Web["Web Console + Responder PWA\n(Next.js)"]
-        MCP["MCP Server\n(TS · stdio)"]
-    end
+`make doctor` diagnoses the deployment and prints the command to run next.
+The five most common failures:
 
-    Sources --> Connectors --> IngestSvc --> Kafka
-    OsqueryTLS --> IngestSvc
-    IngestSvc --> Enrich --> Kafka
-    Kafka --> Fusion --> Storage
-    Kafka --> UEBA --> Kafka
-    Kafka --> Rules --> Kafka
-    Agents --> Storage
-    API --> Storage
-    Web --> API
-    MCP --> API
-```
-
-Full architecture (every service, every storage role, the v1.5 console workbench, and the Investigation Ledger contract) is in [`apps/docs/docs/architecture.md`](apps/docs/docs/architecture.md). The deeper system-design write-up — including ML fusion, the Neo4j-at-ingest schema, and the threat-intel pipeline — lives at [`docs/architecture/SYSTEM_DESIGN.md`](docs/architecture/SYSTEM_DESIGN.md). The full monorepo layout is at [`apps/docs/docs/architecture/overview.md`](apps/docs/docs/architecture/overview.md).
-
----
-
-## What's in the box
-
-A handful of headline capabilities — the rest are catalogued in [`apps/docs/docs/features/`](apps/docs/docs/features/) and indexed at the top of [`apps/docs/docs/intro.md`](apps/docs/docs/intro.md):
-
-> **Maturity (v8.1.0 — Wave-2 features, and the gaps behind them).** Every wave-2 backlog item was audited against the tree before any code was written, and the backlog was wrong in both directions: two were already built, four had the capability present with the path that feeds it broken. One inverted what the feature appeared to do — a Slack or Teams **approval authorized nobody**: the bots verified who clicked, logged them, and called the actions service with no approver, so the permission tier and separation of duties were both skipped. The end-to-end spine is wired and CI-gated: ingest → ClickHouse lake → live detection → fused alert → auto-triage → governed response. v8.0 connected capabilities the codebase already contained but never called. Response actions are now **verified against the vendor** rather than assumed from a 200 — an action that reports success while the effect is absent is reported as failed, because that gap is how a SOC comes to believe a host is contained when it is not. Autonomy is governed by **each tenant's own** L0–L4 policy instead of one deployment-wide environment variable. Repeat-alert suppression, shipped in v7.7, **could never fire** — the evidence fingerprint included the alert id, so no repeat ever matched; it now does. Analysts can **hunt the events AiSOC itself ingested** instead of needing an external SIEM. A verdict citing indicators the evidence never contained is demoted to human review rather than auto-closed. Autonomous *response* still defaults to copilot/dry-run: an autonomy policy governs every real execution. The live-agent LLM benchmark is preview (the deterministic-tier scoreboard is CI-gated per PR); substrate eval suites are GA. Every product claim is backed by a failing test — [claim-to-gate matrix](docs/audit/CLAIM_TO_GATE_MATRIX.md): 99 GATED / 9 PARTIAL / 0 NO GATE. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
-
-- **84 click-and-connect data connectors** (EDR/XDR, SIEM, NDR, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets — recently adding Qualys, GreyNoise, JumpCloud, Darktrace, and Imperva alongside IBM QRadar, Netskope, Zeek/Suricata NDR, and more. One query runs SIEM-agnostic **federated search** across Splunk SPL / Sentinel KQL / Elastic ES&#124;QL / **QRadar AQL**. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
-- **End-to-end SIEM spine** — a cold `docker compose up` ingests connector data → lands it in the ClickHouse event lake → the executable detection corpus (833 rules) fires on the live stream → a fused alert is created, all asserted by an extended integration gate. Fuse-time threat-intel + CISA-KEV enrichment now feeds the confidence score and exploit-in-wild boost, and **stateful/windowed detections** (brute-force, password-spray, port-scan) run alongside the corpus. [`apps/docs/docs/architecture.md`](apps/docs/docs/architecture.md).
-- **Autonomous triage + governed response** — every fused alert is auto-triaged by the agent (copilot/read-only by default) with a prompt-injection guard that demotes tampered evidence to manual review; a unified **confidence × blast-radius × reversibility** policy authorizes auto-execution only for reversible, low-blast actions at high confidence (everything else stays gated to a human), with real rollback + post-action verification. [`apps/docs/docs/concepts/automation-maturity.md`](apps/docs/docs/concepts/automation-maturity.md).
-- **Advanced Data Explorer** — one investigation surface (NL + SQL over the lake, plus pivots to identity/graph/intel), replacing the SIEM context-switch. `/explore`.
-- **Investigation Rail + replayable Investigation Ledger** — every prompt, tool call, evidence chip, and rationale stored against a case, replayable in the UI and shareable as a redacted public permalink. [`apps/docs/docs/console/investigation-rail.md`](apps/docs/docs/console/investigation-rail.md).
-- **Detection-as-Code lifecycle** — propose → review → eval-gate → promote; CI rejects any candidate that fails its own positive/negative fixtures (the non-circular gate) or regresses MITRE accuracy. Analyst false-positive feedback now feeds a **self-improving tuner** that proposes scoped rule exceptions / severity changes (human-approved, never auto-applied). [`apps/docs/docs/concepts/detections.md`](apps/docs/docs/concepts/detections.md) — and the native rules live in [`detections/`](detections/), of which the truth table records how many actually execute.
-- **Three-model AI + tool-using agents** — Semantic (graph-at-ingest), Behavioral (UEBA fused into alert scoring), and Knowledge (LLM), with fuse-time attack-chain grouping. The agent calls real tools (IOC enrichment, MITRE lookup, graph blast-radius) through an **LLM tool-calling loop**, and a **scored planner** routes each alert to the right specialist instead of fanning out to all four.
-- **Cost-governed LLM routing** — per-tenant budgets + circuit breaker, token/cost telemetry, a content-addressed response cache, a cheap-first cost cascade (escalate to the strong model only on low confidence), multi-model gateway fallbacks, and per-tenant BYOK keys. [`services/agents/app/routing/`](services/agents/app/routing/).
-- **Hunt-as-Code** — YAML hypotheses with MITRE tags, cron schedules, and natural-language `/hunt` workbench. [`hunts/`](hunts/) + [`apps/docs/docs/console/rule-tuning.md`](apps/docs/docs/console/rule-tuning.md).
-- **Public weekly benchmark scoreboard** — the same harness that gates PRs; the deterministic-tier row is CI-gated for freshness on every PR, and the funded weekly job appends live-LLM rows. A new **groundedness/hallucination axis** flags any indicator the agent asserts that isn't in the evidence it was given. [`apps/docs/docs/benchmark-scoreboard.mdx`](apps/docs/docs/benchmark-scoreboard.mdx).
-
----
-
-## Use it from Claude, Cursor, or Cody
-
-AiSOC ships an [MCP server](https://modelcontextprotocol.io) (`services/mcp/`) so analysts can query alerts, run agent investigations, and replay every step the agent took without leaving the IDE or chat. The server exposes 13 tools — discovery, deep-dive, governed lake query, and the action / replay set that walks the agent decision ledger step-by-step.
-
-> **Status — monorepo source build today; npm publish lands in v8.2.** Full setup is in [`apps/docs/docs/integrations/mcp.md`](apps/docs/docs/integrations/mcp.md), which shows the today-vs-published invocations side by side.
-
----
-
-## Extend it
-
-Three contribution surfaces; each is one file plus optional fixtures, and CI validates every PR.
-
-- **Detection rule.** Drop a Sigma YAML under [`detections/`](detections/) with a positive / negative fixture in [`detections/fixtures/`](detections/fixtures/). The [validate-detections](https://github.com/beenuar/AiSOC/actions/workflows/validate-detections.yml) workflow tests it on every PR. Spec: [`docs/connectors/`](apps/docs/docs/connectors/).
-- **Connector.** Subclass `BaseConnector` in [`services/connectors/app/connectors/`](services/connectors/app/connectors/), register it in `_CONNECTOR_CLASSES`, and add a `plugins/<id>/plugin.yaml` manifest. The marketplace picks it up automatically. Walkthrough: [`apps/docs/docs/connectors/`](apps/docs/docs/connectors/).
-- **Playbook.** Drop a YAML under [`playbooks/`](playbooks/); [`validate-playbooks`](https://github.com/beenuar/AiSOC/actions/workflows/validate-playbooks.yml) gates the PR. Schema: [`playbook.schema.json`](playbook.schema.json).
-
-Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/plugins/overview.md`](apps/docs/docs/plugins/overview.md). The CLI (`aisoc-cli`) is in [`packages/aisoc-cli/`](packages/aisoc-cli/); PyPI publish lands in v8.2.
-
-**In your CI:** add `- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0` to triage your repo's Dependabot / CodeQL / secret-scanning alerts on every PR (deterministic, nothing leaves your runner). The short `beenuar/aisoc-action@v1` form needs a Marketplace listing, which lands with v8.2 — until then the subdirectory form above is the one that resolves. [Docs](apps/docs/docs/integrations/github-action.md).
-
----
-
-## Roadmap & releases
-
-- **Latest GitHub release with downloads:** <https://github.com/beenuar/AiSOC/releases/latest>
-- **Per-release narrative:** [`RELEASES.md`](RELEASES.md) (mirrors what used to live in this README)
-- **Machine-readable inventory with file paths, env-var diffs, test counts:** [`CHANGELOG.md`](CHANGELOG.md)
-- **v8.1 scope, and why packaging is named against v8.2:** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
-- **Bigger-picture roadmap (BYOC multi-cloud, MSSP rollups, federated search):** [`ROADMAP.md`](ROADMAP.md)
-
----
-
-## Contributing
-
-PRs of every size are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening a PR.
-
-First-time contributors: pick a [`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22). Need help? [Open a Q&A discussion](https://github.com/beenuar/AiSOC/discussions/new?category=q-a).
-
----
-
-## Credits
-
-AiSOC is built and improved by a growing community of contributors, security researchers, and operators. The full attribution — including bug reporters and security researchers — lives in [`.github/CREDITS.md`](.github/CREDITS.md). The always-up-to-date code-contribution graph is on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
-
----
+| Symptom | Cause | Fix |
+|---|---|---|
+| `port is already allocated` | Something else on 5432/6379/9092/3000 | `make doctor` names the port; stop it or edit the host port |
+| Kafka reports healthy but nothing flows | Docker VM out of disk — Kafka corrupts its log dir and still passes its healthcheck | `docker system prune -af`, then `make clean && make up` |
+| `make smoke` fails at "became an alert" | fusion is down or not consuming | `docker compose logs fusion \| tail -60` |
+| Console loads but is empty | No data yet — this is correct | `make smoke`, or `make demo` |
+| Services restart-loop on 8 GB machines | Not enough RAM for `full` | Use `make up` (core) |
 
 ## Security
 
-For security issues, please do not open a public issue. Use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new). Full policy in [`SECURITY.md`](SECURITY.md). AiSOC follows coordinated disclosure.
+Secrets live in `.env` and are never committed; connector credentials are
+encrypted at rest with a per-deployment key. Tenant isolation is enforced at
+the query layer in every store, not by convention. RBAC gates every mutating
+route. Prompts are validated before they leave the deployment, and you can
+bring your own model key or run entirely local models. Report vulnerabilities
+via [SECURITY.md](SECURITY.md).
 
----
+## Developing
 
-## License
+```bash
+make test        # unit tests for every service
+make smoke       # the golden pipeline, against a running stack
+make stats       # recount every figure this README publishes
+```
 
-[MIT](LICENSE) — © 2024–present AiSOC contributors.
+Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/overview) ·
+[add a detection](https://beenuar.github.io/AiSOC/docs/detections/authoring) ·
+[add a playbook](https://beenuar.github.io/AiSOC/docs/playbooks/overview) ·
+[contributing](CONTRIBUTING.md)
 
-<div align="center">
+Every number in this README is produced by `scripts/project_stats.py` and
+checked in CI, so a figure cannot drift from the tree without a red build.
 
-[Report a bug](https://github.com/beenuar/AiSOC/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/beenuar/AiSOC/issues/new?template=feature_request.yml) · [Contribute](CONTRIBUTING.md) · [Read the docs](apps/docs/) · [Reproduce the benchmark](apps/docs/docs/benchmark.md)
+## Roadmap · Contributing · License
 
-</div>
+[ROADMAP.md](ROADMAP.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · MIT

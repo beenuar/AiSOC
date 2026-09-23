@@ -34,7 +34,7 @@ from typing import Any
 import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
-from app.services.provenance import extract_provenance
+from app.services.provenance import extract_provenance, product_label
 
 logger = structlog.get_logger()
 
@@ -109,10 +109,44 @@ def _title(ocsf: dict[str, Any]) -> str:
 
 
 def _source(ocsf: dict[str, Any]) -> str:
-    vendor = _get_nested(ocsf, "metadata", "product", "vendor_name")
-    product = _get_nested(ocsf, "metadata", "product", "name")
-    parts = [p for p in (vendor, product) if isinstance(p, str) and p]
-    return " ".join(parts) or "ingest"
+    """Human-readable origin, e.g. "CrowdStrike Falcon" or "crowdstrike".
+
+    Delegates to `provenance.product_label` so the vendor/product join exists
+    once. Two copies of it used to exist, and fixing only this one left
+    `connector_type` still reading "crowdstrike crowdstrike" on the alert row.
+    """
+    return product_label(ocsf) or "ingest"
+
+
+def _description(ocsf: dict[str, Any]) -> str:
+    """Prefer a human sentence over a serialized payload.
+
+    This used to be `str(ocsf.get("raw_data"))`, so every alert's description
+    was the whole event dumped as a Python dict repr — unreadable in the
+    console, and it discarded the vendor's own description even when one was
+    supplied. Verified against a live stack: a CrowdStrike event carrying
+    "powershell.exe -enc ... spawned by winword.exe" produced a description
+    that began `{"command_line": "powershell.exe ...`.
+
+    The raw payload is not lost: it stays on the alert's `raw_event`, which is
+    what the investigation surfaces read.
+    """
+    raw = ocsf.get("raw_data")
+    if isinstance(raw, dict):
+        for key in ("description", "message", "summary", "detail", "reason"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()[:2000]
+    finding_desc = _get_nested(ocsf, "finding", "desc")
+    if isinstance(finding_desc, str) and finding_desc.strip():
+        return finding_desc.strip()[:2000]
+    message = ocsf.get("message")
+    if isinstance(message, str) and message.strip():
+        return message.strip()[:2000]
+    # Nothing human-authored anywhere. An empty description is more honest
+    # than a dict repr pretending to be prose; the console renders the raw
+    # event beneath it either way.
+    return ""
 
 
 def _event_time(ocsf: dict[str, Any]) -> datetime | None:
@@ -168,7 +202,7 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         tenant_id=tenant_id,
         source=_source(ocsf),
         title=_title(ocsf),
-        description=str(ocsf.get("raw_data") or "")[:2000],
+        description=_description(ocsf),
         severity=severity,
         src_ip=_get_nested(ocsf, "src_endpoint", "ip"),
         dst_ip=_get_nested(ocsf, "dst_endpoint", "ip"),
