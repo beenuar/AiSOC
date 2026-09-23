@@ -1,5 +1,6 @@
 {
-  "actor_uid_neq_owner_uid": true,
-  "event_type": "not-ES_EVENT_TYPE_NOTIFY_OPEN",
+  "actor_uid": 1000,
+  "event_type": "ES_EVENT_TYPE_NOTIFY_OPEN",
+  "owner_uid": 1000,
   "path": "head-/Keychains/login.keychain-db"
 }
