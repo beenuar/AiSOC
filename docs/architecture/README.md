@@ -242,6 +242,18 @@ One architecture, three profiles of it — not three architectures.
 CORE is not a toy. It is the smallest deployment that can take a real event
 and produce a real alert, which is the thing the product is for.
 
+**Two flags travel with the `full` profile.** The lake writer and the
+graph writer target stores that exist only there, so in CORE they default off
+rather than retrying against a host that is not running:
+
+```bash
+AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true \
+  docker compose --profile full up -d
+```
+
+`make up-full` sets both for you, and the integration workflow sets the same
+pair — so the documented command and the tested command are the same command.
+
 ---
 
 ## Verifying any of this

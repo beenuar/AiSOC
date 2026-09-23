@@ -105,8 +105,19 @@ jobs:
       - name: Build fusion + ingest from source
         run: docker compose build fusion ingest-worker
 
-      - name: Boot stack
-        run: docker compose up -d
+      # This job verifies the FULL architecture — it asserts below that the
+      # ClickHouse event lake is populated — so it must boot the `full`
+      # profile. ClickHouse, Neo4j and the rest moved behind that profile so
+      # a plain `docker compose up` is the 10-service CORE pipeline.
+      #
+      # The two flags travel with the profile: the lake writer and the graph
+      # writer target stores that only exist in `full`, and in CORE they
+      # default off rather than retrying against a host that is not there.
+      - name: Boot stack (full profile — this job asserts on the lake)
+        env:
+          AISOC_LAKE_WRITER_ENABLED: "true"
+          AISOC_GRAPH_ENABLED: "true"
+        run: docker compose --profile full up -d
 
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py

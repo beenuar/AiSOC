@@ -65,8 +65,11 @@ up:
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
 
+# The lake and graph writers target stores that exist only in `full`, so the
+# flags travel with the profile. In CORE they default off rather than
+# retrying forever against a host that is not there.
 up-full:
-	$(COMPOSE) --profile full up -d
+	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait
 	@echo "Full profile up. Prove the pipeline works: make smoke"
 
