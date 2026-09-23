@@ -29,8 +29,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.12(expo@54.0.37)(react-native@0.81.4)(react@19.1.0)
       expo-local-authentication:
-        specifier: ^17.0.0
-        version: 17.0.9(expo@54.0.37)
+        specifier: ^57.0.3
+        version: 57.0.3(expo@54.0.37)
       expo-notifications:
         specifier: ^0.32.0
         version: 0.32.17(expo@54.0.37)(react-native@0.81.4)(react@19.1.0)(typescript@6.0.3)
@@ -3705,8 +3705,8 @@ packages:
       - supports-color
     dev: false
 
-  /expo-local-authentication@17.0.9(expo@54.0.37):
-    resolution: {integrity: sha512-Ro2m6JJ7ebaDCMsnh6CeXKqXUdK5xP2lnrJlAopUO2DGqX5693BWC14ANFihFWL6qEV7IIV4hGpdU5RYyBCbuQ==}
+  /expo-local-authentication@57.0.3(expo@54.0.37):
+    resolution: {integrity: sha512-1oQCBKz8JOpai+Zp+Z2RkBFIi2CHHWLSJk/pjvT9VEyf8nPFslo4kt1ZlQvtJ4rupbKNCmxqKfYr8Mlo8nJEug==}
     peerDependencies:
       expo: '*'
     dependencies:
