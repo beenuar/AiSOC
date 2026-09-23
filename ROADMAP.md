@@ -599,9 +599,16 @@ Disposition of every item that had been listed against v8.0:
 
 ---
 
-## v8.1 — In progress
+## v8.1 — Shipped (2026-09-23)
 
-Wave-2 features plus release integrity. Tracked in
+Wave-2 features plus release integrity. Every backlog item was audited against
+the tree before any code was written, and the backlog was wrong in both
+directions: two items were already built, and four had the capability present
+with the path that feeds it broken. Two remain partial and say so — the two
+attack-chain implementations still never exchange data, and ChatOps still has
+no proactive card push or durable approval store.
+
+Full inventory under `[8.1.0]` in [`CHANGELOG.md`](CHANGELOG.md). Tracked in
 [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md) and, for the
 community-facing view, issue
 [#362](https://github.com/beenuar/AiSOC/issues/362).
