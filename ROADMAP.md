@@ -44,7 +44,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.
 - **Phase E (prove it):** E1 CI-gated benchmark scoreboard tied to a deterministic live-agent MITRE-accuracy run.
 
-The claim-to-gate matrix stands at **33 GATED / 7 PARTIAL / 0 NO GATE** — **every product claim is now backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 7 remaining PARTIAL rows are honest, named deferrals to phases outside the A–E scope. Per-session working detail is tracked locally in `docs/audit/PROGRESS.md`.
+The claim-to-gate matrix stands at **102 rows — 93 GATED / 9 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 9 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. Per-session working detail is tracked locally in `docs/audit/PROGRESS.md`.
 
 ## v4.0 — Shipped
 
@@ -565,19 +565,56 @@ Terraform skeleton equivalent to the existing AWS module.
 
 ---
 
-## v8.0 — Planned
+## v8.0 — Shipped (2026-09-22)
 
-- Mobile responder console (React Native) — triage and acknowledge from phone
-- Plugin publishing marketplace v3 (commercial plugins, revenue sharing)
-- MSSP RBAC enforcement on `/api/v1/actors/*` endpoints (threat attribution)
+v8.0 shipped as the **close-the-loop** release rather than the feature list
+below. It had been reserved for the package-publish milestone, but nothing can
+publish without registry credentials, so packaging moved out (see v8.1) and the
+release instead wired capabilities the codebase already contained and never
+called. What v8.0 actually delivered is recorded under `[8.0.0]` in
+[`CHANGELOG.md`](CHANGELOG.md) and summarised in [`RELEASES.md`](RELEASES.md).
+
+Disposition of every item that had been listed against v8.0:
+
 - ~~Automated IOC sharing to community MISP instances via STIX/TAXII push~~ → **shipped in v7.2.0**
 - ~~NL→query: "show me failed logins from new ASNs last 24h" → ES|QL / KQL~~ → **shipped in v7.2.0** (deterministic translator + 50-pair eval set)
-- AI-generated threat intelligence briefings from public feeds
-- Embedded red-team scoring (ATT&CK coverage %) as a live dashboard widget
-- SLA breach predictor (ML model on historical MTTR data)
-- Incident cost estimator (breach impact calculator)
 - ~~SOC-in-a-box one-click cloud deploy (Terraform module for AWS / GCP)~~ → **GCP module shipped in v7.2.0** (AWS already shipped)
 - ~~Automated retro/blameless post-mortem drafting from case timeline~~ → **shipped in v7.2.0** (ideas backlog item promoted)
+- Mobile responder console (React Native) — **not started**, deferred; see the
+  note under v7.0 above. No React Native code exists in the tree.
+- Plugin publishing marketplace v3 (commercial plugins, revenue sharing) —
+  **not started**, deferred. Revenue sharing is a commercial decision rather
+  than an engineering one, and the free packaging path is itself still blocked
+  on registry credentials.
+- MSSP RBAC enforcement on `/api/v1/actors/*` (threat attribution) — **shipped
+  in v7.5.0** as part of the threat-actor attribution RBAC + port fix.
+- AI-generated threat intelligence briefings from public feeds — **open**, not
+  scheduled.
+- Embedded red-team scoring (ATT&CK coverage %) as a live dashboard widget —
+  **open**, not scheduled. The underlying coverage heatmap shipped in v5.1; the
+  dashboard widget did not.
+- SLA breach predictor (ML model on historical MTTR data) — **open**, not
+  scheduled.
+- Incident cost estimator (breach impact calculator) — **open**, not scheduled.
+
+---
+
+## v8.1 — In progress
+
+Wave-2 features plus release integrity. Tracked in
+[`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md) and, for the
+community-facing view, issue
+[#362](https://github.com/beenuar/AiSOC/issues/362).
+
+**Packaging is not in v8.1 either, and the reason is worth stating plainly:**
+`release.yml` already builds, packs and would upload all eight packages — the
+npm and PyPI jobs are written and run on every tag. The repository's only
+secret is `FLY_API_TOKEN`. There is no `NPM_TOKEN` and no PyPI trusted
+publisher, so the upload steps skip with a warning by design rather than
+failing the release. This is an account action, not an engineering task, and
+promising it in a release that cannot perform it is the kind of claim this
+project's claim-to-gate matrix exists to prevent. Packaging is therefore named
+against **v8.2**, and it becomes a re-tag the moment the credentials exist.
 
 ---
 
