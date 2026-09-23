@@ -151,6 +151,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Codespaces quickstart could never start Docker
+  ([#716](https://github.com/beenuar/AiSOC/issues/716)).** The README
+  advertises Codespaces as "the zero-install way to drive the real stack in a
+  browser"; it failed at step 1 of `pnpm aisoc:demo` and was not recoverable
+  from inside the codespace. The `docker-in-docker` feature does two things,
+  and only the first has a Dockerfile equivalent: it installs the binaries
+  (replicated), and it supplies container *runtime* options (`--privileged`,
+  `--init`, a volume at `/var/lib/docker`) plus an entrypoint that launches
+  `dockerd`. Capabilities are granted at container creation and cannot be
+  self-granted from an image, so baking the binaries and stopping there
+  produced a container with `CapEff: 0` and `CAP_SYS_ADMIN` outside the
+  bounding set — `sudo` could not help, because the capability was not in the
+  set to grant. `devcontainer.json` passes the runtime half now and
+  `.devcontainer/start-docker.sh` is the missing entrypoint, running from
+  `postStartCommand` so a stop-and-resume comes back with a working daemon.
+  `apt install docker.io` also creates the `docker` group and puts nobody in
+  it, so `node` could not reach the socket its own daemon creates and every
+  command failed with a permission error that reads like a missing daemon.
+  The cold-start gate is why this survived: it asserted the docker *CLI* was
+  installed, which it is with no daemon anywhere. A third phase now starts a
+  real daemon under the same flags and runs a container as the non-root user.
+- **Service images were published amd64-only.** Apple Silicon is the majority
+  of contributor laptops, and `pnpm aisoc:demo` — the README's headline
+  "Docker + pnpm" path — could not pull a single service image there.
+  Compose reported `no matching manifest for linux/arm64/v8` for every one,
+  fell back to building four services from source, and the quickstart became
+  a long silent build instead of a demo. The devcontainer image has been
+  multi-arch all along, so the pattern existed and was simply never applied
+  to the service images. This roughly doubles image-build time, which is the
+  correct trade: a first run that cannot start is worse than a slower
+  release.
+- **The OSS screencast recorder defaulted to a commercial host.**
+  `screencast.yml` recorded `https://tryaisoc.com` unless told otherwise and
+  the shot list named that host in three shots, so a self-hoster running the
+  workflow would record somebody else's deployment — and that hostname would
+  then travel into the README caption. Both default to the local demo stack
+  now, and the outro carries no URL at all, because a hostname there dates
+  the cut and points viewers at an instance rather than at the project.
+- **`beenuar/aisoc-action` does not exist as a repository.** Every
+  `uses: beenuar/aisoc-action@v1` example in the README and the integration
+  doc 404s. The reference that resolves is the monorepo subdirectory form,
+  `beenuar/AiSOC/packages/aisoc-action@v8.1.0`, which is what both show now;
+  `docs/operations/publishing.md` records what the short alias would actually
+  require, since a Marketplace listing resolves to a repository root.
 - **A ChatOps approval authorized nobody.** The Slack and Teams bots verified
   who clicked — Slack signs every interaction payload, Teams payloads carry an
   HMAC — recorded that person in an audit event, and then called

@@ -23,7 +23,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 
 <a href="apps/web/public/demo/"><img src="apps/web/public/demo-thumbnail.svg" alt="90-second AiSOC product walkthrough — agent investigating the seeded LockBit 3.0 case" width="720" /></a>
 
-<sub><em>90-second walkthrough — agent investigates the seeded LockBit 3.0 case end-to-end. The rendered <code>.mp4</code> + <code>hero.gif</code> land with the v8.1 packaging release; the brief is in <a href="docs/demo/SCREENCAST_SHOTLIST.md">docs/demo/SCREENCAST_SHOTLIST.md</a>.</em></sub>
+<sub><em>90-second walkthrough — agent investigates the seeded LockBit 3.0 case end-to-end. <strong>This is a placeholder diagram, not a recording.</strong> The shot list is in <a href="docs/demo/SCREENCAST_SHOTLIST.md">docs/demo/SCREENCAST_SHOTLIST.md</a> and the recorder is <a href=".github/workflows/screencast.yml">screencast.yml</a>; the cut ships in v8.2, because recording needs a running stack to point a browser at and the hosted OSS demo is down pending a billing action on the account. Run it yourself with <code>pnpm aisoc:demo</code> and you are looking at the same thing.</em></sub>
 
 </div>
 
