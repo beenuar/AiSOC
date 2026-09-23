@@ -530,6 +530,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberately so**: what remains is a funded provider key for the live-agent
   eval, not code. Marking it done would be the exact failure the program exists
   to prevent.
+- The wave-2 work adds six more rows, closing at **108 rows: 99 GATED, 9
+  PARTIAL, 0 NO GATE** — one per capability whose gate this release built:
+  authorized approvals, the signed email link, the LLM input contract across
+  both services, rule-id agreement between engine and catalogue, which identity
+  providers can resolve permissions live, and config snapshots reaching the
+  graph. Four carry a named caveat rather than a clean claim, because the
+  limitation is real: approvals are still an in-process dict, the contract is
+  a leak control rather than an injection sanitizer, four of five posture
+  snapshots cannot be collected, and `is_current` is set on write and never
+  cleared.
+- **The wave-2 backlog in [#362](https://github.com/beenuar/AiSOC/issues/362)
+  was wrong in both directions.** Two items (business-context rules,
+  effective-permissions resolvers) were already built, and four had the
+  capability present with the path that feeds it broken — which is the same
+  shape v8.0 found a dozen times. Auditing each item against the tree before
+  writing code is now the first step of any wave, not an optional one.
 
 - **A rule id named one rule in the engine and a different one in the
   catalogue.** #697 made ids position-independent by pinning

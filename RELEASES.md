@@ -2,7 +2,7 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v8.0.0`, released 2026-09-22 — the **Close the loop** release. It connected capabilities the codebase already contained but never called: response actions are verified against the vendor rather than assumed from a 200, autonomy is governed by each tenant's own L0–L4 policy instead of one deployment-wide environment variable, repeat-alert suppression can fire at all, and analysts can hunt the events AiSOC itself ingested. Every product claim is backed by a failing CI test (claim-to-gate matrix: 93 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v8.0.0`, released 2026-09-22 — the **Close the loop** release. It connected capabilities the codebase already contained but never called: response actions are verified against the vendor rather than assumed from a 200, autonomy is governed by each tenant's own L0–L4 policy instead of one deployment-wide environment variable, repeat-alert suppression can fire at all, and analysts can hunt the events AiSOC itself ingested. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
@@ -37,7 +37,7 @@ The full inventory (every file, env-var, and test count) lives under `[8.0.0]` i
 - **Phase D — breadth.** Eight new connectors — IBM QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon (WEF), Zeek/Suricata NDR, and a generic syslog/CEF listener (D1); an AI/LLM-usage audit connector + eight `llm-*` detections + hot/cold ClickHouse lake tiering (D2); and a live-vendor mock-server smoke suite that exercises each connector's real HTTP client (D3).
 - **Phase E — prove it.** The public benchmark scoreboard is now CI-gated against a deterministic live-agent MITRE-accuracy run, closing the last `NO GATE` and ratcheting `MAX_NO_GATE` to 0 (E1).
 
-The full inventory (every file, env-var, and test count) lives under `[7.6.0]` in [`CHANGELOG.md`](CHANGELOG.md). Note that the claim-to-gate figure quoted in the v7.6.0 announcement (33 GATED / 7 PARTIAL) was the count at that time; the matrix has grown to 102 rows since.
+The full inventory (every file, env-var, and test count) lives under `[7.6.0]` in [`CHANGELOG.md`](CHANGELOG.md). Note that the claim-to-gate figure quoted in the v7.6.0 announcement (33 GATED / 7 PARTIAL) was the count at that time; the matrix has grown to 108 rows since.
 
 ---
 
