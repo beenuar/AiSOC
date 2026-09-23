@@ -181,8 +181,14 @@ def test_reordering_specs_does_not_renumber_the_engine(monkeypatch: pytest.Monke
     specs and asserts every id stays put. A positional exporter shifts all of
     them; a lock-based one shifts none.
     """
-    import detection_specs_index
-    import export_detection_ruleset
+    # One import style per module (py/import-and-import-from): this file
+    # also does `from export_detection_ruleset import ...`, and mixing the
+    # two forms is what lets a test monkey-patch one copy of a module-level
+    # constant while the code reads the other.
+    from importlib import import_module
+
+    detection_specs_index = import_module("detection_specs_index")
+    export_detection_ruleset = import_module("export_detection_ruleset")
 
     original = list(detection_specs_index.all_specs())
     network = [pair for pair in original if pair[0] == "network"]
@@ -201,8 +207,14 @@ def test_reordering_specs_does_not_renumber_the_engine(monkeypatch: pytest.Monke
 
 def _build_from(specs: list[tuple[str, dict]]) -> list[dict]:
     """Export the ruleset from an explicit spec order."""
-    import detection_specs_index
-    import export_detection_ruleset
+    # One import style per module (py/import-and-import-from): this file
+    # also does `from export_detection_ruleset import ...`, and mixing the
+    # two forms is what lets a test monkey-patch one copy of a module-level
+    # constant while the code reads the other.
+    from importlib import import_module
+
+    detection_specs_index = import_module("detection_specs_index")
+    export_detection_ruleset = import_module("export_detection_ruleset")
 
     saved = detection_specs_index.all_specs
     detection_specs_index.all_specs = lambda: iter(specs)

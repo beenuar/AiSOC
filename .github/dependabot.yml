@@ -56,6 +56,37 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # ── pip (api) ────────────────────────────────────────────────
+  # ── apps/mobile ──────────────────────────────────────────────
+  #
+  # Its own install root, deliberately outside the pnpm workspace: React
+  # Native needs Metro rather than Turbopack and brings an Expo dependency
+  # tree that would add several hundred megabytes to every other TypeScript
+  # CI job. That also means the `/` entry above does not cover it — and
+  # Dependabot *alerts* scan every manifest regardless of this file, so
+  # alerts appeared here that no update job could ever act on. A security
+  # update against an uncovered directory is what failed the Dependabot run.
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "javascript", "mobile"]
+
+  # ── services/realtime ────────────────────────────────────────
+  #
+  # npm rather than pnpm, with its own package-lock.json, so the root entry
+  # does not reach it either. Three `qs` advisories sat here unactionable.
+  - package-ecosystem: npm
+    directory: /services/realtime
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "javascript"]
+
   - package-ecosystem: pip
     directory: /services/api
     schedule:

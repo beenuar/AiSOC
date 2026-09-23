@@ -2,7 +2,7 @@
   "name": "aisoc-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "AiSOC — Open-source AI-powered Security Operations Center (monorepo root). The publishable CLI package `aisoc` lives at packages/aisoc-lite.",
+  "description": "AiSOC \u2014 Open-source AI-powered Security Operations Center (monorepo root). The publishable CLI package `aisoc` lives at packages/aisoc-lite.",
   "license": "MIT",
   "author": "AiSOC contributors",
   "workspaces": [
@@ -88,7 +88,10 @@
       "serialize-javascript": ">=7.0.3 <8",
       "sharp": ">=0.35.4",
       "svgo@3": ">=3.3.5 <4",
-      "websocket-driver": ">=0.7.5"
+      "websocket-driver": ">=0.7.5",
+      "tsup>esbuild": "^0.28.1",
+      "vite>esbuild": "^0.28.1",
+      "bundle-require>esbuild": "^0.28.1"
     }
   }
 }

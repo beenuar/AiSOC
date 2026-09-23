@@ -63,8 +63,18 @@ _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from detection_specs_index import all_specs  # type: ignore[import-not-found]  # noqa: E402
-from generate_detections import enrich, matches, requested_derived_fields  # type: ignore[import-not-found]  # noqa: E402
+# Imported as modules, not as bound attributes (py/import-of-mutable-attribute):
+# a from-import snapshots the object, so a test that monkey-patches
+# `generate_detections.matches` would be patching a different binding than
+# the one this file calls — the exact split that lets a gate certify a
+# function nobody ran.
+import detection_specs_index  # type: ignore[import-not-found]  # noqa: E402
+import generate_detections  # type: ignore[import-not-found]  # noqa: E402
+
+all_specs = detection_specs_index.all_specs
+enrich = generate_detections.enrich
+matches = generate_detections.matches
+requested_derived_fields = generate_detections.requested_derived_fields
 
 # CI gate (lower-is-better). Tighten only with a corresponding allowlist
 # entry or rule-narrowing PR. The 5% ceiling is a deliberate compromise:

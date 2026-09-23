@@ -1,15 +1,26 @@
 name: Deploy Web to Fly
 
+# ── Why this no longer runs on push ──────────────────────────────────────────
+#
+# The Fly account has overdue invoices and both demo apps were reclaimed for
+# non-payment. Fly says so itself, verbatim, on every attempt:
+#
+#   Error: Your account has overdue invoices. Please update your payment
+#   information: https://fly.io/dashboard/<account>/billing
+#
+# That is a billing action, not an engineering one, so a push trigger here can
+# only ever fail — and a job that cannot pass teaches everyone to ignore a red
+# `main`, which is how a real breakage gets through.
+#
+# The fix is deliberately NOT a silent `exit 0`. That is exactly what hid this
+# for weeks of green runs before: the workflow swallowed "app not found" and
+# reported success while nothing was deployed. It still fails loudly — it just
+# no longer fails on every push for a reason no contributor can act on.
+#
+# Settle the invoice, then run this from the Actions tab. Nothing else needs
+# to change. The OSS demo path meanwhile is Codespaces, not Fly.
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/web/**"
-      - "packages/types/**"
-      - "packages/ui/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
 
 permissions:

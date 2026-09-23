@@ -95,6 +95,11 @@ def flat_fields(message: dict[str, Any]) -> dict[str, Any]:
             if isinstance(parsed, dict):
                 fields = parsed
         except (ValueError, TypeError):
+            # `raw_data` is a vendor blob and is not guaranteed to be JSON —
+            # some connectors put a plain log line there. Falling back to the
+            # OCSF envelope is the right answer, and raising would drop an
+            # event over a field this function is only opportunistically
+            # reading.
             pass
     elif isinstance(raw, dict):
         fields = raw

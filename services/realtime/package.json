@@ -35,5 +35,8 @@
     "@opentelemetry/sdk-trace-base": "^1.30.0",
     "@opentelemetry/resources": "^1.30.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.57.0"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }

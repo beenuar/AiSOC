@@ -33,8 +33,13 @@ logger = structlog.get_logger()
 #: Process-local fallback, and the store the unit suite exercises.
 _MEMORY: dict[str, dict[str, Any]] = {}
 
-#: Set once a DSN has been seen to work, so a database that disappears mid-run
-#: surfaces as an error rather than silently reverting to per-replica memory.
+#: Set once a write has actually reached Postgres.
+#:
+#: This existed as a flag nothing read, which made the comment above it a
+#: description of behaviour that did not happen. The property is worth having:
+#: a store that worked and then stopped must not quietly revert to per-replica
+#: memory, because that is the same "approve returns Action not found" failure
+#: arriving by a different route — and it would arrive without a log line.
 _DB_CONFIRMED = False
 
 
@@ -68,7 +73,7 @@ async def save(record: dict[str, Any]) -> None:
     try:
         conn = await _connect(dsn)
     except Exception as exc:  # noqa: BLE001 — an unreachable store must not drop the action
-        logger.warning("action_store.connect_failed", action_id=action_id, error=str(exc))
+        _report_degraded("connect_failed", action_id, exc)
         return
     try:
         await conn.execute(
@@ -88,9 +93,32 @@ async def save(record: dict[str, Any]) -> None:
         global _DB_CONFIRMED
         _DB_CONFIRMED = True
     except Exception as exc:  # noqa: BLE001 — see above
-        logger.warning("action_store.write_failed", action_id=action_id, error=str(exc))
+        _report_degraded("write_failed", action_id, exc)
     finally:
         await conn.close()
+
+
+def _report_degraded(event: str, action_id: str, exc: Exception) -> None:
+    """Log a store failure at the severity its consequence deserves.
+
+    Before the first successful write this is a warning: a deployment with no
+    database is a supported configuration and says so at boot. *After* one,
+    the same failure means a store that was working has stopped, and every
+    pending approval from here on is invisible to any other replica — so it
+    is an error, and it says which of the two it is.
+    """
+    logger.log(
+        "error" if _DB_CONFIRMED else "warning",
+        f"action_store.{event}",
+        action_id=action_id,
+        error=str(exc),
+        previously_durable=_DB_CONFIRMED,
+        consequence=(
+            "the durable store was working and has stopped; pending actions are now per-replica"
+            if _DB_CONFIRMED
+            else "no durable store configured or reachable; pending actions are per-replica"
+        ),
+    )
 
 
 async def get(action_id: str) -> dict[str, Any] | None:

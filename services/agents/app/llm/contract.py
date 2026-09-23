@@ -81,6 +81,19 @@ from app.llm.contract_rules import (  # noqa: E402,F401 — re-exported
     validate_messages,
 )
 
+# Named here because they are re-exports, not incidental imports. Without
+# this a reader — and CodeQL — sees an import nothing in this file uses.
+__all__ = [
+    "AGENTS_LLM_CONTRACT_ENFORCED_ENV",
+    "CONTRACT_DICT_KEY_BLOCKLIST",
+    "LLMContractViolation",
+    "LLMInputContract",
+    "classify_message",
+    "is_contract_enforced",
+    "set_contract_enforcement",
+    "validate_messages",
+]
+
 # ---------------------------------------------------------------------------
 # Safe LLM invocation wrapper
 # ---------------------------------------------------------------------------
