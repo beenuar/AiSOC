@@ -14,6 +14,28 @@ The objectives are targets, not measured SLIs — they define the **error
 budget** (`1 − availability_target` over a rolling 30 days) that the golden
 signals below are measured against.
 
+### Alerts are generated from the objectives
+
+`infra/docker/alerts/slo.rules.yml` is produced by
+`scripts/generate_slo_alerts.py` from `slos.yaml`, and a CI gate fails when
+the two disagree. Before this, the SLO file declared targets nothing
+alerted on while the alert rules used thresholds — a 5% error rate, a
+2-second p95 — that corresponded to no objective in the file. Two numbers
+meant to agree, maintained separately, will not agree for long.
+
+Alerts are **burn-rate**, not instantaneous. A 99.9% target allows roughly
+43 minutes of error a month; alerting the moment the rate exceeds 0.1%
+pages on every transient blip. Fast burn (2% of the budget in an hour) is
+a page. Slow burn (10% in six hours) is a ticket — not an outage, but the
+shape that exhausts a month's budget without any single incident to point
+at.
+
+**Coverage is five of seventeen services**, because only five expose
+`/metrics`. Generating rules for the other twelve would produce alerts
+that can never fire, and an alert that can never fire reads as coverage
+while providing none. The generator names the uncovered services on every
+run rather than quietly skipping them.
+
 ## The four golden signals
 
 For each service we track the standard golden signals:
