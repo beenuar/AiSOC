@@ -167,22 +167,31 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
                 status_code=409,
             )
         if status_code == 403:
-            # Only ``upstream_detail`` reaches the page. The exception message
-            # can carry a transport error with internal hostnames, and this
-            # route is unauthenticated by necessity — the reader is holding an
-            # email, not a session.
-            detail = exc.upstream_detail
+            # The upstream detail is logged and NOT rendered.
+            #
+            # It was interpolated into the page, which is how a transport
+            # error carrying an internal hostname — or a stack frame — ends
+            # up in front of whoever holds the email. This route is
+            # unauthenticated by necessity, so it is the worst surface in the
+            # product for that, and truncating or escaping the string is not
+            # the same as not sending it.
+            #
+            # Nothing is lost for the reader: an upstream authorization
+            # detail is not something an email recipient can act on. The two
+            # things they can act on are here, and the operator gets the
+            # detail in the log with the action id beside it.
             logger.warning(
                 "email_approval.not_authorized",
                 action_id=parsed.action_id,
                 approver=parsed.approver,
-                detail=detail,
+                detail=exc.upstream_detail,
             )
             return _page(
                 "You are not authorised to decide this action",
-                f"{detail} An email approver must be mapped under 'email' in "
+                "An email approver must be mapped under 'email' in "
                 "AISOC_CHATOPS_APPROVERS, and may not approve an action they "
-                "requested themselves.",
+                "requested themselves. Ask an administrator to check the "
+                "API service log for this action id.",
                 status_code=403,
             )
         if status_code == 404:

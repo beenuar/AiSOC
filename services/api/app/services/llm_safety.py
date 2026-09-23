@@ -45,24 +45,30 @@ from typing import Any
 import httpx
 import structlog
 
+# `X as X` is the explicit re-export form (PEP 484). These names are this
+# module's public surface — callers do
+# `from app.services.llm_safety import LLMContractViolation` — and without the
+# `as` both ruff and CodeQL read them as imports nothing here uses. An
+# `__all__` would say the same thing to a human and nothing to either tool,
+# which is how the previous arrangement collected an alert for declaring a
+# public surface no importer consults.
 from app._vendor.llm_contract_rules import (
-    LLMContractViolation,
-    LLMInputContract,
-    classify_message,
-    is_contract_enforced,
-    validate_messages,
+    LLMContractViolation as LLMContractViolation,
+)
+from app._vendor.llm_contract_rules import (
+    LLMInputContract as LLMInputContract,
+)
+from app._vendor.llm_contract_rules import (
+    classify_message as classify_message,
+)
+from app._vendor.llm_contract_rules import (
+    is_contract_enforced as is_contract_enforced,
+)
+from app._vendor.llm_contract_rules import (
+    validate_messages as validate_messages,
 )
 
 logger = structlog.get_logger(__name__)
-
-__all__ = [
-    "LLMContractViolation",
-    "LLMInputContract",
-    "classify_message",
-    "is_contract_enforced",
-    "safe_chat_completions_request",
-    "validate_messages",
-]
 
 DEFAULT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 
