@@ -15,7 +15,7 @@ detection:
   condition: |
     syscall == "connect"
     AND path == "/var/run/docker.sock"
-    AND actor_uid_neq == 0
+    AND actor_uid != 0
 false_positives:
 - docker group user (deprecated, must be ticketed)
 playbook: tpl-privilege-escalation

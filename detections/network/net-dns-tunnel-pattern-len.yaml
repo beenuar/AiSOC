@@ -1,4 +1,4 @@
-id: det-network-037
+id: det-network-038
 name: 'DNS Tunnel Indicator: Long Hex Subdomain Sequence'
 description: 'AiSOC v1 curated detection. Triggers on the network signal described by ''DNS Tunnel Indicator:
   Long Hex Subdomain Sequence''. Watch the 1 documented false-positive case before tuning.'

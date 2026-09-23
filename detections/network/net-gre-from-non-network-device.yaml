@@ -1,4 +1,4 @@
-id: det-network-058
+id: det-network-059
 name: GRE Tunnel Initiated By Non-Network Host
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'GRE Tunnel Initiated
   By Non-Network Host'. Watch the 1 documented false-positive case before tuning.

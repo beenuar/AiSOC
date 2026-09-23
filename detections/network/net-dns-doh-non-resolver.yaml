@@ -1,4 +1,4 @@
-id: det-network-038
+id: det-network-039
 name: DNS-Over-HTTPS Egress To Non-Sanctioned Resolver
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'DNS-Over-HTTPS Egress
   To Non-Sanctioned Resolver'. Watch the 1 documented false-positive case before tuning.

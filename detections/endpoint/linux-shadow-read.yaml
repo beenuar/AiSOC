@@ -15,7 +15,7 @@ detection:
   condition: |
     syscall == "openat"
     AND path == "/etc/shadow"
-    AND actor_uid_neq == 0
+    AND actor_uid != 0
 false_positives:
 - Approved security scanner running with sudo
 playbook: tpl-credential-access

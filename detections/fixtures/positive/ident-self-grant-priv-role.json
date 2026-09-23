@@ -1,5 +1,6 @@
 {
-  "actor_eq_target": true,
+  "actor": "principal-a",
   "event_type": "role_grant",
-  "role_priv": true
+  "role_priv": true,
+  "target": "principal-a"
 }

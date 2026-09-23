@@ -1,4 +1,4 @@
-id: det-network-044
+id: det-network-045
 name: HTTP User-Agent Matches PowerShell Default
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'HTTP User-Agent
   Matches PowerShell Default'. Watch the 1 documented false-positive case before tuning.

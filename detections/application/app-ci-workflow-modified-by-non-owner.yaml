@@ -15,7 +15,7 @@ detection:
   condition: |
     event_type == "push"
     AND path CONTAINS ".github/workflows/"
-    AND approver_role_neq == "codeowner"
+    AND approver_role != "codeowner"
 false_positives:
 - Bootstrap of new repository
 playbook: tpl-supply-chain

@@ -1,4 +1,4 @@
-id: det-network-040
+id: det-network-041
 name: DNS Query For .onion Address
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Query For .onion
   Address'. Watch the 1 documented false-positive case before tuning.

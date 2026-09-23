@@ -1,4 +1,4 @@
-id: det-network-075
+id: det-network-076
 name: RADIUS Authentication Used PAP (Cleartext Password)
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'RADIUS Authentication
   Used PAP (Cleartext Password)'. Watch the 1 documented false-positive case before tuning.

@@ -1,4 +1,4 @@
-id: det-network-041
+id: det-network-042
 name: DNS Fast-Flux Pattern (Many A Records, Short TTL)
 description: AiSOC v1 curated detection. Triggers on the network signal described by 'DNS Fast-Flux Pattern
   (Many A Records, Short TTL)'. Watch the 1 documented false-positive case before tuning.
