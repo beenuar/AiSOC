@@ -1,5 +1,5 @@
 {
   "bytes_out_per_minute": 1073741924.0,
-  "dst_cloud": "gcp",
+  "dst_cloud": "azure",
   "src_cloud": "aws"
 }
