@@ -1,5 +1,6 @@
 {
-  "actor_uid_neq_owner_uid": true,
+  "actor_uid": 1000,
+  "owner_uid": 1000,
   "path": "head-/.zshrc",
-  "syscall": "not-openat"
+  "syscall": "openat"
 }
