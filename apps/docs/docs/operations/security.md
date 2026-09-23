@@ -112,7 +112,7 @@ The model:
 3. RLS policies on every tenant-scoped table (`cases`, `alerts`, `connectors`, `detection_rules`, `api_keys`, `playbooks`, `audit_log`, …) enforce `tenant_id = current_tenant_id()`.
 4. The `FORCE ROW LEVEL SECURITY` flag ensures even the table owner is subject to the policy — there is no superuser escape hatch via the application's DB role.
 
-If `app.current_tenant_id` is not set (e.g. an internal job that needs to operate cross-tenant), the policy permits the query. This is intentional for system-level workers but means **the application-level ORM session must always set the tenant** before serving user requests. The middleware that does this is wired in [`services/api/app/api/deps.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/deps.py).
+If `app.current_tenant_id` is not set (e.g. an internal job that needs to operate cross-tenant), the policy permits the query. This is intentional for system-level workers but means **the application-level ORM session must always set the tenant** before serving user requests. The middleware that does this is wired in [`services/api/app/api/v1/deps.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/deps.py).
 
 The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 

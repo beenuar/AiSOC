@@ -21,6 +21,7 @@ on:
       - '**/*.mdx'
       - '.github/workflows/link-check.yml'
       - '.lycheeignore'
+      - 'scripts/check_repo_self_links.py'
   push:
     branches: [main]
     paths:
@@ -28,6 +29,7 @@ on:
       - '**/*.mdx'
       - '.github/workflows/link-check.yml'
       - '.lycheeignore'
+      - 'scripts/check_repo_self_links.py'
   # External links rot without anyone touching this repo, which is how the
   # docs URL went stale in the first place.
   schedule:
@@ -84,3 +86,23 @@ jobs:
             --accept 200,206,301,302,307,308,403,429
             'docs/**/*.md' 'apps/docs/docs/**/*.md' 'apps/docs/docs/**/*.mdx'
           fail: false
+
+  # Hard gate, and deliberately offline. The observe tier above cannot catch
+  # self-links into our own tree: it accepts 403/429, so GitHub rate-limiting
+  # a request is indistinguishable from the page existing. A QA pass found
+  # seven links to three orgs that do not exist plus one to a path that moved,
+  # all 404s, none reported. Resolving against the checkout instead of the
+  # network makes this deterministic and unrateable, so it can fail closed.
+  self-links:
+    name: Self-links · repo paths must exist
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Every github.com/beenuar/AiSOC link resolves to a real path
+        run: python3 scripts/check_repo_self_links.py
