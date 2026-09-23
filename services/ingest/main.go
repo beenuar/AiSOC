@@ -22,6 +22,7 @@ import (
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/beenuar/aisoc/services/ingest/internal/server"
+	"github.com/beenuar/aisoc/services/ingest/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -41,6 +42,24 @@ func main() {
 	}
 
 	log.Info().Str("service", "ingest").Msg("Starting AiSOC Ingest Service")
+
+	// Tracing. `ingest` and `realtime` were the two uninstrumented ends of
+	// the Kafka spine, so a trace started at the API stopped at the
+	// pipeline boundary — exactly where the interesting latency is. No-ops
+	// unless OTEL_EXPORTER_OTLP_ENDPOINT is set, because emitting spans
+	// into a connection error is worse than emitting none.
+	tracingCtx := context.Background()
+	shutdownTracing, err := telemetry.Setup(tracingCtx)
+	if err != nil {
+		// Degraded, not fatal: ingest is the pipeline's front door and
+		// must not refuse traffic because a collector is unreachable.
+		log.Warn().Err(err).Msg("tracing disabled — exporter could not start")
+	}
+	defer func() {
+		if err := shutdownTracing(tracingCtx); err != nil {
+			log.Warn().Err(err).Msg("tracing shutdown incomplete; recent spans may be lost")
+		}
+	}()
 
 	cfg, err := config.Load()
 	if err != nil {

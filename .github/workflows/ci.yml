@@ -259,6 +259,16 @@ jobs:
       # genuinely dead service looks like an uninstrumented one. Also
       # checks datasource uids resolve: Grafana does not warn about a
       # dangling reference, the link just silently does nothing.
+      # The SLO file declared availability and latency targets for all 17
+      # services and no alert referenced any of them; the alerts used
+      # thresholds no objective justified. Generating one from the other
+      # makes the threshold traceable — an alert fires because an
+      # objective is being missed, and changing the objective changes the
+      # alert.
+      - name: SLO alerts match the declared objectives
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/generate_slo_alerts.py --check
       - name: Grafana dashboards query metrics that exist
         run: python scripts/check_grafana_dashboards.py
       - name: Support bundle must not leak

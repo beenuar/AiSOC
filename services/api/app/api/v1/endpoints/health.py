@@ -78,7 +78,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.api.v1.endpoints.metrics import PipelineHealth, PipelineStage
@@ -533,3 +533,88 @@ async def get_fleet_health(
     """
     rows = (await db.execute(select(Connector).where(Connector.tenant_id == user.tenant_id))).scalars().all()
     return assess_fleet(list(rows)).to_dict()
+
+
+@router.get("/dead-letters")
+async def get_dead_letters(
+    user: AuthUser,
+    db: DBSession,
+    limit: int = 50,
+    hours: int = 24,
+) -> dict[str, Any]:
+    """Events the pipeline refused, and why.
+
+    Three DLQ implementations existed and none could answer this: one
+    wrote a log line, one wrote to a Kafka topic with no consumer, one
+    forgot on restart. Events were being dropped correctly and invisibly —
+    and an invisible drop is indistinguishable from an event that never
+    arrived, which is the worse of the two and the one nobody investigates.
+
+    Returns the breakdown by reason as well as the rows. A list of fifty
+    dropped events is data; "forty-eight of them failed schema validation
+    on the same topic" is a finding.
+    """
+    since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 720)))
+    capped = max(1, min(limit, 500))
+
+    rows = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT id, topic, reason, schema_version, payload_excerpt,
+                       source_event_id, occurred_at, acknowledged_at
+                FROM aisoc_dead_letters
+                WHERE tenant_id = :tid AND occurred_at >= :since
+                ORDER BY occurred_at DESC
+                LIMIT :lim
+                """
+                ),
+                {"tid": user.tenant_id, "since": since, "lim": capped},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    by_reason = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT reason, count(*) AS n
+                FROM aisoc_dead_letters
+                WHERE tenant_id = :tid AND occurred_at >= :since
+                GROUP BY reason
+                ORDER BY n DESC
+                """
+                ),
+                {"tid": user.tenant_id, "since": since},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    total = sum(int(r["n"]) for r in by_reason)
+    return {
+        "window_hours": hours,
+        "total": total,
+        # Present even when zero, and labelled: "no dead letters" is a
+        # real answer and should not look like a broken panel.
+        "by_reason": [{"reason": r["reason"], "count": int(r["n"])} for r in by_reason],
+        "truncated": len(rows) >= capped,
+        "dead_letters": [
+            {
+                "id": str(r["id"]),
+                "topic": r["topic"],
+                "reason": r["reason"],
+                "schema_version": r["schema_version"],
+                "payload_excerpt": r["payload_excerpt"],
+                "source_event_id": r["source_event_id"],
+                "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
+                "acknowledged": r["acknowledged_at"] is not None,
+            }
+            for r in rows
+        ],
+    }
