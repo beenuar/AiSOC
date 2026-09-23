@@ -115,6 +115,18 @@ jobs:
               echo "── docker compose ──";  docker compose version
               echo "── ripgrep ──";         rg --version | head -1
               echo "── jq ──";              jq --version
+              # Issue #716: the probe above asserted the docker *CLI* exists,
+              # which it does without any daemon — so a container that could
+              # never run `pnpm aisoc:demo` passed this check for months.
+              # A daemon needs runtime options the image cannot grant itself,
+              # so it is verified in Phase 3 against a container started the
+              # way devcontainer.json starts one, not here.
+              echo "── docker socket access ──"
+              getent group docker
+              id node | grep -q "(docker)" || {
+                echo "node is not in the docker group — it cannot reach the socket" >&2
+                exit 1
+              }
             '
           elapsed=$(( $(date +%s) - start ))
           echo "::notice title=devcontainer-toolchain-seconds::${elapsed}"
@@ -122,3 +134,38 @@ jobs:
             echo "::error::Devcontainer toolchain check took ${elapsed}s, over budget of ${PHASE_TOOLCHAIN_BUDGET}s." >&2
             exit 1
           fi
+
+      - name: Phase 3 — a Docker daemon actually starts (issue #716)
+        # The gap that let the Codespaces quickstart stay broken: Phase 2
+        # proves the CLI is installed, which says nothing about whether
+        # `pnpm aisoc:demo` can run. The binaries were baked in without the
+        # runtime options the docker-in-docker feature also supplies, so the
+        # container had CapEff: 0 and dockerd could never start.
+        #
+        # This runs the real script under the same flags devcontainer.json
+        # passes. Drop either `--privileged` or the /var/lib/docker volume and
+        # it fails, which is the point — a passing Phase 2 with a failing
+        # Phase 3 is exactly the state #716 described.
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          docker run --rm --privileged --init \
+            -v aisoc-coldstart-dind:/var/lib/docker \
+            -v "$PWD/.devcontainer:/probe/.devcontainer:ro" \
+            -w /probe \
+            ghcr.io/beenuar/aisoc-devcontainer:latest \
+            bash -lc '
+              set -euo pipefail
+              bash .devcontainer/start-docker.sh
+              echo "── daemon reachable as the non-root user ──"
+              docker info --format "server: {{.ServerVersion}} | driver: {{.Driver}}"
+              echo "── compose can talk to it ──"
+              docker compose version
+              echo "── and it can actually run something ──"
+              docker run --rm hello-world >/dev/null && echo "container ran"
+            '
+          echo "::notice title=devcontainer-dockerd-seconds::$(( $(date +%s) - start ))"
+
+      - name: Clean up the probe volume
+        if: always()
+        run: docker volume rm -f aisoc-coldstart-dind || true

@@ -114,6 +114,20 @@ RUN corepack enable \
 RUN su node -c "pnpm config set store-dir /home/node/.local/share/pnpm/store \
              && pnpm store status >/dev/null 2>&1 || true"
 
+# ─── Docker socket access for the non-root user (issue #716) ────────────────
+#
+# `apt install docker.io` creates the `docker` group but puts nobody in it, so
+# `node` could not reach /var/run/docker.sock and every `docker` command
+# failed with a permission error that reads like a missing daemon. The
+# docker-in-docker feature does this too; baking the binaries without it left
+# the user locked out of the socket its own daemon creates.
+#
+# `|| true` on groupadd: the base image may already define the group, and a
+# duplicate is not a build failure.
+RUN groupadd --system docker 2>/dev/null || true; \
+    usermod -aG docker node; \
+    getent group docker
+
 USER node
 WORKDIR /workspaces/AiSOC
 

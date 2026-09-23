@@ -31,6 +31,44 @@ The source lives at
 the publisher at
 [`.github/workflows/devcontainer-build.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/devcontainer-build.yml).
 
+## Why the Docker daemon needs runtime options
+
+Baking the toolchain into the image instead of resolving it through
+`features:` is what buys the cold start, but it does not work for Docker, and
+that distinction broke the quickstart for several releases
+([#716](https://github.com/beenuar/AiSOC/issues/716)).
+
+`ghcr.io/devcontainers/features/docker-in-docker` does two things:
+
+1. **Installs the Docker binaries.** Reproducible in a Dockerfile — that is
+   the `docker.io` package plus the pinned Compose v2 plugin above.
+2. **Supplies container runtime options** (`--privileged`, `--init`, a volume
+   at `/var/lib/docker`) and an entrypoint that launches `dockerd`.
+
+Only the first has a Dockerfile equivalent. **Capabilities are granted at
+container creation and cannot be self-granted from an image**, so an image
+that bakes the binaries and stops there produces a container with `CapEff: 0`
+and `CAP_SYS_ADMIN` outside the bounding set. `sudo` cannot help, because the
+capability is not in the set to grant. `dockerd` dies on its first `iptables`
+call:
+
+```text
+failed to start daemon: Error initializing network controller: ...
+iptables -t nat -N DOCKER: Permission denied (you must be root)
+```
+
+The symptom is confusing because the CLI works perfectly — `docker --version`
+answers, `docker ps` does not — which sends people looking for a missing
+install rather than a missing capability.
+
+`devcontainer.json` therefore passes the runtime half explicitly
+(`runArgs`, a named volume for `/var/lib/docker` because overlay2 cannot run
+on the container's own overlay filesystem), and
+[`.devcontainer/start-docker.sh`](https://github.com/beenuar/AiSOC/blob/main/.devcontainer/start-docker.sh)
+is the missing entrypoint. It runs from `postStartCommand` rather than
+`onCreateCommand` so a Codespace stop and resume comes back with a working
+daemon, and it is idempotent because that hook fires on every start.
+
 ## Cold-start budget
 
 The KPI we hold ourselves to is _time-to-first-keystroke in a Codespace_,
@@ -43,6 +81,14 @@ acceptance gate.
 |---|---|---|
 | `docker pull` of the devcontainer image | 60 s | `PHASE_PULL_BUDGET` |
 | Toolchain ready (every `--version` on PATH) | 30 s | `PHASE_TOOLCHAIN_BUDGET` |
+| A Docker daemon actually starts | reported, not budgeted | Phase 3, `#716` |
+
+Phase 3 exists because Phase 2 asserted the docker *CLI* was installed, which
+it is with no daemon anywhere — so a container that could never run
+`pnpm aisoc:demo` passed the gate for months. Phase 3 runs the real
+`start-docker.sh` under the same flags `devcontainer.json` passes, then pulls
+and runs a container as the non-root user. Remove `--privileged` or the
+`/var/lib/docker` volume and it fails, which is the point.
 
 Both budgets are gated by
 [`.github/workflows/devcontainer-coldstart.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/workflows/devcontainer-coldstart.yml),
