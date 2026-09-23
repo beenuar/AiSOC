@@ -693,7 +693,7 @@ jobs:
             -e packages/plugin-sdk-py \
             -e packages/sdk-py \
             -e packages/aisoc-cli \
-            pytest pytest-asyncio pytest-httpx
+            pytest pytest-asyncio pytest-httpx build
       - name: Run aisoc-plugin-sdk tests
         run: pytest packages/plugin-sdk-py/tests/ -v --tb=short
       - name: Run aisoc-sdk tests

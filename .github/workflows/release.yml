@@ -293,7 +293,13 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build ${{ matrix.pkg }}
-        run: pnpm --filter ${{ matrix.pkg }} build
+        # The `...` suffix means "and its workspace dependencies", built
+        # topologically. Without it, `aisoc` and `@aisoc/mcp` fail with
+        # `Could not resolve "@aisoc/report-card"`: that dependency's `main`
+        # points at `./dist/index.js`, a build artifact, and a plain
+        # `--filter <pkg>` never builds it. The failure only shows up on a tag,
+        # because nothing else builds these packages in isolation.
+        run: pnpm --filter '${{ matrix.pkg }}...' build
 
       - name: Pack tarball
         id: pack

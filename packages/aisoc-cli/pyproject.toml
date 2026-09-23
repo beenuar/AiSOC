@@ -49,10 +49,19 @@ Documentation = "https://github.com/beenuar/AiSOC#readme"
 Repository = "https://github.com/beenuar/AiSOC"
 
 [tool.hatch.build.targets.wheel]
+# `packages` already carries everything under src/aisoc_cli, templates
+# included, so they reach the wheel at aisoc_cli/templates/... where
+# `importlib.resources` expects them.
+#
+# There used to be a `force-include` mapping that same directory to that same
+# destination. Hatchling then tried to add each template twice and refused:
+#   ValueError: A second file is being added to the wheel archive at the same
+#   path: aisoc_cli/templates/connector/README.md.tmpl
+# Nothing built this wheel except a tag, so the failure was invisible until
+# the release ran — and it would have blocked the first real publish.
+# `test_templates_reach_the_wheel` in tests/ now asserts the templates are
+# present, so removing the redundant mapping cannot quietly drop them.
 packages = ["src/aisoc_cli"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/aisoc_cli/templates" = "aisoc_cli/templates"
 
 [tool.hatch.build.targets.sdist]
 include = [

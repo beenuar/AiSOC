@@ -184,6 +184,19 @@ Claim-to-gate matrix: **108 rows — 99 GATED, 9 PARTIAL, 0 NO GATE**.
 
 ### Fixed
 
+- **Three of the eight publishable packages could not be built.** The release
+  pipeline builds and packs every package on each tag precisely so it cannot
+  rot while the upload is credential-gated — and on this tag it earned that
+  design back. `aisoc` and `@aisoc/mcp` failed with
+  `Could not resolve "@aisoc/report-card"`: that workspace dependency's `main`
+  points at a build artifact and `pnpm --filter <pkg> build` never builds
+  dependencies, so the `...` suffix was missing. `aisoc-cli` could not produce
+  a wheel at all — `pyproject.toml` declared `packages = ["src/aisoc_cli"]`
+  *and* a `force-include` mapping the same templates directory to the same
+  wheel path, so hatchling refused on the duplicate. Both would have blocked
+  the first real publish, and neither was visible anywhere but a tag.
+  `test_packaging.py` now builds the wheel and looks inside it, because a test
+  that read the config would have declared both fine.
 - **The sandbox determinism test compared a timer.** Its `VOLATILE` list named
   four fields the CLI does not emit — the real one is `elapsed_ms` — so the
   comparison included a wall-clock value and failed whenever two runs
