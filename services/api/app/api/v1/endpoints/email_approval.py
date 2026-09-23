@@ -49,14 +49,37 @@ def _signing_secret() -> str:
     return os.environ.get("AISOC_EMAIL_APPROVAL_SECRET", "").strip()
 
 
+def _render_safe(value: str, *, limit: int) -> str:
+    """One operator-readable line, HTML-escaped and length-bounded.
+
+    Newlines are collapsed rather than escaped: a multi-line value reaching
+    this page is a traceback or a wrapped transport error, and the first line
+    is the only part a recipient can act on. Truncating is what stops the
+    rest of it being rendered at all.
+    """
+    single_line = str(value).replace("\r", " ").replace("\n", " ")
+    escaped = single_line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return escaped[:limit]
+
+
 def _page(title: str, body: str, *, status_code: int) -> HTMLResponse:
     """Render a minimal self-contained result page.
 
     No external assets: this is opened from a mail client, often on a phone,
     frequently on a network that cannot reach a CDN.
     """
-    safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
-    safe_body = body.replace("<", "&lt;").replace(">", "&gt;")
+    # Bounded and flattened at the point of rendering, not only at the point
+    # of construction.
+    #
+    # This route is unauthenticated by necessity — the reader is holding an
+    # email, not a session — so it is the worst place in the product for a
+    # transport error carrying an internal hostname or a stack frame to
+    # surface. Callers already pass `ActionsServiceError.upstream_detail`
+    # rather than the exception, but a sanitiser that lives at the boundary
+    # holds for every future caller and is visible to a reader here, which
+    # the earlier arrangement was not.
+    safe_title = _render_safe(title, limit=120)
+    safe_body = _render_safe(body, limit=400)
     html = (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"

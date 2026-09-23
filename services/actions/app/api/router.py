@@ -38,12 +38,11 @@ logger = structlog.get_logger()
 router = APIRouter()
 gate = BlastRadiusGate()
 
-# Kept as a module attribute because tests and other modules reach for it by
-# name. It is now the in-memory *tier* of `app.services.action_store`, which
-# persists to Postgres when a DSN is configured — a restart used to lose every
-# action awaiting approval, so an analyst tapping Approve on a Slack card got
-# "Action not found" for an incident that was still live.
-_actions = action_store._MEMORY
+# The module-global `_actions` dict that used to live here is gone; storage is
+# `app.services.action_store`, which persists to Postgres when a DSN is
+# configured. A restart used to lose every action awaiting approval, so an
+# analyst tapping Approve on a Slack card got "Action not found" for an
+# incident that was still live. Tests reset state with `action_store.clear()`.
 
 # Replay-protection set: action IDs that have already received a response.
 # Single-use enforcement is layered on top of HMAC + expiry. Anything more

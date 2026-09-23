@@ -28,6 +28,7 @@ from app.models.action import (
     BlastRadius,
 )
 from app.security import chatops_identity
+from app.services import action_store
 
 APPROVER_MAP = {
     "slack": {
@@ -52,9 +53,9 @@ def _approver_map(monkeypatch: pytest.MonkeyPatch):
 
 @pytest.fixture(autouse=True)
 def _clean_store():
-    router_module._actions.clear()
+    action_store.clear()
     yield
-    router_module._actions.clear()
+    action_store.clear()
 
 
 class _CapturingExecutor:
