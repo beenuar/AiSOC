@@ -9,9 +9,12 @@ name: Devcontainer · cold-start KPI
 # ~5-min cold boot and the README's "Try AiSOC in 60 seconds" promise no
 # longer holds for Codespaces users — release-blocking.
 #
-# Strategy: pull the published `ghcr.io/beenuar/aisoc-devcontainer:latest`
-# (the same image Codespaces resolves) and verify it is immediately useful
-# as a dev environment. We measure two budgets independently:
+# Strategy: probe the image Codespaces would resolve and verify it is
+# immediately useful as a dev environment. On `main` that is the published
+# `ghcr.io/beenuar/aisoc-devcontainer:latest`; on a pull request touching
+# `.devcontainer/**` it is built from the PR's own source, because probing
+# `:latest` from a PR can only ever validate the *previous* image. We measure
+# two budgets independently:
 #
 #   1. image pull — the "before any keystroke is possible" phase.
 #      Budget: 60 s.
@@ -38,13 +41,19 @@ on:
     paths:
       - '.devcontainer/**'
       - '.github/workflows/devcontainer-coldstart.yml'
-  # PRs that touch this workflow run the toolchain probe against the
-  # currently-published `:latest` image. That validates the workflow's
-  # logic without needing a fresh image (the build & publish workflow's
-  # PR job verifies the Dockerfile separately).
+  # A PR that changes `.devcontainer/**` builds the image from *its own*
+  # source and probes that, rather than the published `:latest`.
+  #
+  # It used to probe `:latest` on the grounds that this "validates the
+  # workflow's logic without needing a fresh image". The consequence is that
+  # a PR could only ever validate the *previous* image, so a Dockerfile
+  # change was unverifiable until after it shipped — which is how a
+  # devcontainer whose non-root user was not in the `docker` group reached
+  # `main` (#716).
   pull_request:
     branches: [main]
     paths:
+      - '.devcontainer/**'
       - '.github/workflows/devcontainer-coldstart.yml'
   workflow_dispatch:
 
@@ -67,6 +76,12 @@ jobs:
     env:
       PHASE_PULL_BUDGET: '60'
       PHASE_TOOLCHAIN_BUDGET: '30'
+      # Built from source on a PR, pulled from GHCR otherwise. Referenced by
+      # every phase so the thing measured and the thing probed cannot drift.
+      PROBE_IMAGE: >-
+        ${{ github.event_name == 'pull_request'
+            && 'aisoc-devcontainer:pr'
+            || 'ghcr.io/beenuar/aisoc-devcontainer:latest' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -78,11 +93,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # On a pull request the image under test is the one this PR would
+      # publish, so it is built here. The pull budget is a property of the
+      # published image and is measured on the `main` paths only.
+      - name: Build the image from this PR's source
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          docker build -t "$PROBE_IMAGE" .devcontainer
+          echo "::notice title=devcontainer-probe::built from this PR"
+
       - name: Phase 1 — pull prebuilt image (KPI budget ${{ env.PHASE_PULL_BUDGET }}s)
+        if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           start=$(date +%s)
-          docker pull ghcr.io/beenuar/aisoc-devcontainer:latest
+          docker pull "$PROBE_IMAGE"
           elapsed=$(( $(date +%s) - start ))
           echo "::notice title=devcontainer-pull-seconds::${elapsed}"
           if [ "$elapsed" -gt "${PHASE_PULL_BUDGET}" ]; then
@@ -101,7 +127,7 @@ jobs:
           # streamed directly to the job log — no inside-container
           # redirection that would swallow errors on container exit.
           docker run --rm \
-            ghcr.io/beenuar/aisoc-devcontainer:latest \
+            "$PROBE_IMAGE" \
             bash -lc '
               set -euo pipefail
               echo "── node ──";            node --version
@@ -153,7 +179,7 @@ jobs:
             -v aisoc-coldstart-dind:/var/lib/docker \
             -v "$PWD/.devcontainer:/probe/.devcontainer:ro" \
             -w /probe \
-            ghcr.io/beenuar/aisoc-devcontainer:latest \
+            "$PROBE_IMAGE" \
             bash -lc '
               set -euo pipefail
               bash .devcontainer/start-docker.sh
