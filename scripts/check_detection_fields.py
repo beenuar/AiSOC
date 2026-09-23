@@ -63,10 +63,21 @@ MAX_UNREACHABLE = 133
 #: actor/target comparisons. A rule naming one of these cannot fire no matter
 #: which connector is attached, because nothing computes it.
 #:
-#: They need one of two things that do not exist yet: evaluation in
-#: `services/fusion/app/services/windowed_detection.py` (which has three
-#: hardcoded rules and no loader), or a fusion-time enrichment step that
-#: resolves the predicate. Until then they are honest work items.
+#: They need one of two things. The windowed family needs a `wd-*` rule in
+#: `services/fusion/app/services/windowed_detection.py`; the rest need a
+#: fusion-time enrichment step that resolves the predicate.
+#:
+#: This comment used to say the windowed engine "has three hardcoded rules
+#: and no loader". That was true when written and has not been true since the
+#: exporter landed: the engine loads `app/data/windowed_ruleset.json` on top
+#: of its builtins, runs in the fusion consumer, and fires real alerts. The
+#: stale half mattered, because it told a reader the engine was unusable when
+#: the actual gap is narrower and more actionable — **nobody has translated
+#: these `det-*` rules into windowed form.** The two corpora are disjoint:
+#: not one of the `wd-*` ids appears in `detections/`, so building the engine
+#: moved none of these rules off this list and the count did not move either.
+#:
+#: Migrating one means *authoring* a `wd-*` rule, not flipping a flag.
 _DERIVED_FIELD_PATTERN = re.compile(
     r"(_count$|^count_|_per_|time_window|_window_"
     r"|_in_allowlist$|_not_in_allowlist$"
