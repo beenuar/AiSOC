@@ -792,7 +792,19 @@ class PluginManager:
             #    so links would be preserved-as-links rather than followed,
             #    but ``_assert_no_symlinks`` above should already have made
             #    that path unreachable.
-            dest = self._plugins_dir / plugin_id
+            # Re-derived inline rather than trusting the earlier
+            # `_validate_plugin_id` call. That validation is real and runs, but
+            # taint analysis does not follow a value through a function
+            # boundary reliably, so a reader — human or CodeQL — cannot see
+            # from here that this component is safe. Adding the OCI HTTP route
+            # in v9.0 made this path reachable from a request body for the
+            # first time, which turned an invisible property into one worth
+            # making visible at the point of use.
+            safe_component = os.path.basename(plugin_id)
+            if not _PLUGIN_ID_RE.fullmatch(safe_component) or safe_component != plugin_id:
+                raise PluginError(plugin_id, "plugin id is not a safe single path component")
+
+            dest = self._plugins_dir / safe_component
             if dest.exists():
                 shutil.rmtree(dest)
             _safe_copytree(extracted, dest)
