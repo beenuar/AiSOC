@@ -139,7 +139,7 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 | `AISOC_DEMO_MODE` | `false` | When `true`, mutating requests outside the demo tenant return 403 |
 | `AISOC_DEMO_TENANT` | `demo` | Tenant slug allowed to write in demo mode |
 | `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
-| `AISOC_DISABLE_KAFKA` / `AISOC_DISABLE_CLICKHOUSE` / `AISOC_DISABLE_OPENSEARCH` / `AISOC_DISABLE_NEO4J` / `AISOC_DISABLE_QDRANT` | `false` | Skip the corresponding subsystem at boot — endpoints that need it return 503 |
+| `AISOC_DISABLE_KAFKA` / `AISOC_DISABLE_CLICKHOUSE` / `AISOC_DISABLE_NEO4J` / `AISOC_DISABLE_QDRANT` | `false` | Skip the corresponding subsystem at boot — endpoints that need it return 503. There is no OpenSearch equivalent: the API service holds no OpenSearch client. OpenSearch belongs to `services/threatintel`, configured with `OPENSEARCH_HOST` / `OPENSEARCH_PORT`. |
 
 ---
 

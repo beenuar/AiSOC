@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 )
 
 // ErrTemplateNotFound is returned when a token resolves to a template_id
@@ -90,56 +93,106 @@ func NewRegistry() *Registry {
 	return &Registry{templates: make(map[string]*Template)}
 }
 
-// Load reads every *.yaml file in dir and registers it as a template.
-// Files with malformed YAML are logged and skipped so a typo in one
-// template doesn't take down the whole ingest service.
+// parse turns one template file's bytes into a registered Template.
+// Returns false when the YAML is malformed, so one typo cannot take down
+// the whole ingest service.
+func (r *Registry) parse(name string, raw []byte) bool {
+	t := &Template{}
+	if err := yaml.Unmarshal(raw, t); err != nil {
+		log.Warn().Err(err).Str("template", name).Msg("inbox: malformed template YAML")
+		return false
+	}
+	// Default the ID to the filename stem — operators usually leave
+	// the explicit `id:` blank and rely on the convention.
+	if t.ID == "" {
+		t.ID = strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")
+	}
+	// Normalise severity keys.
+	if len(t.SeverityMap) > 0 {
+		normalised := make(map[string]int, len(t.SeverityMap))
+		for k, v := range t.SeverityMap {
+			normalised[strings.ToLower(strings.TrimSpace(k))] = v
+		}
+		t.SeverityMap = normalised
+	}
+
+	r.mu.Lock()
+	r.templates[t.ID] = t
+	r.mu.Unlock()
+	return true
+}
+
+func isTemplateFile(name string) bool {
+	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")
+}
+
+// LoadEmbedded registers the templates compiled into the binary.
 //
-// dir is typically baked into the container image at
-// /app/templates, but tests override to use a tmpdir.
+// This is the load that must always succeed: the on-disk path below is an
+// operator override, and for most of this service's life it pointed at a
+// directory the container image never contained, so /v1/inbox/* answered 503
+// for every template on every deployment.
+func (r *Registry) LoadEmbedded() error {
+	entries, err := normalizer.InboxTemplates.ReadDir(normalizer.InboxTemplateDir)
+	if err != nil {
+		return fmt.Errorf("inbox: read embedded templates: %w", err)
+	}
+
+	loaded := 0
+	for _, e := range entries {
+		if e.IsDir() || !isTemplateFile(e.Name()) {
+			continue
+		}
+		raw, err := normalizer.InboxTemplates.ReadFile(path.Join(normalizer.InboxTemplateDir, e.Name()))
+		if err != nil {
+			log.Warn().Err(err).Str("template", e.Name()).Msg("inbox: skipping unreadable embedded template")
+			continue
+		}
+		if r.parse(e.Name(), raw) {
+			loaded++
+		}
+	}
+	log.Info().Int("count", loaded).Msg("inbox: embedded templates loaded")
+	if loaded == 0 {
+		// The embed directive matched nothing, which means the binary shipped
+		// without the templates it is supposed to carry. Saying so loudly is
+		// the whole point of this change.
+		return errors.New("inbox: no embedded templates found in the binary")
+	}
+	return nil
+}
+
+// Load reads every *.yaml file in dir and registers it as a template,
+// overriding any embedded template of the same ID.
+//
+// Files with malformed YAML are logged and skipped so a typo in one
+// template doesn't take down the whole ingest service. A missing directory
+// is not an error: the embedded set is the baseline and this is the operator
+// override on top of it.
 func (r *Registry) Load(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			log.Debug().Str("dir", dir).Msg("inbox: no on-disk template overrides")
+			return nil
+		}
 		return fmt.Errorf("inbox: read template dir %s: %w", dir, err)
 	}
 
 	loaded := 0
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !isTemplateFile(e.Name()) {
 			continue
 		}
-		name := e.Name()
-		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-			continue
-		}
-		path := filepath.Join(dir, name)
-		raw, err := os.ReadFile(path)
+		p := filepath.Join(dir, e.Name())
+		raw, err := os.ReadFile(p)
 		if err != nil {
-			log.Warn().Err(err).Str("path", path).Msg("inbox: skipping unreadable template")
+			log.Warn().Err(err).Str("path", p).Msg("inbox: skipping unreadable template")
 			continue
 		}
-		t := &Template{}
-		if err := yaml.Unmarshal(raw, t); err != nil {
-			log.Warn().Err(err).Str("path", path).Msg("inbox: malformed template YAML")
-			continue
+		if r.parse(e.Name(), raw) {
+			loaded++
 		}
-		// Default the ID to the filename stem — operators usually leave
-		// the explicit `id:` blank and rely on the convention.
-		if t.ID == "" {
-			t.ID = strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")
-		}
-		// Normalise severity keys.
-		if len(t.SeverityMap) > 0 {
-			normalised := make(map[string]int, len(t.SeverityMap))
-			for k, v := range t.SeverityMap {
-				normalised[strings.ToLower(strings.TrimSpace(k))] = v
-			}
-			t.SeverityMap = normalised
-		}
-
-		r.mu.Lock()
-		r.templates[t.ID] = t
-		r.mu.Unlock()
-		loaded++
 	}
 	log.Info().Int("count", loaded).Str("dir", dir).Msg("inbox: templates loaded")
 	return nil

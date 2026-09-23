@@ -338,7 +338,10 @@ class Settings(BaseSettings):
     KAFKA_TOPIC_EVENTS: str = "aisoc.normalized_events"
     KAFKA_TOPIC_ALERTS: str = "aisoc.alerts"
 
-    # OpenSearch
+    # OpenSearch. This service constructs no OpenSearch client; the value is
+    # read only by esql_runner's SSRF allow-list, as the host an operator is
+    # permitted to point ES|QL at. `services/threatintel` is the only service
+    # that actually stores anything in OpenSearch.
     OPENSEARCH_URL: str = "http://localhost:9200"
 
     # Neo4j
@@ -467,9 +470,12 @@ class Settings(BaseSettings):
     # and the API returns 503 for endpoints that require it.
     AISOC_DISABLE_KAFKA: bool = False
     AISOC_DISABLE_CLICKHOUSE: bool = False
-    AISOC_DISABLE_OPENSEARCH: bool = False
     AISOC_DISABLE_NEO4J: bool = False
     AISOC_DISABLE_QDRANT: bool = False
+    # AISOC_DISABLE_OPENSEARCH is deliberately absent. It sat here with zero
+    # readers while three deploy configs set it and the env-var reference
+    # documented it, so an operator could switch off a subsystem this service
+    # never had. A flag that disables nothing is worse than no flag.
 
     # ------------------------------------------------------------------
     # v6 capability flags (AiSOC v6 capability roadmap).

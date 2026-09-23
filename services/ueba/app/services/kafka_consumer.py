@@ -1,6 +1,11 @@
 """Kafka consumer — reads security events, scores them, emits anomalies.
 
-Message schema (JSON, ``security.events`` topic):
+The consumer reads ``aisoc.raw_events``: the ingest-normalized OCSF envelope
+that every connector and webhook already produces. Entity and features are
+recovered by :mod:`app.services.feature_extraction`, which also still accepts
+the pre-extracted shape below for operators feeding UEBA from their own
+pipeline:
+
   {
     "event_id":       "uuid-string",
     "tenant_id":      "uuid-string",
@@ -41,6 +46,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.services.feature_extraction import extract
 from app.services.peer_group import PeerGroupService
 from app.services.scoring import ScoringService
 
@@ -60,32 +66,24 @@ class UEBAKafkaConsumer:
             LOG.warning("Invalid JSON message; skipping.")
             return
 
-        tenant_id_raw = msg.get("tenant_id")
-        entity_type = msg.get("entity_type", "user")
-        entity_id = msg.get("entity_id", "")
-        event_type = msg.get("event_type", "unknown")
-        peer_group_id = msg.get("peer_group_id")
-        features_raw = msg.get("features", {})
-        source_event_id = msg.get("event_id")
-
-        if not tenant_id_raw or not entity_id:
-            LOG.debug("Skipping message: missing tenant_id or entity_id")
+        # An event with no recoverable entity or no numeric feature is a
+        # normal outcome, not an error — most telemetry names no identity, and
+        # something with no baseline cannot deviate from one.
+        event = extract(msg)
+        if event is None:
             return
+
+        entity_type = event.entity_type
+        entity_id = event.entity_id
+        event_type = event.event_type
+        peer_group_id = event.peer_group_id
+        features = event.features
+        source_event_id = event.source_event_id
 
         try:
-            tenant_id = uuid.UUID(tenant_id_raw)
+            tenant_id = uuid.UUID(event.tenant_id)
         except ValueError:
-            LOG.warning("Invalid tenant_id: %s", tenant_id_raw)
-            return
-
-        features: dict[str, float] = {}
-        for k, v in features_raw.items():
-            try:
-                features[k] = float(v)
-            except (TypeError, ValueError):
-                pass  # non-numeric feature value; skip
-
-        if not features:
+            LOG.warning("Invalid tenant_id: %s", event.tenant_id)
             return
 
         async with self._session_factory() as session:

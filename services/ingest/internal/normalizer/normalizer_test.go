@@ -305,3 +305,123 @@ func TestAiGuardrailFindingIsAlwaysPromotable(t *testing.T) {
 		t.Errorf("activity_name = %v, want the finding type detections match on", ocsf["activity_name"])
 	}
 }
+
+// getNestedField on the produced OCSF event, for assertions that need to
+// reach actor.user.name / device.name without re-implementing the walk.
+func nested(t *testing.T, ocsf map[string]interface{}, path string) interface{} {
+	t.Helper()
+	return getNestedField(ocsf, path)
+}
+
+func canonicalEvent(payload map[string]interface{}) *RawEvent {
+	return &RawEvent{
+		ConnectorID:   "conn-1",
+		ConnectorType: "crowdstrike",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload:       payload,
+	}
+}
+
+// The canonical field map recognised only `actor`. Eleven of the 68
+// canonical-envelope connectors spell it `username` or `user`, and their
+// alerts reached fusion anonymous — which matters beyond a blank column,
+// because the correlation key is {tenant}:{entity}:{tactic} and every one of
+// those alerts collapsed into the same "unknown" bucket.
+func TestCanonicalEnvelopeResolvesActorAliases(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		value string
+	}{
+		{"actor", "alice"},
+		{"username", "bob"},
+		{"user", "carol"},
+		{"user_name", "dave"},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			n := newLenientNormalizer()
+			ev, err := n.Normalize(canonicalEvent(map[string]interface{}{
+				"source":    "crowdstrike",
+				"title":     "Detection",
+				"severity":  "high",
+				tc.field:    tc.value,
+				"raw_event": map[string]interface{}{},
+			}))
+			if err != nil {
+				t.Fatalf("Normalize returned error: %v", err)
+			}
+			if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != tc.value {
+				t.Errorf("actor.user.name = %v, want %q from field %q", got, tc.value, tc.field)
+			}
+		})
+	}
+}
+
+// Precedence must be the declared order, not Go's randomised map iteration.
+// Expressing the aliases as extra fieldMap entries would pick a different
+// winner per process, which surfaces as flake rather than as a bug.
+func TestCanonicalActorPrecedenceIsDeterministic(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		n := newLenientNormalizer()
+		ev, err := n.Normalize(canonicalEvent(map[string]interface{}{
+			"source":    "crowdstrike",
+			"title":     "Detection",
+			"severity":  "high",
+			"actor":     "primary",
+			"username":  "secondary",
+			"user":      "tertiary",
+			"raw_event": map[string]interface{}{},
+		}))
+		if err != nil {
+			t.Fatalf("Normalize returned error: %v", err)
+		}
+		if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != "primary" {
+			t.Fatalf("iteration %d: actor.user.name = %v, want the declared-first source", i, got)
+		}
+	}
+}
+
+func TestCanonicalEnvelopeResolvesHostAndIPAliases(t *testing.T) {
+	n := newLenientNormalizer()
+	ev, err := n.Normalize(canonicalEvent(map[string]interface{}{
+		"source":    "crowdstrike",
+		"title":     "Detection",
+		"severity":  "high",
+		"host":      "web-01",
+		"client_ip": "203.0.113.7",
+		"raw_event": map[string]interface{}{},
+	}))
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+	if got := nested(t, ev.OcsfEvent, "device.name"); got != "web-01" {
+		t.Errorf("device.name = %v, want web-01 resolved from `host`", got)
+	}
+	if got := nested(t, ev.OcsfEvent, "src_endpoint.ip"); got != "203.0.113.7" {
+		t.Errorf("src_endpoint.ip = %v, want the value resolved from `client_ip`", got)
+	}
+}
+
+// Hand-written vendor profiles name their own fields and must not have the
+// canonical aliases applied on top of them.
+func TestAliasesDoNotApplyToRawVendorProfiles(t *testing.T) {
+	n := newTestNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID:   "conn-1",
+		ConnectorType: "crowdstrike_falcon",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload: map[string]interface{}{
+			"UserName":     "falcon-user",
+			"ComputerName": "falcon-host",
+			// A stray `username` must not override the profile's own mapping.
+			"username": "should-not-win",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+	if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != "falcon-user" {
+		t.Errorf("actor.user.name = %v, want the vendor profile's own mapping", got)
+	}
+}

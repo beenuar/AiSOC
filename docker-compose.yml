@@ -258,7 +258,9 @@ services:
       LLM_GATEWAY_URL: http://litellm:4000/v1
     # Phase 2.6 — use /readyz, not /health, so the orchestrator
     # only routes traffic once the lifespan has finished wiring
-    # Postgres, Redis, Kafka, OpenSearch, Qdrant, and Neo4j.
+    # Postgres, Redis, Kafka, Qdrant, and Neo4j. (Not OpenSearch: this
+    # service constructs no OpenSearch client. `services/threatintel` is
+    # the only consumer of that store.)
     # /livez is what the restart policy looks at via `pgrep`-style
     # checks; we don't need a separate compose healthcheck for it
     # because the process being up implies it's alive.
@@ -284,6 +286,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:8081:8080"
       - "127.0.0.1:9090:9090"
@@ -293,6 +297,12 @@ services:
       METRICS_PORT: 9090
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/1
+      # The inbox webhook routes (/v1/inbox/*) mount only when this is set,
+      # and no compose file set it, so the documented "push events straight
+      # from your SIEM" path was unreachable on every local and CI stack.
+      # This is a pgx DSN and is deliberately distinct from the SQLAlchemy
+      # DATABASE_URL the Python services use.
+      DATABASE_DSN: postgres://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc?sslmode=disable
       LOG_LEVEL: info
       JWT_SECRET: dev_secret_key_change_in_production
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
@@ -561,12 +571,23 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      # OpenSearch is a hard dependency, not an optional one: the lifespan
+      # calls os_store.initialize() without a try/except, so starting before
+      # it is up kills the container and leaves `restart: unless-stopped` to
+      # paper over the race.
+      opensearch:
+        condition: service_started
     ports:
       - "127.0.0.1:8005:8005"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/7
-      OPENSEARCH_URL: http://opensearch:9200
+      # This service reads OPENSEARCH_HOST/PORT. It was given OPENSEARCH_URL,
+      # which its Settings has no field for and `extra="ignore"` discards, so
+      # the connection worked only because the defaults happened to match the
+      # compose service name. Set what is actually read.
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j

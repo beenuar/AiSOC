@@ -82,22 +82,40 @@ mismatch is invisible until nothing arrives.
 | ClickHouse | full | the event lake (`aisoc.raw_events` table) behind `/lake/sql` and hunt | **WORKING** when enabled |
 | Neo4j | full | entity graph, blast radius | **WORKING** when enabled |
 | Qdrant | full | IOC/actor embeddings for `services/threatintel` | **WORKING** when enabled |
-| OpenSearch | full | declared for archived-event search | **DEAD CODE** — no CORE or FULL code path queries it |
+| OpenSearch | full | IOC + threat-actor indices for `services/threatintel` | **WORKING** when enabled |
 
-OpenSearch is the honest casualty of this audit: it is started by the compose
-file and nothing reads from it. It stays in the `full` profile rather than
-being silently removed, and is recorded here as unused.
+**Correction (v9.0).** This audit originally recorded OpenSearch as dead code
+on the grounds that nothing read it. That was wrong, and wrong in the way this
+document exists to prevent: the check was made against `services/api`, which
+holds no OpenSearch client, and never against `services/threatintel`, which
+holds one and uses it unconditionally. `OpenSearchStore.initialize()` runs in
+the threatintel lifespan with no feature flag and no `try`, and every CISA KEV
+poll bulk-indexes into `threatintel-iocs`.
+
+Two real defects sat underneath the wrong verdict, both now fixed: compose set
+`OPENSEARCH_URL` on the threatintel service, which its settings class has no
+field for and `extra="ignore"` silently discards, so the connection worked
+only because the defaults happened to match the compose service name; and
+threatintel declared no `depends_on` for OpenSearch, so it could boot first,
+die in the lifespan, and be restarted until the race resolved.
+
+What *is* vestigial is on the API side. `AISOC_DISABLE_OPENSEARCH` had zero
+readers while three deploy configs set it and the env-var reference documented
+it — an operator could disable a subsystem this service never had — so the
+setting is removed rather than left as a switch wired to nothing.
+`OPENSEARCH_URL` stays in the API config because `esql_runner` reads it as an
+SSRF allow-list entry, and is commented as such.
 
 ### Broken or disconnected
 
 | Component | Status | What is wrong |
 |---|---|---|
-| `services/ueba` | **BROKEN** | Consumes the topic `security.events`. Nothing in the repository produces that topic — ingest writes `aisoc.raw_events`. So UEBA never scores, never emits `ueba.anomalies`, and fusion's UEBA confidence boost is permanently inert despite defaulting on. |
-| Ingest inbox webhooks | **BROKEN** | Routes mount only when `DATABASE_DSN` is set; compose never sets it. The templates directory is also not copied into the image, so even with a DSN every template resolves 503. |
-| Fuse-time enrichment | **FIXED in this audit** | Defaulted to `http://localhost:8082`, which inside the fusion container is fusion itself. Every enrichment call failed and the failure was swallowed at `DEBUG`. Now points at the `enrichment` service and is a declared `full`-profile capability. |
+| `services/ueba` | **FIXED in v9.0** | Consumed the topic `security.events`, which nothing in the repository produces — ingest writes `aisoc.raw_events`. So UEBA never scored, never emitted `ueba.anomalies`, and fusion's UEBA confidence boost was permanently inert despite defaulting on. The default topic is now `aisoc.raw_events` and `app/services/feature_extraction.py` recovers the entity and features the scorer needs from the OCSF envelope. |
+| Ingest inbox webhooks | **FIXED in v9.0** | Routes mounted only when `DATABASE_DSN` was set and compose never set it; the templates were also not copied into the runtime image, so even with a DSN every template resolved 503. Templates are now `go:embed`-ed into the binary — a directory cannot be missing from an image — and compose sets the DSN. The on-disk path remains as an operator override. |
+| Fuse-time enrichment | **FIXED in v8.1.1** | Defaulted to `http://localhost:8082`, which inside the fusion container is fusion itself. Every enrichment call failed and the failure was swallowed at `DEBUG`. Now points at the `enrichment` service and is a declared `full`-profile capability. |
 | Investigation → response | **PARTIAL, by design** | Nothing automatically dispatches to `services/actions`. Response is copilot-default and human-initiated. This is intentional, but it means the pipeline terminates at triage. |
-| `aisoc.alerts.raw` | **DEAD** | Fusion subscribes to it; no producer exists anywhere. |
-| `aisoc.vulnerability_matches` | **DEAD** | Ingest produces it; no consumer exists. |
+| `aisoc.alerts.raw` | **EXTERNAL ENTRYPOINT** | Previously recorded as dead because no in-repo producer exists. That is what an entrypoint is: fusion subscribes, schema-validates against the pinned `v1` RawAlert envelope, and dead-letters poison, so an external system can push a vendor alert straight into fusion. Covered by `test_event_schema.py` and `test_consumer_dlq.py`, and documented in `docs/runbooks/kafka-consumer-lag.md`. |
+| `aisoc.vulnerability_matches` | **OPT-IN EXPORT** | Ingest produced it by default and nothing consumed it — fusion gets vulnerability context by calling the enrichment service at fuse time. `VULN_CORREL_ENABLED` now defaults to `false`, so a stock deployment no longer downloads the CISA KEV catalogue at boot to publish into a topic with no reader. It stays available for an external consumer. |
 
 ### Detection
 
@@ -124,9 +142,20 @@ These were not visible from the code alone:
    every request, and compose still reported it `healthy`. `make doctor`
    checks disk before anything else and probes the broker with an admin call
    rather than trusting the healthcheck.
-4. **CrowdStrike has no normalizer profile** and falls through to the generic
-   one. Events still promote, but entity extraction is weak — the correlation
-   key came back `tenant:unknown:unknown`.
+4. **CrowdStrike alerts reached fusion with no actor.** Recorded here first as
+   "has no normalizer profile", which was the wrong diagnosis: the connector
+   emits a canonical envelope, so it takes the canonical path and gets OCSF
+   2001 correctly. The actual faults were two, and both are fixed in v9.0.
+   The connector never read `behaviors[].user_name`, where Falcon puts the
+   acting identity, so the envelope carried none. And the canonical field map
+   recognised only `actor` — of the 68 canonical-envelope connectors, 40 use
+   that spelling and 11 use `username` or `user`, which mapped nowhere.
+   Because the fusion correlation key is `{tenant}:{entity}:{tactic}`, a
+   missing actor did not merely blank a column: every affected alert
+   correlated into the same `unknown` bucket. Aliases now resolve in declared
+   order rather than as extra map entries, because Go randomises map
+   iteration and three entries pointing at one destination would pick a
+   different winner per process.
 
 ---
 
