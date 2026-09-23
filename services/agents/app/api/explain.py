@@ -117,6 +117,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
+from app.llm.contract import LLMContractViolation, safe_chat_completions_request
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 
 logger = structlog.get_logger()
@@ -574,8 +575,6 @@ async def _llm_summary(
         return fallback
 
     try:
-        import httpx
-
         base = llm_config.base_url.rstrip("/")
         url = f"{base}/v1/chat/completions"
         model = llm_config.model
@@ -613,15 +612,24 @@ async def _llm_summary(
             },
         ]
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {llm_config.api_key}"},
-                json={"model": model, "messages": messages, "max_tokens": 320},
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
+        # T2.3 — this was the one LLM call in services/agents that bypassed
+        # the contract. It POSTed with raw httpx, and the no-bypass gate only
+        # walked the AST for `.ainvoke` / `.astream`, so a raw-HTTP call was
+        # invisible to it. `safe_chat_completions_request` exists for exactly
+        # this shape and is already used by copilot.py and the NL translator.
+        body = await safe_chat_completions_request(
+            api_key=llm_config.api_key,
+            model=model,
+            messages=messages,
+            url=url,
+            timeout=20.0,
+            max_tokens=320,
+        )
+        return str(body["choices"][0]["message"]["content"]).strip()
 
+    except LLMContractViolation as exc:
+        logger.warning("explain.llm_contract_violation", reason=exc.reason)
+        return fallback
     except Exception as exc:
         logger.warning("explain.llm_error", error=str(exc))
         return fallback

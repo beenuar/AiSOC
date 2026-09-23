@@ -139,6 +139,131 @@ def _python_sources() -> list[Path]:
     return [p for p in _AGENTS_APP.rglob("*.py") if "__pycache__" not in p.parts and p not in _ALLOWED_FILES]
 
 
+# ── Raw-HTTP LLM calls ─────────────────────────────────────────────────────
+#
+# The gate above walks the AST for `.ainvoke` / `.astream`, which proves the
+# LangChain path is clean and says nothing about the other way to reach a
+# model: POST to a chat-completions URL with httpx. `app/api/explain.py` did
+# exactly that and was invisible here for several releases, under a test named
+# "no bypass".
+#
+# The same shape is the whole story in `services/api`, which had no contract
+# at all while seven endpoints POSTed untrusted input to a provider.
+
+_API_APP = _AGENTS_APP.parent.parent / "api" / "app"
+
+#: A URL fragment that means "this is a chat-completions endpoint".
+_COMPLETIONS_MARKERS = ("chat/completions", "/completions")
+
+#: Files that legitimately construct such a request: the safe wrappers
+#: themselves, which validate before the POST.
+_ALLOWED_HTTP_FILES: frozenset[Path] = frozenset(
+    {
+        _AGENTS_APP / "llm" / "contract.py",
+        _API_APP / "services" / "llm_safety.py",
+        # Vendored copy of the rules; carries no HTTP call, listed so a future
+        # sync that adds one is a deliberate decision.
+        _API_APP / "_vendor" / "llm_contract_rules.py",
+    }
+)
+
+
+#: ``.post`` receivers that are route registrars, not HTTP clients. A FastAPI
+#: ``@router.post("/...")`` decorator is the same attribute name as an httpx
+#: POST and means the opposite thing.
+_NOT_HTTP_CLIENTS: frozenset[str] = frozenset({"router", "app", "api_router"})
+
+
+def _mentions_completions(source: str) -> bool:
+    return any(marker in source for marker in _COMPLETIONS_MARKERS)
+
+
+def _find_raw_http_llm_calls(path: Path) -> list[tuple[int, str]]:
+    """Flag a `client.post(...)`-shaped call in a file that names a
+    completions endpoint and does not import a safe wrapper.
+
+    Deliberately coarse. Proving that a particular `post` targets a
+    completions URL requires following a variable through string formatting,
+    which an AST walker cannot do reliably — so the test asks the answerable
+    question instead: does this file both talk about a completions endpoint
+    and issue its own POST? A file that routes through
+    `safe_chat_completions_request` passes, because it no longer issues the
+    POST itself.
+    """
+    source = path.read_text(encoding="utf-8")
+    if not _mentions_completions(source):
+        return []
+    if "safe_chat_completions_request" in source:
+        return []
+
+    tree = ast.parse(source, filename=str(path))
+    findings: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "post":
+            continue
+        receiver = _receiver_name(node.func)
+        if receiver in _NOT_HTTP_CLIENTS:
+            continue
+        findings.append((node.lineno, receiver))
+    return findings
+
+
+def _http_sources() -> list[Path]:
+    roots = [r for r in (_AGENTS_APP, _API_APP) if r.is_dir()]
+    return [p for root in roots for p in root.rglob("*.py") if "__pycache__" not in p.parts and p not in _ALLOWED_HTTP_FILES]
+
+
+def test_no_raw_http_llm_calls() -> None:
+    """An LLM call over raw HTTP must go through the safe wrapper too.
+
+    This is the gate that was missing. `services/agents/app/api/explain.py`
+    reached a model with `httpx.AsyncClient().post(...)` and never touched the
+    contract, and every LLM call in `services/api` did the same — while the
+    suite reported the contract fully enforced.
+    """
+    violations: list[str] = []
+    for path in _http_sources():
+        for lineno, receiver in _find_raw_http_llm_calls(path):
+            try:
+                rel = path.relative_to(_AGENTS_APP.parent.parent)
+            except ValueError:  # pragma: no cover - defensive
+                rel = path
+            violations.append(f"{rel}:{lineno}  {receiver}.post(...) to a completions endpoint")
+
+    assert not violations, (
+        "Raw-HTTP LLM call detected — route it through "
+        "safe_chat_completions_request (app.llm.contract in services/agents, "
+        "app.services.llm_safety in services/api) so the input contract runs "
+        "before the request rather than after it.\n  " + "\n  ".join(violations)
+    )
+
+
+def test_the_http_gate_detects_a_synthetic_bypass(tmp_path: Path) -> None:
+    """A gate nobody has seen fail is a gate nobody knows works."""
+    bad = tmp_path / "sneaky.py"
+    bad.write_text(
+        "import httpx\n"
+        "async def go(key):\n"
+        "    async with httpx.AsyncClient() as c:\n"
+        '        return await c.post("https://api.openai.com/v1/chat/completions", json={})\n',
+        encoding="utf-8",
+    )
+    assert _find_raw_http_llm_calls(bad), "the raw-HTTP walker missed an obvious bypass"
+
+
+def test_the_http_gate_accepts_a_wrapped_call(tmp_path: Path) -> None:
+    good = tmp_path / "fine.py"
+    good.write_text(
+        "from app.services.llm_safety import safe_chat_completions_request\n"
+        "async def go(key):\n"
+        '    return await safe_chat_completions_request(api_key=key, model="m", messages=[], url="https://x/chat/completions")\n',
+        encoding="utf-8",
+    )
+    assert not _find_raw_http_llm_calls(good)
+
+
 def test_no_direct_ainvoke_or_astream_bypass() -> None:
     """No file under services/agents/app/ may call .ainvoke/.astream directly on an LLM."""
     violations: list[str] = []

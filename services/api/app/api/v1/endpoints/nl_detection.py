@@ -13,6 +13,7 @@ functional in all deployment environments.
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.models.detection_proposal import DetectionRuleProposal
 from app.services.detection_eval import evaluate_candidate_rule
 from app.services.fixture_synth import derive_fixtures_from_sigma
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 
 logger = structlog.get_logger()
 
@@ -141,36 +143,35 @@ async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
         logger.info("nl_detection.airgap_block", url=completions_url, reason=str(exc))
         return _template_fallback(request)
 
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.1,
-                    "max_tokens": 2000,
-                },
-            )
-            resp.raise_for_status()
-            import json
-
-            content = resp.json()["choices"][0]["message"]["content"]
-            rules = json.loads(content)
-            return {
-                "sigma": rules.get("sigma") if "sigma" in request.target_platforms else None,
-                "kql": rules.get("kql") if "kql" in request.target_platforms else None,
-                "spl": rules.get("spl") if "spl" in request.target_platforms else None,
-                "esql": rules.get("esql") if "esql" in request.target_platforms else None,
-                "_model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-            }
+        # T2.3 — the description is analyst-authored but routinely contains a
+        # pasted log line, which is exactly what the contract refuses to
+        # forward.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            url=completions_url,
+            timeout=30.0,
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=2000,
+        )
+        rules = json.loads(body["choices"][0]["message"]["content"])
+        return {
+            "sigma": rules.get("sigma") if "sigma" in request.target_platforms else None,
+            "kql": rules.get("kql") if "kql" in request.target_platforms else None,
+            "spl": rules.get("spl") if "spl" in request.target_platforms else None,
+            "esql": rules.get("esql") if "esql" in request.target_platforms else None,
+            "_model": model,
+        }
+    except LLMContractViolation as exc:
+        logger.warning("nl_detection.llm_contract_violation", reason=exc.reason)
+        return _template_fallback(request)
     except Exception as exc:
         logger.warning("nl_detection.llm_error", error=str(exc))
         return _template_fallback(request)

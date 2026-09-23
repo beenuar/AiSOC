@@ -14,15 +14,18 @@ Endpoints
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, Literal
 
-import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import resolve_model_alias
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/translation", tags=["translation"])
 
@@ -122,23 +125,25 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
     except AirgapViolation:
         raise
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM},
-                        {"role": "user", "content": _user_prompt(req)},
-                    ],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        # T2.3 — the contract runs before the request, so a vendor rule
+        # pasted in with a raw log sample attached is refused rather than
+        # forwarded.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": _user_prompt(req)},
+            ],
+            url=completions_url,
+            timeout=60.0,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(body["choices"][0]["message"]["content"])
+    except LLMContractViolation as exc:
+        logger.warning("translation.llm_contract_violation", reason=exc.reason)
+        return None
     except Exception:
         return None
 

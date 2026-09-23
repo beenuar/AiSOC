@@ -191,6 +191,14 @@ jobs:
       # `python scripts/sync_vendored_nl_query.py` locally to fix.
       - name: Verify vendored nl_query is in sync
         run: python scripts/sync_vendored_nl_query.py --check
+      # Same reasoning as nl_query above. The LLM input contract's rules are
+      # authored in services/agents and vendored into the API, which is the
+      # only way both services can run the *same* classifier — two heuristics
+      # disagreeing about what counts as a raw log is worse than one. The API
+      # had no contract at all until this was wired, so a drifted or
+      # non-importable copy is how the gap silently returns.
+      - name: Verify vendored llm_contract_rules is in sync
+        run: python scripts/sync_vendored_llm_contract.py --check
       # Fabricated security data must never render as a tenant's real state.
       # Around three dozen console components served a `MOCK_*` / `DEMO_*`
       # array of plausible alerts, connectors and coverage numbers whenever the

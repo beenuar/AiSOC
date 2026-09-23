@@ -51,7 +51,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +59,7 @@ from app.models.alert import Alert
 from app.models.detection_rule import DetectionRule
 from app.services.cost_dashboard import _impute_public_cost
 from app.services.llm_resolver import LlmConfig, resolve_llm_config
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 
 logger = logging.getLogger(__name__)
 
@@ -753,14 +753,29 @@ async def _call_llm_for_summary(
         )
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {llm_config.api_key}"},
-                json={"model": llm_config.model, "messages": messages, "max_tokens": 360},
-            )
-            resp.raise_for_status()
-            payload = resp.json()
+        # T2.3 — the contract runs before the request. The user message is a
+        # JSON dump of the alert, so this is the API's most direct path for
+        # raw event data to reach a third party.
+        payload = await safe_chat_completions_request(
+            api_key=llm_config.api_key,
+            model=llm_config.model,
+            messages=messages,
+            url=url,
+            timeout=20.0,
+            max_tokens=360,
+        )
+    except LLMContractViolation as exc:
+        # Reported as its own error string rather than folded into the
+        # generic branch, so an operator can tell "we refused to send this"
+        # apart from "the provider was unreachable".
+        return _LlmCallResult(
+            text=None,
+            model=llm_config.model,
+            prompt_tokens=0,
+            completion_tokens=0,
+            latency_ms=(time.monotonic() - started) * 1000.0,
+            error=f"llm_contract_violation: {exc.reason}",
+        )
     except Exception as exc:  # noqa: BLE001
         return _LlmCallResult(
             text=None,
