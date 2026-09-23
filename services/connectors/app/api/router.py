@@ -29,18 +29,30 @@ import re
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from pydantic import Field as PydField
 
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 from app.connectors.base import Capability
+from app.db.connector_repo import fetch_enabled_connectors
+from app.db.engine import get_engine
 from app.federated.query import QueryError, parse_unified_query
+from app.security.credential_vault import CredentialVaultError, get_vault
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+#: Keys stored on a connector instance that are scheduler knobs rather than
+#: constructor arguments. Passing them through raises ``TypeError`` and turns a
+#: working connector into a 422. Mirrors the filter in ``ConnectorScheduler``.
+_SCHEDULER_ONLY_CONFIG_KEYS = frozenset({"poll_interval_seconds", "checkpoint", "filter_rules"})
+
+
+def _connector_kwargs(connector_config: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in connector_config.items() if k not in _SCHEDULER_ONLY_CONFIG_KEYS}
 
 
 def _safe_log_val(value: str) -> str:
@@ -283,6 +295,86 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
         # Defensive: some connectors might return None on success. Coerce.
         result = {"success": bool(result), "connector": connector_id}
     return result
+
+
+@router.get("/connectors/instances/{instance_id}/resource-config")
+async def get_instance_resource_config(
+    instance_id: str,
+    resource_id: str = Query(..., description="Vendor-native resource id"),
+    ts: str | None = Query(None, description="Point in time (RFC 3339)"),
+):
+    """Fetch a resource's configuration for a **saved connector instance**.
+
+    The POST route below takes credentials in the body, which works for the
+    API service — it owns the vault — and cannot work for `services/ingest`.
+    The Go config-snapshotter has no credentials to send, so it called a GET
+    endpoint that did not exist; a 404 maps to `ErrNotImplemented`, which the
+    snapshotter treats as a soft skip. An operator therefore saw
+    "snapshots enabled" and zero Configuration nodes, with nothing logged.
+
+    This route resolves the instance and decrypts `auth_config` the same way
+    `ConnectorScheduler` does at poll time, so the caller needs no secrets.
+    That also means the ingest service never handles credentials, which is the
+    reason the original contract could not simply be renamed into place.
+    """
+    try:
+        engine = get_engine()
+        async with engine.begin() as conn:
+            instances = await fetch_enabled_connectors(conn)
+    except Exception as exc:  # noqa: BLE001 — surfaced as 503, never silent
+        logger.exception("connector.resource_config.instance_load_failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="could not load connector instances",
+        ) from exc
+
+    target = next((i for i in instances if str(i.id) == instance_id), None)
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no enabled connector instance '{_safe_log_val(instance_id)}'",
+        )
+
+    cls = CONNECTOR_REGISTRY.get(target.connector_type)
+    if cls is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"connector type '{_safe_log_val(target.connector_type)}' is not in this build",
+        )
+
+    try:
+        auth = get_vault().decrypt_dict(target.auth_config or {})
+    except CredentialVaultError as exc:
+        logger.error("connector.resource_config.decrypt_failed instance=%s", _safe_log_val(instance_id))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="could not decrypt stored credentials",
+        ) from exc
+
+    kwargs = {**auth, **_connector_kwargs(target.connector_config or {})}
+    try:
+        connector = cls(**kwargs)
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"connector config does not match schema: {exc}",
+        ) from exc
+
+    try:
+        config = await connector.get_resource_config(resource_id, ts)
+    except NotImplementedError as exc:
+        # 501 rather than an error: most connectors legitimately cannot
+        # time-travel a resource's configuration, and the snapshotter skips
+        # them without counting a failure.
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("connector.resource_config.runtime_error instance=%s", _safe_log_val(instance_id))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Resource-config fetch failed. Check connector configuration and connectivity.",
+        ) from exc
+
+    return config
 
 
 @router.post("/connectors/{connector_id}/resource_config")

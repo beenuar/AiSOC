@@ -245,10 +245,38 @@ Every event edge in the schema below carries the three required event-edge prope
 
 ### `:CONFIGURED_AS` — `Resource` → `Configuration`
 
-**Structural edge.** The Resource is described by this Configuration snapshot. Multiple Configuration nodes per resource form a time-series; the most-recent one is reachable in O(1) via the `:CONFIGURED_AS {is_current: true}` shortcut.
+**Structural edge.** The Resource is described by this Configuration snapshot. Multiple Configuration nodes per resource form a time-series.
 
 - **Required edge properties**: `snapshot_id`.
 - **Additional properties**: `is_current`, `valid_from`, `valid_to`.
+
+:::caution `is_current` is set on write and never cleared
+This page previously stated that the most recent configuration was reachable
+in O(1) via a `:CONFIGURED_AS {is_current: true}` shortcut. None of
+`is_current`, `valid_from` or `valid_to` was written by anything, so that query
+matched **zero** edges; the drift gate missed it because it only validates
+properties on edges declared `event_edge: true` and this one is structural.
+
+All three are written now, but with a limitation worth stating rather than
+implying: closing the previous interval would need a read-modify-write against
+the graph, which the ingest hot path deliberately does not do. So every edge
+carries `is_current: true` and `valid_to` is **absent** while the interval is
+open — an open interval is not one that closed at the epoch, and a reader
+filtering `valid_to < now` would otherwise exclude the current configuration.
+
+To get the latest configuration, order by `valid_from` descending and take the
+first:
+
+```cypher
+MATCH (r:Resource {tenant_id: $tenant, natural_key: $key})-[c:CONFIGURED_AS]->(cfg:Configuration)
+RETURN cfg ORDER BY c.valid_from DESC LIMIT 1
+```
+
+Note also that `configurationKey` truncates the timestamp into a TTL bucket
+(10 minutes by default), so several events touching one resource inside a
+window MERGE onto a single Configuration node. Drift is queryable per bucket,
+not per event.
+:::
 
 ### `:DEPLOYED_FROM` — `Container` → `Image`
 
