@@ -45,6 +45,7 @@ from app.api.v1.endpoints import (
     investigations,
     knowledge_base,
     lake,
+    live_actions,
     llm_credentials,
     llm_status,
     marketplace,
@@ -166,6 +167,13 @@ api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(approvals.router)
 api_router.include_router(passkeys.router)
+
+# The live-action registry, proxied for the browser. Upstream it sits behind
+# a service token, so before this every route that answers "what can AiSOC do
+# to my estate" was reachable only by another service. Discovery and dry-run
+# only: a live dispatch goes through the approval path so an approver is
+# bound to it.
+api_router.include_router(live_actions.router)
 
 # Per-user saved views — WS-F3 (analyst quality-of-life).
 # Backs the saved-views menu on Alerts/Cases/Investigations/Playbooks

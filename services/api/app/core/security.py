@@ -63,6 +63,13 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # permission only controls who *can* query at all.
         "lake:query",
         "lake:read_schema",
+        # The live-action registry: which vendors can perform which response
+        # verbs against this tenant's estate, and what a given action would
+        # do. `actions:execute` gates the dry-run preview only — a live
+        # containment goes through the approval path, where an approver is
+        # bound to the decision.
+        "actions:read",
+        "actions:execute",
     ],
     "soc_lead": [
         "alerts:read",
@@ -85,6 +92,8 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # SOC leads run investigations across the lake routinely.
         "lake:query",
         "lake:read_schema",
+        "actions:read",
+        "actions:execute",
     ],
     "soc_analyst": [
         "alerts:read",
@@ -101,6 +110,10 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # the rate limiter caps abuse.
         "lake:query",
         "lake:read_schema",
+        # Analysts already hold playbooks:execute, and a dry run touches no
+        # vendor, so previewing a response is within the same envelope.
+        "actions:read",
+        "actions:execute",
     ],
     "threat_hunter": [
         "alerts:read",
@@ -116,12 +129,16 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # events, alert metrics, and IOC enrichments.
         "lake:query",
         "lake:read_schema",
+        # Read the registry to know what response is available for a finding;
+        # hunters hand off rather than respond, so no execute.
+        "actions:read",
     ],
     "viewer": [
         "alerts:read",
         "cases:read",
         "reports:read",
         "threat_intel:read",
+        "actions:read",
     ],
     "api_service": [
         "alerts:read",

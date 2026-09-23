@@ -535,6 +535,106 @@ async def persist_auto_triage(
         raise LedgerPersistError(str(exc)) from exc
 
 
+async def raise_approval(
+    *,
+    tenant_ref: str,
+    run_id: uuid.UUID | None,
+    alert_id: Any,
+    title: str,
+    summary: str,
+    risk_level: str,
+    action: dict[str, Any],
+    requested_by: str = "agent",
+) -> uuid.UUID | None:
+    """Queue a proposed action for human sign-off, returning the approval id.
+
+    The ``agent_approvals`` table, its API and the whole responder-app
+    approvals screen already existed. Nothing ever inserted a row: the API
+    docstring said "the agents service calls this" and a grep of this service
+    for ``approvals`` returned nothing. So the queue was structurally empty on
+    every deployment, and the feature was indistinguishable from a working one
+    that simply had no pending work.
+
+    Written from here rather than over HTTP because this is where the rest of
+    the triage outcome is persisted, under the same pool and the same RLS
+    context, so an approval cannot end up recorded against a verdict that
+    failed to save. Best-effort in the same sense as the other ledger writes:
+    no database or an unknown tenant is a no-op, because a triage verdict is
+    still worth having without one.
+
+    ``ON CONFLICT DO NOTHING`` on the deterministic id makes a Kafka replay
+    re-raise the same approval rather than a second copy of it — an operator
+    seeing the same containment request twice cannot tell which one is live.
+    """
+    pool = await get_pool()
+    if pool is None:
+        return None
+    try:
+        async with pool.acquire() as conn:
+            tenant_id = await _resolve_tenant_id(conn, tenant_ref)
+            if tenant_id is None:
+                logger.warning(
+                    "ledger.approval_skipped_unknown_tenant",
+                    tenant_ref=tenant_ref,
+                    run_id=str(run_id) if run_id else None,
+                )
+                return None
+            await _set_rls_context(conn, tenant_id)
+            approval_id = _deterministic_approval_id(tenant_id, run_id, action)
+            await conn.execute(
+                """
+                INSERT INTO agent_approvals
+                    (id, tenant_id, run_id, alert_id, requested_by, title,
+                     summary, risk_level, action, status, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', now(), now())
+                ON CONFLICT (id) DO NOTHING
+                """,
+                approval_id,
+                tenant_id,
+                run_id,
+                _coerce_uuid(alert_id),
+                requested_by[:120],
+                title[:200],
+                summary,
+                risk_level[:20],
+                json.dumps(action),
+            )
+            # The id is returned whether the insert landed or the conflict
+            # clause fired: either way this is the approval that governs this
+            # action, and a replay must point at the one already queued.
+            return approval_id
+    except Exception as exc:  # noqa: BLE001 — an approval write must not fail triage
+        logger.warning(
+            "ledger.raise_approval_failed",
+            tenant_ref=tenant_ref,
+            run_id=str(run_id) if run_id else None,
+            error=str(exc),
+        )
+        return None
+
+
+def _deterministic_approval_id(
+    tenant_id: uuid.UUID,
+    run_id: uuid.UUID | None,
+    action: dict[str, Any],
+) -> uuid.UUID:
+    """One approval per (tenant, run, action type, target), stable across replays."""
+    key = "|".join(
+        [
+            str(tenant_id),
+            str(run_id or ""),
+            str(action.get("action_type") or ""),
+            str(action.get("target") or ""),
+        ]
+    )
+    return uuid.uuid5(_APPROVAL_NAMESPACE, key)
+
+
+#: Fixed namespace so an approval id is reproducible across processes and
+#: restarts. Any constant UUID would do; this one is arbitrary and permanent.
+_APPROVAL_NAMESPACE = uuid.UUID("6f1d3b6e-7a4f-5c2b-9f0a-2d5b8c1e4a37")
+
+
 async def record_suppression(
     *,
     tenant_ref: str,

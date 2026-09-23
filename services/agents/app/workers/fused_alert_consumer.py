@@ -85,6 +85,7 @@ _METRICS = {
     "ungrounded_demoted": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
+    "approvals_raised": 0,
     "errors": 0,
 }
 
@@ -110,6 +111,17 @@ def _memory_writeback_enabled() -> bool:
     """Write every durable triage outcome back as a per-signature prior (Wave 1)
     so autonomous closures compound. Disable with AISOC_AGENT_MEMORY_WRITEBACK=0."""
     return _truthy("AISOC_AGENT_MEMORY_WRITEBACK")
+
+
+def _approvals_enabled() -> bool:
+    """Queue approval-requiring proposed actions for human sign-off.
+
+    On by default. Queueing an approval executes nothing — the worker stays
+    copilot-default — so the risk of leaving it on is a longer approvals
+    list, while the cost of leaving it off is the pre-v9.0 behaviour where
+    the queue had no producer. Disable with AISOC_AGENT_RAISE_APPROVALS=0.
+    """
+    return _truthy("AISOC_AGENT_RAISE_APPROVALS")
 
 
 def _groundedness_gate_enabled() -> bool:
@@ -473,6 +485,12 @@ class FusedAlertTriageWorker:
         if state.status is not AgentStatus.COMPLETED:
             await self._maybe_escalate(state)
 
+        # Queue every action that needs sign-off so a human can actually give
+        # it. Until v9.0 proposed actions were persisted as JSON and stopped
+        # there, so "requires_approval" described an approval nobody could
+        # grant — the responder app's queue had no producer at all.
+        approvals = await self._raise_approvals(state)
+
         return {
             "run_id": str(state.run_id),
             "incident_id": str(state.incident_id),
@@ -483,8 +501,45 @@ class FusedAlertTriageWorker:
             "business_context_rules": bc_matched,
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
+            "approvals_raised": approvals,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
         }
+
+    async def _raise_approvals(self, state: InvestigationState) -> list[str]:
+        """Queue each approval-requiring proposed action; return the ids.
+
+        Only actions the agent itself marked ``requires_approval`` are
+        queued. The ones it did not are still not executed — the worker is
+        copilot-default and dispatches nothing — so this does not widen what
+        the agent can do. It makes the subset that was always meant to reach a
+        human reach one.
+        """
+        if not _approvals_enabled():
+            return []
+        raised: list[str] = []
+        for action in state.proposed_actions:
+            if not action.requires_approval:
+                continue
+            risk = action.risk_level.value if hasattr(action.risk_level, "value") else str(action.risk_level)
+            approval_id = await ledger_module.raise_approval(
+                tenant_ref=str(state.tenant_id),
+                run_id=state.run_id,
+                alert_id=(state.raw_alert or {}).get("id"),
+                title=action.description[:200] or f"Approve {action.action_type}",
+                summary=(action.rationale or action.description or "").strip()
+                or f"The agent proposes {action.action_type} against {action.target}.",
+                risk_level=risk,
+                action={
+                    "action_type": action.action_type,
+                    "target": action.target,
+                    "parameters": dict(action.parameters or {}),
+                    "risk_level": risk,
+                },
+            )
+            if approval_id is not None:
+                raised.append(str(approval_id))
+                _METRICS["approvals_raised"] += 1
+        return raised
 
     async def _maybe_suppress_from_memory(
         self,

@@ -256,6 +256,12 @@ services:
       # (translation, hunts, KB, phishing, NL-detection) through the gateway by
       # setting OPENAI_BASE_URL=http://litellm:4000/v1 + OPENAI_API_KEY=$LITELLM_MASTER_KEY.
       LLM_GATEWAY_URL: http://litellm:4000/v1
+      # services/actions — where an approved response action is executed.
+      # The API had no pointer to it at all: the one endpoint that called it
+      # read the URL from os.environ and fell back to `aisoc-actions`, which
+      # is the container_name, not the DNS name on this network.
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:-}
     # Phase 2.6 — use /readyz, not /health, so the orchestrator
     # only routes traffic once the lifespan has finished wiring
     # Postgres, Redis, Kafka, Qdrant, and Neo4j. (Not OpenSearch: this
@@ -520,6 +526,12 @@ services:
       REDIS_URL: redis://:redis_dev_secret@redis:6379/5
       DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       CORE_API_URL: http://api:8000
+      # Must match AISOC_ACTIONS_SERVICE_TOKEN on the api and slack-bot
+      # services. Unset in dev, where AISOC_DEV_MODE relaxes the check;
+      # require_service_auth returns 503 on every mutating route without it
+      # in any other environment, which is the intended failure.
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
     networks:
       - aisoc
     restart: unless-stopped

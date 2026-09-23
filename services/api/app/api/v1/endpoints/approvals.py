@@ -6,6 +6,18 @@ approval request that lands here. The PWA polls and subscribes to push
 notifications so the on-call analyst can approve or deny in one tap,
 even from a phone.
 
+That was the design, and for both of its halves it was only the design.
+Nothing in the repository called ``POST /approvals``, so the queue had no
+producer and the responder app's approvals screen was structurally empty; and
+``decide`` flipped a row and notified the realtime service without ever
+reaching ``services/actions``, so the queue had no executor either. Tapping
+Approve recorded a decision and ran nothing, which is worse than a missing
+feature: the operator is told the host was contained.
+
+Both halves are closed in v9.0. ``services/agents`` posts here when triage
+proposes an action that needs sign-off, and ``decide`` carries the decision
+through to the actions service and records on the row whether it executed.
+
 Endpoints
 ---------
 * ``GET    /approvals``           List pending/decided approvals.
@@ -30,6 +42,7 @@ from app.api.v1.deps import AuthUser, require_permission
 from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
+from app.services.actions_client import ActionsServiceError, decide_action, submit_action
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +249,15 @@ async def decide_approval(
     row.decided_at = datetime.now(UTC)
     row.decision_comment = body.comment
 
+    # Dispatch before committing the decision, so an approval that the actions
+    # service refuses does not leave a row reading "approved" against an
+    # action that never ran. This endpoint used to flip the row and stop:
+    # every tap of Approve in the responder app recorded a decision and
+    # executed nothing, which is the most dangerous shape a security control
+    # can have — it reports that the host was contained.
+    dispatch = await _dispatch_decision(row, user, approve=body.decision == "approve")
+    row.action = {**(row.action or {}), "dispatch": dispatch}
+
     await db.commit()
     await db.refresh(row)
 
@@ -243,7 +265,95 @@ async def decide_approval(
     # resume — fire-and-forget pattern matches the rest of the surface.
     await _notify_realtime(row, event="approval_decided")
 
+    if dispatch.get("state") == "failed":
+        # The decision is durable and the operator is told the truth: their
+        # choice was recorded, the execution behind it was not accepted.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Decision recorded, but the action service refused it: {dispatch.get('detail')}. "
+                "The approval row reflects your decision; the action did not run."
+            ),
+        )
+
     return ApprovalResponse.model_validate(row)
+
+
+async def _dispatch_decision(
+    row: AgentApproval,
+    user: AuthUser,
+    *,
+    approve: bool,
+) -> dict[str, Any]:
+    """Carry a decision through to ``services/actions``.
+
+    Returns a provenance record that is stored on the approval, so "was this
+    actually executed" is answerable from the row rather than by correlating
+    two services' logs. The four states are deliberately distinct:
+
+    ``not_executable``  the approval names no action type, so there is
+                        nothing to run. Common and fine: an approval can
+                        gate a human step.
+    ``declined``        the decision was to deny; the action was rejected
+                        upstream so it cannot later be approved by replay.
+    ``executed``        the actions service accepted and ran it.
+    ``failed``          the actions service refused or was unreachable.
+    """
+    action = row.action or {}
+    action_type = action.get("action_type") or action.get("type")
+    target = action.get("target")
+    if not isinstance(action_type, str) or not action_type.strip():
+        return {"state": "not_executable", "reason": "approval carries no action_type"}
+    if not isinstance(target, str) or not target.strip():
+        return {"state": "not_executable", "reason": "approval carries no target"}
+
+    # The approval id is reused as the action id so the two systems share one
+    # identifier. Without that, "which action did this approval authorise"
+    # requires a join nobody wrote.
+    action_id = str(row.id)
+    principal = {
+        "user_id": str(user.user_id),
+        "email": getattr(user, "email", None),
+        "roles": list(getattr(user, "roles", []) or []),
+        "permissions": list(getattr(user, "permissions", []) or []),
+    }
+
+    try:
+        await submit_action(
+            action_id=action_id,
+            action_type=action_type.strip(),
+            target=target.strip(),
+            tenant_id=str(row.tenant_id),
+            incident_id=str(row.run_id or row.id),
+            rationale=row.summary or row.title,
+            parameters=action.get("parameters") or {},
+            # The requester is the agent, not the approver. Sending the
+            # approver here would make them both, and separation of duties
+            # would pass by accident.
+            requested_by=row.requested_by or "agent",
+        )
+    except ActionsServiceError as exc:
+        logger.warning(
+            "Approval dispatch: submit refused",
+            extra={"approval_id": action_id, "status": exc.status_code, "detail": str(exc)},
+        )
+        return {"state": "failed", "stage": "submit", "detail": str(exc)}
+
+    try:
+        result = await decide_action(action_id=action_id, approve=approve, approver=principal)
+    except ActionsServiceError as exc:
+        logger.warning(
+            "Approval dispatch: decision refused",
+            extra={"approval_id": action_id, "status": exc.status_code, "detail": str(exc)},
+        )
+        return {"state": "failed", "stage": "decide", "detail": str(exc)}
+
+    return {
+        "state": "executed" if approve else "declined",
+        "action_id": action_id,
+        "action_status": result.get("status"),
+        "blast_radius": result.get("blast_radius"),
+    }
 
 
 async def _notify_realtime(row: AgentApproval, *, event: str) -> None:

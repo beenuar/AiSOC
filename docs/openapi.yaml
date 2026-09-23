@@ -8043,6 +8043,138 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/live-actions:
+    get:
+      tags:
+      - actions
+      summary: List every registered live action
+      operationId: discover_api_v1_live_actions_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: vendor_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Vendor Id
+      - name: capability
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capability
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Discover Api V1 Live Actions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/live-actions/by-capability/{capability}:
+    get:
+      tags:
+      - actions
+      summary: Vendors implementing a capability
+      operationId: vendors_for_capability_api_v1_live_actions_by_capability__capability__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Capability
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Vendors For Capability Api V1 Live Actions By Capability  Capability  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/live-actions/by-vendor/{vendor_id}:
+    get:
+      tags:
+      - actions
+      summary: Capabilities a vendor supports
+      operationId: capabilities_for_vendor_api_v1_live_actions_by_vendor__vendor_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: vendor_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Vendor Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Capabilities For Vendor Api V1 Live Actions By Vendor  Vendor
+                  Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/live-actions/dry-run:
+    post:
+      tags:
+      - actions
+      summary: Preview a live action without touching a vendor
+      description: 'Proxy a dry run, with the tenant taken from the session.
+
+
+        Only ``/dry-run`` is proxied, never ``/dispatch``. Upstream, ``/dry-run``
+
+        forces ``dry_run=true`` server-side regardless of the body, so a client
+
+        cannot talk its way into a live vendor call through this route.'
+      operationId: dry_run_api_v1_live_actions_dry_run_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: true
+              type: object
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Dry Run Api V1 Live Actions Dry Run Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/saved-views:
     get:
       tags:

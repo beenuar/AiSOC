@@ -71,6 +71,12 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
         # W4.4 — remember who requested it so an approver can't approve their
         # own action (separation of duties).
         "requested_by_user_id": request.principal.user_id if request.principal else None,
+        # Kept so approve can rebuild the request faithfully. Without this the
+        # approve path reconstructed an ActionRequest with an empty
+        # `parameters`, so an action that was gated *because* of what it
+        # targets executed against defaults — and reported COMPLETED. An
+        # approval that silently changes what it approved is not an approval.
+        "parameters": dict(request.parameters or {}),
     }
     _actions[str(request.id)] = record
 
@@ -181,7 +187,9 @@ async def approve_action(
     if bound is not None:
         record["approved_by_user_id"] = bound.user_id
 
-    # Reconstruct request and execute
+    # Reconstruct the request as submitted, parameters included. Dropping
+    # them turned an approved action into a different action that still
+    # reported success.
     request = ActionRequest(
         id=UUID(action_id),
         incident_id=UUID(record["incident_id"]),
@@ -189,6 +197,10 @@ async def approve_action(
         action_type=ActionType(record["action_type"]),
         target=record["target"],
         rationale=record["rationale"],
+        parameters=dict(record.get("parameters") or {}),
+        # The bound approver, not the original requester: the executor's
+        # authorization has to evaluate the identity that authorised this run.
+        principal=bound,
     )
 
     executor = EXECUTOR_REGISTRY.get(request.action_type)
