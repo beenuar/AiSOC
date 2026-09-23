@@ -29,7 +29,15 @@ type Config struct {
 	ShodanEnrichEnabled   bool
 	ShodanCacheExpirySecs int
 
-	// CVE / vulnerability correlation
+	// CVE / vulnerability correlation.
+	//
+	// Off by default. Nothing in the platform consumes VulnKafkaTopic —
+	// fusion gets its vulnerability context by calling the enrichment service
+	// at fuse time, not from this stream — so with it on, every deployment
+	// downloaded the CISA KEV catalogue at boot and published matches into a
+	// topic with no reader. It remains available as an opt-in export for an
+	// external consumer; the messages carry an `event_type:
+	// VULNERABILITY_MATCH` header for exactly that.
 	VulnCorrelEnabled   bool
 	VulnKafkaTopic      string // topic for VULNERABILITY_MATCH events
 	NvdAPIKey           string // optional NVD API key for higher rate limits
@@ -169,7 +177,7 @@ func Load() (*Config, error) {
 		ShodanCacheExpirySecs: mustGetEnvInt("SHODAN_CACHE_EXPIRY_SECS", 3600),
 
 		// CVE correlation
-		VulnCorrelEnabled: getEnv("VULN_CORREL_ENABLED", "true") == "true",
+		VulnCorrelEnabled: getEnv("VULN_CORREL_ENABLED", "false") == "true",
 		VulnKafkaTopic:    getEnv("VULN_KAFKA_TOPIC", "aisoc.vulnerability_matches"),
 		NvdAPIKey:         getEnv("NVD_API_KEY", ""),
 

@@ -174,9 +174,16 @@ func main() {
 			defer pool.Close()
 			store := inbox.NewStore(pool)
 			registry := inbox.NewRegistry()
+			// Embedded first — these ship in the binary and are the set the
+			// service is tested against. The on-disk directory is an operator
+			// override layered on top, and is allowed to be absent.
+			if err := registry.LoadEmbedded(); err != nil {
+				log.Error().Err(err).
+					Msg("Failed to load embedded inbox templates; /v1/inbox/* will return 503 for every template")
+			}
 			if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
 				log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).
-					Msg("Failed to load inbox templates; /v1/inbox/* will return 503 for unknown templates")
+					Msg("Failed to load inbox template overrides from disk")
 			}
 			log.Info().
 				Strs("templates", registry.IDs()).

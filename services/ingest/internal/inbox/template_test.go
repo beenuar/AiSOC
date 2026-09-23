@@ -168,11 +168,85 @@ field_map: {}
 	}
 }
 
-func TestRegistry_Load_ErrorsOnMissingDir(t *testing.T) {
+func TestRegistry_Load_MissingDirIsNotAnError(t *testing.T) {
+	// Load is now the operator override on top of LoadEmbedded, so an absent
+	// directory is the normal case rather than a failure. It used to be an
+	// error, and the default it was pointed at — /app/templates — was a path
+	// the container image never contained, so the "error" was logged as a
+	// warning on every boot and the inbox 503'd regardless.
 	r := NewRegistry()
-	err := r.Load("/nonexistent/template/dir/" + strings.Repeat("x", 10))
-	if err == nil {
-		t.Fatalf("expected error for missing dir")
+	if err := r.Load("/nonexistent/template/dir/" + strings.Repeat("x", 10)); err != nil {
+		t.Fatalf("missing override dir should not error: %v", err)
+	}
+}
+
+func TestRegistry_LoadEmbedded_ShipsTemplatesInTheBinary(t *testing.T) {
+	// The regression this pins: the runtime image copies only the compiled
+	// binary, so a disk-only template path meant every /v1/inbox/* request
+	// answered 503 on every deployment.
+	r := NewRegistry()
+	if err := r.LoadEmbedded(); err != nil {
+		t.Fatalf("LoadEmbedded failed: %v", err)
+	}
+	ids := r.IDs()
+	if len(ids) == 0 {
+		t.Fatalf("no embedded templates registered")
+	}
+	// generic-json is the template the documented inbox quickstart uses.
+	if _, err := r.Get("generic-json"); err != nil {
+		t.Errorf("generic-json not embedded; got IDs %v", ids)
+	}
+}
+
+func TestRegistry_LoadEmbedded_CoversEveryTemplateOnDisk(t *testing.T) {
+	// A new template added to the directory but not reachable through the
+	// embed would be invisible at runtime while looking present in the repo.
+	entries, err := os.ReadDir("../normalizer/templates")
+	if err != nil {
+		t.Fatalf("read template source dir: %v", err)
+	}
+	r := NewRegistry()
+	if err := r.LoadEmbedded(); err != nil {
+		t.Fatalf("LoadEmbedded failed: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !isTemplateFile(e.Name()) {
+			continue
+		}
+		id := strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
+		if _, err := r.Get(id); err != nil {
+			t.Errorf("template %s exists on disk but is not embedded", e.Name())
+		}
+	}
+}
+
+func TestRegistry_Load_OverridesAnEmbeddedTemplate(t *testing.T) {
+	r := NewRegistry()
+	if err := r.LoadEmbedded(); err != nil {
+		t.Fatalf("LoadEmbedded failed: %v", err)
+	}
+	before, err := r.Get("generic-json")
+	if err != nil {
+		t.Fatalf("generic-json not embedded: %v", err)
+	}
+
+	dir := t.TempDir()
+	writeTemplate(t, dir, "generic-json.yaml", `
+vendor_name: Operator
+product_name: Override
+class_uid: 2001
+field_map: {}
+`)
+	if err := r.Load(dir); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	after, err := r.Get("generic-json")
+	if err != nil {
+		t.Fatalf("generic-json vanished after override: %v", err)
+	}
+	if after.VendorName != "Operator" {
+		t.Errorf("on-disk template did not override embedded one: vendor = %q (was %q)",
+			after.VendorName, before.VendorName)
 	}
 }
 

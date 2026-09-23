@@ -30,7 +30,6 @@ The Blueprint sets these flags on the api and agents services:
 ```yaml
 AISOC_DISABLE_KAFKA: "true"
 AISOC_DISABLE_CLICKHOUSE: "true"
-AISOC_DISABLE_OPENSEARCH: "true"
 AISOC_DISABLE_NEO4J: "true"
 AISOC_DISABLE_QDRANT: "true"
 ```

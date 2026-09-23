@@ -75,8 +75,6 @@ services:
         value: "true"
       - key: AISOC_DISABLE_CLICKHOUSE
         value: "true"
-      - key: AISOC_DISABLE_OPENSEARCH
-        value: "true"
       - key: AISOC_DISABLE_NEO4J
         value: "true"
       - key: AISOC_DISABLE_QDRANT

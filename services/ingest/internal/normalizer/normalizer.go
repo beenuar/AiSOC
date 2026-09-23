@@ -336,9 +336,30 @@ var _canonicalSeverityMap = map[string]int{
 var _canonicalFieldMap = map[string]string{
 	"title":       "message",
 	"external_id": "finding.uid",
-	"src_ip":      "src_endpoint.ip",
-	"hostname":    "device.name",
-	"actor":       "actor.user.name",
+}
+
+// _canonicalAliases fills one OCSF destination from the first connector field
+// that carries a value, in declared order.
+//
+// This is a slice and not more fieldMap entries because Go randomises map
+// iteration: three entries pointing at actor.user.name would resolve to a
+// different one of them per process, which is a correctness bug that only
+// shows up as flakiness. Declared order is the precedence.
+//
+// The aliases exist because the canonical map recognised only `actor`, and a
+// count across the 68 canonical-envelope connectors found 40 using `actor`
+// but 11 using `username` or `user`. Those eleven lost their identity on the
+// way through, and the fusion correlation key is {tenant}:{entity}:{tactic},
+// so a missing actor does not merely blank a column — it collapses the
+// entity segment to "unknown" and every one of that connector's alerts
+// correlates into the same bucket.
+var _canonicalAliases = []struct {
+	dst     string
+	sources []string
+}{
+	{"actor.user.name", []string{"actor", "username", "user", "user_name"}},
+	{"device.name", []string{"hostname", "host", "device_name"}},
+	{"src_endpoint.ip", []string{"src_ip", "source_ip", "client_ip"}},
 }
 
 // canonicalClassByConnector overrides the default Security Finding class for
@@ -425,7 +446,8 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	}
 
 	var profile connectorProfile
-	if isCanonicalEnvelope(raw.Payload) {
+	isCanonical := isCanonicalEnvelope(raw.Payload)
+	if isCanonical {
 		// Connector-normalized envelope: map its canonical fields directly.
 		profile = canonicalProfile(raw.ConnectorType)
 	} else {
@@ -470,6 +492,24 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	for srcField, dstField := range profile.fieldMap {
 		if val := getNestedField(raw.Payload, srcField); val != nil {
 			setNestedField(ocsf, dstField, val)
+		}
+	}
+
+	// Canonical envelopes additionally resolve identity aliases in declared
+	// order, so a connector that spells the actor `username` is not silently
+	// anonymised. Only applies where the profile uses the canonical map;
+	// hand-written vendor profiles already name their own fields.
+	if isCanonical {
+		for _, alias := range _canonicalAliases {
+			if getNestedField(ocsf, alias.dst) != nil {
+				continue
+			}
+			for _, src := range alias.sources {
+				if val := getNestedField(raw.Payload, src); val != nil {
+					setNestedField(ocsf, alias.dst, val)
+					break
+				}
+			}
 		}
 	}
 

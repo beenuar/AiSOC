@@ -161,10 +161,13 @@ flowchart TB
 | **ClickHouse** | Columnar scans over hundreds of millions of events. Postgres cannot do this at cost. | No event lake, no hunting over raw telemetry. **Alerting is unaffected.** |
 | **Neo4j** | Multi-hop traversal ("what else did this identity touch") is a join explosion in SQL. | No graph context or blast radius. Alerting unaffected. |
 | **Qdrant** | Vector similarity for IOC and actor matching. | No semantic threat-intel matching. |
+| **OpenSearch** | Full-text and structured search over the threat-intel corpus — `threatintel-iocs` and `threatintel-actors`. | `services/threatintel` cannot start: it indexes into OpenSearch in its lifespan, without a fallback. |
 
-**OpenSearch is started by the `full` profile and nothing reads from it.**
-It is recorded in [the reality audit](../audit/REPOSITORY_REALITY.md) as
-unused rather than drawn here as though it were part of the design.
+**Who reads OpenSearch, precisely:** only `services/threatintel`. This page
+previously said nothing read it at all, which came from checking
+`services/api` — which genuinely holds no OpenSearch client — and stopping
+there. See the correction in
+[the reality audit](../audit/REPOSITORY_REALITY.md).
 
 ---
 

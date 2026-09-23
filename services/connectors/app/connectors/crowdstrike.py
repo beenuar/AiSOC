@@ -166,6 +166,19 @@ class CrowdStrikeConnector(BaseConnector):
         behaviors = raw.get("behaviors") or [{}]
         title = behaviors[0].get("display_name", "CrowdStrike Detection")
 
+        # Falcon carries the acting identity per behavior, not on the
+        # detection. The envelope omitted it entirely, so every CrowdStrike
+        # alert reached fusion with no actor — and fusion's correlation key is
+        # {tenant}:{entity}:{tactic}, so an EDR detection on a named user
+        # correlated under "unknown" alongside every other one.
+        actor = ""
+        for behavior in behaviors:
+            candidate = (behavior.get("user_name") or "").strip()
+            if candidate:
+                domain = (behavior.get("user_id") or "").strip()
+                actor = f"{candidate}@{domain}" if "@" not in candidate and "@" in domain else candidate
+                break
+
         return {
             "source": self.connector_id,
             "external_id": raw.get("detection_id", ""),
@@ -174,6 +187,7 @@ class CrowdStrikeConnector(BaseConnector):
             "severity": severity,
             "src_ip": raw.get("device", {}).get("external_ip"),
             "hostname": raw.get("device", {}).get("hostname"),
+            "actor": actor or None,
             "mitre_techniques": [b.get("technique_id", "") for b in raw.get("behaviors", []) if b.get("technique_id")],
             "raw_event": raw,
             "created_at": raw.get("created_timestamp"),

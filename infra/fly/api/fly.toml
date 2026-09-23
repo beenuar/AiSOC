@@ -67,10 +67,11 @@ kill_timeout   = "5s"
   # "MIGRATION SKIPPED" line in the deploy log to investigate. Flip this
   # back to "1" if you want demo deploys to fail-closed on DB outages.
   AISOC_MIGRATIONS_REQUIRED = "0"
-  # Disable optional integrations (no Kafka/ClickHouse/OpenSearch on demo)
+  # Disable optional integrations (no Kafka/ClickHouse/graph/vector on demo).
+  # There is no AISOC_DISABLE_OPENSEARCH: this service holds no OpenSearch
+  # client, so the flag disabled nothing and only implied it did.
   AISOC_DISABLE_KAFKA      = "true"
   AISOC_DISABLE_CLICKHOUSE = "true"
-  AISOC_DISABLE_OPENSEARCH = "true"
   AISOC_DISABLE_NEO4J      = "true"
   AISOC_DISABLE_QDRANT     = "true"
   # Seeding runs automatically on deploy via [deploy].release_command above.
