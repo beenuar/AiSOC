@@ -200,7 +200,16 @@ async def handle_action_decision(
 
     is_approve = action_id_event == APPROVE_ACTION_ID
     try:
-        action = await actions_client.approve_action(action_id) if is_approve else await actions_client.reject_action(action_id)
+        # `user_id` comes off the Slack-signed interaction payload, so it is
+        # attested rather than claimed. Passing it is what makes the actions
+        # service able to enforce the permission tier and separation of
+        # duties; without it the approval authorized nobody.
+        approver = actions_client.chatops_approver("slack", user_id)
+        action = (
+            await actions_client.approve_action(action_id, approver=approver)
+            if is_approve
+            else await actions_client.reject_action(action_id, approver=approver)
+        )
     except AisocClientError as exc:
         await sink.record(
             ApprovalAuditEvent(

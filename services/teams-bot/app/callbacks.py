@@ -39,11 +39,28 @@ class _ActionsClient(Protocol):
     # CodeQL ``py/ineffectual-statement`` (it flags ellipsis as a
     # discarded expression statement). Semantically identical for an
     # unimplemented Protocol contract.
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
+    async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         pass
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
+    async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         pass
+
+
+def _chatops_approver(client: Any, approver_id: str | None) -> dict[str, Any] | None:
+    """Build the approver payload, tolerating a client without the helper.
+
+    `build_actions_client` may return the Slack bot's client, this package's
+    fallback, or a test double. All of the real ones expose
+    `chatops_approver`; a double may not, so fall back to constructing the
+    payload directly rather than dropping the identity — silently omitting it
+    is what made approvals authorize nobody in the first place.
+    """
+    if not approver_id:
+        return None
+    helper = getattr(client, "chatops_approver", None)
+    if callable(helper):
+        return helper("teams", approver_id)
+    return {"chatops_approver": {"platform": "teams", "platform_user_id": approver_id}}
 
 
 @dataclass(slots=True, frozen=True)
@@ -138,10 +155,15 @@ async def handle_card_action(
         )
 
     try:
+        # `approver_id` was verified by the inbound HMAC check above, so it is
+        # attested rather than claimed. Passing it is what lets the actions
+        # service enforce the permission tier and separation of duties; the
+        # callback previously recorded it in the audit event only.
+        approver = _chatops_approver(actions_client, approver_id)
         if decision_label == "approved":
-            await actions_client.approve_action(action_id)
+            await actions_client.approve_action(action_id, approver=approver)
         else:
-            await actions_client.reject_action(action_id)
+            await actions_client.reject_action(action_id, approver=approver)
     except Exception as exc:  # noqa: BLE001 — surfaced as audit error
         log.warning(
             "teams_callback.upstream_failed",

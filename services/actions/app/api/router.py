@@ -13,13 +13,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from app.core.config import get_settings
-from app.models.action import ActionPrincipal, ActionRequest, ActionStatus, ActionType
+from app.models.action import (
+    ActionPrincipal,
+    ActionRequest,
+    ActionStatus,
+    ActionType,
+    ChatOpsApprover,
+)
 from app.security.authz import (
     ActionAuthzError,
     authorize_action,
     authorize_approver,
     require_service_auth,
 )
+from app.security.chatops_identity import resolve_approver
 from app.security.chatops_token import ChatOpsTokenError, verify_token
 from app.services.blast_radius import BlastRadiusGate
 from app.services.executor_registry import EXECUTOR_REGISTRY
@@ -99,34 +106,80 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
     return record
 
 
+def _bind_approver(
+    record: dict[str, Any],
+    action_id: str,
+    approver: ActionPrincipal | None,
+    assertion: ChatOpsApprover | None,
+    *,
+    require: bool,
+) -> ActionPrincipal | None:
+    """Resolve and authorize the identity behind an approve/reject call.
+
+    Returns the bound principal, or ``None`` when no identity was supplied and
+    ``require`` is false. Raises ``HTTPException`` on denial.
+
+    A ChatOps assertion carries identity only — never permissions — because a
+    bot that asserted its own permissions could grant itself anything. The
+    mapping from a verified platform user to a principal is operator
+    configuration; an unmapped user is refused rather than admitted with an
+    empty permission set.
+
+    ``require`` is true for approve and false for reject. The asymmetry is
+    deliberate: an approval with no identity cannot be evaluated against
+    separation of duties, while a rejection causes no vendor effect and has no
+    human at all when it comes from the approval-timeout scheduler — requiring
+    one would leave expired requests stuck in ``awaiting_approval`` forever.
+    """
+    if approver is None and assertion is not None:
+        approver = resolve_approver(assertion.platform, assertion.platform_user_id)
+        if approver is None:
+            logger.warning(
+                "approval_denied_unmapped_identity",
+                action_id=action_id,
+                platform=assertion.platform,
+            )
+            detail = f"{assertion.platform} user is not mapped to an AiSOC approver. Add them to AISOC_CHATOPS_APPROVERS."
+            raise HTTPException(status_code=403, detail=detail)
+
+    if approver is None:
+        settings = get_settings()
+        if require and (settings.AISOC_ACTIONS_REQUIRE_APPROVER or settings.AISOC_ACTIONS_REQUIRE_PRINCIPAL):
+            raise HTTPException(status_code=403, detail="an approver identity is required")
+        return None
+
+    try:
+        authorize_approver(record, approver)
+    except ActionAuthzError as exc:
+        logger.warning("Approval denied", action_id=action_id, reason=str(exc))
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return approver
+
+
 @router.post("/actions/{action_id}/approve")
 async def approve_action(
     action_id: str,
     approver: ActionPrincipal | None = None,
+    chatops_approver: ChatOpsApprover | None = None,
     _auth: None = Depends(require_service_auth),
 ):
     """Approve a pending action (human-in-the-loop gate).
 
-    W4.4 — when an approver identity is supplied it is bound: the approver must
-    hold the action's required permission and must not be the requester. When
-    principals are required (``AISOC_ACTIONS_REQUIRE_PRINCIPAL``) an approver is
-    mandatory."""
+    W4.4 — the approver is bound to the decision: they must hold the action's
+    required permission and must not be the requester. T3.6 — an approval with
+    no resolvable identity is refused by default
+    (``AISOC_ACTIONS_REQUIRE_APPROVER``), because separation of duties cannot
+    be evaluated against nobody. ChatOps callers send ``chatops_approver``
+    (verified platform identity) and the mapping supplies the permissions."""
     record = _actions.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
     if record["status"] != ActionStatus.AWAITING_APPROVAL:
         raise HTTPException(status_code=400, detail=f"Action is not awaiting approval (current: {record['status']})")
 
-    if approver is None:
-        if get_settings().AISOC_ACTIONS_REQUIRE_PRINCIPAL:
-            raise HTTPException(status_code=403, detail="an approver identity is required")
-    else:
-        try:
-            authorize_approver(record, approver)
-        except ActionAuthzError as exc:
-            logger.warning("Approval denied", action_id=action_id, reason=str(exc))
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-        record["approved_by_user_id"] = approver.user_id
+    bound = _bind_approver(record, action_id, approver, chatops_approver, require=True)
+    if bound is not None:
+        record["approved_by_user_id"] = bound.user_id
 
     # Reconstruct request and execute
     request = ActionRequest(
@@ -152,13 +205,33 @@ async def approve_action(
 
 
 @router.post("/actions/{action_id}/reject")
-async def reject_action(action_id: str, _auth: None = Depends(require_service_auth)):
-    """Reject a pending action."""
+async def reject_action(
+    action_id: str,
+    approver: ActionPrincipal | None = None,
+    chatops_approver: ChatOpsApprover | None = None,
+    _auth: None = Depends(require_service_auth),
+):
+    """Reject a pending action.
+
+    Binds the deciding identity on the same terms as approve. A rejection used
+    to take no identity and record none, so "who declined to contain this
+    host, and were they entitled to" had no answer — which matters as much as
+    the approve side during an incident review.
+    """
     record = _actions.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")
+
+    bound = _bind_approver(record, action_id, approver, chatops_approver, require=False)
+    if bound is not None:
+        record["rejected_by_user_id"] = bound.user_id
+
     record["status"] = ActionStatus.REJECTED
-    logger.info("Action rejected", action_id=action_id)
+    logger.info(
+        "Action rejected",
+        action_id=action_id,
+        rejected_by=bound.user_id if bound else None,
+    )
     return record
 
 

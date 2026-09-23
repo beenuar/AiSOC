@@ -28,10 +28,10 @@ class _ActionsClient(Protocol):
     # Protocol method bodies use ``pass`` rather than ``...`` to silence
     # CodeQL ``py/ineffectual-statement``. Semantically identical for an
     # unimplemented Protocol contract.
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
+    async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         pass
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
+    async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         pass
 
     async def aclose(self) -> None:
@@ -61,13 +61,26 @@ class _FallbackActionsClient:
             headers["Authorization"] = f"Bearer {self._token}"
         self._client = httpx.AsyncClient(base_url=self._base_url, headers=headers, timeout=10.0)
 
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
-        r = await self._client.post(f"/api/v1/actions/{action_id}/approve")
+    @staticmethod
+    def chatops_approver(platform: str, platform_user_id: str | None) -> dict[str, Any] | None:
+        """Mirror of the Slack client's helper, so either client works here.
+
+        `build_actions_client` prefers the Slack bot's client when it is on
+        the image and falls back to this one, so both have to accept the same
+        approver payload — otherwise approvals authorize or don't depending on
+        which image the Teams bot happens to be running.
+        """
+        if not platform_user_id:
+            return None
+        return {"chatops_approver": {"platform": platform, "platform_user_id": platform_user_id}}
+
+    async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
+        r = await self._client.post(f"/api/v1/actions/{action_id}/approve", json=approver)
         r.raise_for_status()
         return r.json()
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
-        r = await self._client.post(f"/api/v1/actions/{action_id}/reject")
+    async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
+        r = await self._client.post(f"/api/v1/actions/{action_id}/reject", json=approver)
         r.raise_for_status()
         return r.json()
 
