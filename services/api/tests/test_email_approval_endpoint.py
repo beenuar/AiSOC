@@ -76,7 +76,8 @@ def _stub_post(monkeypatch: pytest.MonkeyPatch, response: _StubResponse, recorde
 
 
 def test_the_url_the_issuer_mints_is_the_url_the_router_serves(client: TestClient) -> None:
-    """The regression. The default used to be /v1/actions/email-decide."""
+    """The regression. The default used to be /v1/actions/email-decide, a path
+    no router served, so every button in a rendered email 404'd."""
     url = approval_url(
         base_url="https://console.example",
         decision="approved",
@@ -87,8 +88,13 @@ def test_the_url_the_issuer_mints_is_the_url_the_router_serves(client: TestClien
     )
     path = url.split("https://console.example", 1)[1].split("?", 1)[0]
     assert path == "/api/v1/actions/email-decide"
-    # And that path is routed, rather than 404.
-    assert any(getattr(route, "path", "") == path for route in client.app.routes)
+
+    # Asserted by requesting it rather than by inspecting `app.routes`: a
+    # route table can list a path that the mounted prefix does not actually
+    # serve, and a 404 here is precisely the bug. Any status other than 404
+    # means the path resolves — the token is deliberately absent, so a 422
+    # for the missing required query parameter is the expected answer.
+    assert client.get(path).status_code != 404
 
 
 # ── the approver is signed in ──────────────────────────────────────────────

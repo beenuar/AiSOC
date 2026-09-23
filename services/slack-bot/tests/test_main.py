@@ -43,17 +43,29 @@ class _StubActionsClient:
         self._raise_on = raise_on
         self.approve_calls: list[str] = []
         self.reject_calls: list[str] = []
+        # T3.6 — the verified platform identity the handler now forwards, so
+        # the actions service has somebody to authorize. It used to send
+        # nothing at all.
+        self.approvers: list[dict[str, Any] | None] = []
 
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
+    @staticmethod
+    def chatops_approver(platform: str, platform_user_id: str | None) -> dict[str, Any] | None:
+        if not platform_user_id:
+            return None
+        return {"chatops_approver": {"platform": platform, "platform_user_id": platform_user_id}}
+
+    async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._raise_on == "approve":
             raise AisocClientError("upstream boom", status_code=502)
         self.approve_calls.append(action_id)
+        self.approvers.append(approver)
         return {"id": action_id, "status": "approved", "action_type": "isolate_host"}
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
+    async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._raise_on == "reject":
             raise AisocClientError("upstream boom", status_code=502)
         self.reject_calls.append(action_id)
+        self.approvers.append(approver)
         return {"id": action_id, "status": "rejected", "action_type": "isolate_host"}
 
 
@@ -125,10 +137,10 @@ def test_lifespan_builds_and_closes_clients(monkeypatch):
         # ``ApprovalTimeoutScheduler`` at startup (T3.6 ChatOps timeout
         # path), so the mock has to expose them — no actual call is
         # made during the lifespan, but ``getattr`` is.
-        async def approve_action(self, action_id: str) -> dict[str, Any]:
+        async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
             return {"id": action_id, "status": "approved"}
 
-        async def reject_action(self, action_id: str) -> dict[str, Any]:
+        async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
             return {"id": action_id, "status": "rejected"}
 
     monkeypatch.setattr(main_module, "AisocApiClient", _RecordingApiClient)
