@@ -1,7 +1,7 @@
 # AiSOC v8 — progress tracker
 
 **Last updated:** 2026-09-23
-**Current release:** `v8.1.0` (2026-09-23) · **Next:** `v8.2` (packaging)
+**Current release:** `v8.1.1` (2026-09-23) · **Next:** `v8.2` (packaging)
 
 This tracker is the at-a-glance view of what has landed across the v8 line and
 what is still open. It is deliberately short and dated. When it disagrees with
@@ -89,6 +89,37 @@ optional one.
 | Codespaces quickstart ([#716](https://github.com/beenuar/AiSOC/issues/716)) | done |
 | arm64 service images (Apple Silicon could not pull any of them) | done |
 | Screencast + `hero.gif` assets | moved to v8.2 — recording needs a stack to point a browser at, and the hosted OSS demo is down pending a billing action |
+
+---
+
+## v8.1.1 — shipped 2026-09-23
+
+An adoption audit with no new capability, run against the whole repository:
+installability, architecture comprehension, data provenance, pipeline
+connectivity, and whether documented commands work. The headline finding is
+that `./install.sh` started a compose file with **no ingest service, no fusion
+service and Kafka disabled** — so the most-followed path into the project did
+not run the project, and the console a reader saw had been populated by a seed
+script.
+
+| Item | Status |
+|------|--------|
+| `install.sh` runs `make up` (CORE) and then the golden pipeline | done |
+| `tests/e2e/golden_pipeline/` + `golden-pipeline.yml`, verified to fail when broken | done |
+| `scripts/doctor.sh` / `make doctor` | done |
+| `/livez` + `/readyz` on `services/ingest`, dialling Kafka | done |
+| CORE as the default profile; ClickHouse / Neo4j / Qdrant / OpenSearch / enrichment / connectors to `full` | done |
+| Five fabricated-data surfaces gated behind demo mode; `seed_demo.py` refuses outside development | done |
+| `054_alert_provenance.sql` — `is_synthetic` on `alerts` | done |
+| `scripts/project_stats.py --check` — README figures derived from the tree | done |
+| `docs/audit/REPOSITORY_REALITY.md` | done |
+| `docs/architecture/README.md` rewritten around one event's journey | done |
+| `docs/testing/CLEAN_INSTALL.md` | done |
+| README rewritten for adoption | done |
+| Consolidated `Makefile` | done |
+| The three packages that could not be built at the v8.1.0 tag | done |
+| CrowdStrike has no normalizer profile and uses the generic one | open — recorded in the reality audit |
+| OpenSearch is started by `full` and read by nothing | open — recorded, not drawn into a diagram |
 
 ---
 

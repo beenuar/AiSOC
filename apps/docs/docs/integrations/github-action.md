@@ -16,7 +16,7 @@ as a PR comment or job summary. No LLM, no data leaves your CI runner.
 today points at the action's directory inside the monorepo:
 
 ```yaml
-- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.1
 ```
 
 Pin a tag rather than a branch, so a workflow cannot change underneath you.
@@ -41,7 +41,7 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.1
         with:
           mode: pr-comment
           min-severity: low
@@ -70,7 +70,7 @@ jobs:
   digest:
     runs-on: ubuntu-latest
     steps:
-      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.1
         with:
           mode: digest
 ```

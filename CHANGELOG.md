@@ -7,6 +7,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.1] — 2026-09-23
+
+**The v8.1.0 notes described a platform its own quick start never started.**
+This release contains no new capability. It exists because an adoption audit
+of the repository — installability, architecture comprehension, data
+provenance, pipeline connectivity — found that the single most-followed path
+into AiSOC did not run AiSOC, and that finding accounts for most of the
+recurring feedback on its own.
+
+`./install.sh` handed off to a nine-service compose file with **no ingest
+service, no fusion service, and `AISOC_DISABLE_KAFKA: true`**. Everything
+visible in the resulting console came from `seed_demo.py` writing fifteen
+fabricated incidents straight into Postgres. A reader followed the README, saw
+a populated console, and concluded the platform worked — having never run the
+platform. The installer printed *"AiSOC is up and running"* because the
+compose command exited 0.
+
+The good news the audit also produced: **the core pipeline does work.** It had
+simply never been demonstrated. `make smoke` now pushes one real event through
+ingest, Kafka, fusion and detection and reads the alert back from the API,
+reaching past nothing, and CI fails if any stage does.
+
+### Fixed
+
+- **The documented quick start never ran the product** ([#726](https://github.com/beenuar/AiSOC/pull/726)).
+  `install.sh` now runs `make up` — the same CORE stack the README documents
+  and CI tests — and then runs the golden pipeline, so the installer's success
+  banner reports a verified event traversal rather than a process exit code.
+  `infra/compose/docker-compose.demo.yml` is kept for screenshots and UI work
+  and now says at the top of the file that it cannot answer whether AiSOC
+  works.
+- **`services/ingest` answered `/health` unconditionally** ([#727](https://github.com/beenuar/AiSOC/pull/727)),
+  so *"ingest is healthy"* and *"every event is being dropped"* could both be
+  true at once — precisely the state a broker outage produces. `/readyz` now
+  dials Kafka rather than reading a cached connection flag, because kafka-go
+  reconnects lazily and a cached flag is stale in exactly the situation this
+  is meant to catch. Verified live: 200 with Kafka up, 503 with a reason and a
+  log hint with Kafka stopped.
+- **Three of the eight publishable packages could not be built** ([#725](https://github.com/beenuar/AiSOC/pull/725)).
+  The release pipeline builds and packs every package on each tag precisely so
+  it cannot rot while the upload is credential-gated — and on the v8.1.0 tag
+  it earned that design back. `aisoc` and `@aisoc/mcp` failed with
+  `Could not resolve "@aisoc/report-card"`: that workspace dependency's `main`
+  points at a build artifact and `pnpm --filter <pkg> build` never builds
+  dependencies, so the `...` suffix was missing. `aisoc-cli` could not produce
+  a wheel at all — `pyproject.toml` declared `packages = ["src/aisoc_cli"]`
+  *and* a `force-include` mapping the same templates directory to the same
+  wheel path, so hatchling refused on the duplicate. Neither was visible
+  anywhere but a tag. `test_packaging.py` now builds the wheel and looks
+  inside it, because a test that read the config would have declared both
+  fine.
+- **Alerts were labelled `"crowdstrike crowdstrike"`** — vendor and product
+  joined without deduplication, in two copies of the same helper, so fixing
+  one left the other. There is one shared implementation now
+  (`fusion/app/services/provenance.py::product_label`). In the same pass, an
+  alert's `description` was `str(raw_data)`, so the console showed
+  `{"command_line": "powershell.exe -nop ...` where a sentence belongs,
+  discarding the vendor's own description.
+- **Fusion defaulted its enrichment URL to `localhost:8082` — itself** — and
+  swallowed the resulting failure at `DEBUG`; and fusion declared no
+  `depends_on` for Postgres, so it raced the database on cold boot.
+- **Five surfaces rendered fabricated data outside demo mode**: the MSSP
+  overview and its managed-tenant and cross-tenant-incident lists, the
+  Copilot's reply on API error, the air-gap status endpoint reporting
+  unchecked conditions as satisfied, a hard-coded analyst identity in
+  Settings, and the investigation timeline. All are gated behind demo mode and
+  return honest empties otherwise. `seed_demo.py` refuses to run outside
+  development unless `AISOC_ALLOW_SEED=1`.
+
+### Added
+
+- **`tests/e2e/golden_pipeline/`** — one deterministic end-to-end test that
+  pushes raw telemetry into ingest and asserts each boundary independently, so
+  a break names the stage rather than the suite. Wired into CI as
+  `golden-pipeline.yml`, which also verifies the gate fails when the pipeline
+  is broken.
+- **`scripts/doctor.sh` / `make doctor`** — diagnoses Docker, Compose, disk,
+  ports, configuration, Postgres, Redis, Kafka and every service, and prints
+  the command to run next. It checks disk before Kafka and probes the broker
+  directly, because the Docker VM filling up produced a Kafka that reported
+  `healthy` while refusing every request.
+- **`/livez` and `/readyz` on `services/ingest`**, matching `services/api` and
+  `services/fusion`.
+- **`scripts/project_stats.py --check`** — derives the connector count,
+  executable detection count, compose service count and claim-to-gate totals
+  from the tree and fails CI when the README disagrees.
+- **`docs/audit/REPOSITORY_REALITY.md`** — every major component classified
+  WORKING / PARTIAL / BROKEN / DEMO-ONLY / EXPERIMENTAL / DEAD CODE by tracing
+  the implementation, not the filename. It records that OpenSearch is started
+  by the `full` profile and read by nothing, rather than drawing it into a
+  diagram as though it were part of the design.
+- **`docs/architecture/README.md`** — rewritten around *what happens when
+  AiSOC receives one security event*, with five diagrams whose every box links
+  to the directory that implements it.
+- **`docs/testing/CLEAN_INSTALL.md`** — the clean-machine walkthrough, from a
+  real run.
+- Migration `054_alert_provenance.sql` adds `is_synthetic`,
+  `synthetic_source` and `synthetic_scenario` to `alerts`.
+
+### Changed
+
+- **CORE is the default deployment profile**: ten services, roughly 6 GB, and
+  the smallest deployment that takes a real event and produces a real alert —
+  not a cut-down toy. ClickHouse, Neo4j, Qdrant, OpenSearch, enrichment and
+  connectors moved to `full`. Both heavy dependencies were already
+  environment-gated, so nothing was weakened to do this. `make up-full` sets
+  `AISOC_LAKE_WRITER_ENABLED` and `AISOC_GRAPH_ENABLED`, which the profile
+  needs and did not previously set.
+- **README rewritten for adoption** rather than release history: what AiSOC
+  does, quick start, how to tell demo data from real data, connecting real
+  sources, the data flow, project maturity per capability, and what AiSOC is
+  not.
+- **One command set.** `make install / up / up-full / down / restart / status
+  / doctor / smoke / demo / logs / test / test-unit / test-integration /
+  test-e2e / stats / clean`, consolidating the previous scattered scripts.
+- The integration workflow boots the `full` profile with the lake writer and
+  graph enabled, so it exercises the architecture it claims to.
+
 ## [8.1.0] — 2026-09-23
 
 **Wave-2 features, and the gaps behind them.** Every item in the wave-2
@@ -184,19 +302,6 @@ Claim-to-gate matrix: **108 rows — 99 GATED, 9 PARTIAL, 0 NO GATE**.
 
 ### Fixed
 
-- **Three of the eight publishable packages could not be built.** The release
-  pipeline builds and packs every package on each tag precisely so it cannot
-  rot while the upload is credential-gated — and on this tag it earned that
-  design back. `aisoc` and `@aisoc/mcp` failed with
-  `Could not resolve "@aisoc/report-card"`: that workspace dependency's `main`
-  points at a build artifact and `pnpm --filter <pkg> build` never builds
-  dependencies, so the `...` suffix was missing. `aisoc-cli` could not produce
-  a wheel at all — `pyproject.toml` declared `packages = ["src/aisoc_cli"]`
-  *and* a `force-include` mapping the same templates directory to the same
-  wheel path, so hatchling refused on the duplicate. Both would have blocked
-  the first real publish, and neither was visible anywhere but a tag.
-  `test_packaging.py` now builds the wheel and looks inside it, because a test
-  that read the config would have declared both fine.
 - **The sandbox determinism test compared a timer.** Its `VOLATILE` list named
   four fields the CLI does not emit — the real one is `elapsed_ms` — so the
   comparison included a wall-clock value and failed whenever two runs
@@ -4066,7 +4171,10 @@ demo profile. Details below.
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v5.2.0...HEAD
+[Unreleased]: https://github.com/beenuar/AiSOC/compare/v8.1.1...HEAD
+[8.1.1]: https://github.com/beenuar/AiSOC/compare/v8.1.0...v8.1.1
+[8.1.0]: https://github.com/beenuar/AiSOC/compare/v8.0.0...v8.1.0
+[8.0.0]: https://github.com/beenuar/AiSOC/compare/v7.7.0...v8.0.0
 [5.2.0]: https://github.com/beenuar/AiSOC/compare/v5.1.0...v5.2.0
 [5.1.0]: https://github.com/beenuar/AiSOC/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/beenuar/AiSOC/compare/v4.1.0...v5.0.0

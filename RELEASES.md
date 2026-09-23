@@ -2,13 +2,29 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v8.1.0`, released 2026-09-23 — wave-2 features plus the gaps behind them. Every wave-2 backlog item was audited against the tree before any code was written, and the backlog was wrong in both directions: two items were already built, four had the capability present with the path that feeds it broken. One inverted what the feature appeared to do — a Slack or Teams approval authorized nobody. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v8.1.1`, released 2026-09-23 — an adoption-audit release with no new capability. The audit found that the single most-followed path into AiSOC did not run AiSOC: `./install.sh` started a compose file with no ingest service, no fusion service and Kafka disabled, and everything in the resulting console had been written straight into Postgres by a seed script. The core pipeline does work; it had never been demonstrated, and `make smoke` now demonstrates it in CI. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `8.1.0`. The **v8.1.0** release (2026-09-23) delivers the wave-2 backlog and the defects auditing it surfaced.
+`VERSION` is `8.1.1`. The **v8.1.1** release (2026-09-23) adds no capability. It exists because an audit of how the repository is adopted — installability, architecture comprehension, data provenance, pipeline connectivity — found the quick start did not start the product.
+
+**v8.1.1 highlights (September 23, 2026)**
+- **The documented quick start never ran the product.** `./install.sh` handed off to a nine-service compose file with no ingest service, no fusion service, and `AISOC_DISABLE_KAFKA: true`. Everything visible in the console came from `seed_demo.py` writing fifteen fabricated incidents straight into Postgres, and the installer printed "AiSOC is up and running" because the compose command exited 0. It now runs `make up` — the same CORE stack the README documents and CI tests — then proves the pipeline before claiming success.
+- **`make smoke` is the claim.** One real event enters ingest, travels Kafka and fusion, matches a detection, and is read back from the API, with each of the eight stages reporting independently so a break names the boundary. It reaches past nothing: no stubbed Kafka, no inserted alert. CI fails if any stage does, and separately verifies the gate fails when the pipeline is broken.
+- **`services/ingest` answered `/health` unconditionally**, so "ingest is healthy" and "every event is being dropped" could both be true at once — exactly the state a broker outage produces. `/readyz` now dials Kafka; verified live at 200 up and 503 down, with a reason and the log command to run.
+- **CORE is the default: ten services, roughly 6 GB**, and it is the smallest deployment that turns a real event into a real alert rather than a cut-down toy. ClickHouse, Neo4j, Qdrant, OpenSearch, enrichment and connectors moved to `full`. OpenSearch is started by `full` and read by nothing, and is recorded that way instead of appearing in a diagram.
+- **Five surfaces rendered fabricated data outside demo mode** — the MSSP overview, the Copilot's reply on API error, the air-gap status endpoint, an analyst identity in Settings, and the investigation timeline. All are gated now and return honest empties otherwise.
+- **Three of the eight publishable packages could not be built.** The v8.1.0 tag surfaced it, which is the credential-gated build design working: an unresolvable workspace dependency for `aisoc` and `@aisoc/mcp`, and a duplicate-path wheel failure for `aisoc-cli`. Both would have blocked the first real publish.
+
+`make doctor`, `docs/audit/REPOSITORY_REALITY.md`, a data-flow rewrite of `docs/architecture/README.md`, and `docs/testing/CLEAN_INSTALL.md` came out of the same pass. The full inventory lives under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v8.1.0 (2026-09-23)
+
+`VERSION` was `8.1.0`. The **v8.1.0** release (2026-09-23) delivers the wave-2 backlog and the defects auditing it surfaced.
 
 **v8.1.0 highlights (September 23, 2026)**
 - **A ChatOps approval authorized nobody.** The Slack and Teams bots verified who clicked — Slack signs every interaction payload, Teams payloads carry an HMAC — recorded that person in an audit event, and then called the actions service with no approver. The permission-tier check and separation of duties were both skipped. A bot cannot supply permissions (it knows a Slack user id and has no idea what that person may do in AiSOC), so it now asserts identity only and the actions service maps it through operator configuration. **If you use ChatOps approvals you must populate `AISOC_CHATOPS_APPROVERS` or they will be refused** — that is the intended failure.

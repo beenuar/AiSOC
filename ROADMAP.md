@@ -625,6 +625,32 @@ against **v8.2**, and it becomes a re-tag the moment the credentials exist.
 
 ---
 
+## v8.1.1 — Shipped (2026-09-23)
+
+An adoption audit, and no new capability. The recurring feedback on this
+project — hard to install, fabricated data, architecture nobody could follow,
+documentation describing things a reader could not reproduce — turned out to
+share one root cause: **the documented quick start did not run the product.**
+`./install.sh` started a compose file with no ingest service, no fusion
+service and `AISOC_DISABLE_KAFKA: true`, and the populated console a reader
+saw was a seed script writing rows into Postgres.
+
+The pipeline itself works. It had simply never been demonstrated, and now
+`make smoke` demonstrates it on every CI run: one real event through ingest,
+Kafka, fusion and detection, read back from the API, eight stages each
+reporting independently.
+
+Also in this release: `/readyz` on `services/ingest` that dials Kafka rather
+than answering unconditionally, `make doctor`, CORE as the default ten-service
+profile, five fabricated-data surfaces gated behind demo mode, the three
+packages that could not be built at the v8.1.0 tag, and three new documents —
+`docs/audit/REPOSITORY_REALITY.md`, a data-flow rewrite of
+`docs/architecture/README.md`, and `docs/testing/CLEAN_INSTALL.md`.
+
+Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## Ideas Backlog (unscheduled)
 
 - "Explain this alert" button using LLM with enrichment context
