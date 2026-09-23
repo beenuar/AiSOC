@@ -4697,51 +4697,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/plugins/install/oci:
-    post:
-      tags:
-      - plugins
-      summary: Install Plugin From Oci
-      description: 'Install a plugin from an OCI registry.
-
-
-        `PluginManager.install_from_oci` was 220 lines of hardened ingest —
-
-        argv-safe `oras` invocation, symlink rejection, Ed25519 manifest
-
-        verification against a trusted-keys directory, re-verified at load — with
-
-        **no HTTP caller anywhere**. There was no way to reach it short of a
-
-        Python shell inside the container, so every bit of that hardening
-
-        protected a path nobody could take.'
-      operationId: install_plugin_from_oci_api_v1_plugins_install_oci_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OciInstallRequest'
-        required: true
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                type: object
-                title: Response Install Plugin From Oci Api V1 Plugins Install Oci
-                  Post
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
   /api/v1/plugins/{plugin_id}/run:
     post:
       tags:
@@ -22562,23 +22517,6 @@ components:
       - kind
       - value
       title: ObservableNode
-    OciInstallRequest:
-      properties:
-        oci_ref:
-          type: string
-          title: Oci Ref
-          description: 'Registry reference, pinned to a digest: host[:port]/repo@sha256:...
-            A mutable tag is refused unless AISOC_PLUGIN_ALLOW_UNPINNED is set.'
-        plugin_id:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Plugin Id
-          description: Override the id in the manifest.
-      type: object
-      required:
-      - oci_ref
-      title: OciInstallRequest
     OnCallEntry:
       properties:
         user_id:
