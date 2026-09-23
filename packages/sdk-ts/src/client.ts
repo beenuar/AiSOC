@@ -8,6 +8,16 @@
  *   client.connectors.*   – connector management
  *   client.playbooks.*    – playbook management
  *   client.apiKeys.*      – API key management
+ *   client.approvals.*   – action approvals awaiting a human decision
+ *   client.push.*        – Web Push subscription management
+ *   client.onCall.*      – on-call rota
+ *   client.liveActions.* – what this deployment can actually do to the estate
+ *
+ * The responder namespaces exist because a responder client — the PWA, the
+ * native app, or anything a user writes — needs approvals, push and on-call,
+ * and the hand-written client covered none of them. They were in
+ * docs/openapi.yaml the whole time, which is exactly why nobody noticed: the
+ * generated types were complete and the ergonomic surface was not.
  */
 
 import type {
@@ -16,14 +26,19 @@ import type {
   ApiKey,
   ApiKeyCreateRequest,
   ApiKeyCreateResponse,
+  Approval,
+  ApprovalFilters,
   Case,
   CaseFilters,
   Connector,
   DetectionRule,
+  LiveActionDiscovery,
+  OnCallEntry,
   Page,
   PaginationParams,
   Playbook,
   PlaybookRun,
+  PushSubscriptionPayload,
 } from "./types.js";
 
 export interface AiSOCClientOptions {
@@ -60,6 +75,18 @@ class ResourceClient {
     protected readonly baseUrl: string,
     protected readonly token: string,
     protected readonly extraHeaders: Record<string, string> = {},
+    /**
+     * `AiSOCClientOptions.fetch` was documented as "Fetch implementation —
+     * defaults to global fetch" and then never threaded through: every
+     * request called the global directly. So a caller could pass one and
+     * silently not get it, which matters most in the two places it exists
+     * for — a test double, and a React Native runtime whose fetch is not the
+     * same object the module closed over.
+     *
+     * Left undefined rather than defaulted, and resolved per call, so that
+     * replacing the global after construction still works.
+     */
+    protected readonly fetchImpl?: typeof globalThis.fetch,
   ) {}
 
   protected async request<T>(
@@ -76,7 +103,8 @@ class ResourceClient {
         }
       }
     }
-    const res = await fetch(url.toString(), {
+    const doFetch = this.fetchImpl ?? globalThis.fetch;
+    const res = await doFetch(url.toString(), {
       method,
       headers: {
         Authorization: `Bearer ${this.token}`,
@@ -193,6 +221,85 @@ class ApiKeysClient extends ResourceClient {
   }
 }
 
+// ─── Responder namespaces ────────────────────────────────────────────────────
+
+class ApprovalsClient extends ResourceClient {
+  /** Pending by default, because that is the whole point of the queue. */
+  async list(filters?: ApprovalFilters): Promise<Page<Approval>> {
+    return this.request<Page<Approval>>("GET", "/api/v1/approvals", undefined, filters as Record<string, unknown>);
+  }
+
+  async get(id: string): Promise<Approval> {
+    return this.request<Approval>("GET", `/api/v1/approvals/${id}`);
+  }
+
+  /**
+   * Approve or deny.
+   *
+   * Deciding carries the action through to the execution service, so a
+   * non-2xx here can mean "your decision was recorded and the action was
+   * refused" rather than "nothing happened". The thrown `AiSOCError` body
+   * says which.
+   */
+  async decide(id: string, decision: "approve" | "deny", comment?: string): Promise<Approval> {
+    return this.request<Approval>("POST", `/api/v1/approvals/${id}/decide`, { decision, comment });
+  }
+}
+
+class PushClient extends ResourceClient {
+  /** VAPID public key. Required before a browser can subscribe at all. */
+  async publicKey(): Promise<{ public_key: string }> {
+    return this.request<{ public_key: string }>("GET", "/api/v1/push/public-key");
+  }
+
+  async subscribe(subscription: PushSubscriptionPayload): Promise<{ status: string }> {
+    return this.request<{ status: string }>("POST", "/api/v1/push/subscribe", subscription);
+  }
+
+  async unsubscribe(endpoint: string): Promise<{ status: string }> {
+    return this.request<{ status: string }>("POST", "/api/v1/push/unsubscribe", { endpoint });
+  }
+
+  /** Send yourself one, to prove delivery works before relying on it. */
+  async test(): Promise<{ status: string }> {
+    return this.request<{ status: string }>("POST", "/api/v1/push/test");
+  }
+}
+
+class OnCallClient extends ResourceClient {
+  async list(): Promise<Page<OnCallEntry>> {
+    return this.request<Page<OnCallEntry>>("GET", "/api/v1/oncall");
+  }
+
+  async me(): Promise<OnCallEntry> {
+    return this.request<OnCallEntry>("GET", "/api/v1/oncall/me");
+  }
+}
+
+class LiveActionsClient extends ResourceClient {
+  /** What this deployment can do to the estate, and with which vendor. */
+  async discover(filters?: { vendor_id?: string; capability?: string }): Promise<LiveActionDiscovery> {
+    return this.request<LiveActionDiscovery>("GET", "/api/v1/live-actions", undefined, filters);
+  }
+
+  async vendorsFor(capability: string): Promise<string[]> {
+    return this.request<string[]>("GET", `/api/v1/live-actions/by-capability/${encodeURIComponent(capability)}`);
+  }
+
+  async capabilitiesFor(vendorId: string): Promise<string[]> {
+    return this.request<string[]>("GET", `/api/v1/live-actions/by-vendor/${encodeURIComponent(vendorId)}`);
+  }
+
+  /**
+   * Preview an action. There is deliberately no `dispatch` here: a live
+   * containment goes through the approval path so an approver is bound to
+   * it, and the API exposes no un-approved dispatch route to proxy.
+   */
+  async dryRun(request: Record<string, unknown>): Promise<unknown> {
+    return this.request<unknown>("POST", "/api/v1/live-actions/dry-run", request);
+  }
+}
+
 // ─── Main client ─────────────────────────────────────────────────────────────
 
 export class AiSOCClient {
@@ -208,12 +315,21 @@ export class AiSOCClient {
   readonly playbooks: PlaybooksClient;
   /** Scoped API key management. */
   readonly apiKeys: ApiKeysClient;
+  /** Action approvals awaiting a human decision. */
+  readonly approvals: ApprovalsClient;
+  /** Web Push subscription management. */
+  readonly push: PushClient;
+  /** On-call rota. */
+  readonly onCall: OnCallClient;
+  /** The live-action registry: discovery and dry-run. */
+  readonly liveActions: LiveActionsClient;
 
   constructor(opts: AiSOCClientOptions) {
-    const args: [string, string, Record<string, string>] = [
+    const args: [string, string, Record<string, string>, (typeof globalThis.fetch) | undefined] = [
       opts.baseUrl,
       opts.token,
       opts.headers ?? {},
+      opts.fetch,
     ];
     this.alerts = new AlertsClient(...args);
     this.cases = new CasesClient(...args);
@@ -221,6 +337,10 @@ export class AiSOCClient {
     this.connectors = new ConnectorsClient(...args);
     this.playbooks = new PlaybooksClient(...args);
     this.apiKeys = new ApiKeysClient(...args);
+    this.approvals = new ApprovalsClient(...args);
+    this.push = new PushClient(...args);
+    this.onCall = new OnCallClient(...args);
+    this.liveActions = new LiveActionsClient(...args);
   }
 
   /**

@@ -153,3 +153,75 @@ export interface ApiKeyCreateResponse {
   /** Raw key — only returned on creation, store it safely. */
   rawKey: string;
 }
+
+// ─── Responder ───────────────────────────────────────────────────────────────
+
+export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
+export type ApprovalRisk = "low" | "medium" | "high" | "critical";
+
+/** An action an agent proposed that needs a human decision before it runs. */
+export interface Approval {
+  id: string;
+  tenant_id: string;
+  run_id: string | null;
+  case_id: string | null;
+  alert_id: string | null;
+  requested_by: string;
+  required_user_id: string | null;
+  required_topic: string | null;
+  title: string;
+  summary: string;
+  risk_level: ApprovalRisk;
+  /**
+   * The action itself: `action_type`, `target`, `parameters`. After a
+   * decision it also carries a `dispatch` record saying whether the action
+   * actually executed — the approval row is the answer to "was this done",
+   * not just "was this decided".
+   */
+  action: Record<string, unknown>;
+  status: ApprovalStatus;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision_comment: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApprovalFilters extends PaginationParams {
+  status?: ApprovalStatus;
+  /** Only approvals routed specifically to the calling user. */
+  mine?: boolean;
+  risk_level?: ApprovalRisk;
+}
+
+/** A W3C PushSubscription, as `PushSubscription.toJSON()` produces it. */
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  /** Topics to receive: `p0_alert`, `agent_approval`, `oncall_handoff`. */
+  topics?: string[];
+}
+
+export interface OnCallEntry {
+  user_id: string;
+  name: string;
+  email: string | null;
+  starts_at: string;
+  ends_at: string;
+  rotation: string | null;
+}
+
+/** One registered live action: a vendor, a verb, and its contract. */
+export interface LiveActionDescriptor {
+  vendor_id: string;
+  capability: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface LiveActionDiscovery {
+  executors: LiveActionDescriptor[];
+  vendors: string[];
+  capabilities: string[];
+}
