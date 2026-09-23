@@ -1,5 +1,5 @@
 {
-  "event_type": "not-smb_write",
+  "event_type": "smb_write",
   "share_name": "SYSVOL",
-  "src_role_neq": "domain-controller"
+  "src_role": "domain-controller"
 }
