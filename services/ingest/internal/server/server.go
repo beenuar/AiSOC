@@ -100,7 +100,13 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 	}))
 
 	// Routes
+	// Liveness and readiness are separate questions, and this service only
+	// answered the first one. /health returned 200 whether or not Kafka was
+	// reachable — so "ingest is healthy" and "every event is being dropped"
+	// could both be true at once. /readyz probes the broker.
 	r.Get("/health", h.Health)
+	r.Get("/livez", h.Livez)
+	r.Get("/readyz", h.Readyz)
 	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 
 	r.Route("/v1", func(r chi.Router) {

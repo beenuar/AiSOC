@@ -759,9 +759,14 @@ run_demo() {
     info "  cd $REPO_ROOT && pnpm aisoc:demo"
     return 0
   fi
-  section "Launching AiSOC demo stack"
-  info "Handing off to 'pnpm aisoc:demo' — this will pull images, start the"
-  info "stack, seed the showcase ransomware case, and open your browser."
+  section "Starting AiSOC (CORE profile)"
+  info "Starting the 10-service CORE stack: postgres, redis, kafka, ingest,"
+  info "fusion, api, agents, realtime and the web console."
+  info ""
+  info "This is the same stack 'make up' starts and the same one CI tests."
+  info "It runs the real pipeline: an event you send is normalized, placed on"
+  info "the event spine, evaluated against the detection corpus, correlated"
+  info "and written as an alert."
   echo
 
   # In non-interactive / headless contexts (CI, ssh without DISPLAY, --non-interactive),
@@ -781,16 +786,21 @@ run_demo() {
   # script. Run docker via `sg docker` if the user was just added to the
   # group and hasn't logged out — otherwise pnpm aisoc:demo will explode on
   # its very first `docker compose` call.
+  # One architecture, one command. This used to hand off to
+  # `pnpm aisoc:demo`, which started a *different* nine-service compose file
+  # with no ingest service, no fusion service and Kafka disabled — its only
+  # content came from a seed script writing rows straight into Postgres. A
+  # user followed the README, saw a populated console and concluded the
+  # platform worked, having never run the platform.
+  #
+  # `make up` is now the only path, so what the installer starts, what the
+  # README documents and what CI tests are the same stack.
   if [ "$DOCKER_NEEDS_NEWGRP" = "1" ] && have sg; then
-    # `sg` spawns a fresh shell that wipes our env, so re-export AISOC_NO_BROWSER
-    # inline if we set it.
-    local pre=""
-    [ "$need_no_browser" = "1" ] && pre="AISOC_NO_BROWSER=1 "
-    sg docker -c "cd '$REPO_ROOT' && ${pre}pnpm aisoc:demo ${DEMO_FLAGS[*]:-}" \
-      || { err "pnpm aisoc:demo exited non-zero."; exit 3; }
+    sg docker -c "cd '$REPO_ROOT' && make up" \
+      || { err "'make up' exited non-zero."; exit 3; }
   else
-    ( cd "$REPO_ROOT" && pnpm aisoc:demo "${DEMO_FLAGS[@]}" ) \
-      || { err "pnpm aisoc:demo exited non-zero."; exit 3; }
+    ( cd "$REPO_ROOT" && make up ) \
+      || { err "'make up' exited non-zero."; exit 3; }
   fi
 }
 
