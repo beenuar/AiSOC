@@ -55,17 +55,28 @@ class FakeActionsClient:
         self._raise_on = raise_on
         self.approve_calls: list[str] = []
         self.reject_calls: list[str] = []
+        # T3.6 — the approver payload the handler sent with each call. The
+        # handler used to send none, so the actions service authorized nobody.
+        self.approvers: list[dict[str, Any] | None] = []
 
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
+    @staticmethod
+    def chatops_approver(platform: str, platform_user_id: str | None) -> dict[str, Any] | None:
+        if not platform_user_id:
+            return None
+        return {"chatops_approver": {"platform": platform, "platform_user_id": platform_user_id}}
+
+    async def approve_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._raise_on == "approve":
             raise AisocClientError("upstream approve boom", status_code=502)
         self.approve_calls.append(action_id)
+        self.approvers.append(approver)
         return self._approve_response
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
+    async def reject_action(self, action_id: str, *, approver: dict[str, Any] | None = None) -> dict[str, Any]:
         if self._raise_on == "reject":
             raise AisocClientError("upstream reject boom", status_code=502)
         self.reject_calls.append(action_id)
+        self.approvers.append(approver)
         return self._reject_response
 
 
@@ -95,6 +106,45 @@ async def test_approve_replaces_card_and_records_decider():
     rendered = _flatten(res["blocks"])
     assert "U42" in rendered
     assert "approved" in rendered.lower()
+
+
+@pytest.mark.asyncio
+async def test_approve_sends_the_clicking_slack_user_as_the_approver():
+    """T3.6 — the identity has to reach the actions service, not just the log.
+
+    `user_id` comes off the Slack-signed interaction payload, so it is
+    attested. The handler used to call `approve_action(action_id)` with no
+    body: the actions service then ran its approver authorization against
+    `None`, which skipped the permission tier and separation of duties and
+    left the human recorded only in an audit line. This test fails against
+    that behaviour.
+    """
+    actions = FakeActionsClient()
+    await handle_action_decision(
+        action_id_event=APPROVE_ACTION_ID,
+        button_value="act-7|case-3",
+        user_id="U42",
+        actions_client=actions,
+    )
+    assert actions.approvers == [{"chatops_approver": {"platform": "slack", "platform_user_id": "U42"}}]
+
+
+@pytest.mark.asyncio
+async def test_the_approver_platform_is_slack_not_inferred_downstream():
+    """The platform travels with the identity.
+
+    The Teams bot imports this client when it is on the image, so a platform
+    baked into the client as a constant would stamp "slack" onto a Teams user
+    and resolve against the wrong half of the approver map.
+    """
+    actions = FakeActionsClient()
+    await handle_action_decision(
+        action_id_event=DENY_ACTION_ID,
+        button_value="act-8|case-3",
+        user_id="U99",
+        actions_client=actions,
+    )
+    assert actions.approvers[0]["chatops_approver"]["platform"] == "slack"
 
 
 @pytest.mark.asyncio

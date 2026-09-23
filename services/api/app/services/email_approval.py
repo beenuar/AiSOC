@@ -28,10 +28,18 @@ Design notes
   alongside the rest of the payload so an attacker can't extend it
   client-side.
 
-The endpoint that consumes these tokens (``GET /v1/actions/email-decide``
-or similar) is wired in a follow-up — this module ships the *issuer*
-side plus the verifier, so any web route can adopt it with three lines
-of glue.
+* **The approver is signed into the token.** Without that a signed URL
+  is a bearer credential: anyone holding the link approves, and the
+  resulting approval carries no identity for the actions service to
+  authorize — the same hole the ChatOps path had. The recipient address
+  travels inside the signature, and
+  ``app/api/v1/endpoints/email_approval.py`` forwards it as the
+  approver so the permission tier and separation of duties apply.
+
+The consuming endpoint is ``GET /api/v1/actions/email-decide``. It did
+not exist for several releases while ``approval_url`` defaulted to
+``/v1/actions/email-decide``, a path present nowhere else in the tree,
+so every rendered approve and deny button linked to a 404.
 """
 
 from __future__ import annotations
@@ -71,6 +79,11 @@ class ApprovalToken:
     action_id: str
     case_id: str
     expires_at: int
+    #: The recipient the link was minted for. Signed, so the click carries an
+    #: identity the actions service can authorize — without it a signed URL is
+    #: a bearer credential that approves as nobody, which is the same hole the
+    #: ChatOps path had.
+    approver: str = ""
 
     @property
     def is_expired(self) -> bool:
@@ -86,8 +99,13 @@ def _b64url_decode(token: str) -> bytes:
     return base64.urlsafe_b64decode(token + pad)
 
 
-def _canonical_payload(decision: str, action_id: str, case_id: str, expires_at: int) -> str:
-    return f"{decision}|{action_id}|{case_id}|{int(expires_at)}"
+def _canonical_payload(decision: str, action_id: str, case_id: str, expires_at: int, approver: str = "") -> str:
+    # The approver is appended rather than inserted so a token minted before
+    # approver binding still verifies (it signs the empty string). The
+    # endpoint refuses such a token anyway, because an approval needs an
+    # identity — but it should fail as "no approver" rather than as a
+    # signature mismatch, which would send an operator hunting a key problem.
+    return f"{decision}|{action_id}|{case_id}|{int(expires_at)}|{approver}"
 
 
 def _hmac_hex(payload: str, *, secret: str) -> str:
@@ -100,6 +118,7 @@ def issue_token(
     action_id: str,
     case_id: str,
     secret: str,
+    approver: str = "",
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     now: float | None = None,
 ) -> str:
@@ -109,6 +128,11 @@ def issue_token(
     ``decision`` must be ``"approved"`` or ``"rejected"`` so the email
     template generates one URL per choice and the recipient's click is
     self-describing.
+
+    ``approver`` is the recipient address the link is minted for. It is signed
+    into the token so a click carries an identity the actions service can
+    authorize against; a token without one is a bearer credential that
+    approves as nobody.
     """
     if decision not in {"approved", "rejected"}:
         raise EmailApprovalError(f"unsupported decision {decision!r}")
@@ -119,7 +143,7 @@ def issue_token(
 
     issued = float(now if now is not None else time.time())
     expires_at = int(issued + max(60, int(ttl_seconds)))
-    canonical = _canonical_payload(decision, action_id, case_id, expires_at)
+    canonical = _canonical_payload(decision, action_id, case_id, expires_at, approver)
     signature = _hmac_hex(canonical, secret=secret)
     envelope = json.dumps(
         {
@@ -127,6 +151,7 @@ def issue_token(
             "a": action_id,
             "c": case_id,
             "e": expires_at,
+            "p": approver,
             "s": signature,
         },
         separators=(",", ":"),
@@ -157,6 +182,7 @@ def verify_token(token: str, *, secret: str, now: float | None = None) -> Approv
     action_id = str(envelope.get("a") or "")
     case_id = str(envelope.get("c") or "")
     expires_at_raw = envelope.get("e")
+    approver = str(envelope.get("p") or "")
     signature = str(envelope.get("s") or "")
 
     if decision not in {"approved", "rejected"}:
@@ -166,7 +192,7 @@ def verify_token(token: str, *, secret: str, now: float | None = None) -> Approv
     if not isinstance(expires_at_raw, int):
         raise EmailApprovalError("token missing expires_at")
 
-    canonical = _canonical_payload(decision, action_id, case_id, int(expires_at_raw))
+    canonical = _canonical_payload(decision, action_id, case_id, int(expires_at_raw), approver)
     expected = _hmac_hex(canonical, secret=secret)
     if not hmac.compare_digest(expected, signature):
         raise EmailApprovalError("signature mismatch")
@@ -180,26 +206,34 @@ def verify_token(token: str, *, secret: str, now: float | None = None) -> Approv
         action_id=action_id,
         case_id=case_id,
         expires_at=int(expires_at_raw),
+        approver=approver,
     )
 
 
 def approval_url(
     *,
     base_url: str,
-    endpoint_path: str = "/v1/actions/email-decide",
+    endpoint_path: str = "/api/v1/actions/email-decide",
     decision: str,
     action_id: str,
     case_id: str,
     secret: str,
+    approver: str = "",
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     now: float | None = None,
 ) -> str:
-    """Build the full signed URL embedded in the approval email."""
+    """Build the full signed URL embedded in the approval email.
+
+    The default path is the route that exists. It previously defaulted to
+    ``/v1/actions/email-decide``, which appeared nowhere else in the tree — so
+    every approve and deny button in a rendered email linked to a 404.
+    """
     token = issue_token(
         decision=decision,
         action_id=action_id,
         case_id=case_id,
         secret=secret,
+        approver=approver,
         ttl_seconds=ttl_seconds,
         now=now,
     )

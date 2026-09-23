@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     detection_rules,
     easm,
     effective_permissions,
+    email_approval,
     federated,
     feedback,
     fusion,
@@ -146,6 +147,13 @@ api_router.include_router(replay.public_router)
 # Okta / Google Workspace and caches the result as :EFFECTIVE_PERMISSION
 # edges in Neo4j. Backs apps/web/src/app/(app)/identity/permissions.
 api_router.include_router(effective_permissions.router)
+
+# Signed email-approval links (T3.6). Unauthenticated by necessity — the
+# recipient is in a mail client, not a session — so the HMAC token is the
+# credential. `app/services/email_approval.py` had minted URLs pointing at
+# /v1/actions/email-decide, which no router served, so every approve and deny
+# button in a rendered email linked to a 404.
+api_router.include_router(email_approval.router)
 
 # Cost dashboard — WS-H1 (buyer-value plan).
 # Aggregates LLM spend / token volume from aisoc_run_costs joined with

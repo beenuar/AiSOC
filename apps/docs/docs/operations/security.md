@@ -311,6 +311,48 @@ When you move from `pnpm aisoc:demo` to a production deployment, walk through th
 - [ ] Enable mTLS between services if you're running on Kubernetes with a mesh.
 - [ ] Subscribe to the AiSOC GitHub Security Advisories for vulnerability notifications.
 
+## The LLM input contract
+
+Every prompt that leaves AiSOC for a third-party model passes a fail-closed
+validator first. It is a **minimum-leak** control: it aborts a call that is
+about to ship raw OCSF, vendor log lines, Sysmon XML or secret-shaped values
+outside the deployment. It is *not* an injection sanitizer — that is
+`PromptInjectionGuard`, which detects and demotes rather than refusing.
+
+The rules live once, in `services/agents/app/llm/contract_rules.py`, and are
+vendored byte-identically to `services/api/app/_vendor/llm_contract_rules.py`
+(gated by `scripts/sync_vendored_llm_contract.py --check`). One classifier
+rather than two: a prompt refused by one service and accepted by the other
+reads as a bug in the refusal.
+
+Enforcement is governed by `AISOC_AGENTS_LLM_CONTRACT_ENFORCED` (default on)
+for both services, so it cannot be left enabled on one path and disabled on the
+other.
+
+Routing an LLM call:
+
+| How you call the model | Use |
+|---|---|
+| LangChain chat model in `services/agents` | `safe_ainvoke` / `safe_astream` / `make_safe_chat_model` |
+| Raw HTTP in `services/agents` | `app.llm.contract.safe_chat_completions_request` |
+| Raw HTTP in `services/api` | `app.services.llm_safety.safe_chat_completions_request` |
+
+Two CI gates in `services/agents/tests/test_llm_contract_no_bypass.py` enforce
+this. The first walks the AST for `.ainvoke` / `.astream`; the second flags a
+file that both names a completions endpoint and issues its own POST.
+
+:::warning Why the second gate exists
+The first gate proved the LangChain path was clean and said nothing about the
+other way to reach a model. `services/agents/app/api/explain.py` POSTed to a
+completions URL with raw `httpx` and was invisible to it for several releases,
+under a test named "no bypass" — and **every** LLM call in `services/api` did
+the same, because that service had no contract at all. The module this
+documentation used to describe as living there did not exist in the tree.
+
+Both are fixed, and the gate now asks the question that catches the shape
+rather than the one that catches the library.
+:::
+
 ## Static analysis (CodeQL)
 
 GitHub CodeQL runs on every pull request and on a nightly schedule against `main`. As of the v8.0 wave-1 push the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow and blocks the next release.

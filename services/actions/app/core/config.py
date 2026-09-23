@@ -94,6 +94,24 @@ class ActionsSettings(BaseSettings):
         default=False,
         description="Require a structured ActionPrincipal on every action request.",
     )
+    # T3.6 — the *approval* path, which is separate from the request path
+    # above and defaults the other way. An approval with no identity cannot
+    # satisfy separation of duties at all, so a principal-less approval is not
+    # a legacy convenience, it is the control being absent. Slack and Teams
+    # approvals ran in exactly that state: the bot verified who clicked, then
+    # called approve with no approver.
+    AISOC_ACTIONS_REQUIRE_APPROVER: bool = Field(
+        default=True,
+        description="Refuse approve/reject calls that carry no resolvable approver identity.",
+    )
+    # Maps a verified ChatOps identity onto an authorization principal. JSON
+    # inline or `file:/path/to.json`. Unset means nobody can approve over
+    # ChatOps, which is the correct default for a control that was absent.
+    # See app/security/chatops_identity.py for the shape.
+    AISOC_CHATOPS_APPROVERS: str = Field(
+        default="",
+        description="JSON (or file: path) mapping platform user ids to approver principals.",
+    )
 
 
 @lru_cache(maxsize=1)

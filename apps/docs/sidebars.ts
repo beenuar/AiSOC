@@ -190,6 +190,7 @@ const sidebars: SidebarsConfig = {
         "operations/theming",
         "operations/upgrades",
         "operations/notifications",
+        "operations/action-approvals",
         "operations/case-reports",
         "operations/troubleshooting",
         "operations/faq",

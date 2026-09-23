@@ -21,7 +21,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -29,6 +28,7 @@ from sqlalchemy import text
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.kb_chunking import chunk_text
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
@@ -121,21 +121,23 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
     completions_url = f"{base_url}/chat/completions"
     enforce_airgap_for_url(completions_url)
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": _SYNTH_SYSTEM},
-                        {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"},
-                    ],
-                    "temperature": 0.2,
-                },
-            )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+        # T2.3 — the retrieved KB chunks are the untrusted half here: a
+        # document ingested from a vendor advisory can carry a log excerpt.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYNTH_SYSTEM},
+                {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}"},
+            ],
+            url=completions_url,
+            timeout=45.0,
+            temperature=0.2,
+        )
+        return str(body["choices"][0]["message"]["content"]).strip()
+    except LLMContractViolation as exc:
+        logger.warning("knowledge_base.llm_contract_violation", reason=exc.reason)
+        return None
     except Exception:
         return None
 

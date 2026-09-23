@@ -19,12 +19,12 @@ Endpoints
 from __future__ import annotations
 
 import json
+import logging
 import textwrap
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -32,6 +32,9 @@ from sqlalchemy import text
 from app.api.v1.deps import AuthUser
 from app.core.config import settings
 from app.db.rls import TenantDBSession
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/detection-loop", tags=["detection_rules", "detection_loop"])
 
@@ -110,22 +113,22 @@ async def _llm_draft_sigma(
         indent=2,
     )
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": "gpt-4o-mini",
-                    "response_format": {"type": "json_object"},
-                    "messages": [
-                        {"role": "system", "content": _SYS_PROMPT},
-                        {"role": "user", "content": user_msg},
-                    ],
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"]
-            return json.loads(raw)
+        # T2.3 — `user_msg` embeds `alert_fields`, i.e. raw alert data, which
+        # is the shape the contract exists to stop leaving the deployment.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _SYS_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            timeout=30.0,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(body["choices"][0]["message"]["content"])
+    except LLMContractViolation as exc:
+        logger.warning("detection_loop.llm_contract_violation", reason=exc.reason)
+        return _template_fallback(current_sigma, alert_fields, analyst_note)
     except Exception:
         return _template_fallback(current_sigma, alert_fields, analyst_note)
 

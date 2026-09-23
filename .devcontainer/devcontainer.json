@@ -7,7 +7,17 @@
     "dockerfile": "Dockerfile",
     "context": "."
   },
-  "//features": "We intentionally do NOT enable docker-in-docker / python / go / github-cli features here — they are baked into the image at build time. Re-enabling them would cancel the cold-start win.",
+  "//features": "We intentionally do NOT enable docker-in-docker / python / go / github-cli features here — the *binaries* are baked into the image at build time and re-enabling the features would cancel the cold-start win. But see runArgs/mounts/postStartCommand below: the docker-in-docker feature also supplies container runtime options and a dockerd entrypoint, and that half has no Dockerfile equivalent. Omitting it is what broke the Codespaces quickstart (#716).",
+  "//runArgs": "The half an image cannot provide. Capabilities are granted at container creation, so a Dockerfile cannot self-grant them: without --privileged the container ran with CapEff: 0 and CAP_SYS_ADMIN outside the bounding set, so not even sudo could start dockerd. --init reaps the zombies a background dockerd leaves behind.",
+  "runArgs": ["--privileged", "--init"],
+  "//mounts": "dockerd's overlay2 graph driver cannot run on the container's own overlay filesystem. A named volume gives it a real one, and keeps pulled images across a Codespace stop/resume so the demo does not re-pull on every boot.",
+  "mounts": [
+    {
+      "source": "aisoc-dind-var-lib-docker",
+      "target": "/var/lib/docker",
+      "type": "volume"
+    }
+  ],
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
@@ -34,6 +44,8 @@
   },
   "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so `--frozen-lockfile=false` here is fast (≤ 30 s on a green Codespace).",
   "onCreateCommand": "pnpm install --frozen-lockfile=false",
+  "//postStartCommand": "Starts dockerd. Runs on every container start rather than only at create, so a Codespace stop/resume comes back with a working daemon — `onCreateCommand` would leave the second boot without one.",
+  "postStartCommand": "bash .devcontainer/start-docker.sh",
   "postAttachCommand": "echo '\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n>>> Or, no-Docker:  pip install -e packages/aisoc-sandbox && aisoc-sandbox demo\\n'",
   "remoteUser": "node",
   "containerEnv": {

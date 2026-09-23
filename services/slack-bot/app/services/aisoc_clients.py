@@ -327,26 +327,76 @@ class AisocActionsClient(_BaseClient):
         except ValueError as exc:
             raise AisocClientError("submit action failed: invalid JSON") from exc
 
-    async def approve_action(self, action_id: str) -> dict[str, Any]:
-        """Approve a pending action (called from the Slack approve button)."""
+    @staticmethod
+    def chatops_approver(platform: str, platform_user_id: str | None) -> dict[str, Any] | None:
+        """Build the body carrying an identity the platform itself verified.
+
+        Slack signs every interaction payload and Teams payloads are
+        HMAC-signed, so the user id on a button click is attested rather than
+        claimed. It is sent as identity only — the actions service maps it to
+        permissions — because this bot has no idea what a given Slack user may
+        do in AiSOC, and a bot permitted to assert its own permissions could
+        grant itself anything.
+
+        The platform is a parameter rather than a constant because the Teams
+        bot imports this client when it is on the image, and stamping "slack"
+        onto a Teams user would resolve against the wrong half of the approver
+        map.
+
+        Until this was wired, approve/reject sent no body at all, so the
+        actions service authorized nobody: the permission tier and separation
+        of duties were both skipped, and the human survived only in a log line.
+        """
+        if not platform_user_id:
+            return None
+        return {
+            "chatops_approver": {
+                "platform": platform,
+                "platform_user_id": platform_user_id,
+            }
+        }
+
+    async def approve_action(
+        self,
+        action_id: str,
+        *,
+        approver: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Approve a pending action (called from the approve button).
+
+        ``approver`` is the payload from :meth:`chatops_approver`. Omitting it
+        makes the actions service refuse by default — which is why the
+        approval-timeout scheduler only ever rejects.
+        """
         safe_id = quote(action_id, safe="")
         response = await self._request(
             "POST",
             f"/api/v1/actions/{safe_id}/approve",
             context="approve action",
+            json=approver,
         )
         try:
             return response.json()
         except ValueError as exc:
             raise AisocClientError("approve action failed: invalid JSON") from exc
 
-    async def reject_action(self, action_id: str) -> dict[str, Any]:
-        """Reject a pending action (called from the Slack deny button)."""
+    async def reject_action(
+        self,
+        action_id: str,
+        *,
+        approver: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Reject a pending action (called from the deny button).
+
+        Identity is recorded when supplied but not required: a rejection
+        causes no vendor effect, and a timeout-driven rejection has no human.
+        """
         safe_id = quote(action_id, safe="")
         response = await self._request(
             "POST",
             f"/api/v1/actions/{safe_id}/reject",
             context="reject action",
+            json=approver,
         )
         try:
             return response.json()

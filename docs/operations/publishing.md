@@ -84,6 +84,31 @@ Then set the repository **variable** (not secret)
 
 There is no API token to store or rotate in this path.
 
+## One-time setup: GitHub Marketplace (the Action)
+
+`beenuar/aisoc-action` **does not exist as a repository**, so
+`uses: beenuar/aisoc-action@v1` 404s. Until a Marketplace listing exists, the
+reference that resolves is the action's directory inside this monorepo:
+
+```yaml
+- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+```
+
+That form needs no setup and is what the README and
+`apps/docs/docs/integrations/github-action.md` show. Publishing the short
+alias is a repository-settings action, not an engineering one:
+
+1. On the repo's **Releases** page, edit the release for the tag you want to
+   list and tick **Publish this Action to the GitHub Marketplace**. GitHub
+   validates `packages/aisoc-action/action.yml` at that point — it needs
+   `name`, `description` and `branding`.
+2. Accept the Marketplace developer agreement if prompted.
+3. Marketplace listings are per-repository and resolve to the repository
+   root, so the short `beenuar/aisoc-action@v1` alias additionally requires a
+   dedicated repository with the action at its root. Mirroring
+   `packages/aisoc-action/` there on each tag is the remaining work; the
+   subdirectory form above stays valid either way.
+
 ## Cutting a release
 
 The existing tag-driven flow is unchanged — see the release section of

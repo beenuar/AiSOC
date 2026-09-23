@@ -7383,6 +7383,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actions/email-decide:
+    get:
+      tags:
+      - actions
+      summary: Email Decide
+      description: 'Verify a signed approval link and forward the decision.
+
+
+        Unauthenticated by necessity — the recipient is reading email, not holding
+
+        a session — so the token *is* the credential and every check that would
+
+        otherwise come from a session has to come from the signature.'
+      operationId: email_decide_api_v1_actions_email_decide_get
+      parameters:
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Signed approval token
+          title: Token
+        description: Signed approval token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/costs/dashboard:
     get:
       tags:

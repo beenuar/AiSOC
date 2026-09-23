@@ -148,6 +148,21 @@ class ActionPrincipal(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class ChatOpsApprover(BaseModel):
+    """A platform identity a bot has already verified (T3.6).
+
+    Carries identity and deliberately **not** permissions. The bot proves who
+    clicked — Slack signs the interaction payload, Teams payloads are
+    HMAC-signed — but it has no knowledge of what that person may do in AiSOC,
+    and a bot permitted to assert its own permissions could grant itself
+    anything. The actions service maps this onto a principal.
+    """
+
+    platform: str
+    platform_user_id: str
+    display_name: str | None = None
+
+
 class ActionRequest(BaseModel):
     """Request to execute an action."""
 

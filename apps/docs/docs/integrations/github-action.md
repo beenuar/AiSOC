@@ -10,9 +10,22 @@ repository's own security alerts — Dependabot, CodeQL (code scanning), and
 secret scanning — and posts verdicts, suppression rationale, and prioritization
 as a PR comment or job summary. No LLM, no data leaves your CI runner.
 
-> **Status:** the Action is dogfooded on the AiSOC repo today via the in-repo
-> path (`uses: ./packages/aisoc-action`). Publishing to the GitHub Marketplace
-> as `beenuar/aisoc-action@v1` lands with the v8.0 launch.
+:::warning Use the subdirectory form
+`beenuar/aisoc-action` **does not exist as a repository** — that reference
+404s, and every example on this page used to carry it. The form that resolves
+today points at the action's directory inside the monorepo:
+
+```yaml
+- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+```
+
+Pin a tag rather than a branch, so a workflow cannot change underneath you.
+
+The short `beenuar/aisoc-action@v1` alias needs a GitHub Marketplace listing,
+which is an account action rather than an engineering one, and is named
+against v8.2 alongside the npm and PyPI publishes. The Action itself is
+complete and dogfooded on this repo via `uses: ./packages/aisoc-action`.
+:::
 
 ## PR triage (comment on every pull request)
 
@@ -28,7 +41,7 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: beenuar/aisoc-action@v1
+      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
         with:
           mode: pr-comment
           min-severity: low
@@ -57,7 +70,7 @@ jobs:
   digest:
     runs-on: ubuntu-latest
     steps:
-      - uses: beenuar/aisoc-action@v1
+      - uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
         with:
           mode: digest
 ```

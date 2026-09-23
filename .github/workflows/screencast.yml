@@ -14,10 +14,15 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: "URL to record against (defaults to the latest preview)"
+        description: "URL to record against. Defaults to a local demo stack (pnpm aisoc:demo)."
         required: false
         type: string
-        default: "https://tryaisoc.com"
+        # Deliberately a local address rather than a hosted one. A default
+        # pointing at a specific deployment means a self-hoster who runs this
+        # workflow records somebody else's instance — and that hostname then
+        # travels into the README caption and the docs. Bring the stack up
+        # with `pnpm aisoc:demo --no-open` and record against it.
+        default: "http://localhost:3000"
       release_tag:
         description: "Optional release tag; if set, the recording is uploaded as a release asset"
         required: false
@@ -67,7 +72,7 @@ jobs:
       - name: Run the screencast spec
         working-directory: apps/web
         env:
-          AISOC_SCREENCAST_URL: ${{ inputs.target_url || 'https://tryaisoc.com' }}
+          AISOC_SCREENCAST_URL: ${{ inputs.target_url || 'http://localhost:3000' }}
           # Disable any analytics injection so the recorder browser
           # doesn't render a cookie banner in the final cut.
           AISOC_DISABLE_ANALYTICS: "1"

@@ -151,6 +151,172 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Codespaces quickstart could never start Docker
+  ([#716](https://github.com/beenuar/AiSOC/issues/716)).** The README
+  advertises Codespaces as "the zero-install way to drive the real stack in a
+  browser"; it failed at step 1 of `pnpm aisoc:demo` and was not recoverable
+  from inside the codespace. The `docker-in-docker` feature does two things,
+  and only the first has a Dockerfile equivalent: it installs the binaries
+  (replicated), and it supplies container *runtime* options (`--privileged`,
+  `--init`, a volume at `/var/lib/docker`) plus an entrypoint that launches
+  `dockerd`. Capabilities are granted at container creation and cannot be
+  self-granted from an image, so baking the binaries and stopping there
+  produced a container with `CapEff: 0` and `CAP_SYS_ADMIN` outside the
+  bounding set — `sudo` could not help, because the capability was not in the
+  set to grant. `devcontainer.json` passes the runtime half now and
+  `.devcontainer/start-docker.sh` is the missing entrypoint, running from
+  `postStartCommand` so a stop-and-resume comes back with a working daemon.
+  `apt install docker.io` also creates the `docker` group and puts nobody in
+  it, so `node` could not reach the socket its own daemon creates and every
+  command failed with a permission error that reads like a missing daemon.
+  The cold-start gate is why this survived: it asserted the docker *CLI* was
+  installed, which it is with no daemon anywhere. A third phase now starts a
+  real daemon under the same flags and runs a container as the non-root user.
+- **Service images were published amd64-only.** Apple Silicon is the majority
+  of contributor laptops, and `pnpm aisoc:demo` — the README's headline
+  "Docker + pnpm" path — could not pull a single service image there.
+  Compose reported `no matching manifest for linux/arm64/v8` for every one,
+  fell back to building four services from source, and the quickstart became
+  a long silent build instead of a demo. The devcontainer image has been
+  multi-arch all along, so the pattern existed and was simply never applied
+  to the service images. This roughly doubles image-build time, which is the
+  correct trade: a first run that cannot start is worse than a slower
+  release.
+- **The OSS screencast recorder defaulted to a commercial host.**
+  `screencast.yml` recorded `https://tryaisoc.com` unless told otherwise and
+  the shot list named that host in three shots, so a self-hoster running the
+  workflow would record somebody else's deployment — and that hostname would
+  then travel into the README caption. Both default to the local demo stack
+  now, and the outro carries no URL at all, because a hostname there dates
+  the cut and points viewers at an instance rather than at the project.
+- **`beenuar/aisoc-action` does not exist as a repository.** Every
+  `uses: beenuar/aisoc-action@v1` example in the README and the integration
+  doc 404s. The reference that resolves is the monorepo subdirectory form,
+  `beenuar/AiSOC/packages/aisoc-action@v8.1.0`, which is what both show now;
+  `docs/operations/publishing.md` records what the short alias would actually
+  require, since a Marketplace listing resolves to a repository root.
+- **Config snapshots could never run, and reported themselves enabled.** The
+  Go config-snapshotter called `GET {base}/v1/connectors/{id}/resource-config`;
+  the connectors service serves `POST /api/v1/connectors/{id}/resource_config`.
+  Four mismatches at once — method, prefix, separator, payload — and the last
+  is not a typo: that endpoint requires decrypted `auth_config` in the body and
+  the ingest service has no vault, so it could never have called that route at
+  all. Renaming the URL would have turned a silent 404 into a silent 422.
+  Silent either way, because a 404 maps to `ErrNotImplemented`, which the
+  snapshotter treats as a soft skip — so an operator saw "T1.2 config snapshots
+  enabled" on boot and zero `Configuration` nodes in the graph, with nothing
+  connecting the two. Fixed with an instance-scoped route on the connectors
+  service that resolves the saved instance and decrypts credentials the way
+  `ConnectorScheduler` does at poll time, so the ingest service needs no
+  secrets. Query values are escaped: an ARN containing `&` or `#` would
+  otherwise truncate the URL or inject a parameter.
+- **The documented "latest configuration" graph query matched zero edges.**
+  `is_current`, `valid_from` and `valid_to` are declared in
+  `schemas/graph-schema.yaml` and the published schema doc advertised an O(1)
+  lookup via `:CONFIGURED_AS {is_current: true}`. Nothing wrote any of the
+  three. The drift gate could not catch it, because it validates properties
+  only on edges declared `event_edge: true` and this one is structural. All
+  three are written now, with the limitation stated rather than implied:
+  closing the previous interval needs a read-modify-write the ingest hot path
+  deliberately does not do, so `valid_to` is **absent** while the interval is
+  open — an open interval is not one that closed at the epoch — and the doc
+  now shows the `ORDER BY valid_from DESC` query that actually works.
+- **Four effective-permissions resolvers were documented as scaffolds long
+  after they were implemented.** The endpoint docstring described Azure, GCP,
+  Okta and GWS as returning HTTP 501, and the `NotImplementedError` branch had
+  been unreachable for as long. All five resolvers report `coverage: "full"`.
+  What is still limited is the *snapshot*, not the resolver: only Okta's is
+  assembled from a live connector, because the other four expect a connector
+  to answer the `__posture_snapshot__` sentinel and **no connector implements
+  it**, so with live mode on they return 412 rather than a fabricated
+  snapshot. That was honest but unrecorded, so `coverage: full` was the only
+  figure a reader saw. A new gate pins the real shape of the gap in both
+  directions — a resolver registered without a snapshot source fails, and so
+  does a stale entry on the allow-list once its connector starts answering the
+  sentinel. The gap is allowed to exist; it is not allowed to be invisible.
+- **A fabricated investigation rendered whenever no run was selected.**
+  `InvestigationTimeline.tsx` called `makeDemoTimeline()` — a named analyst, a
+  routable source IP, "Session suspended; email dispatched" — with no demo
+  gate. `check_mock_data_gated.py` missed it because it matches `MOCK_*` /
+  `DEMO_*` constant *names* and this is a function call, which is the other of
+  the two ways to render invented state. Gated, and the gate now also catches
+  a `set*(makeDemo*())` factory. Verified by reverting the component: the
+  widened gate names the exact line.
+- **A ChatOps approval authorized nobody.** The Slack and Teams bots verified
+  who clicked — Slack signs every interaction payload, Teams payloads carry an
+  HMAC — recorded that person in an audit event, and then called
+  `approve_action(action_id)` with no body. The actions service ran
+  `authorize_approver` against `None`, so the permission-tier check *and*
+  separation of duties were both skipped; the clicking user appeared in the
+  audit trail and was never bound to the authorization decision. An approval
+  path that does not authorize is worse than none, because it reads as a
+  control.
+  A bot cannot supply permissions — it knows a Slack user id and has no idea
+  what that person may do in AiSOC, and a bot permitted to assert its own
+  permissions could grant itself anything. It now asserts identity only, and
+  the actions service maps it through `AISOC_CHATOPS_APPROVERS`: operator
+  configuration rather than a directory lookup, because the actions service
+  owns no user table and an approval should not depend on a second service
+  being reachable. Fails closed — `AISOC_ACTIONS_REQUIRE_APPROVER` defaults
+  true, an unmapped user is refused rather than admitted with an empty
+  permission set, and a malformed map raises rather than resolving to "no
+  approvers", which looks identical to correctly having none. **Operators
+  using Slack or Teams approvals must populate the map or approvals will be
+  refused**; that is the intended failure.
+  Approve and reject are deliberately asymmetric: a rejection causes no vendor
+  effect and a timeout-driven one has no human by definition, so requiring an
+  identity there would strand expired requests in `awaiting_approval` forever.
+  An identity supplied on a rejection is still authorized, and the decider is
+  now recorded — it never was.
+  Separately, the signed email-approval link pointed at
+  `/v1/actions/email-decide`, a path served by no router, so every approve and
+  deny button in a rendered approval email linked to a **404** — the documented
+  fallback for "Slack is unreachable" failed at the moment it was needed. The
+  route exists, and the recipient is signed into the token, because a bare
+  signed link is a bearer credential that approves as nobody. Docs:
+  `apps/docs/docs/operations/action-approvals.md`, which states the three
+  remaining limitations rather than implying they are closed.
+- **One `not` rule silently discarded a tenant's entire business-context rule
+  set.** Rules are parsed twice by two implementations. The console requires
+  `not` to be a mapping; the triage worker iterated every aggregator as a
+  list, and iterating a mapping yields its string keys — so
+  `_parse_condition("field")` called `.get()` on a `str`, raised
+  `AttributeError`, and the caller's catch turned that into `rules = []`. A
+  single console-accepted rule therefore stopped every *other* rule that
+  tenant had written, suppressions included: a rule written to suppress
+  known-benign noise quietly stopped suppressing, with nothing on the console
+  to say so and one `warning` in the worker log. Fixed in two places, because
+  the parser bug and its blast radius are separate problems — `not` takes a
+  mapping now, and a rule that fails to parse is skipped while the rest
+  survive. Also closed two smaller divergences: the worker accepted any
+  `route_to` string while the console validated against a fixed set, and the
+  two copies of that set had nothing pinning them together.
+- **The API service had no LLM input contract at all.** `services/agents` has
+  had a fail-closed one since T2.3 landed there; the module this repo's own
+  notes described as living at `services/api/app/services/llm_safety.py` was
+  absent from the tree. Seven endpoints POSTed untrusted input straight to a
+  chat-completions provider — `phishing` (a submitted email body,
+  attacker-authored by definition), `translation`, `knowledge_base`, `hunts`,
+  `nl_detection`, `detection_loop`, and `alert_explain` (a JSON dump of the
+  alert). All validate before the request now, because a check that runs after
+  it is a log line rather than a control.
+  The rules are shared rather than reimplemented: they sat in `contract.py`
+  next to LangChain, the cost-telemetry recorder and the response cache, none
+  of which ship in the API image — which is precisely why the API could not
+  run them. They now live in `contract_rules.py` with stdlib imports only,
+  vendored byte-identically and gated by
+  `scripts/sync_vendored_llm_contract.py --check`. Two heuristics disagreeing
+  about what counts as a raw log would be worse than one.
+  Two more holes closed alongside: `services/agents/app/api/explain.py`
+  reached a model with raw `httpx` and never touched the contract, invisible
+  to a gate that walked the AST for `.ainvoke`/`.astream` only — it proved the
+  LangChain path clean and said nothing about the other way to reach a model,
+  so a second gate now flags any file that both names a completions endpoint
+  and issues its own POST. And the NL-query translator, one file vendored into
+  both services, imported `app.llm.contract` and `app.llm.factory` — neither of
+  which exists in the API process. The `ImportError` was swallowed, so
+  `/nl-query` always returned the deterministic translation and **never
+  reached a model**: safe by accident, and invisible.
 - **The detection truth table was a gate that could certify a no-op.** It
   classified rules by file path and by the key names inside `detection:`, never
   consulting the engine — so it published **947 executable** while the engine
@@ -364,6 +530,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberately so**: what remains is a funded provider key for the live-agent
   eval, not code. Marking it done would be the exact failure the program exists
   to prevent.
+- The wave-2 work adds six more rows, closing at **108 rows: 99 GATED, 9
+  PARTIAL, 0 NO GATE** — one per capability whose gate this release built:
+  authorized approvals, the signed email link, the LLM input contract across
+  both services, rule-id agreement between engine and catalogue, which identity
+  providers can resolve permissions live, and config snapshots reaching the
+  graph. Four carry a named caveat rather than a clean claim, because the
+  limitation is real: approvals are still an in-process dict, the contract is
+  a leak control rather than an injection sanitizer, four of five posture
+  snapshots cannot be collected, and `is_current` is set on write and never
+  cleared.
+- **The wave-2 backlog in [#362](https://github.com/beenuar/AiSOC/issues/362)
+  was wrong in both directions.** Two items (business-context rules,
+  effective-permissions resolvers) were already built, and four had the
+  capability present with the path that feeds it broken — which is the same
+  shape v8.0 found a dozen times. Auditing each item against the tree before
+  writing code is now the first step of any wave, not an optional one.
 
 - **A rule id named one rule in the engine and a different one in the
   catalogue.** #697 made ids position-independent by pinning

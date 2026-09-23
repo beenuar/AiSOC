@@ -1,5 +1,9 @@
 /**
- * Demo-mode helpers for the hosted demo at tryaisoc.com.
+ * Demo-mode helpers for a hosted demo deployment.
+ *
+ * Deliberately not naming a hostname: this module ships to every
+ * self-hoster, and a specific deployment's domain in a shared component is
+ * how one install's branding ends up inside another's product.
  *
  * Reads `NEXT_PUBLIC_DEMO_MODE` (set by `infra/fly/web/fly.toml`) to flag-gate
  * write actions in the UI:

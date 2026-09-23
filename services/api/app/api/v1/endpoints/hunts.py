@@ -38,6 +38,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
@@ -148,22 +149,22 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
     completions_url = f"{base_url}/chat/completions"
     enforce_airgap_for_url(completions_url)
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": _HUNT_SYSTEM},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    "temperature": 0.2,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-        resp.raise_for_status()
-        return json.loads(resp.json()["choices"][0]["message"]["content"])
+        body = await safe_chat_completions_request(  # T2.3
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _HUNT_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            url=completions_url,
+            timeout=45.0,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(body["choices"][0]["message"]["content"])
+    except LLMContractViolation as exc:
+        logger.warning("hunts.llm_contract_violation", reason=exc.reason)
+        return None
     except Exception:
         return None
 

@@ -21,13 +21,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
@@ -104,22 +104,23 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
     # AirgapViolation propagates to the caller so the endpoint can surface 503.
     enforce_airgap_for_url(completions_url)
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                completions_url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-        resp.raise_for_status()
-        data = json.loads(resp.json()["choices"][0]["message"]["content"])
+        # T2.3 — the contract runs before the request. This body is a
+        # submitted email, so it is attacker-authored by definition and is
+        # the single most likely place in the product to ship a raw log or a
+        # secret to a third party.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            url=completions_url,
+            timeout=45.0,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(body["choices"][0]["message"]["content"])
         return TriageResult(
             verdict=data.get("verdict", "unknown"),
             confidence=float(data.get("confidence", 0.5)),
@@ -127,6 +128,12 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
             mitre_technique=data.get("mitre_technique"),
             summary=data.get("summary", ""),
         )
+    except LLMContractViolation as exc:
+        # Degrading to heuristic triage is the right outcome, but it must be
+        # visible: this `except` used to swallow everything, so a refused
+        # prompt was indistinguishable from a missing API key.
+        logger.warning("phishing.llm_contract_violation", reason=exc.reason)
+        return None
     except Exception:
         return None
 

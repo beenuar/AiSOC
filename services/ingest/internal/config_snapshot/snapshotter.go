@@ -46,7 +46,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	urlpkg "net/url"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -134,12 +136,27 @@ func (p *StaticProvider) GetResourceConfig(_ context.Context, connectorID, resou
 //
 // Endpoint contract:
 //
-//	GET {BaseURL}/v1/connectors/{connector_id}/resource-config?
+//	GET {BaseURL}/api/v1/connectors/instances/{instance_id}/resource-config?
 //	      resource_id={resource_id}&ts={rfc3339}
 //
-// 200 JSON body                → return as map
+// 200 JSON body                 → return as map
 // 404 / 501 / "not_implemented" → ErrNotImplemented (soft skip)
 // other non-2xx                 → error (snapshotter logs + skips)
+//
+// This previously pointed at `/v1/connectors/{id}/resource-config`, which no
+// router served: the real route was a POST at
+// `/api/v1/connectors/{id}/resource_config` taking decrypted credentials in
+// the body. Four mismatches at once — method, prefix, separator, payload —
+// and the last one is not a typo. This service has no vault, so it cannot
+// supply `auth_config` at all; renaming the URL would have turned a silent
+// 404 into a silent 422. The instance-scoped route above resolves the
+// credentials itself, the same way the connector scheduler does at poll time.
+//
+// Both failures were invisible because a 404 maps to ErrNotImplemented, which
+// the snapshotter treats as a soft skip — so an operator saw
+// "T1.2 config snapshots enabled" and zero Configuration nodes, with nothing
+// in the log. `snapshotsSkippedTotal` is now reported so a permanent skip is
+// distinguishable from a connector that genuinely cannot time-travel.
 type HTTPProvider struct {
 	BaseURL string
 	Client  *http.Client
@@ -162,9 +179,17 @@ func (p *HTTPProvider) GetResourceConfig(ctx context.Context, connectorID, resou
 	if p.BaseURL == "" {
 		return nil, ErrNotImplemented
 	}
+	// Query values are escaped: a resource id is vendor-supplied (an ARN, an
+	// Okta app id) and can contain `&`, `/` and `#`, which would otherwise
+	// truncate the URL or inject a parameter.
 	url := fmt.Sprintf(
-		"%s/v1/connectors/%s/resource-config?resource_id=%s&ts=%s",
-		p.BaseURL, connectorID, resourceID, ts.UTC().Format(time.RFC3339),
+		"%s/api/v1/connectors/instances/%s/resource-config?%s",
+		strings.TrimRight(p.BaseURL, "/"),
+		urlpkg.PathEscape(connectorID),
+		urlpkg.Values{
+			"resource_id": {resourceID},
+			"ts":          {ts.UTC().Format(time.RFC3339)},
+		}.Encode(),
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -323,13 +348,32 @@ func (s *Snapshotter) Apply(ctx context.Context, ev *graph.Event) {
 			TenantID:   ev.TenantID,
 			Properties: props,
 		})
+		// `valid_from` / `valid_to` / `is_current` are declared in
+		// schemas/graph-schema.yaml and the published graph-schema doc
+		// advertises an O(1) "latest configuration" lookup via
+		// `:CONFIGURED_AS {is_current: true}`. Nothing wrote any of the three,
+		// so that documented query matched zero edges. The drift gate could
+		// not catch it because it only validates properties on edges declared
+		// `event_edge: true`, and this one is structural.
+		//
+		// `valid_to` is left nil rather than zero: an open interval is not the
+		// same as one that closed at the epoch, and a reader filtering
+		// `valid_to < now` would otherwise exclude the current configuration.
+		// Closing the previous interval needs a read-modify-write against the
+		// graph, which the ingest hot path deliberately does not do — so
+		// `is_current` is true on write and a traversal takes the newest
+		// `valid_from`, with the caveat recorded in the schema doc.
+		validFrom := ev.TS.UTC().Format(time.RFC3339Nano)
 		ev.Edges = append(ev.Edges, graph.Edge{
 			Type:      graph.RelConfiguredAs,
 			FromLabel: graph.NodeResource, FromKey: ref.NaturalKey,
 			ToLabel: graph.NodeConfiguration, ToKey: configKey,
 			Properties: map[string]interface{}{
-				"ts":           ev.TS.UTC().Format(time.RFC3339Nano),
+				"ts":           validFrom,
 				"connector_id": connectorID,
+				"snapshot_id":  configKey,
+				"valid_from":   validFrom,
+				"is_current":   true,
 			},
 		})
 		digestParts = append(digestParts, configKey)

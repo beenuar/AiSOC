@@ -23,7 +23,7 @@ An open-source, self-hostable AI SOC. The agent's prompts, tool calls, and ratio
 
 <a href="apps/web/public/demo/"><img src="apps/web/public/demo-thumbnail.svg" alt="90-second AiSOC product walkthrough — agent investigating the seeded LockBit 3.0 case" width="720" /></a>
 
-<sub><em>90-second walkthrough — agent investigates the seeded LockBit 3.0 case end-to-end. The rendered <code>.mp4</code> + <code>hero.gif</code> land with the v8.1 packaging release; the brief is in <a href="docs/demo/SCREENCAST_SHOTLIST.md">docs/demo/SCREENCAST_SHOTLIST.md</a>.</em></sub>
+<sub><em>90-second walkthrough — agent investigates the seeded LockBit 3.0 case end-to-end. <strong>This is a placeholder diagram, not a recording.</strong> The shot list is in <a href="docs/demo/SCREENCAST_SHOTLIST.md">docs/demo/SCREENCAST_SHOTLIST.md</a> and the recorder is <a href=".github/workflows/screencast.yml">screencast.yml</a>; the cut ships in v8.2, because recording needs a running stack to point a browser at and the hosted OSS demo is down pending a billing action on the account. Run it yourself with <code>pnpm aisoc:demo</code> and you are looking at the same thing.</em></sub>
 
 </div>
 
@@ -42,7 +42,7 @@ One alert through the four-stage agent funnel — Detect → Triage → Hunt →
 
 | If you have…                          | Run this                                                                                                 | What you get                                                                                       |
 |---------------------------------------|----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| **npm, and v8.1 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
+| **npm, and v8.2 has shipped**         | `npx aisoc triage --demo`                                                                                 | Batch-scores 200 alerts to escalate / review / suppress with the deterministic triage engine. **Not yet published** — `aisoc` is not on npm today, so this 404s. Builds from [`packages/aisoc-lite/`](packages/aisoc-lite/) meanwhile. |
 | **A browser** (zero install)          | [Open in Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)                                  | Browser IDE → `pnpm aisoc:demo --no-open` → click forwarded port `3000`. ~5 min cold.              |
 | **Docker + pnpm**                     | `git clone https://github.com/beenuar/AiSOC && cd AiSOC && pnpm aisoc:demo`                              | Local stack on Postgres + Redis + Kafka + api + agents + web. Browser opens at `INC-RT-001`.       |
 | **Nothing** (clean Linux/macOS/Win)   | `curl -fsSL https://raw.githubusercontent.com/beenuar/AiSOC/main/install.sh \| bash`                     | Bootstraps Docker, Node, pnpm, git for you; then runs `pnpm aisoc:demo`.                           |
@@ -172,7 +172,7 @@ Full architecture (every service, every storage role, the v1.5 console workbench
 
 A handful of headline capabilities — the rest are catalogued in [`apps/docs/docs/features/`](apps/docs/docs/features/) and indexed at the top of [`apps/docs/docs/intro.md`](apps/docs/docs/intro.md):
 
-> **Maturity (v8.0.0 — Close the loop).** The end-to-end spine is wired and CI-gated: ingest → ClickHouse lake → live detection → fused alert → auto-triage → governed response. v8.0 connected capabilities the codebase already contained but never called. Response actions are now **verified against the vendor** rather than assumed from a 200 — an action that reports success while the effect is absent is reported as failed, because that gap is how a SOC comes to believe a host is contained when it is not. Autonomy is governed by **each tenant's own** L0–L4 policy instead of one deployment-wide environment variable. Repeat-alert suppression, shipped in v7.7, **could never fire** — the evidence fingerprint included the alert id, so no repeat ever matched; it now does. Analysts can **hunt the events AiSOC itself ingested** instead of needing an external SIEM. A verdict citing indicators the evidence never contained is demoted to human review rather than auto-closed. Autonomous *response* still defaults to copilot/dry-run: an autonomy policy governs every real execution. The live-agent LLM benchmark is preview (the deterministic-tier scoreboard is CI-gated per PR); substrate eval suites are GA. Every product claim is backed by a failing test — [claim-to-gate matrix](docs/audit/CLAIM_TO_GATE_MATRIX.md): 93 GATED / 9 PARTIAL / 0 NO GATE. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
+> **Maturity (v8.0.0 — Close the loop).** The end-to-end spine is wired and CI-gated: ingest → ClickHouse lake → live detection → fused alert → auto-triage → governed response. v8.0 connected capabilities the codebase already contained but never called. Response actions are now **verified against the vendor** rather than assumed from a 200 — an action that reports success while the effect is absent is reported as failed, because that gap is how a SOC comes to believe a host is contained when it is not. Autonomy is governed by **each tenant's own** L0–L4 policy instead of one deployment-wide environment variable. Repeat-alert suppression, shipped in v7.7, **could never fire** — the evidence fingerprint included the alert id, so no repeat ever matched; it now does. Analysts can **hunt the events AiSOC itself ingested** instead of needing an external SIEM. A verdict citing indicators the evidence never contained is demoted to human review rather than auto-closed. Autonomous *response* still defaults to copilot/dry-run: an autonomy policy governs every real execution. The live-agent LLM benchmark is preview (the deterministic-tier scoreboard is CI-gated per PR); substrate eval suites are GA. Every product claim is backed by a failing test — [claim-to-gate matrix](docs/audit/CLAIM_TO_GATE_MATRIX.md): 99 GATED / 9 PARTIAL / 0 NO GATE. Full per-claim status: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md).
 
 - **84 click-and-connect data connectors** (EDR/XDR, SIEM, NDR, cloud, CNAPP, identity, SaaS, VCS, K8s audit, network) with schema-driven config, live `Test connection`, and vault-encrypted secrets — recently adding Qualys, GreyNoise, JumpCloud, Darktrace, and Imperva alongside IBM QRadar, Netskope, Zeek/Suricata NDR, and more. One query runs SIEM-agnostic **federated search** across Splunk SPL / Sentinel KQL / Elastic ES&#124;QL / **QRadar AQL**. Walkthrough: [`apps/docs/docs/connectors/index.md`](apps/docs/docs/connectors/index.md).
 - **End-to-end SIEM spine** — a cold `docker compose up` ingests connector data → lands it in the ClickHouse event lake → the executable detection corpus (833 rules) fires on the live stream → a fused alert is created, all asserted by an extended integration gate. Fuse-time threat-intel + CISA-KEV enrichment now feeds the confidence score and exploit-in-wild boost, and **stateful/windowed detections** (brute-force, password-spray, port-scan) run alongside the corpus. [`apps/docs/docs/architecture.md`](apps/docs/docs/architecture.md).
@@ -191,7 +191,7 @@ A handful of headline capabilities — the rest are catalogued in [`apps/docs/do
 
 AiSOC ships an [MCP server](https://modelcontextprotocol.io) (`services/mcp/`) so analysts can query alerts, run agent investigations, and replay every step the agent took without leaving the IDE or chat. The server exposes 13 tools — discovery, deep-dive, governed lake query, and the action / replay set that walks the agent decision ledger step-by-step.
 
-> **Status — monorepo source build today; npm publish lands in v8.1.** Full setup is in [`apps/docs/docs/integrations/mcp.md`](apps/docs/docs/integrations/mcp.md), which shows the today-vs-published invocations side by side.
+> **Status — monorepo source build today; npm publish lands in v8.2.** Full setup is in [`apps/docs/docs/integrations/mcp.md`](apps/docs/docs/integrations/mcp.md), which shows the today-vs-published invocations side by side.
 
 ---
 
@@ -203,9 +203,9 @@ Three contribution surfaces; each is one file plus optional fixtures, and CI val
 - **Connector.** Subclass `BaseConnector` in [`services/connectors/app/connectors/`](services/connectors/app/connectors/), register it in `_CONNECTOR_CLASSES`, and add a `plugins/<id>/plugin.yaml` manifest. The marketplace picks it up automatically. Walkthrough: [`apps/docs/docs/connectors/`](apps/docs/docs/connectors/).
 - **Playbook.** Drop a YAML under [`playbooks/`](playbooks/); [`validate-playbooks`](https://github.com/beenuar/AiSOC/actions/workflows/validate-playbooks.yml) gates the PR. Schema: [`playbook.schema.json`](playbook.schema.json).
 
-Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/plugins/overview.md`](apps/docs/docs/plugins/overview.md). The CLI (`aisoc-cli`) is in [`packages/aisoc-cli/`](packages/aisoc-cli/); PyPI publish lands in v8.1.
+Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/plugins/overview.md`](apps/docs/docs/plugins/overview.md). The CLI (`aisoc-cli`) is in [`packages/aisoc-cli/`](packages/aisoc-cli/); PyPI publish lands in v8.2.
 
-**In your CI:** add `- uses: beenuar/aisoc-action@v1` to triage your repo's Dependabot / CodeQL / secret-scanning alerts on every PR (deterministic, nothing leaves your runner; dogfooded on this repo, Marketplace publish lands with v8.1). [Docs](apps/docs/docs/integrations/github-action.md).
+**In your CI:** add `- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0` to triage your repo's Dependabot / CodeQL / secret-scanning alerts on every PR (deterministic, nothing leaves your runner). The short `beenuar/aisoc-action@v1` form needs a Marketplace listing, which lands with v8.2 — until then the subdirectory form above is the one that resolves. [Docs](apps/docs/docs/integrations/github-action.md).
 
 ---
 
@@ -214,7 +214,7 @@ Plugin and detection SDK (Python · TypeScript · Go) — see [`apps/docs/docs/p
 - **Latest GitHub release with downloads:** <https://github.com/beenuar/AiSOC/releases/latest>
 - **Per-release narrative:** [`RELEASES.md`](RELEASES.md) (mirrors what used to live in this README)
 - **Machine-readable inventory with file paths, env-var diffs, test counts:** [`CHANGELOG.md`](CHANGELOG.md)
-- **v8.1 packaging work in flight (`[~]` items):** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
+- **v8.1 scope, and why packaging is named against v8.2:** [`docs/roadmap/v8-progress.md`](docs/roadmap/v8-progress.md)
 - **Bigger-picture roadmap (BYOC multi-cloud, MSSP rollups, federated search):** [`ROADMAP.md`](ROADMAP.md)
 
 ---

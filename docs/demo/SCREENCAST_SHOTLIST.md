@@ -18,7 +18,7 @@
 
 ## Shot 1 · Alert hits (0:02 — 0:14)
 
-* **Visual:** browser at `tryaisoc.com/dashboard/alerts`. A new alert
+* **Visual:** browser at `localhost:3000/dashboard/alerts`. A new alert
   card animates in from the top (the seed dataset includes a Crowdstrike
   EDR detection for `wmic.exe` spawn from `winword.exe`).
 * **Voice (12 words):** "An EDR detection comes in. AiSOC opens an
@@ -73,10 +73,11 @@
 
 ## Outro (1:20 — 1:30)
 
-* **Visual:** fade to the AiSOC wordmark on dark with the URL
-  `tryaisoc.com` and "MIT licensed · github.com/beenuar/AiSOC" under
-  it.
-* **Voice (8 words):** "Try the live demo at tryaisoc.com."
+* **Visual:** fade to the AiSOC wordmark on dark with
+  "MIT licensed · github.com/beenuar/AiSOC" under it. No deployment
+  hostname — a URL in the outro dates the cut and points viewers at one
+  particular instance rather than at the project.
+* **Voice (9 words):** "Run it yourself: one command, no account required."
 
 ---
 
