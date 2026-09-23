@@ -91,7 +91,7 @@ There is no API token to store or rotate in this path.
 reference that resolves is the action's directory inside this monorepo:
 
 ```yaml
-- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.0
+- uses: beenuar/AiSOC/packages/aisoc-action@v8.1.1
 ```
 
 That form needs no setup and is what the README and
