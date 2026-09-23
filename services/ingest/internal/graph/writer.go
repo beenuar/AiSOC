@@ -245,15 +245,60 @@ func New(ctx context.Context, cfg Config) (*Writer, error) {
 		return nil, fmt.Errorf("graph: connect to Neo4j: %w", err)
 	}
 
-	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := driver.VerifyConnectivity(connectCtx); err != nil {
+	// Retry rather than deciding on the first attempt.
+	//
+	// This was a single 5-second check at process start, and a failure
+	// disabled the graph writer for the lifetime of the process. Neo4j takes
+	// tens of seconds to accept connections on a cold boot, and compose
+	// cannot express "depend on neo4j only in the full profile" — so on a
+	// stack where the graph is switched on, ingest would lose a race it had
+	// no way to wait for and then run for days with the feature silently off.
+	// The integration gate caught it intermittently, which is the worst way
+	// to find out.
+	if err := verifyWithRetry(ctx, driver, connectRetryWindow); err != nil {
 		_ = driver.Close(ctx)
 		return nil, fmt.Errorf("graph: verify connectivity: %w", err)
 	}
 
 	w := newWriterFromDriver(&neo4jDriverWrapper{inner: driver}, cfg)
 	return w, nil
+}
+
+// connectRetryWindow bounds how long startup waits for Neo4j.
+//
+// Long enough for a cold container, short enough that ingest still comes up
+// and starts serving /v1/ingest promptly when the graph is genuinely absent —
+// the graph is an enrichment, and refusing to ingest because it is missing
+// would turn an optional dependency into a required one.
+const connectRetryWindow = 60 * time.Second
+
+// verifyWithRetry polls until the driver answers or the window closes.
+func verifyWithRetry(ctx context.Context, driver neo4j.DriverWithContext, window time.Duration) error {
+	deadline := time.Now().Add(window)
+	backoff := 500 * time.Millisecond
+	var lastErr error
+
+	for {
+		attemptCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := driver.VerifyConnectivity(attemptCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if time.Now().Add(backoff).After(deadline) {
+			return lastErr
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+		if backoff < 5*time.Second {
+			backoff *= 2
+		}
+	}
 }
 
 // newWriterFromDriver is the test-friendly constructor — takes a Driver

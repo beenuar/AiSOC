@@ -397,6 +397,14 @@ class Settings(BaseSettings):
     REALTIME_BASE_URL: str = "http://realtime:8086"
     REALTIME_INTERNAL_TOKEN: str = ""
 
+    # services/actions — where a governed response action is actually
+    # executed. These were read inline with os.environ.get from one endpoint,
+    # which is why the default was wrong: `aisoc-actions` is the compose
+    # container_name, and the DNS name on the network is the service name,
+    # `actions`. Nothing noticed because the only caller was a fallback path.
+    AISOC_ACTIONS_BASE_URL: str = "http://actions:8085"
+    AISOC_ACTIONS_SERVICE_TOKEN: str = ""
+
     # SAML/OIDC session token signing secret. Consumed by ``app/auth/saml.py``
     # and ``app/auth/oidc.py`` to mint AiSOC session JWTs after an external
     # identity provider returns a successful authn response. We surface this

@@ -33,23 +33,16 @@ from __future__ import annotations
 
 import os
 
-import httpx
 import structlog
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
+from app.services.actions_client import ActionsServiceError, decide_action
 from app.services.email_approval import EmailApprovalError, verify_token
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/actions", tags=["actions"])
-
-#: Matches the default in the actions service's own compose/Helm wiring.
-_DEFAULT_ACTIONS_BASE_URL = "http://aisoc-actions:8085"
-
-
-def _actions_base_url() -> str:
-    return os.environ.get("AISOC_ACTIONS_BASE_URL", _DEFAULT_ACTIONS_BASE_URL).rstrip("/")
 
 
 def _signing_secret() -> str:
@@ -129,62 +122,56 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
             status_code=400,
         )
 
-    verb = "approve" if parsed.decision == "approved" else "reject"
-    payload = {
-        "chatops_approver": {
-            "platform": "email",
-            "platform_user_id": parsed.approver,
-        }
-    }
-    headers = {"Accept": "application/json"}
-    service_token = os.environ.get("AISOC_ACTIONS_SERVICE_TOKEN", "").strip()
-    if service_token:
-        headers["Authorization"] = f"Bearer {service_token}"
-
-    url = f"{_actions_base_url()}/api/v1/actions/{parsed.action_id}/{verb}"
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-    except httpx.HTTPError as exc:
-        logger.warning("email_approval.upstream_unreachable", action_id=parsed.action_id, error=str(exc))
-        return _page(
-            "The action service could not be reached",
-            "Your decision was not recorded. Try again, or use the console.",
-            status_code=502,
-        )
-
-    if response.status_code == 400:
-        return _page(
-            "This action was already decided",
-            "Somebody has already approved or rejected it, so this link no longer applies. Approval links work once.",
-            status_code=409,
-        )
-    if response.status_code == 403:
-        detail = _detail(response)
-        logger.warning(
-            "email_approval.not_authorized",
+        await decide_action(
             action_id=parsed.action_id,
-            approver=parsed.approver,
-            detail=detail,
+            approve=parsed.decision == "approved",
+            chatops_approver={"platform": "email", "platform_user_id": parsed.approver},
         )
-        return _page(
-            "You are not authorised to decide this action",
-            f"{detail} An email approver must be mapped under 'email' in "
-            "AISOC_CHATOPS_APPROVERS, and may not approve an action they "
-            "requested themselves.",
-            status_code=403,
-        )
-    if response.status_code == 404:
-        return _page("Action not found", "It may have been removed since the email was sent.", status_code=404)
-    if response.status_code >= 400:
+    except ActionsServiceError as exc:
+        status_code = exc.status_code
+        if status_code is None:
+            logger.warning("email_approval.upstream_unreachable", action_id=parsed.action_id, error=str(exc))
+            return _page(
+                "The action service could not be reached",
+                "Your decision was not recorded. Try again, or use the console.",
+                status_code=502,
+            )
+        if status_code == 400:
+            return _page(
+                "This action was already decided",
+                "Somebody has already approved or rejected it, so this link no longer applies. Approval links work once.",
+                status_code=409,
+            )
+        if status_code == 403:
+            # Only ``upstream_detail`` reaches the page. The exception message
+            # can carry a transport error with internal hostnames, and this
+            # route is unauthenticated by necessity — the reader is holding an
+            # email, not a session.
+            detail = exc.upstream_detail
+            logger.warning(
+                "email_approval.not_authorized",
+                action_id=parsed.action_id,
+                approver=parsed.approver,
+                detail=detail,
+            )
+            return _page(
+                "You are not authorised to decide this action",
+                f"{detail} An email approver must be mapped under 'email' in "
+                "AISOC_CHATOPS_APPROVERS, and may not approve an action they "
+                "requested themselves.",
+                status_code=403,
+            )
+        if status_code == 404:
+            return _page("Action not found", "It may have been removed since the email was sent.", status_code=404)
         logger.warning(
             "email_approval.upstream_error",
             action_id=parsed.action_id,
-            status=response.status_code,
+            status=status_code,
         )
         return _page(
             "Your decision could not be recorded",
-            f"The action service returned {response.status_code}. Try the console instead.",
+            f"The action service returned {status_code}. Try the console instead.",
             status_code=502,
         )
 
@@ -199,12 +186,3 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
         f"Recorded as {parsed.approver}. You can close this page.",
         status_code=200,
     )
-
-
-def _detail(response: httpx.Response) -> str:
-    try:
-        body = response.json()
-    except ValueError:
-        return "The action service refused the decision."
-    detail = body.get("detail") if isinstance(body, dict) else None
-    return str(detail) if detail else "The action service refused the decision."

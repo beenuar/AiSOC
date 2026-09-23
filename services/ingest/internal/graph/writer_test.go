@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -269,7 +270,7 @@ type blockingFakeDriver struct{}
 func (b *blockingFakeDriver) NewSession(_ context.Context, _ neo4j.SessionConfig) Session {
 	return &blockingSession{}
 }
-func (b *blockingFakeDriver) Close(_ context.Context) error           { return nil }
+func (b *blockingFakeDriver) Close(_ context.Context) error              { return nil }
 func (b *blockingFakeDriver) VerifyConnectivity(_ context.Context) error { return nil }
 
 type blockingSession struct{}
@@ -369,4 +370,58 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// A single connectivity check at process start disabled the graph writer for
+// the lifetime of the process. Neo4j takes tens of seconds to accept
+// connections on a cold boot, and compose cannot express "depend on neo4j
+// only in the full profile", so ingest lost a race it had no way to wait for
+// and then ran with the feature silently off. The integration gate caught it
+// intermittently, which is the worst way to find out.
+type flakyDriver struct {
+	neo4j.DriverWithContext
+	failures int
+	attempts int
+}
+
+func (d *flakyDriver) VerifyConnectivity(ctx context.Context) error {
+	d.attempts++
+	if d.attempts <= d.failures {
+		return errors.New("connection refused")
+	}
+	return nil
+}
+
+func TestVerifyWithRetrySucceedsAfterABriefOutage(t *testing.T) {
+	driver := &flakyDriver{failures: 2}
+	if err := verifyWithRetry(context.Background(), driver, 30*time.Second); err != nil {
+		t.Fatalf("verifyWithRetry returned %v, want nil once the broker answers", err)
+	}
+	if driver.attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (two refusals then success)", driver.attempts)
+	}
+}
+
+func TestVerifyWithRetryGivesUpAndSaysWhy(t *testing.T) {
+	// Bounded: the graph is an enrichment, and refusing to ingest because it
+	// is missing would turn an optional dependency into a required one.
+	driver := &flakyDriver{failures: 1000}
+	err := verifyWithRetry(context.Background(), driver, 1200*time.Millisecond)
+	if err == nil {
+		t.Fatal("verifyWithRetry returned nil for a driver that never answers")
+	}
+	if !strings.Contains(err.Error(), "connection refused") {
+		t.Errorf("error = %v, want the driver's own reason carried through", err)
+	}
+	if driver.attempts < 2 {
+		t.Errorf("attempts = %d, want more than one — a single try is the bug", driver.attempts)
+	}
+}
+
+func TestVerifyWithRetryHonoursCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := verifyWithRetry(ctx, &flakyDriver{failures: 1000}, time.Minute); err == nil {
+		t.Fatal("verifyWithRetry ignored a cancelled context")
+	}
 }

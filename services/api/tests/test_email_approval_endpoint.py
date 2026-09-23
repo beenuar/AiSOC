@@ -20,6 +20,7 @@ import json
 import httpx
 import pytest
 from app.api.v1.endpoints import email_approval as endpoint
+from app.services import actions_client
 from app.services.email_approval import EmailApprovalError, approval_url, issue_token, verify_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -57,6 +58,14 @@ class _StubResponse:
 
 
 def _stub_post(monkeypatch: pytest.MonkeyPatch, response: _StubResponse, recorder: list | None = None):
+    """Stub the transport, not the client.
+
+    Patched at ``actions_client.httpx`` rather than in the endpoint, because
+    the endpoint no longer builds its own request: URL construction, the
+    service-token header and the status mapping all live in the shared
+    client now, and stubbing above them would stop testing any of it.
+    """
+
     class _Client:
         async def __aenter__(self):
             return self
@@ -69,7 +78,7 @@ def _stub_post(monkeypatch: pytest.MonkeyPatch, response: _StubResponse, recorde
                 recorder.append({"url": url, "json": json, "headers": headers})
             return response
 
-    monkeypatch.setattr(endpoint.httpx, "AsyncClient", lambda **_: _Client())
+    monkeypatch.setattr(actions_client.httpx, "AsyncClient", lambda **_: _Client())
 
 
 # ── the route exists at the path the emails link to ────────────────────────
@@ -208,7 +217,42 @@ def test_an_unreachable_actions_service_does_not_claim_success(client: TestClien
         async def post(self, *a, **k):
             raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr(endpoint.httpx, "AsyncClient", lambda **_: _Client())
+    monkeypatch.setattr(actions_client.httpx, "AsyncClient", lambda **_: _Client())
     res = client.get("/api/v1/actions/email-decide", params={"token": _token()})
     assert res.status_code == 502
     assert "not recorded" in res.text
+
+
+# ── the shared client, exercised through this route ────────────────────────
+
+
+def test_the_service_token_is_sent_when_configured(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(actions_client.settings, "AISOC_ACTIONS_SERVICE_TOKEN", "svc-token")
+    calls: list[dict] = []
+    _stub_post(monkeypatch, _StubResponse(200, {"status": "approved"}), calls)
+
+    client.get("/api/v1/actions/email-decide", params={"token": _token()})
+
+    assert calls[0]["headers"]["Authorization"] == "Bearer svc-token"
+
+
+def test_no_authorization_header_when_no_token_is_configured(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(actions_client.settings, "AISOC_ACTIONS_SERVICE_TOKEN", "")
+    calls: list[dict] = []
+    _stub_post(monkeypatch, _StubResponse(200, {"status": "approved"}), calls)
+
+    client.get("/api/v1/actions/email-decide", params={"token": _token()})
+
+    assert "Authorization" not in calls[0]["headers"]
+
+
+def test_the_default_base_url_is_the_compose_service_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The regression this pins.
+
+    The base URL was read inline with ``os.environ.get`` and defaulted to
+    ``http://aisoc-actions:8085`` — the compose ``container_name``, not the
+    DNS name on the network, which is the service name ``actions``. Nothing
+    noticed because the only path that used the default was a fallback.
+    """
+    monkeypatch.setattr(actions_client.settings, "AISOC_ACTIONS_BASE_URL", "http://actions:8085")
+    assert actions_client.base_url() == "http://actions:8085"
