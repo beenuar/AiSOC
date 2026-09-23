@@ -171,9 +171,39 @@ def _is_secret(field) -> bool:
     return getattr(field, "secret", False) or str(getattr(field, "type", "")) == "secret"
 
 
+def duplicate_slugs() -> list[tuple[str, list[str]]]:
+    """Pages that differ only by separator.
+
+    Six connectors had a hand-written page using underscores while the
+    generator assumed hyphens, so it saw no page and wrote a second,
+    thinner one beside the original — and listed only its own in the
+    sidebar, dropping the better half of each pair out of navigation.
+    """
+    groups: dict[str, list[str]] = {}
+    for path in sorted(DOCS_DIR.glob("*.md")):
+        groups.setdefault(path.stem.replace("_", "-"), []).append(path.stem)
+    return [(key, names) for key, names in groups.items() if len(names) > 1]
+
+
 def _slug(connector_id: str) -> str:
-    """Doc filename for a connector id. Docs use hyphens, modules underscores."""
-    return connector_id.replace("_", "-")
+    """Doc filename for a connector id.
+
+    Hyphens are the convention, but six pages predate it and use
+    underscores. Assuming the convention meant the coverage check saw no
+    page for those connectors and generated a second, thinner one beside
+    the hand-written original — six duplicate pages, with the better half
+    of each pair dropped from the sidebar.
+
+    So an existing page wins over the convention, whichever separator it
+    used. Only a connector with no page at all gets the hyphenated form.
+    """
+    hyphenated = connector_id.replace("_", "-")
+    if (DOCS_DIR / f"{hyphenated}.md").exists():
+        return hyphenated
+    underscored = connector_id.replace("-", "_")
+    if (DOCS_DIR / f"{underscored}.md").exists():
+        return underscored
+    return hyphenated
 
 
 def _human_block(path: Path) -> str:
@@ -381,6 +411,8 @@ SIDEBAR_PREAMBLE = (
     "connectors/endpoint-decision-matrix",
     "connectors/api-coverage",
     "connectors/universal-capture",
+    # Not a connector, so the generated list below does not cover it.
+    "connectors/osquery-extensions",
 )
 
 SIDEBAR_START = "// BEGIN GENERATED CONNECTOR LIST"
@@ -509,6 +541,7 @@ def main(argv: list[str] | None = None) -> int:
             path.write_text(rendered, encoding="utf-8")
             written += 1
 
+    dupes = duplicate_slugs()
     sidebar_ok = sync_sidebar(schemas, check=args.check)
 
     if args.check:
@@ -548,6 +581,16 @@ def main(argv: list[str] | None = None) -> int:
                 "alone, only the reference table is rewritten.",
                 file=sys.stderr,
             )
+        if dupes:
+            print(
+                f"CONNECTOR DOC GATE FAILED: {len(dupes)} connector(s) have two "
+                f"pages differing only by separator. One will be orphaned from "
+                f"the sidebar:",
+                file=sys.stderr,
+            )
+            for _key, names in dupes:
+                print(f"  {' and '.join(n + '.md' for n in names)}", file=sys.stderr)
+            return 1
         if mdx_breaks:
             print(
                 f"CONNECTOR DOC GATE FAILED: {len(mdx_breaks)} page(s) contain "
