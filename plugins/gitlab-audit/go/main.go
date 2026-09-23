@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // GitLabConnector implements aisoc.Connector for the GitLab audit events API.

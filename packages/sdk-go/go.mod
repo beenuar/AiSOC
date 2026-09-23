@@ -1,3 +1,3 @@
-module github.com/beenuar/aisoc/sdk-go
+module github.com/beenuar/AiSOC/packages/sdk-go
 
 go 1.26

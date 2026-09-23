@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 func writeManifest(t *testing.T, dir string, content map[string]any) {

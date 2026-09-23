@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // OktaConnector is a connector + action plugin for the Okta Identity Cloud.

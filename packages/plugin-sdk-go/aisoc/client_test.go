@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // newTestServer returns a test HTTP server that handles the given pattern.

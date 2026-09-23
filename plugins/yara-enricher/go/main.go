@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // YaraEnricher implements aisoc.Enricher for file-based YARA scanning.

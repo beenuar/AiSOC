@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // ── mock enricher ──────────────────────────────────────────────────────────

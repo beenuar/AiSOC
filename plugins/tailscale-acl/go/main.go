@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 const tsAPIBase = "https://api.tailscale.com/api/v2"

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // GitHubAuditConnector implements aisoc.Connector against the GitHub Audit Log API.

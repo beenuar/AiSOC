@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,11 +60,60 @@ def _load() -> dict:
     return json.loads(SCOREBOARD.read_text(encoding="utf-8"))
 
 
+#: How stale the published scoreboard may be before this gate fails.
+#:
+#: The page above the table says rows are appended weekly. It sat frozen at
+#: 2026-07-13 / v7.5.0 for ten weeks across three releases and **every check
+#: in the repository passed throughout**, because "freshness" here meant the
+#: accuracy *value* was current and nothing ever read the row's date.
+#:
+#: 45 days rather than 7: the weekly job needs a funded provider key it does
+#: not have, so a 7-day ceiling would red `main` permanently for a reason no
+#: contributor can fix, and a gate people route around is worse than none.
+#: This catches the failure that actually happened — a scoreboard going stale
+#: for a season while claiming to be weekly.
+MAX_SCOREBOARD_AGE_DAYS = 45
+
+
 def _newest_substrate_row(data: dict) -> dict | None:
-    for row in data.get("rows", []):
-        if row.get("substrate") is True:
-            return row
-    return None
+    """The newest substrate row *by date*, not by position in the file.
+
+    This used to return the first row with ``substrate: true`` and the file
+    is only conventionally newest-first, so a row appended in the wrong place
+    would have silently become the one every check measured.
+    """
+    substrate = [row for row in data.get("rows", []) if row.get("substrate") is True]
+    if not substrate:
+        return None
+    return max(substrate, key=lambda row: str(row.get("date", "")))
+
+
+def _newest_row(data: dict) -> dict | None:
+    rows = data.get("rows", [])
+    return max(rows, key=lambda row: str(row.get("date", ""))) if rows else None
+
+
+def _staleness_errors(data: dict, today: date | None = None) -> list[str]:
+    """Fail when the published table has gone quiet while promising weekly rows."""
+    newest = _newest_row(data)
+    if newest is None:
+        return ["scoreboard has no rows at all"]
+
+    raw = str(newest.get("date", ""))
+    try:
+        newest_date = date.fromisoformat(raw)
+    except ValueError:
+        return [f"newest row has an unparseable date: {raw!r}"]
+
+    age = ((today or date.today()) - newest_date).days
+    if age <= MAX_SCOREBOARD_AGE_DAYS:
+        return []
+    return [
+        f"the newest scoreboard row is {age} days old ({raw}), over the "
+        f"{MAX_SCOREBOARD_AGE_DAYS}-day ceiling. The benchmark page says rows are "
+        "appended weekly. Either append a run, or change what the page claims — "
+        "a table that has gone quiet for a season must not keep advertising a cadence."
+    ]
 
 
 def _validate_schema(data: dict) -> list[str]:
@@ -98,7 +148,7 @@ def check() -> int:
         print(f"ERROR: {SCOREBOARD.relative_to(ROOT)} missing", file=sys.stderr)
         return 1
     data = _load()
-    errors = _validate_schema(data) + _validate_honesty(data)
+    errors = _validate_schema(data) + _validate_honesty(data) + _staleness_errors(data)
 
     row = _newest_substrate_row(data)
     if row is None:
@@ -131,16 +181,97 @@ def refresh() -> int:
         return 1
     live = _live_accuracy()
     row["mitre_accuracy"] = live
+    # Re-stamp the row. --refresh rewrote only the accuracy, so a refreshed
+    # row kept a months-old date and commit_sha: the number described today's
+    # code and the row said it was measured in July. That is a worse claim
+    # than a stale number, because it looks current.
+    row["date"] = date.today().isoformat()
+    row["commit_sha"] = _head_sha() or row.get("commit_sha", "")
+    row["agent_version"] = _tree_version() or row.get("agent_version", "")
     SCOREBOARD.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"refreshed newest substrate row mitre_accuracy -> {live}")
+    print(f"refreshed newest substrate row -> accuracy {live}, dated {row['date']}, {row['commit_sha']}")
+    return 0
+
+
+def _head_sha() -> str:
+    """Short HEAD sha, or empty when git is unavailable."""
+    import subprocess  # noqa: PLC0415 — only needed on the refresh path
+
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short=8", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=ROOT,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+    return out.stdout.strip()
+
+
+def _tree_version() -> str:
+    """The version in the working tree, not a remembered one."""
+    version_file = ROOT / "VERSION"
+    if not version_file.exists():
+        return ""
+    return "v" + version_file.read_text(encoding="utf-8").strip()
+
+
+def append() -> int:
+    """Append one substrate row from a fresh deterministic run.
+
+    The scoreboard had no writer at all. `wet-eval.yml` rewrites
+    `benchmark.md` and a snapshot file and never touches `scoreboard.json`;
+    `live-agent-eval.yml` runs a real Ollama-hosted agent and has
+    `permissions: contents: read`, so it could not have written one if it
+    tried. The docs promise an auto-PR appending a row, and nothing
+    implements it. That is why the table sat frozen for ten weeks across
+    three releases with every check passing.
+
+    This is the substrate half only, and it is labelled as such — the row
+    carries `substrate: true` and `eval_mode: substrate-only`, and the
+    honesty check refuses any other combination. Appending a substrate row
+    does not and must not look like live-agent performance.
+    """
+    data = _load()
+    rows = data.setdefault("rows", [])
+    today = date.today().isoformat()
+    sha = _head_sha()
+
+    # (date, commit_sha) is the row key. Re-running on the same commit on the
+    # same day is a no-op rather than a duplicate.
+    if any(r.get("date") == today and r.get("commit_sha") == sha for r in rows):
+        print(f"OK: a row for {today} @ {sha} already exists; nothing appended")
+        return 0
+
+    template = _newest_substrate_row(data)
+    if template is None:
+        print("ERROR: no existing substrate row to take a shape from", file=sys.stderr)
+        return 1
+
+    row = dict(template)
+    row["date"] = today
+    row["commit_sha"] = sha
+    row["agent_version"] = _tree_version() or row.get("agent_version", "")
+    row["mitre_accuracy"] = _live_accuracy()
+    row["substrate"] = True
+    row["eval_mode"] = "substrate-only"
+
+    rows.insert(0, row)
+    SCOREBOARD.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"appended substrate row {today} @ {sha}: mitre_accuracy={row['mitre_accuracy']}")
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--append", action="store_true", help="append a substrate row from a fresh run")
     parser.add_argument("--refresh", action="store_true", help="rewrite the newest substrate row's mitre_accuracy")
     parser.add_argument("--check", action="store_true", help="validate + freshness-gate (default action)")
     args = parser.parse_args()
+    if args.append:
+        return append()
     return refresh() if args.refresh else check()
 
 

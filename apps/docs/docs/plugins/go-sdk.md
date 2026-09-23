@@ -7,7 +7,7 @@ sidebar_position: 3
 ## Installation
 
 ```bash
-go get github.com/beenuar/aisoc/plugin-sdk-go
+go get github.com/beenuar/AiSOC/packages/plugin-sdk-go
 ```
 
 ## Quick Start: Enricher
@@ -17,7 +17,7 @@ package main
 
 import (
     "context"
-    "github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+    "github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 type IPReputationEnricher struct {

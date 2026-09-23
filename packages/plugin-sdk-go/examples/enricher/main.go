@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/beenuar/aisoc/plugin-sdk-go/aisoc"
+	"github.com/beenuar/AiSOC/packages/plugin-sdk-go/aisoc"
 )
 
 // IPReputationEnricher checks a fictional reputation API.
