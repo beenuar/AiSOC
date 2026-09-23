@@ -2,13 +2,32 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v8.1.1`, released 2026-09-23 — an adoption-audit release with no new capability. The audit found that the single most-followed path into AiSOC did not run AiSOC: `./install.sh` started a compose file with no ingest service, no fusion service and Kafka disabled, and everything in the resulting console had been written straight into Postgres by a seed script. The core pipeline does work; it had never been demonstrated, and `make smoke` now demonstrates it in CI. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v9.0.0`, released 2026-09-23 — ten waves, and one finding under nearly all of them: the mechanism existed, was tested, and nothing called it. The one worth stating first is that **approving an action executed nothing** — `decide()` flipped a row and never reached the execution service, so every tap of Approve recorded a decision and ran nothing while telling the operator the opposite. Both ends of that loop are closed. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `8.1.1`. The **v8.1.1** release (2026-09-23) adds no capability. It exists because an audit of how the repository is adopted — installability, architecture comprehension, data provenance, pipeline connectivity — found the quick start did not start the product.
+`VERSION` is `9.0.0`. The **v9.0.0** release (2026-09-23) is ten waves of one audit question: what in this tree exists, is tested, and has no caller?
+
+**v9.0.0 highlights (September 23, 2026)**
+- **Approving an action executed nothing.** `decide()` flipped a row, notified the realtime service and returned 200 without ever touching `services/actions`. The other end was missing too — nothing in the repository ever created an approval, so the queue had no producer and was structurally empty on every deployment. A queue with no producer and a queue with no pending work look identical.
+- **The confidence x impact approval matrix had zero production callers.** Written, documented, unit-tested and listed in the claim-to-gate matrix as GATED, while `POST /actions` gated on blast radius alone — a property of the verb, so the same answer came back for a 40%-confidence guess and a corroborated finding. Both gates run now and the stricter wins.
+- **UEBA never scored a single message.** It consumed a topic nothing in the platform writes, so fusion's UEBA confidence boost — on by default, fully built — could only ever be inert.
+- **A plugin could never be rejected for a bad signature.** `_get_registered_pub_key` returned `None` unconditionally, so verification was skipped entirely. The signing path existed end to end, had a CLI command, and was incapable of saying no. There was also no registry allow-list and no digest pinning, both of which the notes claimed existed.
+- **The public scoreboard was frozen for ten weeks and every check passed**, because "freshness" meant the accuracy value was current and nothing ever read the row's date.
+- **Neither published Go SDK was installable** — wrong case against a case-sensitive VCS path, missing the directory prefix — and **the Helm chart did not render** until dependencies were fetched, which no documentation mentioned.
+- **A native responder app**, plus the honest correction that the responder console already existed as a PWA. The native app is a distribution channel; it exists because iOS Web Push requires an installed PWA and has been unreliable even then.
+
+Packaging stops moving the number. It slipped v8.0 to v8.1 to v8.2 for the same reason each time, so the README states a fact rather than a date, and `check_published_packages.py` reads registry state so the claim cannot go stale in either direction.
+
+The full inventory — including what is knowingly still open — lives under `[9.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v8.1.1 (2026-09-23)
+
+`VERSION` was `8.1.1`. The **v8.1.1** release (2026-09-23) adds no capability. It exists because an audit of how the repository is adopted — installability, architecture comprehension, data provenance, pipeline connectivity — found the quick start did not start the product.
 
 **v8.1.1 highlights (September 23, 2026)**
 - **The documented quick start never ran the product.** `./install.sh` handed off to a nine-service compose file with no ingest service, no fusion service, and `AISOC_DISABLE_KAFKA: true`. Everything visible in the console came from `seed_demo.py` writing fifteen fabricated incidents straight into Postgres, and the installer printed "AiSOC is up and running" because the compose command exited 0. It now runs `make up` — the same CORE stack the README documents and CI tests — then proves the pipeline before claiming success.
