@@ -63,6 +63,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   credentials. Doing this before v8.0's degenerate-variance fix would have been
   misleading, since a constant stream collapses the standard deviation and every
   such principal would have read as permanently normal.
+- **Four capability pillars, on a credibility floor
+  ([#696](https://github.com/beenuar/AiSOC/pull/696),
+  [#697](https://github.com/beenuar/AiSOC/pull/697),
+  [#707](https://github.com/beenuar/AiSOC/pull/707)).** The floor came first,
+  because a published claim that is false costs more than a missing feature.
+  - **Context graph.** Neo4j schema v1.1 adds identity, asset, cloud, business
+    and threat depth — Employee joined to Identity, Vulnerability, Application
+    criticality and data classification, CloudAccount and Secret, and the
+    IOC → Malware → Campaign → ThreatActor → Technique chain. One
+    tenant-scoped traversal resolves an alert into all five behind
+    `GET /api/v1/graph/incident-context/{alert_id}`, feeding the agent's
+    context bundle, with `POST /graph/context/import` for directory and CMDB
+    data. Neo4j had no migration mechanism at all, so any schema change
+    landed only on fresh installs; real runners now exist for all three
+    non-Postgres stores (`services/api/app/db/{graph,lake,vector}_migrations.py`)
+    and the gate checks the half that matters — that each is *called* from a
+    startup path. Qdrant's vector dimension is immutable, so an
+    embedding-model change is a re-embed, surfaced by `pending_rebuilds()`
+    rather than silently mixing incompatible vectors.
+  - **Recursive investigation.** `run_with_tools` shipped working, guarded and
+    instrumented, with zero production callers. It now drives
+    `services/agents/app/investigator/deep_investigation.py` over ten
+    strategies, with seven typed lake-backed pivots in
+    `services/api/app/services/investigation_tools.py` behind
+    `POST /investigate/query` — the model picks a tool and passes typed
+    arguments, it never writes SQL. `scripts/check_investigation_depth.py`
+    asserts the loop still has a caller, because a narrative reads equally
+    plausible whether the agent pivoted five times or once.
+  - **Action contract.** Risk, reversibility, verification and approval are
+    declared per *capability* rather than per vendor, since the contract
+    belongs to the verb. `approval_matrix.py` implements confidence × impact
+    and `scripts/check_action_contract.py` enforces it.
+  - **SOC-agent benchmark.** `packages/aisoc-benchmark` ships an adapter
+    protocol plus an HTTP adapter, so a third party's agent can be graded
+    against the same corpus, with hallucination rate and real-vs-synthetic
+    provenance labels on every row.
+- **A model matrix, so an accuracy number names its backend
+  ([#715](https://github.com/beenuar/AiSOC/pull/715)).** The weekly eval runs
+  one model, so its numbers describe the agent *on whatever the pins resolved
+  to* and cannot separate a property of the agent from a property of the
+  backend. `scripts/run_model_matrix.py` grades the same corpus across several
+  models, one variable at a time. It is deliberately a thin wrapper that sets
+  the pins and re-invokes `run_evals.py` rather than a second evaluator — two
+  definitions of accuracy drift apart, which is the defect the alert-reduction
+  suite already demonstrated — and a test asserts it defines no scoring of its
+  own. With no funded key every row reads **not measured**, never `0.000`: a
+  zero is a measurement, and "we did not run this" is not.
+- **Dead letters can be read back
+  ([#713](https://github.com/beenuar/AiSOC/pull/713)).** Three DLQ
+  implementations existed — a log line, a Kafka topic with no consumer, and one
+  that forgets on restart — and the worker defaulted to the first. An invisible
+  drop is indistinguishable from an event that never arrived, and only one of
+  those is an incident. `PostgresDLQ` plus migration `053_dead_letters.sql`
+  persists them and `GET /api/v1/health/dead-letters` reads them back with a
+  breakdown by reason. `/health/fleet` reports connector staleness alongside.
+- **SLO alerts are generated from the objectives
+  ([#713](https://github.com/beenuar/AiSOC/pull/713)).** `slos.yaml` declared
+  targets for 17 services while the alert rules used thresholds corresponding
+  to no objective in the file. `scripts/generate_slo_alerts.py` derives
+  burn-rate alerts from it, covering the five services that actually expose
+  `/metrics` and naming the twelve that do not, so no alert can be permanently
+  dead.
+- **The last two fidelity corpora are obtainable
+  ([#717](https://github.com/beenuar/AiSOC/pull/717)).** Four datasets have
+  loaders; only two shipped a downloader. `ait_lds_loader.py` and
+  `mitre_engenuity_loader.py` could parse their full corpora from the day they
+  landed with no way to fetch either, so their only numbers came from a
+  ten-line micro fixture — which proves the loader parses and says nothing
+  about the classifier at scale. The asymmetry was invisible because each half
+  looked complete alone and nothing compared the two sets;
+  `scripts/check_fidelity_datasets.py` does, and also enforces licence
+  acceptance and citation across all four. New `*_full` floors are marked
+  `measured: false`, lead with UNMEASURED, and are set at the micro-fixture
+  level rather than guessed higher, because a floor invented above an
+  unmeasured result is a gate that gets lowered rather than investigated.
+- **Operator tooling for the paths that only matter under failure
+  ([#696](https://github.com/beenuar/AiSOC/pull/696),
+  [#697](https://github.com/beenuar/AiSOC/pull/697)).** AES-256-GCM backup
+  encryption in `scripts/backup_crypt.py` (chunk-framed with a per-chunk nonce
+  and AAD binding the chunk index, so a truncated or reordered archive fails to
+  decrypt rather than restoring a smaller database, plus a SHA-256 manifest);
+  scheduled Neo4j, Qdrant and Redis backups via a Helm CronJob;
+  `scripts/support_bundle.py`; a per-investigation cost budget; and per-tenant
+  ingest token buckets in `internal/inbox/ratelimit.go` (per-replica, and
+  documented as such) on the one endpoint deliberately open to the internet.
 
 ### Fixed
 
@@ -103,6 +188,164 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions (which documented the no-op YAML path that produced the 44
   orphans), and the orphaned `detections/splunk-imports/_migrated/` directory
   of 16 files that no script, workflow or doc referenced.
+- **Four documented security controls did not exist
+  ([#696](https://github.com/beenuar/AiSOC/pull/696)).** AES-256-GCM backup
+  encryption — the script gzipped and uploaded. Envelope encryption as the
+  control mitigating a database dump — `EnvelopeCipher` had zero callers. One
+  unbroken distributed trace — neither end of the Kafka spine emitted
+  OpenTelemetry. Per-tenant retention marked GATED by a test asserting the
+  purge SQL *parses* while nothing called it. Four more docs told operators to
+  run `alembic downgrade` against a service with no Alembic, so the documented
+  recovery path failed at the one moment it was needed. Each was corrected in
+  the docs **and then implemented**, so the claim could return honestly:
+  envelope encryption now carries `vault:v2:` tokens with `vault:v1:` read
+  compatibility and fail-closed behaviour in both directions (the three
+  vendored read-path copies *refuse* a `vault:v2:` token rather than returning
+  ciphertext as plaintext); retention actually deletes; and tenant offboarding
+  covers all five stores, with the Postgres table list discovered from
+  `information_schema` rather than hardcoded — 14 of 72 tenant-scoped tables
+  had no cascade, so deleting a tenant orphaned institutional memory and
+  compliance evidence.
+- **The prompt-injection guard missed every action-trigger payload
+  ([#697](https://github.com/beenuar/AiSOC/pull/697)).** Adversarial recall was
+  **0.22**, and the payloads that got through were the ones that produce a real
+  isolate or disable — which turns the SOC into a denial-of-service aimed at
+  its own estate. Eight new patterns take recall to **0.85** with zero false
+  positives.
+- **Nine capabilities declared a verification probe and three had one
+  ([#697](https://github.com/beenuar/AiSOC/pull/697),
+  [#698](https://github.com/beenuar/AiSOC/pull/698)).** Two probes were added
+  and four declarations corrected to `false` with stated reasons, and
+  "unverifiable means not autonomous" is now enforced: probes are required
+  unconditionally for AUTOMATIC and for HIGH/SEVERE impact regardless of
+  approval tier, and waived below MODERATE where the API response *is* the
+  confirmation. `suspend_session` and `force_mfa` were demoted AUTOMATIC →
+  ANALYST accordingly. Building the gate surfaced **eleven capabilities with a
+  contract and no executor at all, including `unisolate_host`** — the rollback
+  for the most disruptive action in the product resolved to nothing — fixed
+  with a `KNOWN_ORPHANS` ratchet plus 17 new executors wired to client methods
+  that already existed. Separately, `AzureEntraClient.get_user_enabled` called
+  `_ensure_token()` with no argument and used the return value as a bearer
+  token; the method takes a client and returns `None`, so every live call would
+  have raised `TypeError` — invisible in simulation, which never constructs the
+  client, and that method backs the `disable_user` probe, so a containment
+  would have reported UNVERIFIED for an unrelated reason.
+- **The sandbox's "deterministic" baseline moved every run
+  ([#696](https://github.com/beenuar/AiSOC/pull/696)).** Risk scores used
+  `abs(hash(str))`, with three comments calling it deterministic. CPython salts
+  string hashing per process. The test runs the CLI under different
+  `PYTHONHASHSEED` values, which is the only way to catch it.
+- **The Helm chart could not be installed at all
+  ([#696](https://github.com/beenuar/AiSOC/pull/696)).** Three templates
+  referenced values absent from `values.yaml` — the UEBA deployment read
+  `.Values.ueba.replicaCount` and there was no `ueba` key — so rendering
+  failed before any cluster saw it.
+- **Three shell and DR traps that only appear under failure
+  ([#696](https://github.com/beenuar/AiSOC/pull/696)).** `pg_dump` stderr sent
+  to `/dev/null` under `pipefail` handed an operator exit 1 with zero
+  diagnostic; `fail() { ((ERRORS++)); … }` returns the *pre-increment* value,
+  so under `set -e` the first failure killed the script before it printed why;
+  and `grep -oP` made `restore --latest` impossible on macOS. `openssl enc`
+  also refuses AEAD ciphers outright, which is why the AES-256-GCM path is a
+  Python script on `cryptography` rather than a one-liner.
+- **The one-directional gates
+  ([#696](https://github.com/beenuar/AiSOC/pull/696),
+  [#707](https://github.com/beenuar/AiSOC/pull/707)).** The graph-schema drift
+  check compared the YAML vocabulary against Go and never the reverse, so it
+  reported the schema consistent while Go declared 28 labels against the YAML's
+  17; it now parses the declared Go type (`NodeLabel` vs `RelType`) instead of
+  classifying by string casing, which had misread `IOC`. In the same family:
+  `neq` was never a matcher operator despite eleven rules using it, so
+  `approver_role_neq: "codeowner"` was read as a field literally named
+  `approver_role_neq`; every one of those rules' fixtures encoded the clause
+  key verbatim because `build_positive()` synthesizes fixtures *from the rule*,
+  so the durable fix is in the generator rather than the 22 files that
+  regenerate from it; and `test_positive_fixtures_fire_and_negatives_do_not`
+  only ever replayed the positives, leaving 100+ negative fixtures unrun under
+  a test whose name says otherwise. Derived fields (`is_business_hours`,
+  `<a>_eq_<b>` / `<a>_neq_<b>`) took the unreachable-rule ratchet from 138 to
+  **133**, now reported by family — needs windowed engine, identity enrichment,
+  allowlists, invented operands — so the number is actionable rather than bare.
+- **A vendor's help text broke the entire docs deploy
+  ([#708](https://github.com/beenuar/AiSOC/pull/708)).** Lacework's field help
+  contains `https://<account>.lacework.net`, and Docusaurus parses `.md` under
+  MDX, so `<account>` is an unclosed JSX element — one of which fails the whole
+  build. The generator escapes angle brackets now, skipping code spans, with a
+  gate over every connector page, because nothing about "MDX compilation
+  failed" points at a vendor help string.
+- **Six duplicate connector pages, with the gate reporting 100% coverage
+  throughout ([#712](https://github.com/beenuar/AiSOC/pull/712)).** `_slug()`
+  assumed hyphenated filenames; six pages predate that convention and use
+  underscores, so the coverage check saw nothing at the hyphenated path and
+  generated a thinner second page beside each hand-written original. The
+  sidebar is generated from the same slug, so it listed only the thin copy and
+  dropped the better half of each pair out of navigation. An existing page now
+  wins over the convention, and a guard fails the gate when two pages differ
+  only by separator.
+- **Eight dead links survived in the published docs with a link checker running
+  on every PR ([#709](https://github.com/beenuar/AiSOC/pull/709),
+  [#718](https://github.com/beenuar/AiSOC/pull/718),
+  [#719](https://github.com/beenuar/AiSOC/pull/719)).** A full QA pass over
+  `https://beenuar.github.io/AiSOC/` — 167 sitemap pages, 170 internal and 405
+  external link targets — took the health score from 81 to 99. Seven of the
+  dead links pointed at three GitHub organisations that do not exist, and the
+  wrong org was baked into the *generator* `scripts/curate_detections.py`, so
+  fixing the page alone would have regenerated the 404. The link job could not
+  catch this class: it runs lychee with `fail: false` and
+  `--accept …403,429`, and GitHub rate-limits unauthenticated crawls hard, so a
+  403 from rate limiting is indistinguishable from the page existing.
+  `scripts/check_repo_self_links.py` is the deterministic offline replacement.
+  Two links into `docs/` (which the site does not serve) also took the whole
+  deploy down, since Docusaurus treats a broken relative link as a build
+  failure. Stale counts were re-read from the tree — 84 connectors, not 47;
+  833 executable rules, not "800 fixture-tested".
+- **A hydration mismatch from adjacent JSX children
+  ([#718](https://github.com/beenuar/AiSOC/pull/718)).** An SVG `<title>` built
+  from several adjacent children gets `<!-- -->` separators injected during
+  SSR that the client does not reproduce (React error #418). Build the whole
+  string as one template literal so there is exactly one text node.
+- **Sixty-six Dependabot alerts down to seven**
+  ([#686](https://github.com/beenuar/AiSOC/pull/686),
+  [#691](https://github.com/beenuar/AiSOC/pull/691),
+  [#694](https://github.com/beenuar/AiSOC/pull/694),
+  [#701](https://github.com/beenuar/AiSOC/pull/701),
+  [#703](https://github.com/beenuar/AiSOC/pull/703),
+  [#705](https://github.com/beenuar/AiSOC/pull/705),
+  [#706](https://github.com/beenuar/AiSOC/pull/706),
+  [#710](https://github.com/beenuar/AiSOC/pull/710), plus routine bumps in
+  [#687](https://github.com/beenuar/AiSOC/pull/687)–[#714](https://github.com/beenuar/AiSOC/pull/714)).
+  The three remaining highs are unpatchable (`ecdsa`, `image-size`). Two
+  recurring shapes are worth remembering. A **caret pin that excludes the fix
+  makes a security update unsolvable rather than pending**: the pytest advisory
+  covers `< 9.0.3` and `^7.4.0` cannot reach it, so Dependabot had no version
+  to propose and the failure surfaced as a red workflow rather than an open
+  alert — ten services carried four different constraints for no reason, now
+  uniformly `>=9.0.3,<10.0`. And **a range that permits the fix is not a lock
+  that takes it**: the agents lock held langchain 1.0.2 against a 1.3.9 fix,
+  all inside the existing caps. Transitive advisories need an override with a
+  major ceiling, because without `<5` `@vitest/mocker` resolved to 5.0.1 —
+  taking a major version of the test runner's mocking layer as a side effect of
+  a security patch is how unrelated breakage gets blamed on security work.
+  `dompurify` is the one worth naming: it is the sanitiser behind rendered
+  report HTML, so a version below the fix was a live XSS surface in a product
+  whose job is being trusted with hostile input.
+- **The Fly demo outage finally has a stated cause
+  ([#698](https://github.com/beenuar/AiSOC/pull/698)).** The self-provisioning
+  deploy ran on merge and Fly answered: *"Your account has overdue invoices."*
+  Both apps were reclaimed for non-payment, and the workflow's old silent
+  `exit 0` when the app was missing hid that behind weeks of green runs. The
+  error message used to guess at causes and got them wrong; it now prints
+  Fly's own message verbatim. This is a billing action only the account owner
+  can take, not a code fix.
+- **Three CodeQL findings, at the root rather than around them
+  ([#700](https://github.com/beenuar/AiSOC/pull/700),
+  [#708](https://github.com/beenuar/AiSOC/pull/708)).** A previous attempt
+  parenthesised an implicit concatenation without removing it, and added a
+  top-level import alongside an existing from-import — turning one
+  `py/import-and-import-from` alert into two. Fixed properly: setup prose built
+  as named strings before the list, one import style per module, and four
+  `py/unnecessary-lambda` findings cleared. Generated pages verified
+  byte-identical.
 
 ### Changed
 
@@ -111,17 +354,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its closing condition rather than as clean, because 138 rules still depend on
   computed fields and claiming otherwise would be the overstatement the matrix
   exists to prevent.
+- The claim-to-gate matrix ends the wave at **102 rows: 93 GATED, 9 PARTIAL, 0
+  NO GATE**, one row per capability added above, each backed by a test that
+  fails against the old behaviour. The ratchet (`MAX_NO_GATE = 0`) still
+  forbids a regression, and no `PARTIAL` row was relabelled without building
+  the gate it names — relabelling would make the file a liability instead of a
+  control.
+- Of the twelve hardening phases, **Phase 4 is now the only one unchecked, and
+  deliberately so**: what remains is a funded provider key for the live-agent
+  eval, not code. Marking it done would be the exact failure the program exists
+  to prevent.
 
 ### Known
 
-- `scripts/generate_detections.py` is not idempotent. Rule ids are positional
-  (`det-{category}-{NNN}`) and the committed YAML was produced from a different
-  spec ordering than the current code emits, so re-running it on a clean
-  checkout reassigns ids and trips the marketplace gate. `validate_detections.py`
-  does not compare the projection against the generator, so nothing catches it.
-  New rules must therefore be appended rather than inserted. Fixing it properly
-  means either content-derived ids or a one-time regenerate-and-commit plus a
-  `--check` gate.
+- `scripts/generate_detections.py` still does not reproduce the committed
+  detection pack, and the reason changed. Ids are no longer positional — #697
+  pinned `(category, slug) → rule_id` in `detections/rule-ids.lock.json` — but
+  **nothing reconciled the lock against the YAML already on disk**, and the
+  `--check` mode that would have caught it was never written (nothing outside
+  the generator references the lock). Running the generator on a clean checkout
+  rewrites 57 files and moves 45 network rule ids.
+  The consequence is worse than a regeneration hazard: the engine
+  (`services/fusion/app/data/detection_ruleset.json`, which fires and stamps
+  the id onto the alert) and the published projection **disagree about which
+  rule owns those 45 ids**. `det-network-037` is "DNS TXT Response Over 250
+  Bytes From Non-Resolver Host" to the engine and "DNS Tunnel Indicator: Long
+  Hex Subdomain Sequence" in the YAML and `marketplace/index.json`, so an
+  analyst who takes a rule id off an alert and looks it up in the catalogue
+  reads a different rule's description, false-positive notes and playbook. This
+  is precisely the harm the lock's own docstring warns about.
 
 
 ## [8.0.0] — 2026-09-22

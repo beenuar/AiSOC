@@ -2,13 +2,33 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v7.6.0`, released 2026-07-13 — the **Fully-Operational AI-SOC** release. It wires the three end-to-end paths that were previously unwired (the event lake is populated, the executable detection corpus fires on the live stream, every fused alert is auto-triaged, and approved SOAR actions execute against real connector credentials under an autonomy policy), and adds the competitive-parity differentiators plus nine new connectors. Every product claim is now backed by a failing CI test (claim-to-gate matrix: 33 GATED / 7 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v8.0.0`, released 2026-09-22 — the **Close the loop** release. It connected capabilities the codebase already contained but never called: response actions are verified against the vendor rather than assumed from a 200, autonomy is governed by each tenant's own L0–L4 policy instead of one deployment-wide environment variable, repeat-alert suppression can fire at all, and analysts can hunt the events AiSOC itself ingested. Every product claim is backed by a failing CI test (claim-to-gate matrix: 93 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `7.6.0`. The **v7.6.0** release (2026-07-13) is the **Fully-Operational AI-SOC** release — it completes the A1–E1 roadmap that made the platform work end-to-end and pushed it to competitive parity + beyond.
+`VERSION` is `8.0.0`. The **v8.0.0** release (2026-09-22) is the **Close the loop** release. v8.0 had been reserved for the package-publish milestone; nothing can publish without registry credentials, so the milestone was re-scoped and distribution/packaging moved out. What v8.0 does instead is close the gap between what the codebase contains and what it actually runs.
+
+**v8.0.0 highlights (September 22, 2026)**
+- **The finding worth remembering, because it repeated a dozen times:** the mechanism existed, was unit-tested, and had no caller on the path that needed it. A passing test on an uncalled function is indistinguishable from a working feature until someone traces the call graph. `evidence_fingerprint` promised volatile fields were excluded while its only caller hashed the alert row id plus the whole raw event, so no two alerts ever matched and v7.7's repeat-alert suppression could only ever report zero. `PostActionVerifier` had no caller, and its isolation probe returned `bool(device_id)` — it would have certified an uncontained host. The console wrote per-tenant L0–L4 autonomy tiers to Postgres while the dispatcher read one global environment variable. `get_entity_neighbors` accepted a `tenant_id` and never passed it to the driver.
+- **Fabricated security data across 24 components.** The `AlertDetailView` catch block rendered a full invented verdict — named IP, C2 domain, "12 additional systems" — as `status: 'completed'`. `/hunt/search` always returned synthetic telemetry behind a green "Live backend" pill. All seeded and mock data is now gated behind demo mode, with honest empty, zero and error states otherwise, enforced by a new `check_mock_data_gated.py` gate.
+- **Three services were fully unauthenticated** — `purple-team` (20 routes), `honeytokens` (9) and `ueba` (7) — and so was the live-action router. Default-deny landed on all four.
+- **Securing the customer's AI estate** as the flagship capability: a new `ai` connector category, an `ai_gateway` connector, two ingest webhook templates mapping to OCSF `6003` and `2001`, a dependency-free SDK that hashes prompts by default while still reporting which secret shapes they contained, eight executable AI-runtime detections, and AiSOC's own MCP server as the first monitored asset.
+
+The full inventory (every file, env-var, and test count) lives under `[8.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v7.7.0 (2026-08-04)
+
+`VERSION` was `7.7.0`. Seven gap-closing waves, each its own PR: detection **backtesting** (`POST /rules/{id}/backtest` replays a candidate rule over real tenant-scoped lake events and reports honest `would_fire` / `hit_rate`); three **detection-authoring modes** (a Python `def rule(event)` framework with a fixture gate, an AI builder that turns natural language into Sigma plus auto-derived fixtures through the eval gate into a governed proposal, and a no-code builder); **invoking-identity least-privilege** scoping for response actions, so the authenticated principal replaces free-text `requested_by` and nobody approves their own action; self-service **data lifecycle** (per-tenant retention, a ReDoS-proof grok transform DSL, runtime custom parsers); an agentless **CSPM** scanner plus compliance auto-evidence and SSRF-guarded destinations; and a customisable **report builder**. Wave 1 wired components that existed but were never connected: auto-triage outcomes persist as per-signature institutional-memory priors, and a repeat alert matching a *trusted* prior benign disposition is auto-resolved without re-triage — human priors trusted immediately, AI priors needing corroboration, a prior true positive never auto-closing. Full inventory under `[7.7.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v7.6.0 (2026-07-13)
+
+`VERSION` was `7.6.0`. The **v7.6.0** release (2026-07-13) is the **Fully-Operational AI-SOC** release — it completes the A1–E1 roadmap that made the platform work end-to-end and pushed it to competitive parity + beyond.
 
 **v7.6.0 highlights (July 13, 2026)**
 - **Phase A — the data spine flows.** A ClickHouse lake writer populates `aisoc.raw_events` from the stream (A1); a live detection-evaluation worker runs the 947-rule executable corpus against every event and emits alerts (A2); a cold `docker compose up` now ships connectors + graph-at-ingest by default, proven by an extended integration gate (A3); and the UEBA behavioral model is fused into alert scoring, making the three-model story real (A4).
@@ -17,7 +37,7 @@ This file mirrors what used to live in the "What's new" section of [`README.md`]
 - **Phase D — breadth.** Eight new connectors — IBM QRadar, Exabeam, Securonix, Devo, Netskope, Windows/Sysmon (WEF), Zeek/Suricata NDR, and a generic syslog/CEF listener (D1); an AI/LLM-usage audit connector + eight `llm-*` detections + hot/cold ClickHouse lake tiering (D2); and a live-vendor mock-server smoke suite that exercises each connector's real HTTP client (D3).
 - **Phase E — prove it.** The public benchmark scoreboard is now CI-gated against a deterministic live-agent MITRE-accuracy run, closing the last `NO GATE` and ratcheting `MAX_NO_GATE` to 0 (E1).
 
-The full inventory (every file, env-var, and test count) lives under `[7.6.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+The full inventory (every file, env-var, and test count) lives under `[7.6.0]` in [`CHANGELOG.md`](CHANGELOG.md). Note that the claim-to-gate figure quoted in the v7.6.0 announcement (33 GATED / 7 PARTIAL) was the count at that time; the matrix has grown to 102 rows since.
 
 ---
 
