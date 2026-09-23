@@ -23,8 +23,8 @@ importers:
         specifier: ^18.0.0
         version: 18.0.14(expo@54.0.37)(react-native@0.81.4)
       expo-device:
-        specifier: ^8.0.0
-        version: 8.0.10(expo@54.0.37)
+        specifier: ^57.0.2
+        version: 57.0.2(expo@54.0.37)
       expo-linking:
         specifier: ^8.0.0
         version: 8.0.12(expo@54.0.37)(react-native@0.81.4)(react@19.1.0)
@@ -3648,8 +3648,8 @@ packages:
       - supports-color
     dev: false
 
-  /expo-device@8.0.10(expo@54.0.37):
-    resolution: {integrity: sha512-jd5BxjaF7382JkDMaC+P04aXXknB2UhWaVx5WiQKA05ugm/8GH5uaz9P9ckWdMKZGQVVEOC8MHaUADoT26KmFA==}
+  /expo-device@57.0.2(expo@54.0.37):
+    resolution: {integrity: sha512-1A0/FICR3CgrH43FeiDQP3l5eHDmiMoh4EjXfhfoHHkMgdBQdyD0kwDWskiGZlQ3E0Nd0LHkCFH6vJ1ofm/jow==}
     peerDependencies:
       expo: '*'
     dependencies:
