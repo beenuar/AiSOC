@@ -20,7 +20,7 @@ This document captures the planned direction for AiSOC across major versions. Al
 
 ## World-Class Hardening Program (2026-07, in flight)
 
-A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Committed status is the checklist below (per-session working detail is tracked locally in `docs/audit/PROGRESS.md`, which is gitignored per repo convention). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
+A proof-first, security-first program to make every README claim gate-backed, close four existential agent-security holes, and build the ingest-time-graph + multi-model-router moat. Executed one phase per PR with a mandatory CI gate each. Committed status is the checklist below (the six lettered deferrals — 3.5+, 5b, 7b+, 9b, 10b, 11b — are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md). They were previously said to be "tracked in `docs/audit/PROGRESS.md`", which is gitignored and was never committed, so six named commitments had no scope anywhere a contributor could read). Baseline audit: [`docs/audit/REALITY_REPORT.md`](docs/audit/REALITY_REPORT.md) and [`docs/audit/CLAIM_TO_GATE_MATRIX.md`](docs/audit/CLAIM_TO_GATE_MATRIX.md).
 
 - [x] Phase 0 — Reality audit (claim-to-gate matrix, ranked overclaims/untested-paths/circular-gates)
 - [x] Phase 1 — Four existential holes (prompt injection, memory poisoning, cross-store tenant isolation, data-exfiltration/redaction, cost DoS, vault)
@@ -44,7 +44,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.
 - **Phase E (prove it):** E1 CI-gated benchmark scoreboard tied to a deterministic live-agent MITRE-accuracy run.
 
-The claim-to-gate matrix stands at **108 rows — 99 GATED / 9 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 9 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. Per-session working detail is tracked locally in `docs/audit/PROGRESS.md`.
+The claim-to-gate matrix stands at **108 rows — 99 GATED / 9 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 9 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. The six lettered deferrals are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md).
 
 ## v4.0 — Shipped
 
