@@ -38,7 +38,7 @@ revision a notice rather than a failure there.
 
 from __future__ import annotations
 
-from alembic import op
+from alembic import op  # type: ignore[attr-defined]  # re-exported at runtime, absent from the stub
 
 revision = "0003"
 down_revision = "0002"
