@@ -1,0 +1,109 @@
+name: CodeQL alert gate
+
+# `apps/docs/docs/operations/security.md` has stated since the v8.0 wave-1 push
+# that the CodeQL alert count on `main` is zero and that this is enforced as a
+# CI gate. Nothing enforced it. `codeql.yml` uploads SARIF and
+# `github/codeql-action/analyze` does not fail a build on findings; `main` has
+# no branch protection, so "Code scanning results" was not a required check
+# either; and `security.yml`'s only hard job is the claim-to-gate matrix.
+# Alerts #893 and #896 — both `note` severity — sat open on `main` under a
+# documented invariant of zero, and no job anywhere could have gone red.
+#
+# This workflow is that gate. It is deliberately separate from `security.yml`
+# because it needs a `workflow_run` trigger that the observe-mode scanners
+# there should not inherit.
+
+on:
+  # What landed. A push-triggered run races the CodeQL analysis of its own
+  # commit, so the gate is pinned to `github.sha` and waits for that revision
+  # to be analyzed rather than reading the previous commit's alert list.
+  push:
+    branches: [main]
+  # What is proposed, before it lands.
+  pull_request:
+    branches: [main]
+  # Belt and braces for `main`: fires once CodeQL has actually finished, so a
+  # push whose analysis outran the wait window is still checked.
+  workflow_run:
+    workflows: [CodeQL]
+    types: [completed]
+    branches: [main]
+  # Daily, so a scan that quietly stops running is caught during a quiet week
+  # instead of at whatever push happens next. `main` can be stale-green.
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-alert-gate-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zero-open-alerts:
+    name: Zero open CodeQL alerts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        # The gate itself is stdlib-only, deliberately: it must run on a bare
+        # interpreter. pytest is for the unit tests below; pydantic + httpx
+        # let the two `validate_playbooks` regression tests import the real
+        # model rather than skip — a skipped regression test is not a
+        # regression test. Same set the parity job in `ci.yml` installs, for
+        # the same reason.
+        run: pip install --quiet pytest pydantic httpx
+
+      # The self-test runs first and on the same tree. It injects an alert at
+      # every severity — including `note`, the severity of the two alerts that
+      # motivated this gate — plus each shape of vacuous pass (no analysis, a
+      # dropped language, a frozen analysis, mixed action pins, a PR-only
+      # trigger) and requires the gate to catch every one. A gate whose
+      # self-test is skipped is a gate that proves nothing.
+      - name: Self-test — prove the gate detects an injected alert
+        run: python3 scripts/check_codeql_alerts.py --self-test
+
+      - name: Unit tests
+        run: python3 -m pytest tests/test_codeql_alert_gate.py -q
+
+      # `main`, pinned to the revision that triggered this run.
+      - name: Gate — main
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/check_codeql_alerts.py \
+            --repo "${{ github.repository }}" \
+            --ref refs/heads/main \
+            ${{ github.event_name == 'push' && format('--commit {0} --wait-seconds 1500', github.sha) || '' }}
+
+      # The merge ref, so a contributor sees a new alert before it lands
+      # rather than after. `github.sha` on a `pull_request` event is the merge
+      # commit CodeQL analyses, so the same pin applies.
+      - name: Gate — pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork != true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/check_codeql_alerts.py \
+            --repo "${{ github.repository }}" \
+            --ref "refs/pull/${{ github.event.pull_request.number }}/merge" \
+            --commit "${{ github.sha }}" \
+            --wait-seconds 1500
+
+      # A fork PR's GITHUB_TOKEN cannot read code scanning, so the alert query
+      # is impossible here. `--offline` checks the wiring and prints, in its
+      # own output, exactly which checks it did not perform — the push and
+      # workflow_run runs above are what hold the invariant for `main`.
+      - name: Gate — fork pull request (wiring only, alert query not possible)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true
+        run: python3 scripts/check_codeql_alerts.py --offline
