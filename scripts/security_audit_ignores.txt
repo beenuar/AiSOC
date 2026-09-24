@@ -91,3 +91,38 @@
 # Add entries back only with a justification that names the version actually
 # resolved and the fix that is genuinely out of reach. An expiry is a
 # re-review date, not a snooze.
+
+# ── 2026-09-24 — apps/mobile, a second install root the audit never saw ──────
+# The two image-size entries below look like the pair dismissed above and are a
+# different case. That one was @docusaurus/mdx-loader holding ^2.0.2 in the root
+# workspace, where 2.0.4 is a drop-in. This one is metro, and the fix really is
+# out of reach:
+#
+#   • apps/mobile resolves image-size 1.2.1, pulled only by metro 0.83.3.
+#   • No patched 1.x exists — 1.2.1 is the last 1.x and the fix landed in 2.0.3.
+#   • Every metro release through the current latest (0.87.1) still declares
+#     image-size ^1.0.2.
+#   • metro/src/Assets.js calls the callable default export at lines 68 and 173
+#     — `(0, _imageSize.default)(content)` — which image-size 2.x replaced with
+#     named exports. An override here does not bump a version, it breaks asset
+#     resolution at bundle time.
+#   • Dependabot's own updater reaches the same verdict independently:
+#     security_update_not_possible, latest-resolvable 1.2.1,
+#     lowest-non-vulnerable 2.0.3, conflicting-dependencies [].
+#
+# Both advisories are denial of service only (CVSS A:H, C:N/I:N) via infinite
+# loops in the JXL/HEIF and ICNS parsers. Reaching them needs a malicious image
+# inside this repository's own asset tree, which presupposes commit access, and
+# the impact is a hung developer bundler. No runtime, server or user-input path
+# reaches this code.
+#
+# Why they were invisible rather than accepted is the part worth keeping:
+# `pnpm audit` ran only at the repo root, and apps/mobile is a deliberately
+# separate install root, so this arm reported a clean workspace while two high
+# advisories stood open. run_pnpm_audit now discovers every directory holding a
+# pnpm-lock.yaml, so a third install root is covered the day it appears rather
+# than the day someone remembers it exists.
+#
+# Retire these when metro adopts image-size >= 2.0.3.
+pnpm|GHSA-5p2g-fcmc-qvqq|apps/mobile resolves image-size 1.2.1 through metro 0.83.3; no 1.x fix exists, metro through 0.87.1 still requires ^1.0.2, and image-size 2.x drops the callable default export metro calls in Assets.js. DoS-only and build-time, reachable only from an image already committed to this repo|2026-12-23
+pnpm|GHSA-w3rx-r6r6-pgpr|apps/mobile resolves image-size 1.2.1 through metro 0.83.3; no 1.x fix exists, metro through 0.87.1 still requires ^1.0.2, and image-size 2.x drops the callable default export metro calls in Assets.js. DoS-only and build-time, reachable only from an image already committed to this repo|2026-12-23

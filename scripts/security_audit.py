@@ -164,7 +164,29 @@ def is_ignored(tool: str, vuln_ids: list[str], ignores: list[Ignore]) -> Ignore 
 # ─── pnpm scanner ────────────────────────────────────────────────────────────
 
 
-def classify_pnpm_audit(audit_json: dict[str, Any], ignores: list[Ignore]) -> Report:
+def pnpm_install_roots(repo_root: Path) -> list[str]:
+    """Every directory holding its own ``pnpm-lock.yaml``, relative to the repo root.
+
+    Read from the tree rather than listed, because a listed set is the artefact
+    that drifts. ``apps/mobile`` is a deliberately separate install root — it
+    has its own ``pnpm-workspace.yaml`` so its installs stop rewriting the root
+    lock — and auditing only the repo root never saw it. Two high-severity
+    advisories stood open there while this arm reported a clean workspace.
+    """
+    proc = subprocess.run(
+        ["git", "ls-files", "-z", "*pnpm-lock.yaml"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    return sorted({str(Path(p).parent) for p in proc.stdout.split("\0") if p})
+
+
+def classify_pnpm_audit(
+    audit_json: dict[str, Any],
+    ignores: list[Ignore],
+    location: str = "pnpm workspace",
+) -> Report:
     """Classify pnpm audit JSON into a Report using native severity."""
     report = Report()
 
@@ -181,7 +203,7 @@ def classify_pnpm_audit(audit_json: dict[str, Any], ignores: list[Ignore]) -> Re
             severity=severity,
             vuln_id=all_ids[0] if all_ids else str(advisory.get("id", "unknown")),
             package=advisory.get("module_name", "unknown"),
-            location="pnpm workspace",
+            location=location,
             title=advisory.get("title") or advisory.get("overview") or "",
         )
 
@@ -194,8 +216,29 @@ def classify_pnpm_audit(audit_json: dict[str, Any], ignores: list[Ignore]) -> Re
 
 
 def run_pnpm_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
-    """Run pnpm audit with fallback registry on 403."""
-    lockfile = repo_root / "pnpm-lock.yaml"
+    """Audit every pnpm install root in the tree, not only the repo root."""
+    roots = pnpm_install_roots(repo_root)
+    merged = Report()
+    if not roots:
+        # Zero install roots is not zero workspaces vulnerable. Without this the
+        # arm prints "pnpm: 0 findings" over a tree with no lockfile in it,
+        # which is the sentence a clean audit also prints.
+        merged.unscanned.append(f"no pnpm-lock.yaml anywhere in {repo_root} — NOTHING was scanned")
+        return merged
+
+    for rel in roots:
+        label = "pnpm workspace" if rel == "." else f"pnpm workspace {rel}"
+        part = run_pnpm_audit_at(repo_root / rel, label, ignores)
+        merged.findings.extend(part.findings)
+        merged.ignored.extend(part.ignored)
+        merged.warnings.extend(part.warnings)
+        merged.unscanned.extend(part.unscanned)
+    return merged
+
+
+def run_pnpm_audit_at(root: Path, label: str, ignores: list[Ignore]) -> Report:
+    """Run pnpm audit in one install root, with fallback registry on 403."""
+    lockfile = root / "pnpm-lock.yaml"
     if not lockfile.is_file():
         # `pnpm audit` in a directory with no lockfile has nothing to resolve
         # and can still answer with an empty advisory set. Refuse instead:
@@ -213,7 +256,7 @@ def run_pnpm_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
 
         proc = subprocess.run(
             ["pnpm", "audit", "--json"],
-            cwd=repo_root,
+            cwd=root,
             env=env,
             capture_output=True,
             text=True,
@@ -233,13 +276,13 @@ def run_pnpm_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
             # as a coverage gap rather than a warning for the same reason the
             # Python arm does it: a warning still exits 0, so the job would
             # report "pnpm: 0 findings" having scanned nothing at all.
-            report.unscanned.append("pnpm workspace: audit returned unparseable output — NOT scanned")
+            report.unscanned.append(f"{label}: audit returned unparseable output — NOT scanned")
             return report
 
-        return classify_pnpm_audit(data, ignores)
+        return classify_pnpm_audit(data, ignores, label)
 
     report = Report()
-    report.unscanned.append("pnpm workspace: audit failed on every registry — NOT scanned")
+    report.unscanned.append(f"{label}: audit failed on every registry — NOT scanned")
     return report
 
 

@@ -104,6 +104,119 @@ const KIND_SHAPES: Record<GraphNodeKind, string> = {
   asset: 'round-rectangle',
 };
 
+// ─── Traversal depth ──────────────────────────────────────────────────────────
+
+/** Matches the `depth` default on `GET /api/v1/graph`. */
+const DEFAULT_DEPTH = 3;
+
+/** `GET /api/v1/graph` declares `Query(ge=1, le=6)`; offering 7 would 422. */
+const DEPTH_CHOICES = [1, 2, 3, 4, 5, 6] as const;
+
+// ─── Truncation notice ────────────────────────────────────────────────────────
+
+interface TruncationNoticeProps {
+  nodeCount: number;
+  edgeCount: number;
+  nodeLimit?: number;
+  edgeLimit?: number;
+  depth: number;
+  onNarrow: (depth: number) => void;
+}
+
+/**
+ * Say that the graph is partial, say what bounded it, and offer a way out.
+ *
+ * `GET /api/v1/graph` bounds itself and flags `truncated`, and for a while
+ * nothing rendered the flag. That left the two halves of the same defect on
+ * either side of one request: the API stopped presenting a partial graph as
+ * complete, and the canvas carried on doing exactly that. On an attack graph
+ * the cost is specific rather than cosmetic — a missing edge is a lateral
+ * path the analyst concludes does not exist, and nothing on screen
+ * distinguishes "these are your attack paths" from "these are four hundred
+ * of your attack paths".
+ *
+ * Three things, because two of them are not enough:
+ *
+ * 1. that it is truncated, in words rather than an icon;
+ * 2. the ceiling that produced it, taken from the response so the number
+ *    shown is the number applied;
+ * 3. a control that actually narrows the query. Telling someone their answer
+ *    is incomplete and leaving them no move makes the notice something to
+ *    learn to ignore.
+ *
+ * Deliberately not a heading. The page is `h1` "Attack Graph", the panels
+ * below it are `h2`, and `EmptyState`/`ErrorState` already contribute the
+ * `h3`s inside them. A heading here would sit between an `h2` and those, and
+ * the axe-core WCAG AA gate checks heading order. `role="status"` with an
+ * `aria-label` puts it in the accessibility tree without inventing one —
+ * `EmptyState` is also a `status`, so the label is what tells the two apart
+ * for a screen reader arriving at either.
+ */
+function TruncationNotice({
+  nodeCount,
+  edgeCount,
+  nodeLimit,
+  edgeLimit,
+  depth,
+  onNarrow,
+}: TruncationNoticeProps) {
+  // Which ceiling the returned counts actually reach.
+  //
+  // Not always answerable, and it would be easy to assume otherwise. The
+  // service flags `truncated` on the counts its traversal bounded, then the
+  // endpoint drops nodes it could not identify and edges whose endpoints went
+  // with them — so a truncated response can arrive holding fewer than either
+  // limit. Naming a ceiling the counts do not reach would point the analyst
+  // at the wrong knob; refusing to name one at all when the response says
+  // what bounded it would throw away the number they need.
+  const reached = [
+    nodeCount >= (nodeLimit ?? Infinity) ? `${nodeLimit}-node` : null,
+    edgeCount >= (edgeLimit ?? Infinity) ? `${edgeLimit}-edge` : null,
+  ].filter((entry): entry is string => entry !== null);
+
+  const declared = [
+    nodeLimit !== undefined ? `${nodeLimit} nodes` : null,
+    edgeLimit !== undefined ? `${edgeLimit} edges` : null,
+  ].filter((entry): entry is string => entry !== null);
+
+  const ceiling =
+    reached.length > 0
+      ? `the ${reached.join(' and ')} ceiling`
+      : declared.length > 0
+        ? `this view's ceiling of ${declared.join(' and ')}`
+        : 'a ceiling this response did not report';
+
+  return (
+    <div
+      role="status"
+      aria-label="Truncated graph"
+      className="flex flex-col gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p className="text-xs leading-relaxed text-amber-200">
+        <span className="font-semibold">This graph is incomplete.</span>{' '}
+        Showing {nodeCount.toLocaleString()} nodes and{' '}
+        {edgeCount.toLocaleString()} edges at depth {depth}, cut at {ceiling}.
+        Paths beyond it were dropped, so an absent connection here is not
+        evidence that none exists.
+      </p>
+      <label className="flex shrink-0 items-center gap-2 text-xs text-amber-200/90">
+        <span>Narrow to depth</span>
+        <select
+          value={depth}
+          onChange={(event) => onNarrow(Number(event.target.value))}
+          className="rounded border border-amber-500/40 bg-slate-900/80 px-2 py-1 text-xs text-amber-100 focus:outline-none focus:ring-1 focus:ring-amber-400"
+        >
+          {DEPTH_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>
+              {choice}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 // ─── Cytoscape canvas ─────────────────────────────────────────────────────────
 
 interface GraphCanvasProps {
@@ -379,11 +492,24 @@ export function AttackGraphView() {
    */
   const [override, setOverride] = useState<{ node: GraphNode | null } | null>(null);
 
+  /**
+   * Traversal depth, and the one thing an analyst can do about a truncated
+   * graph from here.
+   *
+   * It is part of the SWR key rather than an argument closed over by the
+   * fetcher, because a key that does not change is a fetch that does not
+   * happen: the control would move the number, re-render, and show the same
+   * cached graph. Narrowing that silently does nothing is worse than no
+   * control at all — it tells the analyst they have seen a smaller, complete
+   * picture when they are still looking at the truncated one.
+   */
+  const [depth, setDepth] = useState(DEFAULT_DEPTH);
+
   const graphState = useSWR<AttackGraph>(
-    'attack-graph',
+    ['attack-graph', depth],
     async () => {
       try {
-        return await graphApi.getOverview({ depth: 3 });
+        return await graphApi.getOverview({ depth });
       } catch (err) {
         // "So the UI is always alive" meant a fabricated attack graph — named
         // hosts, users and edges — rendered as the tenant's real estate
@@ -442,6 +568,23 @@ export function AttackGraphView() {
 
       {/* Graph panel */}
       <section className="rounded-xl bg-slate-900/60 border border-white/5 overflow-hidden">
+        {/*
+          Above the canvas, and only when the response says so. The three
+          existing states are deliberately untouched: an empty tenant still
+          reads as empty, an unreachable backend still names the endpoint and
+          the status, and neither of those is a truncation — a graph that
+          could not be loaded has no size to report.
+        */}
+        {graph?.truncated ? (
+          <TruncationNotice
+            nodeCount={graph.nodes.length}
+            edgeCount={graph.edges.length}
+            nodeLimit={graph.nodeLimit}
+            edgeLimit={graph.edgeLimit}
+            depth={depth}
+            onNarrow={setDepth}
+          />
+        ) : null}
         <div className="grid lg:grid-cols-[1fr_320px]">
           <div className="relative h-[560px] bg-[#0a1120]">
             {graphState.isLoading ? (

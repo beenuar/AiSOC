@@ -179,6 +179,55 @@ EXPECTED_ESBUILD: dict[str, str] = {
     "0.28.1": "the version the scoped tsup/vite/bundle-require overrides ask for",
 }
 
+# `apps/mobile` and `services/realtime` resolve esbuild too, and neither is
+# checked against EXPECTED_ESBUILD above. That is deliberate and is not the
+# one-directional hole it resembles: the pinned *resolved set* exists because
+# Next bundles its own esbuild and a replacement breaks Turbopack's font
+# import map, and Next lives only in the root workspace. What does apply
+# everywhere is the *scoping* rule — no install root may override esbuild
+# workspace-wide — and `check_esbuild_overrides` now enforces that against
+# every root rather than against the repository root alone.
+
+# Install roots allowed to resolve a package another root pins, with the
+# reason and the exact versions the exemption was verified against.
+#
+# Version-bearing on purpose. `("body-parser", "services/realtime")` alone
+# would be a permanent hole: realtime could drift to any other 1.x and this
+# gate would keep crediting it. Recording the versions makes each entry a
+# ratchet — a bump re-fires the check and someone has to re-verify — and
+# `check_override_propagation` fails in the reverse direction too, so an entry
+# naming a root that no longer resolves the package, or a version the lockfile
+# no longer contains, fails the build rather than sitting here.
+#
+# What an entry may say, and what it may not. These record *a package on two
+# supported major lines*, verified clean on both. They do not record "we
+# accept a vulnerable version": an override floor exists because something
+# below it is exploitable, and a root resolving an affected release has to be
+# fixed, not exempted. The evidence for each is a version query against the
+# OSV API — the resolved version, not the range a manifest declares — because
+# ten justifications in this repository's history were found to be untrue when
+# checked that way.
+CROSS_ROOT_OVERRIDE_EXEMPT: dict[tuple[str, str], tuple[tuple[str, ...], str]] = {
+    ("body-parser", "services/realtime"): (
+        ("1.20.8",),
+        "the root override `>=2.3.0 <3` is a major-line floor for the "
+        "workspace's Express 5 tree; realtime is on Express 4, whose 1.x line "
+        "is separately patched. OSV version query for body-parser 1.20.8 on "
+        "2026-09-24 returns no advisories",
+    ),
+    ("ws", "apps/mobile"): (
+        ("6.2.6", "7.5.13"),
+        "React Native's development server pins its own websocket majors: 6.2.6 "
+        "through @react-native/dev-middleware and react-native itself, 7.5.13 "
+        "through metro and react-devtools-core. Both are the terminal patched "
+        "releases of those lines and OSV version queries for ws 6.2.6 and "
+        "7.5.13 on 2026-09-24 return no advisories. Forcing 8.x here would "
+        "override the transport the Metro dev server speaks, which is a bundler "
+        "change made to satisfy a range written for the web workspace — and "
+        "none of these three reach the shipped app bundle",
+    ),
+}
+
 # Prose, vendored history and generated artefacts.
 SKIP_PREFIXES = (
     "plans/",
@@ -309,10 +358,38 @@ class Install:
 
 
 @dataclass
+class NodeRoot:
+    """One directory that resolves its own node_modules.
+
+    An *install root*, not a workspace member: a directory holding both a
+    manifest and a lockfile, so `pnpm install` or `npm install` run there
+    produces a version set of its own. There are four in this tree and they
+    were treated as one for as long as only the repository root was read.
+    """
+
+    directory: str  # "" for the repository root
+    manifest: str
+    lockfile: str
+    tool: str  # pnpm | npm
+    # Override key exactly as written -> spec. Keys may be a bare name, a
+    # scoped name, a name with a version selector (`js-yaml@3`) or a
+    # parent-scoped path (`vite>esbuild`).
+    overrides: dict[str, str] = field(default_factory=dict)
+    # The key the overrides were read from, so `check_override_parser_coverage`
+    # can tell "no overrides" apart from "overrides this parser cannot see".
+    overrides_key: str = ""
+    # package -> every version the lockfile resolved for it. A list, not one
+    # version: pnpm keeps several majors of the same package side by side and
+    # collapsing them would hide exactly the one that is vulnerable.
+    resolved: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass
 class Scan:
     pins: list[Pin] = field(default_factory=list)
     installs: list[Install] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
+    node_roots: list[NodeRoot] = field(default_factory=list)
     go_modules: dict[str, dict] = field(default_factory=dict)
     go_cache_paths: list[tuple[str, str]] = field(default_factory=list)
     pnpm_actions: list[tuple[str, str]] = field(default_factory=list)
@@ -913,6 +990,117 @@ def parse_package_json(path: Path, rel: str, scan_result: Scan) -> None:
         scan_result.pins.append(Pin("node", re.sub(r"^[^\d]*", "", engine), rel, "floor", f"engines.node: {engine}"))
 
 
+# A pnpm lockfile package header: `  /image-size@2.0.4:` or
+# `  /@babel/core@7.29.7(peer@1.2.3):`. The peer suffix is dropped — it
+# identifies a variant of the same release, not a different version.
+_PNPM_PKG = re.compile(r"^ {2}/(?P<name>@[^/@\s]+/[^@\s]+|[^@/\s][^@\s]*)@(?P<version>\d[^(:\s]*)", re.MULTILINE)
+
+#: An override key, split into the package it governs and the selector on it.
+#:
+#: Four shapes appear in this tree and they do not mean the same thing:
+#:   `image-size`          every resolution of the package
+#:   `js-yaml@3`           only resolutions in that version line
+#:   `@babel/plugin-…`     a scoped package, where the `@` is part of the name
+#:   `vite>esbuild`        only where `vite` is the parent — a *scoped*
+#:                         override, which is the whole point of the esbuild
+#:                         arrangement and must not be read as a global one
+_OVERRIDE_KEY = re.compile(r"^(?:(?P<parent>[^>]+)>)?(?P<name>@[^/@]+/[^@]+|[^@>]+)(?:@(?P<selector>.+))?$")
+
+
+def parse_override_key(key: str) -> tuple[str | None, str, str | None]:
+    """`(parent, package, selector)` for one override key."""
+    match = _OVERRIDE_KEY.match(key.strip())
+    if not match:
+        return None, key.strip(), None
+    return match.group("parent"), match.group("name"), match.group("selector")
+
+
+def parse_pnpm_lock(text: str) -> dict[str, list[str]]:
+    resolved: dict[str, list[str]] = {}
+    for match in _PNPM_PKG.finditer(text):
+        resolved.setdefault(match.group("name"), []).append(match.group("version"))
+    return resolved
+
+
+def parse_npm_lock(text: str) -> dict[str, list[str]]:
+    resolved: dict[str, list[str]] = {}
+    for key, meta in (json.loads(text).get("packages") or {}).items():
+        if "node_modules/" not in key or not isinstance(meta, dict):
+            continue
+        version = meta.get("version")
+        if isinstance(version, str) and version:
+            # Nested paths carry the package last: `node_modules/a/node_modules/b`.
+            resolved.setdefault(key.rsplit("node_modules/", 1)[1], []).append(version)
+    return resolved
+
+
+def _flatten_npm_overrides(block: dict, prefix: str = "") -> dict[str, str]:
+    """npm's nested `overrides` object, flattened to the same shape as pnpm's.
+
+    npm permits `{"a": {"b": "1.0.0"}}`, which pnpm writes `a>b`. Reading only
+    the flat form would credit a nested override as absent, so the two
+    spellings are normalised to one before anything compares them.
+    """
+    flat: dict[str, str] = {}
+    for key, value in block.items():
+        name = f"{prefix}{key}"
+        if isinstance(value, str):
+            flat[name] = value
+        elif isinstance(value, dict):
+            if isinstance(value.get("."), str):
+                flat[name] = value["."]
+            flat.update(_flatten_npm_overrides({k: v for k, v in value.items() if k != "."}, f"{name}>"))
+    return flat
+
+
+def parse_node_root(manifest: Path, lockfile: Path, rel_dir: str) -> NodeRoot:
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    pnpm_overrides = (data.get("pnpm") or {}).get("overrides") or {}
+    npm_overrides = data.get("overrides") or {}
+    if pnpm_overrides:
+        overrides, key = dict(pnpm_overrides), "pnpm.overrides"
+    elif npm_overrides:
+        overrides, key = _flatten_npm_overrides(npm_overrides), "overrides"
+    else:
+        overrides, key = {}, ""
+
+    text = lockfile.read_text(encoding="utf-8")
+    if lockfile.name == "pnpm-lock.yaml":
+        tool, resolved = "pnpm", parse_pnpm_lock(text)
+    else:
+        tool, resolved = "npm", parse_npm_lock(text)
+
+    return NodeRoot(
+        directory=rel_dir,
+        manifest=manifest.name if not rel_dir else f"{rel_dir}/{manifest.name}",
+        lockfile=lockfile.name if not rel_dir else f"{rel_dir}/{lockfile.name}",
+        tool=tool,
+        overrides=overrides,
+        overrides_key=key,
+        resolved=resolved,
+    )
+
+
+def scan_node_roots(root: Path) -> list[NodeRoot]:
+    """Every directory in the tree that resolves its own node_modules.
+
+    Discovered structurally rather than listed. A list would have had one
+    entry — the repository root — for the same reason every other check here
+    did: `apps/mobile` was created as an independent install root precisely so
+    its install would stop rewriting the root lockfile, and nothing that reads
+    dependency resolution was told it now existed.
+    """
+    found: list[NodeRoot] = []
+    for name in ("pnpm-lock.yaml", "package-lock.json"):
+        for lockfile in walk(root, name):
+            manifest = lockfile.parent / "package.json"
+            if not manifest.is_file():
+                continue  # reported by `check_dead_lockfiles`
+            rel_dir = lockfile.parent.relative_to(root).as_posix()
+            found.append(parse_node_root(manifest, lockfile, "" if rel_dir == "." else rel_dir))
+    return sorted(found, key=lambda r: r.directory)
+
+
 def scan(root: Path) -> Scan:
     result = Scan()
 
@@ -952,6 +1140,10 @@ def scan(root: Path) -> Scan:
             continue
         result.files.append(rel)
         parse_package_json(manifest, rel, result)
+
+    result.node_roots = scan_node_roots(root)
+    for node_root in result.node_roots:
+        result.files.append(node_root.lockfile)
 
     # `packages/*` as well as `services/*`: the packages are the *published*
     # artefacts, so their floor is a promise to a downstream consumer rather
@@ -1368,7 +1560,258 @@ def check_go_modules(root: Path, data: Scan) -> list[str]:
     return problems
 
 
-def check_esbuild_overrides(root: Path) -> list[str]:
+_RELEASE = re.compile(r"^(\d+(?:\.\d+)*)")
+_CLAUSE = re.compile(r"^(?P<op>>=|<=|>|<|=|\^|~)?(?P<version>\d[\w.*-]*)$")
+
+
+def satisfies_npm_range(version: str, spec: str) -> bool | None:
+    """Whether a concrete version is inside an npm range.
+
+    Returns ``None`` — not ``False`` — for a range this function cannot
+    reason about. A boolean for an unparsed spec is the shape that makes a
+    gate credit something it never evaluated: `False` reds the build for no
+    reason and `True` passes silently, and the second is how the caller ends
+    up printing OK about a comparison that did not happen. The caller reports
+    ``None`` as a finding against this gate rather than against the tree.
+
+    Only the operators actually written in this repository's overrides are
+    supported (`>=`, `<=`, `>`, `<`, `=`, `^`, `~`, bare, and space- or
+    comma-joined conjunctions of them). `||` unions and hyphen ranges are
+    deliberately absent rather than approximated.
+    """
+    release = _RELEASE.match(version)
+    if not release:
+        return None
+    actual = tuple(int(p) for p in release.group(1).split("."))
+
+    normalised = spec.strip().replace(",", " ")
+    if not normalised or "||" in normalised or " - " in normalised or normalised in {"*", "x", "latest"}:
+        return None
+
+    for clause in normalised.split():
+        match = _CLAUSE.match(clause)
+        if not match or "*" in match.group("version") or "-" in match.group("version"):
+            return None
+        bound_release = _RELEASE.match(match.group("version"))
+        if not bound_release:
+            return None
+        bound = tuple(int(p) for p in bound_release.group(1).split("."))
+        operator = match.group("op") or "="
+        left, right = _pad(actual, bound)
+
+        if operator in {"^", "~"}:
+            # `^1.2.3` is `>=1.2.3 <2.0.0`; `^0.2.3` is `>=0.2.3 <0.3.0`
+            # (npm treats a leading zero major as unstable). `~1.2.3` is
+            # `>=1.2.3 <1.3.0`.
+            if left < right:
+                return False
+            if operator == "~" or (operator == "^" and bound and bound[0] == 0):
+                ceiling = bound[:2] if len(bound) >= 2 else bound
+                if actual[: len(ceiling)] != ceiling:
+                    return False
+            elif actual[:1] != bound[:1]:
+                return False
+            continue
+
+        ok = {">=": left >= right, ">": left > right, "<=": left <= right, "<": left < right, "=": left == right}[operator]
+        if not ok:
+            return False
+    return True
+
+
+def _governed(versions: list[str], selector: str | None) -> list[str]:
+    """The resolutions an override key actually governs.
+
+    A bare key governs every resolution; `js-yaml@3` governs only the 3.x
+    line. Without this, the root's `brace-expansion@1` pin would be compared
+    against the 5.0.12 the workspace also resolves and fail for a version the
+    key was never written about.
+    """
+    if not selector:
+        return versions
+    return [v for v in versions if satisfies_npm_range(v, selector) is True]
+
+
+def check_override_propagation(root: Path, data: Scan) -> list[str]:
+    """A dependency resolution decision made in one install root and not another.
+
+    This is the Node half of the defect ``check_dependency_pins`` was built
+    for on the Python side, where CI installed a ``cryptography`` range
+    disjoint from the one a service required. Here the two sides are two
+    *install roots*: the repository workspace pinned ``image-size`` to
+    ``>=2.0.4 <3`` after establishing that ``<= 2.0.2`` is vulnerable, and
+    ``apps/mobile`` — an independent root with its own lockfile, created that
+    way so its install would stop rewriting the root lock — kept resolving
+    1.2.1 through Metro. The fix could not reach it and nothing compared them,
+    so two high-severity advisories stayed open against a package the
+    repository had already decided the answer for.
+
+    Both directions:
+
+    declaration -> resolution
+        a root resolving a package another root pins, at a version outside
+        that pin, with no pin of its own. The direction the tree drifted.
+    resolution -> declaration
+        a root whose own lockfile resolves a version its own override
+        forbids — a lockfile that was not regenerated after the manifest
+        moved, which is the same disagreement inside one root.
+    exemption -> tree / tree -> exemption
+        an exemption naming a root that no longer resolves the package, or
+        one whose recorded version no longer matches what the lockfile says.
+
+    Not checked, and said plainly rather than left to be discovered: an
+    override declared in one root and resolved by no root at all is *not*
+    reported. Several here are deliberately defensive — nothing in this tree
+    resolves js-yaml 3.x, and the `js-yaml@3` pin exists so that if something
+    later does, it lands patched. Calling that dead would push people to
+    delete the pin that is doing the work.
+    """
+    problems: list[str] = []
+    by_dir = {r.directory: r for r in data.node_roots}
+
+    # ── declaration -> resolution, across roots ──────────────────────────
+    for declaring in data.node_roots:
+        for key, spec in sorted(declaring.overrides.items()):
+            parent, package, selector = parse_override_key(key)
+            if parent:
+                continue  # `vite>esbuild` constrains one parent, not the package
+            for other in data.node_roots:
+                if other.directory == declaring.directory:
+                    continue
+                governed = _governed(other.resolved.get(package, []), selector)
+                if not governed:
+                    continue
+                exempt = CROSS_ROOT_OVERRIDE_EXEMPT.get((package, other.directory))
+                offending = []
+                for version in sorted(set(governed)):
+                    verdict = satisfies_npm_range(version, spec)
+                    if verdict is None:
+                        problems.append(
+                            f"{declaring.manifest} pins `{key}` to `{spec}`, which this gate cannot "
+                            f"evaluate against the {version} that {other.lockfile} resolved — a range "
+                            f"the comparison skips is a comparison that did not happen; teach "
+                            f"`satisfies_npm_range` the operator or rewrite the pin (override propagation)"
+                        )
+                    elif verdict is False:
+                        offending.append(version)
+                if not offending:
+                    continue
+                if exempt and set(offending) <= set(exempt[0]):
+                    continue
+                if exempt:
+                    offending = sorted(set(offending) - set(exempt[0]))
+                own = other.overrides.get(key) or other.overrides.get(package)
+                held = f" — it declares `{own}` of its own" if own else " and declares no override of its own"
+                problems.append(
+                    f"{declaring.manifest} pins `{key}` to `{spec}` but {other.lockfile} resolves "
+                    f"{package}@{', '.join(offending)}{held}. `{other.directory or '.'}` is a separate "
+                    f"install root, so a resolution applied in one lockfile does not reach the other; "
+                    f"add the override there too, or record a measured reason in "
+                    f"CROSS_ROOT_OVERRIDE_EXEMPT (override propagation)"
+                )
+
+    # ── resolution -> declaration, inside one root ───────────────────────
+    for node_root in data.node_roots:
+        for key, spec in sorted(node_root.overrides.items()):
+            parent, package, selector = parse_override_key(key)
+            if parent:
+                continue
+            for version in sorted(set(_governed(node_root.resolved.get(package, []), selector))):
+                if satisfies_npm_range(version, spec) is False:
+                    problems.append(
+                        f"{node_root.manifest} overrides `{key}` to `{spec}` but {node_root.lockfile} "
+                        f"resolves {package}@{version}, which does not satisfy it — the lockfile was "
+                        f"not regenerated after the manifest moved, so `{node_root.tool} install "
+                        f"--frozen-lockfile` installs a version the manifest forbids "
+                        f"(override propagation)"
+                    )
+
+    # ── exemption <-> tree ───────────────────────────────────────────────
+    for (package, directory), (versions, _) in sorted(CROSS_ROOT_OVERRIDE_EXEMPT.items()):
+        # Named apart from the `node_root` the loops above bind: this one is
+        # a lookup that can miss, and reusing the name would narrow an
+        # optional into a type the earlier loops guaranteed.
+        exempt_root = by_dir.get(directory)
+        if exempt_root is None:
+            # Only reported when the directory is *there* and has stopped
+            # resolving its own node_modules. An exemption for a directory
+            # that does not exist in this tree at all is a fixture or a fork,
+            # not drift — the same distinction `check_pnpm_actions` draws by
+            # testing its exemptions against the files the scan actually saw.
+            if (root / directory).is_dir():
+                problems.append(
+                    f"CROSS_ROOT_OVERRIDE_EXEMPT names `{directory}`, which is no longer an install "
+                    f"root — it has no lockfile of its own, so the exemption asserts a constraint "
+                    f"nothing is under (override propagation)"
+                )
+            continue
+        got = set(exempt_root.resolved.get(package, []))
+        if not got:
+            problems.append(
+                f"CROSS_ROOT_OVERRIDE_EXEMPT exempts `{package}` in `{directory}`, which no longer "
+                f"resolves it — the exemption asserts a constraint nothing is under (override propagation)"
+            )
+        elif stale := sorted(set(versions) - got):
+            problems.append(
+                f"CROSS_ROOT_OVERRIDE_EXEMPT was verified against `{package}@{', '.join(stale)}` in "
+                f"`{directory}`, which now resolves {', '.join(sorted(got))}. The exemption records "
+                f"exact versions on purpose so a bump re-opens the question — re-verify the resolved "
+                f"version against OSV and update it (override propagation)"
+            )
+    return problems
+
+
+def check_node_root_corpus(data: Scan) -> list[str]:
+    """Refuse to render a verdict over install roots that were never read.
+
+    Every check above answers "do these roots agree", and a root whose
+    lockfile yielded nothing agrees with everyone. That is the shape this
+    repository keeps finding: *found nothing* and *scanned nothing* print the
+    same word. So a discovered root that parsed to zero resolutions, or a
+    tree with no install root at all, is a failure of the gate rather than a
+    pass for the tree — which is also what keeps this check from reporting OK
+    on an empty corpus.
+    """
+    if not data.node_roots:
+        return [
+            "no Node install root was discovered (a directory holding both package.json and a "
+            "lockfile). Either the tree has none, or the discovery walk is looking in the wrong "
+            "place — both mean the cross-root comparison below ran over nothing (node root corpus)"
+        ]
+    return [
+        f"{node_root.lockfile} parsed to zero resolved packages, so every comparison against it "
+        f"passes by default. A {node_root.tool} lockfile this gate cannot read is not a clean "
+        f"root, it is an unread one (node root corpus)"
+        for node_root in data.node_roots
+        if not node_root.resolved
+    ]
+
+
+def check_override_parser_coverage(root: Path, data: Scan) -> list[str]:
+    """A manifest whose override block this parser could not see.
+
+    The other direction of discovery. `check_node_root_corpus` asks whether
+    the lockfiles were read; this asks whether the *manifests* were, because
+    a root counted and compared while contributing no override is
+    indistinguishable from one that genuinely pins nothing.
+    """
+    problems: list[str] = []
+    declares = re.compile(r'"(?:pnpm|overrides)"\s*:')
+    for node_root in data.node_roots:
+        path = root / node_root.manifest
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if declares.search(text) and not node_root.overrides:
+            problems.append(
+                f"{node_root.manifest} declares an override block but the parser extracted nothing "
+                f"from it — the root is counted as compared while contributing no pin "
+                f"(override parser coverage)"
+            )
+    return problems
+
+
+def check_esbuild_overrides(root: Path, data: Scan) -> list[str]:
     """esbuild must stay overridden per parent, and the resolved set must be pinned.
 
     Forcing esbuild across the workspace broke Turbopack's font import map,
@@ -1376,19 +1819,23 @@ def check_esbuild_overrides(root: Path) -> list[str]:
     overrides are therefore scoped (`vite>esbuild`) — but that scoping means a
     `vite` bump can pull a different esbuild with no esbuild line in the diff,
     so the resolved versions are compared too.
+
+    The scoping half is checked against *every* install root. It used to read
+    the repository root's manifest alone, which left the one place a
+    workspace-wide esbuild override could be added without anything noticing:
+    `apps/mobile` installs separately and is the root whose bundler is not
+    Turbopack, so the mistake would look locally harmless there and reach the
+    web build through nothing but a future reviewer's memory.
     """
     problems: list[str] = []
-    manifest = root / "package.json"
-    if not manifest.exists():
-        return []
-    overrides = (json.loads(manifest.read_text(encoding="utf-8")).get("pnpm") or {}).get("overrides") or {}
-    for key in sorted(overrides):
-        if key == "esbuild" or key.startswith("esbuild@"):
-            problems.append(
-                f"package.json overrides `{key}` workspace-wide. Next bundles its own esbuild "
-                f"and a workspace-wide override replaces it, which breaks Turbopack's font "
-                f"import map — scope it to its parent as `<parent>>esbuild` (override scope)"
-            )
+    for node_root in data.node_roots:
+        for key in sorted(node_root.overrides):
+            if key == "esbuild" or key.startswith("esbuild@"):
+                problems.append(
+                    f"{node_root.manifest} overrides `{key}` workspace-wide. Next bundles its own "
+                    f"esbuild and a workspace-wide override replaces it, which breaks Turbopack's "
+                    f"font import map — scope it to its parent as `<parent>>esbuild` (override scope)"
+                )
 
     lockfile = root / "pnpm-lock.yaml"
     if not lockfile.exists():
@@ -1528,6 +1975,16 @@ def report(data: Scan) -> None:
 
     locked = sum(1 for i in data.installs if i.locked)
     print(f"  node installs: {len(data.installs)} ({locked} locked, {len(data.installs) - locked} unlocked)")
+    # Named, not counted. "4 install roots compared" is true whether the
+    # fourth was read or silently parsed to nothing, and a root that resolved
+    # zero packages agrees with every other root about everything.
+    print(f"  node install roots: {len(data.node_roots)} — each with what was actually read from it")
+    for node_root in data.node_roots:
+        print(
+            f"      {(node_root.directory or '.'):<30} {node_root.tool:<5} "
+            f"{len(node_root.resolved):>5} packages resolved, "
+            f"{len(node_root.overrides)} override(s) from {node_root.overrides_key or 'none declared'}"
+        )
     modules = sorted(d for d, e in data.go_modules.items() if e.get("mod"))
     print(f"  go modules: {len(modules)} — {', '.join(modules)}")
     scopes = ", ".join(f"{w.split('/')[-1]}{f' [{s}]' if s else ' [repo-wide]'}" for w, s, _, _ in data.gofmt_steps) or "none"
@@ -1563,8 +2020,11 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
         + check_go_modules(root, data)
         + check_go_formatting(data)
         + check_published_service_ci(root, data)
-        + check_esbuild_overrides(root)
+        + check_esbuild_overrides(root, data)
         + check_pnpm_actions(data)
+        + check_node_root_corpus(data)
+        + check_override_propagation(root, data)
+        + check_override_parser_coverage(root, data)
         + check_parser_coverage(root, data)
         + check_scan_coverage(root, data)
     )
@@ -1608,12 +2068,28 @@ def _fixture(root: Path) -> None:
                 "private": True,
                 "packageManager": "pnpm@8.15.1",
                 "engines": {"node": ">=22.0.0"},
-                "pnpm": {"overrides": {"vite>esbuild": "^0.28.1"}},
+                "pnpm": {"overrides": {"vite>esbuild": "^0.28.1", "image-size": ">=2.0.4 <3"}},
             }
         ),
         encoding="utf-8",
     )
-    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /esbuild@0.28.1:\n  /esbuild@0.25.12:\n", encoding="utf-8")
+    (root / "pnpm-lock.yaml").write_text(
+        "lockfileVersion: '6.0'\n  /esbuild@0.28.1:\n  /esbuild@0.25.12:\n  /image-size@2.0.4:\n", encoding="utf-8"
+    )
+
+    # A second install root, shaped like `apps/mobile`: its own manifest and
+    # its own lockfile, outside the workspace the root one describes. The
+    # cross-root checks have nothing to compare without it, and a fixture with
+    # one root is how a gate for two roots passes its own self-test while
+    # exercising neither direction.
+    satellite = root / "apps" / "satellite"
+    satellite.mkdir(parents=True)
+    (satellite / "package.json").write_text(
+        json.dumps({"name": "satellite", "private": True, "pnpm": {"overrides": {"image-size": ">=2.0.4 <3"}}}),
+        encoding="utf-8",
+    )
+    (satellite / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /image-size@2.0.4:\n", encoding="utf-8")
+    (root / "pnpm-workspace.yaml").write_text('packages:\n  - "apps/*"\n  - "!apps/satellite"\n', encoding="utf-8")
 
     (root / "services" / "web-svc" / "Dockerfile").write_text(
         "FROM node:22-alpine AS base\nRUN npm install -g pnpm@8.15.1\n"
@@ -1686,12 +2162,19 @@ def self_test() -> int:
 
     def build(mutate=None) -> tuple[int, list[str]]:
         temp = Path(tempfile.mkdtemp(prefix="toolchain_selftest_"))
+        # Two injections below add an entry to the module-level exemption
+        # list, which is how an exemption is drifted. Restoring it per case
+        # keeps one case from deciding the verdict of the next — a self-test
+        # whose cases leak into each other proves the wrong thing.
+        saved = dict(CROSS_ROOT_OVERRIDE_EXEMPT)
         try:
             _fixture(temp)
             if mutate:
                 mutate(temp)
             return run(temp)
         finally:
+            CROSS_ROOT_OVERRIDE_EXEMPT.clear()
+            CROSS_ROOT_OVERRIDE_EXEMPT.update(saved)
             shutil.rmtree(temp, ignore_errors=True)
 
     def drift_node_image_behind_ci(root: Path) -> None:
@@ -1919,6 +2402,81 @@ def self_test() -> int:
             encoding="utf-8",
         )
 
+    # ── The cross-root install-root directions ───────────────────────────
+    #
+    # Written by enumerating what the check *credits* rather than what it
+    # flags. It credits a root as agreeing when the root declares the same
+    # override, when the version it resolved satisfies the other root's pin,
+    # or when the package is absent from it — and each of those three is also
+    # what a root looks like when the parser could not read its lockfile, its
+    # manifest, or the range being compared. Those are the last four cases
+    # here, and they are the ones that would have let this check pass while
+    # comparing nothing.
+
+    def drift_override_reaching_one_root(root: Path) -> None:
+        """The measured bug: the workspace pins image-size, apps/mobile does not."""
+        path = root / "apps" / "satellite" / "package.json"
+        path.write_text(json.dumps({"name": "satellite", "private": True}), encoding="utf-8")
+        (root / "apps" / "satellite" / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /image-size@1.2.1:\n", encoding="utf-8")
+
+    def drift_lockfile_behind_its_own_manifest(root: Path) -> None:
+        """The same disagreement inside one root: the manifest moved, the lock did not."""
+        (root / "apps" / "satellite" / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /image-size@1.2.1:\n", encoding="utf-8")
+
+    def drift_workspace_wide_esbuild_in_a_satellite_root(root: Path) -> None:
+        """The esbuild trap in the one root the old check could not see."""
+        path = root / "apps" / "satellite" / "package.json"
+        data = json.loads(path.read_text())
+        data["pnpm"]["overrides"]["esbuild"] = "^0.28.1"
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def drift_exemption_for_a_root_that_stopped_being_one(root: Path) -> None:
+        """A directory still in the tree that no longer resolves its own node_modules.
+
+        Deliberately not a directory that is simply absent: an exemption for
+        a path this tree never had is a fixture or a fork, and failing on
+        that would make the gate unusable anywhere but here.
+        """
+        (root / "apps" / "folded-in").mkdir(parents=True)
+        (root / "apps" / "folded-in" / "package.json").write_text(json.dumps({"name": "folded-in"}), encoding="utf-8")
+        CROSS_ROOT_OVERRIDE_EXEMPT[("image-size", "apps/folded-in")] = (("1.2.1",), "a root folded back into the workspace")
+
+    def drift_exemption_whose_version_moved(root: Path) -> None:
+        CROSS_ROOT_OVERRIDE_EXEMPT[("image-size", "apps/satellite")] = (("1.2.1",), "verified against a version since bumped")
+
+    def drift_unreadable_lockfile(root: Path) -> None:
+        """A lockfile in a format the parser does not understand.
+
+        It yields no resolutions, so every cross-root comparison against it
+        passes — the exact shape of a gate reporting OK about a root it never
+        read. `check_node_root_corpus` must call this a failure of the gate.
+        """
+        (root / "apps" / "satellite" / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\nsnapshots: {}\n", encoding="utf-8")
+
+    def drift_override_block_the_parser_cannot_read(root: Path) -> None:
+        """A manifest that declares overrides under a key this parser misses."""
+        path = root / "apps" / "satellite" / "package.json"
+        path.write_text(
+            json.dumps({"name": "satellite", "private": True, "pnpm": {"override": {"image-size": ">=2.0.4 <3"}}}),
+            encoding="utf-8",
+        )
+
+    def drift_range_the_comparison_cannot_evaluate(root: Path) -> None:
+        """A spec `satisfies_npm_range` has no answer for.
+
+        A boolean here would be invented. Passing is the dangerous half: the
+        gate would print OK having compared nothing.
+        """
+        path = root / "package.json"
+        data = json.loads(path.read_text())
+        data["pnpm"]["overrides"]["image-size"] = "1.x || >=2.0.4"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        (root / "apps" / "satellite" / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /image-size@1.2.1:\n", encoding="utf-8")
+
+    def drift_no_install_root_at_all(root: Path) -> None:
+        (root / "pnpm-lock.yaml").unlink()
+        (root / "apps" / "satellite" / "pnpm-lock.yaml").unlink()
+
     cases = [
         ("clean fixture passes", None, None),
         ("ship -> test (image behind CI)", drift_node_image_behind_ci, "ship -> test"),
@@ -1954,6 +2512,15 @@ def self_test() -> int:
         ("coverage claimed by a quoted path in a list", drift_coverage_claimed_by_a_quoted_path, "image -> CI"),
         ("coverage through a matrix working-directory", drift_matrix_working_directory, None),
         ("publish entry for a directory that moved", drift_publish_context_that_moved, "CI -> image"),
+        ("override reaching one install root and not the other", drift_override_reaching_one_root, "override propagation"),
+        ("lockfile behind its own manifest", drift_lockfile_behind_its_own_manifest, "override propagation"),
+        ("workspace-wide esbuild in a satellite root", drift_workspace_wide_esbuild_in_a_satellite_root, "override scope"),
+        ("exemption for a root that stopped being one", drift_exemption_for_a_root_that_stopped_being_one, "no longer an install root"),
+        ("exemption whose verified version moved", drift_exemption_whose_version_moved, "re-opens the question"),
+        ("lockfile the parser cannot read", drift_unreadable_lockfile, "node root corpus"),
+        ("override block the parser cannot read", drift_override_block_the_parser_cannot_read, "override parser coverage"),
+        ("range the comparison cannot evaluate", drift_range_the_comparison_cannot_evaluate, "cannot evaluate"),
+        ("no install root at all", drift_no_install_root_at_all, "no Node install root"),
     ]
 
     failures: list[str] = []

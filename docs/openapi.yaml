@@ -20668,6 +20668,14 @@ components:
           type: boolean
           title: Truncated
           default: false
+        nodeLimit:
+          type: integer
+          title: Nodelimit
+          default: 400
+        edgeLimit:
+          type: integer
+          title: Edgelimit
+          default: 900
       type: object
       required:
       - nodes
@@ -20683,7 +20691,22 @@ components:
 
         identically, and a viewer who cannot tell them apart reads a partial
 
-        picture as the whole estate.'
+        picture as the whole estate.
+
+
+        ``nodeLimit`` and ``edgeLimit`` travel with it so the ceiling a caller
+
+        reports is the ceiling this service applied. They are the same two
+
+        constants the traversal is bounded by, read from
+
+        ``graph_service`` rather than restated: a console that hardcoded 400 and
+
+        900 would keep printing those numbers after someone moved them here, and
+
+        a client telling an analyst the wrong limit is a smaller version of the
+
+        bug ``truncated`` exists to fix.'
     HTTPValidationError:
       properties:
         detail:
