@@ -230,20 +230,30 @@ async def bootstrap(
 
 
 def _print_credentials(email: str, password: str, *, generated: bool) -> None:
+    """Report the new account, disclosing the password only if we invented it.
+
+    A password the operator supplied through ``AISOC_ADMIN_PASSWORD`` or
+    ``--password-stdin`` is never echoed: they already have it, and printing it
+    back would put a secret on a terminal and into any scrollback or CI log for
+    no gain. A generated one is printed because it exists nowhere else — that
+    single line is the whole point of this command, and it is why the password
+    is never written to disk.
+    """
     console = os.environ.get("AISOC_CONSOLE_URL", "http://localhost:3000")
     bar = "─" * 64
     print(f"\n{bar}")
     print("  Administrator created. Sign in at " + console)
     print(bar)
     print(f"  Email     {email}")
-    print(f"  Password  {password}")
-    print(bar)
     if generated:
-        # Said plainly because it is the one irreversible thing here: the
-        # plaintext exists only in this terminal.
+        print(f"  Password  {password}")
+        print(bar)
         print("  This password was generated now and is not stored anywhere.")
         print("  Copy it before closing this terminal. Lost it? Re-run with")
         print("  --reset-password to mint a new one.")
+    else:
+        print("  Password  (the one you supplied — not echoed)")
+        print(bar)
     print()
 
 

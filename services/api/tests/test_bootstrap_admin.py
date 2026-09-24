@@ -380,6 +380,26 @@ def test_a_too_short_supplied_password_is_refused(monkeypatch) -> None:
         ba.resolve_password(_args())
 
 
+def test_a_supplied_password_is_never_echoed_back(capsys) -> None:
+    """Only a password the operator cannot otherwise know is worth disclosing.
+
+    Printing one they gave us puts a secret into scrollback and any CI log for
+    nothing.
+    """
+    ba._print_credentials("admin@aisoc.internal", "the-operators-own-secret", generated=False)
+    out = capsys.readouterr().out
+    assert "the-operators-own-secret" not in out
+    assert "admin@aisoc.internal" in out
+
+
+def test_a_generated_password_is_printed_because_it_exists_nowhere_else(capsys) -> None:
+    password = ba.generate_password()
+    ba._print_credentials("admin@aisoc.internal", password, generated=True)
+    out = capsys.readouterr().out
+    assert password in out
+    assert "not stored anywhere" in out
+
+
 def test_stdin_wins_over_the_environment(monkeypatch) -> None:
     """So a password never has to appear in shell history or `ps` output."""
     monkeypatch.setenv("AISOC_ADMIN_PASSWORD", "from-the-environment")
