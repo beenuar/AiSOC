@@ -95,7 +95,7 @@ httpx = ">=0.27,<0.29"
 # manifest permits a newer ruff reformats the tree and reds their own PR.
 # Moving this range means reformatting the tree, which is its own change.
 ruff = ">=0.4.4,<0.5"
-mypy = ">=1.10,<2"
+mypy = ">=1.10,<3"
 
 [build-system]
 requires = ["poetry-core"]
