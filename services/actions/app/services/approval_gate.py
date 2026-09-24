@@ -16,18 +16,22 @@ the matrix already states for its own three inputs: each can raise a
 requirement, none can lower it. So switching it on cannot make anything
 auto-execute that did not before.
 
-Two honest limits, both logged rather than papered over:
+Every ``ActionType`` member now resolves to a capability contract, and
+``scripts/check_action_contract.py`` fails if one stops doing so.
 
-One of the 24 ``ActionType`` members has no capability contract, down from
-five: ``capture_forensics`` and ``chatops_verify`` gained one, and
-``add_ioc_to_blocklist`` and ``run_playbook`` left the enum because neither
-had an implementation path. The one left is ``notify_slack``, and it is a
-naming gap rather than an undeclared verb — the lookup below is by
-``ActionType`` value and the matching capability is called ``notify``, which
-does have a contract. For an unmapped verb the matrix has no impact to reason
-about and blast radius decides alone. That is recorded at debug rather than
-guessed at, because inventing an impact for an unmapped verb is how a gate
-starts certifying things it never examined.
+The last hold-out was ``notify_slack``. It was never a missing capability:
+the verb is ``notify``, it has a contract, and ``SlackNotify`` already
+bridged the two. What was missing was anything connecting a lookup *by
+ActionType value* to that bridge, so this gate found no contract, skipped
+the confidence matrix and let blast radius decide alone — a 40%-confidence
+guess and a corroborated finding got the same answer for the one verb most
+likely to be auto-executed. ``contract_for_action_type`` closes it by alias
+rather than by rename, because ``action_type`` is persisted operator intent
+(see the note on ``ACTION_TYPE_CAPABILITY_ALIASES``).
+
+An unmapped verb is still possible in principle, and is still recorded at
+debug rather than guessed at: inventing an impact for a verb nobody declared
+is how a gate starts certifying things it never examined.
 
 A request with no ``confidence`` is treated as the lowest band. For anything
 above READ_ONLY impact that means analyst approval, which is a real tightening
@@ -38,7 +42,7 @@ from __future__ import annotations
 
 import structlog
 
-from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
+from app.live_actions.capability_contracts import contract_for_action_type
 from app.live_actions.contract import ApprovalRequirement
 from app.models.action import ActionRequest, ActionStatus, BlastRadius
 from app.services.approval_matrix import evaluate as evaluate_matrix
@@ -90,7 +94,7 @@ async def apply_matrix(
     Never lowers: a blast-radius gate that already demands approval keeps
     demanding it whatever the confidence says.
     """
-    contract = CAPABILITY_CONTRACTS.get(request.action_type.value)
+    contract = contract_for_action_type(request.action_type.value)
     if contract is None:
         logger.debug(
             "approval_gate.no_capability_contract",

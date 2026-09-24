@@ -98,6 +98,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or parses empty is a hard error rather than a quiet pass — a gate that
   reports OK about a tree it never opened is worse than no gate.
 
+- **The published playbook schema now describes the engine that runs
+  playbooks, and a gate keeps it that way in both directions.**
+  `schemas/playbook.schema.json` is the contract authors are told to trust,
+  and it had drifted from `services/agents/app/playbook/` in every available
+  direction at once. Two schema files existed with different step
+  vocabularies — 15 types at the repo root, 9 under `schemas/` — against a
+  `StepType` enum of 22, and the NL drafter silently fell back from one to
+  the other if the primary was missing. Eleven step types were declared by a
+  schema and implemented nowhere (`trigger`, `action`, `loop`, `parallel`,
+  `human_approval`, `wait`, `isolate`, `block`, `create_case`,
+  `run_playbook`, `script`); thirteen were accepted by the engine and
+  declared by neither schema. Six step fields (`blast_radius`, `depends_on`,
+  `output_key`, `retry.max_attempts`, `retry.backoff_seconds`,
+  `retry.backoff_multiplier`) were declared and never read — `blast_radius`
+  carried the description "engine enforces analyst approval for destructive
+  steps", and the engine could not see the field at all.
+
+  Resolved by making `schemas/playbook.schema.json` the only schema, widened
+  to the full `StepType` range with the condition-as-string form the engine
+  already accepted, bounds matched to `bounds.py` (3600s / 25 retries, not
+  600s / 5), and the two authored-but-inert playbook keys (`inputs`,
+  `dry_run_support`) declared as the documentation they are. The root
+  duplicate is deleted. The schema also carries `x-aisoc-execution`, a
+  machine-checked map recording whether each step type is `executed`,
+  `simulated`, or vocabulary with no handler — so an author can tell what
+  will happen before writing the playbook rather than after running it.
+
+  `run_playbook` is deliberately **not** implemented as a step, on its own
+  merits rather than by inheriting the argument that removed it as an action.
+  A nested playbook's steps are not visible where the parent declares its
+  step-level policy, so the parent cannot bound them; the engine reads no
+  step-level approval or blast-radius field today, so nesting would let one
+  ungated parent pull in an arbitrary tree; and twelve of the engine's own
+  step types have no handler, so a verb whose purpose is to execute more
+  steps would multiply that. It can return when playbook steps are graded
+  individually — recursion depth and an ancestor set are the easy part.
+
+  `scripts/check_playbook_schema_parity.py` compares the schema enum, the
+  `StepType` enum, the engine's handler table, the execution map, the bounds
+  module and the pack validator's trigger list — every pair in both
+  directions, because the characteristic failure here is a check that asks
+  only whether the schema declares something the engine lacks and never the
+  reverse, which is the direction things actually drift. It carries a
+  `--self-test` that injects drift each way and fails if any goes undetected,
+  refuses to run at all on a tree missing its marker files rather than
+  printing OK about files it never opened, and names the root, schema, step
+  counts and playbook count it inspected.
+
+- **Every `ActionType` now resolves a capability contract.** `notify_slack`
+  was the last one without, and it was a naming gap rather than a missing
+  capability: the verb is `notify`, it has had a contract throughout, and the
+  `SlackNotify` adapter already bridged the two names. Nothing connected a
+  lookup *by `ActionType` value* to that bridge, so `approval_gate` found no
+  contract and skipped the confidence matrix — a 10%-confidence
+  `notify_slack` was approved for auto-execution, and the verb most likely to
+  auto-execute was the one graded without reference to confidence. It now
+  requires an analyst under the default L1 tier.
+
+  Closed with a one-entry alias (`ACTION_TYPE_CAPABILITY_ALIASES`) rather
+  than a rename, because `action_type` is persisted operator intent:
+  `remediation_whitelist` (migration 015) stores per-tenant pre-approvals
+  keyed `UNIQUE (tenant_id, action_type)`, so renaming the member silently
+  orphans every row an operator created for `notify_slack`. It is also a
+  documented request field and a member of the `ActionType` union in
+  `packages/types`. The retirement condition is recorded rather than left
+  open-ended: the map goes when `ActionType` does. `check_action_contract.py`
+  gains two directions — every `ActionType` must resolve a contract, and
+  every alias must name a real `ActionType`, point at a real contract, not
+  shadow a capability of the same name, and describe a bridge some adapter
+  actually implements.
+
 - **Competitor product names removed from the docs portal, the benchmark page
   and the archived plan subtree, and a CI gate added to keep them out.** AiSOC
   names no competitor product, but two published comparison tables and the
@@ -518,6 +589,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directions, so a stale exemption fails the build rather than accumulating as
   cover. The one MITRE figure the project does publish — 97.0% in
   `BenchmarkBand` — is labelled "substrate" and is unchanged.
+
+- **A playbook step the engine could not run reported success.** Twelve of
+  the twenty-two `StepType` members had no entry in the engine's handler
+  table. The run loop answered those with `{"skipped": true}` and left the
+  step's status at its `SUCCESS` default, so a playbook containing them ran
+  to `COMPLETED` having done nothing it said it did. `approval` is the one
+  that mattered: it is a human decision point, it appears in 14 steps across
+  the shipped packs, and it passed on its own — the run continued straight
+  into the action an analyst was meant to authorise. An unimplemented step
+  type now fails closed with `unimplemented: true` and an error naming the
+  verb, is not retried (a missing handler will still be missing next
+  attempt), and halts the run under the default `on_failure: abort` while
+  still honouring an explicit `continue`. A dry run reports `would_fail` for
+  such a step instead of a bare `dry_run: true`.
+
+  `apps/docs/docs/concepts/playbooks.md` had documented the safe behaviour
+  all along — "recorded as `SKIPPED` … so unknown actions never silently
+  succeed" — and has been corrected to describe what the code now does. The
+  same page described a manual approval gate backed by
+  `POST /v1/playbook-runs/{id}/approve`, where "the engine pauses on the
+  condition until the field flips, then resumes". No such endpoint exists and
+  the engine has no pause or resume; that section now says so and points at
+  the actions service, which does hold an action for an analyst.
+
+- **The playbook lint job validated two files and reported "2/2 passed".**
+  `scripts/lint_playbooks.py` claimed in its own docstring to check "any
+  `*.playbook.json` files anywhere in the repo" and only ever scanned the two
+  under `services/agents/data/playbooks/`. Pointed at the whole tree, 32 of
+  the 62 playbooks in `playbooks/packs/v1/` did not match the published
+  schema. It now scans recursively, treats finding no files as a broken scan
+  rather than a clean bill of health, and no longer crashes in its own error
+  path when a file passed on argv sits outside the repo.
+
+- **20 shipped playbooks carried a duplicated tag.**
+  `scripts/generate_playbooks.py` emitted `[category, *tags]` where several
+  categories already lead their tag list with the category name, producing
+  e.g. `["supply-chain", "supply-chain", "npm", …]`. Fixed in the generator,
+  which is what the reproducibility gate diffs, rather than in the 20
+  generated files.
+
+- **The NL drafter rewrote steps to make its own output pass lint.** Because
+  the schema declared 9 of 22 step types, `_collapse_step_types_for_schema`
+  mapped the other 13 onto a "nearest neighbour" — `run_av_scan` and
+  `revoke_session` both became `investigate`, `approval` became `condition` —
+  keeping the original in `params.original_type`. The playbook that shipped
+  said it would investigate when the author had asked to disable an account,
+  and an approval gate came out as an ungated branch. The projection and its
+  second validation pass are removed; the schema covers the full range, so a
+  validation failure is now a real failure. The drafter's system prompt also
+  restated the vocabulary by hand and had drifted from it — offering
+  `webhook` as a trigger, which no validator in the repo accepts, and capping
+  `retry_max` at 5 against a model allowing 25 — and is now generated from
+  `StepType` and `bounds.py`.
 
 - **The agent recommended evidence acquisition the platform could not
   perform.** `capture_forensics` was an `ActionType` with no executor

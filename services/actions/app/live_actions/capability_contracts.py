@@ -526,6 +526,56 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
 }
 
 
+#: Legacy ``ActionType`` value -> capability name, for the cases where the
+#: two vocabularies chose different words for the same verb.
+#:
+#: Only one entry, and it is a naming gap rather than a missing capability:
+#: the public API verb is ``notify_slack`` (it predates the capability
+#: registry and names the transport), the capability is ``notify`` (it names
+#: the verb, which is the whole point of a per-capability contract), and
+#: ``SlackNotify`` in ``builtins.py`` already bridges them. What was missing
+#: was anything that told a *lookup by ActionType value* about the bridge, so
+#: ``approval_gate`` found no contract, skipped the confidence matrix
+#: entirely and let blast radius decide alone.
+#:
+#: Why an alias and not a rename. ``action_type`` is persisted as free text:
+#: ``remediation_whitelist`` (migration 015) stores operator pre-approvals
+#: keyed ``UNIQUE (tenant_id, action_type)``, so renaming the enum member
+#: silently orphans every row an operator created for ``notify_slack`` —
+#: their pre-approval stops matching and nobody is told. It is also a
+#: documented request field (``{"action_type": "notify_slack"}`` in
+#: ``apps/docs/docs/operations/notifications.md``) and a member of the
+#: ``ActionType`` union in ``packages/types``.
+#:
+#: When to delete this. It retires with ``ActionType`` itself: the enum is
+#: already the legacy half of the registry (every adapter carries a
+#: ``_legacy_action_type`` pointing back at it) and the live-actions path
+#: dispatches on capability strings. When the ``POST /actions`` body takes a
+#: capability and the ``remediation_whitelist`` rows have been migrated,
+#: this map and the enum go together. Until then a new entry here needs the
+#: same justification: a *naming* difference for a verb that already has a
+#: contract, never a stand-in for a capability nobody wrote.
+ACTION_TYPE_CAPABILITY_ALIASES: dict[str, str] = {
+    "notify_slack": "notify",
+}
+
+
+def contract_for_action_type(action_type_value: str) -> CapabilityContract | None:
+    """Resolve a legacy ``ActionType`` value to its capability contract.
+
+    Tries the value as a capability name first, then the alias map. Returns
+    ``None`` when the verb genuinely has no contract, so callers can say so
+    rather than invent an impact for it.
+    """
+    contract = CAPABILITY_CONTRACTS.get(action_type_value)
+    if contract is not None:
+        return contract
+    aliased = ACTION_TYPE_CAPABILITY_ALIASES.get(action_type_value)
+    if aliased is None:
+        return None
+    return CAPABILITY_CONTRACTS.get(aliased)
+
+
 def apply_contract(cls: type) -> type:
     """Class decorator: stamp the capability's contract onto an executor.
 
