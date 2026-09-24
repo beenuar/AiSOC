@@ -291,7 +291,9 @@ async def update_rule_compat(
     if updates:
         updates["updated_at"] = datetime.now(UTC)
         updates["version"] = (rule.version or 1) + 1
-        await db.execute(update(DetectionRule).where(DetectionRule.id == rule_id).values(**updates))
+        await db.execute(
+            update(DetectionRule).where(DetectionRule.id == rule_id, DetectionRule.tenant_id == current_user.tenant_id).values(**updates)
+        )
         await db.commit()
         await db.refresh(rule)
 

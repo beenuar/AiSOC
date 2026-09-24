@@ -31,11 +31,36 @@ intersecting it with the caller's scope. `--self-test` injects a violation of
 each kind plus a stale exemption and asserts all three are caught, because a
 gate nobody has seen fail is indistinguishable from one that cannot.
 
-The resolver is vendored into six services (each is built with its own
+The resolver is vendored into eight services (each is built with its own
 directory as its Docker context, the same reason `service_auth.py` and
 `cors.py` are vendored), so `sync_vendored_tenant_scope.py --check` runs
 alongside it: a fix that lands in one copy and not the others is a fix in
 none.
+
+## The two shapes that question could not reach
+
+`test_route_auth_default_deny.py` covers the rest of the surface, because the
+gate above asks a *conditional* question and two shapes fall outside it.
+
+**A route that takes no tenant was never in its reach.** 37 routes in
+`services/agents` took none, and they included create, delete and *execute* a
+response playbook. The suite drives the real routers over ASGI with credential
+material configured — so a refusal is about the credential, not about an
+unconfigured service — and asserts an anonymous caller is refused on every one
+of them, that a valid console session still gets a non-empty response, that a
+service token declaring no tenant is a 403, and that forged, expired,
+`alg: none` and refresh tokens are each refused. `scripts/check_route_auth.py`
+holds the line repo-wide: every route authenticates or appears in one of three
+tables with its reason, and an entry that no longer matches an unauthenticated
+route fails as stale.
+
+**A route that matches on an id takes no tenant, which is exactly why it was
+missing the filter.** `scripts/check_tenant_query_predicates.py` asks the
+predicate question instead, deriving both the tenant-scoped models and the
+tenant-scoped tables from the tree rather than from a list. The live half
+seeds two tenants against a real database and asserts both hold rows *before*
+asserting either absence — a scoped read against an empty table passes for the
+wrong reason — then has tenant B name tenant A's `query_id` and get nothing.
 
 ## Two layers
 

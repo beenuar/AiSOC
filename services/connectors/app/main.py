@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app._health import install_health_routes
-from app.api.router import router
+from app.api.router import health_router, router
 from app.db.engine import dispose_engine
 from app.scheduler import ConnectorScheduler, scheduler_disabled
 from app.security.cors import build_cors_kwargs
@@ -100,3 +100,4 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1")
+app.include_router(health_router, prefix="/api/v1")

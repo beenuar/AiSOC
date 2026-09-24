@@ -120,7 +120,10 @@ async def _load_run_and_events(
     events = list(
         (
             await db.execute(
-                select(InvestigationEvent).where(InvestigationEvent.run_id == run_id).order_by(InvestigationEvent.seq.asc()).limit(10000)
+                select(InvestigationEvent)
+                .where(InvestigationEvent.run_id == run_id, InvestigationEvent.tenant_id == tenant_id)
+                .order_by(InvestigationEvent.seq.asc())
+                .limit(10000)
             )
         )
         .scalars()

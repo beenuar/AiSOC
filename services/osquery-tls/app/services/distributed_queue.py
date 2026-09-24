@@ -55,7 +55,20 @@ async def complete_query(
     await db.commit()
 
 
-async def get_query_by_id(db: AsyncSession, query_id: str) -> OsqueryDistributedQuery | None:
-    """Look up a distributed query by its query_id."""
-    result = await db.execute(select(OsqueryDistributedQuery).where(OsqueryDistributedQuery.query_id == query_id))
+async def get_query_by_id(db: AsyncSession, query_id: str, tenant_id: str | uuid.UUID | None = None) -> OsqueryDistributedQuery | None:
+    """Look up a distributed query by its query_id.
+
+    ``osquery_distributed_query`` carries no ``tenant_id`` of its own — it is
+    scoped through the node it was sent to — so when a request supplies a
+    tenant the lookup joins onto ``osquery_node`` rather than trusting the
+    id. Without that join a query_id is a bearer capability for another
+    tenant's host telemetry.
+    """
+    stmt = select(OsqueryDistributedQuery).where(OsqueryDistributedQuery.query_id == query_id)
+    if tenant_id is not None:
+        # osquery_node.tenant_id is VARCHAR: the rest of this service stores
+        # the tenant as a string, so coerce rather than binding a UUID object
+        # against a text column and relying on the driver to guess.
+        stmt = stmt.join(OsqueryNode, OsqueryNode.id == OsqueryDistributedQuery.node_id).where(OsqueryNode.tenant_id == str(tenant_id))
+    result = await db.execute(stmt)
     return result.scalar_one_or_none()

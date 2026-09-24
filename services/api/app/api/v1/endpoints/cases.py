@@ -1254,7 +1254,7 @@ async def case_auto_summary(
     ),
 ) -> Any:
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
-    summary = await build_case_summary(db, cid)
+    summary = await build_case_summary(db, cid, user.tenant_id)
     if summary is None:
         raise HTTPException(status_code=404, detail="Case not found.")
 

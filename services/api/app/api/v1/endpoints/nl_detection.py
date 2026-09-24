@@ -195,7 +195,7 @@ def _template_fallback(request: NLDetectionRequest) -> dict[str, str | None]:
 
 
 @router.post("/translate", response_model=NLDetectionResponse)
-async def translate_detection(payload: NLDetectionRequest) -> NLDetectionResponse:
+async def translate_detection(payload: NLDetectionRequest, user: AuthUser) -> NLDetectionResponse:
     """Convert a plain-English threat description into multi-platform detection rules."""
     if not payload.description.strip():
         raise HTTPException(

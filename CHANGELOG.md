@@ -695,6 +695,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Fifty-eight routes across four services carried no authentication at all,
+  and the previous gate could not see them.** `check_route_tenant_scope.py`
+  asks a conditional question — *if* a route takes a tenant, where did the
+  tenant come from — so a route that takes no tenant was never in its reach.
+  37 `services/agents` routes took none. Reproduced against the real routers
+  with credential material configured, so the result is not "the service was
+  unconfigured": an anonymous caller with no `Authorization` header created a
+  playbook (201), listed all 64 (200), **executed one** (202) and deleted it
+  (204), then read copilot conversations and ran a threat hunt. All seven
+  refuse with 401 now, while a valid console session still gets a non-empty
+  response.
+
+  `services/agents` keeps **dual-mode** auth rather than a bearer-only
+  scheme, because the console reaches it directly through a Next rewrite on a
+  session cookie: the guard is #813's `require_console_or_service_auth`,
+  extended rather than replaced. Its WebSocket could not use the same
+  dependency — a browser cannot set an `Authorization` header on a handshake,
+  and an `HTTPException` has no defined rendering on a WebSocket scope — so
+  `_ws_principal` reads the credential from the header or `?token=`, verifies
+  it with the *same* vendored logic, and closes with 1008 before `accept()`.
+  That route previously took its tenant from a query parameter defaulting to
+  the literal `"default"`, which names no tenant anywhere in this schema, and
+  would start a fresh investigation on the connection.
+
+  Also closed: `connectors` (9 data routes, including the one that decrypts a
+  saved instance's credentials to test them and the two that push into a
+  customer's ITSM), `fusion` (5), `osquery-tls` (7), `threatintel` (1),
+  `actions` (1) and 20 in `services/api` — among them `PUT /deployment/config`,
+  `POST /deployment/airgap/bundle`, `POST /compliance/evidence/collect`, both
+  LLM-backed `/translate` routes and the seven STIX/TAXII routes.
+
+  Two counts in the original report were **wrong, in the safe direction**, and
+  the reason matters: `slack-bot` (5) and `teams-bot` (4) were never open. An
+  AST pass sees no `Depends` and calls a route unauthenticated, but Slack Bolt
+  verifies a request signature, `/approval-card` compares a shared internal
+  token in constant time, and the Teams webhook verifies an HMAC-signed card
+  payload with a replay window. `scripts/check_route_auth.py` models these as
+  **conditional** exemptions that name the verifier and lapse the moment the
+  handler stops calling it.
+
+- **`scripts/check_route_auth.py` — default-deny over all 601 routes.** Every
+  route must carry an auth dependency or appear in one of three tables, each
+  recording why it is public. It reuses the tenant-scope gate's AST collector
+  rather than adding a second parser: building it surfaced that
+  `playbooks.py`'s `ExecuteUser = Annotated[AuthUser, Depends(require_permission(...))]`
+  was reported as an unauthenticated playbook-run, because the vocabulary
+  listed `ReadUser` and `WriteUser` and nobody thought of the third. Auth
+  aliases are now resolved by **what they wrap**, which removes the naming
+  dependency in both directions — the reflex fix of appending the new name to
+  the list is how a list stops describing anything. State after: 517
+  authenticated, 73 public with a recorded reason, 11 verified in-band, 0
+  unexplained.
+
+- **`scripts/check_tenant_query_predicates.py` — the predicate question.**
+  Closing the parameter shape surfaced eight routes matching on an id with no
+  tenant predicate; the sweep that found them was opportunistic. This gate
+  asks the question structurally over the whole tree, and the model and table
+  inventories are **derived from the tree** (a model's `tenant_id` column, the
+  migrations' DDL) rather than listed, so a new migration cannot slip past.
+  It matters most where nothing stands behind it: of 95 tenant-scoped tables
+  only 31 carry an RLS policy, and RLS engages only on a session that ran
+  `SET LOCAL app.current_tenant_id`.
+
+  Real leaks it found beyond the known eight:
+
+  - `GET /graph/attack-path/{case_id}`'s **relational fallback** read
+    `aisoc_cases` by id with no tenant predicate. The primary Neo4j path is
+    scoped, but the fallback runs precisely when that path failed — and its
+    own docstring says it exists so deployments without a graph database keep
+    working, i.e. permanently for many of them. An authenticated caller naming
+    another tenant's case UUID got its title, severity, MITRE techniques and
+    alert ids.
+  - `GET /osquery/distributed/{query_id}` was **both** unauthenticated and
+    unscoped. `osquery_distributed_query` has no `tenant_id` of its own — it
+    is reached through its node — so the lookup now joins onto
+    `osquery_node.tenant_id`. Demonstrated with two seeded tenants: before,
+    tenant B naming tenant A's `query_id` got A's host telemetry back; after,
+    nothing.
+  - `alert_explain._resolve_rule_lineage` selected a detection rule by an id
+    lifted out of the alert's `raw_event` — vendor-supplied, so a crafted
+    event could name another tenant's rule and have its definition explained
+    back.
+  - The ITSM webhook inserted its system comment into `aisoc_case_comments`
+    **without `tenant_id` at all**, leaving rows belonging to no tenant since
+    migration 044 added the column.
+  - Thirteen by-id writes (`alerts` escalate/snooze/update, four `connectors`,
+    three detection-rule routes, `claim_alert`, `run_saved_hunt`) were scoped
+    only by a preceding read. Not exploitable as written, and one reorder from
+    being scoped by nothing.
+
+  What cannot be decided statically sits on a **shrink-only ratchet** — 34
+  entries, each with a reason, `MAX_RATCHET` asserted against the table's
+  length, and an entry whose statement is now scoped failing as *stale*. That
+  last property caught two of this change's own edits.
+
 - **The zero-CodeQL-alert invariant was documented for four months with
   nothing enforcing it.** `apps/docs/docs/operations/security.md` has said
   since 2026-05-15 that "the Python alert count on `main` is zero, and we

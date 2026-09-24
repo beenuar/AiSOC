@@ -48,6 +48,12 @@ TARGETS: dict[str, str] = {
     "honeytokens": "HONEYTOKENS",
     "purple-team": "PURPLE_TEAM",
     "ueba": "UEBA",
+    # The console reaches the connector catalogue and test-connection routes
+    # through a Next rewrite, the same way it reaches fusion and agents, so
+    # this service needs the same dual-mode resolver rather than a
+    # bearer-only guard the browser could not satisfy.
+    "connectors": "CONNECTORS",
+    "threatintel": "THREATINTEL",
 }
 
 _SERVICE_NAME_RE = re.compile(r'^SERVICE_NAME = ".*"$', re.MULTILINE)

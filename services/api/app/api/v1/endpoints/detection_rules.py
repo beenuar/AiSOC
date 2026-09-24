@@ -236,7 +236,9 @@ async def update_rule(
     if updates:
         updates["updated_at"] = datetime.now(UTC)
         updates["version"] = rule.version + 1
-        await db.execute(update(DetectionRule).where(DetectionRule.id == rule_id).values(**updates))
+        await db.execute(
+            update(DetectionRule).where(DetectionRule.id == rule_id, DetectionRule.tenant_id == current_user.tenant_id).values(**updates)
+        )
         await db.commit()
         await db.refresh(rule)
 
@@ -329,7 +331,7 @@ async def execute_detection_rule(
     if match.matched:
         await db.execute(
             update(DetectionRule)
-            .where(DetectionRule.id == rule_id)
+            .where(DetectionRule.id == rule_id, DetectionRule.tenant_id == current_user.tenant_id)
             .values(
                 total_hits=DetectionRule.total_hits + len(match.match_details.get("matched_events", [])),
                 last_triggered=datetime.now(UTC),

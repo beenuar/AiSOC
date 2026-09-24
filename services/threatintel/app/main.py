@@ -13,11 +13,12 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import partial
+from typing import Annotated
 
 import redis.asyncio as aioredis
 import structlog
 from aiokafka import AIOKafkaProducer
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from neo4j import AsyncGraphDatabase
 from opensearchpy import AsyncOpenSearch
 from prometheus_client import Counter, make_asgi_app
@@ -40,6 +41,7 @@ from app.feeds.handlers import (
 )
 from app.feeds.pipeline import ThreatIntelPipeline
 from app.feeds.scheduler import FeedScheduler
+from app.security.tenant_scope import TenantPrincipal, require_console_or_service_auth
 from app.storage.bloom import RedisBloomFilter
 from app.storage.neo4j import Neo4jStore
 from app.storage.opensearch import OpenSearchStore
@@ -310,6 +312,7 @@ async def health() -> dict:
 
 @app.get("/api/v1/iocs/search")
 async def search_iocs(
+    principal: Annotated[TenantPrincipal, Depends(require_console_or_service_auth)],
     value: str | None = None,
     ioc_type: str | None = None,
     source: str | None = None,

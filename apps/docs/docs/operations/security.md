@@ -165,6 +165,78 @@ injected drift. `services/mesh` is exempt by design: it is a federated hub
 protected by Ed25519 signatures and k-anonymity, where a shared bearer token
 would break federation rather than secure it.
 
+### Every route authenticates, or says why it does not
+
+The gate above asks a *conditional* question: if a route takes a tenant, where
+did the tenant come from. A route that takes no tenant was never in its reach,
+and an unauthenticated route that takes no tenant is still an unauthenticated
+route. 37 routes in `services/agents` took none — including the one that
+executes a response playbook against your estate.
+
+`scripts/check_route_auth.py` inverts the default. Every route under
+`services/` must carry an authentication dependency or appear in one of three
+tables, each of which records **why** it is reachable without one:
+
+| Table | What it holds | Example |
+|---|---|---|
+| `PUBLIC_MODULES` | whole modules that exist to be probed, keyed by path | `app/_health.py` |
+| `PUBLIC_ROUTES` | individual routes public by design, each with its reason | `POST /auth/login`, the SAML ACS, a published replay |
+| `IN_BAND_CREDENTIAL_ROUTES` | routes whose credential is verified *inside* the handler | the Slack and Teams webhooks, the ITSM inbox, `?token=` WebSockets |
+
+That third table matters more than it looks. An AST pass sees no `Depends` and
+calls those routes unauthenticated — they are not. Slack Bolt verifies a
+request signature, the Teams webhook verifies an HMAC-signed card payload with
+a replay window, and the ITSM inbox authenticates on a per-tenant token in the
+path. Each entry **names the verifier** and stops protecting the route the
+moment the handler stops calling it, so the exemption cannot outlive its
+justification.
+
+`services/agents` is the one service that needs **dual-mode** authentication.
+The console reaches its routes directly through a Next.js rewrite carrying the
+first-party access token, so a bearer-token-only scheme would lock the browser
+out; the guard is the same `require_console_or_service_auth` described above.
+Its WebSocket cannot use a FastAPI dependency at all — a browser cannot set an
+`Authorization` header on a handshake — so it accepts the credential as
+`?token=`, verifies it with the same vendored logic, and closes with code 1008
+before accepting the connection.
+
+Run `python scripts/check_route_auth.py --inventory` for the per-service
+table.
+
+### Reads addressed by an id still filter on a tenant
+
+Tenant isolation is enforced at read time, per store, and **most of this schema
+has nothing behind that**: of 95 tenant-scoped tables only 31 carry an RLS
+policy, and RLS engages only on a session that has run
+`SET LOCAL app.current_tenant_id` (a `TenantDBSession`). On an `aisoc_*` table
+read through a plain session, a missing predicate is a leak, not a
+defence-in-depth gap.
+
+The dangerous shape is a query that matches on an id and nothing else —
+`select(Honeytoken).where(Honeytoken.id == token_id)`. It takes no tenant, so
+the parameter gate cannot see it, and naming another tenant's UUID reaches
+their row.
+
+`scripts/check_tenant_query_predicates.py` enforces the predicate directly.
+Both the tenant-scoped ORM models and the tenant-scoped tables are derived
+from the tree — a model's `tenant_id` column, the migrations' DDL — rather
+than listed, so a new migration cannot slip past a stale constant. A statement
+counts as scoped when the tenant predicate reaches it by any structural route:
+inline in the `.where()` chain, appended to a `filters` list, bound to a
+variable, added by a later `q = q.where(...)`, carried in through a join, or
+applied by a helper that takes the statement and hands it back filtered. Two
+further shapes count because they are strictly narrower: a predicate on the
+**authenticated principal's own identity**, and a key this request already
+validated against the caller's tenant (`_fetch_run(db, run_id, user.tenant_id)`
+before reading that run's events). Raw SQL is parsed too, with docstrings
+excluded so prose describing a query is not read as one.
+
+Cases that cannot be decided statically sit on a **shrink-only ratchet**. Each
+entry carries a reason; an entry whose statement has since been scoped fails
+the build as *stale*, so exemptions come out as code is fixed; and
+`MAX_RATCHET` is asserted against the table's length, so adding one means
+raising a number in the diff rather than appending a line nobody reads.
+
 ### MSSP parent/child links require the child's consent
 
 A managed provider can hold other tenants as children (`tenants.parent_tenant_id`), which grants the parent real authority over them: rule packs, per-rule overrides, notes and delegations are all keyed on the child's tenant id, and an override with `action: "exclude"` removes a detection rule from the ruleset that child's hunts run against.

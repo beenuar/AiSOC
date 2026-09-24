@@ -20,6 +20,7 @@ editor:
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,9 @@ if str(_AGENTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENTS_ROOT))
 
 from app.api.playbooks import router as playbooks_router  # noqa: E402
+from app.security.tenant_scope import TenantPrincipal, require_console_or_service_auth  # noqa: E402
+
+_TEST_TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a")
 
 # ---------------------------------------------------------------------------
 # Test app fixture
@@ -42,6 +46,14 @@ from app.api.playbooks import router as playbooks_router  # noqa: E402
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(playbooks_router)
+    # The router is default-deny (every route carries
+    # `require_console_or_service_auth`), so these tests supply a resolved
+    # principal rather than credential material. What this file is about is
+    # the drafter's contract with the editor; that the routes refuse an
+    # anonymous caller is asserted in tests/isolation, against the real guard.
+    app.dependency_overrides[require_console_or_service_auth] = lambda: TenantPrincipal(
+        tenant_ids=frozenset({_TEST_TENANT}), subject="test"
+    )
     return TestClient(app)
 
 

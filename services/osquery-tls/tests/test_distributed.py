@@ -80,8 +80,10 @@ async def test_distributed_write_and_status(client, service_auth):
     assert write.status_code == 200
     assert write.json()["node_invalid"] is False
 
-    # Internal status endpoint should show completed
-    status_resp = await client.get(f"/api/v1/osquery/distributed/{query_id}")
+    # Internal status endpoint should show completed. It is tenant-scoped
+    # now: the results are reached through the node, so the caller has to
+    # say which tenant it is acting for.
+    status_resp = await client.get(f"/api/v1/osquery/distributed/{query_id}", headers=service_auth)
     assert status_resp.status_code == 200
     sdata = status_resp.json()
     assert sdata["status"] == "completed"
@@ -102,6 +104,13 @@ async def test_distributed_enqueue_unknown_host(client, service_auth):
 
 
 @pytest.mark.asyncio
-async def test_distributed_status_not_found(client):
-    resp = await client.get("/api/v1/osquery/distributed/no-such-id")
+async def test_distributed_status_not_found(client, service_auth):
+    resp = await client.get("/api/v1/osquery/distributed/no-such-id", headers=service_auth)
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_distributed_status_refuses_an_anonymous_caller(client):
+    """A query_id used to be a bearer capability for another tenant's results."""
+    resp = await client.get("/api/v1/osquery/distributed/no-such-id")
+    assert resp.status_code == 401

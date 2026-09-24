@@ -7,6 +7,8 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from app.api.v1.deps import AuthUser
+
 router = APIRouter(prefix="/deployment", tags=["Deployment"])
 
 
@@ -87,13 +89,13 @@ _config = DeploymentConfig(
 
 
 @router.get("/config", response_model=DeploymentConfig)
-async def get_deployment_config() -> DeploymentConfig:
+async def get_deployment_config(user: AuthUser) -> DeploymentConfig:
     """Return the current deployment configuration."""
     return _config
 
 
 @router.put("/config", response_model=DeploymentConfig)
-async def update_deployment_config(body: DeploymentConfigUpdate) -> DeploymentConfig:
+async def update_deployment_config(body: DeploymentConfigUpdate, user: AuthUser) -> DeploymentConfig:
     """Update deployment configuration fields."""
     global _config
 
@@ -112,7 +114,7 @@ async def update_deployment_config(body: DeploymentConfigUpdate) -> DeploymentCo
 
 
 @router.get("/airgap/status", response_model=AirgapStatus)
-async def get_airgap_status() -> AirgapStatus:
+async def get_airgap_status(user: AuthUser) -> AirgapStatus:
     """Check air-gap readiness: local LLM health, offline bundles, sync age."""
     is_airgap = _config.mode == DeploymentMode.airgap
     local_llm_up = _config.llm_provider in (LLMProvider.local_ollama, LLMProvider.local_vllm)
@@ -167,7 +169,7 @@ async def get_airgap_status() -> AirgapStatus:
 
 
 @router.post("/airgap/bundle", response_model=BundleJob, status_code=status.HTTP_202_ACCEPTED)
-async def create_airgap_bundle() -> BundleJob:
+async def create_airgap_bundle(user: AuthUser) -> BundleJob:
     """Trigger creation of an offline update bundle for air-gapped deployments."""
     return BundleJob(
         job_id=str(uuid.uuid4()),

@@ -526,6 +526,7 @@ async def test_apply_status_to_case_writes_three_rows() -> None:
 
     await _apply_status_to_case(
         db,
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
         case_row=case_row,
         new_status="resolved",
         actor_label="jira-webhook",
@@ -557,6 +558,7 @@ async def test_apply_status_to_case_resolved_sets_resolved_at() -> None:
 
     await _apply_status_to_case(
         db,
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
         case_row=case_row,
         new_status="resolved",
         actor_label="jira-webhook",
@@ -580,6 +582,7 @@ async def test_apply_status_to_case_closed_sets_closed_at() -> None:
 
     await _apply_status_to_case(
         db,
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
         case_row=case_row,
         new_status="closed",
         actor_label="snow-webhook",
@@ -600,6 +603,7 @@ async def test_apply_status_to_case_triaged_does_not_stamp_resolved_or_closed() 
 
     await _apply_status_to_case(
         db,
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
         case_row=case_row,
         new_status="triaged",
         actor_label="jira-webhook",
@@ -635,6 +639,7 @@ async def test_apply_status_to_case_writes_system_comment_with_provenance() -> N
 
     await _apply_status_to_case(
         db,
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
         case_row=case_row,
         new_status="resolved",
         actor_label="jira-webhook",

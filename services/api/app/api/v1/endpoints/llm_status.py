@@ -61,6 +61,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import AuthUser
 from app.core.airgap import is_host_allowed_for_airgap
 from app.core.config import settings
 from app.models.llm_credential import TenantLlmCredential
@@ -381,7 +382,7 @@ async def tenant_llm_status(
 
 
 @router.get("/status", summary="Current LLM provider configuration")
-async def get_llm_status() -> dict[str, object]:
+async def get_llm_status(user: AuthUser) -> dict[str, object]:
     """Return the env-only LLM provider snapshot for this pod.
 
     Intentionally **unauthenticated** and **env-only**, mirroring

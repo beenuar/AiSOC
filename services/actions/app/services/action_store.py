@@ -121,15 +121,23 @@ def _report_degraded(event: str, action_id: str, exc: Exception) -> None:
     )
 
 
-async def get(action_id: str) -> dict[str, Any] | None:
+async def get(action_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
     """Fetch an action record, preferring the durable copy.
 
     The in-memory copy is checked first only as a cache: on the replica that
     handled the submission it is the same object, and on any other replica it
     is absent and the database answers.
+
+    ``tenant_id`` narrows the lookup to one tenant and should always be
+    supplied from a request path. ``aisoc_action_records`` carries no RLS
+    policy, so without it an id is a capability: an action record names the
+    host or account an action was aimed at, and any caller who could guess or
+    observe a UUID would read another tenant's response history.
     """
     cached = _MEMORY.get(action_id)
     if cached is not None:
+        if tenant_id is not None and str(cached.get("tenant_id") or "") != str(tenant_id):
+            return None
         return cached
 
     dsn = _dsn()
@@ -141,7 +149,14 @@ async def get(action_id: str) -> dict[str, Any] | None:
         logger.warning("action_store.connect_failed", action_id=action_id, error=str(exc))
         return None
     try:
-        row = await conn.fetchrow("SELECT record FROM aisoc_action_records WHERE id = $1", action_id)
+        if tenant_id is None:
+            row = await conn.fetchrow("SELECT record FROM aisoc_action_records WHERE id = $1", action_id)
+        else:
+            row = await conn.fetchrow(
+                "SELECT record FROM aisoc_action_records WHERE id = $1 AND tenant_id = $2",
+                action_id,
+                tenant_id,
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning("action_store.read_failed", action_id=action_id, error=str(exc))
         return None

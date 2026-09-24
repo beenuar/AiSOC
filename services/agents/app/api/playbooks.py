@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.playbook import (
@@ -26,9 +26,14 @@ from app.playbook import (
     PlaybookStore,
     draft_from_nl,
 )
+from app.security.tenant_scope import require_console_or_service_auth
 
 logger = logging.getLogger("aisoc.api.playbooks")
-router = APIRouter(prefix="/api/v1/playbooks", tags=["playbooks"])
+#: Default-deny. The console reaches this router directly through a Next
+#: rewrite carrying the first-party access token, so the guard resolves
+#: either that session or a trusted service declaring the tenant it acts
+#: for — a bearer-token-only scheme would lock the browser out.
+router = APIRouter(prefix="/api/v1/playbooks", tags=["playbooks"], dependencies=[Depends(require_console_or_service_auth)])
 
 # In-memory run store for Pillar-2 (swap for Redis/DB in production)
 _runs: dict[str, PlaybookRun] = {}

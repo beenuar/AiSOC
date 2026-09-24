@@ -319,6 +319,43 @@ def _pydantic_models_with_tenant(tree: ast.AST) -> dict[str, list[str]]:
     return models
 
 
+def auth_annotation_aliases(tree: ast.AST) -> set[str]:
+    """Module-local ``X = Annotated[..., Depends(<auth callable>)]`` names.
+
+    ``playbooks.py`` declares ``ExecuteUser = Annotated[AuthUser,
+    Depends(require_permission("playbooks:execute"))]`` — a perfectly
+    authenticated route that a hardcoded vocabulary reports as wide open,
+    because the vocabulary happened to list ``ReadUser`` and ``WriteUser``
+    and nobody thought of the third.
+
+    Resolving the alias by *what it wraps* removes the naming dependency
+    entirely, which matters in both directions: a false positive sends
+    somebody to "fix" a closed route, and the reflex fix — appending the new
+    name to the list — is how a list stops describing anything.
+    """
+    aliases: set[str] = set()
+    for node in ast.walk(tree):
+        target_names: list[str] = []
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target_names = [node.targets[0].id]
+            value = node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
+            target_names = [node.target.id]
+            value = node.value
+        if not target_names or value is None:
+            continue
+        if not (isinstance(value, ast.Subscript) and _names_in(value.value) & {"Annotated"}):
+            continue
+        # Credit only when a Depends(...) inside the annotation names an auth
+        # callable; Annotated[AsyncSession, Depends(get_db)] is not auth.
+        for sub in ast.walk(value):
+            if isinstance(sub, ast.Call) and _names_in(sub.func) & {"Depends", "Security"}:
+                if _names_in(sub) & AUTH_DEPENDENCY_NAMES:
+                    aliases.update(target_names)
+    return aliases
+
+
 def _router_level_auth_objects(tree: ast.AST) -> set[str]:
     """Router objects constructed with a ``dependencies=`` list naming an auth guard.
 
@@ -350,6 +387,9 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
     routes: list[Route] = []
     secured_routers = _router_level_auth_objects(tree)
     tenant_models = _pydantic_models_with_tenant(tree)
+    # Per-file vocabulary: the global names plus any module-local alias that
+    # resolves to one of them.
+    auth_vocabulary = AUTH_DEPENDENCY_NAMES | auth_annotation_aliases(tree)
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -372,7 +412,7 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
             assert isinstance(dec, ast.Call)
             for kw in dec.keywords:
                 if kw.arg == "dependencies":
-                    decorator_auth |= _names_in(kw.value) & AUTH_DEPENDENCY_NAMES
+                    decorator_auth |= _names_in(kw.value) & auth_vocabulary
 
         if not methods:
             continue
@@ -384,7 +424,7 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
         auth_deps: set[str] = set(decorator_auth)
         for arg in all_args:
             ann = _annotation_names(arg.annotation)
-            hit = ann & AUTH_DEPENDENCY_NAMES
+            hit = ann & auth_vocabulary
             if hit:
                 auth_deps |= hit
             if _is_tenant_param(arg.arg):
@@ -399,7 +439,7 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
 
         # Defaults can carry Depends(...) without an annotation.
         for default in [*args.defaults, *[d for d in args.kw_defaults if d is not None]]:
-            auth_deps |= _names_in(default) & AUTH_DEPENDENCY_NAMES
+            auth_deps |= _names_in(default) & auth_vocabulary
 
         body_names = set()
         for stmt in node.body:

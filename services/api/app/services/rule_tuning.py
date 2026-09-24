@@ -527,7 +527,16 @@ async def _load_rule_for_tenant(
     tenant's workbench would leak the change to every other tenant. We let
     analysts *see* them in projections but reject mutations.
     """
-    result = await db.execute(select(DetectionRule).where(DetectionRule.id == rule_id))
+    # Narrowed to this tenant's rules plus the platform-wide ones, because
+    # the two get different refusals below: a platform rule is a 403 (it
+    # exists, it just isn't tuneable from here) and another tenant's rule is
+    # a 404 (it must not be distinguishable from absent).
+    result = await db.execute(
+        select(DetectionRule).where(
+            DetectionRule.id == rule_id,
+            or_(DetectionRule.tenant_id == tenant_id, DetectionRule.tenant_id.is_(None)),
+        )
+    )
     rule = result.scalar_one_or_none()
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Detection rule not found")

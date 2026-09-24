@@ -20,12 +20,18 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.security.tenant_scope import require_console_or_service_auth
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/hunt", tags=["hunt-search"])
+#: Default-deny. The console reaches this router directly through a Next
+#: rewrite carrying the first-party access token, so the guard resolves
+#: either that session or a trusted service declaring the tenant it acts
+#: for — a bearer-token-only scheme would lock the browser out.
+router = APIRouter(prefix="/api/v1/hunt", tags=["hunt-search"], dependencies=[Depends(require_console_or_service_auth)])
 
 
 # ---------------------------------------------------------------------------

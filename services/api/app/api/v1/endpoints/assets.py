@@ -236,7 +236,7 @@ async def list_asset_vulnerabilities(
         raise HTTPException(status_code=404, detail="Asset not found")
     q = (
         select(AssetVulnerability)
-        .where(AssetVulnerability.asset_id == asset_id)
+        .where(AssetVulnerability.asset_id == asset_id, AssetVulnerability.tenant_id == current_user.tenant_id)
         .order_by(AssetVulnerability.severity, AssetVulnerability.last_found.desc())
     )
     result = await db.execute(q)

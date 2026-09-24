@@ -468,7 +468,7 @@ async def claim_alert(
     now = datetime.now(UTC)
     update_result = await db.execute(
         update(Alert)
-        .where(Alert.id == alert_id, Alert.assigned_to_id.is_(None))
+        .where(Alert.id == alert_id, Alert.tenant_id == tenant_id, Alert.assigned_to_id.is_(None))
         .values(assigned_to_id=user_id, assigned_at=now, updated_at=now)
         .returning(Alert.assigned_to_id)
     )
@@ -476,7 +476,7 @@ async def claim_alert(
     if winner is None or winner != user_id:
         # Someone else grabbed it between our SELECT and UPDATE.
         # Re-read so the error carries the actual owner.
-        refresh = await db.execute(select(Alert.assigned_to_id).where(Alert.id == alert_id))
+        refresh = await db.execute(select(Alert.assigned_to_id).where(Alert.id == alert_id, Alert.tenant_id == tenant_id))
         actual_owner = refresh.scalar_one_or_none()
         if actual_owner is None:
             raise AlertNotFoundError(str(alert_id))
