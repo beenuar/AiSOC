@@ -8716,7 +8716,34 @@ paths:
       tags:
       - mssp
       summary: Onboard Child Tenant
-      description: Link an existing tenant as a child of the current MSSP tenant.
+      description: 'Link an existing tenant as a child, if that tenant invited the
+        caller.
+
+
+        Adoption previously required nothing but an authenticated session and a
+
+        tenant UUID: the only check was a 409 when the target already had a
+
+        parent, so **every standalone tenant on the deployment was adoptable by
+
+        any user**, and adoption is what makes the child-scoped write routes below
+
+        accept you. That is the root of the escalation ``_require_own_child``
+
+        describes — closing those routes alone would not have helped, because an
+
+        attacker could simply adopt the victim first.
+
+
+        Consent is now required and comes from the child''s own side: an admin of
+
+        the tenant being adopted sets ``settings["mssp_parent_invite"]`` to the
+
+        parent''s UUID through ``PATCH /api/v1/tenants/me/settings``. The invite is
+
+        single-use — it is cleared here — so a stale value cannot re-adopt a
+
+        tenant that later left.'
       operationId: onboard_child_tenant_api_v1_mssp_children__child_id__onboard_post
       security:
       - HTTPBearer: []

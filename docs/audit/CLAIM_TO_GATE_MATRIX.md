@@ -27,6 +27,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Plugin SDK Python/TS/Go | README L79, L193 | `ci.yml :: sdk-*` | PARTIAL (build/test gated; OpenAPI breaking-change now gated via `openapi-breaking.yml`, so a spec change that would break the generated SDKs is caught; per-language generated-client contract-drift is 11b) | Phase 11b |
 | Prompt-injection resistance | (implied by agent claims) | `ci.yml :: python-test` (agents) runs `test_prompt_sanitizer.py`, `test_prompt_envelope.py` and `tests/adversarial/` — a 32-payload corpus grouped by attacker goal, enforcing a recall floor **and** a false-positive ceiling on real security content that reads adversarially. Action-trigger and exfiltration payloads are individually required rather than averaged, because an injected containment turns the SOC into a denial-of-service tool pointed at its own estate | GATED | obfuscation is an arms race and is recorded rather than individually required; two payloads are currently xfail and counted in the recall rate |
 | Cross-tenant isolation (Postgres) | (implied by multi-tenant) | `cross-tenant-rbac.yml` (nightly, 3 endpoints) + `ci.yml` | PARTIAL (Postgres only, compiled-SQL not live DB) | Phase 1.3 |
+| An MSSP parent holds only tenants that invited it | operations/security.md (MSSP parent/child links) | `ci.yml` api job (`test_mssp_cross_tenant_authz.py` — the four child-scoped write routes refuse a tenant that is not the caller's child and persist nothing; unknown and unowned are indistinguishable so the routes cannot enumerate tenant UUIDs; onboarding refuses without an invite, refuses an invite addressed to another parent, consumes the invite on success, and refuses self-adoption) | GATED | the guard is unit-level against the route functions; the nightly live-DB `cross-tenant-rbac.yml` sweep does not yet cover the MSSP routes |
 | Cross-tenant isolation (Qdrant/Neo4j/Redis/ClickHouse/Kafka) | (implied by multi-tenant) | `isolation.yml` (offline: read paths construct a tenant scope) + `isolation-live.yml` (live A-vs-B replay: Neo4j property filter, Redis keyspace namespacing, ClickHouse via production `lake_sql.rewrite_for_tenant`, Kafka per-tenant envelope filter) | GATED | - |
 | SAST | README badge (CodeQL) | `codeql.yml` | GATED | - |
 | Dependency CVE scanning | (implied by security) | `security-audit.yml` | GATED | - |
@@ -120,7 +121,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 100
+- GATED: 101
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 

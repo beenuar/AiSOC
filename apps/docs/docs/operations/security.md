@@ -116,6 +116,21 @@ If `app.current_tenant_id` is not set (e.g. an internal job that needs to operat
 
 The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 
+### MSSP parent/child links require the child's consent
+
+A managed provider can hold other tenants as children (`tenants.parent_tenant_id`), which grants the parent real authority over them: rule packs, per-rule overrides, notes and delegations are all keyed on the child's tenant id, and an override with `action: "exclude"` removes a detection rule from the ruleset that child's hunts run against.
+
+Because that authority is real, the link cannot be created unilaterally. `POST /api/v1/mssp/children/{child_id}/onboard` requires the child to have invited that specific parent:
+
+1. An admin of the tenant being adopted calls `PATCH /api/v1/tenants/me/settings` (gated on `settings:write`, and it only ever writes the caller's own row) with `settings.mssp_parent_invite` set to the parent's tenant UUID.
+2. The parent calls the onboard endpoint. The invite is consumed on success, so it is single-use and a stale value cannot re-adopt a tenant that later left.
+
+Without a matching invite the endpoint answers `403` and nothing is written. The four child-scoped write routes (`/mssp/overrides`, `/mssp/notes`, `/mssp/delegations`, `/mssp/rule-packs/{id}/assign`) independently verify that the named child really is the caller's, and answer `404` — never `403` — when it is not, so they cannot be used to discover which tenant UUIDs exist.
+
+:::note What this replaced
+The guard on these routes was a function named `_ensure_mssp_parent` whose body was `pass`, and onboarding's only check was a `409` when the target already had a parent. Every standalone tenant on a deployment was therefore adoptable by any authenticated user, after which that user could disable named detection rules inside it. See the `[Unreleased]` section of the changelog.
+:::
+
 ## Audit logging
 
 Every state-changing API action is appended to an immutable audit log. The schema lives in [`004_audit_log.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/004_audit_log.sql) (chain columns added in [`043_audit_log_hash_chain.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/043_audit_log_hash_chain.sql)), the model in `services/api/app/models/audit.py`, and the helper that emits events in [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py).
