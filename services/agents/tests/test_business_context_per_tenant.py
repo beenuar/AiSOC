@@ -114,6 +114,7 @@ async def test_no_tenant_id_still_works(monkeypatch: pytest.MonkeyPatch):
 # ── fail-soft ─────────────────────────────────────────────────────────────
 
 
+@pytest.mark.touches_database
 async def test_an_unreachable_database_never_breaks_triage(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -129,6 +130,7 @@ async def test_an_unreachable_database_never_breaks_triage(
     assert not (await applier.apply_for_tenant(TENANT_A, _alert())).suppressed
 
 
+@pytest.mark.touches_database
 async def test_a_transient_outage_serves_the_last_known_rules(
     monkeypatch: pytest.MonkeyPatch,
 ):

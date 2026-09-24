@@ -18,6 +18,7 @@ fires.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -283,7 +284,13 @@ def patch_handlers():
 
     def _install(mapping: dict) -> None:
         for k, v in mapping.items():
-            saved[k] = engine_mod._HANDLERS.get(k)
+            # `setdefault`, not assignment: a second install of the same key
+            # inside one test would otherwise record the *first injected*
+            # handler as the original, and teardown would write that test
+            # double permanently into the process-wide `_HANDLERS`. Nothing
+            # installs twice today; the registry is shared by every test in
+            # the process, so it should not depend on nobody starting.
+            saved.setdefault(k, engine_mod._HANDLERS.get(k))
             engine_mod._HANDLERS[k] = v
 
     yield _install
@@ -457,15 +464,54 @@ class TestUnimplementedStepTypesFailClosed:
             assert run.status == RunStatus.FAILED
 
     @pytest.mark.asyncio
-    async def test_a_missing_handler_is_not_retried(self) -> None:
+    async def test_a_missing_handler_is_not_retried(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A handler that does not exist will not exist next attempt either;
-        retrying just delays the failure by up to 2**retry_max seconds."""
-        pb = _make_playbook([PlaybookStep(id="s1", name="scan", type=StepType.RUN_AV_SCAN, retry_max=3)])
+        retrying just delays the failure by up to 2**retry_max seconds.
+
+        This test used to name ``RUN_AV_SCAN`` as its missing handler. That
+        stopped being true the moment the response verbs were wired into
+        ``_HANDLERS`` through ``RESPONSE_STEP_TYPES``, so the step it built
+        went down the *retry* branch and was attempted four times over
+        fourteen seconds — the exact behaviour the docstring forbids — while
+        the test reported green. It could not notice, because its only
+        behavioural assertion was ``_elapsed_ms == 0``: ``t0`` is reset at the
+        top of every attempt, so that field is the duration of the final
+        attempt alone and never of the step, and it reads 0 both when the
+        engine skips the retry loop (which writes a literal 0) and when a
+        handler simply fails in under half a millisecond. The two cases the
+        test exists to tell apart were indistinguishable to it, which left a
+        rounded wall-clock reading as the only thing standing between the
+        suite and a regression.
+
+        So: take the step type from the registry rather than naming one, and
+        assert the property directly by recording the backoff sleeps.
+        """
+        unimplemented = [st for st in StepType if st not in engine_mod._HANDLERS and st != StepType.CONDITION]
+        assert unimplemented, "fixture assumption broken: expected some StepType to lack a handler"
+        step_type = unimplemented[0]
+
+        # Delegate to a zero-delay sleep so a regression fails in
+        # milliseconds instead of sitting in 2+4+8s of real backoff.
+        slept: list[float] = []
+        real_sleep = asyncio.sleep
+
+        async def _recording_sleep(delay: float, *args: Any, **kwargs: Any) -> Any:
+            slept.append(delay)
+            return await real_sleep(0, *args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "sleep", _recording_sleep)
+
+        pb = _make_playbook([PlaybookStep(id="s1", name="scan", type=step_type, retry_max=3)])
 
         run = await PlaybookEngine().run(pb, trigger_context={})
 
+        result = run.step_results[0]["result"]
         assert run.step_results[0]["status"] == StepStatus.FAILED
-        assert run.step_results[0]["result"]["_elapsed_ms"] == 0
+        # `unimplemented` is written only by the branch that skips the retry
+        # loop, so this is what says which path ran — `_elapsed_ms` never did.
+        assert result["unimplemented"] is True
+        assert result["executed"] is False
+        assert not slept, f"a missing handler was retried with {slept} of backoff; retry_max was {3}"
 
     @pytest.mark.asyncio
     async def test_on_failure_continue_lets_the_run_proceed_without_calling_it_completed(self) -> None:

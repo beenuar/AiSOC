@@ -39,7 +39,9 @@ import pytest
 _AGENTS_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_AGENTS_ROOT))
 
-os.environ.setdefault("DATABASE_URL", "")
+# `DATABASE_URL` is handled by the `_no_ambient_database` fixture in
+# tests/conftest.py. The `setdefault` that used to stand here was a no-op in
+# the only case that mattered — a developer who already had one exported.
 os.environ.setdefault("REDIS_URL", "")
 
 from app.memory import MemoryManager  # noqa: E402

@@ -1311,6 +1311,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also stopped falling back to `Path.cwd()`, which meant a run from anywhere
   else audited whatever manifests happened to be under it.
 
+- **Four more known-red CI entries, and the reason each could sit on `main`.**
+  None was anyone's recent breakage; all four reproduced on a pristine
+  checkout. What they had in common is more useful than what broke: in every
+  case the thing that should have objected either did not run, was not
+  required, or could not fail.
+
+  - **`Backup → destroy → restore` had lost its object store for the second
+    time.** `minio/minio` was withdrawn from Docker Hub (the repository 404s),
+    the job was moved to the quay.io mirror pinned by digest, and quay.io now
+    answers **401 UNAUTHORIZED for every tag and for that digest** — the whole
+    repository, not one tag. A third MinIO coordinate would be the same bet a
+    third time, so the fixture is now Versity's Apache-2.0 S3 gateway
+    (`ghcr.io/versity/versitygw`, pinned to the v1.8.0 multi-arch index
+    digest). It is a real S3 server rather than a mock, so `backup.sh` and
+    `restore.sh` still drive `aws s3 cp/ls/rm` and `s3api head-object` for
+    real; and it is on GHCR, which this workflow's own images already use and
+    which cannot be withdrawn independently of the CI it runs on. The job also
+    gained a readiness probe: `docker run -d` succeeding only means the
+    container was created, and the previous shape would have spent the bucket
+    loop's retries before failing with a connection error that said nothing
+    about why.
+  - **`docker compose up — full stack` failed building `services/realtime`,
+    and not for the reason it looked like.** The lock and the manifest do
+    agree (`npm install --package-lock-only` is a no-op against the committed
+    lock), the Dockerfile does copy `package-lock.json` into both stages, and
+    Node 22 is consistent across the Dockerfile, CI and `@types/node`. The
+    failure was `esbuild`: a transitive of `tsx` that the image never runs,
+    whose install script hardlinks the platform binary into place and then
+    immediately execs it to read its version, with no retry — under BuildKit
+    that exec loses a race with the writer still holding the inode and fails
+    `ETXTBSY`. The builder stage now installs with `--ignore-scripts`, which
+    it can do because the only thing it needs from devDependencies is `tsc`.
+    The emitted `dist/` is byte-identical. The runtime stage deliberately
+    keeps its install scripts: what it installs is what ships.
+  - **`test_business_context_hotpath.py` reached a real database.**
+    `FusedAlertTriageWorker.triage()` opens asyncpg connections through
+    `business_context._load_tenant_rules` and `ledger.persist_auto_triage`, so
+    with an inherited `DATABASE_URL` two tests failed with `InterfaceError:
+    cannot perform operation: another operation is in progress` — pytest-asyncio
+    gives each test its own event loop, and the module-level pool one test
+    opens is unusable by the next. The agents unit suite now declares that it
+    runs with no database, in `tests/conftest.py`, and **enforces it**: the
+    inherited DSN is removed and a real asyncpg connection raises. The guard
+    is a `BaseException` on purpose — every call site it covers is wrapped in
+    a fail-soft `except Exception`, which is correct in production and is
+    exactly why the bug was invisible, so an `Exception` here would be
+    swallowed by the handlers it exists to police. Two tests that drive the
+    real client against a DSN they set themselves are marked
+    `touches_database`. Replaces two earlier workarounds that did not work:
+    `os.environ.setdefault("DATABASE_URL", "")` is a no-op precisely when the
+    variable is set.
+  - **`test_a_missing_handler_is_not_retried` asserted nothing that could
+    fail.** It named `RUN_AV_SCAN` as its missing handler; that stopped being
+    true when the response verbs were wired into `_HANDLERS` via
+    `RESPONSE_STEP_TYPES`, so the step took the *retry* branch and was
+    attempted four times over fourteen seconds — the behaviour the test's own
+    docstring forbids — while reporting green. Its one behavioural assertion,
+    `_elapsed_ms == 0`, could not notice: `t0` resets at the top of every
+    attempt, so the field is the duration of the final attempt alone, and it
+    reads 0 both when the engine skips the retry loop (which writes a literal
+    `0`) and when a handler fails in under half a millisecond. The test now
+    takes its step type from the registry instead of naming one, so it cannot
+    silently rot the same way again, and asserts the property directly by
+    recording backoff sleeps. The file went from 14.13s to 0.16s. The
+    `patch_handlers` fixture now saves originals with `setdefault`, so a
+    second install of one key cannot write a test double permanently into the
+    process-wide handler registry.
+
+  Why `main` carried them: `backup-restore` and `docker compose up — full
+  stack` fail hard but are **not** among the nine required checks, and compose
+  smoke is pull-by-default — it only builds a service when that service's
+  build context changed, so it is usually green without building the thing
+  that was broken. `test_business_context_hotpath.py` runs inside `Python —
+  Tests`, which **is** required, and passed only because GitHub's runners have
+  nothing on 5432 and the agents step sets no `DATABASE_URL` — green by
+  property of the runner, not of the code. `test_playbook_engine_correctness.py`
+  was named by no workflow at all; it is one of **62 of the 82** test files
+  under `services/agents/tests` in that position. The playbook and per-tenant
+  business-context files are added to the agents test list (gated agents tests
+  529, up from 303); the remaining gap is real and is not closed here.
+
 - **Four tests failed on a clean checkout and belonged to nobody.** A suite
   with known-failing tests teaches everyone to skim past red, so each is now
   either fixed or skipped with a reason that says what to do about it.
@@ -2784,7 +2865,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared as a real field, because an undeclared setting is dropped by
   `extra="ignore"` and the operator who exports it gets no explanation.
 
-
 - **The Splunk warehouse driver executes.** It previously raised
   `HuntNotConfigured("provider scaffolded but live SPL execution not yet
   shipped")` on every call, so the SPL every hunt was translated into was
@@ -3736,7 +3816,6 @@ Claim-to-gate matrix: **108 rows — 99 GATED, 9 PARTIAL, 0 NO GATE**.
     order, so the two schemes agree until the day someone inserts a rule; it
     moves 81 engine ids against the old exporter.
 
-
 ## [8.0.0] — 2026-09-22
 
 **Close the loop.** v8.0 was reserved for the package-publish milestone. That
@@ -4281,7 +4360,6 @@ graph.
 
 ### Fixed
 
-
 - **Hosted demo API 500s from stale Postgres pool + broken waitlist funnel (QA 2026-07-19).**
   Live `/health` showed `demo_bootstrap.last_error_type=create_seed:ConnectionDoesNotExistError`
   after 22 attempts — Fly Postgres autostop closed pooled sockets and every
@@ -4301,7 +4379,6 @@ graph.
   INC-RT-* cases already exist, `_seed_in_flight_investigation` returned early
   and never created `published_replays`. Now that path still ensures the
   canonical replay; bootstrap only marks `done` after verifying the slug.
-
 
 - **Out-of-the-box 500 from schema drift on migration-bootstrapped installs (#492).**
   `docker-compose.yml` mounts `services/api/migrations` into
