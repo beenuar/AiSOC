@@ -61,6 +61,12 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root
+
 # ── Which packages must agree repo-wide ──────────────────────────────────────
 #
 # Not every dependency belongs here. Two services may legitimately ship
@@ -883,7 +889,7 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
-    root = (args.repo_root or Path(__file__).resolve().parent.parent).resolve()
+    root = (args.repo_root or repo_root()).resolve()
     return run(root, verbose=args.verbose)[0]
 
 

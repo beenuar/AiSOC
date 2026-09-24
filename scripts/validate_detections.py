@@ -44,13 +44,21 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
 try:
     import yaml
 except ImportError:
     print("ERROR: PyYAML not installed. Run: pip install pyyaml")
     sys.exit(1)
 
-ROOT = Path(__file__).parent.parent
+ROOT = repo_root()
 DETECTIONS_DIR = ROOT / "detections"
 FIXTURES_DIR = DETECTIONS_DIR / "fixtures"
 SCRIPTS_DIR = ROOT / "scripts"

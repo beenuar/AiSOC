@@ -53,8 +53,15 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import SELF_TEST_FLAG
 
 # Secrets the workflow needs. Names match what's documented in
 # ``apps/docs/docs/operations/secrets.md`` so docs and code stay in step.
@@ -150,5 +157,53 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _self_test() -> int:
+    """Prove the verdict this preflight actually renders.
+
+    The shared empty-tree self-test does not apply here: this script reads two
+    environment variables and no repository content, and exits 0 by design so
+    a fork with no secrets does not look like a broken build. Its verdict is
+    ``should_run`` in the status file, and that is what has to be checked —
+    otherwise a preflight that answered "yes, dispatch" unconditionally would
+    look identical from the outside, and the weekly workflow would proceed to
+    call a provider with no key.
+    """
+    cases = [
+        ("no secrets configured: the workflow must not dispatch", {}, False, False),
+        ("both secrets present: the workflow dispatches", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, False, True),
+        ("one secret missing: still no dispatch", {_REQUIRED_SECRETS_FOR_LIVE_RUN[0]: "x"}, False, False),
+        ("dry-run overrides present secrets", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, True, False),
+    ]
+    ok = True
+    saved = {name: os.environ.get(name) for name in _REQUIRED_SECRETS_FOR_LIVE_RUN}
+    with tempfile.TemporaryDirectory(prefix="wet_eval_check_") as tmp:
+        out = Path(tmp) / "status.json"
+        for description, environment, dry_run, expected in cases:
+            for name in _REQUIRED_SECRETS_FOR_LIVE_RUN:
+                os.environ.pop(name, None)
+            os.environ.update(environment)
+            argv = ["--status-out", str(out)] + (["--dry-run"] if dry_run else [])
+            status = main(argv)
+            should_run = json.loads(out.read_text())["should_run"]
+            passed = status == 0 and should_run is expected
+            ok &= passed
+            print(f"  {'PASS' if passed else 'FAIL'}  {description}")
+            print(f"        exit {status}, should_run={should_run} (want {expected})")
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+    print()
+    if not ok:
+        print("wet_eval_check.py: self-test FAILED")
+        return 1
+    print("wet_eval_check.py: self-test OK")
+    return 0
+
+
 if __name__ == "__main__":
+    if SELF_TEST_FLAG in sys.argv[1:]:
+        sys.exit(_self_test())
     sys.exit(main())

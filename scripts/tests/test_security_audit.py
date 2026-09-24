@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import textwrap
 from pathlib import Path
@@ -26,6 +27,7 @@ from security_audit import (
     parse_govulncheck_json,
     parse_pip_audit_json,
     run_govulncheck,
+    run_pip_audit,
     run_pnpm_audit,
 )
 
@@ -490,6 +492,11 @@ class _Proc:
 
 
 class TestPnpmCoverageGaps:
+    @staticmethod
+    def _workspace(tmp_path: Path) -> Path:
+        (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+        return tmp_path
+
     def test_unparseable_output_is_a_coverage_gap_not_a_warning(self, monkeypatch, tmp_path: Path):
         """pnpm audit that returns garbage has audited nothing.
 
@@ -503,7 +510,7 @@ class TestPnpmCoverageGaps:
             lambda *a, **k: _Proc(returncode=1, stdout="<html>not json</html>"),
         )
 
-        report = run_pnpm_audit(tmp_path, [])
+        report = run_pnpm_audit(self._workspace(tmp_path), [])
 
         assert report.unscanned, "unparseable pnpm output must be recorded as a coverage gap"
         assert not report.findings
@@ -516,10 +523,50 @@ class TestPnpmCoverageGaps:
             lambda *a, **k: _Proc(returncode=0, stdout='{"advisories": {}}'),
         )
 
-        report = run_pnpm_audit(tmp_path, [])
+        report = run_pnpm_audit(self._workspace(tmp_path), [])
 
         assert report.unscanned == []
         assert exit_code_for(report) == 0
+
+
+class TestNothingToScanIsNotACleanScan:
+    """Zero targets discovered is a coverage gap, not a clean result.
+
+    Every arm of this audit printed "N findings" and exited 0 against a
+    directory with no manifests in it — the same sentence, and the same exit
+    status, as a clean audit of the real workspace. Found nothing and scanned
+    nothing are different results and only one of them is good news.
+    """
+
+    def test_pnpm_refuses_a_workspace_with_no_lockfile(self, tmp_path: Path):
+        report = run_pnpm_audit(tmp_path, [])
+
+        assert report.unscanned, "no pnpm-lock.yaml must be a coverage gap"
+        assert exit_code_for(report) == 1
+
+    def test_python_refuses_a_tree_with_no_manifests(self, tmp_path: Path):
+        report = run_pip_audit(tmp_path, [])
+
+        assert report.unscanned, "no pyproject.toml anywhere must be a coverage gap"
+        assert exit_code_for(report) == 1
+
+    def test_go_refuses_a_tree_with_no_modules(self, tmp_path: Path):
+        report = run_govulncheck(tmp_path, [])
+
+        assert report.unscanned, "no go.mod anywhere must be a coverage gap"
+        assert exit_code_for(report) == 1
+
+    def test_validate_ignores_refuses_a_missing_policy_file(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setattr(security_audit, "get_repo_root", lambda: tmp_path)
+
+        assert security_audit.cmd_validate_ignores(argparse.Namespace()) == 1
+
+    def test_validate_ignores_accepts_a_policy_file_with_no_entries(self, monkeypatch, tmp_path: Path):
+        (tmp_path / "scripts").mkdir()
+        (tmp_path / "scripts" / "security_audit_ignores.txt").write_text("# every suppression has been retired\n")
+        monkeypatch.setattr(security_audit, "get_repo_root", lambda: tmp_path)
+
+        assert security_audit.cmd_validate_ignores(argparse.Namespace()) == 0
 
 
 class TestGoCoverageGaps:

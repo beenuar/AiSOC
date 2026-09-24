@@ -33,6 +33,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__, ["python"])
+
 # ─── Data types ───────────────────────────────────────────────────────────────
 
 SEVERITY_ORDER = {"info": 0, "low": 1, "moderate": 2, "high": 3, "critical": 4}
@@ -187,6 +195,15 @@ def classify_pnpm_audit(audit_json: dict[str, Any], ignores: list[Ignore]) -> Re
 
 def run_pnpm_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
     """Run pnpm audit with fallback registry on 403."""
+    lockfile = repo_root / "pnpm-lock.yaml"
+    if not lockfile.is_file():
+        # `pnpm audit` in a directory with no lockfile has nothing to resolve
+        # and can still answer with an empty advisory set. Refuse instead:
+        # the workspace the audit is supposed to cover is not there.
+        report = Report()
+        report.unscanned.append(f"no pnpm-lock.yaml at {lockfile} — the workspace was NOT scanned")
+        return report
+
     fallback = os.environ.get("PNPM_AUDIT_REGISTRY", "https://registry.npmjs.org/")
 
     for attempt, registry in enumerate([None, fallback]):
@@ -318,6 +335,17 @@ def _export_requirements(service_dir: Path, work_dir: Path) -> Path | None:
     return req_path
 
 
+def _python_manifests(repo_root: Path) -> list[Path]:
+    """Every service or package directory holding a ``pyproject.toml``."""
+    found: list[Path] = []
+    for search_dir in ("services", "packages"):
+        parent = repo_root / search_dir
+        if not parent.is_dir():
+            continue
+        found.extend(child for child in sorted(parent.iterdir()) if child.is_dir() and (child / "pyproject.toml").exists())
+    return found
+
+
 def run_pip_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
     """Run pip-audit on all Python services with pyproject.toml.
 
@@ -326,63 +354,61 @@ def run_pip_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
       2. pip-audit -r requirements.txt --format json
     """
     combined = Report()
+    manifests = _python_manifests(repo_root)
+    if not manifests:
+        # Zero manifests discovered is not zero manifests vulnerable. The arm
+        # would otherwise print "python: 0 findings" over a tree with nothing
+        # in it, which is the same sentence a clean audit of twenty services
+        # prints. Recorded as unscanned so `exit_code_for` fails.
+        combined.unscanned.append(f"no pyproject.toml under services/ or packages/ in {repo_root} — NOTHING was scanned")
+        return combined
 
     with tempfile.TemporaryDirectory(prefix="security_audit_py_") as tmp:
         tmp_root = Path(tmp)
 
-        for search_dir in ["services", "packages"]:
-            parent = repo_root / search_dir
-            if not parent.exists():
+        for child in manifests:
+            target = str(child.relative_to(repo_root))
+            safe_name = target.replace("/", "__")
+            work_dir = tmp_root / safe_name
+            work_dir.mkdir(parents=True, exist_ok=True)
+
+            req_path = _export_requirements(child, work_dir)
+            if req_path is None:
+                # Not a warning: this service is now unscanned, and the
+                # usual cause is a poetry.lock whose content hash no longer
+                # matches pyproject.toml. Recorded so `exit_code_for` can
+                # fail rather than letting coverage silently shrink.
+                combined.unscanned.append(f"{target}: poetry export failed (stale poetry.lock?) — NOT scanned")
                 continue
-            for child in sorted(parent.iterdir()):
-                if not child.is_dir():
-                    continue
-                pyproject = child / "pyproject.toml"
-                if not pyproject.exists():
-                    continue
 
-                target = str(child.relative_to(repo_root))
-                safe_name = target.replace("/", "__")
-                work_dir = tmp_root / safe_name
-                work_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                cmd = [
+                    "pip-audit",
+                    "-r",
+                    str(req_path),
+                    "--format",
+                    "json",
+                    "--progress-spinner",
+                    "off",
+                ]
 
-                req_path = _export_requirements(child, work_dir)
-                if req_path is None:
-                    # Not a warning: this service is now unscanned, and the
-                    # usual cause is a poetry.lock whose content hash no longer
-                    # matches pyproject.toml. Recorded so `exit_code_for` can
-                    # fail rather than letting coverage silently shrink.
-                    combined.unscanned.append(f"{target}: poetry export failed (stale poetry.lock?) — NOT scanned")
-                    continue
+                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=repo_root)
+            except FileNotFoundError:
+                combined.unscanned.append("pip-audit not found on PATH — NO Python service was scanned")
+                break
 
-                try:
-                    cmd = [
-                        "pip-audit",
-                        "-r",
-                        str(req_path),
-                        "--format",
-                        "json",
-                        "--progress-spinner",
-                        "off",
-                    ]
+            if proc.returncode not in (0, 1):
+                # pip-audit returns 1 when vulns found; anything else means
+                # it did not complete, so this service is unscanned too.
+                combined.unscanned.append(
+                    f"{target}: pip-audit exited {proc.returncode} — NOT scanned " f"({proc.stderr[:160].strip()})"
+                )
+                continue
 
-                    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=repo_root)
-                except FileNotFoundError:
-                    combined.unscanned.append("pip-audit not found on PATH — NO Python service was scanned")
-                    break
-
-                if proc.returncode not in (0, 1):
-                    # pip-audit returns 1 when vulns found; anything else means
-                    # it did not complete, so this service is unscanned too.
-                    combined.unscanned.append(
-                        f"{target}: pip-audit exited {proc.returncode} — NOT scanned " f"({proc.stderr[:160].strip()})"
-                    )
-                    continue
-
-                deps = parse_pip_audit_json(proc.stdout)
-                sub = classify_pip_audit(target, deps, ignores)
-                combined.findings.extend(sub.findings)
-                combined.ignored.extend(sub.ignored)
+            deps = parse_pip_audit_json(proc.stdout)
+            sub = classify_pip_audit(target, deps, ignores)
+            combined.findings.extend(sub.findings)
+            combined.ignored.extend(sub.ignored)
 
     return combined
 
@@ -459,6 +485,12 @@ def run_govulncheck(repo_root: Path, ignores: list[Ignore]) -> Report:
         parent = repo_root / search_dir
         if parent.exists():
             go_mods.extend(sorted(parent.rglob("go.mod")))
+
+    if not go_mods:
+        # Same reason as the Python arm: "go: 0 findings" over a tree with no
+        # go.mod in it reads exactly like a clean scan of every Go module.
+        combined.unscanned.append(f"no go.mod under services/ or packages/ in {repo_root} — NOTHING was scanned")
+        return combined
 
     for go_mod in go_mods:
         module_dir = go_mod.parent
@@ -578,14 +610,16 @@ def exit_code_for(report: Report) -> int:
 
 
 def get_repo_root() -> Path:
-    workspace = os.environ.get("GITHUB_WORKSPACE")
-    if workspace:
-        return Path(workspace)
-    # Walk up from this script to find the repo root (contains .git/)
-    p = Path(__file__).resolve().parent.parent
-    if (p / ".git").exists():
-        return p
-    return Path.cwd()
+    """The repository, per git.
+
+    This used to prefer ``GITHUB_WORKSPACE``, then a ``.git`` probe two levels
+    above this file, then ``Path.cwd()``. The last of those is the dangerous
+    one: run from anywhere else it returns that directory, and the audit then
+    scans whatever manifests happen to be under it and reports success. Under
+    Actions the environment variable and ``git rev-parse`` name the same
+    directory anyway, so nothing is lost by asking git.
+    """
+    return repo_root()
 
 
 def get_ignores_path() -> Path:
@@ -593,13 +627,27 @@ def get_ignores_path() -> Path:
 
 
 def cmd_validate_ignores(args: argparse.Namespace) -> int:
+    """Validate the suppression file, and refuse to validate one that is not there.
+
+    ``load_ignores`` returns an empty list for a file that does not exist, so
+    this printed "Validated 0 ignore entries." and exited 0 against a
+    repository containing nothing at all — the same sentence, and the same
+    exit status, as a real run over a file with every suppression retired.
+    Found nothing and scanned nothing are not the same result, and the one
+    that matters here is the one where the policy file has gone missing.
+    """
+    path = get_ignores_path()
+    if not path.is_file():
+        print(f"Ignore policy error: {path} does not exist — refusing to report a validated policy with no policy file.", file=sys.stderr)
+        return 1
+    lines = path.read_text(encoding="utf-8").splitlines()
     try:
-        ignores = load_ignores(get_ignores_path())
-        print(f"Validated {len(ignores)} ignore entries.")
-        return 0
+        ignores = load_ignores(path)
     except ValueError as e:
         print(f"Ignore policy error: {e}", file=sys.stderr)
         return 1
+    print(f"Validated {len(ignores)} ignore entries from {path} ({len(lines)} lines read).")
+    return 0
 
 
 def cmd_pnpm(args: argparse.Namespace) -> int:

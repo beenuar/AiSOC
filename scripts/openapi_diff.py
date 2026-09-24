@@ -44,6 +44,14 @@ from typing import Any
 
 import yaml
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 # Schema-name suffixes that indicate a request body (tightening these breaks
 # callers). Response-shaped schemas don't break a caller when a new optional
 # field appears, so a *new* required field only counts as breaking here.

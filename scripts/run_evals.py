@@ -59,7 +59,15 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+_REPO_ROOT = repo_root()
 _AGENTS_ROOT = _REPO_ROOT / "services" / "agents"
 # Order matters: scripts/ also contains a tests/ package (scripts/tests/) for
 # the CLI smoke test, and would shadow services/agents/tests/ if it landed at

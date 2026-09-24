@@ -59,6 +59,12 @@ import re
 import sys
 from pathlib import Path
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root
+
 NORMALIZER_REL = Path("services/ingest/internal/normalizer/normalizer.go")
 NORMALIZER_TEST_REL = Path("services/ingest/internal/normalizer/normalizer_test.go")
 CONNECTORS_REL = Path("services/connectors/app/connectors")
@@ -459,7 +465,7 @@ def load(root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
+    parser.add_argument("--repo-root", type=Path, default=repo_root())
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--self-test", action="store_true", help="prove the gate detects injected drift in each direction")
     args = parser.parse_args(argv)

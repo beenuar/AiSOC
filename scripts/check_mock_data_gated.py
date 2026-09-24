@@ -58,6 +58,14 @@ import pathlib
 import re
 import sys
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 MOCK_NAME = r"(?:MOCK|DEMO|SAMPLE|FALLBACK)_[A-Z0-9_]+"
 
 #: A `fallbackData:` whose value mentions sample data. Whether it is gated is

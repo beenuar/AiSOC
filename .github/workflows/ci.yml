@@ -681,6 +681,37 @@ jobs:
           python3 scripts/check_gate_coverage.py --list
           python3 -m pytest tests/test_gate_coverage_classifier.py -q
 
+      - name: No check may report OK over a repository with no content
+        # The gate on the gates, the other axis. Reachability says a check can
+        # fail; this says it does, when there is nothing there to be clean.
+        # Copying scripts/ into an empty git repository and running every
+        # wired check found five reporting OK over a tree with no content —
+        # the detection validator certifying zero rules valid, a dashboard
+        # check that failed on an empty directory and passed on a missing one,
+        # `OK: 0 published Go module path(s)`, every self-link healthy over
+        # zero files, and a health-probe audit printing a table header. Found
+        # nothing and scanned nothing print the same word.
+        #
+        # That probe was a one-off, so the next gate written could reintroduce
+        # the defect freely. This is the same probe, permanent: each check is
+        # run the way a workflow runs it, inside a repository holding only
+        # scripts/, and must not exit 0. Exceptions are recorded with the
+        # disposition they are excused for and checked in both directions, so
+        # an entry that stops being needed fails the build.
+        #
+        # It also holds the two properties that produced those five: a root
+        # resolved through git rather than from __file__ (two levels above the
+        # script is whatever happens to be there), and a --self-test a
+        # contributor can run before CI does.
+        #
+        # The inventory comes from check_gate_coverage.py above. A second
+        # scanner here would drift the first time either one learned something
+        # the other had not.
+        run: |
+          python3 scripts/check_gate_contract.py --self-test
+          python3 scripts/check_gate_contract.py --list
+          python3 -m pytest tests/test_gate_contract.py -q
+
       - name: Gate store migration runners and their call sites
         # Neo4j, ClickHouse and Qdrant hold schema that code depends on, and
         # all three create-if-absent — so a schema change lands on a fresh
