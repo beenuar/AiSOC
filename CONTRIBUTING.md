@@ -129,6 +129,47 @@ docs(readme): update deployment instructions
 test(agents): add unit tests for investigation agent
 ```
 
+### No tool attribution
+
+AiSOC does not attribute work to a development tool or AI assistant. That
+applies to code, comments, docs, commit messages, commit trailers, PR bodies,
+release notes and marketing copy alike — no "built with" or "generated with"
+footers, and no `Co-authored-by:` trailer naming a tool.
+
+Credit for human contributors is the opposite of this rule, not an exception to
+it: a `Co-authored-by:` line naming a real person is welcome and is never
+touched, and neither is `dependabot[bot]`.
+
+Some editors append such a trailer at commit time on their own. Install the
+repository's hooks once and the trailer is stripped before it reaches a commit:
+
+```bash
+sh scripts/setup_hooks.sh        # or: pnpm install, which runs it for you
+```
+
+This sets `core.hooksPath` to the tracked [`.githooks/`](.githooks) directory,
+so the hook arrives with the checkout instead of living in an untracked
+`.git/hooks/`. It rewrites the message and never blocks a commit.
+
+This matters beyond your own branch: the repository squash-merges, and GitHub
+composes a squash commit's body from the branch commits — so a trailer on any
+commit in your PR is copied onto `main` at merge time.
+
+CI enforces the same rule over commits, changed files and the PR body. To check
+before pushing:
+
+```bash
+python3 scripts/check_attribution.py --self-test
+python3 scripts/check_attribution.py --all
+python3 scripts/check_attribution.py --commits origin/main..HEAD
+```
+
+If it flags something legitimate — a contributor whose name collides with a
+vendor string, or prose naming a vendor neutrally rather than as an attribution
+— add a justified entry to
+[`.githooks/attribution-allowlist.txt`](.githooks/attribution-allowlist.txt) so
+a reviewer sees the exemption in the diff.
+
 ### Testing
 
 - Write tests for all new features

@@ -49,6 +49,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Nothing in `apps/web` consumes these three routes; it calls
   `/mssp/children`, which is unchanged.
 
+### Added
+
+- **Tool attribution is now prevented at commit time and blocked in CI.** AiSOC
+  does not attribute work to a development tool or AI assistant. An audit found
+  the rule was being broken automatically: a `Co-authored-by:` trailer naming an
+  editor appeared in 214 commits on `main`, and 280 of 732 pull request bodies
+  carried a "Made with" or "Generated with" footer. Nothing in the repository
+  caused it — no `commit.template`, no `core.hooksPath`, nothing in
+  `.git/hooks/` — the editor appended it at commit time, and it survived
+  `git commit --amend`.
+
+  - `.githooks/commit-msg` strips the line before it reaches a commit. It is
+    wired through `core.hooksPath`, so it is version-controlled and shared with
+    every clone rather than living in an untracked `.git/hooks/`;
+    `scripts/setup_hooks.sh` installs it and runs automatically as the `prepare`
+    script on `pnpm install`. The hook rewrites and never rejects — a hook that
+    can block is a hook that can halt someone's work on a bad pattern, so the
+    blocking job belongs in CI where it is visible.
+  - This is load-bearing rather than cosmetic because the repository
+    squash-merges with `squash_merge_commit_message=COMMIT_MESSAGES`: GitHub
+    composes the squash commit body from the branch commits, so a trailer on any
+    branch commit is copied onto `main` at merge time.
+  - `scripts/check_attribution.py` fails CI when attribution appears in a
+    commit message, a changed file or the PR body. A human `Co-authored-by:`
+    line is never flagged — a pattern only fires when the trailer names a known
+    tool — and `dependabot[bot]` is allowlisted.
+  - The gate runs on `push` to `main` as well as on `pull_request`. A PR-only
+    check is one-directional: it inspects what contributors propose but never
+    what actually lands, so anything introduced by the merge itself would pass
+    it while the gate stayed green.
+  - `--self-test` runs on every CI invocation and checks four directions against
+    a shared fixture corpus: the gate detects every known-bad sample (so it
+    cannot pass vacuously), flags no known-good sample (so it cannot pass
+    direction one by flagging everything), and the hook strips exactly what the
+    gate flags in both directions (so the two implementations cannot drift).
+    Both read their patterns from the same `.githooks/attribution-patterns.txt`.
+    The self-test earned its place immediately by catching a real hole in the
+    patterns — `Built with GitHub Copilot` slipped through, because a vendor
+    word sat between the verb and the tool name.
+
+### Changed
+
+- **A hosted deployment's hostname no longer appears in self-hosted docs as the
+  reader's own URL.** Seven files under `apps/docs/` pointed at the managed
+  instance: two `curl` examples told a self-hoster to push their SIEM data to
+  somebody else's ingest endpoint, a sample address appeared in a console
+  illustration, three white-paper links and a benchmark-scoreboard link sent
+  open-source readers to the hosted console, and a JSON Schema `$id` claimed the
+  hosted docs domain. These now use `example.com`, in-repo GitHub links, or the
+  project's own documentation URL. Pages genuinely *about* the managed offering
+  keep naming it, as does the docs build configuration.
+- **The Slack bot no longer deep-links an unconfigured deployment to somebody
+  else's console.** `AISOC_WEB_BASE_URL` defaulted to a hosted hostname, so a
+  self-hoster who deployed the bot without setting it got case cards pointing at
+  another instance. It now defaults to `http://localhost:3000`, matching the
+  compose default it had silently disagreed with, and both documented defaults
+  were corrected with it.
+
 ### Security
 
 - **`/api/v1/identity-timeline` read every tenant's alerts.** Both routes bound

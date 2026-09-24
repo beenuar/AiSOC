@@ -1,0 +1,35 @@
+# Tool-attribution patterns — the single source of truth.
+#
+# Both the client-side hook (.githooks/commit-msg, POSIX sh + grep -E) and the
+# CI gate (scripts/check_attribution.py, Python re) read THIS file. Keeping one
+# list means the hook and the gate cannot drift apart and start disagreeing
+# about what counts as a violation.
+#
+# Syntax: one POSIX-ERE pattern per line, matched case-insensitively against a
+# SINGLE line of text. Blank lines and lines starting with '#' are ignored.
+#
+# Patterns must stay inside the subset of regex that POSIX ERE and Python `re`
+# interpret identically: | ( ) [ ] . * + ? ^ $ and backslash-escaped literals.
+# No backreferences, no lookaround, no POSIX [[:class:]] names (Python lacks
+# them), no \d / \s shorthands (POSIX ERE lacks them). Use [ \t] for spacing.
+#
+# `[^a-z]*` at the start absorbs leading whitespace and any emoji (an emoji is
+# not an ASCII letter), so a "robot" footer is matched without embedding the
+# emoji bytes in a pattern file.
+
+# --- Co-author trailers naming a non-human tool -----------------------------
+# A human contributor's trailer has no tool name in it and is left alone. See
+# .githooks/attribution-allowlist.txt for exempting a human whose real name
+# collides with a vendor string.
+^[ \t]*co-authored-by:.*(cursor|claude|anthropic|openai|chatgpt|copilot|codex|gemini|devin|windsurf|aider|codeium|tabnine|sourcegraph|bolt\.new|v0\.dev|lovable|replit)
+
+# --- "Made with / Generated with / Built by <tool>" footers -----------------
+# `([a-z]+[ \t]+)?` absorbs one optional vendor qualifier, so "Built with GitHub
+# Copilot" and "Generated with Claude Code" are caught as well as the bare form.
+^[^a-z]*(made|generated|created|written|authored|built|crafted|produced|developed)[ \t]+(with|by|using)[ \t]*\[?[ \t]*([a-z]+[ \t]+)?(cursor|claude|anthropic|openai|chatgpt|gpt-[0-9o]|copilot|codex|gemini|devin|windsurf|aider|codeium|tabnine)
+
+# --- "Powered by / Assisted by <tool>" --------------------------------------
+^[^a-z]*(powered|assisted|aided)[ \t]+by[ \t]*\[?[ \t]*([a-z]+[ \t]+)?(cursor|claude|anthropic|openai|chatgpt|copilot|codex|gemini|devin|windsurf|aider|codeium)
+
+# --- A bare vendor URL on its own line (the link half of a stripped footer) --
+^[ \t]*<?https?://(www\.)?(cursor\.(com|sh|so)|claude\.(ai|com)|anthropic\.com|codeium\.com|windsurf\.(com|ai)|githubcopilot\.com)

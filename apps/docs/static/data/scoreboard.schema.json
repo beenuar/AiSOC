@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://docs.tryaisoc.com/data/scoreboard.schema.json",
+  "$id": "https://beenuar.github.io/AiSOC/data/scoreboard.schema.json",
   "title": "AiSOC public benchmark scoreboard",
   "description": "Append-only weekly eval results. Substrate rows are deterministic CI gates (no LLM); wet-eval rows are live LangGraph agent runs from the T5.5 weekly job. Both shapes share the same fields so the scoreboard table renders uniformly; substrate:true is the explicit marker that prevents substrate numbers from being quoted as live agent performance.",
   "type": "object",

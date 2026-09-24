@@ -75,8 +75,12 @@ class SlackBotSettings(BaseSettings):
         ),
     )
     AISOC_WEB_BASE_URL: str = Field(
-        default="https://app.tryaisoc.com",
-        description="Public web app URL used to deep-link case cards.",
+        default="http://localhost:3000",
+        description=(
+            "Public web app URL used to deep-link case cards. Defaults to the "
+            "local console so an unconfigured deployment links to its own "
+            "instance rather than somebody else's. Matches the compose default."
+        ),
     )
 
     # --- Proactive notification -------------------------------------------
