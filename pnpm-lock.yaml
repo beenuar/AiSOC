@@ -48,8 +48,8 @@ importers:
         specifier: ^3.9.5
         version: 3.9.5
       tsx:
-        specifier: ^4.23.1
-        version: 4.23.1
+        specifier: ^4.23.15
+        version: 4.23.15
       turbo:
         specifier: ^2.10.7
         version: 2.10.7
@@ -112,11 +112,11 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.3.0)(@types/react@19.3.0)(react-dom@19.3.0)(react@19.3.0)
       cytoscape:
-        specifier: ^3.34.0
-        version: 3.34.0
+        specifier: ^3.34.3
+        version: 3.34.3
       cytoscape-fcose:
         specifier: ^2.2.0
-        version: 2.2.0(cytoscape@3.34.0)
+        version: 2.2.0(cytoscape@3.34.3)
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -127,8 +127,8 @@ importers:
         specifier: ^4.0.3
         version: 4.0.3
       lucide-react:
-        specifier: ^1.28.0
-        version: 1.28.0(react@19.3.0)
+        specifier: ^1.47.0
+        version: 1.48.0(react@19.3.0)
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7)(@playwright/test@1.63.0)(@types/node@26.1.1)(react-dom@19.3.0)(react@19.3.0)
@@ -240,7 +240,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^8.3.0
-        version: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+        version: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(jsdom@30.1.1)(vite@8.3.0)
@@ -258,7 +258,7 @@ importers:
         version: 26.1.1
       tsup:
         specifier: ^8.3.0
-        version: 8.5.1(tsx@4.23.1)(typescript@6.0.3)
+        version: 8.5.1(tsx@4.23.15)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -280,7 +280,7 @@ importers:
         version: 26.1.1
       tsup:
         specifier: ^8.3.0
-        version: 8.5.1(tsx@4.23.1)(typescript@6.0.3)
+        version: 8.5.1(tsx@4.23.15)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -298,7 +298,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.3.0
-        version: 8.5.1(tsx@4.23.1)(typescript@6.0.3)
+        version: 8.5.1(tsx@4.23.15)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -320,7 +320,7 @@ importers:
         version: 7.13.0(typescript@6.0.3)
       tsup:
         specifier: ^8.0.0
-        version: 8.5.1(tsx@4.23.1)(typescript@6.0.3)
+        version: 8.5.1(tsx@4.23.15)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -332,7 +332,7 @@ importers:
     devDependencies:
       tsup:
         specifier: ^8.0.1
-        version: 8.5.1(tsx@4.23.1)(typescript@6.0.3)
+        version: 8.5.1(tsx@4.23.15)(typescript@6.0.3)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -343,8 +343,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.1
       lucide-react:
-        specifier: ^1.28.0
-        version: 1.28.0(react@19.3.0)
+        specifier: ^1.47.0
+        version: 1.48.0(react@19.3.0)
     devDependencies:
       '@types/react':
         specifier: ^19.3.0
@@ -365,8 +365,8 @@ importers:
   services/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: ^1.0.4
-        version: 1.29.0(zod@4.4.3)
+        specifier: ^1.30.0
+        version: 1.30.1(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -375,8 +375,8 @@ importers:
         specifier: ^26.1.1
         version: 26.1.1
       tsx:
-        specifier: ^4.23.1
-        version: 4.23.1
+        specifier: ^4.23.15
+        version: 4.23.15
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -5142,7 +5142,7 @@ packages:
       magic-string: 0.30.21
       react-docgen-typescript: 2.4.0(typescript@6.0.3)
       typescript: 6.0.3
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     dev: true
 
   /@jridgewell/gen-mapping@0.3.13:
@@ -5449,8 +5449,8 @@ packages:
       react: 19.3.0
     dev: false
 
-  /@modelcontextprotocol/sdk@1.29.0(zod@4.4.3):
-    resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
+  /@modelcontextprotocol/sdk@1.30.1(zod@4.4.3):
+    resolution: {integrity: sha512-H2HxLvC3HDNybePJaLdSrU1hhUK5iQw+WvV1b01myFyI7sdVGe1u/IPTE5D9fGCiJDVtgMV/lmFkQXLmQyIFYA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -6608,7 +6608,7 @@ packages:
       '@storybook/csf-plugin': 9.1.20(storybook@9.1.20)
       storybook: 9.1.20(@testing-library/dom@10.4.2)(prettier@3.9.5)(vite@8.3.0)
       ts-dedent: 2.3.0
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     dev: true
 
   /@storybook/csf-plugin@9.1.20(storybook@9.1.20):
@@ -6657,7 +6657,7 @@ packages:
       resolve: 1.22.12
       storybook: 9.1.20(@testing-library/dom@10.4.2)(prettier@3.9.5)(vite@8.3.0)
       tsconfig-paths: 4.2.0
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     transitivePeerDependencies:
       - rollup
       - supports-color
@@ -7209,7 +7209,7 @@ packages:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     dev: true
 
   /@testing-library/dom@10.4.2:
@@ -7416,7 +7416,7 @@ packages:
     resolution: {integrity: sha512-EXHOHxqQjGxLDEh5cP4te6J0bi7LbCzmZkzsR6f703igUac8UGMdEohMyU3GHAayCTZrLQOMnaE/lqB2Ekh8Ww==}
     deprecated: This is a stub types definition. cytoscape provides its own type definitions, so you do not need this installed.
     dependencies:
-      cytoscape: 3.34.0
+      cytoscape: 3.34.3
     dev: true
 
   /@types/d3-array@3.2.2:
@@ -8102,7 +8102,7 @@ packages:
         optional: true
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     dev: true
 
   /@vitest/coverage-v8@4.1.10(vitest@4.1.11):
@@ -8162,7 +8162,7 @@ packages:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
     dev: true
 
   /@vitest/pretty-format@3.2.4:
@@ -10035,17 +10035,17 @@ packages:
       fs-exists-sync: 0.1.0
     dev: true
 
-  /cytoscape-fcose@2.2.0(cytoscape@3.34.0):
+  /cytoscape-fcose@2.2.0(cytoscape@3.34.3):
     resolution: {integrity: sha512-ki1/VuRIHFCzxWNrsshHYPs6L7TvLu3DL+TyIGEsRcvVERmxokbf5Gdk7mFxZnTdiGtnA4cfSmjZJMviqSuZrQ==}
     peerDependencies:
       cytoscape: ^3.2.0
     dependencies:
       cose-base: 2.2.0
-      cytoscape: 3.34.0
+      cytoscape: 3.34.3
     dev: false
 
-  /cytoscape@3.34.0:
-    resolution: {integrity: sha512-62rNSrioXw93uliKFBwjukeQyeWwH2PqDrTac31r2P6464u3AUvTk0xS4LVvT251g7IgkFunrI48ZEZGjywSOg==}
+  /cytoscape@3.34.3:
+    resolution: {integrity: sha512-yfYGhRcGAntq6YBD583j4n0Eg3jIxvWmZtz/5uz9UYkeIStSlMxuUja+ec5j3iBD8nv1rwaOAYMW09tBdkSeaQ==}
     engines: {node: '>=0.10'}
 
   /d3-array@3.2.4:
@@ -11461,7 +11461,7 @@ packages:
       send: 1.2.1
       serve-static: 2.2.1
       statuses: 2.0.2
-      type-is: 2.0.1
+      type-is: 2.1.0
       vary: 1.1.2
     transitivePeerDependencies:
       - supports-color
@@ -14273,8 +14273,8 @@ packages:
     dependencies:
       yallist: 3.1.1
 
-  /lucide-react@1.28.0(react@19.3.0):
-    resolution: {integrity: sha512-fARAFJULsGuDDydjp6+6blekG/sBIM29TerzLjc9bQUKAcEfrSc4ZQKb25KRz4OMKd87cZTb5dgq0w/T6KufVg==}
+  /lucide-react@1.48.0(react@19.3.0):
+    resolution: {integrity: sha512-R0CIKY/fXiC6y9xRBADgsK+VW2p/pcTJOMhLZf1T+uG+vJUvyUR02nGOgmIIC7MPkiNK4Ox8QDnbqF8rJYWPZQ==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
@@ -16257,7 +16257,7 @@ packages:
       postcss: 8.5.28
     dev: false
 
-  /postcss-load-config@6.0.1(tsx@4.23.1):
+  /postcss-load-config@6.0.1(tsx@4.23.15):
     resolution: {integrity: sha512-oPtTM4oerL+UXmx+93ytZVN82RrlY/wPUV8IeDxFrzIjXOLF1pN+EmKPLbubvKHT2HC20xXsCAH2Z+CKV6Oz/g==}
     engines: {node: '>= 18'}
     peerDependencies:
@@ -16276,7 +16276,7 @@ packages:
         optional: true
     dependencies:
       lilconfig: 3.1.3
-      tsx: 4.23.1
+      tsx: 4.23.15
     dev: true
 
   /postcss-loader@7.3.4(postcss@8.5.28)(typescript@6.0.3)(webpack@5.108.4):
@@ -18826,7 +18826,7 @@ packages:
   /tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
-  /tsup@8.5.1(tsx@4.23.1)(typescript@6.0.3):
+  /tsup@8.5.1(tsx@4.23.15)(typescript@6.0.3):
     resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
     engines: {node: '>=18'}
     hasBin: true
@@ -18854,7 +18854,7 @@ packages:
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
       picocolors: 1.1.1
-      postcss-load-config: 6.0.1(tsx@4.23.1)
+      postcss-load-config: 6.0.1(tsx@4.23.15)
       resolve-from: 5.0.0
       rollup: 4.60.2
       source-map: 0.7.6
@@ -18870,8 +18870,8 @@ packages:
       - yaml
     dev: true
 
-  /tsx@4.23.1:
-    resolution: {integrity: sha512-GQHnkIfxyx1wYCOS/wonik5MVRZU9hi1TEZmzGZSCJB1y9YgoZ8H6itNE/u4suE+yLmOzuE4E5S4TZ/ZX2wcWQ==}
+  /tsx@4.23.15:
+    resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
     dependencies:
@@ -18942,15 +18942,6 @@ packages:
     dependencies:
       media-typer: 0.3.0
       mime-types: 2.1.35
-    dev: false
-
-  /type-is@2.0.1:
-    resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
-    engines: {node: '>= 0.6'}
-    dependencies:
-      content-type: 1.0.5
-      media-typer: 1.1.0
-      mime-types: 3.0.2
     dev: false
 
   /type-is@2.1.0:
@@ -19384,7 +19375,7 @@ packages:
       d3-timer: 3.0.1
     dev: false
 
-  /vite@8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1):
+  /vite@8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15):
     resolution: {integrity: sha512-lhZBVvEHefgE+HQZC9O7EBJgCU/nVzFNl7vkS4RE0APtWLP02/8QVIkQtzBxPquh7lq5/78NHipTj7ODQ6XuyQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
@@ -19434,12 +19425,12 @@ packages:
       postcss: 8.5.28
       rolldown: 1.2.10
       tinyglobby: 0.2.17
-      tsx: 4.23.1
+      tsx: 4.23.15
     optionalDependencies:
       fsevents: 2.3.3
     dev: true
 
-  /vite@8.3.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1):
+  /vite@8.3.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.15):
     resolution: {integrity: sha512-lhZBVvEHefgE+HQZC9O7EBJgCU/nVzFNl7vkS4RE0APtWLP02/8QVIkQtzBxPquh7lq5/78NHipTj7ODQ6XuyQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
@@ -19489,7 +19480,7 @@ packages:
       postcss: 8.5.28
       rolldown: 1.2.10
       tinyglobby: 0.2.17
-      tsx: 4.23.1
+      tsx: 4.23.15
     optionalDependencies:
       fsevents: 2.3.3
     dev: true
@@ -19570,7 +19561,7 @@ packages:
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.25.12)(tsx@4.23.15)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw
@@ -19636,7 +19627,7 @@ packages:
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)
+      vite: 8.3.0(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.15)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw

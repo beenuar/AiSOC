@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Four root-workspace dependency bumps landed as one lockfile change.**
+  `cytoscape` 3.34.0 → 3.34.3, `lucide-react` 1.28.0 → 1.48.0,
+  `@modelcontextprotocol/sdk` 1.29.0 → 1.30.1 and `tsx` 4.23.1 → 4.23.15 all
+  resolve through the single root `pnpm-lock.yaml`, so merging them
+  separately makes each one rebase the next until they all report
+  `CONFLICTING`. Regenerated once from the four manifests together: 47
+  insertions against 56 deletions, versus 1,130 insertions across the four
+  individual proposals, because each of those re-churned the same peer keys.
+  The `esbuild` resolutions are byte-identical before and after — `0.25.12`
+  and the `vite>esbuild` / `tsup>esbuild` / `bundle-require>esbuild`
+  override's `0.28.1` — so the `tsx` bump does not reach Turbopack's bundler,
+  which is the reason those overrides are scoped to named parents rather than
+  applied workspace-wide.
+
+### Fixed
+
+- **Dependabot proposed Expo SDK 57 packages for an SDK 54 app, from an entry
+  that was never meant to see them.** `pnpm-workspace.yaml` excludes
+  `apps/mobile` with a `!apps/mobile` negation and pnpm honours it — the root
+  lockfile has no `apps/mobile` importer. Dependabot's manifest scan does
+  not: it expands `apps/*`, finds `apps/mobile/package.json` and proposes
+  updates for it from the root `/` entry, where none of the Expo holds
+  written into the dedicated `/apps/mobile` entry apply. The result was
+  `expo-constants 18.0.14 -> 57.0.19` — a release-train version, not a
+  package version — carrying no lockfile change at all, since from the root
+  entry's point of view the lockfile is the root one and the package is not
+  in it. `pnpm install` resolves it to `expo-router 6.0.24 unmet peer
+  expo-constants@^18.0.13`, while `tsc --noEmit` stays green, so the mobile
+  job would have passed. Fixed with `exclude-paths: ["apps/mobile/**"]` on
+  the root entry, which is version-updates-only and so leaves that
+  directory's security alerts with the entry that owns them.
+
+- **The `services/realtime` Dependabot entry let the eslint family arrive one
+  package at a time.** `@eslint/js@10.0.1` declares
+  `peerDependencies: { eslint: "^10.0.0" }`, so bumping it alone against this
+  service's `eslint@^9` installs a tree `npm ls` reports as `invalid` in nine
+  places — and nothing else notices: `npm ci`, `tsc`, `eslint src test` and
+  the test run are all green on it, and the effective rule set grows by three
+  rules rather than shrinking. Unlike the root workspace this service does
+  not use `eslint-plugin-react`, and `typescript-eslint@8.70.1` already
+  accepts `eslint@^10`, so the family is grouped rather than held: it can
+  move whenever all of it arrives in one reviewable pull request.
+
+- **The `services/api` pip entry had no holds, against two ratchet gates.**
+  `ruff` is declared in fourteen files (a count
+  `scripts/check_dependency_pins.py` enforces agreement across) and `mypy` in
+  six, plus `.github/workflows/ci.yml` for both, and Dependabot can only edit
+  one of them.
+  Measured rather than assumed: `ruff` 0.16.8 reformats 90 files and reports
+  3 lint errors where the pinned 0.4.10 reports `All checks passed!` and
+  `1229 files already formatted`; `mypy` 2.3.1 makes
+  `scripts/check_mypy_baseline.py` exit 1 with 35 `(tree, file, code)`
+  entries no longer matching. Both failures land on the required
+  `Python — Lint & Type-check` check, which is to say on every open pull
+  request rather than on the bump's own. Held at the majors (and, for `ruff`,
+  the minors, since 0.4 → 0.16 is a minor step under semver while 0.4.x
+  patches still flow). `sqlglot` is deliberately *not* held: an `ignore` rule
+  suppresses security updates as well as version updates, and a single-path
+  sqlglot bump already cannot merge because `scripts/check_sqlglot_pin.py`
+  fails closed when the seven install paths disagree.
+
 ### Security
 
 - **`apps/mobile` resolved a vulnerable `image-size` that the workspace had
