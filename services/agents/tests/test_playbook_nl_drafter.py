@@ -39,6 +39,12 @@ from app.playbook import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+#: Materialised once. Iterating the enum class directly is correct Python,
+#: but CodeQL resolves ``StepType`` through the ``app.playbook`` package
+#: re-export, does not see the ``Enum`` base, and reads ``for x in StepType``
+#: as iterating a plain class (``py/non-iterable-in-for-loop``).
+_ALL_STEP_TYPES = tuple(StepType.__members__.values())
+
 
 def _run(coro: Any) -> Any:
     """Run an awaitable synchronously, with one event loop per call."""
@@ -178,10 +184,10 @@ class TestSchemaValidity:
         schema = nl_drafter._load_schema()
         declared = set(schema["definitions"]["PlaybookStep"]["properties"]["type"]["enum"])
 
-        missing = sorted(st.value for st in StepType if st.value not in declared)
+        missing = sorted(st.value for st in _ALL_STEP_TYPES if st.value not in declared)
         assert missing == [], f"StepType members the published schema does not declare: {missing}"
 
-        for step_type in StepType:
+        for step_type in _ALL_STEP_TYPES:
             payload = {
                 "id": "test-id",
                 "name": "Test playbook",
@@ -203,7 +209,7 @@ class TestSchemaValidity:
         it offered ``webhook`` as a trigger, which no validator in the repo
         accepts, and capped ``retry_max`` at 5 against a model allowing 25."""
         prompt = nl_drafter._SYSTEM_PROMPT
-        for step_type in StepType:
+        for step_type in _ALL_STEP_TYPES:
             assert f"``{step_type.value}``" in prompt, f"{step_type.value} missing from the drafter prompt"
         assert "webhook" not in prompt, "prompt offers a trigger no validator accepts"
 
