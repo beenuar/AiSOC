@@ -132,7 +132,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 111
+- GATED: 112
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 

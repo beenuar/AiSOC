@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-23T14:14:28Z",
+  "generated": "2026-09-24T07:22:47Z",
   "categories": [
     {
       "id": "playbooks",
@@ -222981,7 +222981,6 @@
       "author": "AiSOC",
       "tags": [
         "bec",
-        "bec",
         "identity",
         "conditional-access"
       ],
@@ -223004,7 +223003,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "bec",
         "bec",
         "email"
       ],
@@ -223030,7 +223028,6 @@
       "author": "AiSOC",
       "tags": [
         "bec",
-        "bec",
         "email"
       ],
       "severity": "critical",
@@ -223054,7 +223051,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "bec",
         "bec",
         "identity",
         "token-theft"
@@ -223080,7 +223076,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "bec",
         "bec",
         "finance"
       ],
@@ -223446,7 +223441,6 @@
       "author": "AiSOC",
       "tags": [
         "ddos",
-        "ddos",
         "dns"
       ],
       "severity": "high",
@@ -223470,7 +223464,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "ddos",
         "ddos",
         "waf"
       ],
@@ -223496,7 +223489,6 @@
       "author": "AiSOC",
       "tags": [
         "ddos",
-        "ddos",
         "ato"
       ],
       "severity": "high",
@@ -223521,7 +223513,6 @@
       "author": "AiSOC",
       "tags": [
         "ddos",
-        "ddos",
         "network"
       ],
       "severity": "critical",
@@ -223545,7 +223536,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "ddos",
         "ddos",
         "network"
       ],
@@ -224109,7 +224099,6 @@
       "author": "AiSOC",
       "tags": [
         "ransomware",
-        "ransomware",
         "c2"
       ],
       "severity": "critical",
@@ -224133,7 +224122,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "ransomware",
         "ransomware",
         "fileserver"
       ],
@@ -224159,7 +224147,6 @@
       "author": "AiSOC",
       "tags": [
         "ransomware",
-        "ransomware",
         "endpoint"
       ],
       "severity": "critical",
@@ -224183,7 +224170,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "ransomware",
         "ransomware",
         "exposure"
       ],
@@ -224209,7 +224195,6 @@
       "author": "AiSOC",
       "tags": [
         "ransomware",
-        "ransomware",
         "endpoint"
       ],
       "severity": "critical",
@@ -224233,7 +224218,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "supply-chain",
         "supply-chain",
         "github"
       ],
@@ -224259,7 +224243,6 @@
       "author": "AiSOC",
       "tags": [
         "supply-chain",
-        "supply-chain",
         "iac",
         "drift"
       ],
@@ -224282,7 +224265,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "supply-chain",
         "supply-chain",
         "npm"
       ],
@@ -224308,7 +224290,6 @@
       "author": "AiSOC",
       "tags": [
         "supply-chain",
-        "supply-chain",
         "pypi"
       ],
       "severity": "high",
@@ -224332,7 +224313,6 @@
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
-        "supply-chain",
         "supply-chain",
         "vendor"
       ],
