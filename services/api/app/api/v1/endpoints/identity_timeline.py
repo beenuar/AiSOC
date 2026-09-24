@@ -55,6 +55,10 @@ class IdentityTimeline(BaseModel):
     total_events: int
     risk_score: float | None = None
     built_at: datetime
+    #: Sources this build could not read. A timeline assembled from fewer
+    #: sources than intended is not the same answer as one that found nothing,
+    #: and the difference used to be visible only in a DEBUG log line.
+    sources_unavailable: list[str] = Field(default_factory=list)
 
 
 class BuildTimelineRequest(BaseModel):
@@ -102,6 +106,7 @@ async def build_timeline(
     to_ts = body.to_ts or now
 
     events: list[TimelineEvent] = []
+    unavailable: list[str] = []
 
     # ── 1. Alerts that reference this identity ──────────────────────────────
     try:
@@ -110,7 +115,8 @@ async def build_timeline(
                 """
                 SELECT id, created_at, severity, title, evidence, mitre_technique
                 FROM aisoc_alerts
-                WHERE created_at BETWEEN :from_ts AND :to_ts
+                WHERE tenant_id = :tenant_id
+                  AND created_at BETWEEN :from_ts AND :to_ts
                   AND (
                     evidence::text ILIKE :pat
                     OR title ILIKE :pat
@@ -119,6 +125,7 @@ async def build_timeline(
                 LIMIT :lim
                 """
             ).bindparams(
+                tenant_id=str(user.tenant_id),
                 from_ts=from_ts,
                 to_ts=to_ts,
                 pat=f"%{body.identity_value}%",
@@ -139,42 +146,21 @@ async def build_timeline(
                 )
             )
     except Exception as exc:
-        log.debug("aisoc_alerts table not available; skipping", error=str(exc))
-
-    # ── 2. Raw events from aisoc_events (if table exists) ──────────────────
-    try:
-        ev_rows = await db.execute(
-            text(
-                """
-                SELECT id, timestamp, event_type, source, description,
-                       severity, raw_event
-                FROM aisoc_events
-                WHERE timestamp BETWEEN :from_ts AND :to_ts
-                  AND raw_event::text ILIKE :pat
-                ORDER BY timestamp DESC
-                LIMIT :lim
-                """
-            ).bindparams(
-                from_ts=from_ts,
-                to_ts=to_ts,
-                pat=f"%{body.identity_value}%",
-                lim=body.max_events - len(events),
-            )
+        # WARNING, not DEBUG: this is the only source the timeline has, so a
+        # failure here means the answer is empty for a reason the caller
+        # cannot see. The reason is also returned on the response.
+        log.warning(
+            "identity_timeline.alert_source_unavailable",
+            error=str(exc).replace("\r", "").replace("\n", " ")[:300],
         )
-        for row in ev_rows.fetchall():
-            events.append(
-                TimelineEvent(
-                    event_id=row.id,
-                    timestamp=row.timestamp,
-                    event_type=row.event_type or "other",
-                    source=row.source or "aisoc_events",
-                    description=row.description or "",
-                    severity=row.severity,
-                    raw=row.raw_event,
-                )
-            )
-    except Exception as exc:
-        log.debug("aisoc_events table not available; skipping", error=str(exc))
+        unavailable.append("aisoc_alerts")
+
+    # There is no second source. A block here queried a table named
+    # ``aisoc_events`` that no migration creates, nothing writes to, and that
+    # appears nowhere else in the repository — with its failure swallowed at
+    # DEBUG, so it silently returned nothing on every deployment while reading
+    # as a second source of evidence. Removed rather than tenant-scoped: there
+    # is nothing to scope.
 
     # ── 3. Sort chronologically ─────────────────────────────────────────────
     events.sort(key=lambda e: e.timestamp)
@@ -189,6 +175,7 @@ async def build_timeline(
         total_events=len(events),
         risk_score=_risk_score(events),
         built_at=now,
+        sources_unavailable=unavailable,
     )
 
 

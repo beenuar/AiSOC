@@ -4330,6 +4330,8 @@ paths:
       - playbooks
       summary: List playbooks
       operationId: list_playbooks_api_v1_playbooks_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: enabled_only
         in: query
@@ -4355,6 +4357,8 @@ paths:
       - playbooks
       summary: Create playbook
       operationId: create_playbook_api_v1_playbooks_post
+      security:
+      - HTTPBearer: []
       responses:
         '201':
           description: Successful Response
@@ -4367,6 +4371,8 @@ paths:
       - playbooks
       summary: List playbook runs
       operationId: list_runs_api_v1_playbooks_runs_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: limit
         in: query
@@ -4393,6 +4399,8 @@ paths:
       - playbooks
       summary: Get a playbook run
       operationId: get_run_api_v1_playbooks_runs__run_id__get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: run_id
         in: path
@@ -4418,6 +4426,8 @@ paths:
       - playbooks
       summary: Get a playbook
       operationId: get_playbook_api_v1_playbooks__playbook_id__get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: playbook_id
         in: path
@@ -4442,6 +4452,8 @@ paths:
       - playbooks
       summary: Update a playbook
       operationId: update_playbook_api_v1_playbooks__playbook_id__put
+      security:
+      - HTTPBearer: []
       parameters:
       - name: playbook_id
         in: path
@@ -4466,6 +4478,8 @@ paths:
       - playbooks
       summary: Delete a playbook
       operationId: delete_playbook_api_v1_playbooks__playbook_id__delete
+      security:
+      - HTTPBearer: []
       parameters:
       - name: playbook_id
         in: path
@@ -4488,6 +4502,8 @@ paths:
       - playbooks
       summary: Execute a playbook
       operationId: run_playbook_api_v1_playbooks__playbook_id__run_post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: playbook_id
         in: path
@@ -20330,6 +20346,11 @@ components:
           type: string
           format: date-time
           title: Built At
+        sources_unavailable:
+          items:
+            type: string
+          type: array
+          title: Sources Unavailable
       type: object
       required:
       - timeline_id
