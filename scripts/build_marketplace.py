@@ -495,7 +495,7 @@ def _tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _detection_tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
-    """Count detection items per tier — the main 'are we Wazuh-scale' headline."""
+    """Count detection items per tier — the main 'are we at open-source-SIEM scale' headline."""
     counts: dict[str, int] = {}
     for item in items:
         if item.get("type") != "detection":

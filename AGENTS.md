@@ -2,7 +2,7 @@
 
 - Always track progress locally (e.g. in a TODO/PROGRESS file) so work can be resumed after IDE crashes or restarts.
 - Complete all planned tasks without stopping mid-way; work through the full list until done.
-- Do not mention competitor names (Prophet Security, Torq) anywhere in code, comments, or docs — this is an open-source project.
+- Do not name competitor products anywhere in code, comments, docs, plan files, or marketing copy. Where a competitor is the benchmark for a comparison, refer to it neutrally (e.g. "the reference AI-SOC platform") and keep the analytical content. Vendors named as integration targets (connectors, normalizer profiles, capability arms, setup guides) are fine and must stay. The canonical name list and the allow-listed integration paths live in `scripts/competitor_names.toml`, enforced by `scripts/check_competitor_names.py`.
 - Before pushing to GitHub, ensure no secrets, API keys, tokens, or sensitive data are present in any public repo files.
 - Host codebase on GitHub once fully built out; keep documentation in sync.
 - Never edit plan files directly — implement the plan as specified without modifying the plan document itself.

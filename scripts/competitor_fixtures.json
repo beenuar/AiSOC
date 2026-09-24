@@ -1,0 +1,182 @@
+{
+  "_comment": [
+    "Fixture corpus for scripts/check_competitor_names.py --self-test.",
+    "",
+    "'bad' samples are competitor references the gate must catch. There is at",
+    "least one per declared competitor, and the self-test fails if a competitor",
+    "is declared without one — otherwise a name could be added to the config,",
+    "never exercised, and quietly stop matching.",
+    "",
+    "'good' samples are real integration shapes taken from surfaces that exist",
+    "in this tree: a connector module docstring, a plugin manifest, a setup",
+    "guide, the connector registry, an imported detection rule's provenance",
+    "link, and the lower-case SEO keyword list. Flagging any of these would be",
+    "a false positive that breaks working connector code and documentation.",
+    "",
+    "'comparison_bad' / 'comparison_good' exercise the narrower rule applied to",
+    "published comparison tables, where even an integration vendor's name is a",
+    "violation because the table's job is to position AiSOC against it."
+  ],
+  "bad": [
+    {
+      "competitor": "Prophet Security",
+      "path": "plans/example.md",
+      "text": "Where Cyble beats them: Prophet Security is a point product with no SOAR."
+    },
+    {
+      "competitor": "Dropzone AI",
+      "path": "apps/docs/docs/example.md",
+      "text": "Dropzone AI focuses on fully automated first-line response."
+    },
+    {
+      "competitor": "Radiant Security",
+      "path": "README.md",
+      "text": "Radiant Security — AI-powered SOC with alert correlation, Series A stage."
+    },
+    {
+      "competitor": "Intezer",
+      "path": "plans/example.md",
+      "text": "Commercial deployments at Intezer Analyze report Tier-1 parity."
+    },
+    {
+      "competitor": "Microsoft Security Copilot",
+      "path": "apps/docs/docs/example.md",
+      "text": "microsoft security copilot adds natural-language SIEM querying."
+    },
+    {
+      "competitor": "Security Copilot (title case)",
+      "path": "plans/example.md",
+      "text": "Bundle threat: Security Copilot is free for top-tier suite customers."
+    },
+    {
+      "competitor": "Duet AI",
+      "path": "plans/example.md",
+      "text": "Google Chronicle + Duet AI: strong for Google-native stacks."
+    },
+    {
+      "competitor": "Palo Alto XSIAM",
+      "path": "plans/example.md",
+      "text": "Palo Alto XSIAM creates lock-in that AiSOC avoids."
+    },
+    {
+      "competitor": "Torq",
+      "path": "plans/example.md",
+      "text": "Torq requires playbook authors; AiSOC requires none for standard cases."
+    },
+    {
+      "competitor": "Tines",
+      "path": "docs/gtm.md",
+      "text": "Sales play: playbook fatigue — Torq/Tines customer displacement motion."
+    },
+    {
+      "competitor": "Swimlane",
+      "path": "plans/example.md",
+      "text": "Swimlane / Tines: automation platforms, weak on AI reasoning depth."
+    },
+    {
+      "competitor": "Wazuh",
+      "path": "apps/docs/docs/example.md",
+      "text": "| Open-source (MIT) | yes | Wazuh: yes (GPLv2) | no |"
+    }
+  ],
+  "good": [
+    {
+      "path": "services/connectors/app/connectors/torq.py",
+      "text": "class TorqConnector(BaseConnector):  # polls the Torq workflow audit API",
+      "why": "connector module — the first-party Torq integration"
+    },
+    {
+      "path": "services/connectors/app/connectors/__init__.py",
+      "text": "from app.connectors.torq import TorqConnector",
+      "why": "connector registry import; discovery is registry-based"
+    },
+    {
+      "path": "services/connectors/tests/connectors/test_torq.py",
+      "text": "def test_torq_normalize_preserves_critical_severity():",
+      "why": "connector test"
+    },
+    {
+      "path": "plugins/torq/plugin.yaml",
+      "text": "label: Torq",
+      "why": "marketplace plugin manifest mirroring the connector schema()"
+    },
+    {
+      "path": "apps/docs/docs/connectors/torq.md",
+      "text": "Generate an API key in Torq under Settings -> API Keys.",
+      "why": "per-connector operator setup guide"
+    },
+    {
+      "path": "apps/docs/docs/connectors/tines.md",
+      "text": "| `base_url` | Tines tenant URL | string | yes |",
+      "why": "per-connector setup guide field table"
+    },
+    {
+      "path": "apps/docs/docs/connectors/wazuh.md",
+      "text": "AiSOC polls the Wazuh Indexer `wazuh-alerts-*` indices over HTTPX.",
+      "why": "per-connector setup guide"
+    },
+    {
+      "path": "docs/connectors/conformance-matrix.md",
+      "text": "| torq | saas | 3 | 1 | 3 | OK | OK | OK |",
+      "why": "connector conformance matrix row"
+    },
+    {
+      "path": "services/api/app/services/destinations.py",
+      "text": "\"\"\"Normalised handoff envelope for an external SOAR (Tines/Torq/XSOAR/...).\"\"\"",
+      "why": "integration contract docstring naming handoff targets"
+    },
+    {
+      "path": "plans/aisoc_v8.0_north_star_plan_1dee8c63.plan.md",
+      "text": "| 3 | Torq | S | SOAR coverage parity |",
+      "why": "connector build-priority table — an integration target, not a comparison"
+    },
+    {
+      "path": "detections/sigma-imports/_quarantine/pnscan-binary-data-transmission-activity.yaml",
+      "text": "- https://intezer.com/wp-content/uploads/2021/09/TeamTNT-Cryptomining-Explosion.pdf",
+      "why": "upstream threat-research citation carried verbatim for rule provenance"
+    },
+    {
+      "path": "RELEASES.md",
+      "text": "- **Sixteen first-party connectors** — wave-1 (`tines`, `torq`, `falco`, `pagerduty`).",
+      "why": "release note recording which connectors shipped"
+    },
+    {
+      "path": "apps/web/src/lib/site.ts",
+      "text": "  \"security copilot\",",
+      "why": "lower-case generic SEO keyword, not the Microsoft product name"
+    },
+    {
+      "path": "apps/docs/docs/console/federated-search.md",
+      "text": "| `splunk` | SPL |",
+      "why": "a vendor AiSOC integrates with, deliberately absent from the competitor list"
+    }
+  ],
+  "comparison_bad": [
+    {
+      "text": "| Capability | AiSOC | Wazuh | Splunk | Closed-source AI SOC |",
+      "why": "a published comparison table may not name a vendor, even one AiSOC integrates with"
+    },
+    {
+      "text": "  { kind: 'caveat', label: 'Splunk AI Assistant add-on' },",
+      "why": "a comparison cell naming the vendor"
+    },
+    {
+      "text": "  'Splunk Enterprise Security',",
+      "why": "a comparison column header"
+    }
+  ],
+  "comparison_good": [
+    {
+      "text": "| Capability | AiSOC | Open-source SIEM/HIDS | Commercial SIEM | Closed-source AI SOC |",
+      "why": "neutral column labels; every cell below still carries the comparison"
+    },
+    {
+      "text": "  { kind: 'caveat', label: 'Paid AI assistant add-on' },",
+      "why": "the capability gap survives without the vendor's identity"
+    },
+    {
+      "text": "  { kind: 'yes', label: 'Vendor app marketplace' },",
+      "why": "neutral restatement of a named marketplace"
+    }
+  ]
+}

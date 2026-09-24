@@ -55,7 +55,7 @@ Every strategy rests on premises. These must survive challenge.
 
 **Evidence:** CyberSeek 2024 shows 660,000+ unfilled cybersecurity jobs in the US alone. Enterprise SOC teams report 45% analyst burnout leading to 2-year average tenure. Average CISO spends 35% of security budget on analyst labor vs. 15% a decade ago.
 
-**Devil's advocate:** Hyperscaler-native SIEM/SOAR bundles (Sentinel + Copilot, Chronicle + Duet) are improving analyst productivity within existing tools. Offshore SOC models (India, Philippines, Eastern Europe) are absorbing demand at 40–60% cost reduction. If enterprises route to MDR/MSSP at scale, the TAM for in-house SOC automation shrinks.
+**Devil's advocate:** Hyperscaler-native SIEM/SOAR bundles (each major cloud's own SIEM plus its bundled AI assistant) are improving analyst productivity within existing tools. Offshore SOC models (India, Philippines, Eastern Europe) are absorbing demand at 40–60% cost reduction. If enterprises route to MDR/MSSP at scale, the TAM for in-house SOC automation shrinks.
 
 **Verdict:** Premise holds. Offshore and MDR trends create *channel partners*, not competitors — MSSPs need the platform more urgently than enterprise SOCs do, and they represent a faster go-to-market. Hyperscaler bundles are real competition (see Section 2c), not a premise-killer.
 
@@ -65,7 +65,7 @@ Every strategy rests on premises. These must survive challenge.
 
 **The claim:** Agent reliability for structured tool-calling tasks (lookup, enrich, classify, score) is high enough for production use if: (a) the agent only calls declared tools, (b) tool outputs are sanitized before re-ingestion, (c) human gates are placed at irreversible actions, and (d) the agent produces a signed evidence trail.
 
-**Evidence:** Benchmark studies on GPT-4o and Claude 3.5/3.7 family show >95% tool-call accuracy on structured security enrichment tasks when given well-formed schemas. Commercial deployments at Dropzone AI, Intezer Analyze, and Prophet Security report production alert-triage accuracy competitive with Tier-1 analysts in controlled evaluations.
+**Evidence:** Benchmark studies on GPT-4o and Claude 3.5/3.7 family show >95% tool-call accuracy on structured security enrichment tasks when given well-formed schemas. Commercial deployments at the leading autonomous-triage vendors and at an automated malware-analysis vendor report production alert-triage accuracy competitive with Tier-1 analysts in controlled evaluations.
 
 **Devil's advocate:** LLMs hallucinate. In a security context, a hallucinated threat verdict that closes a real incident is worse than no automation. Prompt injection via adversarial log content is a real attack vector. Fine-grained multi-step reasoning is still unstable — an agent that correctly enriches 9 of 10 tool calls and then misclassifies the 10th still produces a false close.
 
@@ -77,7 +77,7 @@ Every strategy rests on premises. These must survive challenge.
 
 **The claim:** The underlying LLM is a commodity by 2026. Anthropic, OpenAI, Google, and open weights will all hit roughly equivalent capability for structured tool-calling. The moat is: (a) the depth and freshness of threat intelligence the agent can query, (b) the breadth of tools the agent can call, (c) the feedback loop from analyst corrections that continuously improves verdict quality.
 
-**Devil's advocate:** If the moat is integrations, Torq and Tines already have 200+ connectors. If the moat is CTI, IBM X-Force and Recorded Future are better-resourced than Cyble in certain enterprise segments. Model-level differentiation may last longer than assumed — agentic orchestration quality (chain-of-thought stability, multi-step planning) varies significantly by model family, and a model-native SOC product from Anthropic/OpenAI is not impossible.
+**Devil's advocate:** If the moat is integrations, the incumbent hyperautomation SOAR platforms already have 200+ connectors. If the moat is CTI, the largest commercial threat-intelligence providers are better-resourced than Cyble in certain enterprise segments. Model-level differentiation may last longer than assumed — agentic orchestration quality (chain-of-thought stability, multi-step planning) varies significantly by model family, and a model-native SOC product from Anthropic/OpenAI is not impossible.
 
 **Verdict:** Premise holds *with qualification.* Cyble's moat is **the specific combination**: dark-web telemetry + ASM surface mapping + brand intel + CTI, all fused at query time by agents that have already learned what matters to each customer's environment. No competitor has all four owned feeds. The integration breadth is table stakes; the intel fusion is the weapon.
 
@@ -97,41 +97,41 @@ Every strategy rests on premises. These must survive challenge.
 
 #### Tier 1: Direct Competitors (most dangerous)
 
-**Prophet Security**
+**The reference autonomous-triage platform** *(category leader, triage-only positioning)*
 - What they do: Autonomous Tier-1 triage via multi-agent AI. Alert enrichment, verdict with confidence score, auto-close with full reasoning.
 - Where they are strong: Clean UX, solid accuracy on standard EDR/identity alerts, fast time-to-value.
 - Where they break: Intel depth is third-party only (VirusTotal, Shodan, IP reputation). No SOAR. No investigation depth. No exposure awareness. Single-use case positioning limits upsell.
-- Where Cyble beats them: Cyble CTI + dark-web + ASM enrichment makes every verdict richer. Cyble AiSOC adds investigation + SOAR + exposure-to-response in the same substrate — Prophet is a point product.
+- Where Cyble beats them: Cyble CTI + dark-web + ASM enrichment makes every verdict richer. Cyble AiSOC adds investigation + SOAR + exposure-to-response in the same substrate — the triage-only platform is a point product.
 
-**Torq**
+**The reference hyperautomation SOAR platform**
 - What they do: AI-assisted SOAR with no-code/low-code hyperautomation. 1,000+ integrations. "Autonomous SOC" positioning.
-- Where they are strong: Integration breadth, automation velocity, existing enterprise customer base (Commvault, Armis, others), strong funding ($70M Series B).
+- Where they are strong: Integration breadth, automation velocity, an established enterprise customer base, strong funding (~$70M Series B).
 - Where they break: Still fundamentally playbook-based — "AI-assisted" means suggesting the next step, not reasoning end-to-end. No native CTI. No investigation agent. Alert triage is still analyst-driven. The "autonomous" label overpromises.
-- Where Cyble beats them: True agentic reasoning (no playbooks) + native Cyble intel fusion. Torq requires playbook authors; Cyble AiSOC requires none for standard use cases.
+- Where Cyble beats them: True agentic reasoning (no playbooks) + native Cyble intel fusion. The SOAR platform requires playbook authors; Cyble AiSOC requires none for standard use cases.
 
 #### Tier 2: Strong Adjacents (real risk at displacement)
 
-**Microsoft Sentinel + Security Copilot**
-- Bundle threat: Every Azure customer gets Sentinel. Security Copilot adds natural-language SIEM querying, incident summaries, guided investigation. Free or near-free for M365 E5 customers.
-- Weakness: Copilot is an assistant, not an autonomous agent. No dark-web. No external CTI depth. Microsoft alert sources only in early tiers. Bureaucratic product velocity.
-- Cyble counter: The Cyble CTI + multi-SIEM angle (Splunk + Elastic + Sentinel in the same substrate) + MSSP channel serve customers who aren't Microsoft-only stacks.
+**The primary hyperscaler SIEM + AI-assistant bundle**
+- Bundle threat: Every customer of that cloud already gets the SIEM. The bundled assistant adds natural-language SIEM querying, incident summaries, guided investigation. Free or near-free at the top productivity-suite tier.
+- Weakness: The assistant is an assistant, not an autonomous agent. No dark-web. No external CTI depth. First-party alert sources only in early tiers. Bureaucratic product velocity.
+- Cyble counter: The Cyble CTI + multi-SIEM angle (Splunk + Elastic + Sentinel in the same substrate) + MSSP channel serve customers who aren't single-vendor stacks.
 
-**Google Chronicle + Duet AI**
-- Similar to Sentinel: strong for Google-native stacks, weak on dark-web/CTI depth, assistant not agent.
+**The second hyperscaler SIEM + AI-assistant bundle**
+- Similar to the first: strong for that cloud's native stacks, weak on dark-web/CTI depth, assistant not agent.
 
-**Palo Alto XSIAM**
+**The reference vendor-stack unified SIEM/SOAR/XDR platform**
 - What they do: Unified SIEM + SOAR + XDR + CDL on a single data platform. Strong automated playbooks, stitched investigation.
-- Weakness: Heavily biased toward Palo Alto product stack. Expensive. No agentic reasoning substrate — still rule-based.
-- Cyble counter: Multi-vendor, multi-SIEM, vendor-neutral + Cyble intel fusion. For mixed-stack enterprises, XSIAM creates lock-in that Cyble AiSOC avoids.
+- Weakness: Heavily biased toward that vendor's own product stack. Expensive. No agentic reasoning substrate — still rule-based.
+- Cyble counter: Multi-vendor, multi-SIEM, vendor-neutral + Cyble intel fusion. For mixed-stack enterprises, the single-vendor platform creates lock-in that Cyble AiSOC avoids.
 
-**Dropzone AI**
-- What they do: Autonomous alert triage and investigation for SecOps. Similar positioning to Prophet but focused on fully automated first-line response.
+**The autonomous first-line-response challenger**
+- What they do: Autonomous alert triage and investigation for SecOps. Similar positioning to the triage category leader but focused on fully automated first-line response.
 - Weakness: Limited integration depth, early stage, US-market focused.
 
-**Swimlane / Tines**
+**The no-code automation platforms**
 - Automation platforms with SOC use cases. Strong no-code. Weak on AI reasoning depth.
 
-**Radiant Security**
+**The early-stage AI-SOC entrant**
 - AI-powered SOC with alert correlation and triage. Series A stage.
 
 #### Competitive summary matrix
@@ -141,12 +141,12 @@ Every strategy rests on premises. These must survive challenge.
                      │ Tier-1 Triage │ Investigation│ Fusion       │ Automation   │ Response Loop
 ─────────────────────┼───────────────┼──────────────┼──────────────┼──────────────┼──────────────
 Cyble AiSOC (target) │ ●●●●●        │ ●●●●●       │ ●●●●●       │ ●●●●●       │ ●●●●●
-Prophet Security     │ ●●●●         │ ●●           │ ●●          │ ○           │ ○
-Torq                 │ ●●           │ ●●          │ ●           │ ●●●●        │ ●
-Microsoft Copilot    │ ●●           │ ●●●         │ ●●          │ ●●●         │ ●
-Palo Alto XSIAM      │ ●●●          │ ●●●         │ ●●          │ ●●●●        │ ●●
-Dropzone AI          │ ●●●●         │ ●●●         │ ●●          │ ●           │ ○
-Swimlane/Tines       │ ●            │ ●           │ ●           │ ●●●●        │ ●
+Autonomous triage    │ ●●●●         │ ●●           │ ●●          │ ○           │ ○
+Hyperautomation SOAR │ ●●           │ ●●          │ ●           │ ●●●●        │ ●
+Hyperscaler bundle   │ ●●           │ ●●●         │ ●●          │ ●●●         │ ●
+Vendor-stack XDR     │ ●●●          │ ●●●         │ ●●          │ ●●●●        │ ●●
+First-line responder │ ●●●●         │ ●●●         │ ●●          │ ●           │ ○
+No-code automation   │ ●            │ ●           │ ●           │ ●●●●        │ ●
 
 ● = minimal  ●●●●● = best-in-class
 ```
@@ -207,8 +207,8 @@ The four wedges are not four products. They are four roles on the same agentic s
 - For verdicts below threshold or novel TTPs: escalates to Investigator Agent with pre-built context.
 - Analyst receives exception queue only: novel, complex, or high-stakes alerts needing human judgment.
 
-**Differentiation vs Prophet/Dropzone:**
-Prophet triages alerts using third-party feeds. Cyble AiSOC triages using Cyble's proprietary dark-web + ASM + credential exposure data — detecting threats that no third-party feed catches because Cyble collected them directly from the source. A phishing campaign targeting a specific enterprise brand that appears in Cyble dark-web monitoring but not yet in any public feed is caught. No Prophet alert would fire for it.
+**Differentiation vs the autonomous-triage platforms:**
+Those platforms triage alerts using third-party feeds. Cyble AiSOC triages using Cyble's proprietary dark-web + ASM + credential exposure data — detecting threats that no third-party feed catches because Cyble collected them directly from the source. A phishing campaign targeting a specific enterprise brand that appears in Cyble dark-web monitoring but not yet in any public feed is caught. No third-party-feed-only alert would fire for it.
 
 **Quantified target:**
 - 85% of Tier-1 alerts auto-closed with verdict + full evidence trail
@@ -239,7 +239,7 @@ Prophet triages alerts using third-party feeds. Cyble AiSOC triages using Cyble'
 - Produces: case narrative (human-readable, analyst-editable), blast radius map, MITRE ATT&CK tactic chain, confidence score per finding, recommended next actions ranked by urgency.
 - Analyst reviews, edits, approves, and escalates response or closes.
 
-**Differentiation vs Microsoft Copilot / Chronicle Duet:**
+**Differentiation vs the hyperscaler SIEM assistants:**
 Those are query assistants — they help the analyst write better Kusto/YARA-L queries. The Investigator Agent *runs* the investigation plan autonomously, calls tools in sequence, and hands back a completed case file. The analyst's job shifts from "run every query" to "review and approve findings."
 
 **Quantified target:**
@@ -252,7 +252,7 @@ Those are query assistants — they help the analyst write better Kusto/YARA-L q
 
 ### 3c. Pillar 3 — AI-Native SOAR (No Playbooks)
 
-**Job to be done:** An investigated incident needs a response action: isolate a host, reset a password, block an IP, quarantine an email, revoke a token. Today this requires a pre-authored playbook in Splunk SOAR/Torq/Tines. Cyble AiSOC executes response actions through agentic reasoning — no playbook authoring required for standard use cases.
+**Job to be done:** An investigated incident needs a response action: isolate a host, reset a password, block an IP, quarantine an email, revoke a token. Today this requires a pre-authored playbook in a traditional SOAR platform. Cyble AiSOC executes response actions through agentic reasoning — no playbook authoring required for standard use cases.
 
 **Today's manual workflow (with legacy SOAR):**
 1. Playbook author writes isolation playbook (days of work, QA cycle).
@@ -269,8 +269,8 @@ Those are query assistants — they help the analyst write better Kusto/YARA-L q
 - Handles edge cases by reasoning: "The standard isolation playbook doesn't apply here because this host is tagged as a critical production DB. Recommending network segmentation instead of full isolation. Please confirm."
 - Logs every action to ticketing, SIEM, and audit store.
 
-**Differentiation vs Torq/Tines/Swimlane:**
-Torq/Tines require a human to build and maintain playbooks for every response scenario. Cyble AiSOC's Responder Agent reasons from the current case context to select and sequence actions — no playbook required for the top 80% of response scenarios. Custom playbooks remain available for the 20% of scenarios where organizational policy requires specific steps.
+**Differentiation vs the no-code SOAR/automation platforms:**
+Those platforms require a human to build and maintain playbooks for every response scenario. Cyble AiSOC's Responder Agent reasons from the current case context to select and sequence actions — no playbook required for the top 80% of response scenarios. Custom playbooks remain available for the 20% of scenarios where organizational policy requires specific steps.
 
 **Quantified target:**
 - Top 20 response action types handled without playbook authoring
@@ -298,7 +298,7 @@ Torq/Tines require a human to build and maintain playbooks for every response sc
 - **Threat Graph continuously updated**: every Investigator + Hunter finding is persisted as entity relationships (user → host → IP → campaign → threat actor). Future triage queries the graph instead of rebuilding context from scratch.
 
 **Differentiation vs all competitors:**
-No competitor has this loop closed. Prophet/Dropzone/Torq are reactive (they respond to SIEM alerts). Cyble AiSOC generates proactive cases from Cyble's proprietary exposure data. The Threat Graph accumulates institutional memory — every investigation makes future investigations faster. This is the compounding flywheel that makes the platform better the longer a customer uses it.
+No competitor has this loop closed. The autonomous-triage platforms and the hyperautomation SOAR platforms are reactive (they respond to SIEM alerts). Cyble AiSOC generates proactive cases from Cyble's proprietary exposure data. The Threat Graph accumulates institutional memory — every investigation makes future investigations faster. This is the compounding flywheel that makes the platform better the longer a customer uses it.
 
 **Quantified target:**
 - Mean time from dark-web credential exposure to proactive case creation: <4 hours
@@ -908,8 +908,8 @@ The base fee lowers buyer risk and creates a predictable floor. The outcome tier
 - Target: $15M ARR new-logo in Year 2
 
 **Competitive displacement play:**
-- Prophet Security customers: upsell from triage-only to full platform
-- Torq customers: replacement play on "playbook authoring fatigue" — no more SOAR maintenance
+- Autonomous-triage platform customers: upsell from triage-only to full platform
+- Hyperautomation SOAR customers: replacement play on "playbook authoring fatigue" — no more SOAR maintenance
 - Manual SIEM-only shops: greenfield, highest value, most education needed
 
 ---
@@ -973,7 +973,7 @@ See [roadmap/12-month.md](roadmap/12-month.md) for full detail.
 - Connector SDK GA + community marketplace beta
 
 **GTM:**
-- "Replace your SOAR" campaign targeting Torq/Tines/Swimlane prospects
+- "Replace your SOAR" campaign targeting no-code SOAR/automation platform prospects
 - Case studies from Q1/Q2 early adopters published
 - New-logo pipeline development (North America + Europe)
 - SOC 2 Type II report issued
@@ -1096,17 +1096,17 @@ These are USER CHALLENGES per /autoplan methodology: places where my analysis le
 
 ---
 
-**UC1 — "All four wedges" as simultaneous GTM messaging is Torq's mistake**
+**UC1 — "All four wedges" as simultaneous GTM messaging is the hyperautomation SOAR platform's mistake**
 
 **What you said:** Build all four pillars and go to market with all of them.
 
 **What I'm recommending:** Build all four pillars (architecturally, yes — one substrate), but go to market with **one beachhead message** for Year 1.
 
-**Why:** Torq launched with "autonomous SOC" and "1,000 integrations" and "hyperautomation" simultaneously. Every analyst report I've read says the result is a fuzzy ICP (Ideal Customer Profile) — Torq appeals to everyone and closes fewer deals because "autonomous SOC" without a specific job-to-be-done doesn't create urgency. Prophet Security's single-message approach ("autonomous Tier-1 triage") creates a specific pain, a specific buyer (VP SOC Operations), and a specific success metric (Tier-1 analyst hours saved). They convert faster.
+**Why:** The hyperautomation SOAR platform launched with "autonomous SOC" and "1,000 integrations" and "hyperautomation" simultaneously. Every analyst report I've read says the result is a fuzzy ICP (Ideal Customer Profile) — it appeals to everyone and closes fewer deals because "autonomous SOC" without a specific job-to-be-done doesn't create urgency. The autonomous-triage platform's single-message approach ("autonomous Tier-1 triage") creates a specific pain, a specific buyer (VP SOC Operations), and a specific success metric (Tier-1 analyst hours saved). They convert faster.
 
 **Recommendation:** Lead with **Autonomous Tier-1 Triage with Cyble Intel Fusion** as the market message. Everything else (investigation, SOAR, exposure loop) is revealed in the product, mentioned in demos, and expanded in subsequent sales motion. One problem, one buyer, one metric. The architecture supports all four from Day 1 — but the *story* is one.
 
-**What you might know that I don't:** Cyble may have existing relationships where the SOAR replacement story (replacing Torq) is the urgent opener. Or the Hunter/exposure-loop story may be uniquely compelling for Cyble CTI customers who already have the intel and just need the response arm. If either of those is true, the beachhead message changes — but it should still be one message, not four.
+**What you might know that I don't:** Cyble may have existing relationships where the SOAR replacement story (replacing an incumbent hyperautomation SOAR) is the urgent opener. Or the Hunter/exposure-loop story may be uniquely compelling for Cyble CTI customers who already have the intel and just need the response arm. If either of those is true, the beachhead message changes — but it should still be one message, not four.
 
 **If I'm wrong, the cost is:** Slower initial triage POVs (one-message focus might narrow early pipeline). You have a broader story but no crisp ICP, and first 12 months are spent educating buyers rather than converting a clear pain point.
 
@@ -1114,14 +1114,14 @@ These are USER CHALLENGES per /autoplan methodology: places where my analysis le
 
 **UC2 — The "100x better" framing needs a falsifiable claim or it becomes noise**
 
-**What you said:** "100x better in quality, collections and integrations than Torq and Prophet Security."
+**What you said:** "100x better in quality, collections and integrations than [the leading hyperautomation SOAR and autonomous-triage platforms]."
 
 **What I'm recommending:** Replace "100x better" with specific, auditable claims that can be proven in a 30-day POV. "100x" is marketing noise in security. Buyers have heard it from every vendor. It creates skepticism, not urgency.
 
 **Proposed falsifiable claims:**
-- "Auto-close 85% of Tier-1 alerts with full evidence trail. Prophet closes ~70% without Cyble intel."
-- "Connect to your first SIEM and see a completed case in <10 minutes. Torq takes days to first working automation."
-- "Zero playbook authoring for the top 20 response scenarios. Torq requires a playbook for every one."
+- "Auto-close 85% of Tier-1 alerts with full evidence trail. The autonomous-triage category leader closes ~70% without Cyble intel."
+- "Connect to your first SIEM and see a completed case in <10 minutes. The incumbent hyperautomation SOAR takes days to first working automation."
+- "Zero playbook authoring for the top 20 response scenarios. The incumbent hyperautomation SOAR requires a playbook for every one."
 - "Surface credential exposures from Cyble dark-web monitoring before your SIEM fires. No competitor does this."
 
 These are differentiating, measurable, and provable in a POV. "100x better" is not.

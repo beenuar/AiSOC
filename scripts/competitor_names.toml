@@ -1,0 +1,234 @@
+#:schema none
+# Configuration for the competitor-naming gate (`scripts/check_competitor_names.py`).
+#
+# AiSOC never names a competitor product. Where a competitor is the benchmark
+# for a comparison, the text refers to it neutrally ("the reference AI-SOC
+# platform", "the incumbent hyperautomation SOAR") and keeps the analytical
+# content — the capability compared, the direction of the gap, the magnitude.
+#
+# The hard part is that this product ships 80+ connectors, so a vendor name is
+# usually *correct*: a connector module, a plugin manifest, a setup guide or a
+# normalizer profile naming its vendor is necessary, not a violation. The gate
+# therefore works from two explicit lists and never infers intent from prose:
+#
+#   [[competitors]]  the product names that may not appear, as regexes.
+#   [[allow]]        the integration surfaces where those names are expected,
+#                    by path, each naming which names it excuses and why.
+#
+# Both lists are checked in both directions. A competitor whose pattern matches
+# nothing anywhere (including its own fixtures) is a dead pattern and fails. An
+# allow entry whose paths match no file, or whose files no longer contain any of
+# the names it excuses, is a stale exemption and fails — an exemption must not
+# outlive the code it excused.
+
+# ---------------------------------------------------------------------------
+# Competitor product names
+# ---------------------------------------------------------------------------
+
+[[competitors]]
+name = "Prophet Security"
+pattern = '\bProphet\s+Security\b|\bProphet\s+AI\b'
+neutral = "the reference autonomous-triage platform"
+
+[[competitors]]
+name = "Dropzone AI"
+pattern = '\bDropzone\s*AI\b|\bDropzone\.ai\b'
+neutral = "the autonomous first-line-response challenger"
+
+[[competitors]]
+name = "Radiant Security"
+pattern = '\bRadiant\s+Security\b'
+neutral = "the early-stage AI-SOC entrant"
+
+[[competitors]]
+name = "Intezer"
+pattern = '\bIntezer\b'
+neutral = "an automated malware-analysis vendor"
+
+[[competitors]]
+name = "Microsoft Security Copilot"
+# Two patterns, deliberately split on case. "Microsoft Security Copilot" is the
+# product and is banned however it is capitalised. Bare "Security Copilot" is
+# banned only in title case, because lower-case "security copilot" is a generic
+# category term that legitimately appears in the site's SEO keyword list
+# (`apps/web/src/lib/site.ts`) the same way "agentic SOC" or "SOAR" does.
+pattern = '\bMicrosoft\s+Security\s+Copilot\b'
+neutral = "the hyperscaler SIEM's bundled AI assistant"
+
+[[competitors]]
+name = "Security Copilot (title case)"
+pattern = '\bSecurity\s+Copilot\b|\bMicrosoft\s+Copilot\b'
+case_sensitive = true
+neutral = "the hyperscaler SIEM's bundled AI assistant"
+
+[[competitors]]
+name = "Duet AI"
+pattern = '\bDuet\s+AI\b'
+neutral = "the second hyperscaler SIEM's bundled AI assistant"
+
+[[competitors]]
+name = "Palo Alto XSIAM"
+# The bare connector id `cortex_xsiam` and the product name used inside its own
+# setup guide are integration surfaces and are allow-listed below. The vendor-
+# qualified marketing form is what shows up in competitive framing.
+pattern = '\bPalo\s+Alto\s+XSIAM\b'
+neutral = "the reference vendor-stack unified SIEM/SOAR/XDR platform"
+
+[[competitors]]
+name = "Torq"
+# Dual role. Ships as a first-party SOAR connector (`torq` connector id) *and*
+# appears in competitive framing. Every integration surface is allow-listed by
+# path below; anything outside those paths is competitive framing.
+pattern = '\bTorq\b'
+neutral = "the reference hyperautomation SOAR platform"
+
+[[competitors]]
+name = "Tines"
+pattern = '\bTines\b'
+neutral = "the no-code automation platforms"
+
+[[competitors]]
+name = "Swimlane"
+pattern = '\bSwimlane\b'
+neutral = "the no-code automation platforms"
+
+[[competitors]]
+name = "Wazuh"
+pattern = '\bWazuh\b'
+neutral = "an open-source SIEM/HIDS"
+
+# ---------------------------------------------------------------------------
+# Integration surfaces
+#
+# Path globs, matched against the repository-relative path. Each entry excuses
+# only the names it lists, so allow-listing a connector's directory does not
+# quietly excuse an unrelated competitor appearing in the same tree.
+# ---------------------------------------------------------------------------
+
+[[allow]]
+paths = ["services/connectors/**"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Connector modules, the connector registry, event fixtures and connector tests. These vendors ship as first-party integrations."
+
+[[allow]]
+paths = ["plugins/*/plugin.yaml"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Marketplace plugin manifests, one per connector, mirroring the connector's schema()."
+
+[[allow]]
+paths = ["apps/docs/docs/connectors/**"]
+names = ["Torq", "Tines", "Wazuh", "Palo Alto XSIAM"]
+reason = "Per-connector operator setup guides. A setup guide that cannot name its own vendor is useless."
+
+[[allow]]
+paths = ["docs/connectors/**"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Connector conformance matrix — one row per shipped connector id."
+
+[[allow]]
+paths = ["marketplace/index.json", "apps/web/public/marketplace/index.json"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Generated marketplace catalog; entries are the connector manifests above."
+
+[[allow]]
+paths = ["apps/docs/sidebars.ts"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Docs navigation entries pointing at the per-connector setup guides."
+
+[[allow]]
+paths = ["apps/docs/docs/intro.md", "apps/docs/docs/plugins/**"]
+names = ["Wazuh"]
+reason = "Connector catalog listing and the plugin-SDK scaffolding examples, which use a real connector as the worked example."
+
+[[allow]]
+paths = ["services/api/app/services/destinations.py"]
+names = ["Torq", "Tines"]
+reason = "Docstring naming the external SOAR platforms a handoff envelope targets — an integration contract, not a comparison."
+
+[[allow]]
+paths = ["detections/**"]
+names = ["Intezer", "Wazuh"]
+reason = "Imported detection content. These are upstream threat-research citations and rule logic about the named product, carried verbatim for provenance."
+
+[[allow]]
+paths = ["CHANGELOG.md", "RELEASES.md", "ROADMAP.md", "AGENTS.md"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Release history and roadmap entries recording which connectors shipped in which version."
+
+[[allow]]
+paths = ["CONTRIBUTING.md", "docs/audit/CLAIM_TO_GATE_MATRIX.md"]
+names = ["Torq"]
+reason = "Documentation of this gate. Both explain the dual-role name by example, because a contributor who does not know which name is the trap will do the global replace that breaks the connector."
+
+[[allow]]
+paths = ["docs/community-feedback/**"]
+names = ["Wazuh"]
+reason = "Verbatim community feedback records, where the name refers to the respondent's own deployed stack."
+
+[[allow]]
+paths = [
+    "plans/aisoc_v8.0_north_star_plan_1dee8c63.plan.md",
+    "plans/cyble-aisoc/architecture/integration-matrix.md",
+    "plans/cyble-aisoc/roadmap/12-month.md",
+    "plans/cyble-aisoc/index.html",
+    "plans/cyble-aisoc/platform/**",
+]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Connector build-priority tables, the integration matrix and connector release notes in the archived plan subtree — integration targets, not competitive framing."
+
+# ---------------------------------------------------------------------------
+# Comparison surfaces
+#
+# A published comparison table is the one place where *any* vendor name is a
+# violation, including vendors this product integrates with: the table's job is
+# to position AiSOC against them. These regions are therefore checked against a
+# wider vendor list, and the integration allow-list above does not apply inside
+# them.
+#
+# Each region is pinned by literal start/end markers. If a marker stops matching
+# the gate fails rather than silently scanning an empty slice.
+# ---------------------------------------------------------------------------
+
+[comparison]
+vendors = [
+    "Wazuh",
+    "Splunk",
+    "Splunkbase",
+    "Elastic",
+    "Sentinel",
+    "CrowdStrike",
+    "SentinelOne",
+    "QRadar",
+    "Chronicle",
+    "XSIAM",
+    "XSOAR",
+    "Cortex",
+    "Torq",
+    "Tines",
+    "Swimlane",
+    "Securonix",
+    "Exabeam",
+    "Devo",
+    "Panther",
+    "Sumo Logic",
+    "Datadog",
+    "Rapid7",
+    "Arctic Wolf",
+    "Prophet",
+    "Dropzone",
+    "Intezer",
+    "Radiant",
+    "Copilot",
+]
+
+[[comparison_surfaces]]
+file = "apps/docs/docs/benchmark.md"
+start = "## Comparison to other AI SOC offerings"
+end = "## What this is not"
+reason = "Capability comparison table on the public benchmark page."
+
+[[comparison_surfaces]]
+file = "apps/docs/src/pages/index.tsx"
+start = "const COMPARE_HEADERS"
+end = "function compareCellClass"
+reason = "Capability comparison table rendered on the documentation portal landing page."

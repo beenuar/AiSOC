@@ -1,0 +1,68 @@
+name: Competitor naming
+
+# AiSOC never names a competitor product in documentation, marketing copy, plan
+# files, code comments or release notes. Where a competitor is the benchmark for
+# a comparison the text refers to it neutrally and keeps the analytical content.
+#
+# Vendors named as integration targets are a different thing entirely and must
+# stay: this product ships 80+ connectors, and a connector module, plugin
+# manifest, setup guide or normalizer profile naming its vendor is necessary.
+# The gate allow-lists those surfaces by path rather than guessing from prose.
+#
+# It runs on BOTH pull_request and push-to-main. A PR-only gate is
+# one-directional: it checks what contributors propose but never what actually
+# lands, so a doc edited in the GitHub UI at merge time would slip past it while
+# the gate stayed green.
+#
+# No paths filter. A competitor name can appear in any file, and a filtered gate
+# that skips is indistinguishable from a gate that passes.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: competitor-names-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  competitor-names:
+    name: No competitor product named
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Runs first and on every invocation. If the patterns stop matching, this
+      # fails here rather than letting the scan below report a clean tree it
+      # never actually inspected properly. Both directions are asserted: every
+      # declared competitor is caught in a known-bad sample, and every known-good
+      # integration shape is left alone.
+      - name: Self-test (gate is not vacuous, in both directions)
+        run: python3 scripts/check_competitor_names.py --self-test
+
+      # The scan prints the absolute path of the tree it walked and the number of
+      # files it read. A gate that resolves its repository from its own source
+      # location can print a confident OK about a tree it never inspected.
+      - name: Scan the tree
+        run: python3 scripts/check_competitor_names.py --root "$GITHUB_WORKSPACE"
+
+      - name: Install pytest
+        run: pip install 'pytest>=8,<9'
+
+      # The suite adds the properties the CLI cannot assert about itself: that a
+      # stale allow-list entry fails the build, that a drifted comparison-table
+      # marker fails rather than scanning an empty slice, that a mistyped allow
+      # entry is rejected, and that `Torq` is read as a competitor in prose while
+      # its connector, manifest, docs page and tests stay untouched.
+      - name: Gate properties (stale allow-list, marker drift, dual-role names)
+        run: python3 -m pytest tests/test_competitor_names_gate.py -q

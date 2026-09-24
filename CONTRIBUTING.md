@@ -170,6 +170,35 @@ vendor string, or prose naming a vendor neutrally rather than as an attribution
 [`.githooks/attribution-allowlist.txt`](.githooks/attribution-allowlist.txt) so
 a reviewer sees the exemption in the diff.
 
+### Naming competitors, and naming vendors we integrate with
+
+AiSOC does not name a competitor product — not in documentation, marketing copy,
+plan files, code comments or release notes. Where a competitor is the benchmark
+for a comparison, refer to it neutrally and keep the analytical content. "We lag
+the reference AI-SOC platform on recursive investigation depth" is useful; "we
+lag a competitor on some things" is not. In a comparison table that usually means
+the row or column labels become neutral capability descriptors while every cell
+survives intact.
+
+A vendor named as an **integration target is not a competitor reference**. This
+product ships 80+ connectors, and a connector module, plugin manifest, setup
+guide, normalizer profile or test naming its vendor is correct and necessary.
+Some names play both roles — `Torq` ships as a first-party SOAR connector and has
+also appeared in competitive framing — so judge each occurrence by its context
+rather than doing a global replace, which would break working connector code.
+
+```bash
+python3 scripts/check_competitor_names.py --self-test
+python3 scripts/check_competitor_names.py
+```
+
+The gate reads an explicit name list and a path allow-list from
+[`scripts/competitor_names.toml`](scripts/competitor_names.toml); it never infers
+intent from prose. If it flags an integration reference, add the path to
+`[[allow]]` with the names it excuses and a reason. Both lists are checked in
+both directions, so a stale exemption whose files no longer contain the name
+fails the build rather than outliving the code it excused.
+
 ### Testing
 
 - Write tests for all new features

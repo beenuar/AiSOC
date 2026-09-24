@@ -301,9 +301,9 @@ Ship the Responder Agent. Position the platform as a SOAR replacement. SDK becom
 ### GTM deliverables
 
 **Month 7:**
-- [ ] "Replace your SOAR" campaign launch: positioning vs Torq, Tines, Swimlane
-- [ ] Sales play: "playbook fatigue" — Torq/Tines customer displacement motion
-- [ ] Target list: 200 Torq/Tines accounts (via contact data + partner intelligence)
+- [ ] "Replace your SOAR" campaign launch: positioning vs the incumbent no-code SOAR/automation platforms
+- [ ] Sales play: "playbook fatigue" — no-code SOAR customer displacement motion
+- [ ] Target list: 200 no-code SOAR accounts (via contact data + partner intelligence)
 
 **Month 8:**
 - [ ] New-logo pipeline development: North America enterprise (1,000–5,000 employees, no SOAR)

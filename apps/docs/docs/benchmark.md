@@ -769,16 +769,16 @@ Submission rules:
 
 ## Comparison to other AI SOC offerings
 
-| Capability                                     | AiSOC | Wazuh | Splunk | Closed-source AI SOC |
-|-----------------------------------------------|:-----:|:-----:|:------:|:---------------------:|
-| Open-source (MIT)                              |  yes  |  yes  |   no   |          no           |
-| Self-hostable                                  |  yes  |  yes  |  yes   |          no           |
-| Agent decisions step-by-step auditable         |  yes  |  n/a  |  n/a   |          no           |
-| Public, reproducible regression harness        |  yes  |  no   |   no   |          no           |
-| Eval dataset shipped in the repo               |  yes  |  no   |   no   |          no           |
-| Substrate-level regression gate in CI          |  yes  |  no   |   no   |          no           |
-| Plugin SDK (Python + Go)                       |  yes  |  yes  |  yes   |        partial        |
-| Free                                           |  yes  |  yes  |   no   |          no           |
+| Capability                                     | AiSOC | Open-source SIEM/HIDS | Commercial SIEM | Closed-source AI SOC |
+|-----------------------------------------------|:-----:|:---------------------:|:---------------:|:---------------------:|
+| Open-source (MIT)                              |  yes  |          yes          |       no        |          no           |
+| Self-hostable                                  |  yes  |          yes          |       yes       |          no           |
+| Agent decisions step-by-step auditable         |  yes  |          n/a          |       n/a       |          no           |
+| Public, reproducible regression harness        |  yes  |          no           |       no        |          no           |
+| Eval dataset shipped in the repo               |  yes  |          no           |       no        |          no           |
+| Substrate-level regression gate in CI          |  yes  |          no           |       no        |          no           |
+| Plugin SDK (Python + Go)                       |  yes  |          yes          |       yes       |        partial        |
+| Free                                           |  yes  |          yes          |       no        |          no           |
 
 A self-hostable, MIT-licensed agent with a published regression harness is
 something an auditor or regulated buyer can review directly. Vendor cloud
