@@ -21,7 +21,11 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 SLOS = ROOT / "docs" / "operations" / "slos.yaml"
 SERVICES_DIR = ROOT / "services"
 

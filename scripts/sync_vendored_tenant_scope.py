@@ -30,7 +30,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 SOURCE_FILE = REPO_ROOT / "services" / "fusion" / "app" / "security" / "tenant_scope.py"
 
 #: The test travels with the module. Each service runs the copy it ships

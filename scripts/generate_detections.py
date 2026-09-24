@@ -44,6 +44,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
 try:
     import yaml
 except ImportError:
@@ -52,7 +56,7 @@ except ImportError:
         sys.exit(1)
     raise
 
-ROOT = Path(__file__).parent.parent
+ROOT = repo_root()
 DETECTIONS_DIR = ROOT / "detections"
 SCRIPTS_DIR = ROOT / "scripts"
 

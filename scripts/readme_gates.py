@@ -38,7 +38,11 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 README = REPO_ROOT / "README.md"
 
 # Anything in this list is permitted to appear in README without resolving

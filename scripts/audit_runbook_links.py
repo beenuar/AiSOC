@@ -27,7 +27,11 @@ import pathlib
 import re
 import sys
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 ALERTS = REPO_ROOT / "infra" / "docker" / "alerts" / "aisoc.rules.yml"
 RUNBOOK_PATH_PREFIX = "docs/runbooks/"
 

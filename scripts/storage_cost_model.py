@@ -27,7 +27,11 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 COMMITTED = ROOT / "docs" / "decisions" / "storage-cost-model.json"
 
 # Reference list prices, USD per GB-month. VERIFY against your provider/region.

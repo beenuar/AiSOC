@@ -60,6 +60,8 @@ from pathlib import Path
 
 import yaml
 
+from gate_toolkit import repo_root
+
 WORKFLOWS_REL = Path(".github/workflows")
 SCRIPTS_REL = Path("scripts")
 MAKEFILE_REL = Path("Makefile")
@@ -107,7 +109,15 @@ _VERDICT_PREFIXES = ("--fail-", "--max-", "--require-", "--assert-")
 #: service (`inject_scenario.py` posts alerts, `generate_runbook.py` queries a
 #: tracing backend) exit non-zero when the network call fails, which is an
 #: operational error and not a finding about the tree.
-_INSPECTS_TREE = re.compile(r"Path\(__file__\)|\.glob\(|\.rglob\(|\.iterdir\(|\.read_text\(|\.read_bytes\(|os\.walk\(")
+#
+# `repo_root(` is in the list because it replaced `Path(__file__)` as the way
+# a gate names the tree it is about, and six gates had no other signal: the
+# migration onto `gate_toolkit.repo_root()` silently dropped
+# `check_prompt_lock.py`, `export_openapi.py` and four `sync_vendored_*`
+# mirrors out of this inventory, which would have left deleting their
+# workflow steps unnoticed. A classifier keyed on an idiom has to move when
+# the idiom does.
+_INSPECTS_TREE = re.compile(r"Path\(__file__\)|\brepo_root\(|\.glob\(|\.rglob\(|\.iterdir\(|\.read_text\(|\.read_bytes\(|os\.walk\(")
 
 #: Calls that grow a collection.
 _MUTATORS = {"append", "add", "extend", "update"}
@@ -691,7 +701,7 @@ def load(root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
+    parser.add_argument("--repo-root", type=Path, default=repo_root())
     parser.add_argument("--list", action="store_true", help="print every check with the workflow that runs it")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--self-test", action="store_true", help="prove the gate detects injected drift in each direction")

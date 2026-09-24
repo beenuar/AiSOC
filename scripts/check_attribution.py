@@ -36,7 +36,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root
+
+ROOT = repo_root()
 PATTERN_FILE = ROOT / ".githooks" / "attribution-patterns.txt"
 ALLOWLIST_FILE = ROOT / ".githooks" / "attribution-allowlist.txt"
 FIXTURES = ROOT / "scripts" / "attribution_fixtures.json"

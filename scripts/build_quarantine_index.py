@@ -54,7 +54,11 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 QUARANTINE_DIR = REPO_ROOT / "detections" / "splunk-imports" / "_quarantine"
 README_PATH = QUARANTINE_DIR / "README.md"
 

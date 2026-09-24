@@ -31,7 +31,11 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 sys.path.insert(0, str(ROOT / "services" / "connectors"))
 
 DOC = ROOT / "docs" / "connectors" / "conformance-matrix.md"

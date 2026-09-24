@@ -33,9 +33,11 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
 
+self_test_if_requested(__file__)
 
+ROOT = repo_root()
 def _connectors() -> int | None:
     """Registered connector classes, read from the registry literal."""
     init = ROOT / "services" / "connectors" / "app" / "connectors" / "__init__.py"

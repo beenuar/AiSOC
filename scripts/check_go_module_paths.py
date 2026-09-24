@@ -24,6 +24,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 
 def _repo_root() -> Path:
     """The repository, per git — not per this file's location.

@@ -32,7 +32,11 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 DEFAULT_PACK = ROOT / "playbooks" / "packs" / "v1"
 
 # Make the services/agents Pydantic models importable.

@@ -44,13 +44,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
 try:
     import yaml
 except ImportError:
     print("ERROR: PyYAML not installed. Run: pip install pyyaml")
     sys.exit(1)
 
-ROOT = Path(__file__).parent.parent
+ROOT = repo_root()
 DETECTIONS_DIR = ROOT / "detections"
 FIXTURES_DIR = DETECTIONS_DIR / "fixtures"
 SCRIPTS_DIR = ROOT / "scripts"

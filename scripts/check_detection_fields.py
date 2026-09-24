@@ -44,7 +44,11 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
 CONNECTORS = ROOT / "services" / "connectors" / "app" / "connectors"
 #: The AI SDK is a first-party emitter too — it posts spans straight to an

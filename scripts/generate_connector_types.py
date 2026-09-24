@@ -83,6 +83,8 @@ import re
 import sys
 from pathlib import Path
 
+from gate_toolkit import repo_root
+
 REGISTRY_REL = Path("services/connectors/app/connectors/__init__.py")
 CONNECTORS_REL = Path("services/connectors/app/connectors")
 NORMALIZER_REL = Path("services/ingest/internal/normalizer/normalizer.go")
@@ -374,7 +376,7 @@ def _read(path: Path) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
+    parser.add_argument("--repo-root", type=Path, default=repo_root())
     parser.add_argument("--check", action="store_true", help="fail (exit 1) on drift instead of rewriting the outputs")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--self-test", action="store_true", help="prove the gate detects injected drift in each direction")

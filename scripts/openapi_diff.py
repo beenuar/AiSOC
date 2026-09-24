@@ -44,6 +44,10 @@ from typing import Any
 
 import yaml
 
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 # Schema-name suffixes that indicate a request body (tightening these breaks
 # callers). Response-shaped schemas don't break a caller when a new optional
 # field appears, so a *new* required field only counts as breaking here.

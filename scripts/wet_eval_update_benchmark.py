@@ -32,6 +32,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 # Family ordering must match what's in ``apps/docs/docs/benchmark.md``:
 # Aggregate row first, then the five family rows in this exact order.
 _FAMILY_ORDER: tuple[tuple[str, str], ...] = (

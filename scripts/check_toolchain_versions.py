@@ -19,7 +19,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
 

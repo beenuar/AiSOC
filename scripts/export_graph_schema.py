@@ -50,7 +50,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 DEFAULT_YAML = REPO_ROOT / "schemas" / "graph-schema.yaml"
 DEFAULT_CURRENT_YAML = REPO_ROOT / "schemas" / "graph-schema-current.yaml"
 DEFAULT_GO_SOURCE = REPO_ROOT / "services" / "ingest" / "internal" / "graph" / "schema.go"

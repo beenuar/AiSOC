@@ -31,7 +31,11 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 TENANT_DIR = REPO_ROOT / "infra" / "fly" / "managed" / "tenants"
 
 SLUG_RE = re.compile(r"^[a-z0-9-]{2,32}$")

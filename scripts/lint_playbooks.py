@@ -20,13 +20,17 @@ import json
 import sys
 from pathlib import Path
 
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
 try:
     import jsonschema
 except ImportError:
     print("ERROR: jsonschema not installed.  Run: pip install jsonschema", file=sys.stderr)
     sys.exit(1)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 SCHEMA_PATH = REPO_ROOT / "schemas" / "playbook.schema.json"
 
 # Directories scanned for loose ``*.json`` playbooks.

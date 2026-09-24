@@ -16,8 +16,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
 
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 # file → (min non-whitespace chars, [required substrings])
 _REQUIRED = {
     "GOVERNANCE.md": (600, ["maintainer", "Neutral home", "Decision-making"]),

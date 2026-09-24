@@ -37,7 +37,11 @@ import sys
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 SCOREBOARD = ROOT / "apps" / "docs" / "static" / "data" / "scoreboard.json"
 SCHEMA = ROOT / "apps" / "docs" / "static" / "data" / "scoreboard.schema.json"
 _AGENTS = ROOT / "services" / "agents"

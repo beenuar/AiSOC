@@ -58,6 +58,10 @@ import pathlib
 import re
 import sys
 
+from gate_toolkit import self_test_if_requested
+
+self_test_if_requested(__file__)
+
 MOCK_NAME = r"(?:MOCK|DEMO|SAMPLE|FALLBACK)_[A-Z0-9_]+"
 
 #: A `fallbackData:` whose value mentions sample data. Whether it is gated is

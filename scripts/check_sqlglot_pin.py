@@ -27,8 +27,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
 
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 # Every file that installs sqlglot for a build or a test run. A new one must
 # be added here; `test_every_declaration_is_registered` below is the backstop
 # that notices when a declaration exists in a file this list does not name.

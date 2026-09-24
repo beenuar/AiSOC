@@ -205,6 +205,52 @@ fails the build rather than outliving the code it excused.
 - Maintain or improve test coverage
 - Run the full test suite before submitting a PR
 
+### Writing a CI gate
+
+A gate under `scripts/` is only worth the tree it opened. The useful question
+to ask of one is not "does it flag the right things" but **"what does it
+credit as clean, and could it credit something it never actually opened?"**
+Running every wired check inside an empty git repository once found five
+reporting OK over a repository containing nothing — including the detection
+validator behind the rule count on the front page.
+
+Four properties are enforced by `scripts/check_gate_contract.py`, which runs
+in `ci.yml :: python-test`:
+
+1. **Resolve the root from git.** Use `gate_toolkit.repo_root()`.
+   `Path(__file__).resolve().parent.parent` is whatever happens to sit two
+   levels above the script, so a copy run from elsewhere scans that other
+   tree and prints a confident OK about a checkout nobody asked about.
+2. **Print what was scanned, including a count.** *Found nothing* and
+   *scanned nothing* are different results that print the same word.
+3. **Fail closed on an empty or unreadable read.** Zero files walked is not
+   zero violations found; it usually means a broken glob, a renamed package
+   or a wrong root. Exit non-zero and say which.
+4. **Carry a `--self-test`.** For a gate with nothing bespoke to prove, one
+   statement below the imports is enough:
+
+   ```python
+   from gate_toolkit import repo_root, self_test_if_requested
+
+   self_test_if_requested(__file__)
+   ```
+
+   Where the gate enforces a specific rule, inject a violation of that rule
+   and assert it is caught — a gate nobody has seen fail is indistinguishable
+   from one that cannot.
+
+Run both gates on the gates before pushing:
+
+```bash
+python3 scripts/check_gate_coverage.py   # every check is reachable from a workflow
+python3 scripts/check_gate_contract.py   # no check reports OK over an empty tree
+```
+
+Exceptions to the empty-tree rule are recorded in
+`EMPTY_TREE_EXCEPTIONS` with the disposition they are excused for, and are
+checked in both directions — an entry naming a check that no longer exists
+fails, and so does one whose gate has started behaving differently.
+
 ### Public eval harness
 
 Anything that touches the agent (`services/agents/`), the orchestrator

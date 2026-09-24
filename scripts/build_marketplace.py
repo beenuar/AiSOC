@@ -41,7 +41,11 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 DETECTIONS_DIR = REPO_ROOT / "detections"
 PLAYBOOKS_PACKS_DIR = REPO_ROOT / "playbooks" / "packs"
 PLUGINS_DIR = REPO_ROOT / "plugins"

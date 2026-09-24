@@ -34,13 +34,17 @@ import re
 import sys
 from pathlib import Path
 
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
     print("PyYAML is required: pip install pyyaml", file=sys.stderr)
     raise SystemExit(2) from None
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 SLOS = REPO_ROOT / "docs" / "operations" / "slos.yaml"
 PROMETHEUS = REPO_ROOT / "infra" / "docker" / "prometheus.yml"
 OUTPUT = REPO_ROOT / "infra" / "docker" / "alerts" / "slo.rules.yml"

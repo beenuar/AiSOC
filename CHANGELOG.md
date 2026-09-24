@@ -77,6 +77,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **No gate may report OK over a repository with no content, and it is a CI
+  gate now rather than a probe somebody happened to run once.** Copying
+  `scripts/` into an empty git repository and running every wired check there
+  found five reporting OK over a tree holding nothing — the detection
+  validator behind the rule count on the front page certifying zero rules as
+  valid, a dashboard check that failed on an *empty* directory and passed on a
+  *missing* one, `OK: 0 published Go module path(s)`, every self-link healthy
+  over zero files, and a health-probe audit printing a table header and
+  exiting 0. Those five were fixed; the probe that found them was a one-off,
+  so the next gate written could reintroduce the defect freely.
+
+  `scripts/check_gate_contract.py` is that probe made permanent. It runs all
+  69 inventoried checks the way a workflow runs each one, inside a git
+  repository holding only `scripts/`, and requires each to exit non-zero.
+  Three things make the result mean something:
+
+  - **The inventory is not written here.** It comes from
+    `check_gate_coverage.py`, which already resolves the workflow-to-check
+    graph structurally. A second scanner would drift the first time either
+    one learned something the other had not.
+  - **A failure the empty tree did not cause is INCONCLUSIVE, not a pass.**
+    An argparse usage error, or an import of a module the repository does not
+    supply, means the gate was never exercised — crediting that as a refusal
+    would be the same defect one level up. Whether a missing module is the
+    repository's own is read from `git ls-files`, so `No module named 'app'`
+    counts as the empty tree working and `No module named 'structlog'` does
+    not.
+  - **Every way CI runs a script is probed, and the worst result decides.**
+    Four subcommands under one name are four gates; excusing the set because
+    the first refused is how the others stay hidden. Only invocations
+    carrying a declared verdict flag are probed, so the generator half of a
+    script that is both generator and gate is not mistaken for one.
+
+  Exceptions are recorded with the disposition they are excused for and
+  checked in both directions, so an entry naming a check that no longer
+  exists fails, and so does one whose gate has started behaving differently.
+  Four are recorded: `wet_eval_check.py` (reads two environment variables and
+  no repository content), `security_audit.py`'s `validate-ignores` arm (its
+  entire subject is a file inside `scripts/`, the one directory the scratch
+  tree must keep), and `openapi_diff.py` / `wet_eval_update_benchmark.py`
+  (both inputs named on the command line, one of them built outside the
+  checkout).
+
+- **Every check resolves its repository root from git, and every check
+  carries a `--self-test`.** Sixty of the sixty-nine derived a root from
+  `Path(__file__).resolve().parent.parent` — whatever happens to sit two
+  levels above the script — which is how a gate prints a confident OK about a
+  tree it never opened, and only a deliberate run from another directory
+  catches it. Fifty-four had no self-test at all. Both are now properties the
+  contract gate enforces, with empty exception lists.
+
+  `scripts/gate_toolkit.py` holds the single implementation of both. Five
+  near-identical copies of the git resolution had already accumulated across
+  `scripts/`, which is how the sixth gets written subtly differently.
+
+  Two things this turned up. `check_gate_coverage.py` decided whether a script
+  inspects the repository partly by looking for `Path(__file__)` — the very
+  idiom being migrated away from — so moving six gates onto the shared
+  resolver silently dropped them out of the inventory, and deleting their
+  workflow steps would then have gone unnoticed. And the first spelling of the
+  root-resolution property matched `repo_root` anywhere in the file, which
+  `check_gate_coverage.py` emits as a JSON key: a gate rooted at `__file__`
+  read as compliant on the strength of a dictionary key in its own output.
+  Both are read from the syntax tree now.
+
 - **The 153 Python files that belong to no manifest tree are type-checked, and
   five gates that reported OK over nothing now fail.** Giving all twenty trees
   a `[tool.mypy]` table still left `scripts/`, `tests/`, `tools/` and
@@ -1224,6 +1289,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **`check_route_tenant_scope.py` reported OK having scanned zero routes.** It
+  refused a tree with no `services/` directory, which is not how a scan loses
+  its corpus: a renamed package, a changed decorator spelling or a walk that
+  stops descending all leave the directory in place. Against a `services/`
+  tree with no routes in it the gate printed `scanned 0 routes across 0 files`
+  and then `OK: every route taking a tenant identifier authenticates` — the
+  same sentence CI shows on a real pass. It now exits 2, and `--self-test`
+  carries the case. Naming the count was only half the fix: the number was
+  already printed, directly above the clean verdict.
+
+- **The dependency audit reported success over a tree with no manifests.**
+  `security_audit.py`'s pnpm, python and go arms each discovered zero targets
+  and printed `0 findings`, which is the sentence a clean audit of twenty
+  services prints. The file already treated an unscanned service as a failure
+  rather than a warning — the gap was that a corpus of zero was never
+  *unscanned*, just empty. All three now record a coverage gap when discovery
+  finds nothing, and `validate-ignores` refuses a missing policy file instead
+  of reporting `Validated 0 ignore entries` and exiting 0. `get_repo_root()`
+  also stopped falling back to `Path.cwd()`, which meant a run from anywhere
+  else audited whatever manifests happened to be under it.
 
 - **Four tests failed on a clean checkout and belonged to nobody.** A suite
   with known-failing tests teaches everyone to skim past red, so each is now

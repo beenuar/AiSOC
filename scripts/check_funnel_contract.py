@@ -25,7 +25,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 METRICS = REPO_ROOT / "services" / "api" / "app" / "api" / "v1" / "endpoints" / "metrics.py"
 DOC = REPO_ROOT / "apps" / "docs" / "docs" / "console" / "funnel-kpis.md"
 

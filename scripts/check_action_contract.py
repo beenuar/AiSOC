@@ -32,7 +32,11 @@ from typing import TypeVar
 
 import structlog
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
 ACTIONS = REPO_ROOT / "services" / "actions"
 sys.path.insert(0, str(ACTIONS))
 

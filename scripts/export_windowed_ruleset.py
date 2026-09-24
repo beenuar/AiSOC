@@ -39,7 +39,11 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
 OUT = ROOT / "services" / "fusion" / "app" / "data" / "windowed_ruleset.json"
 
 #: Windowed rules, authored here rather than in the engine module.
