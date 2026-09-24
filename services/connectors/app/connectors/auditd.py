@@ -678,6 +678,11 @@ class AuditdConnector(BaseConnector):
 
         return {
             "source": self.connector_id,
+            # The ingest normalizer treats `raw_event` + `source` as the
+            # canonical connector envelope. Without it this event missed that
+            # check and fell to the generic fallback, which took the host below
+            # with it.
+            "raw_event": raw,
             "category": "endpoint",
             "external_id": raw.get("event_id"),
             "title": title,

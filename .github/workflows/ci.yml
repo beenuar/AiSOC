@@ -280,6 +280,20 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # The count says how many connectors exist; this says whether the name
+      # each one is registered under still reaches a normalization profile.
+      # The connectors service declares `crowdstrike` and `okta` while the
+      # ingest profiles were keyed `crowdstrike_falcon` and `okta_system_log`,
+      # so events arriving under the advertised names — including the README's
+      # own push example — missed the lookup and fell to the generic fallback.
+      #
+      # The self-test runs first and on the same tree: it injects drift in each
+      # direction and requires the gate to catch each one, so a refactor that
+      # quietly stops checking a direction fails here rather than printing OK.
+      - name: Connector profile drift gate — self-test
+        run: python3 scripts/check_connector_profiles.py --self-test
+      - name: Connector profile drift gate
+        run: python3 scripts/check_connector_profiles.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector

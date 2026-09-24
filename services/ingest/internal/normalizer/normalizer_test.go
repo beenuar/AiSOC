@@ -402,8 +402,10 @@ func TestCanonicalEnvelopeResolvesHostAndIPAliases(t *testing.T) {
 	}
 }
 
-// Hand-written vendor profiles name their own fields and must not have the
-// canonical aliases applied on top of them.
+// A hand-written vendor profile's own field mapping always wins. The aliases
+// run over every profile now, so this pins the precedence rather than the
+// absence: they may fill a destination the vendor map left empty, they may
+// never overwrite one it filled.
 func TestAliasesDoNotApplyToRawVendorProfiles(t *testing.T) {
 	n := newTestNormalizer()
 	ev, err := n.Normalize(&RawEvent{
@@ -423,5 +425,233 @@ func TestAliasesDoNotApplyToRawVendorProfiles(t *testing.T) {
 	}
 	if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != "falcon-user" {
 		t.Errorf("actor.user.name = %v, want the vendor profile's own mapping", got)
+	}
+}
+
+// The generic fallback must resolve identity, not just a title.
+//
+// This is the README's own push example: a flat payload, a connector type with
+// no profile of its own. Before, the fallback's field map held `title` and
+// `external_id` and nothing else, and the alias pass was gated behind the
+// canonical-envelope branch — so the event became an alert with no host, no
+// user and no IP. Entity extraction, the Investigation Rail's pivots, the
+// {tenant}:{entity}:{tactic} correlation key, the entity graph and UEBA all
+// read those three fields, so the alert arrived with nothing to pivot from.
+// The alert appearing at all is what made it look like it had worked.
+func TestGenericProfileResolvesIdentityFields(t *testing.T) {
+	n := newLenientNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID:   "edr-1",
+		ConnectorType: "acme_xdr", // deliberately absent from connectorProfiles
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload: map[string]interface{}{
+			"severity": "high",
+			"title":    "Encoded PowerShell from Office",
+			"host":     "WIN-FIN-01",
+			"user":     "alice",
+			"src_ip":   "10.20.30.40",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+	for _, tc := range []struct{ path, want string }{
+		{"device.name", "WIN-FIN-01"},
+		{"actor.user.name", "alice"},
+		{"src_endpoint.ip", "10.20.30.40"},
+	} {
+		if got := nested(t, ev.OcsfEvent, tc.path); got != tc.want {
+			t.Errorf("%s = %v, want %q — the generic fallback must resolve identity", tc.path, got, tc.want)
+		}
+	}
+	// Still promotable and still vendor-neutral, which the fallback already got right.
+	if ev.OcsfEvent["class_uid"] != 2001 {
+		t.Errorf("class_uid = %v, want 2001", ev.OcsfEvent["class_uid"])
+	}
+	if ev.OcsfEvent["severity_id"] != 4 {
+		t.Errorf("severity_id = %v, want 4", ev.OcsfEvent["severity_id"])
+	}
+}
+
+// The connector identifier the product advertises must reach the profile that
+// carries its vendor field map.
+//
+// services/connectors declares `crowdstrike`; this file keyed the profile
+// `crowdstrike_falcon`. The README tells a new user to push the former, so the
+// example fell through to the generic fallback and was attributed to nothing
+// in particular. Both names resolve now, because the longer one is load-bearing
+// elsewhere — the ConnectorType union, the CLI default, the graph extractor.
+func TestDeclaredConnectorIdResolvesToVendorProfile(t *testing.T) {
+	for _, tc := range []struct {
+		connectorType string
+		wantVendor    string
+		wantClass     int
+	}{
+		{"crowdstrike", "CrowdStrike", 2001},
+		{"crowdstrike_falcon", "CrowdStrike", 2001},
+		{"okta", "Okta", 3002},
+		{"okta_system_log", "Okta", 3002},
+	} {
+		t.Run(tc.connectorType, func(t *testing.T) {
+			n := newLenientNormalizer()
+			ev, err := n.Normalize(&RawEvent{
+				ConnectorID:   "c-1",
+				ConnectorType: tc.connectorType,
+				TenantID:      "11111111-1111-1111-1111-111111111111",
+				ReceivedAt:    "2026-09-23T00:00:00Z",
+				// Flat, human-authored, lowercase severity — a pushed payload,
+				// not a vendor row.
+				Payload: map[string]interface{}{
+					"severity": "high",
+					"title":    "Encoded PowerShell from Office",
+					"host":     "WIN-FIN-01",
+					"user":     "alice",
+					"src_ip":   "10.20.30.40",
+				},
+			})
+			if err != nil {
+				t.Fatalf("Normalize returned error: %v", err)
+			}
+			meta := ev.OcsfEvent["metadata"].(map[string]interface{})
+			product := meta["product"].(OcsfProduct)
+			if product.VendorName != tc.wantVendor {
+				t.Errorf("VendorName = %q, want %q — the declared id must reach the vendor profile", product.VendorName, tc.wantVendor)
+			}
+			if ev.OcsfEvent["class_uid"] != tc.wantClass {
+				t.Errorf("class_uid = %v, want %d", ev.OcsfEvent["class_uid"], tc.wantClass)
+			}
+			// Reaching a vendor profile must not cost the identity fields the
+			// generic fallback would have resolved.
+			if got := nested(t, ev.OcsfEvent, "device.name"); got != "WIN-FIN-01" {
+				t.Errorf("device.name = %v, want WIN-FIN-01", got)
+			}
+			if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != "alice" {
+				t.Errorf("actor.user.name = %v, want alice", got)
+			}
+			if got := nested(t, ev.OcsfEvent, "src_endpoint.ip"); got != "10.20.30.40" {
+				t.Errorf("src_endpoint.ip = %v, want 10.20.30.40", got)
+			}
+			// ...nor the severity. crowdstrike_falcon's ladder is capitalised
+			// and a pushed payload is lowercase; without the shared-ladder
+			// fallback this scores 0 and renders as Unknown.
+			if ev.OcsfEvent["severity_id"] != 4 {
+				t.Errorf("severity_id = %v, want 4 for %q", ev.OcsfEvent["severity_id"], "high")
+			}
+			// ...nor the caller's own title. A vendor profile maps its
+			// vendor's field name, so `message` was left empty and the
+			// promoter generated "Security Finding from <product>" over the
+			// top of the title the caller sent.
+			if got := nested(t, ev.OcsfEvent, "message"); got != "Encoded PowerShell from Office" {
+				t.Errorf("message = %v, want the caller's own title", got)
+			}
+		})
+	}
+}
+
+// critical is the fifth tier, not a louder high. A vendor-native critical that
+// collapses into high silently downgrades the most urgent thing in the queue.
+func TestCriticalSeverityDoesNotCollapseIntoHigh(t *testing.T) {
+	for _, connectorType := range []string{"acme_xdr", "crowdstrike"} {
+		t.Run(connectorType, func(t *testing.T) {
+			n := newLenientNormalizer()
+			ev, err := n.Normalize(&RawEvent{
+				ConnectorID:   "c-1",
+				ConnectorType: connectorType,
+				TenantID:      "11111111-1111-1111-1111-111111111111",
+				ReceivedAt:    "2026-09-23T00:00:00Z",
+				Payload:       map[string]interface{}{"title": "t", "severity": "critical"},
+			})
+			if err != nil {
+				t.Fatalf("Normalize returned error: %v", err)
+			}
+			if ev.OcsfEvent["severity_id"] != 5 {
+				t.Errorf("severity_id = %v, want 5 (critical is its own tier)", ev.OcsfEvent["severity_id"])
+			}
+		})
+	}
+}
+
+// An identity destination is a scalar the entity extractor turns into a chip
+// and the correlator folds into its key. Several connectors pass the vendor's
+// nested actor object through under the same key a scalar would use; writing
+// that object into the slot yields an entity that renders as a map.
+func TestIdentityAliasesSkipNonScalarsAndDigForTheName(t *testing.T) {
+	n := newLenientNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID:   "c-1",
+		ConnectorType: "acme_xdr",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload: map[string]interface{}{
+			"title": "t",
+			// The vendor's object under the key a scalar would use.
+			"actor":  map[string]interface{}{"id": "u-1", "name": "alice"},
+			"device": map[string]interface{}{"name": "WIN-01"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+	got := nested(t, ev.OcsfEvent, "actor.user.name")
+	if _, isStr := got.(string); !isStr {
+		t.Fatalf("actor.user.name = %#v (%T), want a string — a map here is an unpivotable entity", got, got)
+	}
+	if got != "alice" {
+		t.Errorf("actor.user.name = %v, want alice dug out of the nested actor", got)
+	}
+	if got := nested(t, ev.OcsfEvent, "device.name"); got != "WIN-01" {
+		t.Errorf("device.name = %v, want WIN-01", got)
+	}
+}
+
+// Go randomises map iteration, so alias precedence has to come from a slice.
+// Resolving the same payload repeatedly must yield the same answer every time;
+// a map-ordered implementation passes this roughly one run in two.
+func TestIdentityAliasResolutionIsDeterministic(t *testing.T) {
+	payload := func() map[string]interface{} {
+		return map[string]interface{}{
+			"title": "t",
+			// Every alias source for actor.user.name carries a distinct value,
+			// so any ordering instability shows up as a different winner.
+			"actor": "by-actor", "username": "by-username",
+			"user": "by-user", "user_name": "by-user-name",
+			"hostname": "by-hostname", "host": "by-host", "device_name": "by-device-name",
+			"src_ip": "1.1.1.1", "source_ip": "2.2.2.2", "client_ip": "3.3.3.3",
+		}
+	}
+	const runs = 200
+	for i := 0; i < runs; i++ {
+		n := newLenientNormalizer()
+		ev, err := n.Normalize(&RawEvent{
+			ConnectorID: "c-1", ConnectorType: "acme_xdr",
+			TenantID:   "11111111-1111-1111-1111-111111111111",
+			ReceivedAt: "2026-09-23T00:00:00Z", Payload: payload(),
+		})
+		if err != nil {
+			t.Fatalf("Normalize returned error: %v", err)
+		}
+		if got := nested(t, ev.OcsfEvent, "actor.user.name"); got != "by-actor" {
+			t.Fatalf("run %d: actor.user.name = %v, want by-actor (first declared source)", i, got)
+		}
+		if got := nested(t, ev.OcsfEvent, "device.name"); got != "by-hostname" {
+			t.Fatalf("run %d: device.name = %v, want by-hostname", i, got)
+		}
+		if got := nested(t, ev.OcsfEvent, "src_endpoint.ip"); got != "1.1.1.1" {
+			t.Fatalf("run %d: src_endpoint.ip = %v, want 1.1.1.1", i, got)
+		}
+	}
+}
+
+// Every connectorTypeAliases entry must point at a profile that exists, and
+// must not shadow a connector type that already has its own profile.
+func TestConnectorTypeAliasesPointAtRealProfiles(t *testing.T) {
+	for alias, target := range connectorTypeAliases {
+		if _, ok := connectorProfiles[target]; !ok {
+			t.Errorf("alias %q -> %q, but %q is not in connectorProfiles", alias, target, target)
+		}
+		if _, ok := connectorProfiles[alias]; ok {
+			t.Errorf("alias %q shadows its own profile entry; the alias is dead code", alias)
+		}
 	}
 }

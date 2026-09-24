@@ -77,6 +77,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`scripts/check_connector_profiles.py` — a connector-type drift gate that
+  reads in both directions.** Nothing compared the profile keys in
+  `services/ingest/internal/normalizer/normalizer.go` against the identifiers
+  the connectors service declares, and they had drifted apart in both
+  directions at once. The gate enumerates four name spaces — the Go profiles
+  and type aliases, the 84 declared `connector_id`s, the `ConnectorType`
+  union, and every `connector_type` appearing in a documented example — and
+  fails when a name in any of them resolves to nothing.
+
+  It also checks that a documented example reaches a *profile*, not merely a
+  declared connector: a reader pastes a flat payload, which never carries the
+  canonical envelope, so only a profile or alias can give the event a vendor
+  identity. That is the specific check that catches the README defect.
+
+  `--self-test` injects twelve defects, one per direction and per failure
+  code, and requires the gate to catch each; it runs in CI on the same tree
+  immediately before the gate itself. The resolved repo root, every file read
+  and every count are printed before the verdict, and an input that is missing
+  or parses empty is a hard error rather than a quiet pass — a gate that
+  reports OK about a tree it never opened is worse than no gate.
+
 - **Competitor product names removed from the docs portal, the benchmark page
   and the archived plan subtree, and a CI gate added to keep them out.** AiSOC
   names no competitor product, but two published comparison tables and the
@@ -291,6 +312,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **An event ingested under a connector type with no profile became an alert
+  with no host, no user and no source IP.** `_canonicalAliases` in
+  `services/ingest/internal/normalizer/normalizer.go` already resolved
+  `actor.user.name`, `device.name` and `src_endpoint.ip` from the spellings
+  connectors actually use, but the pass that applied it was gated behind the
+  canonical-envelope branch. Anything reaching the generic fallback — every
+  push through `/v1/ingest/batch`, which sends a flat payload and so never
+  matches that branch — resolved `title` and `external_id` and nothing else.
+
+  Identity is what the rest of the platform is built on: entity extraction,
+  the Investigation Rail's pivots, the `{tenant}:{entity}:{tactic}`
+  correlation key, the entity graph and UEBA all key off those three fields.
+  An alert still appeared, which is what made it look like it had worked, but
+  it carried no entity chips and correlated into the `unknown` bucket. The
+  alias pass now runs for every profile and fills only destinations the field
+  map left empty, so a vendor profile's own mapping still wins.
+
+  Three defects in the same family, found while fixing it:
+
+  - **A nested vendor object was written whole into a scalar identity slot.**
+    Fourteen of the 84 registered connectors emit `actor`, and four emit it as
+    the vendor's object rather than a name, so `actor.user.name` became a map
+    — an entity that renders as a map and correlates as garbage. Identity
+    resolution now takes strings only and digs one level (`actor.name`,
+    `actor.displayName`, `user.name`) for the scalar underneath.
+  - **A vendor profile's severity ladder is spelled the way its vendor spells
+    it.** `crowdstrike_falcon`'s is capitalised, and a pushed payload is
+    whatever the caller wrote, so a lowercase `high` scored 0 and rendered as
+    Unknown. The shared five-tier ladder is consulted when the profile's own
+    has no entry for the value; `critical` stays its own tier.
+  - **A vendor profile left `message` empty for a pushed payload**, because it
+    maps its vendor's field name, so the promoter generated
+    "Security Finding from <product>" over the title the caller actually sent.
+
+- **`connector_type` values the product advertises did not reach their
+  profile.** The connectors service declares `crowdstrike` and `okta`; the
+  ingest profiles were keyed `crowdstrike_falcon` and `okta_system_log`. The
+  README's own push example used `crowdstrike`, so the example a new user
+  copies missed the lookup, fell to the generic fallback and lost its vendor
+  attribution — 80 of the 84 declared connectors had no profile entry under
+  the name they are registered with.
+
+  A `connectorTypeAliases` map resolves both spellings rather than renaming
+  either. The longer names are load-bearing elsewhere — `packages/types`'
+  `ConnectorType` union, the CLI's default, the graph extractor, the actions
+  credential resolver — so renaming one side would have broken the other.
+
+- **Two registered connectors reached no normalization path at all.**
+  `auditd` emitted `source` without `raw_event`, so it failed the canonical
+  envelope check and lost the host it carries; it now emits both.
+  `email_inbox` returns the message envelope shaped for
+  `email-forwarded.yaml`, so it matched neither branch and strict mode
+  rejected it outright; it now has a profile mirroring that template, the way
+  `ai_runtime` mirrors `ai-runtime.yaml`.
 
 - **The agent recommended evidence acquisition the platform could not
   perform.** `capture_forensics` was an `ActionType` with no executor
