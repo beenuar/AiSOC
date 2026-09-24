@@ -18,7 +18,7 @@ from __future__ import annotations
 import pathlib
 
 import pytest
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML ships no stubs; only used to read compose here
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 ROOT_COMPOSE = REPO / "docker-compose.yml"
