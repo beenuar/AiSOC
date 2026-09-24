@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`apps/mobile` resolved a vulnerable `image-size` that the workspace had
+  already fixed.** Two high-severity advisories — GHSA-5p2g-fcmc-qvqq
+  (CVE-2025-71329, JXL/HEIF parsers) and GHSA-w3rx-r6r6-pgpr
+  (CVE-2025-71330, ICNS parser), both infinite-loop denial of service, both
+  fixed in 2.0.3 — stayed open against `apps/mobile/pnpm-lock.yaml` for a
+  structural reason rather than an unfixed one. The repository root pinned
+  `image-size` to `>=2.0.4 <3` through a pnpm override, and `apps/mobile` is
+  a deliberately independent install root with its own
+  `pnpm-workspace.yaml` and lockfile, created that way so its install would
+  stop rewriting the root lock. The override could not reach it and nothing
+  compared the two. Resolved by declaring the same override in
+  `apps/mobile/package.json`; the lockfile now resolves `image-size@2.0.4`
+  and drops its `queue` dependency with it.
+
+  Metro is the only consumer, and no version of Metro that depends on
+  `image-size` permits 2.x — every one declares `^1.0.2`, which is why
+  Dependabot recorded `security_update_not_possible` and failed its job
+  instead of opening a pull request. Metro 0.83.3's two call sites go
+  through `_interopRequireDefault(require("image-size")).default`, and
+  `image-size@2.0.4`'s CommonJS build still exports a callable `default`, so
+  `metro.getAssetSize` returns correct dimensions against it.
+
+### Added
+
+- **The Attack Graph says when it is showing a truncated graph.**
+  `GET /api/v1/graph` bounds itself to 400 nodes and 900 edges and reports
+  `truncated`; the console rendered the flag nowhere, so a graph cut at the
+  ceiling and a graph that is genuinely that size looked identical. On an
+  attack graph that difference changes a conclusion — a missing edge reads
+  as a lateral path that does not exist. The view now shows a
+  `role="status"` notice naming the counts, the depth and the ceiling that
+  produced them, with a depth control that issues a new query rather than
+  re-rendering the cached one. The three existing states are unchanged: an
+  empty tenant still reads as empty, an unreachable backend still names the
+  endpoint and the status, and neither is reported as a truncation.
+
+- `GraphOverviewResponse` gains `nodeLimit` and `edgeLimit`, read from
+  `graph_service` rather than restated, so the ceiling a client reports is
+  the ceiling the service applied. Additive and defaulted; no existing
+  consumer changes.
+
+### Fixed
+
+- **`scripts/check_toolchain_pins.py` compares every Node install root
+  against every other.** There are four — the workspace root, `apps/mobile`,
+  `services/realtime` and `services/mcp/cursor-extension` — and the gate read
+  dependency resolution out of the first one only, so the `image-size` split
+  above was invisible to it. It now discovers install roots structurally,
+  reads both pnpm and npm override spellings and both lockfile formats, and
+  checks in both directions: an override declared in one root against what
+  every other root resolved, and each root's own lockfile against its own
+  manifest. Exemptions are keyed on the exact versions they were verified
+  against, so a bump re-opens the question rather than inheriting the
+  clearance. Running it against the pre-fix tree names the defect and the
+  file; running it over a lockfile it cannot parse, or a tree with no
+  install root, fails rather than reporting a clean comparison it never
+  performed. The gate found a third instance of the same class on first run
+  (`ws` 6.2.6/7.5.13 in `apps/mobile`, verified clean against OSV and
+  recorded).
+
+- The workspace-wide `esbuild` override ban now applies to every install
+  root instead of the repository root alone. `apps/mobile` was the one place
+  the mistake that broke Turbopack's font import map could have been
+  reintroduced without anything noticing, because its bundler is Metro and
+  the damage would surface in a different workspace.
+
+- `.github/dependabot.yml`'s `apps/mobile` entry gains the `typescript`
+  semver-major hold that the `/` and `/services/realtime` entries already
+  carry. Its CI gate is `tsc --noEmit`, so it was the only Node install root
+  running `tsc` without the hold — the same shape as the `image-size`
+  finding, a decision taken for the workspace that never reached the root
+  installing separately.
+
 ### BREAKING
 
 - **Three MSSP response schemas describing fabricated data are removed:

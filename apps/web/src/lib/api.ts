@@ -3632,6 +3632,19 @@ export interface AttackGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   generatedAt: string;
+  /**
+   * The response was cut at the server's ceiling, so paths are missing.
+   *
+   * Optional because `/graph/blast-radius` and the case attack-path route
+   * reuse this shape and bound differently. A consumer must treat `undefined`
+   * as "this endpoint does not say" and not as "complete" — the two are only
+   * the same for a response that was never bounded.
+   */
+  truncated?: boolean;
+  /** The node ceiling the service applied, when it reports one. */
+  nodeLimit?: number;
+  /** The edge ceiling the service applied, when it reports one. */
+  edgeLimit?: number;
 }
 
 export interface AttackPath {

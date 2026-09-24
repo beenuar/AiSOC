@@ -63,8 +63,29 @@ updates:
   # tree that would add several hundred megabytes to every other TypeScript
   # CI job. That also means the `/` entry above does not cover it — and
   # Dependabot *alerts* scan every manifest regardless of this file, so
-  # alerts appeared here that no update job could ever act on. A security
-  # update against an uncovered directory is what failed the Dependabot run.
+  # alerts appeared here that no update job could ever act on.
+  #
+  # Adding this entry made the directory visible to update jobs. It did not,
+  # and cannot, make every advisory here actionable, and the difference is
+  # worth writing down because the next person will read a red
+  # `Dependabot Updates` run and look for a mistake in this file.
+  #
+  # A security update for a *transitive* npm dependency can only propose a
+  # version the parent's own range permits. Two `image-size` advisories
+  # (GHSA-5p2g-fcmc-qvqq, GHSA-w3rx-r6r6-pgpr) are fixed in 2.0.3, and every
+  # `metro` release that depends on `image-size` declares `^1.0.2` — so the
+  # highest version Dependabot could install was 1.2.1 and it recorded
+  # `security_update_not_possible`, which surfaces as a *failed job* rather
+  # than as a pull request. Raising the parent was not a route either: the
+  # only `@expo/metro` that drops `image-size` ships with Expo SDK 55, and
+  # `expo` is pinned to 54 here.
+  #
+  # The fix for that class is a pnpm override in `apps/mobile/package.json`,
+  # which is a resolution decision this file has no way to express.
+  # `scripts/check_toolchain_pins.py` now compares the override sets and the
+  # resolved versions of every install root against each other, so an
+  # override applied in the workspace and not here fails CI instead of
+  # sitting as an open alert nobody can action.
   - package-ecosystem: npm
     directory: /apps/mobile
     schedule:
@@ -87,6 +108,15 @@ updates:
       - dependency-name: "react-native"
       - dependency-name: "react"
       - dependency-name: "react-dom"
+      # Hold `typescript` on v6, for the same measured reason as the `/` and
+      # `/services/realtime` entries above. This directory's CI gate is
+      # `tsc --noEmit`, so a TypeScript 7 pull request reds it exactly the way
+      # it reds `apps/web` — and it was the only Node install root running
+      # `tsc` without the hold, which is the same shape as the `image-size`
+      # finding: a decision taken for the workspace that never reached the
+      # root installing separately.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # ── services/realtime ────────────────────────────────────────
   #
