@@ -73,12 +73,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      # The gate itself is stdlib-only (ast). The suite additionally drives the
-      # real fusion router over ASGI, which is the point — a stubbed router
-      # would not prove anything about the shipped one — so its module-level
-      # import chain has to resolve here. `aiokafka` and `asyncpg` arrive
-      # through `app.workers.consumer` and the alert/DLQ sinks. The heavier
-      # ML and ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
+      # The gate itself is stdlib-only (ast). The suites additionally drive the
+      # real fusion and agents routers over ASGI, which is the point — a
+      # stubbed router would not prove anything about the shipped one — so
+      # their module-level import chains have to resolve here. `aiokafka` and
+      # `asyncpg` arrive through `app.workers.consumer` and the alert/DLQ
+      # sinks; `langchain-core` through `app.llm`, which the contextual and
+      # copilot routers import at module level. `sqlalchemy` + `aiosqlite` +
+      # `greenlet` back the seeded two-tenant by-id read. The heavier ML and
+      # ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
       # `clickhouse-driver` are all imported inside functions, so they stay
       # out of this job rather than adding minutes to it.
       - name: Install deps
@@ -87,7 +90,7 @@ jobs:
           pytest pytest-asyncio httpx "fastapi>=0.117,<0.142" pydantic
           structlog "redis>=5,<6" "pydantic-settings>=2.1,<3"
           "aiokafka>=0.10,<0.15" "asyncpg>=0.29,<0.31" "cryptography>=46,<51"
-          "sqlalchemy>=2,<3" aiosqlite greenlet
+          "sqlalchemy>=2,<3" aiosqlite greenlet "langchain-core>=1.2.22,<2"
 
       # Proves the gate can fail before trusting it to pass. Injects a route
       # taking a tenant with no auth, one taking a tenant with auth but no
