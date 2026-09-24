@@ -64,12 +64,19 @@ jobs:
           python-version: "3.12"
 
       # The gate itself is stdlib-only (ast). The suite additionally drives the
-      # real fusion router over ASGI against a live Redis.
+      # real fusion router over ASGI, which is the point — a stubbed router
+      # would not prove anything about the shipped one — so its module-level
+      # import chain has to resolve here. `aiokafka` and `asyncpg` arrive
+      # through `app.workers.consumer` and the alert/DLQ sinks. The heavier
+      # ML and ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
+      # `clickhouse-driver` are all imported inside functions, so they stay
+      # out of this job rather than adding minutes to it.
       - name: Install deps
         run: >-
           pip install --quiet
           pytest pytest-asyncio httpx "fastapi>=0.109,<0.142" pydantic
           structlog "redis>=5,<6" "pydantic-settings>=2,<3"
+          "aiokafka>=0.10,<0.15" "asyncpg>=0.29,<0.31" "cryptography>=42,<51"
 
       # Proves the gate can fail before trusting it to pass. Injects a route
       # taking a tenant with no auth, one taking a tenant with auth but no
