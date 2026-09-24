@@ -117,8 +117,8 @@ type CompareCell = { kind: 'yes' | 'no' | 'caveat'; label: string };
 const COMPARE_HEADERS = [
   'Capability',
   'AiSOC',
-  'Wazuh',
-  'Splunk Enterprise Security',
+  'Open-source SIEM/HIDS',
+  'Commercial SIEM platform',
   'Closed-source AI SOC',
 ] as const;
 
@@ -155,7 +155,7 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
     cells: [
       { kind: 'yes', label: 'LangGraph multi-agent' },
       { kind: 'no', label: 'No' },
-      { kind: 'caveat', label: 'Splunk AI Assistant add-on' },
+      { kind: 'caveat', label: 'Paid AI assistant add-on' },
       { kind: 'yes', label: 'Closed-source' },
     ],
   },
@@ -172,8 +172,8 @@ const COMPARE_ROWS: ReadonlyArray<{ feature: string; cells: CompareCell[] }> = [
     feature: 'Plugin SDK (Python + Go) + community marketplace',
     cells: [
       { kind: 'yes', label: 'Both SDKs, MIT' },
-      { kind: 'caveat', label: 'Wodles only' },
-      { kind: 'yes', label: 'Splunkbase' },
+      { kind: 'caveat', label: 'Collector modules only' },
+      { kind: 'yes', label: 'Vendor app marketplace' },
       { kind: 'no', label: 'Vendor-only' },
     ],
   },

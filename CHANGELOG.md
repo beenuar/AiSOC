@@ -77,6 +77,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Competitor product names removed from the docs portal, the benchmark page
+  and the archived plan subtree, and a CI gate added to keep them out.** AiSOC
+  names no competitor product, but two published comparison tables and the
+  competitive-landscape section of the archived plan named eleven vendors
+  outright. The analytical content is preserved everywhere: every matrix cell
+  survives unchanged and every gap keeps its capability, direction and
+  magnitude — only the vendor's identity is gone. The comparison columns on
+  `apps/docs/src/pages/index.tsx` and `apps/docs/docs/benchmark.md` now read
+  "Open-source SIEM/HIDS" and "Commercial SIEM platform"; the plan's competitor
+  profiles and its five-column capability matrix now carry category labels
+  ("Autonomous triage", "Hyperautomation SOAR", "Hyperscaler bundle",
+  "Vendor-stack XDR", "First-line responder", "No-code automation").
+
+  - `scripts/check_competitor_names.py` + `scripts/competitor_names.toml` drive
+    the gate from an **explicit list of competitor product names**, never a
+    heuristic, and allow-list the integration surfaces **by path** — connector
+    modules, plugin manifests, connector docs, the connector registry, fixtures
+    and tests. This matters because a vendor name is usually correct here:
+    `Torq` is simultaneously a first-party SOAR connector and a name that
+    appeared in a comparison matrix, so a global replace would have broken
+    working connector code. Its connector, manifest, docs page and tests are
+    untouched; only the competitive framing changed.
+  - Both lists are checked **in both directions**. A pattern that matches
+    nothing is dead and fails; an allow entry whose files no longer contain any
+    of the names it excuses is stale and fails, so an exemption cannot outlive
+    the code it excused; a mistyped name in an allow entry is rejected at load
+    rather than silently excusing nothing.
+  - A published comparison table is the one place where *any* vendor name is a
+    violation, including one AiSOC integrates with, because the table's job is
+    to position AiSOC against it. Those two regions are pinned by literal
+    start/end markers and checked against a wider vendor list; a marker that
+    drifts fails rather than scanning an empty slice and reporting clean.
+  - The scan root comes from the working directory or `--root`, never from the
+    script's own location, and the run prints the absolute path it walked plus
+    the file count — a gate that resolves its own repository can print a
+    confident OK about a tree it never inspected.
+  - `scripts/check_competitor_names.py --self-test` proves the gate detects a
+    known-bad sample and passes a known-good one in both directions, and fails
+    if a declared competitor has no fixture. `tests/test_competitor_names_gate.py`
+    adds 42 cases covering the stale-allow-list, marker-drift and dual-role-name
+    properties. Wired into `.github/workflows/competitor-names.yml`, which runs
+    on pull requests *and* pushes to `main` with no paths filter.
+
 - **Tool attribution is now prevented at commit time and blocked in CI.** AiSOC
   does not attribute work to a development tool or AI assistant. An audit found
   the rule was being broken automatically: a `Co-authored-by:` trailer naming an
