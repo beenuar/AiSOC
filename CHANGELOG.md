@@ -95,6 +95,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The OpenAPI gate's documented escape hatch did not exist.** The workflow
+  header told a maintainer to "re-run with `--allow-breaking`" and
+  `scripts/openapi_diff.py` claimed the flag was what "the release flow uses" —
+  but the workflow triggered on `pull_request` only, with no dispatch, no input
+  and no label check, and the diff step never passed the flag. `--allow-breaking`
+  had **no caller anywhere in the tree**. A maintainer facing a correct,
+  deliberate break had no action that worked, and the two statements describing
+  the procedure were both false.
+
+  The hatch is now a PR label, `breaking-change-approved`, chosen over a
+  `workflow_dispatch` boolean because applying a label leaves an attributable
+  record of who authorised the break and when on the PR timeline. The job reads
+  that timeline and names the approver in its output. It re-runs on `labeled`
+  and `unlabeled`, so the label is a live control rather than one that waits for
+  the next push.
+
+  Approval is not a skip, and the flag is no longer usable as a silent bypass:
+  `--allow-breaking` now *requires* `--changelog` and `--changelog-base`, so it
+  cannot be wired up without also wiring up the thing that records what was
+  approved. The detector still runs, and the job summary lists every breaking
+  change being permitted next to the CHANGELOG note that justified it. The
+  approval is refused if there is no `### BREAKING` section under
+  `## [Unreleased]`, or if that section is byte-identical to the base branch's —
+  checked in both directions, because "a BREAKING section exists" alone would
+  let the first note in a release cycle excuse every later break in that cycle.
+
+  The version-bump half of the old promise was dropped rather than implemented:
+  this repository accumulates under `[Unreleased]` and bumps `VERSION` at
+  release-cut, so a per-PR version check would demand something no PR can
+  correctly do. The comment now says what the control does.
+
+  Thirteen new tests, all of which fail against the pre-change tree. Four are
+  wiring assertions over the workflow YAML itself — that some step passes
+  `--allow-breaking`, that the step passing it is guarded by the label and
+  presents its evidence, that the unapproved path still blocks, and that
+  `labeled` is in the trigger types. A unit-tested function with no caller is
+  indistinguishable from a working feature until something asserts the call.
+
 - **A dry run called the customer's production SIEM.** The live-action dry-run
   path works by stripping credentials so the executor falls through to
   simulation, and the strip list did not match what the client factory reads:

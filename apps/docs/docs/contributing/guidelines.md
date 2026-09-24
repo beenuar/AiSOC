@@ -152,6 +152,52 @@ must include:
 > [eval harness page](../benchmark) explains exactly which is which. Update
 > that page in the same commit if your PR changes a suite's metric category.
 
+### 4. OpenAPI breaking-change gate {#openapi-breaking-change-gate}
+
+A PR that touches `docs/openapi.yaml` is diffed against the base branch by
+`scripts/openapi_diff.py`. It fails on any change that would break an existing
+generated SDK client: a removed path, operation, schema or property, a changed
+property type, an optional field becoming required, a new required field on a
+request-shaped schema, a dropped enum value, or a new required parameter.
+
+Run it yourself before pushing:
+
+```bash
+git show origin/main:docs/openapi.yaml > /tmp/base-openapi.yaml
+python scripts/openapi_diff.py --old /tmp/base-openapi.yaml --new docs/openapi.yaml
+```
+
+Additive changes — a new path, a new optional field, a new enum value — are not
+flagged. Most spec changes need nothing further.
+
+#### Shipping a break deliberately
+
+Sometimes the break is the point: a schema described data the platform never
+measured, or a field promised a number with no formula behind it. Removing it is
+correct, and preserving it would keep the lie. Two steps:
+
+1. **Write the record.** Add a `### BREAKING` section under `## [Unreleased]` in
+   `CHANGELOG.md` saying what moved, what replaced it, and why it could not be
+   preserved. Name each field. This is the half that outlives CI logs.
+2. **Get it authorised.** Ask a maintainer to apply the
+   `breaking-change-approved` label to the PR.
+
+The label is the authorisation, and it is deliberately a label rather than a
+workflow input: GitHub records who applied it and when on the PR timeline, so
+the approval is attributable after the fact. The gate re-runs on `labeled` and
+`unlabeled`, so applying or removing it takes effect immediately.
+
+Approval is not a skip. The detector still runs, and the job summary lists
+**every** breaking change being permitted alongside the CHANGELOG note that
+justified it — the record says what was approved, not merely that something was.
+The gate refuses the approval outright if the CHANGELOG note is missing, or if
+the `### BREAKING` section is unchanged from the base branch (a note written for
+an earlier PR does not describe yours).
+
+There is no version-bump requirement here. This repository accumulates under
+`[Unreleased]` and bumps `VERSION` when a release is cut, so no single PR can
+correctly satisfy one.
+
 ## Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/). The
