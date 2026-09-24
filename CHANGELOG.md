@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scheduled hunts ran against credentials that could not exist, so every one
+  of them returned zero hits.** The event-warehouse drivers resolved their
+  endpoint and secret from `settings.ES_URL` / `ES_API_KEY` / `SPLUNK_URL` /
+  `SPLUNK_HMAC_TOKEN` / `CHRONICLE_PROJECT_ID`. None of those were declared
+  fields on `Settings`; each was read through `getattr(settings, name, None)`,
+  so the miss was silent, and `Settings` sets `extra="ignore"`, so an operator
+  who followed the resulting "set them in environment variables" message and
+  exported `ES_URL` got the same message back. The scheduler treats the
+  resulting `HuntNotConfigured` as a soft skip, so the failure was invisible.
+
+  Credentials now resolve from the tenant's own `connectors` row — the one the
+  console wizard writes, encrypted by the credential vault — which is where
+  `federated.py` and `case_fanout.py` already read theirs. The warehouse is
+  per-tenant by construction as a result: a managed provider can point each
+  customer at their own cluster, which resolving from process settings made
+  impossible even in principle. `ES_URL` / `ES_API_KEY` are now declared
+  fields and remain as a deployment-wide fallback for single-cluster installs.
+
+- **Provider selection ignored which SIEM the tenant had connected.**
+  `resolve_provider` returned the first driver whose `translated_query_key`
+  appeared in the hunt, and the natural-language translator emits ES|QL, SPL
+  *and* KQL for every question — so `esql` was always present and
+  Elasticsearch was always chosen, including for tenants who run only Splunk.
+  Selection is now driven by the tenant's enabled connectors first and the
+  available translation second.
+
+- **`POST /nl-query/execute` documented two request fields it ignored.**
+  `es_url` and `es_api_key` were described as overrides and silently dropped.
+  `es_url` now selects among the caller's own Elasticsearch connectors by
+  host, matched against connectors they own and never used as an outbound
+  target; `es_api_key` is refused with 400, because credentials belong in the
+  vault-encrypted connector rather than in a request body.
+
+### Added
+
+- **The Splunk warehouse driver executes.** It previously raised
+  `HuntNotConfigured("provider scaffolded but live SPL execution not yet
+  shipped")` on every call, so the SPL every hunt was translated into was
+  discarded. `app/services/spl_runner.py` carries the same three guards as the
+  ES|QL runner — per-tenant SSRF allow-list, air-gap policy, row cap — and
+  prefixes the translator's bare `index=…` expression with `search`, without
+  which Splunk's REST API answers 400 on every hunt.
+
+### Removed
+
+- **The Chronicle warehouse scaffold.** It read `hunt.translated_query["udm"]`,
+  nothing in the repository emits UDM, and it gated on two settings that were
+  never fields — so it could not be selected and could not run, while
+  `available_providers()` reported it as a supported warehouse. Adding a real
+  one is a `register_provider` call plus a UDM translator.
+
 ## [9.0.0] — 2026-09-23
 
 **Ten waves, and one finding under nearly all of them: the mechanism existed,

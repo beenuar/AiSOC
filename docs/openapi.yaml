@@ -22254,14 +22254,18 @@ components:
           - type: string
           - type: 'null'
           title: Es Url
-          description: Override Elasticsearch URL (defaults to settings.ES_URL if
-            set).
+          description: Select which of your tenant's Elasticsearch connectors to run
+            against, by host. Matched against connectors you own; it is never used
+            as an outbound target. Omit it to use your first enabled Elasticsearch
+            connector.
         es_api_key:
           anyOf:
           - type: string
           - type: 'null'
           title: Es Api Key
-          description: Override ES API key (defaults to settings.ES_API_KEY if set).
+          description: Rejected with 400. Credentials are read from the Elasticsearch
+            connector saved for your tenant, where they are encrypted at rest. This
+            field was previously documented as an override and silently ignored.
         max_rows:
           type: integer
           maximum: 5000.0

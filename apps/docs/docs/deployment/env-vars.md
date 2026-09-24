@@ -116,6 +116,8 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENSEARCH_URL` | `http://localhost:9200` | OpenSearch base URL |
+| `ES_URL` | — | Deployment-wide Elasticsearch cluster for scheduled hunts. Optional: the normal path is a per-tenant **Elastic connector** added from the console, whose endpoint and secret are vault-encrypted. Set this only if one cluster serves every tenant. |
+| `ES_API_KEY` | — | API key paired with `ES_URL`. Both must be set for the fallback to apply. |
 | `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt URI |
 | `NEO4J_USER` | `neo4j` | Neo4j user |
 | `NEO4J_PASSWORD` | — | Neo4j password |

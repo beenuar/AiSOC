@@ -74,7 +74,10 @@ from app.services.event_warehouse import (
     HuntExecutionError,
     HuntNotConfigured,
     UnsupportedTranslation,
+    candidate_connector_types,
+    connected_warehouse_types,
     resolve_provider,
+    resolve_tenant_warehouse,
 )
 
 try:
@@ -301,22 +304,42 @@ async def _execute_hunt(db: AsyncSession, hunt: SavedHunt) -> int:
     backend — adding Splunk / Chronicle as live drivers later changes
     nothing here.
 
+    Credentials come from the hunt tenant's own connector rows, decrypted
+    through the credential vault. They used to come from process settings
+    (``ES_URL`` / ``SPLUNK_URL`` and friends) that were never declared as
+    fields, so every provider raised :class:`HuntNotConfigured` and every
+    scheduled hunt returned zero hits on every deployment.
+
     Returns ``0`` (and logs at INFO) when:
 
     * The hunt has no translated query for any registered provider —
       typically a draft saved before the translator ran. The worker
       doesn't re-translate, only re-runs.
-    * The chosen provider raises :class:`HuntNotConfigured` (missing
-      credentials, scaffolded driver). The worker stays quiet in
-      self-hosted dev where warehouses aren't wired up.
+    * The tenant has not connected a SIEM any registered provider can
+      query.
+    * The chosen provider raises :class:`HuntNotConfigured` (the connector
+      row exists but is missing a URL or credentials, or its stored secret
+      cannot be decrypted).
 
     Raises warehouse transport / air-gap errors back to the caller,
     where :func:`run_once` records them via ``logger.exception`` and
     skips the ``last_run_at`` bump so the hunt retries next tick.
     """
-    _ = db  # unused — kept in the signature for future hunt-specific reads
     try:
-        provider = resolve_provider(hunt)
+        connected = await connected_warehouse_types(
+            db,
+            hunt.tenant_id,
+            candidate_types=candidate_connector_types(),
+        )
+    except Exception:
+        # A failed connector lookup is not a hunt result. Let the caller's
+        # handler record it and retry rather than reporting zero hits, which
+        # would read as "your hunt found nothing".
+        logger.exception("hunt_scheduler.connector_lookup_failed hunt_id=%s", hunt.id)
+        raise
+
+    try:
+        provider = resolve_provider(hunt, connected_types=connected)
     except UnsupportedTranslation as exc:
         logger.info(
             "hunt_scheduler.execute_skip hunt_id=%s reason=no_provider err=%s",
@@ -327,7 +350,12 @@ async def _execute_hunt(db: AsyncSession, hunt: SavedHunt) -> int:
 
     max_rows = int(getattr(settings, "HUNT_SCHEDULER_MAX_ROWS", 500))
     try:
-        return await provider.run_hunt(hunt, max_rows=max_rows)
+        credentials = await resolve_tenant_warehouse(
+            db,
+            hunt.tenant_id,
+            connector_types=provider.connector_types,
+        )
+        return await provider.run_hunt(hunt, credentials=credentials, max_rows=max_rows)
     except HuntNotConfigured as exc:
         logger.info(
             "hunt_scheduler.execute_skip hunt_id=%s provider=%s reason=not_configured err=%s",

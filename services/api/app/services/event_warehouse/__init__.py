@@ -16,12 +16,13 @@ warehouse drivers without touching the scheduler. Each provider:
 * Returns a ``hit_count`` integer the scheduler can feed into the
   case-open callback unchanged.
 
-Today the registry ships only the Elasticsearch driver (which simply
-delegates to the existing :mod:`app.services.esql_runner`). The
-Splunk / Chronicle / Sumo drivers are placeholder stubs that ship as
-``NotImplemented`` but raise the right exception type so adding them
-is a one-PR change. The scheduler's selection logic is documented
-in :func:`resolve_provider`.
+The registry ships two live drivers: Elasticsearch (ES|QL, delegating to
+:mod:`app.services.esql_runner`) and Splunk (SPL, delegating to
+:mod:`app.services.spl_runner`). Both take their credentials from the
+tenant's own connector row rather than from process settings — see
+:mod:`app.services.event_warehouse.credentials` for why that distinction
+is the whole point of this package. The scheduler's selection logic is
+documented in :func:`resolve_provider`.
 """
 
 from __future__ import annotations
@@ -32,9 +33,15 @@ from .base import (
     HuntNotConfigured,
     UnsupportedTranslation,
 )
+from .credentials import (
+    WarehouseCredentials,
+    connected_warehouse_types,
+    resolve_tenant_warehouse,
+)
 from .registry import (
     SUPPORTED_PROVIDERS,
     available_providers,
+    candidate_connector_types,
     register_provider,
     resolve_provider,
 )
@@ -45,7 +52,11 @@ __all__ = [
     "HuntExecutionError",
     "HuntNotConfigured",
     "UnsupportedTranslation",
+    "WarehouseCredentials",
     "available_providers",
+    "candidate_connector_types",
+    "connected_warehouse_types",
     "register_provider",
     "resolve_provider",
+    "resolve_tenant_warehouse",
 ]
