@@ -1109,4 +1109,10 @@ async def get_funnel_metrics(
         generated_at=now,
         repeat_alerts_suppressed=current.get("repeat_alerts_suppressed", 0),
         repeat_suppression_rate=current.get("repeat_suppression_rate", 0.0),
+        triaged_alerts=current.get("triaged_alerts", 0),
+        abstentions=current.get("abstentions", 0),
+        abstention_rate=current.get("abstention_rate", 0.0),
+        ungrounded_demotions=current.get("ungrounded_demotions", 0),
+        mean_groundedness=current.get("mean_groundedness"),
+        scored_verdicts=current.get("scored_verdicts", 0),
     )

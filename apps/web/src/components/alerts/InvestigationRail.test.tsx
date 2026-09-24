@@ -126,7 +126,7 @@ const RELATED_ENTITIES: RelatedEntity[] = [
     type: 'user',
     value: 'alice@example.com',
     label: 'Alice (Finance)',
-    pivotPath: '/graph/user/alice%40example.com',
+    pivotPath: '/graph?entity=user%3Aalice%40example.com',
   },
   {
     kind: 'principal',
@@ -137,7 +137,7 @@ const RELATED_ENTITIES: RelatedEntity[] = [
     kind: 'network',
     type: 'ip',
     value: '10.0.0.7',
-    pivotPath: '/graph/ip/10.0.0.7',
+    pivotPath: '/graph?entity=ip%3A10.0.0.7',
   },
   {
     kind: 'workflow',
@@ -437,7 +437,7 @@ describe('InvestigationRail — related entities section', () => {
     expect(aliceLink).not.toBeNull();
     expect(aliceLink).toHaveAttribute(
       'href',
-      '/graph/user/alice%40example.com',
+      '/graph?entity=user%3Aalice%40example.com',
     );
 
     // The non-pivotable host does NOT render an anchor — `closest('a')` should
@@ -447,7 +447,7 @@ describe('InvestigationRail — related entities section', () => {
 
     // The network IP chip renders an anchor too.
     const ipLink = screen.getByText('10.0.0.7').closest('a');
-    expect(ipLink).toHaveAttribute('href', '/graph/ip/10.0.0.7');
+    expect(ipLink).toHaveAttribute('href', '/graph?entity=ip%3A10.0.0.7');
   });
 
   it('omits the section entirely when no related entities are returned', () => {

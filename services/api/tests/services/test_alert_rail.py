@@ -213,8 +213,13 @@ class TestBuildRelatedEntities:
     def test_pivot_routes_are_built_per_kind(self) -> None:
         """The pivot URL contract is part of the public API.
 
-        The frontend keys off the pivot to decide whether a chip is
-        clickable. Pinning the routes prevents an accidental rename.
+        The frontend keys off the pivot to decide whether a chip is clickable.
+
+        This pin cannot tell you the route exists — it compares the producer
+        against a copy of itself, which is how ``/attack-graph`` survived here
+        while ``apps/web`` defined no such route. ``test_pivot_routes_resolve.py``
+        checks these against the console's actual route table; this test only
+        guards the shape.
         """
         entities = build_related_entities(
             _alert(
@@ -225,9 +230,9 @@ class TestBuildRelatedEntities:
             )
         )
         by_kind = {e.kind: e for e in entities}
-        assert by_kind["host"].pivot == "/attack-graph?entity=host:h1"
-        assert by_kind["user"].pivot == "/attack-graph?entity=user:u1"
-        assert by_kind["ip"].pivot == "/attack-graph?entity=ip:1.2.3.4"
+        assert by_kind["host"].pivot == "/graph?entity=host%3Ah1"
+        assert by_kind["user"].pivot == "/graph?entity=user%3Au1"
+        assert by_kind["ip"].pivot == "/graph?entity=ip%3A1.2.3.4"
 
 
 # ─── build_recommended_actions ───────────────────────────────────────────────
@@ -496,7 +501,7 @@ class TestPydanticContracts:
             kind="host",
             value="win-finance-07",
             label="primary",
-            pivot="/attack-graph?entity=host:win-finance-07",
+            pivot="/graph?entity=host%3Awin-finance-07",
         )
         dump = e.model_dump(mode="json")
         assert set(dump) == {"group", "kind", "value", "label", "pivot"}

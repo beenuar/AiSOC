@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 
 // WS-F3 — pin the SavedViewsBar wiring. We care about four behaviors the
 // downstream pages actually rely on:
@@ -170,6 +171,49 @@ describe('SavedViewsBar', () => {
     );
     expect(onApply).toHaveBeenCalledTimes(1);
     expect(onDefaultLoaded).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the default without updating its parent mid-render', async () => {
+    // The auto-apply used to run in the render body, so `onApply` — which for
+    // every real caller is a setState on the *page* — fired while this
+    // component was rendering. React rejects that outright and does not
+    // guarantee the parent's update is processed.
+    //
+    // The existing "exactly once" test cannot catch it: its `onApply` is a
+    // bare `vi.fn()` that sets no state, so React has nothing to complain
+    // about. It takes a real parent to reproduce.
+    seedViews('alerts', [
+      makeView({ id: 'v-1', is_default: true, filters: { status: 'open' } }),
+    ]);
+
+    const consoleErrors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      consoleErrors.push(args.map((a) => String(a)).join(' '));
+    });
+
+    function Page() {
+      const [applied, setApplied] = useState<TestFilters | null>(null);
+      return (
+        <>
+          <SavedViewsBar<TestFilters> viewType="alerts" filters={{}} onApply={setApplied} />
+          <span data-testid="applied-status">{applied?.status ?? 'none'}</span>
+        </>
+      );
+    }
+
+    try {
+      render(<Page />);
+      await waitFor(() => {
+        expect(screen.getByTestId('applied-status')).toHaveTextContent('open');
+      });
+    } finally {
+      spy.mockRestore();
+    }
+
+    const renderPhaseUpdates = consoleErrors.filter((line) =>
+      /Cannot update a component/.test(line),
+    );
+    expect(renderPhaseUpdates).toEqual([]);
   });
 
   it('does not auto-apply when no default view exists', () => {

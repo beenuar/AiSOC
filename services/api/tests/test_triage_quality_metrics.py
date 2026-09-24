@@ -24,6 +24,8 @@ flattering direction:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 metrics = pytest.importorskip(
@@ -167,3 +169,61 @@ def test_the_funnel_model_exposes_every_field():
         "scored_verdicts",
     ):
         assert name in fields, f"{name} is computed but not exposed on FunnelMetrics"
+
+
+@pytest.mark.asyncio
+async def test_every_computed_window_field_reaches_the_response(monkeypatch):
+    """Declaring a field is not the same as forwarding it.
+
+    ``_funnel_window`` merges ``_triage_quality``'s output into the dict it
+    returns, but every field has to be named again in the ``FunnelMetrics(...)``
+    call to reach the client. Six were not, so the endpoint answered 0 for all
+    of them whatever the database held — and a published zero reads as "this
+    tenant never abstained, and nothing was ever demoted for being ungrounded",
+    which is a stronger claim than saying nothing at all.
+
+    The loop is deliberately generic rather than a list of the six: any field
+    the window computes and the model declares must survive the trip, including
+    ones added after this test was written.
+    """
+    window = {
+        "events_of_interest": 1_000,
+        "correlation_instances": 100,
+        "alerts_generated": 40,
+        "signal_to_noise": 0.6,
+        "mttd_seconds": 12.5,
+        "analyst_queue_depth": 7,
+        "correlation_efficiency": 0.1,
+        "alert_yield": 0.04,
+        "mitre_coverage": metrics.MitreCoverage(covered=3, total=10, ratio=0.3),
+        "repeat_alerts_suppressed": 5,
+        "repeat_suppression_rate": 0.1111,
+        "triaged_alerts": 100,
+        "abstentions": 25,
+        "abstention_rate": 0.25,
+        "ungrounded_demotions": 4,
+        "mean_groundedness": 0.91,
+        "scored_verdicts": 80,
+    }
+
+    async def _window(*_a, **_k):
+        return dict(window)
+
+    monkeypatch.setattr(metrics, "_funnel_window", _window)
+
+    out = await metrics.get_funnel_metrics(
+        user=SimpleNamespace(tenant_id="t-1"),
+        db=object(),
+        period="24h",
+    )
+
+    declared = metrics.FunnelMetrics.model_fields
+    unforwarded = [name for name, expected in window.items() if name in declared and getattr(out, name) != expected]
+    assert not unforwarded, f"computed but not forwarded to the response: {unforwarded}"
+
+    # Serialisation is what a client actually sees; a field can be set on the
+    # model and still be dropped by an alias or exclude rule.
+    payload = out.model_dump()
+    assert payload["abstention_rate"] == 0.25
+    assert payload["mean_groundedness"] == 0.91
+    assert payload["scored_verdicts"] == 80

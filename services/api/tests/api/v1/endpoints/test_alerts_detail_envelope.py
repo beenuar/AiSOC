@@ -255,7 +255,7 @@ class TestAlertDetailResponseContract:
                     "kind": "host",
                     "value": "web-01",
                     "label": None,
-                    "pivot": "/attack-graph?entity=host:web-01",
+                    "pivot": "/graph?entity=host%3Aweb-01",
                 }
             ],
             mini_timeline=[
@@ -392,7 +392,7 @@ class TestGetAlertEndpoint:
                     kind="host",
                     value="web-01",
                     label=None,
-                    pivot="/attack-graph?entity=host:web-01",
+                    pivot="/graph?entity=host%3Aweb-01",
                 )
             ],
             mini_timeline=[],
@@ -600,7 +600,7 @@ class TestGetAlertEndpoint:
                     kind="ip",
                     value="10.0.0.1",
                     label=None,
-                    pivot="/attack-graph?entity=ip:10.0.0.1",
+                    pivot="/graph?entity=ip%3A10.0.0.1",
                 ),
             ],
             mini_timeline=[
