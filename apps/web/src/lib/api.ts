@@ -763,6 +763,7 @@ export interface AlertFilters {
 export const alertsApi = {
   list: async (filters: AlertFilters = {}) => {
     const raw = await request<{
+      items?: unknown[];
       alerts?: unknown[];
       total?: number;
       page?: number;
@@ -771,8 +772,18 @@ export const alertsApi = {
     }>('/api/v1/alerts', {
       params: filters as Record<string, string>,
     });
+    // `AlertListResponse` puts the rows under `items`, not `alerts`
+    // (services/api/app/api/v1/endpoints/alerts.py). Reading only `alerts`
+    // resolved every page to [] while `total` reported the real count, so
+    // the queue rendered "1,247 alerts" above an empty table. `alerts` is
+    // still accepted because the mobile responder routes emit that shape.
+    const rows = Array.isArray(raw.items)
+      ? raw.items
+      : Array.isArray(raw.alerts)
+        ? raw.alerts
+        : [];
     return {
-      alerts: Array.isArray(raw.alerts) ? raw.alerts.map(normalizeAlert) : [],
+      alerts: rows.map(normalizeAlert),
       total: typeof raw.total === 'number' ? raw.total : 0,
       page: typeof raw.page === 'number' ? raw.page : 1,
       pageSize:

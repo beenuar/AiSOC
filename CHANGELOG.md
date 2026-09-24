@@ -95,6 +95,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The alerts list was empty on every deployment, under a row count that was
+  real.** `AlertListResponse` returns the rows under `items`; the web client
+  read `raw.alerts`, which is never present, so `Array.isArray(undefined)` was
+  false and each page resolved to `[]` while `total` carried the true figure.
+  The queue therefore rendered "1,247 alerts" above an empty table with no
+  error to explain it, and an operator's most reasonable reading of that screen
+  was that their estate was quiet. The client now reads `items`, still accepts
+  the legacy `alerts` key the responder routes emit, and a test asserts the two
+  halves of the contract against each other so they cannot drift apart again.
+
+- **Two dashboards published fabricated security data as tenant state.**
+  `DashboardView` and `SOCMetricsDashboard` both wrapped their SWR
+  `fallbackData` in `demoFallback()`, which is `undefined` outside the hosted
+  demo — and both then defeated that gate a few lines later with an
+  unconditional `const resolved = isValid ? data : MOCK`. The mock was
+  therefore exactly what rendered during first paint and after any API error,
+  which for a self-hoster with an empty or unreachable backend is the whole
+  session.
+
+  What that put on screen as the reader's own numbers: a connector inventory
+  they do not run (`CrowdStrike EDR`, 412 events), a MITRE tactic ranking, a
+  24-hour alert-volume curve, MTTD 1.4h / MTTR 6.2h, and an LLM spend line of
+  $76.65 naming three models they had never configured. Three "vs yesterday"
+  trend deltas sat beside the real alert counts as literals — `/metrics/dashboard`
+  publishes no period-over-period comparison, so there was nothing to derive
+  them from.
+
+  Every panel now renders one of three honest states: real figures, an empty
+  state naming what would populate it, or an error state carrying the failure
+  and a retry that re-issues the request. Sample data still populates the
+  hosted demo, which is the only reason it exists.
+
 - **The lake's tenant isolation could be switched off by resolving a
   dependency one major version higher.** `lake_sql.rewrite_for_tenant` is the
   only thing separating one tenant's events from another's in ClickHouse: it

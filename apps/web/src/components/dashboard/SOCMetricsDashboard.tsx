@@ -12,6 +12,7 @@ import {
   type CostAggregate,
 } from "@/lib/api";
 import { demoFallback } from '@/lib/demoFallback';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const MOCK_SOC_METRICS: SOCMetrics = {
   kpis: {
@@ -175,17 +176,21 @@ export function SOCMetricsDashboard() {
 
   const refresh = useCallback(() => mutate(), [mutate]);
 
+  // `MOCK_SOC_METRICS` is reachable only through the `demoFallback` above,
+  // which is `undefined` outside the hosted demo.
+  //
+  // It used to also be substituted here, unconditionally, whenever `data` was
+  // absent or malformed — which is exactly the first-paint and error case. A
+  // self-hoster therefore saw MTTD 1.4h, a populated ATT&CK heatmap and an LLM
+  // spend line naming models they had never configured, presented as their own
+  // numbers. When there is no payload there are now no numbers.
   const isValidSOC =
     !!data &&
     typeof data.kpis?.mttd_hours === "number" &&
     Array.isArray(data.attack_heatmap);
-  const resolved = isValidSOC ? data : MOCK_SOC_METRICS;
-  const kpis = resolved.kpis;
-  const heatmap = resolved.attack_heatmap ?? [];
-  const calibration = resolved.calibration_curve ?? [];
-  // We surface the error inline rather than swapping the whole panel out for
-  // a blocking error state — the mock fallback keeps the page legible while
-  // the user retries.
+  const kpis = isValidSOC ? data.kpis : undefined;
+  const heatmap = isValidSOC ? (data.attack_heatmap ?? []) : [];
+  const calibration = isValidSOC ? (data.calibration_curve ?? []) : [];
   const errorMessage =
     error instanceof Error
       ? error.message
@@ -209,12 +214,21 @@ export function SOCMetricsDashboard() {
       {errorMessage && (
         <div className="rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="font-semibold">SOC metrics unavailable:</span>{" "}
-          {errorMessage}. Showing last known mock baseline; the live numbers
-          will refresh automatically once the API recovers.
+          {errorMessage}. No figures are shown below; they will populate once
+          the API recovers.
         </div>
       )}
 
+      {!kpis && !errorMessage && (
+        <EmptyState
+          title="No SOC performance data yet"
+          description="MTTD, MTTR, escalation and false-positive rates are computed from closed cases. They appear once the first investigations complete."
+          className="px-4 py-6"
+        />
+      )}
+
       {/* KPI Grid */}
+      {kpis && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard
             label="MTTD"
@@ -299,6 +313,7 @@ export function SOCMetricsDashboard() {
             color="text-blue-400"
           />
         </div>
+      )}
 
       {/* Confidence Calibration Curve */}
       <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
@@ -341,13 +356,15 @@ function CostTelemetryPanel() {
     },
   );
 
+  // Same rule as the SOC panel: the mock is the demo fallback and nothing
+  // else. Naming `gpt-4o` / `claude-3.5-sonnet` and a $76.65 spend to a
+  // tenant that runs neither is a fabricated claim about their own estate.
   const isValidCost =
     !!data &&
     Array.isArray(data.by_model) &&
     typeof data.window_days === "number";
-  const resolved = isValidCost ? data : MOCK_COST_AGGREGATE;
-  const totals = resolved.totals;
-  const byModel = resolved.by_model ?? [];
+  const totals = isValidCost ? data.totals : undefined;
+  const byModel = isValidCost ? (data.by_model ?? []) : [];
   const maxModelCost = Math.max(...byModel.map((m) => m.total_cost_usd), 0.0001);
   const errorMessage =
     error instanceof Error
@@ -374,11 +391,11 @@ function CostTelemetryPanel() {
       {errorMessage && (
         <div className="mb-3 rounded border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="font-semibold">Cost telemetry unavailable:</span>{" "}
-          {errorMessage}. Showing baseline projections until the API recovers.
+          {errorMessage}. No spend figures are shown until the API recovers.
         </div>
       )}
 
-      {isLoading && !resolved ? (
+      {isLoading && !isValidCost ? (
         <div className="h-32 animate-pulse bg-gray-800 rounded" />
       ) : !totals || totals.runs === 0 ? (
         <div className="text-gray-500 text-sm flex items-center justify-center h-24">
