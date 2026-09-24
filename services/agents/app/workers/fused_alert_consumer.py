@@ -49,6 +49,7 @@ from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
+from app.investigator import siem_writeback
 from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
 from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_suppress
@@ -86,6 +87,12 @@ _METRICS = {
     "persist_retries": 0,
     "dead_lettered": 0,
     "approvals_raised": 0,
+    # Two-way SIEM loop. Kept as two counters, not one: "attempted" grows
+    # on every dry run too, and an operator who sees attempts climbing
+    # while executions stay at zero is looking at the default posture
+    # rather than a broken integration.
+    "writeback_attempted": 0,
+    "writeback_executed": 0,
     "errors": 0,
 }
 
@@ -491,6 +498,12 @@ class FusedAlertTriageWorker:
         # grant — the responder app's queue had no producer at all.
         approvals = await self._raise_approvals(state)
 
+        # Close the loop with the SIEM that raised this alert. Runs last and
+        # fails soft: the verdict is already durable, and an unreachable
+        # Splunk must not re-drive the retry path and dead-letter an alert
+        # that was triaged correctly.
+        source_writeback = await self._write_back_to_source(state, verdict, confidence, rationale=_rationale_of(state))
+
         return {
             "run_id": str(state.run_id),
             "incident_id": str(state.incident_id),
@@ -502,8 +515,48 @@ class FusedAlertTriageWorker:
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
             "approvals_raised": approvals,
+            # None when nothing was attempted. When present, `executed` is the
+            # only field that means a vendor was actually written to — a dry
+            # run reports the same shape with `executed: False`.
+            "source_writeback": source_writeback,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
         }
+
+    async def _write_back_to_source(
+        self,
+        state: InvestigationState,
+        verdict: Any,
+        confidence: float,
+        *,
+        rationale: str,
+    ) -> dict[str, Any] | None:
+        """Ask the API to project this verdict onto the source finding.
+
+        The worker decides nothing about *what* may be written — that policy
+        lives in the actions service, so it cannot drift between two copies.
+        All that happens here is the call, and the metrics that let an
+        operator see whether the loop is closing.
+        """
+        alert_id = str((state.raw_alert or {}).get("id") or "")
+        if not alert_id or not verdict:
+            return None
+        try:
+            report = await siem_writeback.write_back_disposition(
+                tenant_id=str(state.tenant_id),
+                alert_id=alert_id,
+                disposition=str(verdict),
+                confidence=float(confidence or 0.0),
+                rationale=rationale,
+            )
+        except Exception as exc:  # noqa: BLE001 — a durable verdict outranks its writeback
+            logger.warning("auto_triage_worker.source_writeback_failed", alert_id=alert_id, error=str(exc)[:300])
+            return None
+        if report is None:
+            return None
+        _METRICS["writeback_attempted"] += 1
+        if report.get("executed"):
+            _METRICS["writeback_executed"] += 1
+        return report
 
     async def _raise_approvals(self, state: InvestigationState) -> list[str]:
         """Queue each approval-requiring proposed action; return the ids.

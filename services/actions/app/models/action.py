@@ -50,6 +50,10 @@ class ActionType(str, Enum):
     # which credentials are present in the request.
     ACK_ALERT = "ack_alert"
     SUPPRESS_ALERT = "suppress_alert"
+    # Two-way SIEM loop: project an AiSOC verdict onto the vendor finding that
+    # raised the alert. Distinct from ack/suppress because the disposition —
+    # not the caller — decides whether the finding is closed or escalated.
+    UPDATE_ALERT_DISPOSITION = "update_alert_disposition"
 
 
 class ActionStatus(str, Enum):

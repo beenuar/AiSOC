@@ -86,6 +86,12 @@ class RawAlert(BaseModel):
     ocsf_class_uid: int | None = None
     rule_id: str | None = None  # detection rule / Splunk saved-search identifier
     rule_name: str | None = None
+    # The source system's own identifier for the finding (OCSF `finding.uid`):
+    # a Splunk notable's rule UID, an Elastic signal id, a QRadar offense id.
+    # Ingest has always produced it and nothing downstream kept it, so the
+    # alert row could not be traced back to the finding that raised it — and
+    # therefore no verdict could be written back.
+    external_id: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     event_time: datetime | None = None

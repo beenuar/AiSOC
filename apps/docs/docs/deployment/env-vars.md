@@ -57,6 +57,17 @@ Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/
 | `AISOC_TRUSTED_PROXIES` | _empty_ | Comma-separated list of CIDRs (e.g. `10.0.0.0/8,192.168.0.0/16`) for trusted ingress / load balancer hops. When empty, `X-Forwarded-For` is **ignored** and `actor_ip` is the direct TCP peer — set this in production so the audit log records the real client IP without being spoofable from the public side. |
 | `AISOC_AUDIT_MAX_CHANGES_BYTES` | `65536` | Hard cap on the serialized `changes` payload stored per audit row. Over-sized values are replaced with a `{ "_truncated": true, "_size": <bytes> }` marker. Set higher only if you genuinely need richer diffs and have provisioned the storage. |
 
+### SIEM disposition writeback
+
+Source: [`services/api/app/services/siem_writeback.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/siem_writeback.py). Background: [Integrations → SIEM writeback](../integrations/siem-writeback).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_SIEM_WRITEBACK_ENABLED` | `1` (on) | Master switch for projecting an AiSOC verdict back onto the vendor finding that produced the alert. |
+| `AISOC_SIEM_WRITEBACK_EXECUTE` | `0` (**off**) | **Whether a vendor is actually called.** With this off every attempt is dispatched as a dry run, recorded with `executed=false` and reported as `mode: "dry_run"`. The asymmetry is deliberate: a writeback that did not happen costs one duplicated triage, and one that happened unexpectedly silently closed findings in your system of record. Anything that is not an explicit `1`/`true`/`yes`/`on` — including a typo — is read as a dry run. |
+| `AISOC_SIEM_WRITEBACK_CLOSE_CASE` | `0` (**off**) | Whether a closing verdict may resolve the linked case so the existing Jira / ServiceNow fan-out projects the real status. Separate from the execute flag because a case is a unit of work with an owner, not a queue item. |
+| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret the agents worker presents on `POST /alerts/{id}/source-writeback`. **Fails closed:** when unset there is no service path at all and an unauthenticated caller is refused, rather than an empty secret matching an absent header. |
+
 ### Passkeys (WebAuthn)
 
 | Variable | Default | Description |
@@ -170,6 +181,9 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
 | `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach loopback / RFC1918 / link-local destinations. Leave off in production; enable only for self-hosted webhooks on a private network. |
 | `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
+| `AISOC_SIEM_WRITEBACK_ENABLED` | `1` | Whether the triage worker asks the API to project a verdict onto the finding that raised the alert. Off means nothing is attempted. |
+| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret for the API's writeback route. **Unset disables the service path**, so the worker logs a warning and posts nothing rather than failing silently. |
+| `AISOC_SIEM_WRITEBACK_TIMEOUT_S` | `20` | Timeout for the writeback call. A timeout is a skipped writeback, never a failed triage. |
 
 ---
 

@@ -159,6 +159,22 @@ def _event_time(ocsf: dict[str, Any]) -> datetime | None:
     return None
 
 
+def _external_id(ocsf: dict) -> str | None:
+    """The vendor's own id for this finding, from OCSF ``finding.uid``.
+
+    This is the join key the two-way SIEM loop needs: without it an alert
+    cannot be traced back to the notable, signal or offense that raised it.
+    ``metadata.uid`` is the fallback for profiles that carry the vendor id
+    there instead, and both are bounded because the column is indexed and a
+    vendor that puts a whole document in the field should not break the write.
+    """
+    for path in (("finding", "uid"), ("metadata", "uid")):
+        value = _get_nested(ocsf, *path)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:512]
+    return None
+
+
 def should_promote(ocsf: dict[str, Any]) -> bool:
     """Deterministic promotion decision — see module docstring for policy."""
     class_uid = ocsf.get("class_uid")
@@ -216,4 +232,5 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         connector_id=connector_id,
         connector_type=connector_type,
         ocsf_class_uid=class_uid,
+        external_id=_external_id(ocsf),
     )

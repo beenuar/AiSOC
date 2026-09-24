@@ -86,6 +86,9 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "search_siem",
         "suspend_session",
         "sync_detection_rule",
+        # The return leg of a two-way SIEM integration: AiSOC's verdict
+        # written back onto the vendor finding that produced the alert.
+        "update_alert_disposition",
         "update_watcher",
         # TICKET
         "push_case",

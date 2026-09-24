@@ -155,3 +155,47 @@ async def decide_action(
     if chatops_approver is not None:
         body["chatops_approver"] = chatops_approver
     return await _post(f"/api/v1/actions/{action_id}/{verb}", body or None)
+
+
+async def dispatch_live_action(
+    *,
+    capability: str,
+    vendor_id: str,
+    target: str,
+    tenant_id: str,
+    params: dict[str, Any] | None = None,
+    auth_config: dict[str, Any] | None = None,
+    dry_run: bool = True,
+    requested_by: str = "aisoc-api",
+    case_id: str | None = None,
+) -> dict[str, Any]:
+    """Dispatch a ``(vendor_id, capability)`` pair to the live-action registry.
+
+    ``dry_run`` defaults to True. Every caller that wants a vendor touched has
+    to say so, which is the opposite of the usual default and deliberate: the
+    live-action layer is the one place in the platform that changes somebody
+    else's estate, and a forgotten keyword argument should cost a preview
+    rather than an unintended containment.
+
+    ``auth_config`` carries decrypted connector credentials in *connector
+    schema* field names; the actions service translates them into the
+    executor's vendor-prefixed parameters at the dispatch boundary. They are
+    passed per call and never persisted here.
+    """
+    payload: dict[str, Any] = {
+        "capability": capability,
+        "vendor_id": vendor_id,
+        "target": target,
+        "tenant_id": tenant_id,
+        "params": params or {},
+        "dry_run": dry_run,
+        "requested_by": requested_by,
+    }
+    if auth_config:
+        payload["auth_config"] = auth_config
+    if case_id:
+        payload["case_id"] = case_id
+    # `/dry-run` forces dry_run server-side regardless of the body, so a
+    # preview cannot become a live call through a serialisation mistake.
+    path = "/api/v1/live-actions/dispatch" if not dry_run else "/api/v1/live-actions/dry-run"
+    return await _post(path, payload)
