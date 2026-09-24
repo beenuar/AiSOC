@@ -88,7 +88,16 @@ def _request(**overrides) -> LiveActionRequest:
 
 @pytest.fixture(autouse=True)
 def _wire(monkeypatch: pytest.MonkeyPatch):
-    """Executor always succeeds; autonomy always demands verification."""
+    """Executor always succeeds; autonomy always demands verification.
+
+    Stubbing `_govern` replaces the whole verdict, capability contract
+    included — deliberately, because `isolate_host` declares
+    `approval: analyst`, which the matrix never lifts at any tier or
+    confidence. With the real verdict in the path nothing here would reach an
+    executor and these tests would quietly stop testing verification. What the
+    contract layer does has its own tests in
+    `test_dispatch_capability_contract.py`.
+    """
     monkeypatch.setattr(registry, "get_executor", lambda vendor, cap: _OkExecutor())
     monkeypatch.setattr(
         dispatcher_mod,

@@ -121,6 +121,15 @@ class LiveActionRequest(BaseModel):
     auth_config: dict[str, Any] | None = None
     dry_run: bool = False
 
+    #: How sure the caller is that the finding justifying this action is real,
+    #: 0..1. The capability contract says what the verb does to an estate; this
+    #: says how good the reason is. ``approval_matrix`` needs both.
+    #:
+    #: ``None`` is not "no opinion", it is the lowest band — the matrix treats
+    #: it that way on purpose, because defaulting permissive turns a scoring
+    #: bug into an autonomous containment.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
     # Provenance — these are filled in by the API layer / agent runner so
     # the executor's structured logs can be correlated back to the case or
     # playbook that triggered it. They are optional because plugin authors
@@ -128,6 +137,10 @@ class LiveActionRequest(BaseModel):
     # synthetic UUIDs.
     case_id: UUID | None = None
     playbook_run_id: UUID | None = None
+    #: The step that asked for this, when the caller is a playbook. Carried so
+    #: the audit trail names the step rather than only the run: a playbook can
+    #: contain several actions and "run X did something" is not an audit trail.
+    playbook_step_id: str = ""
     tenant_id: UUID | None = None
     requested_by: str = "system"
 

@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+import re
 import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -48,8 +49,26 @@ from pathlib import Path
 INERT_AUTHORED_KEYS: frozenset[str] = frozenset({"inputs", "dry_run_support"})
 
 #: Execution classes usable in the schema's ``x-aisoc-execution`` map.
-_RUNS = frozenset({"executed", "simulated"})
+#:
+#: ``governed`` means the step is handed to the action registry in
+#: ``services/actions``, which grades it against the capability contract and
+#: the tenant's autonomy policy before anything reaches a vendor. It is in
+#: ``_RUNS`` because a handler exists and makes a real outbound call — what
+#: it does *not* claim is that a vendor was necessarily touched, which the
+#: step's own ``executed`` field answers per run.
+#:
+#: ``simulated`` is retained in the vocabulary deliberately. It is the class
+#: for a handler that answers from inside the engine without reaching an
+#: executor, which is what ``block_ip`` and ``isolate_host`` used to do, and
+#: dropping the word would make that state unspellable rather than absent.
+_RUNS = frozenset({"executed", "governed", "simulated"})
 _EXECUTION_CLASSES = _RUNS | {"unimplemented"}
+
+#: Verbs the engine dispatches through the action registry. Compared against
+#: ``engine.RESPONSE_STEP_TYPES`` in both directions, because a step marked
+#: ``governed`` that the engine answers locally would be the old defect with
+#: a new label on it.
+_GOVERNED = "governed"
 
 
 class GateError(RuntimeError):
@@ -68,6 +87,11 @@ class Registries:
     model_step_types: frozenset[str]
     handler_step_types: frozenset[str]
     inline_step_types: frozenset[str]
+    #: Verbs the engine routes to the action registry rather than answering
+    #: locally (``engine.RESPONSE_STEP_TYPES``).
+    response_step_types: frozenset[str]
+    #: The ``StepType`` union published in ``packages/types``.
+    typescript_step_types: frozenset[str]
     execution: dict[str, str]
     schema_timeout_max: int
     schema_timeout_min: int
@@ -192,6 +216,37 @@ def _model_playbook_keys(models_mod) -> frozenset[str]:
     return frozenset(models_mod.Playbook.model_fields.keys())
 
 
+#: ``| "value"`` members of a TypeScript string-literal union.
+_TS_UNION_MEMBER = re.compile(r'^\s*\|\s*"([a-z_]+)"', re.MULTILINE)
+
+
+def _typescript_step_types(root: Path) -> frozenset[str]:
+    """The ``StepType`` union published in ``packages/types``.
+
+    A fourth vocabulary lived here undetected because nothing imports the
+    package: 28 members (``notify_email``, ``create_ticket_jira``,
+    ``collect_forensics`` …) matching neither the schema nor the engine. An
+    unimported wrong contract is still a wrong contract — it is what the next
+    person to import it will build against.
+
+    Parsed rather than transpiled so the gate needs no Node toolchain, which
+    is why the union is written one ``| "member"`` per line.
+    """
+    path = root / "packages" / "types" / "src" / "playbook.ts"
+    if not path.is_file():
+        raise GateError(f"{path} is missing; the published TypeScript vocabulary cannot be compared")
+    text = path.read_text()
+    marker = "export type StepType ="
+    start = text.find(marker)
+    if start == -1:
+        raise GateError(f"{path} declares no `export type StepType` union to compare against the engine")
+    end = text.find(";", start)
+    members = frozenset(_TS_UNION_MEMBER.findall(text[start:end]))
+    if not members:
+        raise GateError(f"{path} declares a StepType union the gate could not parse; refusing to compare against nothing")
+    return members
+
+
 def _validator_triggers(root: Path) -> frozenset[str]:
     """``scripts/validate_playbooks.py`` keeps its own trigger allow-list."""
     scripts = str(root / "scripts")
@@ -229,6 +284,8 @@ def collect(root: Path) -> Registries:
         model_step_types=frozenset(st.value for st in models_mod.StepType),
         handler_step_types=frozenset(st.value for st in engine_mod._HANDLERS),
         inline_step_types=_inline_step_types(engine_mod, models_mod),
+        response_step_types=frozenset(st.value for st in engine_mod.RESPONSE_STEP_TYPES),
+        typescript_step_types=_typescript_step_types(root),
         execution=_schema_execution(schema),
         schema_timeout_max=s_tmax,
         schema_timeout_min=s_tmin,
@@ -293,6 +350,39 @@ def compare(reg: Registries) -> list[str]:
         errors.append(
             f"the engine has a handler for {k!r} but `x-aisoc-execution` marks it "
             f"{reg.execution.get(k, '(absent)')!r} — the schema is understating what the product does."
+        )
+
+    # 2b. the published TypeScript vocabulary <-> StepType, both ways.
+    #     `packages/types` is what an integrator builds against, and it had
+    #     drifted into an entirely separate 28-member vocabulary that nothing
+    #     imported and nothing checked.
+    for missing in sorted(reg.model_step_types - reg.typescript_step_types):
+        errors.append(
+            f"`StepType` implements {missing!r} and `packages/types/src/playbook.ts` does not publish it — "
+            f"an integrator typing against the package cannot express a step the engine runs."
+        )
+    for extra in sorted(reg.typescript_step_types - reg.model_step_types):
+        errors.append(
+            f"`packages/types/src/playbook.ts` publishes step type {extra!r}, which `StepType` does not implement — "
+            f"code that type-checks against the package would be rejected by the server."
+        )
+
+    # 3b. `governed` claims <-> the engine's response-verb set, both ways.
+    #     A step labelled `governed` that the engine answers from inside its
+    #     own process is the exact defect this label replaced: `block_ip` used
+    #     to return `{"simulated": true}` and reach no executor. And a verb the
+    #     engine routes to the registry while the schema calls it something
+    #     else understates the governance an author is relying on.
+    claims_governed = frozenset(k for k, v in reg.execution.items() if v == _GOVERNED)
+    for k in sorted(claims_governed - reg.response_step_types):
+        errors.append(
+            f"`x-aisoc-execution` marks {k!r} governed, but the engine does not route it "
+            f"through the action registry — a local answer wearing the label of a dispatched one."
+        )
+    for k in sorted(reg.response_step_types - claims_governed):
+        errors.append(
+            f"the engine dispatches {k!r} through the action registry but `x-aisoc-execution` "
+            f"marks it {reg.execution.get(k, '(absent)')!r}."
         )
 
     # 4. bounds, both ways (a schema ceiling below the engine's rejects valid
@@ -404,6 +494,17 @@ def self_test(reg: Registries) -> list[str]:
         "the schema does not declare it",
     )
     expect(
+        "the published TypeScript union lost a verb the engine runs",
+        replace(reg, typescript_step_types=reg.typescript_step_types - {victim}),
+        "does not publish it",
+    )
+    expect(
+        # The shape the file was actually in: a vocabulary of its own.
+        "the published TypeScript union invented a verb",
+        replace(reg, typescript_step_types=reg.typescript_step_types | {"create_ticket_jira"}),
+        "which `StepType` does not implement",
+    )
+    expect(
         "declared type with no execution annotation",
         replace(reg, execution={k: v for k, v in reg.execution.items() if k != victim}),
         "does not say what the engine does with it",
@@ -427,6 +528,25 @@ def self_test(reg: Registries) -> list[str]:
             "engine gained a handler the annotation calls unimplemented",
             replace(reg, execution={**reg.execution, running: "unimplemented"}),
             "understating what the product does",
+        )
+
+    governed_now = sorted(k for k, v in reg.execution.items() if v == _GOVERNED)
+    if not governed_now:
+        failures.append("self-test: no step type is annotated governed; cannot test the registry directions")
+    else:
+        dispatched = governed_now[0]
+        expect(
+            # The precise shape of the bug this label replaced: a verb that
+            # says it goes through the action registry and is answered inside
+            # the engine instead.
+            "annotation claims governed dispatch the engine does not do",
+            replace(reg, response_step_types=reg.response_step_types - {dispatched}),
+            "a local answer wearing the label of a dispatched one",
+        )
+        expect(
+            "engine dispatches a verb the annotation calls merely executed",
+            replace(reg, execution={**reg.execution, dispatched: "executed"}),
+            "through the action registry but `x-aisoc-execution`",
         )
     expect("timeout ceiling drift", replace(reg, schema_timeout_max=reg.engine_timeout_max + 1), "timeout ceiling disagrees")
     expect("retry ceiling drift", replace(reg, schema_retry_max=reg.engine_retry_max + 1), "retry ceiling disagrees")
@@ -473,7 +593,10 @@ def main() -> int:
     print(f"repo root          {root}")
     print(f"schema             {', '.join(reg.schema_files) or '(none)'}")
     print("engine             services/agents/app/playbook/engine.py")
-    print(f"step types         schema {len(reg.schema_step_types)} | StepType {len(reg.model_step_types)} | runnable {len(reg.runnable)}")
+    print(
+        f"step types         schema {len(reg.schema_step_types)} | StepType {len(reg.model_step_types)} "
+        f"| runnable {len(reg.runnable)} | packages/types {len(reg.typescript_step_types)}"
+    )
     counts = {c: sum(1 for v in reg.execution.values() if v == c) for c in sorted(_EXECUTION_CLASSES)}
     print("execution          " + " | ".join(f"{k} {v}" for k, v in counts.items()))
     print(f"bounds             timeout {reg.schema_timeout_min}..{reg.schema_timeout_max}s | retries <={reg.schema_retry_max}")

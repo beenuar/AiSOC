@@ -16,6 +16,7 @@ One client, one contract, one place to fix the next thing.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import httpx
@@ -96,6 +97,45 @@ async def _post(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
     return body
 
 
+async def _get(path: str) -> Any:
+    url = f"{base_url()}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+            response = await client.get(url, headers=service_headers())
+    except httpx.HTTPError as exc:
+        raise ActionsServiceError(f"actions service unreachable: {exc}") from exc
+    if response.status_code >= 400:
+        detail = _detail(response)
+        raise ActionsServiceError(detail, status_code=response.status_code, upstream_detail=detail)
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise ActionsServiceError("actions service returned a non-JSON body") from exc
+
+
+#: Capability verbs are short identifiers from a closed vocabulary. This one
+#: is interpolated into an upstream path that carries the service token, so
+#: it is checked here rather than trusted — the same guard the browser-facing
+#: proxy applies, for the same reason.
+_IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9_]{0,63}$")
+
+
+async def vendors_for_capability(capability: str) -> list[str]:
+    """Vendor ids with a registered executor for ``capability``.
+
+    Asked of the actions service rather than mirrored here. A second copy of
+    the registry in this process would be a list that goes stale the first
+    time somebody ships a vendor, and the failure would look like "this
+    tenant has no integration" rather than "the list is old".
+    """
+    if not _IDENTIFIER.match(capability):
+        raise ActionsServiceError(f"{capability!r} is not a capability identifier")
+    body = await _get(f"/api/v1/live-actions/by-capability/{capability}")
+    if not isinstance(body, list):
+        raise ActionsServiceError("actions service returned an unexpected body shape")
+    return [str(v) for v in body]
+
+
 def _detail(response: httpx.Response) -> str:
     try:
         payload = response.json()
@@ -168,6 +208,9 @@ async def dispatch_live_action(
     dry_run: bool = True,
     requested_by: str = "aisoc-api",
     case_id: str | None = None,
+    confidence: float | None = None,
+    playbook_run_id: str | None = None,
+    playbook_step_id: str | None = None,
 ) -> dict[str, Any]:
     """Dispatch a ``(vendor_id, capability)`` pair to the live-action registry.
 
@@ -181,6 +224,10 @@ async def dispatch_live_action(
     schema* field names; the actions service translates them into the
     executor's vendor-prefixed parameters at the dispatch boundary. They are
     passed per call and never persisted here.
+
+    ``confidence`` is how good the reason for acting is, and it is a real
+    input: the approval matrix grades impact against it, and omitting it is
+    the lowest band rather than no opinion.
     """
     payload: dict[str, Any] = {
         "capability": capability,
@@ -195,6 +242,12 @@ async def dispatch_live_action(
         payload["auth_config"] = auth_config
     if case_id:
         payload["case_id"] = case_id
+    if confidence is not None:
+        payload["confidence"] = confidence
+    if playbook_run_id:
+        payload["playbook_run_id"] = playbook_run_id
+    if playbook_step_id:
+        payload["playbook_step_id"] = playbook_step_id
     # `/dry-run` forces dry_run server-side regardless of the body, so a
     # preview cannot become a live call through a serialisation mistake.
     path = "/api/v1/live-actions/dispatch" if not dry_run else "/api/v1/live-actions/dry-run"

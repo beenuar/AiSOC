@@ -58,6 +58,7 @@ from app.api.v1.endpoints import (
     oncall,
     passkeys,
     phishing,
+    playbook_steps,
     playbooks,
     plugins,
     posture,
@@ -120,6 +121,10 @@ api_router.include_router(rule_tuning.router)
 api_router.include_router(federated.router)
 api_router.include_router(graph.router)
 api_router.include_router(playbooks.router)
+# One playbook step, graded on its own capability, through the same governed
+# dispatch a manually-approved action takes. The engine has no vault and no
+# tenant session, so this is where a step turns into a real vendor call.
+api_router.include_router(playbook_steps.router)
 api_router.include_router(plugins.router)
 api_router.include_router(community.router)
 api_router.include_router(marketplace.router)
