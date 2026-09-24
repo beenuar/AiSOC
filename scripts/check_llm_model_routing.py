@@ -78,6 +78,8 @@ import copy
 import json
 import re
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # `scripts/` is on sys.path when this file is run as a program, but not when a
@@ -117,6 +119,34 @@ EMBEDDING_MODEL_SHAPES = ("embedding", "embed-")
 
 class GateError(RuntimeError):
     """The scan could not be performed — distinct from the scan finding nothing."""
+
+
+@dataclass
+class RoutingModule:
+    """What one routing module defines, declares as the rule, and reads."""
+
+    defined: set[str] = field(default_factory=set)
+    declared: set[str] = field(default_factory=set)
+    reads: dict[str, set[str]] = field(default_factory=dict)
+
+    @property
+    def all_reads(self) -> set[str]:
+        return set().union(*self.reads.values()) if self.reads else set()
+
+
+@dataclass
+class Corpus:
+    """Everything the gate read, named, so a caller cannot lose track of which tree."""
+
+    gateway_aliases: set[str] = field(default_factory=set)
+    fallbacks: dict[str, list[str]] = field(default_factory=dict)
+    role_pins: dict[str, str] = field(default_factory=dict)
+    api_roles: set[str] = field(default_factory=set)
+    agents_routing: RoutingModule = field(default_factory=RoutingModule)
+    api_routing: RoutingModule = field(default_factory=RoutingModule)
+    env_example: dict[str, str] = field(default_factory=dict)
+    compose: dict[str, dict[str, str]] = field(default_factory=dict)
+    embedding_default: str = ""
 
 
 # --------------------------------------------------------------------------
@@ -222,11 +252,11 @@ def parse_role_pins(source: str) -> dict[str, str]:
         for key, value in zip(node.value.keys, node.value.values, strict=False):
             if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
                 continue
-            if not (isinstance(value, ast.Call) and value.args and isinstance(value.args[-1 if False else 1], ast.Constant)):
+            if not isinstance(value, ast.Call) or len(value.args) < 2:
                 continue
-            primary = value.args[1].value
-            if isinstance(primary, str):
-                pins[key.value] = primary
+            primary = value.args[1]
+            if isinstance(primary, ast.Constant) and isinstance(primary.value, str):
+                pins[key.value] = primary.value
     return pins
 
 
@@ -267,7 +297,7 @@ def _env_reads(node: ast.AST) -> set[str]:
     return names
 
 
-def parse_routing_module(source: str) -> dict[str, object]:
+def parse_routing_module(source: str) -> RoutingModule:
     """Names defined, names declared in ``__all__``, and the env vars each function reads."""
     tree = ast.parse(source)
     functions: dict[str, set[str]] = {}
@@ -284,12 +314,7 @@ def parse_routing_module(source: str) -> dict[str, object]:
             defined |= names
             if "__all__" in names and isinstance(node.value, ast.List | ast.Tuple):
                 declared = {e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
-    return {
-        "defined": defined,
-        "declared": declared,
-        "reads": functions,
-        "all_reads": set().union(*functions.values()) if functions else set(),
-    }
+    return RoutingModule(defined=defined, declared=declared, reads=functions)
 
 
 def parse_env_file(text: str) -> dict[str, str]:
@@ -373,20 +398,18 @@ def _resolve_value(value: str, env: dict[str, str]) -> str:
     return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}", sub, value).strip()
 
 
-def evaluate(
-    *,
-    gateway_aliases: set[str],
-    fallbacks: dict[str, list[str]],
-    role_pins: dict[str, str],
-    api_roles: set[str],
-    agents_routing: dict[str, object],
-    api_routing: dict[str, object],
-    env_example: dict[str, str],
-    compose: dict[str, dict[str, str]],
-    embedding_default: str,
-) -> list[tuple[str, str]]:
+def evaluate(c: Corpus) -> list[tuple[str, str]]:
     """Return ``(code, detail)`` for every unresolvable name. Empty means clean."""
     out: list[tuple[str, str]] = []
+    gateway_aliases = c.gateway_aliases
+    fallbacks = c.fallbacks
+    role_pins = c.role_pins
+    api_roles = c.api_roles
+    agents_routing = c.agents_routing
+    api_routing = c.api_routing
+    env_example = c.env_example
+    compose = c.compose
+    embedding_default = c.embedding_default
 
     # PIN -> GW / GW -> PIN.
     claimed = set(role_pins.values())
@@ -409,17 +432,17 @@ def evaluate(
     # grow a routing rule the agents side does not have. Growth is detected by
     # the reads, not by the name, because a new rule is one that consults the
     # environment.
-    declared: set[str] = agents_routing["declared"]  # type: ignore[assignment]
-    routing_vars: set[str] = agents_routing["all_reads"]  # type: ignore[assignment]
-    api_defined: set[str] = api_routing["defined"]  # type: ignore[assignment]
-    agents_defined: set[str] = agents_routing["defined"]  # type: ignore[assignment]
+    declared = agents_routing.declared
+    routing_vars = agents_routing.all_reads
+    api_defined = api_routing.defined
+    agents_defined = agents_routing.defined
     for name in sorted(declared - agents_defined):
         out.append(("routing-surface-drift", f"{AGENTS_ROUTING_REL} declares '{name}' in __all__ and does not define it"))
     for name in sorted(declared - api_defined):
         out.append(
             ("routing-surface-drift", f"{AGENTS_ROUTING_REL} declares '{name}' as a routing rule and the {API_ROUTING_REL} mirror lacks it")
         )
-    for name, reads in sorted(api_routing["reads"].items()):  # type: ignore[union-attr]
+    for name, reads in sorted(api_routing.reads.items()):
         if reads & routing_vars and name.lstrip("_") not in declared:
             out.append(
                 (
@@ -429,8 +452,8 @@ def evaluate(
                 )
             )
 
-    agents_reads: set[str] = agents_routing["all_reads"]  # type: ignore[assignment]
-    api_reads: set[str] = api_routing["all_reads"]  # type: ignore[assignment]
+    agents_reads = agents_routing.all_reads
+    api_reads = api_routing.all_reads
     for name in sorted(agents_reads ^ api_reads):
         side = AGENTS_ROUTING_REL if name in agents_reads else API_ROUTING_REL
         other = API_ROUTING_REL if name in agents_reads else AGENTS_ROUTING_REL
@@ -539,7 +562,7 @@ def evaluate(
 # --------------------------------------------------------------------------
 
 
-def load(root: Path) -> dict[str, object]:
+def load(root: Path) -> Corpus:
     paths = {
         "config": root / CONFIG_REL,
         "pins": root / PINS_REL,
@@ -554,46 +577,46 @@ def load(root: Path) -> dict[str, object]:
             raise GateError(f"expected input does not exist: {path} ({name})")
 
     config_text = paths["config"].read_text(encoding="utf-8")
-    data: dict[str, object] = {
-        "gateway_aliases": parse_gateway_aliases(config_text),
-        "fallbacks": parse_gateway_fallbacks(config_text),
-        "role_pins": parse_role_pins(paths["pins"].read_text(encoding="utf-8")),
-        "api_roles": parse_api_roles(paths["api_routing"].read_text(encoding="utf-8")),
-        "agents_routing": parse_routing_module(paths["agents_routing"].read_text(encoding="utf-8")),
-        "api_routing": parse_routing_module(paths["api_routing"].read_text(encoding="utf-8")),
-        "env_example": parse_env_file(paths["env_example"].read_text(encoding="utf-8")),
-        "compose": parse_compose_env(paths["compose"].read_text(encoding="utf-8")),
-        "embedding_default": parse_embedding_default(paths["embedding"].read_text(encoding="utf-8")),
-    }
+    corpus = Corpus(
+        gateway_aliases=parse_gateway_aliases(config_text),
+        fallbacks=parse_gateway_fallbacks(config_text),
+        role_pins=parse_role_pins(paths["pins"].read_text(encoding="utf-8")),
+        api_roles=parse_api_roles(paths["api_routing"].read_text(encoding="utf-8")),
+        agents_routing=parse_routing_module(paths["agents_routing"].read_text(encoding="utf-8")),
+        api_routing=parse_routing_module(paths["api_routing"].read_text(encoding="utf-8")),
+        env_example=parse_env_file(paths["env_example"].read_text(encoding="utf-8")),
+        compose=parse_compose_env(paths["compose"].read_text(encoding="utf-8")),
+        embedding_default=parse_embedding_default(paths["embedding"].read_text(encoding="utf-8")),
+    )
     # An empty parse means the format moved, not that the tree is clean. Found
     # nothing and scanned nothing print the same word unless one of them refuses.
-    for name in ("gateway_aliases", "fallbacks", "role_pins", "api_roles", "env_example", "compose"):
-        if not data[name]:  # type: ignore[arg-type]
-            raise GateError(f"parsed zero {name} — refusing to report a clean tree from an empty read")
+    empty = [
+        name for name in ("gateway_aliases", "fallbacks", "role_pins", "api_roles", "env_example", "compose") if not getattr(corpus, name)
+    ]
+    if empty:
+        raise GateError(f"parsed zero {empty[0]} — refusing to report a clean tree from an empty read")
     for side in ("agents_routing", "api_routing"):
-        if not data[side]["defined"]:  # type: ignore[index]
+        module: RoutingModule = getattr(corpus, side)
+        if not module.defined:
             raise GateError(f"parsed zero definitions from {side} — refusing to report a clean tree from an empty read")
-    if not data["agents_routing"]["declared"]:  # type: ignore[index]
+    if not corpus.agents_routing.declared:
         raise GateError(f"{AGENTS_ROUTING_REL} declares no __all__ — the routing contract the mirror is checked against is missing")
-    return data
+    return corpus
 
 
-def _summary(data: dict[str, object], root: Path) -> list[str]:
-    compose: dict[str, dict[str, str]] = data["compose"]  # type: ignore[assignment]
-    gateway_services = sorted(s for s, env in compose.items() if any(BUNDLED_GATEWAY_RE.search(v) for v in env.values()))
-    agents = data["agents_routing"]
-    api = data["api_routing"]
-    reads = ", ".join(sorted(agents["all_reads"]))  # type: ignore[index]
+def _summary(c: Corpus, root: Path) -> list[str]:
+    gateway_services = sorted(s for s, env in c.compose.items() if any(BUNDLED_GATEWAY_RE.search(v) for v in env.values()))
+    reads = ", ".join(sorted(c.agents_routing.all_reads))
     wired = ", ".join(gateway_services)
     return [
         f"repo root        {root}",
-        f"gateway config   {CONFIG_REL}  ({len(data['gateway_aliases'])} aliases, {len(data['fallbacks'])} router fallbacks)",  # type: ignore[arg-type]
-        f"role pins        {PINS_REL}  ({len(data['role_pins'])} roles)",  # type: ignore[arg-type]
-        f"agents routing   {AGENTS_ROUTING_REL}  ({len(agents['declared'])} declared rules, reads {reads})",  # type: ignore[index]
-        f"api routing      {API_ROUTING_REL}  ({len(api['defined'])} definitions, {len(data['api_roles'])} roles)",  # type: ignore[index,arg-type]
-        f"env example      {ENV_EXAMPLE_REL}  ({len(data['env_example'])} live assignments)",  # type: ignore[arg-type]
-        f"compose          {COMPOSE_REL}  ({len(compose)} services, {len(gateway_services)} on the bundled gateway: {wired})",
-        f"embedding scope  {EMBEDDING_REL}  (default '{data['embedding_default']}', excluded from the gateway)",
+        f"gateway config   {CONFIG_REL}  ({len(c.gateway_aliases)} aliases, {len(c.fallbacks)} router fallbacks)",
+        f"role pins        {PINS_REL}  ({len(c.role_pins)} roles)",
+        f"agents routing   {AGENTS_ROUTING_REL}  ({len(c.agents_routing.declared)} declared rules, reads {reads})",
+        f"api routing      {API_ROUTING_REL}  ({len(c.api_routing.defined)} definitions, {len(c.api_roles)} roles)",
+        f"env example      {ENV_EXAMPLE_REL}  ({len(c.env_example)} live assignments)",
+        f"compose          {COMPOSE_REL}  ({len(c.compose)} services, {len(gateway_services)} on the bundled gateway: {wired})",
+        f"embedding scope  {EMBEDDING_REL}  (default '{c.embedding_default}', excluded from the gateway)",
     ]
 
 
@@ -617,99 +640,108 @@ def self_test(root: Path) -> int:
         print(f"self-test cannot run: {exc}", file=sys.stderr)
         return 2
 
-    baseline = evaluate(**base)  # type: ignore[arg-type]
+    baseline = evaluate(base)
     if baseline:
         print("self-test cannot run: the clean tree already has findings:", file=sys.stderr)
         for code, detail in baseline:
             print(f"  [{code}] {detail}", file=sys.stderr)
         return 2
 
-    cases: list[tuple[str, str, dict]] = []
+    def drop_gateway_read(c: Corpus) -> None:
+        for reads in c.api_routing.reads.values():
+            reads.discard("LLM_GATEWAY_URL")
 
-    def case(description: str, code: str, **changes):
-        # deepcopy, not dict(): the corpora are nested (compose is
-        # service -> var -> value), so a shallow copy lets one case mutate the
-        # baseline every later case is measured against. The first draft did
-        # exactly that and every case then "caught" three codes it had
-        # inherited — a self-test that passes for the wrong reason is the
-        # defect this gate exists to find, one level up.
-        data = copy.deepcopy(base)
-        for key, fn in changes.items():
-            fn(data[key])
-        cases.append((description, code, data))
+    def add_unset_gateway_var(c: Corpus) -> None:
+        for module in (c.agents_routing, c.api_routing):
+            module.reads.setdefault("gateway_url", set()).add("AISOC_GATEWAY_URL")
 
-    case(
-        "PIN -> GW: a role pinned to an alias the gateway does not define",
-        "pin-alias-undefined",
-        role_pins=lambda d: d.update({"triage": "aisoc-triage-v2"}),
-    )
-    case(
-        "GW -> PIN: an alias the gateway serves that no role requests",
-        "gateway-alias-unclaimed",
-        gateway_aliases=lambda s: s.add("aisoc-orphan"),
-    )
-    case(
-        "AGENTS <-> API: a role pinned on one side only",
-        "role-set-drift",
-        api_roles=lambda s: s.discard("triage"),
-    )
-    case(
-        "AGENTS <-> API: the mirror loses a routing function",
-        "routing-surface-drift",
-        api_routing=lambda d: d.__setitem__("defined", d["defined"] - {"resolve_api_key"}),
-    )
-    case(
-        "AGENTS <-> API: the mirror stops reading a variable the other reads",
-        "routing-read-drift",
-        api_routing=lambda d: d.__setitem__("all_reads", d["all_reads"] - {"LLM_GATEWAY_URL"}),
-    )
-    case(
-        "CONFIG -> GW: a router fallback naming an undefined alias",
-        "fallback-undefined",
-        fallbacks=lambda d: d.update({"aisoc-report": ["aisoc-nonexistent"]}),
-    )
-    case(
-        "ENV -> GW: .env.example ships a model the gateway does not define",
-        "env-model-undefined",
-        env_example=lambda d: d.update({"OPENAI_MODEL": "gpt-4-turbo-preview"}),
-    )
-    case(
-        "ENV -> GW: a compose service pins a role to a model the gateway lacks",
-        "env-model-undefined",
-        compose=lambda d: d["agents"].update({"AISOC_MODEL_PIN_TRIAGE": "gpt-4o-mini"}),
-    )
-    case(
-        "CMP -> CODE: compose supplies a gateway route no resolver reads",
-        "compose-var-unread",
-        compose=lambda d: d["agents"].update({"LLM_PROXY_URL": "http://litellm:4000/v1"}),
-    )
-    case(
-        "CODE -> CMP: both resolvers read a gateway variable compose never sets",
-        "code-var-unset",
-        agents_routing=lambda d: d.__setitem__("all_reads", d["all_reads"] | {"AISOC_GATEWAY_URL"}),
-        api_routing=lambda d: d.__setitem__("all_reads", d["all_reads"] | {"AISOC_GATEWAY_URL"}),
-    )
-    case(
-        "PAIRING: a service given the gateway URL but not the gateway key",
-        "gateway-without-key",
-        compose=lambda d: d["agents"].pop(GATEWAY_KEY_VAR, None) and None,
-    )
-    case(
-        "SCOPE: the gateway grows an embedding alias it cannot serve as chat",
-        "embedding-scope",
-        gateway_aliases=lambda s: s.add("aisoc-embedding"),
-    )
-    # A scalar corpus cannot be mutated in place, so this one case replaces it
-    # after the copy rather than through the mutator.
-    embedding_case = copy.deepcopy(base)
-    embedding_case["embedding_default"] = "aisoc-summary"
-    cases.append(("SCOPE: the RAG path defaults to a gateway alias for an embedding call", "embedding-scope", embedding_case))
+    def drop_gateway_key(c: Corpus) -> None:
+        c.compose["agents"].pop(GATEWAY_KEY_VAR, None)
+
+    def use_embedding_alias(c: Corpus) -> None:
+        c.embedding_default = "aisoc-summary"
+
+    # Each case is a defect injected into a deep copy of the real corpus, and
+    # the code it must produce. deepcopy, not a shallow one: the corpora are
+    # nested (compose is service -> var -> value), and the first draft let one
+    # case mutate the baseline every later case was measured against, so every
+    # case "caught" three codes it had inherited. A self-test that passes for
+    # the wrong reason is the defect this gate exists to find, one level up.
+    cases: list[tuple[str, str, Callable[[Corpus], None]]] = [
+        (
+            "PIN -> GW: a role pinned to an alias the gateway does not define",
+            "pin-alias-undefined",
+            lambda c: c.role_pins.update({"triage": "aisoc-triage-v2"}),
+        ),
+        (
+            "GW -> PIN: an alias the gateway serves that no role requests",
+            "gateway-alias-unclaimed",
+            lambda c: c.gateway_aliases.add("aisoc-orphan"),
+        ),
+        (
+            "AGENTS <-> API: a role pinned on one side only",
+            "role-set-drift",
+            lambda c: c.api_roles.discard("triage"),
+        ),
+        (
+            "AGENTS <-> API: the mirror loses a routing function",
+            "routing-surface-drift",
+            lambda c: c.api_routing.defined.discard("resolve_api_key"),
+        ),
+        (
+            "AGENTS <-> API: the mirror stops reading a variable the other reads",
+            "routing-read-drift",
+            drop_gateway_read,
+        ),
+        (
+            "CONFIG -> GW: a router fallback naming an undefined alias",
+            "fallback-undefined",
+            lambda c: c.fallbacks.update({"aisoc-report": ["aisoc-nonexistent"]}),
+        ),
+        (
+            "ENV -> GW: .env.example ships a model the gateway does not define",
+            "env-model-undefined",
+            lambda c: c.env_example.update({"OPENAI_MODEL": "gpt-4-turbo-preview"}),
+        ),
+        (
+            "ENV -> GW: a compose service pins a role to a model the gateway lacks",
+            "env-model-undefined",
+            lambda c: c.compose["agents"].update({"AISOC_MODEL_PIN_TRIAGE": "gpt-4o-mini"}),
+        ),
+        (
+            "CMP -> CODE: compose supplies a gateway route no resolver reads",
+            "compose-var-unread",
+            lambda c: c.compose["agents"].update({"LLM_PROXY_URL": "http://litellm:4000/v1"}),
+        ),
+        (
+            "CODE -> CMP: both resolvers read a gateway variable compose never sets",
+            "code-var-unset",
+            add_unset_gateway_var,
+        ),
+        (
+            "PAIRING: a service given the gateway URL but not the gateway key",
+            "gateway-without-key",
+            drop_gateway_key,
+        ),
+        (
+            "SCOPE: the gateway grows an embedding alias it cannot serve as chat",
+            "embedding-scope",
+            lambda c: c.gateway_aliases.add("aisoc-embedding"),
+        ),
+        (
+            "SCOPE: the RAG path defaults to a gateway alias for an embedding call",
+            "embedding-scope",
+            use_embedding_alias,
+        ),
+    ]
 
     print(f"self-test against {root}")
     print("clean tree: 0 findings (the baseline every case below perturbs)\n")
     results: list[tuple[str, bool]] = []
-    for description, expected, data in cases:
-        codes = {code for code, _ in evaluate(**data)}
+    for description, expected, mutate in cases:
+        perturbed = copy.deepcopy(base)
+        mutate(perturbed)
+        codes = {code for code, _ in evaluate(perturbed)}
         caught = expected in codes
         results.append((f"{description}\n        expected [{expected}]  got {sorted(codes) or 'nothing'}", caught))
 
@@ -745,11 +777,11 @@ def self_test(root: Path) -> int:
         (
             "PARSER: an env var named only in a docstring is not read",
             "LLM_GATEWAY_URL"
-            not in parse_routing_module('def gateway_url():\n    """Reads LLM_GATEWAY_URL."""\n    return None\n')["all_reads"],
+            not in parse_routing_module('def gateway_url():\n    """Reads LLM_GATEWAY_URL."""\n    return None\n').all_reads,
         ),
         (
             "PARSER: an env var read through os.environ[...] counts as read",
-            parse_routing_module('import os\ndef f():\n    return os.environ["LLM_GATEWAY_URL"]\n')["all_reads"] == {"LLM_GATEWAY_URL"},
+            parse_routing_module('import os\ndef f():\n    return os.environ["LLM_GATEWAY_URL"]\n').all_reads == {"LLM_GATEWAY_URL"},
         ),
     ]
     results.extend(blind)
@@ -777,7 +809,7 @@ def main(argv: list[str] | None = None) -> int:
         return self_test(root)
 
     try:
-        data = load(root)
+        corpus = load(root)
     except GateError as exc:
         print(f"check_llm_model_routing: FAILED to read the tree: {exc}", file=sys.stderr)
         return 2
@@ -785,19 +817,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"check_llm_model_routing: FAILED to parse the tree: {exc}", file=sys.stderr)
         return 2
 
-    findings = evaluate(**data)  # type: ignore[arg-type]
+    findings = evaluate(corpus)
 
     if args.json:
         print(
             json.dumps(
                 {
                     "repo_root": str(root),
-                    "gateway_aliases": sorted(data["gateway_aliases"]),  # type: ignore[arg-type]
-                    "role_pins": data["role_pins"],
-                    "api_roles": sorted(data["api_roles"]),  # type: ignore[arg-type]
-                    "agents_reads": sorted(data["agents_routing"]["all_reads"]),  # type: ignore[index]
-                    "api_reads": sorted(data["api_routing"]["all_reads"]),  # type: ignore[index]
-                    "embedding_default": data["embedding_default"],
+                    "gateway_aliases": sorted(corpus.gateway_aliases),
+                    "role_pins": corpus.role_pins,
+                    "api_roles": sorted(corpus.api_roles),
+                    "agents_reads": sorted(corpus.agents_routing.all_reads),
+                    "api_reads": sorted(corpus.api_routing.all_reads),
+                    "embedding_default": corpus.embedding_default,
                     "findings": [{"code": c, "detail": d} for c, d in findings],
                 },
                 indent=2,
@@ -806,7 +838,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1 if findings else 0
 
-    for line in _summary(data, root):
+    for line in _summary(corpus, root):
         print(line)
     print()
     if findings:
@@ -815,7 +847,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{code}] {detail}", file=sys.stderr)
         return 1
     print(
-        f"OK: {len(data['role_pins'])} role pins, {len(data['gateway_aliases'])} gateway aliases and "  # type: ignore[arg-type]
+        f"OK: {len(corpus.role_pins)} role pins, {len(corpus.gateway_aliases)} gateway aliases and "
         f"every model named in {ENV_EXAMPLE_REL} / {COMPOSE_REL} resolve at the gateway, "
         "and the variable compose supplies is the variable both resolvers read"
     )
