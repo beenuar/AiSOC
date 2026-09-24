@@ -204,7 +204,12 @@ def make_playbook(
         "name": name,
         "description": description,
         "version": version,
-        "tags": [category, *tags],
+        # dict.fromkeys de-duplicates while preserving order. Several
+        # categories already lead their tag list with the category name, so
+        # the plain `[category, *tags]` emitted e.g.
+        # ["supply-chain", "supply-chain", "npm", ...] in 20 of the 62 packs
+        # — which the schema rejects under `uniqueItems`.
+        "tags": list(dict.fromkeys([category, *tags])),
         "trigger": {
             "on": trigger_on,
             "severity": severity,

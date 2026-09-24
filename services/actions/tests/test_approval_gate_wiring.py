@@ -17,7 +17,8 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
+from app.live_actions import capability_contracts
+from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS, contract_for_action_type
 from app.models.action import ActionRequest, ActionStatus, ActionType, BlastRadius
 from app.services.approval_gate import apply_matrix
 from app.services.blast_radius import BlastRadiusGate
@@ -143,13 +144,68 @@ class TestTheTierIsHonoured:
         assert "L1" in reason
 
 
+class TestTheAliasedVerbIsGatedToo:
+    """``notify_slack`` was the last ActionType the matrix never saw.
+
+    It was never a missing capability — the verb is ``notify``, it has had a
+    contract throughout, and ``SlackNotify`` bridges the two names. What was
+    missing was anything telling a lookup *by ActionType value* about that
+    bridge, so ``apply_matrix`` found nothing, returned the blast-radius
+    verdict unchanged, and the one verb most likely to auto-execute was the
+    one verb graded without reference to confidence.
+    """
+
+    def test_the_two_names_are_not_the_same_string(self):
+        """The premise. If these ever converge the alias becomes dead code,
+        and the contract gate says so rather than leaving it to rot."""
+        assert ActionType.NOTIFY_SLACK.value == "notify_slack"
+        assert ActionType.NOTIFY_SLACK.value not in CAPABILITY_CONTRACTS
+        assert "notify" in CAPABILITY_CONTRACTS
+
+    def test_the_alias_resolves_to_the_notify_contract(self):
+        assert contract_for_action_type(ActionType.NOTIFY_SLACK.value) is CAPABILITY_CONTRACTS["notify"]
+
+    @pytest.mark.asyncio
+    async def test_a_low_confidence_notify_no_longer_auto_executes(self):
+        """Fails against the pre-change tree, which approved this outright.
+
+        ``notify_slack`` is MINIMAL blast radius, so ``BlastRadiusGate``
+        approves it on its own. With the contract now reachable the matrix
+        gets a say, and at 10% confidence under the default L1 tier it
+        demands an analyst.
+        """
+        request = _request(ActionType.NOTIFY_SLACK, confidence=0.1)
+        before, br, before_reason = BlastRadiusGate().evaluate(request)
+        after, reason = await apply_matrix(request, before, br, before_reason)
+
+        assert before == ActionStatus.APPROVED
+        assert after == ActionStatus.AWAITING_APPROVAL
+        assert reason != before_reason
+
+    @pytest.mark.asyncio
+    async def test_the_alias_cannot_lower_a_requirement(self):
+        """An alias route into the matrix must obey the same composition rule
+        as a direct one: each input can raise a requirement, none can lower
+        it. A LOW-impact contract must not talk a blocked action into running.
+        """
+        request = _request(ActionType.NOTIFY_SLACK, confidence=1.0)
+        after, _ = await apply_matrix(request, ActionStatus.AWAITING_APPROVAL, BlastRadius.MINIMAL, "held by policy")
+
+        assert after == ActionStatus.AWAITING_APPROVAL
+
+
 class TestVerbsWithNoContract:
     @pytest.mark.asyncio
-    async def test_an_unmapped_verb_is_left_to_blast_radius(self):
-        """Seven ActionType members have no capability contract. Inventing an
-        impact for them is how a gate starts certifying things it never
-        examined, so blast radius decides alone and the gap is logged."""
-        assert ActionType.NOTIFY_SLACK.value not in CAPABILITY_CONTRACTS
+    async def test_an_unmapped_verb_is_still_left_to_blast_radius(self, monkeypatch: pytest.MonkeyPatch):
+        """Every ActionType resolves a contract today and a gate keeps it that
+        way, so this path is no longer reachable through the enum. It stays
+        tested because the fallback is what stops the gate inventing an impact
+        for a verb nobody declared — a gate that certifies what it never
+        examined is the failure this whole module exists to avoid.
+
+        Pulling the alias out is the smallest way to reach the branch.
+        """
+        monkeypatch.setattr(capability_contracts, "ACTION_TYPE_CAPABILITY_ALIASES", {})
 
         request = _request(ActionType.NOTIFY_SLACK, confidence=0.1)
         before, br, before_reason = BlastRadiusGate().evaluate(request)
@@ -157,6 +213,12 @@ class TestVerbsWithNoContract:
 
         assert after == before
         assert reason == before_reason
+
+    def test_no_action_type_is_left_unmapped(self):
+        """The property the contract gate enforces, asserted here too so it
+        fails in the service's own suite and not only in a CI script."""
+        unmapped = [a.value for a in ActionType if contract_for_action_type(a.value) is None]
+        assert unmapped == [], f"ActionType members with no reachable capability contract: {unmapped}"
 
 
 class TestTierLabelMapping:

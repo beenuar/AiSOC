@@ -56,9 +56,18 @@ The claim-to-gate matrix stands at **108 rows — 99 GATED / 9 PARTIAL / 0 NO GA
 - [x] Eval harness: 20 synthetic incidents, ≥80% MITRE-tactic accuracy CI gate
 
 ### Visual SOAR studio
-- [x] React Flow playbook editor with full node palette (Trigger, Condition, Action, Loop, Parallel, Human Approval, Wait, Notify)
-- [x] DAG playbook engine with retries, idempotency, blast-radius checks
-- [x] `playbook.schema.json` (JSON Schema 2020-12) for portability and CI linting
+- [x] React Flow playbook editor over the step types the engine implements
+      (enrich, investigate, notify, block_ip, isolate_host, create_ticket,
+      close_case, http, condition). Loop, Parallel, Wait and Human Approval
+      were listed here and exist in neither the palette nor the engine.
+- [x] Sequential playbook engine with conditions, branching, retries and
+      cycle detection. Not a DAG: there is no `depends_on` and no parallel
+      execution. No idempotency keys and no step-level blast-radius check —
+      `blast_radius` was declared by a schema the engine could not read, and
+      that schema has been removed rather than left as a promise.
+- [x] `schemas/playbook.schema.json` (JSON Schema draft-07) for portability
+      and CI linting, held to the engine in both directions by
+      `scripts/check_playbook_schema_parity.py`
 - [x] Detection-as-Code: `detections/` directory with Sigma + AiSOC YAML, GitHub Action deploy-on-merge
 - [x] 12 starter playbook templates
 - [x] Community playbook marketplace (static index v4.0; publishing flow v4.1)

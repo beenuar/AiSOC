@@ -403,3 +403,102 @@ class TestEngineConditionGate:
 
         assert called["hit"] is True
         assert run.step_results[0]["status"] == StepStatus.SUCCESS
+
+
+# ---------------------------------------------------------------------------
+# PlaybookEngine.run — step types the engine cannot run must not report success
+# ---------------------------------------------------------------------------
+#
+# Twelve of the twenty-two StepType members had no entry in ``_HANDLERS``.
+# The run loop answered those with ``{"skipped": True}`` and left
+# ``step_status`` at its SUCCESS default, so a playbook containing them ran to
+# RunStatus.COMPLETED having done nothing that it said it did.
+#
+# ``approval`` is the one that matters most: it is a human decision point, it
+# appears in 14 steps across the shipped packs, and it passed on its own —
+# the run continued straight into the action an analyst was meant to
+# authorise. "Unverifiable means not autonomous" applies to a gate that
+# cannot be evaluated as much as to an action that cannot be verified.
+
+
+class TestUnimplementedStepTypesFailClosed:
+    @pytest.mark.asyncio
+    async def test_an_approval_gate_the_engine_cannot_honour_halts_the_run(self) -> None:
+        """Fails against the pre-change tree, which reported SUCCESS/COMPLETED."""
+        pb = _make_playbook(
+            [
+                PlaybookStep(id="gate", name="Analyst approves isolation", type=StepType.APPROVAL),
+                PlaybookStep(id="act", name="Isolate the host", type=StepType.ISOLATE_HOST),
+            ]
+        )
+
+        run = await PlaybookEngine().run(pb, trigger_context={})
+
+        assert run.step_results[0]["status"] == StepStatus.FAILED
+        assert run.step_results[0]["result"]["unimplemented"] is True
+        assert "approval" in run.step_results[0]["result"]["error"]
+        assert run.status == RunStatus.FAILED
+        # The whole point: the step behind the gate must not have run.
+        assert len(run.step_results) == 1, "execution continued past a gate that was never granted"
+
+    @pytest.mark.asyncio
+    async def test_no_step_type_reports_success_without_a_handler(self) -> None:
+        """Every StepType with no handler, not just the one that hurt most."""
+        unimplemented = [st for st in StepType if st not in engine_mod._HANDLERS and st != StepType.CONDITION]
+        assert unimplemented, "fixture assumption broken: expected some StepType to lack a handler"
+
+        for step_type in unimplemented:
+            pb = _make_playbook([PlaybookStep(id="s1", name=f"step {step_type.value}", type=step_type)])
+            run = await PlaybookEngine().run(pb, trigger_context={})
+
+            result = run.step_results[0]
+            assert result["status"] == StepStatus.FAILED, f"{step_type.value} reported {result['status']} with no handler"
+            assert result["result"].get("unimplemented") is True
+            assert run.status == RunStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_a_missing_handler_is_not_retried(self) -> None:
+        """A handler that does not exist will not exist next attempt either;
+        retrying just delays the failure by up to 2**retry_max seconds."""
+        pb = _make_playbook([PlaybookStep(id="s1", name="scan", type=StepType.RUN_AV_SCAN, retry_max=3)])
+
+        run = await PlaybookEngine().run(pb, trigger_context={})
+
+        assert run.step_results[0]["status"] == StepStatus.FAILED
+        assert run.step_results[0]["result"]["_elapsed_ms"] == 0
+
+    @pytest.mark.asyncio
+    async def test_on_failure_continue_is_still_honoured(self) -> None:
+        """Failing closed must not mean ignoring the author's policy: a step
+        explicitly marked ``continue`` still lets the run proceed."""
+        pb = _make_playbook(
+            [
+                PlaybookStep(id="s1", name="best-effort scan", type=StepType.RUN_AV_SCAN, on_failure="continue"),
+                PlaybookStep(id="s2", name="second step", type=StepType.RUN_SCRIPT, on_failure="continue"),
+            ]
+        )
+
+        run = await PlaybookEngine().run(pb, trigger_context={})
+
+        assert len(run.step_results) == 2
+        assert all(r["status"] == StepStatus.FAILED for r in run.step_results)
+        assert run.status == RunStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_a_dry_run_says_which_steps_would_fail(self) -> None:
+        """A dry run exists to tell the author what would happen. Reporting a
+        bare ``dry_run: true`` for a step that cannot execute would imply it
+        is fine."""
+        pb = _make_playbook(
+            [
+                PlaybookStep(id="s1", name="notify", type=StepType.NOTIFY),
+                PlaybookStep(id="s2", name="gate", type=StepType.APPROVAL),
+            ]
+        )
+
+        run = await PlaybookEngine().run(pb, trigger_context={}, dry_run=True)
+
+        assert run.status == RunStatus.COMPLETED
+        assert run.step_results[0]["result"].get("unimplemented") is None
+        assert run.step_results[1]["result"]["unimplemented"] is True
+        assert run.step_results[1]["result"]["would_fail"] is True

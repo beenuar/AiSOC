@@ -153,55 +153,59 @@ class TestSchemaValidity:
         assert rehydrated.id == pb.id
         assert _step_types(rehydrated) == _step_types(pb)
 
-    def test_step_type_collapse_preserves_original_type(self) -> None:
-        # ``run_av_scan`` is Pydantic-only — schema collapse must map it
-        # to a schema-allowed type and stash the original in params.
-        payload = {
-            "id": "test-id",
-            "name": "Test",
-            "version": "1.0.0",
-            "trigger": {"on": "alert"},
-            "steps": [
-                {
-                    "id": "s1",
-                    "name": "Run AV Scan",
-                    "type": "run_av_scan",
-                    "params": {},
-                }
-            ],
-        }
-        collapsed = nl_drafter._collapse_step_types_for_schema(payload)
-        assert collapsed["steps"][0]["type"] in nl_drafter._SCHEMA_STEP_TYPES
-        assert collapsed["steps"][0]["params"]["original_type"] == "run_av_scan"
+    def test_every_step_type_validates_without_being_rewritten(self) -> None:
+        """The three tests that used to live here asserted the collapse.
 
-    def test_schema_collapse_is_pure(self) -> None:
-        # The collapse helper must NOT mutate its input.
-        payload = {
-            "id": "test-id",
-            "name": "Test",
-            "version": "1.0.0",
-            "trigger": {"on": "alert"},
-            "steps": [{"id": "s1", "name": "x", "type": "block_ioc", "params": {}}],
-        }
-        before = json.dumps(payload, sort_keys=True)
-        nl_drafter._collapse_step_types_for_schema(payload)
-        after = json.dumps(payload, sort_keys=True)
-        assert before == after, "collapse must not mutate its input"
+        The drafter could not express 13 of the 22 ``StepType`` values in the
+        published schema, so it rewrote them onto a "nearest neighbour" to
+        make its output lint-clean: ``run_av_scan`` became ``investigate``,
+        ``approval`` became ``condition``. The original was stashed in
+        ``params.original_type``, but the playbook that shipped said it would
+        investigate when the author had asked to scan, and an approval gate
+        came out as an ungated branch.
 
-    def test_schema_allowed_types_unchanged_by_collapse(self) -> None:
-        payload = {
-            "id": "test-id",
-            "name": "Test",
-            "version": "1.0.0",
-            "trigger": {"on": "alert"},
-            "steps": [
-                {"id": "s1", "name": "x", "type": "enrich", "params": {}},
-                {"id": "s2", "name": "y", "type": "notify", "params": {}},
-            ],
-        }
-        collapsed = nl_drafter._collapse_step_types_for_schema(payload)
-        assert collapsed["steps"][0]["type"] == "enrich"
-        assert collapsed["steps"][1]["type"] == "notify"
+        This is the property that replaces it: every step type the model
+        accepts is declared by the published schema. Fails against the
+        pre-change tree, where the schema declared 9 of 22.
+
+        Asserted against the schema document directly, not through
+        ``_validate_against_schema``. Going through the helper is what hid
+        this for so long — its second pass rewrote the step and reported
+        success, so "the drafter's output validates" was true of a playbook
+        the drafter had altered to make it true.
+        """
+        jsonschema = pytest.importorskip("jsonschema")
+        schema = nl_drafter._load_schema()
+        declared = set(schema["definitions"]["PlaybookStep"]["properties"]["type"]["enum"])
+
+        missing = sorted(st.value for st in StepType if st.value not in declared)
+        assert missing == [], f"StepType members the published schema does not declare: {missing}"
+
+        for step_type in StepType:
+            payload = {
+                "id": "test-id",
+                "name": "Test playbook",
+                "version": "1.0.0",
+                "trigger": {"on": "alert"},
+                "steps": [{"id": "s1", "name": f"Step {step_type.value}", "type": step_type.value, "params": {}}],
+            }
+            jsonschema.validate(payload, schema)
+
+    def test_the_collapse_helper_is_gone(self) -> None:
+        """Keeping the schema honest is only durable if the workaround cannot
+        quietly come back — a lossy projection would once again let the
+        drafter emit a step whose declared type is not what it asked for."""
+        for removed in ("_collapse_step_types_for_schema", "_PYDANTIC_TO_SCHEMA_TYPE", "_SCHEMA_STEP_TYPES"):
+            assert not hasattr(nl_drafter, removed), f"{removed} is back; the schema should cover the full StepType range instead"
+
+    def test_the_system_prompt_offers_only_real_vocabulary(self) -> None:
+        """The prompt used to restate the vocabulary by hand and had drifted:
+        it offered ``webhook`` as a trigger, which no validator in the repo
+        accepts, and capped ``retry_max`` at 5 against a model allowing 25."""
+        prompt = nl_drafter._SYSTEM_PROMPT
+        for step_type in StepType:
+            assert f"``{step_type.value}``" in prompt, f"{step_type.value} missing from the drafter prompt"
+        assert "webhook" not in prompt, "prompt offers a trigger no validator accepts"
 
     def test_draft_result_to_dict_round_trip(self) -> None:
         async def _go() -> DraftResult:

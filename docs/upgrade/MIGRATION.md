@@ -28,7 +28,7 @@ Read it before running `docker compose pull` or deploying to production.
 | Area | v3 | v4 |
 |------|----|----|
 | Core engine | Rule-based SOAR engine | LangGraph multi-agent investigator |
-| Playbook format | Custom JSON (no schema) | JSON Schema 2020-12 (`playbook.schema.json`) |
+| Playbook format | Custom JSON (no schema) | JSON Schema draft-07 (`schemas/playbook.schema.json`) |
 | Plugin manifest | `aisoc-plugin.json` only | `plugin.yaml` (preferred) + `aisoc-plugin.json` (legacy) |
 | Plugin types | `enricher`, `action`, `connector` | + `responder`, `detection`, `widget` |
 | Plugin distribution | Local directory only | Local directory + OCI images (via `oras`) |
@@ -171,7 +171,7 @@ config_schema:
 
 ### Step 5 — Migrate playbooks
 
-Playbooks are now validated against `playbook.schema.json` (JSON Schema 2020-12).
+Playbooks are now validated against `schemas/playbook.schema.json` (JSON Schema draft-07).
 
 **Check your existing playbooks:**
 

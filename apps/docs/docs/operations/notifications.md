@@ -122,17 +122,28 @@ Slack tokens **must** come from your secret store (Doppler / Vault / k8s Secret)
 
 The `notify_slack` action executor is the simplest possible Slack surface: a one-shot incoming-webhook POST. It does not require the Slack bot to be running.
 
+The playbook step type is `notify` — `notify_slack` is the `action_type` on
+the actions API, and the two names are bridged by an alias (see
+[Live Actions](../concepts/live-actions)). A step keys its arguments under
+`params`, not `parameters`:
+
 ```yaml
-# playbooks/auto-isolate-on-p0.yaml
 steps:
   - id: notify
-    type: notify_slack
-    parameters:
-      webhook_url: "https://hooks.slack.com/services/..."
-      channel: "#security-alerts"
+    name: Post to the SOC channel
+    type: notify
+    params:
+      channel: webhook
+      url: "https://hooks.slack.com/services/..."
       message: |
-        AiSOC isolated host {{ context.host }} after P0 alert {{ context.alert_id }}.
+        AiSOC isolated host {{ host }} after alert {{ alert_id }}.
 ```
+
+`schemas/playbook.schema.json` is the authoring contract, and
+`scripts/check_playbook_schema_parity.py` keeps it matched to the engine in
+both directions. Its `x-aisoc-execution` map records what the engine does
+with each step type, so you can tell before authoring whether a verb
+executes, simulates, or is vocabulary the engine will fail closed on.
 
 Implementation: [`services/actions/app/executors/notification.py`](https://github.com/beenuar/AiSOC/blob/main/services/actions/app/executors/notification.py).
 

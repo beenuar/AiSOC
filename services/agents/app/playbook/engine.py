@@ -627,28 +627,56 @@ class PlaybookEngine:
                 attempt = 0
                 handler = _HANDLERS.get(step.type)
 
-                while True:
-                    attempt += 1
-                    t0 = time.perf_counter()
-                    try:
-                        if dry_run:
-                            result = {"dry_run": True, "step": step.name}
-                        elif handler:
-                            result = await handler(step, pr.context, http)
-                        else:
-                            result = {"skipped": True, "reason": f"no handler for {step.type}"}
-                        elapsed = time.perf_counter() - t0
-                        result["_elapsed_ms"] = round(elapsed * 1000)
-                        break  # success
-                    except Exception as exc:  # noqa: BLE001
-                        elapsed = time.perf_counter() - t0
-                        logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
-                        if attempt <= step.retry_max:
-                            await asyncio.sleep(min(2**attempt, 30))
-                        else:
-                            step_status = StepStatus.FAILED
-                            result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
-                            break
+                if handler is None and not dry_run:
+                    # Fail closed, and skip the retry loop — a missing handler
+                    # will still be missing on the next attempt.
+                    #
+                    # This branch used to return ``{"skipped": True}`` while
+                    # leaving step_status at SUCCESS, so twelve of the
+                    # twenty-two declared step types reported that they had run
+                    # when nothing had. The worst of them was ``approval``: a
+                    # human decision point that passed on its own and let the
+                    # run continue into the very action an analyst was supposed
+                    # to authorise. Falling through to the shared tail below
+                    # means the default ``on_failure: abort`` halts the run.
+                    step_status = StepStatus.FAILED
+                    result = {
+                        "error": f"step type {step.type.value!r} has no handler in this engine",
+                        "unimplemented": True,
+                        "_elapsed_ms": 0,
+                    }
+                    logger.error(
+                        "Step %s (%s) has no handler; failing closed rather than reporting success",
+                        step.name,
+                        step.type.value,
+                    )
+                else:
+                    while True:
+                        attempt += 1
+                        t0 = time.perf_counter()
+                        try:
+                            if dry_run:
+                                result = {"dry_run": True, "step": step.name}
+                                if handler is None:
+                                    # A dry run exists to tell the author what
+                                    # would happen. "dry_run: true" alone would
+                                    # imply this step is fine.
+                                    result["unimplemented"] = True
+                                    result["would_fail"] = True
+                            else:
+                                result = await handler(step, pr.context, http)
+                            elapsed = time.perf_counter() - t0
+                            result["_elapsed_ms"] = round(elapsed * 1000)
+                            break  # success
+                        except Exception as exc:  # noqa: BLE001
+                            elapsed = time.perf_counter() - t0
+                            logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
+                            if attempt <= step.retry_max:
+                                await asyncio.sleep(min(2**attempt, 30))
+                            else:
+                                step_status = StepStatus.FAILED
+                                result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
+                                break
 
                 pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})
                 # Merge result into context for downstream steps. The namespaced

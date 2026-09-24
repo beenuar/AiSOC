@@ -466,6 +466,70 @@ def check_capability_reachability() -> list[str]:
             f"deployment rather than a verb that was never built."
         )
 
+    # ── Direction 7: ActionType → capability contract ──────────────────────
+    # An ActionType with no reachable contract is not a cosmetic gap. The
+    # submit path looks the contract up *by ActionType value* to run the
+    # confidence matrix; a miss means the matrix is skipped and blast radius
+    # decides alone, so a 40%-confidence guess is graded like a corroborated
+    # finding. That is what happened to `notify_slack` for as long as the
+    # capability was called `notify` and nothing connected the two.
+    from app.live_actions.capability_contracts import (
+        ACTION_TYPE_CAPABILITY_ALIASES,
+        CAPABILITY_CONTRACTS,
+        contract_for_action_type,
+    )
+
+    for action_type in sorted(ActionType, key=lambda a: a.value):
+        if contract_for_action_type(action_type.value) is None:
+            errors.append(
+                f"{action_type.value}: no capability contract resolves for this "
+                f"ActionType. The approval matrix has no impact to reason about, "
+                f"so it is skipped and blast radius decides alone. Give the verb a "
+                f"contract, or — if this is only a naming difference for a verb "
+                f"that already has one — add it to ACTION_TYPE_CAPABILITY_ALIASES."
+            )
+
+    # ── Direction 8: alias map → the rest of the world, both ways ──────────
+    # An alias is a claim that two names mean one verb. Three ways it can rot,
+    # each checked here, because an alias nothing validates is just a lookup
+    # that happens to succeed.
+    known_action_type_values = {a.value for a in ActionType}
+    adapter_bridges = {
+        (getattr(cls, "capability", ""), getattr(cls, "_legacy_action_type", None))
+        for cls in adapters
+        if getattr(cls, "_legacy_action_type", None) is not None
+    }
+    for legacy_value, capability in sorted(ACTION_TYPE_CAPABILITY_ALIASES.items()):
+        if legacy_value not in known_action_type_values:
+            errors.append(
+                f"ACTION_TYPE_CAPABILITY_ALIASES maps {legacy_value!r}, which is not an "
+                f"ActionType. The alias can never fire; delete it or fix the key."
+            )
+        if capability not in CAPABILITY_CONTRACTS:
+            errors.append(
+                f"ACTION_TYPE_CAPABILITY_ALIASES points {legacy_value!r} at capability "
+                f"{capability!r}, which has no contract — the alias resolves to nothing."
+            )
+        # The alias must describe a bridge that actually exists. If no adapter
+        # pairs this capability with this ActionType, the two names are not
+        # two names for one verb and the alias is asserting something false.
+        if not any(cap == capability and lat is not None and lat.value == legacy_value for cap, lat in adapter_bridges):
+            errors.append(
+                f"ACTION_TYPE_CAPABILITY_ALIASES claims {legacy_value!r} and {capability!r} "
+                f"are the same verb, but no adapter pairs them (no executor with "
+                f"capability={capability!r} and _legacy_action_type={legacy_value!r}). "
+                f"An alias asserting a bridge nobody built is worse than no alias."
+            )
+
+    # And the other way: an alias must not shadow a real capability of the
+    # same name, which would silently redirect a verb that has its own contract.
+    for legacy_value in sorted(ACTION_TYPE_CAPABILITY_ALIASES):
+        if legacy_value in CAPABILITY_CONTRACTS:
+            errors.append(
+                f"{legacy_value!r} has its own capability contract AND an alias entry. "
+                f"The alias is dead code at best and a silent redirect at worst; remove it."
+            )
+
     errors.extend(_ratchet("KNOWN_UNGOVERNED_EXECUTORS", KNOWN_UNGOVERNED_EXECUTORS, {a.value for a in adapter_action_types}))
     errors.extend(
         _ratchet(

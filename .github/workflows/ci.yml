@@ -987,8 +987,19 @@ jobs:
           git push origin eval-results || echo "push skipped"
 
   # ──────────────────────────────────────────────
-  # Pillar-2: Playbook JSON Schema lint
-  # Validates all playbook JSON files against schemas/playbook.schema.json
+  # Pillar-2: Playbook JSON Schema lint + schema/engine parity
+  #
+  # The lint validates every *.playbook.json in the tree against
+  # schemas/playbook.schema.json. It used to scan only the two files under
+  # services/agents/data/playbooks and report "2/2 passed" while the 62
+  # playbooks in playbooks/packs/v1 went unchecked — 32 of which did not match.
+  #
+  # The parity check asks the other question, which nothing asked before: does
+  # the published schema describe the engine that runs these files. It compares
+  # the schema, the StepType enum, the engine's handler table and the pack
+  # validator's trigger list in both directions, and carries a --self-test that
+  # injects drift each way so a passing run cannot mean "the comparison is
+  # broken".
   # ──────────────────────────────────────────────
   p2-playbook-schema-lint:
     name: P2 — Playbook Schema Lint
@@ -998,10 +1009,17 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - name: Install jsonschema
-        run: pip install jsonschema
+      - name: Install deps
+        # pydantic + httpx let the parity check import the real engine rather
+        # than parse it; a parser can disagree with the handler table that is
+        # actually built at import time.
+        run: pip install jsonschema pydantic httpx pytest
       - name: Lint playbook files
         run: python3 scripts/lint_playbooks.py
+      - name: Schema/engine parity (both directions, with self-test)
+        run: python3 scripts/check_playbook_schema_parity.py --self-test
+      - name: Parity gate tests
+        run: python3 -m pytest tests/test_playbook_schema_parity_gate.py -q
 
   # ──────────────────────────────────────────────
   # Docker Compose smoke test
