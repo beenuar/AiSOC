@@ -1296,7 +1296,7 @@ async def case_auto_postmortem(
     change*. Both are deterministic — same case state in, same artefact out.
     """
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
-    postmortem = await build_case_postmortem(db, cid)
+    postmortem = await build_case_postmortem(db, cid, user.tenant_id)
     if postmortem is None:
         raise HTTPException(status_code=404, detail="Case not found.")
 
