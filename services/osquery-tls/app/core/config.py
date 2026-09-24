@@ -37,8 +37,10 @@ class Settings(BaseSettings):
     require_client_cert: bool = False
 
     # --- Service identity -----------------------------------------------
-    # Public hostname (used to build TLS flag-file docs).
-    public_hostname: str = "osquery.tryaisoc.com"
+    # Public hostname operators point agents' ``--tls_hostname`` at. Set this
+    # per deployment. Declared but not yet read anywhere in this service —
+    # flag-file rendering still has to be wired up.
+    public_hostname: str = "localhost"
 
     # --- Pack stubs (overridden fully in PR5) ---------------------------
     # Default query interval for the baseline schedule shipped to every node.

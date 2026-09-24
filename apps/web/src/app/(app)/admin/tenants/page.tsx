@@ -102,10 +102,8 @@ export default function AdminTenantsPage() {
         </h1>
         <p className="mt-1 text-sm text-gray-400">
           Read-only directory of every tenant in this AiSOC deployment.
-          Managed tenants — provisioned through the waitlist flow on{' '}
-          <code className="rounded bg-white/[0.05] px-1">tryaisoc.com</code>{' '}
-          — are tagged in the list so the support team can scope
-          their attention.
+          Managed tenants — provisioned through the waitlist flow — are
+          tagged in the list so the support team can scope their attention.
         </p>
       </header>
 

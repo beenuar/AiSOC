@@ -39,6 +39,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.core.config import console_base_url
 from app.models.tenant import Tenant
 from app.services.tenant_provision import (
     ProvisioningError,
@@ -59,7 +60,6 @@ router = APIRouter(prefix="/admin/tenants", tags=["admin", "tenants"])
 # ---------------------------------------------------------------------------
 
 _MAX_LIST_LIMIT: int = 500
-_DEFAULT_INVITE_BASE_URL: str = "https://tryaisoc.com"
 
 
 # ---------------------------------------------------------------------------
@@ -217,9 +217,7 @@ async def provision_tenant(
     """
     await _require_admin(user, db)
 
-    invite_base = (payload.invite_base_url or _DEFAULT_INVITE_BASE_URL).strip()
-    if not invite_base:
-        invite_base = _DEFAULT_INVITE_BASE_URL
+    invite_base = (payload.invite_base_url or "").strip() or console_base_url()
 
     try:
         result = await provision_from_waitlist(

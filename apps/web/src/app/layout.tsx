@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AiSOC — Free, Open-Source AI Security Operations Center',
     description:
-      'Self-hostable AI SOC with real-time threat detection, alert fusion, purple-team drills, MITRE ATT&CK investigation, and detection-as-code. MIT-licensed. Try the live demo at tryaisoc.com.',
+      'Self-hostable AI SOC with real-time threat detection, alert fusion, purple-team drills, MITRE ATT&CK investigation, and detection-as-code. MIT-licensed.',
     type: 'website',
     siteName: 'AiSOC',
     url: siteUrl,
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AiSOC — Free Open-Source AI SOC Platform',
     description:
-      'AI-powered SOC: threat detection, alert fusion, purple team, MITRE ATT&CK mapping, detection-as-code, and eval harness in CI. Self-host for free — tryaisoc.com.',
+      'AI-powered SOC: threat detection, alert fusion, purple team, MITRE ATT&CK mapping, detection-as-code, and eval harness in CI. Self-host for free.',
     site: '@aisoc_dev',
     creator: '@aisoc_dev',
   },
@@ -100,10 +100,7 @@ const jsonLd = {
       logo: `${siteUrl}/favicon.svg`,
       description:
         'Community-driven, MIT-licensed AI security operations platform with a public demo and self-host path.',
-      sameAs: [
-        'https://github.com/beenuar/AiSOC',
-        'https://tryaisoc.com',
-      ],
+      sameAs: ['https://github.com/beenuar/AiSOC'],
       contactPoint: {
         '@type': 'ContactPoint',
         contactType: 'technical support',
@@ -153,7 +150,7 @@ const jsonLd = {
       '@type': 'WebSite',
       name: 'AiSOC',
       url: siteUrl,
-      description: 'Open-source AI-powered Security Operations Center — tryaisoc.com',
+      description: 'Open-source AI-powered Security Operations Center',
       potentialAction: {
         '@type': 'SearchAction',
         target: `${siteUrl}/search?q={search_term_string}`,

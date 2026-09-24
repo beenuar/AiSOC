@@ -47,8 +47,6 @@ func resolveCORSOrigins() []string {
 		"http://localhost:3001",
 		"http://127.0.0.1:3000",
 		"http://127.0.0.1:3001",
-		"https://tryaisoc.com",
-		"https://www.tryaisoc.com",
 	}
 }
 
@@ -86,7 +84,8 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	// Allow-list is resolved from AISOC_CORS_ORIGINS (canonical) / CORS_ORIGINS
-	// (legacy) with a safe default for local dev + the tryaisoc.com console.
+	// (legacy) with a safe default that covers local dev only; deployed
+	// origins are expected to set the env var.
 	// AllowCredentials stays false here — /v1/ingest is token-authenticated
 	// per request, not session-cookie-authenticated, so we don't need the
 	// browser to attach cookies cross-origin and we keep the spec-mandated

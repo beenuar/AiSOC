@@ -1,4 +1,4 @@
-"""Demo-mode guard for the hosted demo at tryaisoc.com.
+"""Demo-mode guard for a public, read-only demo deployment.
 
 When `AISOC_DEMO_MODE=true`, this middleware:
 
@@ -104,7 +104,7 @@ class DemoModeMiddleware(BaseHTTPMiddleware):
             content={
                 "error": "demo_mode_read_only",
                 "message": (
-                    "This is the public AiSOC demo at tryaisoc.com. "
+                    "This AiSOC deployment is running in public demo mode. "
                     "Write actions are disabled here so every visitor sees "
                     "the same dataset. To run AiSOC for real, self-host it "
                     "in 5 minutes — see https://github.com/beenuar/AiSOC."

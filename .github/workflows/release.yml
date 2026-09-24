@@ -183,7 +183,7 @@ jobs:
             echo 'NEXT_PUBLIC_DEMO_MODE=true'
             echo 'NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=ledger'
             echo 'NEXT_PUBLIC_DEMO_BANNER=Demo data resets daily at 00:00 UTC. All write actions are disabled.'
-            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@tryaisoc.com'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@example.com'
             echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=aisoc-demo'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"

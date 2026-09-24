@@ -178,6 +178,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The maintainers' hosted origin shipped in the default CORS allow-list of
+  nine services.** `services/{api,agents,connectors,honeytokens,purple-team,ueba}`
+  (six byte-identical copies of the shared `cors.py`), `services/realtime`, and
+  the Go `ingest` and `enrichment` servers all listed `https://tryaisoc.com` and
+  `https://www.tryaisoc.com` among the origins they trust when
+  `AISOC_CORS_ORIGINS` is unset. That is one deployment's public origin baked
+  into every self-hosted install, trusted for credentialed cross-origin
+  requests its operator never opted into — and if that domain ever changed
+  hands, the grant travels with it. The default is now local development only;
+  the hosted deployment already sets `CORS_ORIGINS` explicitly
+  (`infra/fly/api/fly.toml`), so nothing legitimate depended on the default.
+  `apps/docs/docs/deployment/env-vars.md` documented the old list and was
+  corrected with it, and a new gate pins the six vendored `cors.py` copies
+  byte-identical — nothing enforced that before, and a single drifted copy is
+  exactly how one service would quietly keep the origin.
+
+- **The seeded demo identity was a live, operator-owned domain.**
+  `demo@tryaisoc.com`, paired with a published password, appeared across
+  compose, fly, render, coolify, railway, two workflows, the web Dockerfile and
+  the docs. It told a self-hoster to type somebody else's hostname to sign in
+  to their own install, and published a well-known credential pair against a
+  real domain. Now `demo@example.com` — RFC 2606 reserved, so it can never be
+  registered and can never receive mail, and it still satisfies the
+  `pydantic.EmailStr` check that rejected the earlier `demo@aisoc.local`. Every
+  config and doc moved with it. Safe to re-run: `seed_demo._ensure_user`
+  reconciles on `DEMO_USER_ID`, not on the address, and rewrites a stale email
+  in place.
+
 - **`/api/v1/identity-timeline` read every tenant's alerts.** Both routes bound
   an authenticated user and never used it: the SQL against `aisoc_alerts`
   carried no `tenant_id` predicate, so any authenticated caller could pull any
@@ -340,6 +368,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `test_capability_reachability.py` asserts that emptiness directly, so a verb
   can only be exempted by editing a reviewable assertion rather than appending
   to a list.
+
+- **A self-hosted install handed its own users links into the maintainers'
+  deployment.** Beyond the CORS and demo-credential entries above, ten shipped
+  defaults resolved to the hosted host when left unconfigured, so an operator
+  who never set an override sent their users somewhere else:
+
+  - `getPublicSiteUrl()` (`apps/web/src/lib/site.ts`) fell back to the hosted
+    origin, which is the `metadataBase` for the whole app — every canonical
+    tag, Open Graph URL, JSON-LD block and sitemap entry on a self-hosted
+    console pointed at another deployment. Now `http://localhost:3000`. The
+    hosted brand was also carried in `DISCOVERY_KEYWORDS`, the root layout's
+    OG/Twitter descriptions, its `sameAs`, and the PWA manifest description.
+  - Published investigation replays built share links from a module constant
+    `https://tryaisoc.com/r`, and tenant invite links had **two** independent
+    hard-coded defaults — one on the endpoint, one on the provisioner — free to
+    drift apart, which is the part that makes this hard to notice. Both now
+    resolve through a single `console_base_url()` reading
+    `CONSOLE_PUBLIC_BASE_URL`, with a documented deployment-neutral fallback.
+  - Approval email defaulted to a `From:` on the hosted domain, which fails
+    SPF/DKIM for anyone else. It now prefers the operator's own
+    `MAILGUN_DOMAIN`.
+  - `plugins/aisoc-direct/plugin.yaml` pre-filled the hosted osquery endpoint
+    as the field default; `services/osquery-tls` declared a hosted
+    `public_hostname` (and had no reader at all — the comment claimed a use it
+    did not have).
+  - The simulation-mode call to action pointed operators at docs on the hosted
+    domain rather than the project's own documentation site.
+  - The GitHub Action's PR comment hotlinked a badge served by the hosted
+    deployment, in the same line that promises "no data leaves your CI"; the
+    report card's coverage footer linked the hosted tool while its sibling
+    already linked the repository.
+  - `playwright.config.ts` defaulted one project to the hosted host and the
+    adjacent project to `localhost` — same env var, two answers.
+
+  Two admin console pages also rendered the hosted hostname as body text, and
+  the demo-mode 403 told every operator "This is the public AiSOC demo at
+  tryaisoc.com" regardless of where it was running.
+
+  A new gate, `scripts/check_hosted_hostname.py`, keeps this from coming back.
+  It is deliberately not "the string must not appear": the hostname stays in
+  99 files that genuinely describe the managed offering — the fly/cloudflare/
+  terraform deploy configs, the marketing pages, the changelog, and two
+  `uuid5` namespace seeds that are compatibility constants rather than URLs.
+  It pins an exact occurrence count per path and fails in **both** directions:
+  a new or grown occurrence, and an exemption that outlived the occurrence that
+  justified it. A stale exemption is a standing permit for a future leak, and a
+  one-directional allow-list never notices one. It resolves its repo root from
+  the working directory rather than its own file location (a sibling gate did
+  the latter and reported a confident OK about a tree it never opened), refuses
+  a tree that fails a sentinel check, treats a zero-match scan as broken rather
+  than clean, and ships a `--self-test` proving the detector separates a
+  known-bad from a known-good sample and that the comparison rejects a vacuous
+  pass. Covered by `tests/test_hosted_hostname_gate.py` (39 cases) and
+  `.github/workflows/hosted-hostname.yml`, which runs on pull requests *and* on
+  pushes to `main` so an edit made at merge time cannot slip past.
 
 - **The MSSP console showed six invented tenants and made no API call at all.**
   `MSSPDashboardView.tsx` declared `const TENANTS = [...]` — "Acme Financial",

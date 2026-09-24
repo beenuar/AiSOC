@@ -78,7 +78,7 @@ NEXT_PUBLIC_WS_URL=wss://realtime.aisoc.example.com
 NEXT_PUBLIC_DEMO_MODE=true
 NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=ledger
 NEXT_PUBLIC_DEMO_BANNER=Demo data resets daily. All write actions are disabled.
-NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@tryaisoc.com
+NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@example.com
 NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=aisoc-demo
 ```
 

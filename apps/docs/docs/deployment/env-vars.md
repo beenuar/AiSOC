@@ -340,7 +340,15 @@ CORS is configured the same way across every AiSOC service — Python (FastAPI),
 |----------|----------|-------------|
 | `AISOC_CORS_ORIGINS` | **1 (canonical)** | Comma-separated allow-list. Set this in every environment. |
 | `CORS_ORIGINS` | 2 (legacy alias) | Honoured when `AISOC_CORS_ORIGINS` is unset. Existing Helm charts and dev scripts that already use this keep working. |
-| _(none set)_ | 3 (default) | Each service falls back to `http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`, `https://tryaisoc.com`, `https://www.tryaisoc.com`. |
+| _(none set)_ | 3 (default) | Each service falls back to local development origins only: `http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`. |
+
+:::note Deployed origins are never in the shipped default
+The default covers local development and nothing else. No deployment's public
+origin — including the one the maintainers host — ships in the allow-list, so a
+self-hosted install never trusts a third-party origin for credentialed
+cross-origin requests without its operator opting in. Set
+`AISOC_CORS_ORIGINS` to your own console origin for any deployment.
+:::
 
 Examples:
 

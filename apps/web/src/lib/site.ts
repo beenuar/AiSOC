@@ -1,22 +1,25 @@
 /**
  * Canonical public URL for SEO, Open Graph, and sitemap.
- * Set NEXT_PUBLIC_SITE_URL at build/deploy (e.g. https://tryaisoc.com for the live demo).
+ *
+ * Set NEXT_PUBLIC_SITE_URL at build/deploy to this install's own public origin
+ * (e.g. https://soc.example.com). The fallback is deliberately the local
+ * console rather than any particular deployment: an unset value must never
+ * make a self-hosted install emit canonical/OG/sitemap URLs pointing at
+ * somebody else's hostname.
  */
 export function getPublicSiteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (raw) {
     return raw.replace(/\/$/, "");
   }
-  return "https://tryaisoc.com";
+  return "http://localhost:3000";
 }
 
-/** Meta keywords for cyber/SOC discovery (tryaisoc.com demo + self-host). */
+/** Meta keywords for cyber/SOC discovery (deployment-neutral). */
 export const DISCOVERY_KEYWORDS: readonly string[] = [
   // Brand
   "AiSOC",
   "AI SOC",
-  "tryaisoc",
-  "tryaisoc.com",
   // Core value prop
   "open source SOC",
   "open-source security operations center",

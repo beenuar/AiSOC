@@ -36,7 +36,7 @@ const PUSH_REDIS = new Redis(REDIS_URL);
 // Mirror the shared Python helper in services/api/app/core/cors.py:
 //   1. AISOC_CORS_ORIGINS (canonical, comma-separated)
 //   2. CORS_ORIGINS (legacy alias kept for Helm charts / dev scripts)
-//   3. Default allow-list (local dev + tryaisoc.com)
+//   3. Default allow-list (local dev only — deployed origins set the env var)
 // SSE + WebSocket connections from the console carry the auth cookie, so
 // allow_credentials is effectively in play here. If an operator sets the
 // allow-list to "*" we refuse to start in production rather than silently
@@ -46,8 +46,6 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3001',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
-  'https://tryaisoc.com',
-  'https://www.tryaisoc.com',
 ];
 
 function resolveCorsOrigins(): string[] {

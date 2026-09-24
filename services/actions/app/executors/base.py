@@ -18,7 +18,7 @@ __all__ = ["BaseExecutor", "ActionRequest", "ActionResult", "_SIM_FUNNEL_CTA"]
 # the AiSOC maintainers can co-author and review the new integration.
 _SIM_FUNNEL_CTA: str = (
     " | To wire in a live integration, see the Plugin SDK: "
-    "https://docs.tryaisoc.com/plugins/overview"
+    "https://beenuar.github.io/AiSOC/docs/plugins/overview"
     " | Want this integration co-authored? Open a request: "
     "https://github.com/beenuar/AiSOC/issues/new"
     "?labels=connector-request&template=connector_request.md"

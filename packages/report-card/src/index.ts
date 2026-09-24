@@ -153,7 +153,7 @@ export function renderCardMarkdown(data: ReportCardData): string {
         `- Covered: **${data.covered} / ${data.total}** techniques (**${data.percent}%**)`,
         ...(data.topUncovered?.length ? [`- Top uncovered: ${data.topUncovered.slice(0, 10).join(", ")}`] : []),
         "",
-        "Grade yours: https://tryaisoc.com/tools/coverage",
+        "Grade yours: open `/tools/coverage` in your AiSOC console · https://github.com/beenuar/AiSOC",
       ].join("\n");
     case "replay":
       return [

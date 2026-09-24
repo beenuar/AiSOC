@@ -3,7 +3,7 @@
 Without ``pool_pre_ping`` the pool hands out sockets the managed Postgres
 already closed (autostop / idle teardown). The next query then raises
 ``asyncpg.exceptions.ConnectionDoesNotExistError``, which is what was
-500ing every demo endpoint on tryaisoc.com while ``/health`` still looked
+500ing every demo endpoint on the hosted demo while ``/health`` still looked
 fine. These tests are import-free (parse the source) so they run in the
 same lightweight CI job as the schema-drift guards — no full API dep set
 required.

@@ -353,7 +353,7 @@ async def test_fanout_create_case_happy_path_persists_external_ref() -> None:
             case_row=case,
             tenant_id=tenant_id,
             connector_ids=[connector.id],
-            pushed_by="operator@tryaisoc.com",
+            pushed_by="operator@example.com",
         )
 
     assert len(results) == 1
@@ -566,7 +566,7 @@ async def test_fanout_status_change_happy_path_updates_external_status() -> None
             tenant_id=tenant_id,
             old_status="open",
             new_status="resolved",
-            pushed_by="operator@tryaisoc.com",
+            pushed_by="operator@example.com",
         )
 
     assert len(results) == 1

@@ -1,7 +1,8 @@
 """Public investigation-replay publishing — v8 W3.
 
 Turns a tenant-private investigation ledger into an immutable, redacted, public
-share link at ``tryaisoc.com/r/<slug>``.
+share link at ``<console-base>/r/<slug>``, where the console base comes from
+``CONSOLE_PUBLIC_BASE_URL`` (see :func:`app.core.config.console_base_url`).
 
 Flow:
 
@@ -35,6 +36,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.config import console_base_url
 from app.db.rls import TenantDBSession
 from app.models.investigation import InvestigationEvent, InvestigationRun
 from app.models.published_replay import PublishedReplay
@@ -46,7 +48,15 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/ledger", tags=["replay"])
 public_router = APIRouter(prefix="/r", tags=["replay-public"])
 
-_PUBLIC_BASE = "https://tryaisoc.com/r"
+
+def _public_base() -> str:
+    """Origin for published share links, resolved per call.
+
+    Deliberately a function, not a module constant: the constant was baked in
+    at import time and hard-coded one deployment's hostname, so every
+    self-hosted install handed out share links into somebody else's console.
+    """
+    return f"{console_base_url()}/r"
 
 
 class PublishPreview(BaseModel):
@@ -206,7 +216,7 @@ async def publish_replay(
     await db.commit()
     await db.refresh(row)
     logger.info("replay.published", slug=_sanitize(slug), run_id=_sanitize(run_id), tenant=_sanitize(current_user.tenant_id))
-    return PublishResult(slug=slug, url=f"{_PUBLIC_BASE}/{slug}", run_id=run_id, created_at=row.created_at)
+    return PublishResult(slug=slug, url=f"{_public_base()}/{slug}", run_id=run_id, created_at=row.created_at)
 
 
 @router.get("/{run_id}/published", response_model=list[PublishedSummary])
@@ -229,7 +239,7 @@ async def list_published(
     return [
         PublishedSummary(
             slug=r.slug,
-            url=f"{_PUBLIC_BASE}/{r.slug}",
+            url=f"{_public_base()}/{r.slug}",
             title=r.title,
             case_id=r.case_id,
             view_count=r.view_count,

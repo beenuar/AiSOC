@@ -9,7 +9,7 @@
  * footer ("Sign in on desktop").
  *
  * Demo credentials live in `services/api/app/api/v1/dev_auth.py`:
- *   demo@tryaisoc.com / aisoc-demo
+ *   demo@example.com / aisoc-demo
  */
 
 import Link from 'next/link';
@@ -22,7 +22,7 @@ type Phase = 'idle' | 'pending' | 'success' | 'error';
 
 export const dynamic = 'force-dynamic';
 
-const DEMO_EMAIL = 'demo@tryaisoc.com';
+const DEMO_EMAIL = 'demo@example.com';
 const DEMO_PASSWORD = 'aisoc-demo';
 
 /**
@@ -137,7 +137,7 @@ function LoginInner() {
               <div>
                 <p className="font-medium text-indigo-300">Public demo</p>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  <code className="text-zinc-300">demo@tryaisoc.com</code> /{' '}
+                  <code className="text-zinc-300">demo@example.com</code> /{' '}
                   <code className="text-zinc-300">aisoc-demo</code>
                 </p>
               </div>
