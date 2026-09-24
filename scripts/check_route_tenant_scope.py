@@ -48,6 +48,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -509,6 +510,57 @@ def find_violations(routes: list[Route]) -> tuple[list[Route], list[Route]]:
     return unauthenticated, unintersected
 
 
+def empty_corpus_refusal(routes: list[Route], services_dir: Path) -> str | None:
+    """Why a scan that found no routes must not render a verdict, or ``None``.
+
+    Shared with ``check_route_auth.py``, which imports this scanner. One
+    corpus, one floor: two copies would be two floors, and the second one
+    written is the one that gets the condition subtly wrong.
+
+    The directory-missing guard in each ``main()`` is not this case. A corpus
+    is lost by a renamed package, a changed decorator spelling or a walk that
+    stops descending — none of which removes ``services/``, and all of which
+    leave the gate with nothing to look at and a clean verdict to print. This
+    gate did exactly that: ``scanned 0 routes across 0 files`` on one line and
+    ``OK: every route taking a tenant identifier authenticates`` on the next,
+    which is the sentence CI shows on a real pass.
+    """
+    if routes:
+        return None
+    return (
+        f"no routes found under {services_dir}. Zero routes scanned is not zero routes "
+        "unscoped — either the walk, SERVICES_DIR or the decorator patterns have stopped "
+        "describing where the routes are."
+    )
+
+
+def self_test_empty_corpus(label: str, run: Callable[[], int]) -> int:
+    """Run a route gate against a ``services/`` tree with no routes; require a refusal.
+
+    ``run`` is the gate's own ``main``, called with the module-level roots
+    rebound to a scratch tree. Rebinding is done here rather than in each
+    gate because ``check_route_auth`` imports the names *from* this module:
+    a gate that rebound its own copy would leave the collector pointed at the
+    real checkout and prove nothing. Returns 0 on success, 1 on failure.
+    """
+    global REPO_ROOT, SERVICES_DIR  # noqa: PLW0603 - the scanned root is module state
+    original_root, original_services = REPO_ROOT, SERVICES_DIR
+    with tempfile.TemporaryDirectory(prefix="route_corpus_empty_") as tmp:
+        root = Path(tmp)
+        (root / "services" / "api" / "app").mkdir(parents=True)
+        (root / "services" / "api" / "app" / "nothing.py").write_text("VALUE = 1\n", encoding="utf-8")
+        REPO_ROOT, SERVICES_DIR = root, root / "services"
+        try:
+            status = run()
+        finally:
+            REPO_ROOT, SERVICES_DIR = original_root, original_services
+    if status != 0:
+        print(f"  [PASS] {label}: a services/ tree with no routes exits {status} rather than reporting it clean")
+        return 0
+    print(f"  [FAIL] {label}: reported OK having scanned zero routes")
+    return 1
+
+
 def _print_inventory(routes: list[Route]) -> None:
     services = sorted({r.service for r in routes})
     print(f"Route inventory — scanned {SERVICES_DIR}")
@@ -613,7 +665,7 @@ async def queue(user: AuthUser, tenant_id: UUID):
     # printed "scanned 0 routes across 0 files" and then "OK: every route
     # taking a tenant identifier authenticates" against a services/ directory
     # with nothing in it — the clean verdict CI shows on a real pass.
-    failures += _self_test_empty_corpus()
+    failures += self_test_empty_corpus("empty corpus", lambda: main([]))
 
     if failures:
         print(f"\nself-test FAILED: {failures} case(s) did not behave as specified", file=sys.stderr)
@@ -623,32 +675,6 @@ async def queue(user: AuthUser, tenant_id: UUID):
         "drops a stale exemption, and refuses a corpus it never found."
     )
     return 0
-
-
-def _self_test_empty_corpus() -> int:
-    """Point the scan at a services/ directory with no routes and require a refusal.
-
-    The directory-missing guard is not this case. A corpus is lost by a
-    renamed package, a changed decorator spelling or a walk that stops
-    descending — none of which removes ``services/``, and all of which leave
-    the gate with nothing to look at and a clean verdict to print.
-    """
-    global REPO_ROOT, SERVICES_DIR  # noqa: PLW0603 - the scanned root is module state
-    original_root, original_services = REPO_ROOT, SERVICES_DIR
-    with tempfile.TemporaryDirectory(prefix="route_scope_empty_") as tmp:
-        root = Path(tmp)
-        (root / "services" / "api" / "app").mkdir(parents=True)
-        (root / "services" / "api" / "app" / "nothing.py").write_text("VALUE = 1\n", encoding="utf-8")
-        REPO_ROOT, SERVICES_DIR = root, root / "services"
-        try:
-            status = main([])
-        finally:
-            REPO_ROOT, SERVICES_DIR = original_root, original_services
-    if status != 0:
-        print(f"  [PASS] empty corpus: a services/ tree with no routes exits {status} rather than reporting it clean")
-        return 0
-    print("  [FAIL] empty corpus: reported OK having scanned zero routes")
-    return 1
 
 
 def _self_test_stale_exemption() -> int:
@@ -703,6 +729,20 @@ def main(argv: list[str] | None = None) -> int:
 
     routes = collect_routes()
 
+    # Before any output mode. Naming the count was half the fix; see
+    # empty_corpus_refusal() for why the directory check above is not this
+    # case, and for the two-line output that made it invisible.
+    #
+    # Ahead of `--inventory` as well as the default, because CI runs the
+    # inventory as its own step: a green step printing `TOTAL 0 0 0 0 0` is
+    # the same defect one level out, and it survived the first fix because
+    # only the default path was given a floor.
+    refusal = empty_corpus_refusal(routes, SERVICES_DIR)
+    if refusal is not None:
+        print(f"check_route_tenant_scope: scanned 0 routes across 0 files under {SERVICES_DIR}")
+        print(f"\nFAIL: {refusal}", file=sys.stderr)
+        return 2
+
     if args.json:
         print(json.dumps([asdict(r) for r in routes], indent=2))
         return 0
@@ -717,23 +757,6 @@ def main(argv: list[str] | None = None) -> int:
     # opened cannot be distinguished from one that opened nothing.
     files = len({r.path for r in routes})
     print(f"check_route_tenant_scope: scanned {len(routes)} routes across {files} files under {SERVICES_DIR}")
-
-    # And refuse when it opened nothing. Naming the count was half the fix:
-    # against a tree with a services/ directory and no routes in it, this
-    # printed "scanned 0 routes across 0 files" and then "OK: every route
-    # taking a tenant identifier authenticates" — a clean verdict on an empty
-    # set, in the same sentence CI shows when the real scan passes. The
-    # directory check above only catches services/ being absent altogether,
-    # which is not how a scan loses its corpus: a renamed package, a changed
-    # decorator spelling or a broken walk all leave the directory in place.
-    if not routes:
-        print(
-            f"\nFAIL: no routes found under {SERVICES_DIR}. Zero routes scanned is not zero routes "
-            "unscoped — either the walk, SERVICES_DIR or the decorator patterns have stopped "
-            "describing where the routes are.",
-            file=sys.stderr,
-        )
-        return 2
 
     if unauthenticated:
         print(f"\nFAIL: {len(unauthenticated)} route(s) take a tenant identifier with no auth dependency.", file=sys.stderr)

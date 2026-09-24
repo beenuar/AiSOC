@@ -555,7 +555,13 @@ services:
     profiles:
       - osquery
     environment:
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
       # The ingest service is registered as `ingest-worker` in this compose
       # file; the previous `http://ingest:8080` would not resolve via DNS.
@@ -695,7 +701,13 @@ services:
     ports:
       - "127.0.0.1:8007:8004"
     environment:
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/8
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
@@ -727,7 +739,13 @@ services:
     ports:
       - "127.0.0.1:8008:8005"
     environment:
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/9
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CORE_API_URL: http://api:8000
@@ -756,7 +774,13 @@ services:
     ports:
       - "127.0.0.1:8006:8006"
     environment:
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/10
       CORE_API_URL: http://api:8000
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json

@@ -183,6 +183,16 @@ Every service runs as the scoped runtime role. Nothing needs a cross-tenant cred
 | retention purge / hunt scheduler / tenant deletion (in-process in `api`) | runtime, unbound | Cross-tenant by design, and now assert that no tenant is bound before sweeping. |
 | migration runner, `alembic`, `scripts/backup.sh` | owner | DDL, and a dump that has to read and rewrite tables the runtime role cannot. |
 
+#### The four services that apply their own chain
+
+`honeytokens`, `osquery-tls`, `purple-team` and `ueba` manage their own schema through alembic, and the row above only holds because each now resolves a *migration* credential separately from its runtime one. Until it did, both came from the same variable: an operator pointing such a service at the owner lost row-level security on the twelve tables those chains own, and the deployment surface still read as compliant.
+
+Set both per service — see [the table in Env vars](../deployment/env-vars#the-four-services-that-manage-their-own-schema). Leaving the migration variable unset still works and prints a warning on stderr naming what will happen; under the DML-only role the first `CREATE TABLE` fails with `permission denied for schema public`.
+
+Each chain also grants the runtime role `SELECT, INSERT, UPDATE, DELETE` on its own tables rather than relying on `061_runtime_app_role.sql` having run first. Nothing orders the chains against each other, and `ALTER DEFAULT PRIVILEGES` is recorded against the role that issued it — so a deployment that applies the API chain and a service chain under different owners, or points a service at its own database, would otherwise get a service that starts, connects, and answers every query with `permission denied`.
+
+Verified against `postgres:16` with all four chains applied and two tenants seeded: bound to one tenant the runtime role sees one row of two in `ueba_entity_baselines`, `honeytokens` and `osquery_node`; unbound it sees both, which is the fail-open arm the sweeps depend on; a cross-tenant insert is refused by the policy; `CREATE TABLE` is refused with `permission denied for schema public`; and `ALTER TABLE … NO FORCE ROW LEVEL SECURITY` with `must be owner of table`.
+
 The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication, and platform-admin user administration is cross-tenant by design. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 
 ### The tenant comes from the credential, never from the request

@@ -148,6 +148,14 @@ docker compose exec honeytokens alembic upgrade head
 docker compose exec purple-team alembic upgrade head
 ```
 
+Each of those four runs as the **owner**, not as the role the service serves
+requests with: `docker-compose.yml` sets `DATABASE_MIGRATION_URL` alongside
+`DATABASE_URL` for all four, and their `alembic/env.py` prefers it. The
+runtime role holds no `CREATE` on schema public, by design — that is what
+stops it turning row-level security off — so a chain applied as the runtime
+credential fails on the first `CREATE TABLE`. See
+[Env vars → the four services that manage their own schema](deployment/env-vars#the-four-services-that-manage-their-own-schema).
+
 The `api` migrations include
 [`008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
 (replayable agent decision log) and

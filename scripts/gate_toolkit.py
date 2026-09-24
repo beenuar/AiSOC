@@ -47,7 +47,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 __all__ = [
+    "BARE",
     "SELF_TEST_FLAG",
+    "SKELETON",
+    "TREE_SHAPES",
     "VERDICT_FLAG_PREFERENCE",
     "verdict_args",
     "repo_root",
@@ -115,8 +118,40 @@ def repo_root(start: Path | None = None) -> Path:
     return fallback
 
 
+#: The two shapes a gate can be pointed at when it has nothing to judge.
+#:
+#: ``BARE``      the directories a gate renders a verdict about are *absent*.
+#: ``SKELETON``  they are *present and empty*.
+#:
+#: They are different questions and a gate can answer them differently. The
+#: shape that actually recurs here is the second: ``check_grafana_dashboards``
+#: failed on an empty dashboards directory and passed on a missing one, and
+#: ``check_route_tenant_scope`` printed ``scanned 0 routes across 0 files``
+#: followed by a clean verdict against a ``services/`` directory that existed
+#: and held nothing. A gate whose first act is ``if not X.is_dir(): return 2``
+#: refuses BARE for a reason that says nothing about its corpus.
+BARE = "bare"
+SKELETON = "skeleton"
+TREE_SHAPES = (BARE, SKELETON)
+
+#: Directories the skeleton creates empty. Every top-level directory any gate
+#: in this tree renders a verdict about; a gate whose subject is missing from
+#: this list sees BARE twice and the second shape buys nothing for it.
+_SKELETON_DIRS = (
+    "services",
+    "detections",
+    "apps",
+    "packages",
+    "plugins",
+    "docs",
+    "infra",
+    "marketplace",
+    ".github/workflows",
+)
+
+
 @contextmanager
-def scratch_tree(source: Path | None = None) -> Iterator[Path]:
+def scratch_tree(source: Path | None = None, *, shape: str = BARE) -> Iterator[Path]:
     """A git repository holding this repository's ``scripts/`` and nothing else.
 
     Not an empty directory: the gate under test has to be *runnable*, which
@@ -126,17 +161,32 @@ def scratch_tree(source: Path | None = None) -> Iterator[Path]:
     pointed here has nothing to inspect, so anything other than a refusal is
     a result it invented.
 
+    ``shape=SKELETON`` creates those directories instead of omitting them,
+    each empty. That distinguishes "the tree is not there" from "the corpus
+    is gone", which is the failure that actually happens: a renamed package,
+    a changed decorator spelling, a glob that stopped matching. None of them
+    removes ``services/``.
+
     It is a real git repository with a commit, because a gate that resolves
     its root through ``git rev-parse`` must land *here* and not walk out into
     the checkout the scratch directory happens to sit inside.
     """
+    if shape not in TREE_SHAPES:
+        raise ValueError(f"unknown scratch tree shape {shape!r}; expected one of {TREE_SHAPES}")
     scripts = (source or Path(__file__).resolve().parent).resolve()
     if not scripts.is_dir():
         raise FileNotFoundError(f"no scripts directory to copy from: {scripts}")
 
-    tmp = Path(tempfile.mkdtemp(prefix="aisoc-empty-tree-"))
+    tmp = Path(tempfile.mkdtemp(prefix=f"aisoc-{shape}-tree-"))
     try:
         shutil.copytree(scripts, tmp / "scripts")
+        if shape == SKELETON:
+            for rel in _SKELETON_DIRS:
+                (tmp / rel).mkdir(parents=True, exist_ok=True)
+                # git does not track a directory, only files in it, and a gate
+                # resolving its root through git must still find the directory
+                # after `git clean -qxfd` between probes.
+                (tmp / rel / ".gitkeep").write_text("", encoding="utf-8")
         git = ["git", "-c", "user.name=gate", "-c", "user.email=gate@invalid", "-c", "commit.gpgsign=false"]
         for argv in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "scratch"]):
             subprocess.run(git + argv, cwd=tmp, check=True, capture_output=True)  # noqa: S603
@@ -173,9 +223,9 @@ def run_in_scratch_tree(
     return done.returncode, (done.stdout or "") + (done.stderr or "")
 
 
-def refuses_an_empty_tree(script: str, args: Sequence[str] = ()) -> tuple[bool, str]:
+def refuses_an_empty_tree(script: str, args: Sequence[str] = (), *, shape: str = BARE) -> tuple[bool, str]:
     """Whether ``script`` declines to render a verdict about a tree with no content."""
-    with scratch_tree() as tree:
+    with scratch_tree(shape=shape) as tree:
         status, output = run_in_scratch_tree(script, args, tree=tree)
     if status is None:
         return False, output
