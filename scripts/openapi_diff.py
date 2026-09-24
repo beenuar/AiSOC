@@ -20,15 +20,23 @@ of an existing generated client. Breaking classes:
 * an enum value was removed (a client with exhaustive handling breaks),
 * a new required parameter was added to an existing operation.
 
-`--old`/`--new` take spec files; exit 1 if any breaking change is found (unless
-`--allow-breaking`, which the release flow uses when it deliberately ships a
-major bump). The CI job (`openapi-breaking.yml`) diffs the PR spec against the
-base branch's spec, so a breaking change blocks the PR until it's intentional.
+`--old`/`--new` take spec files; exit 1 if any breaking change is found. The CI
+job (`openapi-breaking.yml`) diffs the PR spec against the base branch's spec,
+so a breaking change blocks the PR until it is deliberate.
+
+Shipping one deliberately goes through `--allow-breaking`, which the gate passes
+only when a maintainer has applied the `breaking-change-approved` label to the
+pull request. The flag is not a silent bypass: it *requires* `--changelog` and
+`--changelog-base`, refuses the approval unless this change added a `### BREAKING`
+note under `## [Unreleased]`, and prints every break it is permitting — so the
+record says what was approved rather than merely that something was.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,12 +164,104 @@ def load_spec(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def main() -> int:
+# ── CHANGELOG evidence for an approved break ────────────────────────────────
+#
+# The approval label says a maintainer authorised the break. The CHANGELOG note
+# is what says *what* was broken, and it is the half that outlives CI logs.
+
+_H2 = re.compile(r"^##\s+")
+_H3 = re.compile(r"^###\s+")
+_UNRELEASED = re.compile(r"^##\s+\[Unreleased\]", re.IGNORECASE)
+_BREAKING_HEADING = re.compile(r"^###\s+BREAKING\b", re.IGNORECASE)
+
+
+def changelog_breaking_notes(text: str) -> list[str]:
+    """Non-blank lines under `### BREAKING` inside the `## [Unreleased]` section.
+
+    Scoped to Unreleased on purpose: a BREAKING heading in an already-shipped
+    release section describes a past break and must not stand in for this one.
+    """
+    lines = text.splitlines()
+    start = next((n for n, line in enumerate(lines) if _UNRELEASED.match(line)), None)
+    if start is None:
+        return []
+    notes: list[str] = []
+    in_breaking = False
+    for line in lines[start + 1 :]:
+        if _H2.match(line):  # the next release section — Unreleased has ended
+            break
+        if _H3.match(line):
+            in_breaking = bool(_BREAKING_HEADING.match(line))
+            continue
+        if in_breaking and line.strip():
+            notes.append(line.strip())
+    return notes
+
+
+def changelog_evidence(old_text: str, new_text: str) -> tuple[list[str], str | None]:
+    """Notes this change added, or a reason the approval cannot be honoured.
+
+    Checked in both directions. "A BREAKING section exists" alone would let the
+    first such note in a release cycle excuse every later break in that cycle,
+    so the note must also differ from the base branch's.
+    """
+    new_notes = changelog_breaking_notes(new_text)
+    if not new_notes:
+        return [], "the CHANGELOG has no '### BREAKING' section with content under '## [Unreleased]'"
+    old_notes = set(changelog_breaking_notes(old_text))
+    added = [note for note in new_notes if note not in old_notes]
+    if not added:
+        return [], (
+            "the '### BREAKING' section under '## [Unreleased]' is byte-identical to the "
+            "base branch's, so it documents an earlier break and not this one"
+        )
+    return added, None
+
+
+def approval_record(breaking: list[Change], notes: list[str], approved_by: str) -> str:
+    """The audit line: who permitted it, and exactly what they permitted."""
+    lines = [
+        "## Breaking OpenAPI changes PERMITTED",
+        "",
+        f"Authorised by: {approved_by or 'not resolved — see the pull request timeline'}",
+        "",
+        f"The detector ran and found {len(breaking)} breaking change(s). All are permitted:",
+        "",
+    ]
+    lines += [f"- `{c.kind}` — {c.detail}" for c in breaking]
+    lines += ["", "CHANGELOG `### BREAKING` note added by this change:", ""]
+    lines += [f"> {note}" for note in notes]
+    return "\n".join(lines)
+
+
+def _write_step_summary(record: str) -> None:
+    """Mirror the record onto the check-run page, not just into the job log."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(record + "\n")
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--old", required=True, type=Path, help="baseline spec (e.g. base branch / last release)")
     parser.add_argument("--new", required=True, type=Path, help="candidate spec (e.g. this PR)")
-    parser.add_argument("--allow-breaking", action="store_true", help="permit breaking changes (deliberate major bump)")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--allow-breaking",
+        action="store_true",
+        help="permit breaking changes; requires --changelog/--changelog-base as evidence",
+    )
+    parser.add_argument("--changelog", type=Path, help="candidate CHANGELOG.md (required with --allow-breaking)")
+    parser.add_argument("--changelog-base", type=Path, help="baseline CHANGELOG.md (required with --allow-breaking)")
+    parser.add_argument("--approved-by", default="", help="who authorised the break; recorded in the audit line")
+    args = parser.parse_args(argv)
+
+    # A bypass that can be taken on trust is not auditable. Requiring the
+    # evidence as arguments means --allow-breaking cannot be wired up later
+    # without also wiring up the thing that records what was approved.
+    if args.allow_breaking and not (args.changelog and args.changelog_base):
+        parser.error("--allow-breaking requires --changelog and --changelog-base (the CHANGELOG BREAKING note is the evidence)")
 
     old = load_spec(args.old)
     new = load_spec(args.new)
@@ -172,20 +272,38 @@ def main() -> int:
         print(f"OK: no breaking OpenAPI changes ({len(changes)} total change(s))")
         return 0
 
+    # The detector runs and names every break whether or not it is approved.
     print(f"Found {len(breaking)} BREAKING OpenAPI change(s):", file=sys.stderr)
     for c in breaking:
         print(f"  - [{c.kind}] {c.detail}", file=sys.stderr)
 
-    if args.allow_breaking:
-        print("--allow-breaking set: not failing (deliberate breaking release).", file=sys.stderr)
-        return 0
-    print(
-        "\nBreaking API changes break every generated SDK client. Either avoid the "
-        "break, or ship it deliberately with a version bump + CHANGELOG BREAKING note "
-        "and re-run with --allow-breaking.",
-        file=sys.stderr,
+    if not args.allow_breaking:
+        print(
+            "\nBreaking API changes break every generated SDK client. Either avoid the "
+            "break, or ship it deliberately: add a '### BREAKING' note under "
+            "'## [Unreleased]' in CHANGELOG.md saying what moved and why it could not "
+            "be preserved, then have a maintainer apply the 'breaking-change-approved' "
+            "label to the pull request.",
+            file=sys.stderr,
+        )
+        return 1
+
+    notes, problem = changelog_evidence(
+        args.changelog_base.read_text(encoding="utf-8"),
+        args.changelog.read_text(encoding="utf-8"),
     )
-    return 1
+    if problem:
+        print(
+            f"\nApproval REFUSED: {problem}. The label authorises a break; the CHANGELOG "
+            "note is what records which break, and it has to outlive this job log.",
+            file=sys.stderr,
+        )
+        return 1
+
+    record = approval_record(breaking, notes, args.approved_by)
+    print(record)
+    _write_step_summary(record)
+    return 0
 
 
 if __name__ == "__main__":

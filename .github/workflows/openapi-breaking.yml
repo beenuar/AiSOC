@@ -5,11 +5,25 @@ name: OpenAPI breaking-change gate
 # touches docs/openapi.yaml, diff the PR's spec against the base branch's spec
 # and fail on any change that would break an existing generated SDK client
 # (removed endpoint/schema/field, type change, tightened request, dropped enum
-# value). Ship a breaking change deliberately by bumping the version and adding
-# a CHANGELOG BREAKING note (then a maintainer re-runs with --allow-breaking).
+# value).
+#
+# Shipping a break deliberately: write a `### BREAKING` note under
+# `## [Unreleased]` in CHANGELOG.md saying what moved and why it could not be
+# preserved, then a maintainer applies the `breaking-change-approved` label to
+# the PR. The label is the authorisation, and GitHub records who applied it and
+# when on the PR timeline — which a workflow_dispatch boolean would not. The job
+# re-runs on `labeled`/`unlabeled` so the label is a live control rather than
+# something that only takes effect on the next push; it still runs the detector,
+# names every break it is permitting in the job summary, and refuses the approval
+# if the CHANGELOG note is missing or was inherited from an earlier PR.
+#
+# The version bump is not checked here: this repository accumulates under
+# `[Unreleased]` and bumps VERSION when a release is cut, so a per-PR version
+# check would demand something no PR can correctly do.
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - "docs/openapi.yaml"
       - "scripts/openapi_diff.py"
@@ -22,6 +36,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   breaking-change:
@@ -43,7 +58,7 @@ jobs:
       - name: Unit-test the detector
         run: python -m pytest tests/test_openapi_diff.py -v --tb=short
 
-      - name: Extract base-branch spec
+      - name: Extract base-branch spec and CHANGELOG
         run: |
           set -euo pipefail
           BASE="${{ github.event.pull_request.base.sha }}"
@@ -54,6 +69,47 @@ jobs:
             echo "no base spec (new file) — nothing to compare"
             cp docs/openapi.yaml /tmp/base-openapi.yaml
           fi
+          if git cat-file -e "${BASE}:CHANGELOG.md" 2>/dev/null; then
+            git show "${BASE}:CHANGELOG.md" > /tmp/base-CHANGELOG.md
+          else
+            : > /tmp/base-CHANGELOG.md
+          fi
 
+      # Not approved: the ordinary path. The detector fails the PR on any break.
       - name: Diff for breaking changes
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'breaking-change-approved') }}
         run: python scripts/openapi_diff.py --old /tmp/base-openapi.yaml --new docs/openapi.yaml
+
+      # Approved: name the maintainer who applied the label, from the PR's own
+      # event history, so the audit line does not depend on who pushed last.
+      - name: Resolve the approval record
+        id: approval
+        if: contains(github.event.pull_request.labels.*.name, 'breaking-change-approved')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          record=$(gh api --paginate "repos/${REPO}/issues/${PR_NUMBER}/events" \
+            --jq '.[] | select(.event == "labeled" and .label.name == "breaking-change-approved") | "@\(.actor.login) at \(.created_at)"' \
+            2>/dev/null | tail -n 1 || true)
+          if [ -z "${record}" ]; then
+            record="the 'breaking-change-approved' label on PR #${PR_NUMBER} (actor not resolved — see the PR timeline)"
+          else
+            record="${record}, via the 'breaking-change-approved' label on PR #${PR_NUMBER}"
+          fi
+          echo "record=${record}" >> "$GITHUB_OUTPUT"
+          echo "approval: ${record}"
+
+      - name: Diff for breaking changes (break approved by label)
+        if: contains(github.event.pull_request.labels.*.name, 'breaking-change-approved')
+        env:
+          APPROVED_BY: ${{ steps.approval.outputs.record }}
+        run: |
+          python scripts/openapi_diff.py \
+            --old /tmp/base-openapi.yaml --new docs/openapi.yaml \
+            --allow-breaking \
+            --changelog CHANGELOG.md \
+            --changelog-base /tmp/base-CHANGELOG.md \
+            --approved-by "${APPROVED_BY}"
