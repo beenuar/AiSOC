@@ -19,8 +19,7 @@ from app.core.airgap import AirgapViolation
 from app.models.saved_hunt import SavedHunt
 from app.services.spl_runner import SPLExecutionError, run_spl_query
 
-from .base import HuntExecutionError, HuntNotConfigured, _BaseProvider
-from .credentials import WarehouseCredentials
+from .base import HuntExecutionError, HuntNotConfigured, WarehouseCredentials, _BaseProvider
 
 logger = logging.getLogger(__name__)
 

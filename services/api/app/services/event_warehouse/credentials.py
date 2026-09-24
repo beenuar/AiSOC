@@ -41,8 +41,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,52 +48,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
 
-from .base import HuntNotConfigured
+from .base import HuntNotConfigured, WarehouseCredentials
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "WarehouseCredentials",
     "connected_warehouse_types",
     "resolve_tenant_warehouse",
 ]
-
-
-@dataclass(frozen=True, slots=True)
-class WarehouseCredentials:
-    """Decrypted credentials for one tenant-owned warehouse instance.
-
-    ``auth`` is the vault-decrypted ``auth_config`` — the same dict the
-    connectors microservice receives — and ``config`` is the non-secret
-    ``connector_config``. Providers read the field names their connector's
-    ``schema()`` declares, so the console form and the hunt executor agree
-    on spelling without a second mapping table to drift out of sync.
-    """
-
-    connector_id: uuid.UUID
-    connector_type: str
-    connector_name: str
-    auth: dict[str, Any] = field(default_factory=dict)
-    config: dict[str, Any] = field(default_factory=dict)
-
-    def get(self, *names: str, default: Any = None) -> Any:
-        """First present value among ``names``, searching auth then config.
-
-        Connector schemas are not uniform — Elastic calls its endpoint
-        ``base_url`` while a future driver may call it ``url`` — and the
-        value can sit in either dict depending on whether the field was
-        declared ``secret``. Looking through both, in declared order, keeps
-        the provider free of per-vendor conditionals.
-        """
-        for name in names:
-            value = self.auth.get(name)
-            if value not in (None, ""):
-                return value
-        for name in names:
-            value = self.config.get(name)
-            if value not in (None, ""):
-                return value
-        return default
 
 
 def _select_enabled(tenant_id: uuid.UUID, connector_types: tuple[str, ...]):

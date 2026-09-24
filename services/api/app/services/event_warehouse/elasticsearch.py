@@ -26,9 +26,9 @@ from app.services.esql_runner import (
 from .base import (
     HuntExecutionError,
     HuntNotConfigured,
+    WarehouseCredentials,
     _BaseProvider,
 )
-from .credentials import WarehouseCredentials
 
 logger = logging.getLogger(__name__)
 

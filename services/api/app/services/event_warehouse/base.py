@@ -33,15 +33,11 @@ Provider authors must:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Protocol, runtime_checkable
 
 from app.models.saved_hunt import SavedHunt
-
-if TYPE_CHECKING:  # pragma: no cover - import cycle guard
-    # ``credentials`` imports :class:`HuntNotConfigured` from this module, so
-    # the runtime import would be circular. The annotation is only needed for
-    # type checkers, which resolve it lazily under ``from __future__``.
-    from .credentials import WarehouseCredentials
 
 
 class HuntNotConfigured(RuntimeError):
@@ -65,6 +61,52 @@ class HuntExecutionError(RuntimeError):
 
     Wraps transport errors so the scheduler only needs one ``except``.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class WarehouseCredentials:
+    """Decrypted credentials for one tenant-owned warehouse instance.
+
+    Part of the provider contract, which is why it lives beside the protocol
+    rather than next to the resolver that builds it: putting it in
+    ``credentials`` made the two modules import each other, and a cycle whose
+    two halves each need a name the other defines is only ever one import
+    order away from an :class:`ImportError` at boot.
+
+    ``auth`` is the vault-decrypted ``auth_config`` — the same dict the
+    connectors microservice receives — and ``config`` is the non-secret
+    ``connector_config``. Providers read the field names their connector's
+    ``schema()`` declares, so the console form and the hunt executor agree on
+    spelling without a second mapping table to drift out of sync.
+    """
+
+    connector_id: uuid.UUID
+    connector_type: str
+    connector_name: str
+    auth: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
+
+    def get(self, *names: str, default: Any = None) -> Any:
+        """First present value among ``names``, searching auth then config.
+
+        Connector schemas are not uniform — Elastic calls its endpoint
+        ``base_url`` while a future driver may call it ``url`` — and the value
+        can sit in either dict depending on whether the field was declared
+        ``secret``. Looking through both, in declared order, keeps the
+        provider free of per-vendor conditionals.
+
+        Emptiness is ``None`` or ``""`` only: ``False`` is a real answer for a
+        flag like ``ssl_verify`` and must not fall through to the default.
+        """
+        for name in names:
+            value = self.auth.get(name)
+            if value not in (None, ""):
+                return value
+        for name in names:
+            value = self.config.get(name)
+            if value not in (None, ""):
+                return value
+        return default
 
 
 @runtime_checkable

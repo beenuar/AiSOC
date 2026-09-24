@@ -32,9 +32,9 @@ from .base import (
     HuntExecutionError,
     HuntNotConfigured,
     UnsupportedTranslation,
+    WarehouseCredentials,
 )
 from .credentials import (
-    WarehouseCredentials,
     connected_warehouse_types,
     resolve_tenant_warehouse,
 )

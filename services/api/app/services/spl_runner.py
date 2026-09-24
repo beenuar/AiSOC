@@ -33,7 +33,6 @@ Splunk specifics worth stating once
 
 from __future__ import annotations
 
-import logging
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -42,8 +41,6 @@ from urllib.parse import urlparse
 import httpx
 
 from app.core.airgap import enforce_airgap_for_url
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "SPLExecutionError",
@@ -152,6 +149,13 @@ async def run_spl_query(
     verify_ssl: bool = True,
 ) -> SPLResult:
     """Run one oneshot SPL search and return its rows.
+
+    ``verify_ssl`` defaults to ``True`` and is only ever ``False`` when an
+    operator explicitly unticks "Verify SSL certificate" on the connector,
+    which self-hosted search heads behind an internal CA require. This is the
+    same accepted risk the vendor appliance clients carry (see
+    ``apps/docs/docs/operations/security.md#static-analysis-codeql``); pinning
+    a CA bundle is the better long-term answer than a boolean.
 
     Raises
     ------
