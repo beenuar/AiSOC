@@ -372,7 +372,7 @@ jobs:
                   return "unknown"
               return "pulled" if out.stdout.strip() not in {"0", ""} else "built"
 
-          built, pulled, unknown = [], [], []
+          built, pulled, unknown, running = [], [], [], set()
           print("## What this run actually exercised\n")
           print("| service | image | from |")
           print("|---|---|---|")
@@ -381,6 +381,7 @@ jobs:
               image = row.get("Image", "?")
               if service not in buildable:
                   continue
+              running.add(service)
               where = provenance(image)
               {"built": built, "pulled": pulled}.get(where, unknown).append(service)
               print(f"| `{service}` | `{image}` | **{where}** |")
@@ -390,6 +391,18 @@ jobs:
           print(f"**{len(pulled)} pulled from the registry**: {', '.join(pulled) or 'none'}  ")
           if unknown:
               print(f"**{len(unknown)} could not be determined**: {', '.join(unknown)}  ")
+
+          # Neither built nor pulled: not started at all. This smoke test boots
+          # the default profile, and the profile-gated services are excluded by
+          # design — but "excluded by design" and "silently not covered" read
+          # identically in a green tick, and a change to one of these goes
+          # through this gate without the service ever starting.
+          absent = sorted(buildable - running)
+          if absent:
+              print()
+              print(f"**{len(absent)} buildable service(s) did not start in this profile and were not exercised at all**: "
+                    f"{', '.join(absent)}. They are gated behind a compose profile and covered by their own publish "
+                    f"workflows; this run says nothing about them.  ")
 
           rebuild = "${{ steps.dockerfile_changes.outputs.rebuild }}" == "true"
           if rebuild and not built:
