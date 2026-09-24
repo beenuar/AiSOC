@@ -34,6 +34,22 @@ ATTCK_DATA_PATH = os.getenv("ATTCK_DATA_PATH", "/data/enterprise-attack.json")
 _CACHE_TTL_HOURS = 24
 _EMBED_BATCH_SIZE = 50
 
+#: Embeddings deliberately do NOT follow chat traffic to the bundled LiteLLM
+#: gateway. ``infra/litellm/config.yaml`` declares seven *chat* aliases and no
+#: embedding model, so routing here would 400 on every batch — and a gateway
+#: master key sent to api.openai.com 401s just as surely. This path therefore
+#: keeps its own pair of variables, defaulting to the provider.
+#: ``scripts/check_llm_model_routing.py`` records embeddings as out of the
+#: gateway's scope, so the exclusion is checked rather than assumed.
+_DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
+
+
+def _embedding_client(openai_module: Any, api_key: str) -> tuple[Any, str]:
+    """Return ``(client, model)`` for the embedding endpoint."""
+    base_url = os.getenv("AISOC_EMBEDDING_BASE_URL", "").strip() or None
+    model = os.getenv("AISOC_EMBEDDING_MODEL", "").strip() or _DEFAULT_EMBEDDING_MODEL
+    return openai_module.AsyncOpenAI(api_key=api_key, base_url=base_url), model
+
 
 # ─── Data Model ───────────────────────────────────────────────────────────────
 
@@ -339,8 +355,13 @@ async def embed_techniques_into_qdrant(
         logger.warning("Qdrant/OpenAI client not available for ATT&CK embedding", error=str(exc))
         return
 
-    oai = openai.AsyncOpenAI(api_key=openai_api_key)
+    oai, embed_model = _embedding_client(openai, openai_api_key)
     qdrant = AsyncQdrantClient(url=qdrant_url)
+    logger.info(
+        "ATT&CK embedding target",
+        base_url=os.getenv("AISOC_EMBEDDING_BASE_URL", "").strip() or "provider default",
+        model=embed_model,
+    )
 
     # Ensure collection exists
     try:
@@ -362,7 +383,7 @@ async def embed_techniques_into_qdrant(
         texts = [f"{t.id} {t.name}: {t.description or ''} Tactics: {', '.join(t.tactic_names or [])}" for t in batch]
         try:
             resp = await oai.embeddings.create(
-                model="text-embedding-3-large",
+                model=embed_model,
                 input=texts,
                 dimensions=3072,
             )
@@ -412,12 +433,12 @@ async def semantic_technique_search(
     except ImportError:
         return []
 
-    oai = openai.AsyncOpenAI(api_key=openai_api_key)
+    oai, embed_model = _embedding_client(openai, openai_api_key)
     qdrant = AsyncQdrantClient(url=qdrant_url)
 
     try:
         emb_resp = await oai.embeddings.create(
-            model="text-embedding-3-large",
+            model=embed_model,
             input=[query],
             dimensions=3072,
         )

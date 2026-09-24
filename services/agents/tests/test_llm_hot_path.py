@@ -50,8 +50,12 @@ def test_llm_override_routes_to_tenant_model(monkeypatch):
     with llm_override(api_key="tenant-byok-key", base_url="https://byok.example/v1", model="gpt-4o-tenant"):
         m = make_chat_model("triage")
         assert getattr(m, "model_name", None) == "gpt-4o-tenant"
-    # Outside the override, back to the alias (platform key from env, as in prod).
+    # Outside the override, back to the alias — which needs the gateway that
+    # docker-compose.yml supplies. A provider key alone is not enough to route
+    # an alias, and building a client that will 404 is what used to look like
+    # "the LLM is configured".
     monkeypatch.setenv("OPENAI_API_KEY", "sk-platform-test")
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
     m2 = make_chat_model("triage")
     assert getattr(m2, "model_name", None) == "aisoc-triage"
 

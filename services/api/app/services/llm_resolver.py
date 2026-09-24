@@ -45,12 +45,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.model_aliases import gateway_url, is_gateway_alias, resolve_api_key
 
 logger = logging.getLogger(__name__)
 
 
 _DEFAULT_OPENAI_BASE = "https://api.openai.com"
 _DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+#: See the agents-side resolver: the explain path's work is a summary, and its
+#: alias is the default model when a gateway is configured, because the bundled
+#: gateway does not define ``gpt-4o-mini``.
+_EXPLAIN_ROLE_ALIAS = "aisoc-summary"
 
 
 @dataclass(frozen=True)
@@ -80,6 +85,14 @@ class LlmConfig:
     api_key: str | None
     source: str
     reason: str
+    # Per-field provenance — mirrors the agents-side resolver. ``source``
+    # collapses the whole config into one word, which is enough to log and not
+    # enough to act on: a caller that binds this as a BYOK *override* needs to
+    # know which fields the tenant actually set, or an env baseline silently
+    # overrides a per-role model pin.
+    model_from_tenant: bool = False
+    base_url_from_tenant: bool = False
+    api_key_from_tenant: bool = False
 
 
 def _env_baseline() -> tuple[str, str, str | None]:
@@ -94,7 +107,14 @@ def _env_baseline() -> tuple[str, str, str | None]:
     """
     base_url = os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
     model = os.getenv("OPENAI_MODEL", "").strip() or os.getenv("LLM_MODEL", "").strip() or os.getenv("AISOC_LLM_MODEL", "").strip()
-    api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip()
+    if not base_url and gateway_url() and is_gateway_alias(model or _EXPLAIN_ROLE_ALIAS):
+        # Same rule as every other caller (``app.services.model_aliases``):
+        # the compose-provided gateway is adopted for an alias and never for a
+        # concrete model. Without this the explain path defaulted straight to
+        # ``https://api.openai.com`` and took an alias there.
+        base_url = gateway_url() or ""
+        model = model or _EXPLAIN_ROLE_ALIAS
+    api_key = resolve_api_key(model) or ""
     return base_url, model, (api_key or None)
 
 
@@ -256,6 +276,9 @@ async def resolve_llm_config(db: AsyncSession, tenant_id: uuid.UUID) -> LlmConfi
             api_key=None,
             source=source,
             reason="no API key configured (neither tenant BYOK nor env)",
+            model_from_tenant=tenant_contributed_model,
+            base_url_from_tenant=tenant_contributed_base_url,
+            api_key_from_tenant=tenant_contributed_key,
         )
 
     blocked, reason = _airgap_blocks(base_url)
@@ -269,6 +292,9 @@ async def resolve_llm_config(db: AsyncSession, tenant_id: uuid.UUID) -> LlmConfi
             api_key=None,
             source=source,
             reason=reason,
+            model_from_tenant=tenant_contributed_model,
+            base_url_from_tenant=tenant_contributed_base_url,
+            api_key_from_tenant=tenant_contributed_key,
         )
 
     return LlmConfig(
@@ -278,4 +304,7 @@ async def resolve_llm_config(db: AsyncSession, tenant_id: uuid.UUID) -> LlmConfi
         api_key=api_key,
         source=source,
         reason="",
+        model_from_tenant=tenant_contributed_model,
+        base_url_from_tenant=tenant_contributed_base_url,
+        api_key_from_tenant=tenant_contributed_key,
     )

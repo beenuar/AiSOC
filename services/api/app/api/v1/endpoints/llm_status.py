@@ -66,6 +66,7 @@ from app.core.airgap import is_host_allowed_for_airgap
 from app.core.config import settings
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.model_aliases import gateway_url, is_gateway_alias, resolve_api_key
 
 router = APIRouter(prefix="/llm", tags=["llm"])
 
@@ -145,7 +146,15 @@ def _env_baseline() -> tuple[str, str, bool]:
     """
     base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or ""
     model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv("AISOC_LLM_MODEL") or ""
-    key_set = bool(os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY"))
+    if not base_url and gateway_url() and is_gateway_alias(model or "aisoc-summary"):
+        # The indicator has to describe the route the explain path will
+        # actually take, and that path now adopts the compose-provided gateway
+        # for an alias-shaped model. Reporting "no LLM configured" while the
+        # request goes to the gateway would be the same class of defect one
+        # level up.
+        base_url = gateway_url() or ""
+        model = model or "aisoc-summary"
+    key_set = bool(resolve_api_key(model))
     return base_url, model, key_set
 
 

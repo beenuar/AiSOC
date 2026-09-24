@@ -427,7 +427,23 @@ class FusedAlertTriageWorker:
                 if use_llm and cfg is not None:
                     # Route the LLM call through the tenant's BYOK key/model so
                     # auto-triage actually honours per-tenant credentials.
-                    with llm_override(api_key=cfg.api_key, base_url=cfg.base_url, model=cfg.model):
+                    #
+                    # Only the fields the *tenant* set are overrides. The
+                    # resolver also carries an env baseline, and passing that
+                    # through here replaced the `triage` role's gateway alias
+                    # with whatever `OPENAI_MODEL` held — `gpt-4-turbo-preview`
+                    # in the shipped .env.example, which the gateway 400s. An
+                    # env default is not a per-tenant override.
+                    # The key needs the same treatment: the env baseline's key
+                    # is a *provider* key, and forcing it here would send it to
+                    # the gateway as a bearer token, which 401s. Left unset,
+                    # make_chat_model resolves the key that pairs with the route
+                    # it actually chose.
+                    with llm_override(
+                        api_key=cfg.api_key if getattr(cfg, "api_key_from_tenant", False) else None,
+                        base_url=cfg.base_url if getattr(cfg, "base_url_from_tenant", False) else None,
+                        model=cfg.model if getattr(cfg, "model_from_tenant", False) else None,
+                    ):
                         state, tier = await self._llm_triage(state)
                 else:
                     state = await run_triage(state)
@@ -701,10 +717,14 @@ class FusedAlertTriageWorker:
         """Resolve the tenant's LLM config, or None to force deterministic triage."""
         try:
             cfg = await resolve_llm_config(str(tenant_id))
-            return cfg if (cfg.allowed and cfg.api_key) else None
         except Exception as exc:  # noqa: BLE001 — resolver failure => deterministic
             logger.debug("auto_triage_worker.llm_resolve_failed", error=str(exc))
             return None
+        # The resolver's env baseline now resolves the bearer that pairs with
+        # the route it chose, so a deployment doing exactly what the compose
+        # file sets up — gateway URL and master key, provider key held by the
+        # gateway — reports a usable key here instead of "none configured".
+        return cfg if (cfg.allowed and cfg.api_key) else None
 
     async def _llm_triage(self, state: InvestigationState) -> tuple[InvestigationState, str]:
         try:

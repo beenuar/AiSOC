@@ -36,6 +36,11 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch):
         "OPENAI_API_KEY",
         "OPENAI_MODEL",
         "AISOC_LLM_MODEL",
+        # The gateway pair the default deployment supplies. The indicator now
+        # reports the route the explain path would actually take, so leaving
+        # these set would make "nothing configured" describe a live gateway.
+        "LLM_GATEWAY_URL",
+        "LITELLM_MASTER_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(airgap_module.settings, "AISOC_AIRGAPPED", False)

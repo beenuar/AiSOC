@@ -29,7 +29,7 @@ from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.kb_chunking import chunk_text
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
-from app.services.model_aliases import resolve_model_alias
+from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
 
 logger = logging.getLogger(__name__)
 
@@ -112,13 +112,14 @@ If the answer cannot be found in the context, say so clearly."""
 
 
 async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
+    # Resolved together with the route: when the call goes to the bundled
+    # gateway the bearer is the gateway's master key, not a provider key.
+    api_key = resolve_api_key(model)
     if not api_key:
         return None
-    base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
     context = "\n\n".join(f"[{c.title}] chunk {c.chunk_index}:\n{c.content}" for c in chunks)
-    completions_url = f"{base_url}/chat/completions"
+    completions_url = chat_completions_url(model)
     enforce_airgap_for_url(completions_url)
     try:
         # T2.3 — the retrieved KB chunks are the untrusted half here: a

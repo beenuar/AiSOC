@@ -231,10 +231,15 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
 
     alert_context = _build_alert_context(state)
 
-    llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
-
     t0 = time.monotonic()
     try:
+        # Inside the try: "the model could not be built" and "the call failed"
+        # are the same condition to every caller, and only one of them used to
+        # become an AutoTriageError. An unroutable gateway alias raises here,
+        # and auto_triage_node catches AutoTriageError specifically — so
+        # constructing outside would have failed the whole graph run over a
+        # configuration problem the deterministic path handles fine.
+        llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
         response = await safe_ainvoke(
             llm,
             [

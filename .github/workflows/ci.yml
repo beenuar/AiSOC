@@ -412,6 +412,22 @@ jobs:
         run: python3 scripts/check_connector_profiles.py --self-test
       - name: Connector profile drift gate
         run: python3 scripts/check_connector_profiles.py
+      # Same question one layer up: a connector name has to reach a profile,
+      # and a model name has to reach a gateway that defines it. AI triage
+      # could not reach a model in the default deployment because
+      # docker-compose.yml set LLM_GATEWAY_URL and both resolvers ignored it,
+      # and because .env.example shipped a model no gateway config here has
+      # ever defined. Neither is visible in a diff, and both are structural.
+      #
+      # The self-test runs first and on the same tree: it injects drift in
+      # each direction and feeds the parsers prose shaped like the thing they
+      # look for — a commented-out alias in the config's Ollama example, a
+      # commented-out pin in .env.example's escape-hatch block, a compose
+      # comment naming a variable two lines above the key it describes.
+      - name: LLM model routing gate — self-test
+        run: python3 scripts/check_llm_model_routing.py --self-test
+      - name: LLM model routing gate
+        run: python3 scripts/check_llm_model_routing.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector
