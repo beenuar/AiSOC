@@ -77,6 +77,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CI now runs the interpreter production runs, and `gofmt`, `services/realtime`
+  and the published image list are gated.** Three loose ends `#817` named and
+  did not close.
+
+  *Python.* Twenty-four workflows ran 3.12 while all thirteen service images
+  ship 3.11. Every manifest declares `^3.11`, which permits both, so nothing
+  written down was violated — which is exactly why it survived. Standardised on
+  **3.11**, in 41 replacements across those 24 workflows, because 3.11 was
+  already the answer everywhere except CI: the images ship it, the devcontainer
+  installs it, `ruff.toml` targets `py311`, five of six `[tool.mypy]` tables set
+  `python_version = "3.11"`, and all twenty-two manifests floor at 3.11 or
+  below. Moving the images to 3.12 instead would have meant changing all of
+  those *and* raising the published floor for seven installable packages — a
+  breaking change for downstream consumers, to fix a CI hygiene problem. Testing
+  at the declared floor is also the stronger guarantee. Nothing broke: 2726 API
+  tests, eleven service suites at their coverage floors and three Python SDKs all
+  pass on 3.11, and the mypy baseline is byte-identical (because those five
+  `python_version` pins meant mypy was already checking 3.11 semantics while
+  running on 3.12). `PYTHON_INTERPRETER_SPLIT` is deleted rather than emptied: a
+  split that can be recorded is a split that can grow.
+
+  *gofmt.* CI ran `go vet` and `go build` and never `gofmt`; 28 files across four
+  modules had drifted. The new job walks every `.go` file rather than iterating a
+  matrix, because a matrix is a list somebody has to remember to add to — which
+  is how `packages/sdk-go` came to be compiled by nothing. Formatting landed as
+  its own commit; nine files also had reStructuredText ``code`` markers in Go doc
+  comments, which have no inline code span, so gofmt was rewriting them to two
+  *left* curly quotes. The 58 marker pairs are gone, which leaves gofmt stable.
+
+  *`services/realtime`.* Published to GHCR on every release and built by nothing
+  — no build, test, lint or type-check job anywhere — despite being one of the
+  two ends of the Kafka spine, carrying the OpenTelemetry instrumentation that
+  keeps the distributed trace continuous, and holding the TypeScript CORS guard.
+  It now has all four, installing with `npm ci` from its committed lock.
+  `@types/node` moves `^20` → `^22` to match the Node 22 runtime, and a
+  `tsconfig.check.json` type-checks the test file, which `rootDir: src` had left
+  checked by nothing.
+
+  Three new bidirectional pairs in `check_toolchain_pins.py` — `module -> format`
+  / `format -> module`, `image -> CI` / `CI -> image`, `target -> ship` /
+  `ship -> target` — each of which rediscovers its defect when run against the
+  previous commit. Five parser blind spots were found and fixed in the gate
+  itself, every one present in this tree: matrix legs read file-wide (so
+  `ci.yml`'s two `service:` matrices merged), the block-list matrix form
+  unreadable, `working-directory` truncated at the space inside a matrix
+  expansion, `working-directory` unreachable when it is a step's first key, and
+  `gofmt` matched inside step names and quoted `echo` strings — the last of which
+  also let a quoted path in a `compose-smoke.yml` shell array count as CI
+  coverage for eleven services, so the check would have reported OK about the
+  very gap it exists to find. Each published image now prints the step that
+  exercises it instead of contributing to a tally, and the gate asks
+  `git rev-parse` for its root instead of inferring it from its own file
+  location. 35 self-test cases, 49 unit tests.
+
 - **`scripts/check_toolchain_pins.py` — the Go, Node and toolchain half of
   reproducible builds.** `check_dependency_pins.py` made every *package*
   install path agree and stopped at the Python services. Go has `go.sum` and
@@ -859,6 +913,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **Five LLM input-contract handlers raised `TypeError` instead of degrading.**
+  `/translation`, `/phishing`, `/knowledge-base`, `/hunts` and `/detection-loop`
+  each catch `LLMContractViolation` — the untrusted-input boundary refusing a
+  prompt — and logged it as `logger.warning("<event>", reason=exc.reason)`.
+  `logger` is `logging.getLogger`, not structlog, and the stdlib `Logger`
+  rejects an unknown keyword with a `TypeError`. An exception raised inside an
+  `except` block is not caught by a sibling handler, so the `except Exception`
+  sitting directly beneath it never saw it: the one path whose job is to
+  degrade gracefully was the only path that raised. `phishing.py` carries a
+  comment explaining that the log line was added *because* the handler used to
+  swallow everything — the fix for the silent failure was itself throwing. Only
+  six of thirteen trees declare `[tool.mypy]`, so an AST scan swept the rest of
+  `services/` and `packages/`; those five were the only instances repo-wide.
+
+- **`DEFAULT_SLA_TARGETS` was declared twice with disagreeing bodies, and
+  neither matched the migration.** The second definition won by being later in
+  the file and put `info` at `(480, 1440, 2880)`; the first said
+  `(240, 960, 2880)`; migration 040 seeds `(240, 1440, 4320)`. A tenant's
+  info-tier deadline therefore depended on whether it had a seeded row
+  (240 min) or fell back to Python (480 min) — and `alert_queue` reads exactly
+  this row as the `sla_due_at` catch-all for severities outside the four-tier
+  ladder. One definition now, matching the migration, which is what is in the
+  database.
+
+- **`posture_loader` returned `None` from a function declared to return a
+  dict** when a 200 response carried no `config` key, while the non-200 branch
+  immediately above already returned `{}` for the same "nothing to load"
+  outcome.
+
+- **Six guards inspected a different call's result from the one they
+  guarded.** `x.get(k) if isinstance(x.get(k), dict) else {}` calls `get`
+  twice; it is safe for a plain dict and that is not a property anything
+  enforces, which is what the twenty `union-attr` findings underneath it were
+  reporting. Fetched once and then tested, in `playbook_step_dispatch`,
+  `siem_writeback` and `sla`.
+
+  Together with a `_compute_durations` return annotation that claimed
+  `dict[str, int | None]` while returning a `str` severity, these take the mypy
+  ratchet from 690 to 656. `packages/sdk-py` declared `[tool.mypy]` with no
+  `python_version`, so it was type-checked against whichever interpreter the
+  job ran and its share of the baseline moved with CI rather than with the
+  code; it is pinned to 3.11 like the other five, and the toolchain gate now
+  fails on a tree that asks to be type-checked without saying against which
+  Python. What remains on the ratchet is annotation hygiene and artefacts of
+  the deliberate no-dependencies environment the baseline is recorded in — the
+  19 surviving `union-attr` are all `mock.call_args` in tests.
 
 - **The connector-type ratchet is at zero: ten `ConnectorType` union members
   named nothing the normalizer could resolve.** They were the console's older
