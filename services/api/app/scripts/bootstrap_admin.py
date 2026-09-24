@@ -238,6 +238,16 @@ def _print_credentials(email: str, password: str, *, generated: bool) -> None:
     no gain. A generated one is printed because it exists nowhere else — that
     single line is the whole point of this command, and it is why the password
     is never written to disk.
+
+    CodeQL flags the generated branch as ``py/clear-text-logging-sensitive-data``
+    and is correct that it discloses a secret. It is dismissed as accepted risk
+    rather than suppressed: without it nobody can sign in, which is the defect
+    this script exists to fix. The exposure is as narrow as the design allows —
+    stdout rather than a logger, only the generated password, and
+    ``golden-pipeline.yml`` redacts the line before it reaches a CI log. The
+    alternative worth building later is an out-of-band channel (a one-shot
+    token redeemed in the console); until that exists, a terminal the operator
+    is already looking at is the smallest surface available.
     """
     console = os.environ.get("AISOC_CONSOLE_URL", "http://localhost:3000")
     bar = "─" * 64
