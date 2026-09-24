@@ -886,7 +886,16 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
     for alert_id in list(case_row.alert_ids or [])[:25]:
         try:
             a = (
-                await db.execute(text("SELECT id, title, severity, created_at FROM aisoc_alerts WHERE id = :id").bindparams(id=alert_id))
+                # Tenant-scoped as defence in depth. Reaching this loop already
+                # required a tenant-scoped case, but the predicate costs
+                # nothing and a poisoned ``alert_ids`` array would otherwise
+                # hydrate another tenant's alert title into this timeline.
+                await db.execute(
+                    text("SELECT id, title, severity, created_at FROM aisoc_alerts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                        id=alert_id,
+                        tenant_id=str(user.tenant_id),
+                    )
+                )
             ).fetchone()
             if a:
                 events.append(

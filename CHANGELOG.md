@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **`/api/v1/identity-timeline` read every tenant's alerts.** Both routes bound
+  an authenticated user and never used it: the SQL against `aisoc_alerts`
+  carried no `tenant_id` predicate, so any authenticated caller could pull any
+  tenant's alerts whose title or evidence matched a substring — and the
+  substring is the search term, so the match is caller-controlled. Both routes
+  are now scoped to the caller's tenant.
+
+- **`/api/v1/playbooks` had no authentication at all.** The module declared no
+  `Depends` of any kind across eight routes and there is no global auth
+  middleware, so every route was reachable unauthenticated — including
+  `POST /playbooks/{id}/run`, which executes a playbook against the estate.
+  Each route now demands `playbooks:read`, `playbooks:write` or
+  `playbooks:execute`; all three permissions already existed in
+  `ROLE_PERMISSIONS` and had no reader. `:execute` stays distinct from
+  `:write` so an analyst can run a governed playbook without editing one.
+
+- The case-timeline linked-alert hydration in `cases.py` now binds a tenant as
+  defence in depth. Reaching it already required a tenant-scoped case, so this
+  was not a live read, but a poisoned `alert_ids` array would otherwise have
+  surfaced another tenant's alert title.
+
 - **Any authenticated user could disable detection rules inside any other
   tenant.** `_ensure_mssp_parent`, the guard on the MSSP write surface, had
   `pass` for a body. Four routes took a caller-supplied child tenant id and
@@ -79,6 +100,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which Splunk's REST API answers 400 on every hunt.
 
 ### Removed
+
+- **The identity timeline's phantom second source.** It queried a table named
+  `aisoc_events` that no migration creates, nothing writes to, and that appears
+  nowhere else in the repository — with its failure swallowed at `DEBUG`. It
+  read as a second source of evidence while returning nothing on every
+  deployment. The remaining source now reports itself on the response
+  (`sources_unavailable`) when it cannot be read, so an empty timeline caused
+  by a broken query is distinguishable from one caused by no matches.
 
 - **The Chronicle warehouse scaffold.** It read `hunt.translated_query["udm"]`,
   nothing in the repository emits UDM, and it gated on two settings that were

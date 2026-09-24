@@ -4,20 +4,40 @@ Pillar-2 Playbook proxy endpoints.
 The api service acts as a gateway that forwards playbook CRUD and run
 requests to the agents service.  This keeps the public API contract in
 one place while the engine lives in services/agents.
+
+Authorization
+-------------
+
+Every route below is gated. The module previously declared no dependency of
+any kind — no ``Depends``, no ``require_permission`` — and there is no global
+auth middleware in ``app/main.py``, so all eight routes were reachable
+unauthenticated, including ``POST /playbooks/{id}/run``, which executes a
+playbook against the estate.
+
+The three permissions used here (``playbooks:read``, ``playbooks:write``,
+``playbooks:execute``) already existed in ``ROLE_PERMISSIONS`` and had no
+reader. ``playbooks:execute`` is deliberately distinct from ``:write`` so an
+analyst can run a governed playbook without being able to edit one.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from app.api.v1.deps import AuthUser, require_permission
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "http://agents:8084")
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+
+ReadUser = Annotated[AuthUser, Depends(require_permission("playbooks:read"))]
+WriteUser = Annotated[AuthUser, Depends(require_permission("playbooks:write"))]
+ExecuteUser = Annotated[AuthUser, Depends(require_permission("playbooks:execute"))]
 
 # Allowlist for playbook/run IDs: UUIDs or short slug-style alphanumeric IDs.
 # Prevents partial-SSRF via path traversal in proxied requests.
@@ -61,48 +81,48 @@ async def _proxy(method: str, path: str, **kwargs) -> Any:
 
 
 @router.get("", summary="List playbooks")
-async def list_playbooks(enabled_only: bool = False):
+async def list_playbooks(user: ReadUser, enabled_only: bool = False):
     return await _proxy("GET", "", params={"enabled_only": enabled_only})
 
 
 @router.post("", summary="Create playbook", status_code=201)
-async def create_playbook(request: Request):
+async def create_playbook(request: Request, user: WriteUser):
     body = await request.json()
     return await _proxy("POST", "", json=body)
 
 
 @router.get("/runs", summary="List playbook runs")
-async def list_runs(limit: int = 50):
+async def list_runs(user: ReadUser, limit: int = 50):
     return await _proxy("GET", "/runs", params={"limit": limit})
 
 
 @router.get("/runs/{run_id}", summary="Get a playbook run")
-async def get_run(run_id: str):
+async def get_run(run_id: str, user: ReadUser):
     safe_run_id = _validate_path_id(run_id, "run_id")
     return await _proxy("GET", f"/runs/{safe_run_id}")
 
 
 @router.get("/{playbook_id}", summary="Get a playbook")
-async def get_playbook(playbook_id: str):
+async def get_playbook(playbook_id: str, user: ReadUser):
     safe_id = _validate_path_id(playbook_id, "playbook_id")
     return await _proxy("GET", f"/{safe_id}")
 
 
 @router.put("/{playbook_id}", summary="Update a playbook")
-async def update_playbook(playbook_id: str, request: Request):
+async def update_playbook(playbook_id: str, request: Request, user: WriteUser):
     safe_id = _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
     return await _proxy("PUT", f"/{safe_id}", json=body)
 
 
 @router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
-async def delete_playbook(playbook_id: str):
+async def delete_playbook(playbook_id: str, user: WriteUser):
     safe_id = _validate_path_id(playbook_id, "playbook_id")
     await _proxy("DELETE", f"/{safe_id}")
 
 
 @router.post("/{playbook_id}/run", summary="Execute a playbook", status_code=202)
-async def run_playbook(playbook_id: str, request: Request):
+async def run_playbook(playbook_id: str, request: Request, user: ExecuteUser):
     safe_id = _validate_path_id(playbook_id, "playbook_id")
     body = await request.json()
     return await _proxy("POST", f"/{safe_id}/run", json=body)
