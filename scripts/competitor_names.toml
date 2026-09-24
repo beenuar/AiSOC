@@ -131,6 +131,11 @@ names = ["Torq", "Tines", "Wazuh"]
 reason = "Generated marketplace catalog; entries are the connector manifests above."
 
 [[allow]]
+paths = ["packages/types/src/generated/connector-types.ts", "packages/types/src/generated/connector-types.json"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "The console's connector_type vocabulary, generated from the connector registry by scripts/generate_connector_types.py. Each name here is a connector id the platform ingests under; removing one would make the type reject events from a connector that ships."
+
+[[allow]]
 paths = ["apps/docs/sidebars.ts"]
 names = ["Torq", "Tines", "Wazuh"]
 reason = "Docs navigation entries pointing at the per-connector setup guides."
