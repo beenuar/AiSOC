@@ -23852,6 +23852,13 @@ components:
         sla_breached_cases:
           type: integer
           title: Sla Breached Cases
+        mttr_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mttr Minutes
+          description: Mean of the per-tenant figures, over tenants that closed something.
+            Null when the portfolio closed nothing.
         connectors_total:
           type: integer
           title: Connectors Total
@@ -23884,6 +23891,7 @@ components:
       - synthetic_alerts
       - open_cases
       - sla_breached_cases
+      - mttr_minutes
       - connectors_total
       - connectors_healthy
       - connectors_stale
@@ -23932,6 +23940,13 @@ components:
         sla_breached_cases:
           type: integer
           title: Sla Breached Cases
+        mttr_minutes:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Mttr Minutes
+          description: Mean minutes to close, over cases this tenant closed in the
+            trailing 30 days. Null when it closed none.
         connectors:
           $ref: '#/components/schemas/ConnectorHealthOut'
         last_event_at:
@@ -23964,6 +23979,7 @@ components:
       - synthetic_alerts
       - open_cases
       - sla_breached_cases
+      - mttr_minutes
       - connectors
       - last_event_at
       - limits

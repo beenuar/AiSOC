@@ -805,6 +805,9 @@ class PortfolioTenantOut(BaseModel):
     synthetic_alerts: int = Field(description="Seeded demo rows, counted apart from the figures above.")
     open_cases: int
     sla_breached_cases: int
+    mttr_minutes: float | None = Field(
+        description="Mean minutes to close, over cases this tenant closed in the trailing 30 days. Null when it closed none."
+    )
     connectors: ConnectorHealthOut
     last_event_at: str | None
     limits: list[LimitHeadroomOut]
@@ -822,6 +825,9 @@ class PortfolioSummaryOut(BaseModel):
     synthetic_alerts: int
     open_cases: int
     sla_breached_cases: int
+    mttr_minutes: float | None = Field(
+        description="Mean of the per-tenant figures, over tenants that closed something. Null when the portfolio closed nothing."
+    )
     connectors_total: int
     connectors_healthy: int
     connectors_stale: int

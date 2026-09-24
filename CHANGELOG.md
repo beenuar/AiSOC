@@ -19,19 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   What moved, and why it could not be preserved:
 
-  - `health_score` is **gone**, not nulled. It was an undefined composite
-    with no formula anywhere in the tree; keeping the field would promise a
-    measurement that does not exist.
+  - `health_score` / `avg_health_score` are **gone**, not nulled. It was an
+    undefined composite with no formula anywhere in the tree; keeping the
+    field would promise a measurement that does not exist. (`MetricsOut` on
+    the separate `/mssp/metrics` route still carries a `health_score` and is
+    unchanged by this release.)
   - `avg_mttr_minutes` → `mttr_minutes`, measured from cases a tenant
     actually closed in the trailing 30 days, and **null** when it closed
-    none. The old value was the literal `23.4`.
-  - `sla_breach_count` → `sla_breached_cases`, counted from
-    `cases.sla_breached`.
-  - `connectors_online` / `connectors_degraded` → a `connectors` object with
+    none. The old value was the literal `23.4`. Present on both the per-tenant
+    row and the portfolio summary, where it averages only over tenants that
+    closed something rather than counting a null as a zero.
+  - `sla_breach_count` and `sla_breaches` → `sla_breached_cases`, counted
+    from `cases.sla_breached`.
+  - `connectors_online` / `connectors_degraded` / `connector_status` →
     `total` / `healthy` / `stale` / `error`, derived from each connector's
-    `health_status` and `last_sync`.
+    `health_status` and `last_sync`. Nested under a `connectors` object on
+    the per-tenant row; flat `connectors_*` fields on the summary.
   - `tenant_id` is now a real tenant UUID rather than a string like
     `"t-acme"`.
+  - `assignee` is gone from the incident rows. It named invented analysts;
+    an alert's real owner is `case_id`, which is now returned instead.
   - New: `synthetic_alerts`, so seeded demo rows are counted apart from a
     tenant's real posture instead of inflating it.
 
