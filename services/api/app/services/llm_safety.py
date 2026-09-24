@@ -70,6 +70,24 @@ from app._vendor.llm_contract_rules import (
 
 logger = structlog.get_logger(__name__)
 
+# These names are re-exports: callers do
+# `from app.services.llm_safety import LLMContractViolation`, and the rules
+# themselves live in the vendored copy so `services/api` can carry them
+# without the agents service's LangChain dependency.
+#
+# `__all__` rather than the PEP 484 `X as X` form. The `as` form satisfies
+# ruff and *not* CodeQL, which still reads each one as an import nothing uses
+# — so it traded one note-level alert for four. `__all__` is what CodeQL
+# models as marking a re-export.
+__all__ = [
+    "LLMContractViolation",
+    "LLMInputContract",
+    "classify_message",
+    "is_contract_enforced",
+    "safe_chat_completions_request",
+    "validate_messages",
+]
+
 DEFAULT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 
 

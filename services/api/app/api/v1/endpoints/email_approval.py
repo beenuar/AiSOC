@@ -117,6 +117,15 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
     try:
         parsed = verify_token(token, secret=secret)
     except EmailApprovalError as exc:
+        # The verifier's message decides *which* fixed page to show; it is
+        # never interpolated into one.
+        #
+        # This is the last of the stack-trace-exposure findings on this route,
+        # and it is the one that was hardest to see: the page text read
+        # naturally, and the value in it came from an exception. On an
+        # unauthenticated page an exception message is the wrong kind of
+        # string to render however harmless today's happens to look, because
+        # the next one is written by whoever raises next.
         reason = str(exc)
         logger.warning("email_approval.token_rejected", reason=reason)
         expired = "expired" in reason
@@ -124,9 +133,9 @@ async def email_decide(token: str = Query(..., description="Signed approval toke
             body = "Approval links are valid for one hour. Ask for a fresh one, or approve from the console."
         else:
             body = (
-                f"The link could not be verified ({reason}). If you received it "
-                "forwarded from someone else, that is why — links are bound to "
-                "their recipient."
+                "The link could not be verified. If you received it forwarded "
+                "from someone else, that is why — links are bound to their "
+                "recipient."
             )
         return _page(
             "This approval link has expired" if expired else "This approval link is not valid",
