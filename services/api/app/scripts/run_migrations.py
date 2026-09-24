@@ -29,6 +29,7 @@ Run standalone via:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 from pathlib import Path
@@ -93,6 +94,21 @@ def _asyncpg_dsn(url: str) -> tuple[str, dict]:
     return new_url, kwargs
 
 
+def migration_url() -> str:
+    """The DSN migrations run against — the owner's, not the runtime role's.
+
+    ``DATABASE_URL`` points at ``aisoc_app``, which holds SELECT / INSERT /
+    UPDATE / DELETE and nothing else, so that row-level security applies to it
+    (see ``migrations/061_runtime_app_role.sql``). DDL needs the role that owns
+    the tables, which is a separate credential.
+
+    Unset falls back to ``DATABASE_URL``, which is the pre-split behaviour and
+    what a single-role deployment still wants.
+    """
+    configured = (settings.DATABASE_MIGRATION_URL or "").strip()
+    return configured or str(settings.DATABASE_URL)
+
+
 async def _connect() -> asyncpg.Connection:
     """Open a fresh asyncpg connection, retrying on transient connect errors.
 
@@ -112,7 +128,7 @@ async def _connect() -> asyncpg.Connection:
     intentionally **not** retried — those need human attention, not
     more attempts.
     """
-    dsn, kwargs = _asyncpg_dsn(str(settings.DATABASE_URL))
+    dsn, kwargs = _asyncpg_dsn(migration_url())
     last_exc: Exception | None = None
     # ~3 min total window (see the back-off below). On the Fly demo, the
     # release_command machine is often the *first* thing to touch the Postgres
@@ -174,6 +190,65 @@ async def _apply_one(conn: asyncpg.Connection, name: str, sql: str) -> tuple[str
         return name, False, str(exc)
 
 
+async def _provision_runtime_role(conn: asyncpg.Connection) -> None:
+    """Apply ``AISOC_APP_DB_PASSWORD`` to the runtime role, if one is configured.
+
+    ``061_runtime_app_role.sql`` creates ``aisoc_app`` with DML-only grants and
+    no password, because a migration in a public repository must not carry a
+    credential and must not overwrite one an operator already set deliberately.
+    The credential therefore arrives from the environment.
+
+    The compose stack also applies it from ``infra/postgres/initdb``, which is
+    the cleaner place — it runs before the container reports healthy, so no
+    service can race it. That hook fires only on an *empty* data directory
+    though, so an upgrade in place never reaches it, and a CI service container
+    has no hook at all. This covers both, running on the owner connection that
+    just applied the chain.
+
+    Unset is a normal state (a deployment managing the role itself, or one that
+    has not split the roles yet) and is logged rather than treated as an error.
+    """
+    password = os.environ.get("AISOC_APP_DB_PASSWORD", "")
+    if not password:
+        logger.info(
+            "AISOC_APP_DB_PASSWORD unset — leaving the runtime role's credential alone. "
+            "If DATABASE_URL points at aisoc_app, that role needs a password from somewhere."
+        )
+        return
+    try:
+        # The password is bound as a parameter into a session GUC, then
+        # re-quoted by the server for the ALTER (a utility statement takes no
+        # parameters). It is never concatenated into SQL in this process.
+        await conn.execute("SELECT set_config('aisoc.app_password', $1, false)", password)
+        await conn.execute(
+            """
+            DO $$
+            DECLARE pw text := current_setting('aisoc.app_password');
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aisoc_app') THEN
+                    EXECUTE 'CREATE ROLE aisoc_app LOGIN PASSWORD ' || quote_literal(pw);
+                ELSE
+                    EXECUTE 'ALTER ROLE aisoc_app WITH LOGIN PASSWORD ' || quote_literal(pw);
+                END IF;
+            END $$;
+            """
+        )
+        logger.info("runtime role aisoc_app: login credential applied from AISOC_APP_DB_PASSWORD")
+    except Exception as exc:  # noqa: BLE001 — reported, never fatal to the chain
+        # Loud, because the services connect as this role: getting here means
+        # they are about to fail authentication and the reason should already
+        # be in the log when that happens.
+        logger.error(
+            "could not set the runtime role's password (%s: %s). Services pointed at aisoc_app "
+            "will fail to authenticate until it is provisioned.",
+            type(exc).__name__,
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+    finally:
+        with contextlib.suppress(Exception):
+            await conn.execute("SELECT set_config('aisoc.app_password', '', false)")
+
+
 def _migrations_required() -> bool:
     """Whether a migration *connect* failure should crash the process.
 
@@ -200,7 +275,14 @@ async def main() -> None:
         return
 
     files = sorted(p for p in MIGRATIONS_DIR.iterdir() if p.suffix == ".sql")
-    logger.info("Found %d migration files", len(files))
+    parts = urlsplit(migration_url())
+    role = (parts.username or "?").replace("\r", "").replace("\n", " ")[:64]
+    logger.info(
+        "Found %d migration files; connecting as %r (%s)",
+        len(files),
+        role,
+        "DATABASE_MIGRATION_URL" if (settings.DATABASE_MIGRATION_URL or "").strip() else "DATABASE_URL",
+    )
 
     try:
         conn = await _connect()
@@ -247,6 +329,8 @@ async def main() -> None:
             else:
                 logger.error("✗ failed %s: %s", name, err)
                 failures.append((name, err or ""))
+
+        await _provision_runtime_role(conn)
 
         if failures:
             logger.warning("%d migrations failed; see logs above", len(failures))

@@ -111,9 +111,21 @@ Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/
 
 ### Database, cache, queue
 
+**Two Postgres roles, and the distinction is a security control.** `DATABASE_URL`
+is the role every service connects as: `aisoc_app`, which holds
+`SELECT / INSERT / UPDATE / DELETE` and nothing else, so the schema's
+row-level-security policies apply to it. `DATABASE_MIGRATION_URL` is the owner,
+read by the migration runner and by nothing else. Running the services as the
+owner — which every deployment surface did until `061_runtime_app_role.sql` —
+leaves all 92 RLS policies filtering nothing, because a superuser ignores them
+even under `FORCE ROW LEVEL SECURITY`. See
+[Security → Multi-tenant isolation](../operations/security#the-role-the-services-connect-as).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Async Postgres DSN |
+| `DATABASE_URL` | `postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@localhost:5432/aisoc` | Async Postgres DSN for the **runtime** role. DML only. |
+| `DATABASE_MIGRATION_URL` | unset → falls back to `DATABASE_URL` | Async Postgres DSN for the **owner**. Used only by `python -m app.scripts.run_migrations`, which needs DDL. |
+| `AISOC_APP_DB_PASSWORD` | `aisoc_app_dev_secret` in compose; unset elsewhere | Password applied to the runtime role, by the postgres init hook on a fresh volume and by the migration runner on every run. Unset leaves the role's credential alone. |
 | `DATABASE_POOL_SIZE` | `20` | SQLAlchemy pool size |
 | `DATABASE_MAX_OVERFLOW` | `10` | SQLAlchemy max overflow |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis DSN |
@@ -383,7 +395,13 @@ These services read the same `AISOC_CORS_ORIGINS` / `CORS_ORIGINS` pair and fall
 # --- API ---
 SECRET_KEY=$(openssl rand -hex 32)
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-DATABASE_URL=postgresql+asyncpg://aisoc:changeme@localhost:5432/aisoc
+# The runtime role: DML only, so row-level security applies to it.
+DATABASE_URL=postgresql+asyncpg://aisoc_app:$(openssl rand -hex 16)@localhost:5432/aisoc
+# The owner: DDL, read by the migration runner and nothing else.
+DATABASE_MIGRATION_URL=postgresql+asyncpg://aisoc:changeme@localhost:5432/aisoc
+# Applied to the runtime role when the chain is applied. Must match the
+# password in DATABASE_URL above.
+AISOC_APP_DB_PASSWORD=...
 REDIS_URL=redis://localhost:6379/0
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 OPENSEARCH_URL=http://localhost:9200

@@ -412,9 +412,39 @@ backup:
       memory: 2Gi
 
 # ─── Bundled Infrastructure (disable in production; use managed services) ─────
+#
+# TWO DATABASE ROLES, AND THE CHART CANNOT CREATE THE SECOND ONE FOR YOU
+# ----------------------------------------------------------------------
+# `auth.username` below is the OWNER: it owns the schema and applies the
+# migration chain. No service should connect as it. A superuser — which is
+# what the bundled chart and most managed services make the master user —
+# ignores every row-level-security policy in this schema, even under
+# FORCE ROW LEVEL SECURITY, so running the services as the owner leaves all 92
+# policies filtering nothing.
+#
+# Services connect as `aisoc_app`, a DML-only role that
+# `services/api/migrations/061_runtime_app_role.sql` creates and constrains to
+# NOSUPERUSER NOBYPASSRLS. The migration deliberately sets no password, so the
+# deployment supplies one. This chart ships no Secret template — it reads an
+# existing `<release>-secrets` — which means **this is an operator step**:
+#
+#   1. Apply the migration chain as the owner, with AISOC_APP_DB_PASSWORD set
+#      in the job's environment. That run gives `aisoc_app` its login.
+#   2. Put the runtime DSN in `<release>-secrets` under `database-url`
+#      (and `honeytoken-database-url` / `purple-team-database-url`), pointing
+#      at `aisoc_app`.
+#   3. Put the owner DSN under `database-migration-url`, used by the migration
+#      job and by nothing else.
+#
+# Verify with `python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL"`:
+# rolsuper and rolbypassrls must both read false and the role must own nothing.
+# Skip step 1 and the services cannot authenticate — a loud failure. Skip step 2
+# and they authenticate as the owner, which is the silent one.
 postgresql:
   enabled: false
   auth:
+    # The owner / migration role. See the note above before pointing a
+    # service's DATABASE_URL at this.
     database: aisoc
     username: aisoc
     existingSecret: aisoc-postgres-secret

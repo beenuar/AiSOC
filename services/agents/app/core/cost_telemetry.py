@@ -29,6 +29,8 @@ from typing import Any
 
 import structlog
 
+from app.core.schema_bootstrap import ensure_table
+
 logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
@@ -99,6 +101,26 @@ class CallRecord:
 
 _POOL: Any = None
 
+#: Only used when the table is genuinely absent — normally it arrives with
+#: ``services/api/migrations/020_soc_metrics_h2.sql``, which also gives it the
+#: RLS policy this copy cannot.
+_RUN_COSTS_DDL = """
+CREATE TABLE IF NOT EXISTS aisoc_run_costs (
+    run_id          TEXT NOT NULL,
+    tenant_id       TEXT NOT NULL,
+    model           TEXT,
+    total_prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+    total_cost_usd  DOUBLE PRECISION NOT NULL DEFAULT 0,
+    total_latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
+    call_count      INTEGER NOT NULL DEFAULT 0,
+    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (run_id, tenant_id, model)
+);
+CREATE INDEX IF NOT EXISTS aisoc_run_costs_tenant_run
+    ON aisoc_run_costs (tenant_id, run_id);
+"""
+
 
 async def _get_pool() -> Any | None:
     global _POOL
@@ -116,24 +138,13 @@ async def _get_pool() -> Any | None:
             max_size=2,
         )
         async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS aisoc_run_costs (
-                    run_id          TEXT NOT NULL,
-                    tenant_id       TEXT NOT NULL,
-                    model           TEXT,
-                    total_prompt_tokens     INTEGER NOT NULL DEFAULT 0,
-                    total_completion_tokens INTEGER NOT NULL DEFAULT 0,
-                    total_cost_usd  DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    total_latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    call_count      INTEGER NOT NULL DEFAULT 0,
-                    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    PRIMARY KEY (run_id, tenant_id, model)
-                );
-                CREATE INDEX IF NOT EXISTS aisoc_run_costs_tenant_run
-                    ON aisoc_run_costs (tenant_id, run_id);
-                """
-            )
+            # Probe before creating: the runtime role holds DML only, and
+            # `CREATE TABLE IF NOT EXISTS` checks the schema ACL before the
+            # existence test, so it raises even when the table is there. See
+            # app/core/schema_bootstrap.py.
+            if not await ensure_table(conn, "aisoc_run_costs", _RUN_COSTS_DDL):
+                await pool.close()
+                return None
         _POOL = pool
         return _POOL
     except Exception as exc:

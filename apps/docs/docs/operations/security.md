@@ -116,31 +116,72 @@ The model:
 
 The three that remain are named rather than rounded away: `users` is excluded deliberately (below), and `case_tasks` / `case_timeline` are ORM models that no migration creates, so there is no table to protect.
 
-### Two reasons RLS may not be protecting you right now
+### The role the services connect as
 
-**Your database role probably bypasses it.** A role with `SUPERUSER` or `BYPASSRLS` ignores policies *even under* `FORCE ROW LEVEL SECURITY` — FORCE binds the table owner, not a superuser. `docker-compose.yml` and the CI service containers both run every service as `POSTGRES_USER=aisoc`, and the `postgres` image creates that role as a superuser. In that configuration **no policy in this database is doing anything**, and it is measured rather than assumed: `tests/isolation/test_postgres_rls.py` seeds two tenants, binds the session to one, and asserts the shipped role still sees both.
+A role with `SUPERUSER` or `BYPASSRLS` ignores policies *even under* `FORCE ROW LEVEL SECURITY` — FORCE binds the table owner, not a superuser. And an owner, though bound by FORCE, can simply issue `ALTER TABLE … NO FORCE ROW LEVEL SECURITY`. So there are three ways around a policy, and the default deployment used to hand a service all three at once: every service connected as `POSTGRES_USER=aisoc`, which the `postgres` image creates as a superuser and which owns every table the chain builds. **In that configuration no policy in this database did anything**, which was measured rather than assumed.
 
-To make the policies live, connect the services as a role with neither attribute:
+[`061_runtime_app_role.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/061_runtime_app_role.sql) splits the credential in two, and every deployment surface in this repository now ships the split:
 
-```sql
-CREATE ROLE aisoc_app LOGIN PASSWORD '<a real secret>' NOSUPERUSER NOBYPASSRLS;
-GRANT USAGE ON SCHEMA public TO aisoc_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO aisoc_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aisoc_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aisoc_app;
+| Role | What it is for | Grants |
+| --- | --- | --- |
+| `aisoc` (`POSTGRES_USER`) | Owns every table. Applies the migration chain. **No service connects as it.** | Everything, by ownership |
+| `aisoc_app` | Every service's `DATABASE_URL`. Row-level security applies to it. | `USAGE` on schema `public`; `SELECT, INSERT, UPDATE, DELETE` on tables and views; `USAGE, SELECT` on sequences; `EXECUTE` on functions |
+
+That grant list is the whole of it. No `CREATE` on the schema, so the role cannot create or alter a table. No `TRUNCATE`, which would otherwise let one statement delete every tenant's rows without a policy seeing a `WHERE` clause — `002_rls.sql` had granted `ALL`, and 061 revokes it. No `REFERENCES`, no `TRIGGER`. The role owns nothing.
+
+`EXECUTE` on functions looks redundant because `PUBLIC` holds it by default, and on a stock database it is. It is spelled out because a deployment that hardens with `REVOKE ALL ON ALL FUNCTIONS FROM PUBLIC` would otherwise break RLS itself: `current_tenant_id()` is evaluated as the querying role inside every policy.
+
+`DATABASE_MIGRATION_URL` carries the owner's DSN and is read by `python -m app.scripts.run_migrations` and nothing else. Leave it unset and migrations fall back to `DATABASE_URL`, which is right for a deployment that has not split the roles and fails loudly — `permission denied for schema public` — on one that has.
+
+Verify any deployment with:
+
+```bash
+python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL" --owner-dsn "$DATABASE_MIGRATION_URL"
 ```
 
-Then point `DATABASE_URL` at `aisoc_app` and keep migrations running as the owner. Verify with:
+It reads `pg_roles` and `pg_class` directly, so it answers for the database rather than for the config file, and it fails on all three bypasses plus a view that reads around the policies. `rolsuper` and `rolbypassrls` must both be false and the role must own nothing.
+
+#### Two views were reading around the policies
+
+A view executes its underlying reads as the **view's owner** unless it is declared `security_invoker`. Both views in this schema are owned by the role that ran the chain, so `mssp_tenant_latest_metrics` and `mssp_effective_tenant_rules` would have gone on returning every tenant's rows to `aisoc_app` after the role switch — a bypass that survives the fix meant to close it. Measured: bound to tenant A, the view returned 2 rows before and 1 after. 061 switches both to `security_invoker`, and the gate checks views as well as tables.
+
+#### What an operator still has to do
+
+The compose stacks and CI need nothing: `infra/postgres/initdb/zz_runtime_role_password.sh` runs inside the postgres image's first-boot init, after the migration chain and before the container reports healthy, and sets the runtime role's password from `AISOC_APP_DB_PASSWORD`. `depends_on: service_healthy` makes that ordering a guarantee rather than a race.
+
+Three cases are **not** automatic:
+
+* **An existing data volume.** `/docker-entrypoint-initdb.d` only runs when the data directory is empty, so `docker compose up` on a stack you already had never reaches that script. `app.scripts.run_migrations` applies `AISOC_APP_DB_PASSWORD` on every run, which covers it — but the API must have run migrations once with the variable set before the other services can authenticate. On a stack upgraded in place, expect the non-API services to fail their first connection attempts and recover on restart.
+* **A managed Postgres** (RDS, Cloud SQL, a Helm-installed chart). There is no init hook. Apply the chain as the owner with `AISOC_APP_DB_PASSWORD` in the job's environment, then point the services' `DATABASE_URL` at `aisoc_app`. The Terraform environment generates the password for you (`terraform output -raw db_app_password`); the Helm chart ships no Secret template, so `values.yaml` spells the three steps out.
+* **Rotating away from `changeme`.** `002_rls.sql` created `aisoc_app` with that literal. 061 does not clear it, because clearing it would break an operator who had already set a real password. Everything above overwrites it; if none of it applies to you, set one by hand. `check_runtime_db_role.py --dsn` tries that password and fails if it still works.
+
+### A session that never bound a tenant still sees everything
+
+If `app.current_tenant_id` is not set the policy permits the query. That is deliberate and load-bearing: ingest, fusion, the hunt scheduler's sweep, the retention purge and tenant deletion all operate across tenants and would otherwise process nothing, silently. Every policy in all five schema chains carries the arm
 
 ```sql
-SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
 ```
 
-Both flags must read `f`. `002_rls.sql` already creates an `aisoc_app` role with the literal password `changeme`; set a real one before using it.
+and [`scripts/check_rls_policy_shape.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_rls_policy_shape.py) fails if one is added without it. **A worker that silently stops seeing data is a worse failure than the bypass this change closes**, so that gate matters as much as the role does.
 
-**A session that never bound a tenant sees everything.** If `app.current_tenant_id` is not set the policy permits the query. That is deliberate — ingest, fusion, the hunt scheduler and the retention purge all operate across tenants and would otherwise process nothing, silently. The paths that *do* bind a tenant are `TenantDBSession` in the API, `_set_rls_context` in the agents ledger / hunt store / LLM resolver / Splunk evidence reader, and the per-hunt rebind in the hunt scheduler. Everywhere else the query predicate is the only control, which is why that gate is the one that matters.
+One construct did not survive the switch. `SET LOCAL row_security = off` appeared in the retention purge, the hunt scheduler and tenant deletion, and it only ever worked because the connecting role was a superuser: for a role the policies apply to, Postgres does not ignore them when row security is off — it raises `query would be affected by row-level security policy for table "…"`. All three now rely on the unbound-session arm and call `assert_cross_tenant_session()` first, which raises if a tenant *is* bound, because such a sweep would process one tenant's rows and report success.
 
-Until 2026-09 the agents-service helpers set `app.tenant_id` — a variable no policy reads — so their scoping had never applied. Four policies had the mirror-image bug from the other side, reading `app.tenant_id` or `app.current_tenant`, and two called `current_setting` without `missing_ok` so an unbound session raised `unrecognized configuration parameter` instead of returning rows. All of it was invisible behind the superuser bypass. `test_no_policy_reads_a_session_variable_nothing_sets` keeps that class closed.
+The paths that deliberately **do** bind a tenant are `TenantDBSession` in the API, `_set_rls_context` in the agents ledger / hunt store / LLM resolver / Splunk evidence reader, and the per-hunt rebind in the hunt scheduler. Everywhere else the query predicate is the only control, which is why that gate is still the one that matters most.
+
+### Which role each service runs as
+
+Every service runs as the scoped runtime role. Nothing needs a cross-tenant credential, because the fail-open arm already gives an unbound session cross-tenant visibility — the distinction is per *session*, not per service, and that is strictly safer: a service that binds a tenant for one request cannot escape it by having been given a privileged role at startup.
+
+| Service | Role | Why |
+| --- | --- | --- |
+| `api` | runtime | Binds a tenant per request through `TenantDBSession`. Also holds `DATABASE_MIGRATION_URL` — the owner — used only by the migration runner at startup. |
+| `ingest` (Go, `DATABASE_DSN`) | runtime | Writes inbox events for every tenant on an unbound session; the fail-open arm admits them. |
+| `fusion` | runtime | Promotes alerts across tenants, unbound. |
+| `agents` | runtime | Binds a tenant in the ledger, hunt store and LLM resolver; unbound elsewhere. |
+| `actions`, `connectors`, `threatintel`, `honeytokens`, `purple-team`, `ueba`, `osquery-tls` | runtime | DML only. `osquery-tls` resolves a node's tenant *from* its enrolment key, so that lookup is unbound by necessity. |
+| retention purge / hunt scheduler / tenant deletion (in-process in `api`) | runtime, unbound | Cross-tenant by design, and now assert that no tenant is bound before sweeping. |
+| migration runner, `alembic`, `scripts/backup.sh` | owner | DDL, and a dump that has to read and rewrite tables the runtime role cannot. |
 
 The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication, and platform-admin user administration is cross-tenant by design. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 
@@ -235,10 +276,12 @@ table.
 
 Tenant isolation is enforced at read time, per store, and the predicate is the
 control that matters. 92 of 95 tenant-scoped tables now carry an RLS policy (it
-was 31), but RLS engages only on a session that has run
-`SET LOCAL app.current_tenant_id` — and only for a database role that does not
-bypass it, which the shipped role does. On an `aisoc_*` table read through a
-plain session, a missing predicate is still a leak, not a defence-in-depth gap.
+was 31), and since `061_runtime_app_role.sql` the shipped role is one those
+policies apply to — so the second layer is real rather than nominal. It still
+engages only on a session that has run `SET LOCAL app.current_tenant_id`, and
+the workers deliberately do not: on an `aisoc_*` table read through a plain
+unbound session, a missing predicate is still a leak, not a defence-in-depth
+gap.
 
 The dangerous shape is a query that matches on an id and nothing else —
 `select(Honeytoken).where(Honeytoken.id == token_id)`. It takes no tenant, so
@@ -467,6 +510,8 @@ When you move from `pnpm aisoc:demo` to a production deployment, walk through th
 - [ ] Configure SSO (OIDC or SAML) and disable local password login for human users — leave it on only for break-glass platform admins.
 - [ ] Require WebAuthn/passkeys for any role that triggers destructive playbook actions or credential changes.
 - [ ] Confirm `FORCE ROW LEVEL SECURITY` is set on every tenant-partitioned table (verify with `\d+ <tablename>` in `psql`).
+- [ ] Confirm `DATABASE_URL` points at the DML-only runtime role and `DATABASE_MIGRATION_URL` at the owner: `python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL" --owner-dsn "$DATABASE_MIGRATION_URL"`. Without this, `FORCE` above is checking a box that the connecting role walks straight past.
+- [ ] Set `AISOC_APP_DB_PASSWORD` to a fresh secret before applying the migration chain, so the runtime role is never left on the `changeme` literal `002_rls.sql` created it with.
 - [ ] Set up an external log sink for the audit log (Splunk, Elastic, Loki) — the in-DB log is the source of truth, but a copy in your SIEM is good practice.
 - [ ] Configure `AISOC_TRUSTED_PROXIES` to the CIDR(s) of your ingress / load balancer so `actor_ip` is sourced from `X-Forwarded-For` instead of the immediate TCP peer. Leave empty if the API is exposed directly to clients.
 - [ ] Schedule a periodic `verify_chain()` job against an offsite read replica or a CSV export of the `audit_log` table and alert on any verification failure.

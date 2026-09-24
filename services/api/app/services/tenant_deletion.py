@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.clickhouse import execute_lake_query
+from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.neo4j import get_session as neo4j_session
 
 logger = logging.getLogger("aisoc.tenant_deletion")
@@ -154,9 +155,16 @@ async def _count_dependent_organizations(db: AsyncSession, tenant_id: uuid.UUID)
 async def purge_postgres(db: AsyncSession, tenant_id: uuid.UUID, *, dry_run: bool) -> StoreResult:
     result = StoreResult(store="postgres")
     try:
-        # Cross-tenant by design, and the predicate below is explicit, so RLS
-        # would only be able to hide rows we are required to delete.
-        await db.execute(text("SET LOCAL row_security = off"))
+        # Cross-tenant by design, and the predicate below is explicit, so a
+        # policy could only hide rows we are required to delete. An unbound
+        # session sees all of them through the ``OR current_tenant_id() IS
+        # NULL`` arm; a bound one would delete a fraction of the tenant's rows
+        # and report the deletion complete, which for this operation is a
+        # compliance claim rather than a log line.
+        #
+        # ``SET LOCAL row_security = off`` used to stand here and raises under
+        # the runtime role (``migrations/061_runtime_app_role.sql``).
+        await assert_cross_tenant_session(db, "tenant deletion purge")
         tables = await discover_tenant_tables(db)
 
         for table in tables:

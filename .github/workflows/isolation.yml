@@ -24,6 +24,15 @@ on:
       - "scripts/check_route_auth.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
+      # The runtime-DB-role gate reads these, so a change to any of them has
+      # to re-run it. A gate whose inputs are outside its own path filter is
+      # a gate that stops running exactly when somebody edits what it checks.
+      - "scripts/check_runtime_db_role.py"
+      - "scripts/check_rls_policy_shape.py"
+      - "docker-compose.yml"
+      - "infra/**"
+      - ".env.example"
+      - "render.yaml"
       - ".github/workflows/isolation.yml"
   pull_request:
     paths:
@@ -33,6 +42,15 @@ on:
       - "scripts/check_route_auth.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
+      # The runtime-DB-role gate reads these, so a change to any of them has
+      # to re-run it. A gate whose inputs are outside its own path filter is
+      # a gate that stops running exactly when somebody edits what it checks.
+      - "scripts/check_runtime_db_role.py"
+      - "scripts/check_rls_policy_shape.py"
+      - "docker-compose.yml"
+      - "infra/**"
+      - ".env.example"
+      - "render.yaml"
       - ".github/workflows/isolation.yml"
   # Matching isolation-live.yml, so a maintainer can run the isolation gate on
   # demand rather than only when a path filter happens to match.
@@ -135,6 +153,26 @@ jobs:
 
       - name: Every query on a tenant-scoped table filters on a tenant
         run: python scripts/check_tenant_query_predicates.py
+
+      # The second layer, which was decoration until 061_runtime_app_role.sql:
+      # every service connected as a superuser, and a superuser ignores RLS
+      # policies even under FORCE ROW LEVEL SECURITY. This is the static half —
+      # the deployment surfaces. integration.yml runs the live half against a
+      # real database, where the role's attributes can be read directly.
+      - name: Runtime-DB-role gate self-test (both directions)
+        run: python scripts/check_runtime_db_role.py --self-test
+
+      - name: No service connects as a role that can bypass RLS
+        run: python scripts/check_runtime_db_role.py
+
+      # The other way the second layer fails: a policy without the
+      # `OR current_tenant_id() IS NULL` arm makes every cross-tenant worker
+      # see zero rows and report success. Silent, and worse than the bypass.
+      - name: Policy-shape gate self-test (both directions)
+        run: python scripts/check_rls_policy_shape.py --self-test
+
+      - name: Every RLS policy admits an unbound session and reads the GUC the tree sets
+        run: python scripts/check_rls_policy_shape.py
 
       - name: Start Redis for the two-tenant route replay
         run: |

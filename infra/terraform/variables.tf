@@ -55,10 +55,21 @@ variable "rds_instance_class" {
 }
 
 variable "db_username" {
-  description = "PostgreSQL master username"
+  description = "PostgreSQL master username. Owns the schema and applies migrations; no service connects as it."
   type        = string
   default     = "aisoc_admin"
   sensitive   = true
+}
+
+variable "db_app_username" {
+  description = <<-EOT
+    The DML-only role every service connects as. Created by
+    services/api/migrations/061_runtime_app_role.sql, which also constrains it to
+    NOSUPERUSER NOBYPASSRLS so the row-level-security policies actually apply.
+    Change this only if you also change the migration.
+  EOT
+  type        = string
+  default     = "aisoc_app"
 }
 
 variable "redis_node_type" {

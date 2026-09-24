@@ -67,6 +67,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.airgap import AirgapViolation
 from app.core.config import settings
+from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.models.case import Case
 from app.models.saved_hunt import SavedHunt
@@ -409,13 +410,20 @@ async def run_once(
     runner = executor or _execute_hunt
     fired = 0
     try:
-        # The DB session bound here doesn't carry an ``app.current_tenant_id``
-        # GUC, so RLS would block reads. Disable the row filter for the
-        # scheduler's sweep — we *want* cross-tenant visibility because the
-        # worker iterates every tenant's scheduled hunts. We re-bind the
-        # tenant before each per-hunt write to keep RLS enforcement intact
-        # for the case insert.
-        await db.execute(text("SET LOCAL row_security = off"))
+        # The sweep is cross-tenant on purpose: the worker iterates every
+        # tenant's scheduled hunts, then re-binds the tenant before each
+        # per-hunt write so the case insert is RLS-enforced.
+        #
+        # It used to open with ``SET LOCAL row_security = off``. That was only
+        # ever a no-op dressed as a control — it worked because the deployment
+        # connected as a superuser, and under the runtime role
+        # (``migrations/061_runtime_app_role.sql``) it raises "query would be
+        # affected by row-level security policy" on the first read *and* on
+        # every per-hunt write after the rebind. The unbound session already
+        # sees every tenant through the ``OR current_tenant_id() IS NULL`` arm;
+        # what matters is that nothing bound a tenant before we got here, which
+        # would quietly reduce the sweep to one tenant.
+        await assert_cross_tenant_session(db, "hunt scheduler sweep")
         rows = (await db.execute(select(SavedHunt).where(SavedHunt.schedule.is_not(None)))).scalars().all()
         for hunt in rows:
             if not _is_due(hunt, now):

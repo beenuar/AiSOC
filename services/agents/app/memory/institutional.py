@@ -25,11 +25,32 @@ from typing import Any
 
 import structlog
 
+from app.core.schema_bootstrap import ensure_table
+
 logger = structlog.get_logger()
 
 _FALLBACK: dict[str, Any] = {}
 
 _POOL: Any = None  # asyncpg.Pool | None
+
+#: Only used when the table is genuinely absent — normally it arrives with
+#: ``services/api/migrations/022_institutional_memory.sql``, which also gives
+#: it the RLS policy this copy cannot.
+_MEMORY_DDL = """
+CREATE TABLE IF NOT EXISTS aisoc_institutional_memory (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    value           JSONB NOT NULL,
+    tags            TEXT[] NOT NULL DEFAULT '{}',
+    analyst_override BOOLEAN NOT NULL DEFAULT FALSE,
+    override_reason TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, key)
+);
+CREATE INDEX IF NOT EXISTS aisoc_institutional_memory_tenant_key
+    ON aisoc_institutional_memory (tenant_id, key);
+"""
 
 
 def _normalise_dsn(url: str) -> str:
@@ -47,25 +68,14 @@ async def _get_pool() -> Any | None:
         import asyncpg  # type: ignore[import]
 
         pool = await asyncpg.create_pool(_normalise_dsn(dsn), min_size=1, max_size=3)
-        # Ensure table exists
+        # Probe before creating: the runtime role holds DML only, and
+        # `CREATE TABLE IF NOT EXISTS` checks the schema ACL before the
+        # existence test, so it raises even when the table is there. See
+        # app/core/schema_bootstrap.py.
         async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS aisoc_institutional_memory (
-                    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    tenant_id       TEXT NOT NULL,
-                    key             TEXT NOT NULL,
-                    value           JSONB NOT NULL,
-                    tags            TEXT[] NOT NULL DEFAULT '{}',
-                    analyst_override BOOLEAN NOT NULL DEFAULT FALSE,
-                    override_reason TEXT,
-                    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    UNIQUE (tenant_id, key)
-                );
-                CREATE INDEX IF NOT EXISTS aisoc_institutional_memory_tenant_key
-                    ON aisoc_institutional_memory (tenant_id, key);
-                """
-            )
+            if not await ensure_table(conn, "aisoc_institutional_memory", _MEMORY_DDL):
+                await pool.close()
+                return None
         _POOL = pool
         return _POOL
     except Exception as exc:

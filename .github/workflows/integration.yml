@@ -277,7 +277,15 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      # The two roles the default deployment ships, wired the same way here.
+      # DATABASE_URL is what every service connects as: DML only, and the RLS
+      # policies apply to it. DATABASE_MIGRATION_URL is the owner, used for DDL
+      # and nothing else. Wiring this job as a single superuser is what let 92
+      # RLS policies sit inert for months while the replay below went green
+      # against a role invented by the test.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      AISOC_APP_DB_PASSWORD: aisoc_app_ci_secret
       SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
       ENVIRONMENT: development
       AISOC_MIGRATIONS_STRICT: '1'
@@ -349,17 +357,25 @@ jobs:
       # replay runs here — the only job with a real database and the full
       # chain already applied.
       #
-      # It connects as a purpose-made role with neither SUPERUSER nor
-      # BYPASSRLS, because the role the services actually use is a superuser
-      # and would sail past every policy. That fact is itself asserted, so
-      # nobody can read a green tick here as "isolation is on in production".
+      # It reads as `DATABASE_URL`, which is the role the default deployment
+      # ships. It used to construct its own NOSUPERUSER NOBYPASSRLS role
+      # because the shipped one was a superuser that sailed past every policy;
+      # a green tick then proved a property of a role nothing ran as.
+      # 061_runtime_app_role.sql made the shipped role the one the policies are
+      # written for, so the replay now covers what ships.
       #
       # POSTGRES_RLS_ISOLATION_REQUIRED turns an unreachable database into a
       # failure rather than a skip, for the same reason as the job above.
-      - name: Postgres row-level security isolation (live, two tenants)
+      - name: Postgres row-level security isolation (live, two tenants, as the shipped role)
         env:
           POSTGRES_RLS_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/isolation/test_postgres_rls.py -v --tb=short
+
+      # The static half of this gate runs on every PR in security.yml. This is
+      # the half that can only be answered by a database: the role the
+      # deployment actually connects as, inspected in pg_roles and pg_class.
+      - name: Runtime DB role cannot bypass RLS (live)
+        run: python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL" --owner-dsn "$DATABASE_MIGRATION_URL"
 
       # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
       # env.py only needs `app.models.ueba` importable, so run in-place with
@@ -372,6 +388,7 @@ jobs:
         env:
           PYTHONPATH: .
           # Dedicated database so the SQL-runner schema above is untouched.
+          # aisoc-db-role: owner — alembic applies DDL and reads DATABASE_URL by its own convention
           DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/ueba_ci
         run: |
           set -euo pipefail
@@ -401,6 +418,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # aisoc-db-role: owner — pg_dump/pg_restore read and rewrite every table, including ones the runtime role cannot
       POSTGRES_URL: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
       BACKUP_S3_BUCKET: s3://aisoc-dr-test
       BACKUP_S3_PREFIX: ci-dr
@@ -600,6 +618,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # aisoc-db-role: owner — this job replays released migration chains, which is DDL from end to end
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
       SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
       ENVIRONMENT: development
