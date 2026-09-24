@@ -70,6 +70,7 @@ or compose override if you need LAN access.
 | `realtime` (Node WS + Web Push) | 8086 | 4000 | |
 | `connectors` (50-vendor poller) | 8088 | 8003 | `profiles: [connectors]` |
 | `osquery-tls` (host telemetry server) | 8091 | 8007 | `profiles: [osquery]` |
+| `litellm` (LLM gateway) | 4000 | 4000 | CORE — resolves every `aisoc-<role>` alias |
 | `web` (Next.js console + Responder PWA) | 3000 | 3000 | |
 
 `mcp` (the Model Context Protocol stdio server) runs without a port — it is

@@ -57,11 +57,11 @@ const MOCK_SOC_METRICS: SOCMetrics = {
 const MOCK_COST_AGGREGATE: CostAggregate = {
   window_days: 30,
   by_model: [
-    { model: "gpt-4o", runs: 312, calls: 1840, total_prompt_tokens: 4_620_000, total_completion_tokens: 890_000, total_cost_usd: 42.18, total_latency_ms: 7_360_000, avg_cost_per_run: 0.1352, avg_latency_per_call_ms: 4000 },
-    { model: "gpt-4o-mini", runs: 580, calls: 3200, total_prompt_tokens: 2_100_000, total_completion_tokens: 620_000, total_cost_usd: 4.86, total_latency_ms: 3_200_000, avg_cost_per_run: 0.0084, avg_latency_per_call_ms: 1000 },
-    { model: "claude-3.5-sonnet", runs: 145, calls: 870, total_prompt_tokens: 3_480_000, total_completion_tokens: 710_000, total_cost_usd: 29.61, total_latency_ms: 4_350_000, avg_cost_per_run: 0.2042, avg_latency_per_call_ms: 5000 },
+    { model: "gpt-4o", runs: 312, calls: 1840, total_prompt_tokens: 4_620_000, total_completion_tokens: 890_000, total_cost_usd: 42.18, measured_call_count: 1840, estimated_cost_usd: 0, estimated_call_count: 0, unpriced_call_count: 0, total_latency_ms: 7_360_000, avg_cost_per_run: 0.1352, avg_latency_per_call_ms: 4000 },
+    { model: "gpt-4o-mini", runs: 580, calls: 3200, total_prompt_tokens: 2_100_000, total_completion_tokens: 620_000, total_cost_usd: 4.86, measured_call_count: 3200, estimated_cost_usd: 0, estimated_call_count: 0, unpriced_call_count: 0, total_latency_ms: 3_200_000, avg_cost_per_run: 0.0084, avg_latency_per_call_ms: 1000 },
+    { model: "claude-3.5-sonnet", runs: 145, calls: 870, total_prompt_tokens: 3_480_000, total_completion_tokens: 710_000, total_cost_usd: 29.61, measured_call_count: 870, estimated_cost_usd: 0, estimated_call_count: 0, unpriced_call_count: 0, total_latency_ms: 4_350_000, avg_cost_per_run: 0.2042, avg_latency_per_call_ms: 5000 },
   ],
-  totals: { model: "all", runs: 1037, calls: 5910, total_prompt_tokens: 10_200_000, total_completion_tokens: 2_220_000, total_cost_usd: 76.65, total_latency_ms: 14_910_000, avg_cost_per_run: 0.0739, avg_latency_per_call_ms: 2523 },
+  totals: { model: "all", runs: 1037, calls: 5910, total_prompt_tokens: 10_200_000, total_completion_tokens: 2_220_000, total_cost_usd: 76.65, measured_call_count: 5910, estimated_cost_usd: 0, estimated_call_count: 0, unpriced_call_count: 0, total_latency_ms: 14_910_000, avg_cost_per_run: 0.0739, avg_latency_per_call_ms: 2523 },
 };
 
 function formatUsd(n: number): string {
@@ -508,7 +508,10 @@ function CostTelemetryPanel() {
             <KpiCard label="LLM Calls" value={totals.calls} />
             <KpiCard
               label="Avg $/Run"
-              value={formatUsd(totals.avg_cost_per_run)}
+              // null when nothing in the window was measured. A mean of an
+              // unmeasured zero is not a cost per run.
+              value={totals.avg_cost_per_run === null ? "—" : formatUsd(totals.avg_cost_per_run)}
+              hint={totals.avg_cost_per_run === null ? "not measured" : undefined}
             />
             <KpiCard
               label="Avg Latency/Call"

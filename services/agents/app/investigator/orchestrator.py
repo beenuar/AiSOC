@@ -32,6 +32,25 @@ from .state import InvestigatorState, StepKind
 
 logger = structlog.get_logger()
 
+
+def _ledger_cost_kwargs(cost_summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Map ``CostTracker.summary()`` onto :func:`ledger.complete_run`'s cost args.
+
+    ``.get(key)`` with no default on the two money keys is deliberate: a
+    missing summary means nothing was measured, and defaulting to ``0.0``
+    there is exactly the substitution this whole change exists to remove.
+    """
+    summary = cost_summary or {}
+    return {
+        "total_cost_usd": summary.get("measured_cost_usd"),
+        "measured_call_count": int(summary.get("measured_call_count") or 0),
+        "estimated_cost_usd": summary.get("estimated_cost_usd"),
+        "estimated_call_count": int(summary.get("estimated_call_count") or 0),
+        "unpriced_call_count": int(summary.get("unpriced_call_count") or 0),
+        "total_tokens": int(summary.get("total_tokens") or 0),
+    }
+
+
 try:
     from app.core.telemetry import get_tracer as _get_tracer
 
@@ -207,27 +226,47 @@ class InvestigatorOrchestrator:
                         content=final.report_md,
                     )
 
+                # Carry the run's spend to the ledger row. Every caller here
+                # omitted these, so `total_cost_usd` defaulted to 0.0 and the
+                # console rendered "$0.0000" for a deep investigation that had
+                # made real model calls — the same fiction as an invented
+                # figure, arrived at from the other direction.
                 await ledger.complete_run(
                     run_id=run_uuid,
                     tenant_id=tenant_uuid,
                     status=final.status,
                     error=final.error,
                     iterations=final.iteration,
+                    **_ledger_cost_kwargs(final.cost_summary),
                 )
 
             span.set_attribute("investigation.status", final.status)
             span.set_attribute("investigation.iterations", final.iteration)
             span.set_attribute("investigation.run_id", str(run_uuid))
             if final.cost_summary:
-                span.set_attribute("investigation.cost_usd", final.cost_summary.get("cost_usd", 0.0))
-                span.set_attribute("investigation.tokens_total", final.cost_summary.get("tokens_total", 0))
+                # These read `cost_usd` and `tokens_total`, two keys the
+                # summary has never emitted, so the span carried the `or 0`
+                # defaults on every run: a trace attribute asserting zero
+                # spend regardless of what was spent. The keys are now the
+                # ones `CostTracker.summary()` actually produces, and the
+                # count travels so a zero can be told from an absence.
+                # An OTel attribute cannot hold None, and a sentinel would be
+                # a second invented number, so an unmeasured run simply has no
+                # cost attribute. The call count is always set, so a reader can
+                # tell "nothing measured" from "attribute dropped".
+                measured = final.cost_summary.get("measured_cost_usd")
+                if measured is not None:
+                    span.set_attribute("investigation.measured_cost_usd", measured)
+                span.set_attribute("investigation.measured_call_count", final.cost_summary.get("measured_call_count", 0))
+                span.set_attribute("investigation.tokens_total", final.cost_summary.get("total_tokens", 0))
             logger.info(
                 "investigation.end",
                 case_id=case_id,
                 run_id=str(run_uuid),
                 status=final.status,
                 iterations=final.iteration,
-                cost_usd=final.cost_summary.get("cost_usd") if final.cost_summary else None,
+                measured_cost_usd=final.cost_summary.get("measured_cost_usd") if final.cost_summary else None,
+                measured_call_count=final.cost_summary.get("measured_call_count") if final.cost_summary else None,
             )
             return final
 
@@ -346,6 +385,7 @@ class InvestigatorOrchestrator:
                         status=last_state.status,
                         error=last_state.error,
                         iterations=last_state.iteration,
+                        **_ledger_cost_kwargs(cost_summary),
                     )
                 yield {
                     "type": "done",

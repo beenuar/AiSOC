@@ -129,6 +129,25 @@ docker compose up -d
 docker compose ps
 ```
 
+**What this gives you about AI.** `docker compose up -d` starts the CORE
+profile, which includes the `litellm` LLM gateway. AiSOC asks for logical task
+aliases (`aisoc-triage`, `aisoc-investigation`, …) and the gateway is the only
+thing that resolves them, so it has to be running for AI triage to happen at
+all — it was a `full`-profile service until 2026-09, which meant this exact
+command could not do AI triage even with the key you just set
+([ADR-0006](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0006-llm-gateway-in-core.md)).
+
+- **With a provider key** in `.env`: alerts are triaged by the AI, and the
+  cost dashboard reports what each call actually cost, because the gateway
+  reports it.
+- **Without one**: the gateway still boots and the stack is healthy, but no
+  LLM call is made. Every alert is triaged by the deterministic path and the
+  console labels it as such. Nothing pretends the AI ran.
+
+Path A above needs no gateway: the demo compose pins every role to a concrete
+provider model, and a concrete pin goes straight to the provider rather than
+through the gateway.
+
 This starts the full set of services:
 
 - **PostgreSQL** (5432) · **Redis** (6379) · **Kafka** (9092)

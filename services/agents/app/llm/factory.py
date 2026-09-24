@@ -32,6 +32,7 @@ from typing import Any
 
 from langchain_openai import ChatOpenAI
 
+from app.core.gateway_cost import INCLUDE_HEADERS_PARAM
 from app.llm.contract import DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
 from app.llm.model_pins import get_pin
 
@@ -140,6 +141,13 @@ def make_chat_model(
     api_key = (override or {}).get("api_key") or resolve_api_key(model)
     if api_key:
         params["api_key"] = api_key
+    # Keep the response headers. The gateway reports what it resolved the
+    # alias to and what the call actually cost on them, and without this flag
+    # `response_metadata` has no `headers` key at all — so the cost tracker
+    # had nothing to read and priced the *alias* against a hosted price table,
+    # billing a free local run. See app/core/gateway_cost.py.
+    if INCLUDE_HEADERS_PARAM in getattr(ChatOpenAI, "model_fields", {}):
+        params.setdefault(INCLUDE_HEADERS_PARAM, True)
     params.update(kwargs)
     return ChatOpenAI(**params)
 

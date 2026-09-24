@@ -8,8 +8,8 @@ logic and not Postgres / SQLAlchemy plumbing.
 The tests deliberately cover:
 
 * daily bucketing across UTC midnight (timezone correctness)
-* per-model aggregation, including unknown models that fall back to the
-  default public-list price
+* per-model aggregation, including models with no public list price, which
+  impute nothing rather than falling back to a default rate
 * top-cost case ranking with ties broken deterministically by ``case_id``
 * action-count ordering (most-common first) and the limit clamp
 * BYOK savings semantics:
@@ -51,25 +51,39 @@ def _cost(
     latency_ms: float = 250.0,
     call_count: int = 1,
     started_at: datetime | None = None,
+    measured_call_count: int | None = None,
+    estimated_cost_usd: float = 0.0,
+    estimated_call_count: int = 0,
+    unpriced_call_count: int = 0,
+    resolved_model: str | None = None,
 ) -> CostRow:
     """Builder that fills sensible defaults for a CostRow.
 
     When ``cost_usd`` is omitted we fall back to the imputed public cost so a
     test that wants "what a hosted call would have charged" can drop into
     the constructor without recomputing pricing by hand.
+
+    ``measured_call_count`` defaults to ``call_count``, i.e. these rows stand
+    for gateway-measured spend. Pass ``0`` to build the row shape that every
+    pre-migration-063 row has: a cost figure with nothing vouching for it.
     """
     if cost_usd is None:
-        cost_usd = _impute_public_cost(model, prompt_tokens, completion_tokens)
+        cost_usd = _impute_public_cost(model, prompt_tokens, completion_tokens) or 0.0
     return CostRow(
         run_id=run_id or str(uuid.uuid4()),
         case_id=case_id,
         model=model,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        cost_usd=cost_usd,
+        measured_cost_usd=cost_usd,
         latency_ms=latency_ms,
         call_count=call_count,
         started_at=started_at or PERIOD_START + timedelta(hours=1),
+        measured_call_count=(call_count if measured_call_count is None else measured_call_count),
+        estimated_cost_usd=estimated_cost_usd,
+        estimated_call_count=estimated_call_count,
+        unpriced_call_count=unpriced_call_count,
+        resolved_model=resolved_model,
     )
 
 
@@ -84,11 +98,26 @@ def test_impute_public_cost_known_model() -> None:
     assert cost == pytest.approx(0.00015 + 0.0003, rel=1e-9)
 
 
-def test_impute_public_cost_unknown_model_uses_default() -> None:
-    # Unknown model falls back to the conservative default, not zero, so we
-    # never silently report 100% savings on a bespoke local model.
-    cost = _impute_public_cost("super-secret-llm", 1000, 1000)
-    assert cost > 0
+def test_impute_public_cost_unknown_model_imputes_nothing() -> None:
+    """An unknown model has no price, and a default rate is not one.
+
+    This test used to assert the opposite — ``cost > 0`` — on the reasoning
+    that a default was "conservative" and stopped us reporting 100% savings
+    on a bespoke local model. The reasoning had it backwards. The agents
+    service records the ``aisoc-<role>`` alias it *requested*, and an alias
+    is in no price table, so the default applied to essentially every row:
+    the "imputed list price" was a made-up rate for a made-up model, and a
+    903-token local completion booked $0.000999 of spend that never existed.
+    ``None`` is the honest answer and the caller counts the row as unpriced.
+    """
+    assert _impute_public_cost("super-secret-llm", 1000, 1000) is None
+    assert _impute_public_cost("aisoc-triage", 1_000_000, 1_000_000) is None
+    assert _impute_public_cost("ollama/qwen2:1.5b", 1_000_000, 1_000_000) is None
+
+
+def test_impute_public_cost_strips_a_provider_prefix() -> None:
+    """The gateway names a resolved model ``openai/gpt-4o-mini``."""
+    assert _impute_public_cost("openai/gpt-4o-mini", 1000, 500) == pytest.approx(_impute_public_cost("gpt-4o-mini", 1000, 500))
 
 
 def test_impute_public_cost_negative_token_counts_clamped() -> None:
@@ -286,6 +315,11 @@ def test_byok_savings_empty_rows() -> None:
     savings_fn = _internal_helpers["_byok_savings"]
     result = savings_fn([], LlmContext(provider="none", is_local=False))
     assert result.recorded_cost_usd == 0.0
+    # Nothing to measure and nothing to price: both are unknown, not zero.
+    assert result.recorded_is_measured is False
+    # 0.0 with the flag off, not None: nullable would break every generated
+    # SDK client for a fact the flag already carries (the MTTR precedent).
+    assert result.imputed_is_estimable is False
     assert result.imputed_public_cost_usd == 0.0
     assert result.savings_usd == 0.0
 
@@ -335,12 +369,14 @@ def test_build_dashboard_empty_inputs_is_well_formed() -> None:
     assert dashboard.tenant_id == TENANT_ID
     assert dashboard.period.window_days == 7
     assert dashboard.headline.total_cost_usd == 0.0
+    assert dashboard.headline.measured_call_count == 0, "zero rows measured nothing"
     assert dashboard.daily_costs == []
     assert dashboard.by_model == []
     assert dashboard.top_cases == []
     assert dashboard.action_counts == []
     # BYOK panel is always present so the UI doesn't have to special-case it.
     assert dashboard.byok_savings.is_byok_active is False
+    assert dashboard.byok_savings.imputed_is_estimable is False
     assert dashboard.byok_savings.savings_usd == 0.0
 
 

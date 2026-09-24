@@ -190,17 +190,29 @@ class InvestigatorState(BaseModel):
         *,
         prompt_hash: str | None = None,
         model: str | None = None,
+        resolved_model: str | None = None,
         tokens_used: int = 0,
         latency_ms: int = 0,
-        cost_usd: float = 0.0,
+        cost_usd: float | None = None,
+        cost_source: str = "unpriced",
     ) -> str:
-        """Record the literal LLM response. Returns the output hash."""
+        """Record the literal LLM response. Returns the output hash.
+
+        ``cost_usd`` is ``None`` when nothing could price the call, and the
+        ledger entry says so via ``cost_source`` rather than recording a
+        confident ``0.0``. It defaulted to ``0.0`` while the only writer fed
+        it a list-price guess against a gateway alias, so the ledger asserted
+        a cost for every call and the cheapest-looking ones were the ones
+        nothing had measured.
+        """
         output_hash = _stable_hash(response)
         meta = {
             "response": response[:8000],
             "model": model,
+            "resolved_model": resolved_model,
             "tokens_used": tokens_used,
             "cost_usd": cost_usd,
+            "cost_source": cost_source,
             "prompt_hash": prompt_hash,
         }
         self.audit_log.append(

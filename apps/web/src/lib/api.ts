@@ -1842,7 +1842,12 @@ export interface LedgerRunSummary {
   model_used: string | null;
   iterations: number;
   total_tokens: number;
+  /** Measured (gateway-reported) spend; 0 with a 0 count means unmeasured. */
   total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
   started_at: string;
   completed_at: string | null;
   error: string | null;
@@ -1850,9 +1855,15 @@ export interface LedgerRunSummary {
 
 export interface LedgerModelCost {
   model: string;
+  /** What the gateway resolved ``model`` to; ``model`` is often an alias. */
+  resolved_model: string | null;
   total_prompt_tokens: number;
   total_completion_tokens: number;
   total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
   total_latency_ms: number;
   call_count: number;
 }
@@ -2110,7 +2121,12 @@ export interface CostAggregateRow {
   total_prompt_tokens: number;
   total_completion_tokens: number;
   total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
   total_latency_ms: number;
+  /** Read with ``measured_call_count``: zero there means this is not a mean. */
   avg_cost_per_run: number;
   avg_latency_per_call_ms: number;
 }
@@ -5375,36 +5391,66 @@ export interface DashboardPeriod {
 }
 
 export interface CostHeadline {
-  /** Sum of recorded LLM cost in USD over the window. */
+  /**
+   * **Measured** LLM cost in USD — what the gateway reported it charged.
+   * Only meaningful when ``measured_call_count > 0``: a zero there means
+   * nothing measured this window, which is not the same as a free one.
+   */
   total_cost_usd: number;
+  /** Calls the measured sum was computed over. 0 ⇒ render "not measured". */
+  measured_call_count: number;
+  /** List-price estimate for calls the gateway did not price. Label it. */
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  /** Calls nothing could price at all. */
+  unpriced_call_count: number;
   /** Sum of prompt + completion tokens. */
   total_tokens: number;
   /** Total LLM API call count (one row in aisoc_run_costs ≈ one call). */
   total_calls: number;
   /** Distinct investigation_runs that produced cost in the window. */
   total_runs: number;
-  /** Mean cost per run; null when no runs landed in the window. */
+  /** Mean measured cost per run; null when nothing was measured. */
   avg_cost_per_run_usd: number | null;
 }
 
 export interface CostBucket {
   /** Calendar day in UTC, ISO ``YYYY-MM-DD``. */
   day: string;
+  /** Measured cost for the day; see ``measured_call_count``. */
   total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
   total_tokens: number;
   call_count: number;
 }
 
 export interface ModelBreakdown {
-  /** Lowercased model id, e.g. ``gpt-4o-mini``. */
+  /** Lowercased model id as requested — usually an ``aisoc-<role>`` alias. */
   model: string;
+  /** What the gateway resolved that alias to, e.g. ``ollama/qwen2:1.5b``. */
+  resolved_model: string | null;
   runs: number;
   calls: number;
   total_prompt_tokens: number;
   total_completion_tokens: number;
+  /** Measured cost; see ``measured_call_count``. */
   total_cost_usd: number;
-  /** What this volume would have cost on the public list price. */
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  /**
+   * What this volume would have cost on the public list price. Read it with
+   * ``imputed_is_estimable``: false means the model has no published price
+   * and this is 0 because there is nothing to compute, not because it is free.
+   */
   imputed_public_cost_usd: number;
+  imputed_is_estimable: boolean;
+  /** Tokens the imputation had to skip, so partial coverage is visible. */
+  unpriced_tokens: number;
   avg_latency_ms: number | null;
 }
 
@@ -5412,6 +5458,9 @@ export interface TopCostCase {
   case_id: string;
   runs: number;
   total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
   total_tokens: number;
 }
 
@@ -5426,13 +5475,24 @@ export interface ByokSavings {
   is_byok_active: boolean;
   /** Provider id from /llm/status (e.g. ``openai``, ``local-ollama``). */
   provider: string;
-  /** Recorded cost — what the cost tracker actually booked. */
+  /** Measured cost — what the gateway reported. See ``recorded_is_measured``. */
   recorded_cost_usd: number;
-  /** Re-priced cost using public list pricing (BYOK-neutral baseline). */
+  /** False when nothing in the window was measured, so 0 means "unknown". */
+  recorded_is_measured: boolean;
+  /**
+   * Re-priced using public list pricing (BYOK-neutral baseline). There is no
+   * default rate: applying one to a gateway alias is what produced savings
+   * figures for spend that never happened.
+   */
   imputed_public_cost_usd: number;
+  /** False => no model in the window has a published price; render "—". */
+  imputed_is_estimable: boolean;
+  /** Tokens excluded from the imputation because nothing prices them. */
+  unpriced_tokens: number;
   /**
    * Estimated savings vs hosted: equals imputed_public_cost on BYOK,
-   * ``max(imputed - recorded, 0)`` otherwise.
+   * ``max(imputed - recorded, 0)`` otherwise. Meaningless unless
+   * ``imputed_is_estimable``.
    */
   savings_usd: number;
 }

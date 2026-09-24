@@ -65,7 +65,17 @@ class RunSummary(BaseModel):
     model_used: str | None
     iterations: int
     total_tokens: int
+    #: Measured (gateway-reported) spend. Trustworthy only when
+    #: ``measured_call_count > 0``; zero means *not measured*, which is what
+    #: every run recorded before migration 063 was, and what a deep
+    #: investigation was until this release passed the figure through at all.
     total_cost_usd: float
+    measured_call_count: int = 0
+    #: List-price estimate for the calls the gateway did not price. Presented
+    #: as an estimate, never added to ``total_cost_usd``.
+    estimated_cost_usd: float = 0.0
+    estimated_call_count: int = 0
+    unpriced_call_count: int = 0
     started_at: datetime
     completed_at: datetime | None
     error: str | None
@@ -80,9 +90,16 @@ class ModelCostBreakdown(BaseModel):
     """
 
     model: str
+    #: What the gateway resolved ``model`` to. ``model`` is usually a logical
+    #: alias, which is a request label rather than the thing billed.
+    resolved_model: str | None = None
     total_prompt_tokens: int
     total_completion_tokens: int
     total_cost_usd: float
+    measured_call_count: int = 0
+    estimated_cost_usd: float = 0.0
+    estimated_call_count: int = 0
+    unpriced_call_count: int = 0
     total_latency_ms: int
     call_count: int
 
@@ -105,7 +122,16 @@ class CostAggregateRow(BaseModel):
     total_prompt_tokens: int
     total_completion_tokens: int
     total_cost_usd: float
+    measured_call_count: int = 0
+    estimated_cost_usd: float = 0.0
+    estimated_call_count: int = 0
+    unpriced_call_count: int = 0
     total_latency_ms: int
+    #: A mean of an unmeasured zero is not a cost per run, it is the absence
+    #: of one. Read it with ``measured_call_count``: zero there means this is
+    #: not a mean of anything and the console must not render it as a cost.
+    #: Kept non-nullable on the MTTR precedent — making it optional breaks
+    #: every generated SDK client for a fact the count already carries.
     avg_cost_per_run: float
     avg_latency_per_call_ms: float
 
@@ -172,6 +198,27 @@ class ExplainResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _export_cost_cell(run: InvestigationRun) -> str:
+    """The cost row of an exported summary, or why there is not one.
+
+    The row was headed "Estimated cost (USD)" and printed
+    ``${run.total_cost_usd:.4f}`` unconditionally, so an exported PDF that
+    reached a customer asserted a dollar figure for every run — including
+    deep investigations, which never wrote the column at all and therefore
+    all reported ``$0.0000``. Measured spend is now printed as spend, an
+    estimate is printed as an estimate, and an unmeasured run says so.
+    """
+    measured_calls = int(getattr(run, "measured_call_count", 0) or 0)
+    if measured_calls:
+        plural = "s" if measured_calls != 1 else ""
+        return f"${float(run.total_cost_usd):.4f} (measured over {measured_calls} call{plural})"
+    estimated_calls = int(getattr(run, "estimated_call_count", 0) or 0)
+    if estimated_calls:
+        plural = "s" if estimated_calls != 1 else ""
+        return f"~${float(run.estimated_cost_usd):.4f} (list-price estimate, {estimated_calls} call{plural}, not billed)"
+    return "not measured"
+
+
 def _run_to_summary(run: InvestigationRun) -> RunSummary:
     return RunSummary(
         id=run.id,
@@ -181,6 +228,10 @@ def _run_to_summary(run: InvestigationRun) -> RunSummary:
         iterations=run.iterations,
         total_tokens=run.total_tokens,
         total_cost_usd=float(run.total_cost_usd),
+        measured_call_count=int(run.measured_call_count or 0),
+        estimated_cost_usd=float(run.estimated_cost_usd or 0),
+        estimated_call_count=int(run.estimated_call_count or 0),
+        unpriced_call_count=int(run.unpriced_call_count or 0),
         started_at=run.started_at,
         completed_at=run.completed_at,
         error=run.error,
@@ -232,7 +283,8 @@ def _aggregate_row(row: RowMapping) -> CostAggregateRow:
     """
     runs = int(row["runs"] or 0)
     calls = int(row["calls"] or 0)
-    cost = float(row["total_cost_usd"] or 0.0)
+    cost = float(row["measured_cost_usd"] or 0.0)
+    measured_calls = int(row["measured_call_count"] or 0)
     latency = int(row["total_latency_ms"] or 0)
     return CostAggregateRow(
         model=row["model"],
@@ -241,8 +293,14 @@ def _aggregate_row(row: RowMapping) -> CostAggregateRow:
         total_prompt_tokens=int(row["total_prompt_tokens"] or 0),
         total_completion_tokens=int(row["total_completion_tokens"] or 0),
         total_cost_usd=cost,
+        measured_call_count=measured_calls,
+        estimated_cost_usd=float(row["estimated_cost_usd"] or 0.0),
+        estimated_call_count=int(row["estimated_call_count"] or 0),
+        unpriced_call_count=int(row["unpriced_call_count"] or 0),
         total_latency_ms=latency,
-        avg_cost_per_run=(cost / runs) if runs else 0.0,
+        # 0.0 when nothing was measured, qualified by measured_call_count
+        # above — the console must not render it as a cost per run.
+        avg_cost_per_run=((cost / runs) if runs else 0.0) if measured_calls else 0.0,
         avg_latency_per_call_ms=(latency / calls) if calls else 0.0,
     )
 
@@ -264,14 +322,19 @@ async def _fetch_model_costs(
         text(
             """
             SELECT model,
+                   resolved_model,
                    total_prompt_tokens,
                    total_completion_tokens,
-                   total_cost_usd,
+                   measured_cost_usd,
+                   measured_call_count,
+                   estimated_cost_usd,
+                   estimated_call_count,
+                   unpriced_call_count,
                    total_latency_ms,
                    call_count
             FROM aisoc_run_costs
             WHERE run_id = :run_id
-            ORDER BY total_cost_usd DESC, model ASC
+            ORDER BY measured_cost_usd DESC, estimated_cost_usd DESC, model ASC
             """
         ),
         {"run_id": str(run_id)},
@@ -280,9 +343,14 @@ async def _fetch_model_costs(
     return [
         ModelCostBreakdown(
             model=row["model"],
+            resolved_model=(str(row["resolved_model"]) if row["resolved_model"] else None),
             total_prompt_tokens=int(row["total_prompt_tokens"] or 0),
             total_completion_tokens=int(row["total_completion_tokens"] or 0),
-            total_cost_usd=float(row["total_cost_usd"] or 0.0),
+            total_cost_usd=float(row["measured_cost_usd"] or 0.0),
+            measured_call_count=int(row["measured_call_count"] or 0),
+            estimated_cost_usd=float(row["estimated_cost_usd"] or 0.0),
+            estimated_call_count=int(row["estimated_call_count"] or 0),
+            unpriced_call_count=int(row["unpriced_call_count"] or 0),
             total_latency_ms=int(row["total_latency_ms"] or 0),
             call_count=int(row["call_count"] or 0),
         )
@@ -358,14 +426,18 @@ async def aggregate_costs(
                        SUM(c.call_count)              AS calls,
                        SUM(c.total_prompt_tokens)     AS total_prompt_tokens,
                        SUM(c.total_completion_tokens) AS total_completion_tokens,
-                       SUM(c.total_cost_usd)          AS total_cost_usd,
+                       SUM(c.measured_cost_usd)       AS measured_cost_usd,
+                       SUM(c.measured_call_count)     AS measured_call_count,
+                       SUM(c.estimated_cost_usd)      AS estimated_cost_usd,
+                       SUM(c.estimated_call_count)    AS estimated_call_count,
+                       SUM(c.unpriced_call_count)     AS unpriced_call_count,
                        SUM(c.total_latency_ms)        AS total_latency_ms
                 FROM aisoc_run_costs c
                 JOIN investigation_runs r ON r.id::text = c.run_id
                 WHERE r.tenant_id = :tenant_id
                   AND r.started_at >= now() - make_interval(days => :window_days)
                 GROUP BY GROUPING SETS ((c.model), ())
-                ORDER BY GROUPING(c.model), SUM(c.total_cost_usd) DESC
+                ORDER BY GROUPING(c.model), SUM(c.measured_cost_usd) DESC
                 """
                 ),
                 {
@@ -865,7 +937,7 @@ def _build_summary_markdown(
         |--------|-------|
         | Iterations | {run.iterations} |
         | Total tokens | {run.total_tokens:,} |
-        | Estimated cost (USD) | ${float(run.total_cost_usd):.4f} |
+        | LLM cost (USD) | {_export_cost_cell(run)} |
         | Events recorded | {len(events)} |
 
         ## Event Kind Breakdown

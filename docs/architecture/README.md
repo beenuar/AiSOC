@@ -112,6 +112,7 @@ flowchart LR
         rt["services/realtime<br/>TS · :8086"]
         agt["services/agents<br/>Python · :8084"]
         web["apps/web<br/>Next.js · :3000"]
+        llm["litellm<br/>LLM gateway · :4000"]
     end
 
     subgraph full ["full profile — optional"]
@@ -134,6 +135,8 @@ flowchart LR
     kafd --> rt
     kafd --> agt
     agt --> pg
+    agt -->|"aisoc-&lt;role&gt; alias"| llm
+    api --> llm
     api --> pg
     api -.-> ch
     api -.-> neo

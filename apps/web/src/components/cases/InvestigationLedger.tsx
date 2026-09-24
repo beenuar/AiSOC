@@ -528,8 +528,7 @@ function RunSummaryCard({
         value={
           <span>
             {run.total_tokens.toLocaleString()}{' '}
-            <span className="text-slate-500">·</span>{' '}
-            ${run.total_cost_usd.toFixed(4)}
+            <span className="text-slate-500">·</span> {formatRunCost(run)}
           </span>
         }
       />
@@ -568,11 +567,15 @@ function RunSummaryCard({
  * Sorted by spend descending so the most expensive model surfaces first.
  */
 function ModelCostsCard({ costs }: { costs: LedgerModelCost[] }) {
-  // Defensive sort — backend already orders by total_cost_usd DESC, but a
+  // Defensive sort — backend already orders by measured cost DESC, but a
   // future caller could pass an arbitrary list and we want the UI invariant
-  // (most expensive first) to hold regardless.
+  // (most expensive first) to hold regardless. Falls through to the estimate
+  // so a run with nothing measured still orders by the best figure there is.
   const sorted = useMemo(
-    () => [...costs].sort((a, b) => b.total_cost_usd - a.total_cost_usd),
+    () =>
+      [...costs].sort(
+        (a, b) => b.total_cost_usd - a.total_cost_usd || b.estimated_cost_usd - a.estimated_cost_usd,
+      ),
     [costs],
   );
 
@@ -603,6 +606,9 @@ function ModelCostsCard({ costs }: { costs: LedgerModelCost[] }) {
               <tr key={c.model} className="text-slate-300">
                 <td className="px-3 py-2 font-mono text-[11px] text-slate-200">
                   {c.model}
+                  {c.resolved_model && (
+                    <span className="block text-[10px] text-slate-500">→ {c.resolved_model}</span>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right">{c.call_count.toLocaleString()}</td>
                 <td className="px-3 py-2 text-right">
@@ -612,7 +618,7 @@ function ModelCostsCard({ costs }: { costs: LedgerModelCost[] }) {
                   {c.total_completion_tokens.toLocaleString()}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
-                  ${c.total_cost_usd.toFixed(4)}
+                  {formatModelCost(c)}
                 </td>
                 <td className="px-3 py-2 text-right text-slate-400">
                   {formatLatencyMs(c.total_latency_ms)}
@@ -624,6 +630,28 @@ function ModelCostsCard({ costs }: { costs: LedgerModelCost[] }) {
       </div>
     </div>
   );
+}
+
+/**
+ * A run's cost cell: measured money, a labelled estimate, or "not measured".
+ *
+ * It read `$${run.total_cost_usd.toFixed(4)}` unconditionally. Deep
+ * investigations never wrote that column at all, so every one of them showed
+ * `$0.0000` next to a real token count, and auto-triage runs showed a
+ * list-price guess made against a gateway alias. Both were a dollar figure
+ * the product could not support.
+ */
+function formatRunCost(run: LedgerRunSummary): string {
+  if (run.measured_call_count > 0) return `$${run.total_cost_usd.toFixed(4)}`;
+  if (run.estimated_call_count > 0) return `~$${run.estimated_cost_usd.toFixed(4)} est.`;
+  return 'cost not measured';
+}
+
+/** Same three-way rule for one model's row in the per-model breakdown. */
+function formatModelCost(c: LedgerModelCost): string {
+  if (c.measured_call_count > 0) return `$${c.total_cost_usd.toFixed(4)}`;
+  if (c.estimated_call_count > 0) return `~$${c.estimated_cost_usd.toFixed(4)} est.`;
+  return '—';
 }
 
 /** Compact human-friendly latency string. ms under 1s, seconds otherwise. */

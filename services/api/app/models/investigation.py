@@ -54,7 +54,17 @@ class InvestigationRun(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
     error: Mapped[str | None] = mapped_column(Text)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: Measured (gateway-reported) cost only — see migration 063. Trustworthy
+    #: only when ``measured_call_count > 0``; a row with a zero count holds
+    #: either a pre-063 list-price guess or nothing at all, and both must read
+    #: as "not measured" rather than as a free run.
     total_cost_usd: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False, default=0)
+    measured_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: List-price estimate for calls the gateway did not price. Always
+    #: presented as an estimate, never merged into ``total_cost_usd``.
+    estimated_cost_usd: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False, default=0)
+    estimated_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unpriced_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

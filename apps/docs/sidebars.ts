@@ -187,6 +187,7 @@ const sidebars: SidebarsConfig = {
         "operations/airgap",
         "operations/air-gapped",
         "operations/llm-gateway",
+        "operations/llm-cost",
         "operations/codespaces",
         "operations/theming",
         "operations/upgrades",

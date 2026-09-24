@@ -202,7 +202,11 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
             step="report_writer",
             tool="llm.report_writer",
         )
-        cost_usd = call_record.cost_usd if call_record is not None else 0.0
+        # None when nothing could price the call — see app/core/gateway_cost.py.
+        # Not 0.0: an unpriced call is not a free one.
+        cost_usd = call_record.cost_usd if call_record is not None else None
+        cost_source = call_record.cost_source if call_record is not None else "unpriced"
+        resolved_model = call_record.resolved_model if call_record is not None else None
         state.log_llm_response(
             agent="ReportWriterAgent",
             response=state.report_md if isinstance(state.report_md, str) else str(state.report_md),
@@ -211,6 +215,8 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
             tokens_used=tokens,
             latency_ms=latency_ms,
             cost_usd=cost_usd,
+            cost_source=cost_source,
+            resolved_model=resolved_model,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("report_writer llm failed", error=str(exc))
