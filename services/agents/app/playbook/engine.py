@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 
+from . import action_bridge
 from .bounds import clamp_timeout
 from .models import Playbook, PlaybookStep, StepCondition, StepType
 from .ssrf_guard import SSRFError, validate_outbound_url
@@ -81,6 +82,11 @@ class PlaybookRun:
         self.trigger_context: dict[str, Any] = trigger_context
         # Accumulated output from previous steps — available to later steps as {{prev.*}}
         self.context: dict[str, Any] = dict(trigger_context)
+        # Under an engine-reserved key so it cannot be overwritten by a step
+        # result flattened into the context. A response action's audit record
+        # names the run it came from, and losing that mid-run would leave an
+        # isolated host with no trace of what asked for it.
+        self.context["_run_id"] = self.run_id
         self.step_results: list[dict[str, Any]] = []
         self.started_at: str = ""
         self.finished_at: str = ""
@@ -389,18 +395,120 @@ async def _handle_http(step: PlaybookStep, context: dict[str, Any], http: httpx.
     return {"status": r.status_code, "body": r.text[:500]}
 
 
-async def _handle_block_ip(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    ip = step.params.get("ip") or context.get("src_ip", "")
-    return {"action": "block_ip", "ip": ip, "simulated": True}
+# ---------------------------------------------------------------------------
+# Response steps — the bridge to governed dispatch
+# ---------------------------------------------------------------------------
+#
+# Fifteen step types name a verb that changes somebody's estate. Three of them
+# used to be answered here with ``{"simulated": True}`` and reached no executor
+# at all; the other twelve had no handler. `services/actions` has held working
+# executors for fourteen of the fifteen the whole time, behind a contract that
+# declares each verb's impact, reversibility, approval requirement and whether
+# a probe exists to confirm the effect landed.
+#
+# Each of these steps is now one governed dispatch, graded on its own
+# capability. A playbook is not approved as a unit: authorising the playbook
+# cannot authorise whatever its steps happen to contain, because the contract
+# is applied per step at the far end.
+#
+# `approval` is the one verb that is not bridged, and the reason is recorded
+# at its entry in ``_UNBRIDGEABLE`` rather than papered over with a handler.
 
 
-async def _handle_isolate_host(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    host = step.params.get("host") or context.get("host", "")
-    return {"action": "isolate_host", "host": host, "simulated": True}
+#: Where each verb's target lives, in the order it should be looked for:
+#: first the step's own params, then the trigger context. A verb with no
+#: natural scalar target (the details ride in ``params``) maps to ``()``.
+_TARGET_KEYS: dict[StepType, tuple[str, ...]] = {
+    StepType.BLOCK_IP: ("ip", "address", "src_ip", "source_ip"),
+    StepType.BLOCK_IOC: ("ioc", "indicator", "hash", "domain", "ip"),
+    StepType.ISOLATE_HOST: ("host", "hostname", "device_id", "host_id"),
+    StepType.KILL_PROCESS: ("host", "hostname", "device_id", "host_id"),
+    StepType.QUARANTINE_FILE: ("host", "hostname", "device_id", "host_id"),
+    StepType.RUN_AV_SCAN: ("host", "hostname", "device_id", "host_id"),
+    StepType.RUN_SCRIPT: ("host", "hostname", "device_id", "host_id"),
+    StepType.DISABLE_USER: ("user", "username", "user_id", "upn", "email"),
+    StepType.RESET_PASSWORD: ("user", "username", "user_id", "upn", "email"),
+    StepType.REVOKE_SESSION: ("user", "username", "user_id", "upn", "email"),
+    StepType.FORCE_MFA: ("user", "username", "user_id", "upn", "email"),
+    StepType.SEARCH_SIEM: ("query", "search"),
+    StepType.CREATE_NOTABLE_EVENT: ("title", "name"),
+    StepType.CREATE_TICKET: (),
+}
+
+#: Step types that name a verb but deliberately have no bridge, with the
+#: reason. The engine reports the reason instead of a bare "no handler", and
+#: the schema's ``x-aisoc-execution`` map records the same state, so an author
+#: can tell before writing the playbook rather than after running it.
+_UNBRIDGEABLE: dict[StepType, str] = {
+    StepType.APPROVAL: (
+        "an approval step is a pause, and this engine is a single-threaded "
+        "index walk with no pause or resume — there is nothing to suspend and "
+        "nothing to wake. It is also no longer the mechanism: every response "
+        "step is now graded against its own capability contract at dispatch "
+        "and returns 'pending_approval' on its own when a human is required, "
+        "so an approval step in front of one would gate a decision that is "
+        "already gated. Remove it, or hold the action in the actions service, "
+        "which does queue for an analyst."
+    ),
+}
 
 
-async def _handle_create_ticket(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    return {"action": "create_ticket", "params": step.params, "simulated": True}
+def _resolve_target(step: PlaybookStep, context: dict[str, Any]) -> str:
+    """First non-empty target for this verb, from params then context."""
+    for key in _TARGET_KEYS.get(step.type, ()):
+        for source in (step.params, context):
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
+def _resolve_confidence(step: PlaybookStep, context: dict[str, Any]) -> float | None:
+    """How good the reason for acting is, as a 0..1 fraction.
+
+    Alerts carry confidence as an integer 0-100 and the agent carries it as a
+    fraction, so both spellings arrive here. ``None`` is returned when there
+    is no score at all rather than a default, because the approval matrix
+    treats a missing score as the lowest band and inventing a middling one
+    would quietly raise what an unscored action is allowed to do.
+    """
+    for source in (step.params, context):
+        raw = source.get("confidence")
+        if isinstance(raw, bool) or raw is None:
+            continue
+        if isinstance(raw, int | float):
+            value = float(raw)
+            return min(1.0, value / 100.0) if value > 1.0 else max(0.0, value)
+    return None
+
+
+def _make_response_handler(step_type: StepType):
+    """Build the handler for one response verb.
+
+    One factory rather than fifteen near-identical functions: the verb is the
+    only thing that differs, and fifteen copies is fifteen chances for one of
+    them to drift into doing something the contract did not grade.
+    """
+
+    async def _handler(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
+        report = await action_bridge.dispatch_step(
+            capability=step_type.value,
+            tenant_id=str(context.get("tenant_id") or ""),
+            target=_resolve_target(step, context),
+            params=dict(step.params),
+            vendor_id=str(step.params.get("vendor") or step.params.get("vendor_id") or ""),
+            confidence=_resolve_confidence(step, context),
+            playbook_run_id=str(context.get("_run_id") or ""),
+            playbook_step_id=step.id,
+        )
+        # Returned verbatim. `executed` is the single field that means a
+        # vendor was touched, and the run loop reads it rather than assuming
+        # that a handler which returned at all did its job.
+        return report
+
+    _handler.__name__ = f"_handle_{step_type.value}"
+    _handler.__qualname__ = _handler.__name__
+    return _handler
 
 
 async def _handle_close_case(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
@@ -522,16 +630,19 @@ async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any]
         return {"error": str(exc), "partial": True, "stub": True}
 
 
+#: Verbs dispatched through the action registry. Derived from `_TARGET_KEYS`
+#: so the two cannot drift: a verb added to one without the other would
+#: either dispatch with no target or declare a target nothing reads.
+RESPONSE_STEP_TYPES: frozenset[StepType] = frozenset(_TARGET_KEYS)
+
 _HANDLERS = {
     StepType.ENRICH: _handle_enrich,
     StepType.INVESTIGATE: _handle_investigate,
     StepType.NOTIFY: _handle_notify,
     StepType.HTTP: _handle_http,
-    StepType.BLOCK_IP: _handle_block_ip,
-    StepType.ISOLATE_HOST: _handle_isolate_host,
-    StepType.CREATE_TICKET: _handle_create_ticket,
     StepType.CLOSE_CASE: _handle_close_case,
     StepType.OSQUERY_LIVE_QUERY: _handle_osquery_live_query,
+    **{step_type: _make_response_handler(step_type) for step_type in sorted(RESPONSE_STEP_TYPES, key=lambda s: s.value)},
 }
 
 
@@ -627,6 +738,8 @@ class PlaybookEngine:
                 attempt = 0
                 handler = _HANDLERS.get(step.type)
 
+                unbridgeable = _UNBRIDGEABLE.get(step.type)
+
                 if handler is None and not dry_run:
                     # Fail closed, and skip the retry loop — a missing handler
                     # will still be missing on the next attempt.
@@ -641,8 +754,13 @@ class PlaybookEngine:
                     # means the default ``on_failure: abort`` halts the run.
                     step_status = StepStatus.FAILED
                     result = {
-                        "error": f"step type {step.type.value!r} has no handler in this engine",
+                        "error": (
+                            f"step type {step.type.value!r} is not runnable: {unbridgeable}"
+                            if unbridgeable
+                            else f"step type {step.type.value!r} has no handler in this engine"
+                        ),
                         "unimplemented": True,
+                        "executed": False,
                         "_elapsed_ms": 0,
                     }
                     logger.error(
@@ -656,18 +774,41 @@ class PlaybookEngine:
                         t0 = time.perf_counter()
                         try:
                             if dry_run:
-                                result = {"dry_run": True, "step": step.name}
+                                result = {"dry_run": True, "executed": False, "step": step.name}
                                 if handler is None:
                                     # A dry run exists to tell the author what
                                     # would happen. "dry_run: true" alone would
                                     # imply this step is fine.
                                     result["unimplemented"] = True
                                     result["would_fail"] = True
+                                    if unbridgeable:
+                                        result["reason"] = unbridgeable
+                                elif step.type in RESPONSE_STEP_TYPES:
+                                    # Name the verb a live run would dispatch,
+                                    # so a preview of a containment playbook
+                                    # reads as a containment playbook.
+                                    result["would_dispatch"] = step.type.value
+                                    result["target"] = _resolve_target(step, pr.context)
                             else:
                                 result = await handler(step, pr.context, http)
                             elapsed = time.perf_counter() - t0
                             result["_elapsed_ms"] = round(elapsed * 1000)
-                            break  # success
+                            # A handler that returned is not a step that ran.
+                            # Every response verb reports `executed`, and a
+                            # False there means the action was previewed, held
+                            # for an analyst, blocked, unconfigured or refused
+                            # — none of which is a step that did what it says.
+                            # Reporting those as SUCCESS is the defect this
+                            # whole path exists to remove, so they fail closed
+                            # and the default `on_failure: abort` halts the run.
+                            if step.type in RESPONSE_STEP_TYPES and not result.get("executed"):
+                                step_status = StepStatus.FAILED
+                                result.setdefault(
+                                    "error",
+                                    f"{step.type.value} did not execute ({result.get('status', 'unknown')}): "
+                                    f"{result.get('summary') or result.get('detail') or 'no vendor was touched'}",
+                                )
+                            break  # the handler answered; status is set above
                         except Exception as exc:  # noqa: BLE001
                             elapsed = time.perf_counter() - t0
                             logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
@@ -716,7 +857,23 @@ class PlaybookEngine:
                     current_idx += 1
 
             if pr.status == RunStatus.RUNNING:
-                pr.status = RunStatus.COMPLETED
+                # `on_failure: continue` decides whether the run keeps going.
+                # It does not decide what the run is called afterwards, and
+                # 346 of the 380 steps in the shipped packs carry it — so
+                # reading it as "report this as completed" would put a green
+                # tick over a containment that never happened, which is the
+                # failure this whole path exists to remove. The run finished;
+                # it did not do everything it said.
+                failed = [r["name"] for r in pr.step_results if r["status"] == StepStatus.FAILED]
+                if failed:
+                    pr.status = RunStatus.FAILED
+                    shown = ", ".join(f"'{name}'" for name in failed[:3])
+                    more = f" and {len(failed) - 3} more" if len(failed) > 3 else ""
+                    pr.error = (
+                        f"{len(failed)} of {len(pr.step_results)} steps failed " f"({shown}{more}); the run continued past them by policy"
+                    )
+                else:
+                    pr.status = RunStatus.COMPLETED
 
             pr.finished_at = datetime.now(UTC).isoformat()
             await _emit(pr.run_id, "run.done", pr.to_dict(), http)

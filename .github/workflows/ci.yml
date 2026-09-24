@@ -1106,6 +1106,14 @@ jobs:
         run: python3 scripts/check_playbook_schema_parity.py --self-test
       - name: Parity gate tests
         run: python3 -m pytest tests/test_playbook_schema_parity_gate.py -q
+      - name: The documented upgrade command runs, and its output validates
+        # MIGRATION.md has told operators to run `scripts/upgrade_playbooks.py`
+        # since v4 and the script did not exist. The test asserts a v3 playbook
+        # fails the real schema before and passes it after, so the doc cannot
+        # go back to naming a command that is not there.
+        run: python3 -m pytest tests/test_upgrade_playbooks.py -q
+      - name: Shipped packs need no upgrade
+        run: python3 scripts/upgrade_playbooks.py --dir playbooks
 
   # ──────────────────────────────────────────────
   # Docker Compose smoke test

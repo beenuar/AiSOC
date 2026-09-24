@@ -56,15 +56,23 @@ The claim-to-gate matrix stands at **108 rows — 99 GATED / 9 PARTIAL / 0 NO GA
 - [x] Eval harness: 20 synthetic incidents, ≥80% MITRE-tactic accuracy CI gate
 
 ### Visual SOAR studio
-- [x] React Flow playbook editor over the step types the engine implements
-      (enrich, investigate, notify, block_ip, isolate_host, create_ticket,
-      close_case, http, condition). Loop, Parallel, Wait and Human Approval
-      were listed here and exist in neither the palette nor the engine.
+- [x] React Flow playbook editor over nine of the step types the engine
+      implements (enrich, investigate, notify, block_ip, isolate_host,
+      create_ticket, close_case, http, condition). The engine accepts 22 and
+      runs 21; widening the palette to the rest is outstanding. Loop,
+      Parallel, Wait and Human Approval were listed here and exist in neither
+      the palette nor the engine.
 - [x] Sequential playbook engine with conditions, branching, retries and
       cycle detection. Not a DAG: there is no `depends_on` and no parallel
-      execution. No idempotency keys and no step-level blast-radius check —
-      `blast_radius` was declared by a schema the engine could not read, and
-      that schema has been removed rather than left as a promise.
+      execution, and there are no idempotency keys.
+- [x] Step-level risk grading, by dispatch rather than by a schema field.
+      A step naming a response verb is dispatched to the action registry and
+      graded against that verb's capability contract — impact, reversibility,
+      approval requirement, verification probe — plus the tenant's autonomy
+      tier and the finding's confidence. Per step, so authorising a playbook
+      does not authorise what its steps contain. The old `blast_radius` step
+      field promised this and was declared by a schema the engine could not
+      read; it has been removed rather than left as a promise.
 - [x] `schemas/playbook.schema.json` (JSON Schema draft-07) for portability
       and CI linting, held to the engine in both directions by
       `scripts/check_playbook_schema_parity.py`

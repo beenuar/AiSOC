@@ -1,141 +1,179 @@
 /**
- * Playbook / SOAR automation types
+ * Playbook / SOAR automation types.
+ *
+ * These mirror `schemas/playbook.schema.json` and the runtime model in
+ * `services/agents/app/playbook/models.py`, and
+ * `scripts/check_playbook_schema_parity.py` fails the build when they drift.
+ *
+ * They used to describe a different product. The previous version declared a
+ * 28-member `ActionType` union (`notify_email`, `create_ticket_jira`,
+ * `collect_forensics`, `run_query_splunk`, …) that matched neither the schema
+ * nor the engine, a `PlaybookStep.action: ActionConfig` shape the engine does
+ * not parse, `depends_on` / `run_parallel` / `blast_radius_check` fields
+ * nothing reads, and `waiting_approval` / `paused` run states the engine
+ * cannot enter — it is a single-threaded index walk with no pause or resume.
+ * Nothing imported it, so the drift was invisible; a shared-types package
+ * that is wrong is worse than one that is absent, because the next person to
+ * import it inherits a contract the server will reject.
  */
 
-export type PlaybookTriggerType =
-  | "alert_created"
-  | "alert_severity_changed"
-  | "alert_status_changed"
-  | "case_created"
-  | "manual"
-  | "scheduled"
-  | "webhook"
-  | "threat_intel_hit";
+/** What can start a playbook. Mirrors `trigger.on` in the schema. */
+export type PlaybookTrigger = "alert" | "case" | "manual" | "schedule";
 
-export type ActionType =
-  | "notify_slack"
-  | "notify_email"
-  | "create_ticket_jira"
-  | "create_ticket_servicenow"
-  | "page_oncall_pagerduty"
-  | "enrich_ip"
-  | "enrich_domain"
-  | "enrich_hash"
-  | "enrich_user"
-  | "isolate_host"
-  | "contain_user"
+/**
+ * Every step type the engine accepts. Mirrors `StepType`.
+ *
+ * What the engine *does* with each one is published in the schema's
+ * `x-aisoc-execution` map and reflected in {@link StepExecution} below —
+ * accepting a step type and performing it are different claims, and the
+ * distinction is the point.
+ */
+export type StepType =
+  | "enrich"
+  | "investigate"
+  | "notify"
   | "block_ip"
-  | "block_domain"
-  | "block_hash"
+  | "block_ioc"
+  | "isolate_host"
+  | "create_ticket"
+  | "close_case"
+  | "http"
+  | "condition"
+  | "osquery_live_query"
+  | "approval"
+  | "disable_user"
+  | "reset_password"
   | "revoke_session"
-  | "snapshot_host"
-  | "collect_forensics"
-  | "run_query_splunk"
-  | "run_query_crowdstrike"
-  | "custom_http"
-  | "wait"
-  | "human_approval"
-  | "set_alert_status"
-  | "set_case_priority"
-  | "add_case_comment"
-  | "assign_case"
-  | "conditional";
+  | "force_mfa"
+  | "kill_process"
+  | "quarantine_file"
+  | "run_av_scan"
+  | "run_script"
+  | "search_siem"
+  | "create_notable_event";
 
-export interface ActionConfig {
-  action_type: ActionType;
-  parameters: Record<string, unknown>;
-  timeout_seconds?: number;
-  retry_count?: number;
-  retry_delay_seconds?: number;
-  on_failure?: "stop" | "continue" | "rollback";
-  // For conditional action
-  condition_field?: string;
-  condition_operator?: "eq" | "ne" | "gt" | "lt" | "contains" | "regex";
-  condition_value?: unknown;
-  true_branch?: string[];  // step IDs
-  false_branch?: string[];
+/**
+ * What happens when a step of a given type runs.
+ *
+ * - `executed` — a handler runs and has a real effect.
+ * - `governed` — the step is dispatched to the action registry in
+ *   `services/actions`, where the capability contract and the tenant's
+ *   autonomy policy decide whether a vendor is touched. Whether one *was* is
+ *   answered per run by {@link StepDispatchReport.executed}, never assumed.
+ * - `unimplemented` — no handler; the engine fails the step closed rather
+ *   than reporting a success it did not achieve.
+ */
+export type StepExecution = "executed" | "governed" | "unimplemented";
+
+/**
+ * Guard on a step. Either the structured form or an expression string.
+ *
+ * The expression parser is deliberately restricted to one comparison: no
+ * `and`/`or` chains, no function calls, no `eval`.
+ */
+export interface StepCondition {
+  field?: string;
+  operator?: "eq" | "ne" | "gt" | "lt" | "contains" | "exists";
+  value?: unknown;
+  expression?: string;
 }
 
 export interface PlaybookStep {
   id: string;
   name: string;
-  description?: string;
-  action: ActionConfig;
-  depends_on?: string[]; // IDs of steps that must complete first
-  run_parallel?: boolean;
-  is_approval_gate?: boolean;
-  approval_roles?: string[];
-  dry_run_safe?: boolean; // Can be safely run in dry_run mode
-  blast_radius_check?: boolean; // Require blast-radius assessment before execution
+  type: StepType;
+  /** Free-form per-verb arguments. Each executor declares its own shape. */
+  params?: Record<string, unknown>;
+  condition?: StepCondition | string;
+  on_failure?: "abort" | "continue" | "retry";
+  /** Ceiling is 25 (`bounds.ABSOLUTE_MAX_RETRIES`). */
+  retry_max?: number;
+  /** 1..3600 seconds (`bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS`). */
+  timeout_seconds?: number;
+  /** Step id to jump to. The engine branches; it does not build a DAG. */
+  next_true?: string;
+  next_false?: string;
 }
 
 export interface Playbook {
-  id: string;
-  tenant_id: string;
+  id?: string;
   name: string;
-  description: string;
-  version: number;
-  is_active: boolean;
-  is_draft: boolean;
-
-  trigger: {
-    type: PlaybookTriggerType;
-    conditions?: Record<string, unknown>; // e.g., severity = "critical"
-    schedule?: string; // cron expression
-    webhook_id?: string;
+  description?: string;
+  version?: string;
+  tags?: string[];
+  trigger?: {
+    on?: PlaybookTrigger;
+    [key: string]: unknown;
   };
-
   steps: PlaybookStep[];
-  tags: string[];
-
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  approved_by?: string;
-  approved_at?: string;
-
-  // Stats
-  run_count?: number;
-  success_rate?: number;
-  avg_duration_seconds?: number;
-  last_run_at?: string;
-  last_run_status?: "success" | "partial" | "failed";
+  author?: string;
+  enabled?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  /**
+   * Authored documentation the engine does not read. Declared because real
+   * playbooks carry them and a schema that rejected them would be wrong;
+   * named here so nobody mistakes them for behaviour.
+   */
+  inputs?: Record<string, unknown>;
+  dry_run_support?: boolean;
 }
 
-export type PlaybookRunStatus = "running" | "waiting_approval" | "paused" | "completed" | "failed" | "cancelled";
+/** Mirrors `RunStatus`. There is no `paused` and no `waiting_approval`. */
+export type PlaybookRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+/** Mirrors `StepStatus`. */
+export type PlaybookStepStatus = "pending" | "skipped" | "running" | "success" | "failed";
+
+/**
+ * What a governed response step reports back.
+ *
+ * `executed` is the single field that means a vendor was actually touched. A
+ * preview, an approval queue, a blocked action and a tenant with no
+ * integration are all `false`, and `status` says which.
+ */
+export interface StepDispatchReport {
+  capability: string;
+  status:
+    | "executed"
+    | "awaiting_completion"
+    | "dry_run"
+    | "simulated"
+    | "pending_approval"
+    | "blocked"
+    | "no_integration"
+    | "unsupported"
+    | "failed";
+  executed: boolean;
+  summary: string;
+  vendor_id?: string;
+  detail?: string;
+  /** Absent when the action did not run: there is nothing to read back. */
+  verification?: "verified" | "failed" | "unverified";
+  verification_reason?: string;
+  autonomy_mode?: string;
+  blast_radius?: string;
+}
 
 export interface PlaybookStepResult {
   step_id: string;
-  step_name: string;
-  status: "pending" | "running" | "success" | "failed" | "skipped" | "waiting_approval";
-  started_at?: string;
-  completed_at?: string;
-  output?: Record<string, unknown>;
-  error?: string;
-  dry_run?: boolean;
+  name: string;
+  status: PlaybookStepStatus;
+  /** The handler's return value. For a governed step, a {@link StepDispatchReport}. */
+  result?: Record<string, unknown>;
+  /** Set on a `condition` step: the step id the engine jumped to. */
+  branch?: string;
 }
 
 export interface PlaybookRun {
-  id: string;
+  run_id: string;
   playbook_id: string;
-  tenant_id: string;
-  trigger_type: PlaybookTriggerType;
-  trigger_context: {
-    alert_id?: string;
-    case_id?: string;
-    manual_by?: string;
-  };
+  playbook_name: string;
   status: PlaybookRunStatus;
-  is_dry_run: boolean;
+  /** Trigger context plus every step's flattened output. */
+  context: Record<string, unknown>;
   step_results: PlaybookStepResult[];
   started_at: string;
-  completed_at?: string;
-  error?: string;
-  blast_radius_assessment?: {
-    estimated_scope: string;
-    affected_assets: string[];
-    requires_approval: boolean;
-    approved_by?: string;
-    approved_at?: string;
-  };
+  finished_at: string;
+  error?: string | null;
 }

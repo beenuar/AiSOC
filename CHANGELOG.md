@@ -213,6 +213,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only to each other would have left the gate agreeing about a bound that
   nothing installs.
 
+- **A playbook step that names a response verb now reaches governed
+  dispatch, and says honestly what happened to it.** Fifteen of the engine's
+  twenty-two step types name an action against somebody's estate. Three of
+  them — `block_ip`, `isolate_host`, `create_ticket` — returned
+  `{"simulated": true}` from inside the engine, reached no executor, and were
+  recorded `SUCCESS`; the other twelve had no handler at all. Meanwhile
+  `services/actions` held working executors for fourteen of the fifteen,
+  behind a contract declaring each verb's impact, reversibility, approval
+  requirement and whether a probe exists to confirm the effect landed. The
+  missing piece was never an executor. The comment in `action.py` asserting
+  that "playbooks dispatch step by step through this service, so every step
+  is graded on the way past" described something that did not happen.
+
+  The bridge is `services/agents/app/playbook/action_bridge.py` ->
+  `POST /api/v1/playbook-steps/dispatch` -> `live_actions.dispatch()`. It
+  lands in the API rather than going direct because that service holds the
+  credential vault and the tenant session, and `services/actions` is the only
+  place that may change a customer's estate — the same shape, and the same
+  reasoning, as `siem_writeback`. **One step, one request, one grading**: a
+  playbook is not approved as a unit, so authorising it cannot authorise
+  whatever its steps happen to contain.
+
+  `executed` is the single field that means a vendor was touched. A preview,
+  an approval queue, a blocked action, a tenant with no integration, a
+  credential-less simulation and a vendor failure are each named and each
+  `executed: false`, and a step that did not execute is recorded FAILED so
+  the run halts under the default `on_failure: abort`. `AWAITING_COMPLETION`
+  counts as executed and `PENDING_APPROVAL` does not: collapsing that pair
+  either loses an action in flight or invents one that never ran. Execution
+  is off by default (`AISOC_PLAYBOOK_ACTIONS_EXECUTE`), so out of the box a
+  response step previews and reports a preview.
+
+  **`approval` is the one step type deliberately not bridged.** It is a
+  pause, and the engine is a single-threaded index walk with nothing to
+  suspend and nothing to wake. It is also no longer the mechanism: every
+  response step is now graded individually at dispatch and returns
+  `pending_approval` on its own when a human is required, so a gate in front
+  of one would gate a decision that is already gated. It fails closed with
+  that reason recorded rather than shipping a handler that pretends.
+
+  **`run_playbook` as a nested step stays unimplemented, and the calculus was
+  re-examined rather than inherited.** Per-step grading was the missing piece
+  the previous decision named, and it now exists — but the objection it was
+  the answer to does not move: a nested playbook's steps are still not
+  visible where the parent declares its policy. What changed is that the
+  parent no longer *needs* to bound them, because each step is graded on
+  arrival wherever it came from. What has not changed is that the engine
+  cannot see a nested playbook's content before running it, so an author
+  cannot review what a run will do, and a cycle across two playbooks that
+  reference each other is unbounded by the per-step `visited` set. Recursion
+  depth and an ancestor set would answer the second; the first is a product
+  question about reviewability, not a governance gap, and it is the reason to
+  keep waiting.
+
+  The schema's `x-aisoc-execution` map gains a `governed` class rather than
+  reusing `executed`, because "a handler ran and made an outbound call" and
+  "a vendor was touched" are different claims and the second is answered per
+  run. `simulated` stays in the vocabulary: it is the class for a handler
+  that answers from inside the engine, which is what these three did, and
+  deleting the word would make that state unspellable rather than absent.
+  `check_playbook_schema_parity.py` compares `governed` against
+  `engine.RESPONSE_STEP_TYPES` in both directions, so a verb wearing the
+  label while being answered locally fails the build.
+
+- **`scripts/upgrade_playbooks.py`, which `docs/upgrade/MIGRATION.md` has told
+  operators to run since v4.** It did not exist, so the one command in the
+  upgrade path that touches a customer's own content failed at exactly the
+  moment it was needed. The field table beside it was worse: four of the five
+  spellings in its "v4" column are rejected by the schema
+  (`on_failure: {policy}`, `retry: {max_attempts, backoff}`,
+  `condition: {expr, language}`, and `type: "action"`, which is not a step
+  type at all), so following the doc by hand produced playbooks that would
+  not validate either. Both are corrected.
+
+  The script reports before it writes, validates its own output against the
+  real `schemas/playbook.schema.json` before touching anything, and leaves
+  alone any file whose upgrade would not validate. `loop`, `parallel`,
+  `wait`, `run_playbook`, `action` and `trigger` are reported and refused
+  rather than mapped onto a nearest neighbour — that rewrite is precisely the
+  defect removed from the NL drafter, where a `disable_user` step shipped as
+  `investigate`. An empty scan is a failure, not a clean bill of health.
+
 - **`scripts/check_connector_profiles.py` — a connector-type drift gate that
   reads in both directions.** Nothing compared the profile keys in
   `services/ingest/internal/normalizer/normalizer.go` against the identifiers
@@ -740,6 +822,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency change in the diff. All fourteen declarations now read
   `>=0.4.4,<0.5`. The devcontainer also told contributors to `uv sync` against
   `services/api/uv.lock`, which has never existed in this tree.
+
+- **The capability contract was not consulted on the dispatch path an agent
+  uses.** `POST /actions` has run the contract through
+  `approval_gate.apply_matrix` since the approval gate was fixed.
+  `live_actions.dispatch()` — the registry-driven path next to it, used by
+  the agent loop, the console dry-run and now the playbook engine — ran
+  `autonomy_safety.decide()` and nothing else. `decide()` reads
+  `ACTION_BLAST_RADIUS`, a second risk ladder keyed on `ActionType`, and for
+  **nine verbs it is the weaker of the two declarations** (`block_ip`,
+  `block_domain` and `reset_password` are blast `medium` against impact
+  `high`; `run_script` is blast `high` against impact `severe`;
+  `quarantine_file` is blast `low` against impact `moderate`). So the same
+  verb was graded differently depending on which door it came through, and
+  the weaker grade belonged to the door an agent uses. `dispatch()` now
+  applies the contract and `approval_matrix.evaluate` — each input may raise
+  a requirement and none may lower it, so switching it on cannot make
+  anything auto-execute that did not before.
+
+  `LiveActionRequest` gains `confidence`, because the matrix needs both axes
+  and the request carried only one. Absent is the lowest band, not a free
+  pass: defaulting permissive turns a scoring bug into an autonomous
+  containment.
+
+  Three further holes closed in the same wiring:
+
+  - **A contracted verb with no `ActionType` skipped governance entirely.**
+    `_action_type_for` returned `None` for `revoke_session` and the whole
+    gate was `if action_type is not None`, so a MODERATE-impact identity
+    action reached its executor with no tier check, no blast check and no
+    contract applied. Those verbs are now graded from the contract's own
+    impact under the tenant's tier.
+  - **A tenant `force_auto` override could lower a contract that declares
+    `analyst`.** `ActionContract.approval` says the tenant's autonomy policy
+    "can raise this but never lower it"; the override reached AUTO anyway,
+    because the contract was not in the path. It still lifts the *tier
+    ceiling*, which is what it is for, and no longer lifts the floor.
+  - **An execution with no probe left the verification field blank.** Probes
+    are keyed on `ActionType`, so a contracted verb without one had nothing
+    to record. A blank field and a confirmed one are indistinguishable to a
+    reader, so the honest answer — `unverified`, with the reason — is written
+    explicitly.
+
+- **A playbook run reported COMPLETED when its steps had failed.**
+  `on_failure: continue` decides whether the run keeps going; it was also
+  deciding what the run was called afterwards. 346 of the 380 steps in the
+  shipped packs carry it, so a containment playbook whose every response step
+  failed still finished green. A run that ends with any failed step is now
+  FAILED, with an error naming how many and which, and the author's
+  `continue` policy still governs whether the remaining steps are attempted.
+
+- **`packages/types/src/playbook.ts` published a fourth playbook
+  vocabulary.** A 28-member `ActionType` union (`notify_email`,
+  `create_ticket_jira`, `collect_forensics`, `run_query_splunk`, …) matching
+  neither the schema nor `StepType`; a `PlaybookStep.action: ActionConfig`
+  shape the engine does not parse; `depends_on`, `run_parallel`,
+  `blast_radius_check` fields nothing reads; and `waiting_approval` /
+  `paused` run states the engine cannot enter. Nothing imports the package,
+  which is why it drifted unnoticed — and is also why it mattered: it is what
+  the next integrator would have built against, and the server would have
+  rejected their code. Rewritten to mirror `StepType`, `PlaybookStep`,
+  `RunStatus` and the dispatch report, and `check_playbook_schema_parity.py`
+  now compares the published union against the engine's in both directions.
 
 - **An event ingested under a connector type with no profile became an alert
   with no host, no user and no source IP.** `_canonicalAliases` in

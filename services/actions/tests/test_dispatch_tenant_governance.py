@@ -23,7 +23,8 @@ pytestmark = pytest.mark.asyncio
 
 
 class _OkExecutor:
-    _legacy_action_type = ActionType.ISOLATE_HOST
+    def __init__(self, action_type: ActionType = ActionType.ISOLATE_HOST) -> None:
+        self._legacy_action_type = action_type
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
         return LiveActionResult(
@@ -102,21 +103,51 @@ async def test_force_auto_override_still_requires_verification(
 ):
     """Skipping the approval queue is not the same as skipping the proof.
 
-    A tenant who force-autos host isolation has chosen to act without a human
-    in the loop, which makes read-back confirmation more important, not less.
+    A tenant who force-autos a verb has chosen to act without a human in the
+    loop, which makes read-back confirmation more important, not less.
+
+    Uses `create_notable_event` because the override has to land on a verb the
+    capability contract actually permits to run automatically — see
+    `test_force_auto_cannot_lower_a_contract_that_demands_an_analyst`.
     """
+    monkeypatch.setattr(registry, "get_executor", lambda vendor, cap: _OkExecutor(ActionType.CREATE_NOTABLE_EVENT))
     _policy(
         monkeypatch,
         TenantPolicy(
             tier=MaturityTier.L2_CONTAIN,
+            action_overrides={"create_notable_event": {"force_auto": True}},
+            from_store=True,
+            source="tenant_policy",
+        ),
+    )
+    result = await dispatch(_request(capability="create_notable_event", confidence=0.95))
+    assert result.status is LiveActionStatus.SUCCEEDED
+    assert result.details["verification"] == "unverified"
+
+
+async def test_force_auto_cannot_lower_a_contract_that_demands_an_analyst(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A tenant override outranks the tier ladder. It does not outrank the contract.
+
+    `ActionContract.approval` says the tenant's autonomy policy "can raise
+    this but never lower it", and `isolate_host` declares `analyst`. On this
+    path the override was reaching AUTO anyway, because the capability
+    contract was never consulted here at all — only the blast-radius table
+    was, and it is the weaker of the two declarations for nine verbs.
+    """
+    _policy(
+        monkeypatch,
+        TenantPolicy(
+            tier=MaturityTier.L4_AUTOMATE,
             action_overrides={"isolate_host": {"force_auto": True}},
             from_store=True,
             source="tenant_policy",
         ),
     )
-    result = await dispatch(_request())
-    assert result.status is LiveActionStatus.SUCCEEDED
-    assert result.details["verification"] == "unverified"
+    result = await dispatch(_request(confidence=1.0))
+    assert result.status is LiveActionStatus.PENDING_APPROVAL
+    assert "analyst approval" in result.summary
 
 
 async def test_whitelist_is_passed_through_to_the_autonomy_decision(
@@ -156,14 +187,15 @@ async def test_the_policy_source_is_recorded_for_the_audit_trail(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """An operator must be able to tell a tenant choice from a default."""
+    monkeypatch.setattr(registry, "get_executor", lambda vendor, cap: _OkExecutor(ActionType.CREATE_NOTABLE_EVENT))
     _policy(
         monkeypatch,
         TenantPolicy(
             tier=MaturityTier.L4_AUTOMATE,
-            action_overrides={"isolate_host": {"force_auto": True}},
+            action_overrides={"create_notable_event": {"force_auto": True}},
             from_store=True,
             source="tenant_policy",
         ),
     )
-    result = await dispatch(_request())
+    result = await dispatch(_request(capability="create_notable_event", confidence=0.95))
     assert "tenant_policy" in result.details["autonomy_reason"]

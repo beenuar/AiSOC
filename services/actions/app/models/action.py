@@ -42,7 +42,19 @@ class ActionType(str, Enum):
     #                         is precisely what the per-capability contract
     #                         exists to prevent. Playbooks dispatch step by
     #                         step through this service instead, so every step
-    #                         is graded on the way past.
+    #                         is graded on the way past — via
+    #                         `services/agents/app/playbook/action_bridge.py`
+    #                         and `POST /api/v1/playbook-steps/dispatch`.
+    #
+    #                         That last sentence was not true when it was
+    #                         written. `_handle_block_ip` and
+    #                         `_handle_isolate_host` returned
+    #                         `{"simulated": True}` from inside the engine and
+    #                         reached no executor, and twelve further step
+    #                         types had no handler at all. The bridge named
+    #                         above is what made it true; the named modules
+    #                         are here so the claim can be checked rather than
+    #                         taken on trust.
     # ChatOps user verification: outbound interactive Slack/Teams prompt
     # asking the affected user to confirm or deny an event ("Was this you?").
     # The response is HMAC-validated and routed back into the case timeline.

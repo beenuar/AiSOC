@@ -468,9 +468,14 @@ class TestUnimplementedStepTypesFailClosed:
         assert run.step_results[0]["result"]["_elapsed_ms"] == 0
 
     @pytest.mark.asyncio
-    async def test_on_failure_continue_is_still_honoured(self) -> None:
-        """Failing closed must not mean ignoring the author's policy: a step
-        explicitly marked ``continue`` still lets the run proceed."""
+    async def test_on_failure_continue_lets_the_run_proceed_without_calling_it_completed(self) -> None:
+        """``continue`` decides whether the run keeps going, not what it is called.
+
+        346 of the 380 steps in the shipped packs carry ``on_failure:
+        continue``, so treating it as "report this run as completed" would put
+        a green tick over a containment that never happened — which is the
+        same fake success, moved up one level from the step to the run.
+        """
         pb = _make_playbook(
             [
                 PlaybookStep(id="s1", name="best-effort scan", type=StepType.RUN_AV_SCAN, on_failure="continue"),
@@ -480,9 +485,10 @@ class TestUnimplementedStepTypesFailClosed:
 
         run = await PlaybookEngine().run(pb, trigger_context={})
 
-        assert len(run.step_results) == 2
+        assert len(run.step_results) == 2, "the author said continue; both steps must be attempted"
         assert all(r["status"] == StepStatus.FAILED for r in run.step_results)
-        assert run.status == RunStatus.COMPLETED
+        assert run.status == RunStatus.FAILED
+        assert run.error and "2 of 2 steps failed" in run.error
 
     @pytest.mark.asyncio
     async def test_a_dry_run_says_which_steps_would_fail(self) -> None:

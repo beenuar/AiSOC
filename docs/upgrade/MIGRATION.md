@@ -183,16 +183,32 @@ python3 scripts/lint_playbooks.py
 
 | v3 field | v4 field | Notes |
 |----------|----------|-------|
-| `type: "action"` | `type: "action"` | Unchanged |
-| `on_error: "stop"` | `on_failure: { policy: "abort" }` | Renamed |
-| `retry: 3` | `retry: { max_attempts: 3, backoff: "exponential" }` | Expanded |
-| `condition: "..."` | `condition: { expr: "...", language: "jmespath" }` | Structured |
-| `timeout: 60` | `timeout_seconds: 60` | Renamed |
+| `type: "action"` | the specific verb | `action` was a meta-type. Use `block_ip`, `isolate_host`, `disable_user` … — the contract belongs to the verb |
+| `type: "isolate"` / `"block"` / `"create_case"` / `"script"` / `"human_approval"` | `isolate_host` / `block_ip` / `create_ticket` / `run_script` / `approval` | Renamed |
+| `on_error: "stop"` | `on_failure: "abort"` | Renamed, and a plain string — not an object |
+| `retry: { max_attempts: 3 }` | `retry_max: 3` | Flattened. Backoff is not configurable; the engine uses `min(2**attempt, 30)` seconds |
+| `condition: { expr: "…", language: "jmespath" }` | `condition: "…"` | The engine's parser is deliberately restricted: one comparison, no JMESPath, no `and`/`or` chains. The structured `{field, operator, value}` form also works |
+| `timeout: 60` | `timeout_seconds: 60` | Renamed. Ceiling is 3600s |
+| `blast_radius`, `depends_on`, `output_key` | *(removed)* | Declared by the v3 schema and never read by any engine. `blast_radius` in particular promised that "the engine enforces analyst approval for destructive steps" and the engine could not see the field. Approval is now decided per capability at dispatch — see [Playbooks](../../apps/docs/docs/concepts/playbooks.md) |
+
+`loop`, `parallel`, `wait` and `run_playbook` have **no v4 equivalent.** They
+named control flow this engine does not have — it is a single-threaded index
+walk — so there is no correct rewrite and the upgrader reports them rather
+than mapping them onto a nearest neighbour.
 
 **Auto-upgrade playbooks:**
 
+The upgrader reports before it writes, and validates its own output against
+`schemas/playbook.schema.json` before touching anything. A file whose upgrade
+would not validate is left alone and named.
+
 ```bash
-python3 scripts/upgrade_playbooks.py --dir playbooks/
+# Report only — nothing on disk changes. Exit 1 means "something would change",
+# exit 2 means a file needs a person.
+python3 scripts/upgrade_playbooks.py --dir playbooks
+
+# Apply, once the report looks right
+python3 scripts/upgrade_playbooks.py --dir playbooks --write
 ```
 
 ---
@@ -314,8 +330,11 @@ A: Yes. Use a different Docker Compose project name:
 `docker compose -p aisoc-v4 up -d`
 
 Q: Will my v3 playbooks still run?
-A: After `python3 scripts/upgrade_playbooks.py`, yes. The v4 engine is
-backward-compatible for the core `action` step type.
+A: Run `python3 scripts/upgrade_playbooks.py --dir playbooks` first — it
+reports what would change without writing. Most playbooks need only the field
+renames above. A playbook using `loop`, `parallel`, `wait`, `run_playbook` or
+the generic `action` type needs a decision from you: those name behaviour the
+v4 engine does not have, and the upgrader will say so rather than guess.
 
 Q: How do I roll back to v3 if something goes wrong?
 A: Restore the PostgreSQL backup from Step 1, then `docker compose pull` with
