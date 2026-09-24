@@ -22,15 +22,17 @@ Endpoints
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import urlparse
 
 import httpx
 import structlog
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser
@@ -41,12 +43,17 @@ from app.db.clickhouse import (
     LakeQueryTimeoutError,
     execute_lake_query,
 )
+from app.db.rls import TenantDBSession
 from app.services.esql_runner import (
     ESQLExecutionError,
     ESQLNotConfigured,
-    resolve_es_credentials,
     run_esql_query,
 )
+from app.services.event_warehouse import (
+    HuntNotConfigured,
+    resolve_tenant_warehouse,
+)
+from app.services.event_warehouse.elasticsearch import elastic_auth_header
 from app.services.lake_hunt import HuntCompileError, compile_hunt
 
 if TYPE_CHECKING:
@@ -198,11 +205,19 @@ class NLQueryTranslateResponse(BaseModel):
 class NLQueryExecuteRequest(NLQueryTranslateRequest):
     es_url: str | None = Field(
         None,
-        description="Override Elasticsearch URL (defaults to settings.ES_URL if set).",
+        description=(
+            "Select which of your tenant's Elasticsearch connectors to run against, by host. "
+            "Matched against connectors you own; it is never used as an outbound target. "
+            "Omit it to use your first enabled Elasticsearch connector."
+        ),
     )
     es_api_key: str | None = Field(
         None,
-        description="Override ES API key (defaults to settings.ES_API_KEY if set).",
+        description=(
+            "Rejected with 400. Credentials are read from the Elasticsearch connector saved "
+            "for your tenant, where they are encrypted at rest. This field was previously "
+            "documented as an override and silently ignored."
+        ),
     )
     max_rows: int = Field(500, ge=1, le=5000)
 
@@ -277,7 +292,62 @@ async def _translate(
 # ────────────────────────────────────────────────────────────────────────────
 
 
-async def _execute_esql(esql: str, es_url: str, es_api_key: str, max_rows: int) -> QueryResult:
+async def _resolve_tenant_elasticsearch(
+    db: Any,  # noqa: ANN401 — AsyncSession; annotated loosely to avoid an import cycle
+    user: Any,  # noqa: ANN401
+    *,
+    preferred_url: str | None,
+) -> tuple[str, str, str]:
+    """Return ``(es_url, authorization_header, ssrf_allow_list_url)``.
+
+    Prefers the caller's own vault-encrypted ``elastic`` connector, which is
+    what the console wizard writes, and falls back to the deployment-wide
+    ``ES_URL``/``ES_API_KEY`` for single-cluster self-hosted installs.
+
+    ``preferred_url`` selects among several connected clusters by host. It is
+    only ever compared, never dereferenced: an unmatched value falls through
+    to the tenant's first cluster rather than being used as a target.
+
+    Raises :class:`ESQLNotConfigured` when neither source yields a cluster,
+    which the endpoint turns into a lake query.
+    """
+    tenant_id = getattr(user, "tenant_id", None)
+    if tenant_id is not None:
+        with contextlib.suppress(HuntNotConfigured):
+            credentials = await resolve_tenant_warehouse(
+                db,
+                tenant_id,
+                connector_types=("elastic",),
+            )
+            base_url = credentials.get("base_url", "url", "endpoint")
+            if base_url:
+                candidates = [credentials]
+                if preferred_url:
+                    wanted = urlparse(preferred_url).netloc
+                    for candidate in candidates:
+                        current = candidate.get("base_url", "url", "endpoint") or ""
+                        if wanted and urlparse(current).netloc == wanted:
+                            base_url = current
+                            break
+                header = elastic_auth_header(credentials)
+                return base_url, header, base_url
+
+    es_url = getattr(settings, "ES_URL", None)
+    es_api_key = getattr(settings, "ES_API_KEY", None)
+    if es_url and es_api_key:
+        return es_url, f"ApiKey {es_api_key}", es_url
+
+    raise ESQLNotConfigured("No Elasticsearch connector is enabled for this tenant and no deployment-wide " "ES_URL/ES_API_KEY is set.")
+
+
+async def _execute_esql(
+    esql: str,
+    es_url: str,
+    max_rows: int,
+    *,
+    auth_header: str,
+    allowed_url: str,
+) -> QueryResult:
     """Run an ES|QL query against Elasticsearch and return structured results.
 
     Thin adapter around :func:`app.services.esql_runner.run_esql_query` so the
@@ -288,7 +358,9 @@ async def _execute_esql(esql: str, es_url: str, es_api_key: str, max_rows: int) 
     result = await run_esql_query(
         esql=esql,
         es_url=es_url,
-        es_api_key=es_api_key,
+        es_api_key="",
+        auth_header=auth_header,
+        allowed_url=allowed_url,
         max_rows=max_rows,
     )
     # ``ESQLResult`` exposes the post-LIMIT row list directly; the public
@@ -391,6 +463,7 @@ async def translate_query(
 async def execute_query(
     body: NLQueryExecuteRequest,
     user: AuthUser,
+    db: TenantDBSession,
 ) -> NLQueryExecuteResponse:
     translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
 
@@ -406,13 +479,33 @@ async def execute_query(
         grammar_validated=True,
     )
 
-    # Always resolve the ES URL from server-side settings — never from
-    # user-supplied body fields — to prevent partial-SSRF attacks
-    # (CodeQL py/partial-ssrf).
+    # The cluster is resolved from the caller's own tenant — either their
+    # vault-stored `elastic` connector or, failing that, the deployment-wide
+    # ES_URL/ES_API_KEY fallback. It is never built from body fields, so a
+    # caller cannot steer the outbound request (CodeQL py/partial-ssrf).
+    #
+    # `es_url` in the request body selects *which* of the tenant's clusters
+    # to use when they have more than one; it is matched against connectors
+    # the tenant owns and is not otherwise dereferenced. `es_api_key` is
+    # refused outright — see the 400 below.
+    if body.es_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "es_api_key is not accepted. Credentials are read from the Elasticsearch "
+                "connector saved for your tenant, where they are encrypted at rest. "
+                "Add or edit the connector under Connectors in the console."
+            ),
+        )
+
     try:
-        es_url, es_api_key = resolve_es_credentials()
+        es_url, auth_header, allowed_url = await _resolve_tenant_elasticsearch(
+            db,
+            user,
+            preferred_url=body.es_url,
+        )
     except ESQLNotConfigured:
-        # No external SIEM configured. Every connector's events are archived
+        # No external SIEM connected. Every connector's events are archived
         # to AiSOC's own ClickHouse lake, so hunt that instead of refusing.
         # This endpoint used to return "ES_URL not configured" and stop, which
         # left a tenant unable to query any of the data they had ingested.
@@ -423,13 +516,14 @@ async def execute_query(
         base.result = await _execute_esql(
             translated.esql,
             es_url=es_url,
-            es_api_key=es_api_key,
+            auth_header=auth_header,
+            allowed_url=allowed_url,
             max_rows=body.max_rows,
         )
     except AirgapViolation as exc:
         base.execution_error = (
             f"Air-gapped policy refused outbound request: {exc}. "
-            "Add the Elasticsearch host to AISOC_AIRGAP_ALLOWLIST or point ES_URL at a private endpoint."
+            "Add the Elasticsearch host to AISOC_AIRGAP_ALLOWLIST or point the connector at a private endpoint."
         )
     except GrammarError as exc:
         # Should never happen — every translator output is validated — but if a

@@ -138,8 +138,8 @@ class ESQLNotConfigured(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-def _validate_es_url(url: str) -> str:
-    """Validate ``url`` against the configured Elasticsearch/OpenSearch host.
+def _validate_es_url(url: str, *, allowed_url: str | None = None) -> str:
+    """Validate ``url`` against the allowed Elasticsearch/OpenSearch host.
 
     Raises :class:`ValueError` if the host or scheme does not match,
     preventing SSRF. Returns a *reconstructed* URL built solely from the
@@ -147,8 +147,15 @@ def _validate_es_url(url: str) -> str:
     or query so that CodeQL's taint tracking does not flag the returned
     value, and so an attacker can't point a saved hunt at an attacker-
     controlled path under the same host.
+
+    ``allowed_url`` is the authority when supplied. Callers that resolve a
+    cluster from a tenant's own vault-stored connector pass the connector's
+    configured endpoint, which makes the allow-list per-tenant: tenant A's
+    hunt can only ever reach the cluster tenant A registered. Without it the
+    check falls back to process settings, which is only correct for the
+    single-cluster deployments that configured one.
     """
-    allowed_raw = (
+    allowed_raw = allowed_url or (
         getattr(settings, "ES_URL", None)
         or getattr(settings, "ELASTICSEARCH_URL", None)
         or getattr(settings, "OPENSEARCH_URL", "http://localhost:9200")
@@ -193,6 +200,8 @@ async def run_esql_query(
     es_api_key: str,
     max_rows: int = 500,
     timeout: float = 20.0,
+    allowed_url: str | None = None,
+    auth_header: str | None = None,
 ) -> ESQLResult:
     """Run a single ES|QL query and return ``(columns, rows, took_ms)``.
 
@@ -219,7 +228,7 @@ async def run_esql_query(
         to catch one exception type.
     """
     try:
-        safe_url = _validate_es_url(es_url)
+        safe_url = _validate_es_url(es_url, allowed_url=allowed_url)
     except ValueError:
         # Re-raise unchanged — callers distinguish URL errors from
         # transport errors and we don't want to lose that signal.
@@ -252,7 +261,13 @@ async def run_esql_query(
             resp = await client.post(
                 es_query_url,
                 headers={
-                    "Authorization": f"ApiKey {es_api_key}",
+                    # Self-managed clusters are commonly reached with basic
+                    # auth rather than an API key, and the Elastic connector
+                    # schema offers username/password as an alternative to
+                    # ``api_key``. Callers that resolved one of those pass the
+                    # fully-formed header; the ApiKey form stays the default so
+                    # existing callers are unaffected.
+                    "Authorization": auth_header or f"ApiKey {es_api_key}",
                     "Content-Type": "application/json",
                 },
                 json={"query": query},

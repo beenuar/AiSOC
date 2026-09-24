@@ -344,6 +344,24 @@ class Settings(BaseSettings):
     # that actually stores anything in OpenSearch.
     OPENSEARCH_URL: str = "http://localhost:9200"
 
+    # Elasticsearch fallback for single-cluster self-hosted deployments.
+    #
+    # The primary source of warehouse credentials is the tenant's own
+    # connector row, configured from the console and encrypted by the
+    # credential vault — see `app/services/event_warehouse/credentials.py`.
+    # These two settings are the deployment-wide fallback for an operator
+    # who runs one cluster shared by every tenant and does not want to
+    # register a connector.
+    #
+    # They are declared here because `esql_runner` has always read them via
+    # `getattr(settings, "ES_URL", None)` and they were never fields, so the
+    # lookup returned None on every deployment. `Settings` sets
+    # `extra="ignore"`, so exporting ES_URL did not help either: the value
+    # was discarded and the "set them in environment variables" message
+    # repeated. Declaring them makes that message true.
+    ES_URL: str | None = None
+    ES_API_KEY: str | None = None
+
     # Neo4j
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"

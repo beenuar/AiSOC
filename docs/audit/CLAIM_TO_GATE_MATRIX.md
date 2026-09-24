@@ -50,7 +50,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | AI/LLM-usage governance: audit connector + detections + tiered lake storage | README (AI usage / storage) | `ci.yml` connectors job (`test_llm_usage.py` — OpenAI/Anthropic audit connector emits the dotted `event_type` the `llm-*` rules match) + `validate-detections.yml` (8 `llm-*` native rules replay) + api job (`test_storage_tiering.py` — hot/cold TTL-move policy + DDL gate; verified on live ClickHouse) | GATED | - |
 | Outcomes compound: repeat alerts auto-suppressed from prior dispositions (measured, not estimated) | README (closed loop) | `ci.yml` agents job (`test_outcome_memory.py` — every durable triage outcome is written back as a per-signature prior; a later alert matching a trusted prior benign/FP disposition is auto-resolved WITHOUT re-triage; human priors trusted immediately, AI priors require corroboration, a prior TP never auto-closes) + api funnel `repeat_alerts_suppressed`/`repeat_suppression_rate` measured from `aisoc_outcome_suppressions` | GATED | - |
 | Institutional memory nudges fuse-time confidence (bounded, per-tenant) | README (compounding memory) | `ci.yml` fusion job (`test_memory_nudge.py` — distilled per-signature priors nudge new alerts of that signature ±0.10 in `ConfidenceScorer`; unknown signatures unchanged; `MemoryPriorProvider` distils per-tenant priors from disposition history so one tenant never nudges another) | GATED | - |
-| Scheduled hunt findings flow into governed detection proposals | README (proactive hunting → detections) | `ci.yml` api job (`test_wave1_loop_edges.py` — a scheduled hunt that returns hits opens a DRAFT `DetectionRuleProposal` (source `hunt-finding`) into the propose→review→eval-gate→promote lifecycle; zero-hit / flag-off paths open nothing) | GATED | - |
+| Scheduled hunt findings flow into governed detection proposals | README (proactive hunting → detections) | `ci.yml` api job (`test_wave1_loop_edges.py` — a scheduled hunt that returns hits opens a DRAFT `DetectionRuleProposal` (source `hunt-finding`) into the propose→review→eval-gate→promote lifecycle; zero-hit / flag-off paths open nothing) **plus `test_hunt_scheduler_execute.py` + `test_event_warehouse_providers.py`, which gate the executor the lifecycle depends on** | GATED | this row was previously proven only by `test_wave1_loop_edges.py`, which injects an `executor` stub (`runner = executor or _execute_hunt`). The real `_execute_hunt` could not return a hit on any deployment, so the gate passed against a path that could not run — see the row below |
+| A scheduled hunt runs against the SIEM the tenant connected in the console | (implied by hunt scheduling + multi-tenant) | `ci.yml` api job (`test_event_warehouse_credentials.py` — credentials resolve from the tenant's vault-encrypted `connectors` row, the query is tenant + enabled + type scoped in compiled SQL, a pinned connector id is still tenant-filtered, and an undecryptable secret is distinguishable from an unconnected one; `test_event_warehouse_registry.py` — a Splunk-only tenant is routed to Splunk rather than to Elasticsearch; `test_event_warehouse_providers.py` — each driver runs against its connector's URL with its connector's auth, and the SSRF allow-list is that connector's own endpoint) | GATED | the drivers are exercised against mocked vendor HTTP, not a live Splunk or Elasticsearch; a vendor-sandbox integration job needs credentials nobody has provisioned |
 | Analyst disposition history drives human-approval-gated tuning proposals | README (self-improving detections) | `ci.yml` api job (`test_wave1_loop_edges.py` — the previously-orphaned `suggest_tuning` engine is wired to real per-rule disposition history via `/detection/tuning/auto-suggest`, opening DRAFT proposals; `test_detection_tuner.py` fixture-gates the engine) | PARTIAL (mapping + wiring gated; end-to-end proposal insert exercised in api integration, not a unit DB) | Phase 2 |
 | Detections can be backtested over historical lake data before promotion | README (detection engineering) | `ci.yml` api job (`test_backtest.py` — bounded/allow-listed SQL construction with injection-sanitised source filter, lake-row→event mapping with JSON payload expansion, exact would-fire count + hit-rate + samples; `test_backtest_gate.py` — opt-in `AISOC_BACKTEST_MAX_HIT_RATE` /decide gate) + web type-check (rule-editor backtest panel) | PARTIAL (pure backtest logic + gate gated; the live tenant-scoped ClickHouse fetch is exercised by the integration gate, not a unit) | Phase 2 |
 | Detections can be authored in Python (`def rule(event)`) with a fixture gate | README (detection engineering) | `python-detections.yml` (`aisoc_detections.runner` fails a blind rule that misses a positive or a noisy one that fires on a negative; every bundled detection must ship ≥1 positive + ≥1 negative case) + `test_framework.py` (fail-closed evaluate, metadata validation) | GATED | - |
@@ -119,7 +120,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- GATED: 93
+- GATED: 100
 - PARTIAL: 9
 - NO GATE: 0 (**every claim is backed by a failing test.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The remaining PARTIAL rows are honest, named deferrals — each states the specific gap and what closes it — not unproven claims.)
 
@@ -131,6 +132,14 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 > counts above are what `scripts/check_claim_gate_matrix.py` now reports.
 > A governance artifact whose own totals are unverified is the exact failure
 > mode it exists to prevent, so the numbers are now derived rather than typed.
+>
+> **They drifted again.** The summary read 93 GATED while the script counted
+> 99 on the commit before this one: rows were appended without re-running it,
+> which is the same failure the note above describes and the reason the
+> lesson is that the summary must be *recomputed*, never typed. The ratchet
+> only enforces the NO GATE ceiling, so a stale GATED total does not fail CI
+> — the number above is now what `scripts/check_claim_gate_matrix.py` prints,
+> and re-running it is the only way to change it.
 
 ### On the PARTIAL rows
 
