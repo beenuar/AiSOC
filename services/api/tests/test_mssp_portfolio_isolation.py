@@ -21,9 +21,13 @@ Industries, Wayne Enterprises — with invented alert counts and health
 scores. `test_every_returned_tenant_exists_in_the_database` fails against
 that code, because none of those names is a row.
 
-Skips when `DATABASE_URL` is not a Postgres DSN, so a local `pytest` run
-without a database stays green. CI runs it in `integration.yml`, where the
-full migration chain has just been applied to a fresh Postgres.
+Skips when no database answers, so a local `pytest` run stays green — but
+**cannot** skip where it is supposed to run. `integration.yml` sets
+`MSSP_ISOLATION_REQUIRED=1`, and an unreachable database is then a failure
+rather than a skip. A gate that quietly declines to run is the shape that
+left the public scoreboard ten weeks stale while its page promised weekly
+rows; checking the DSN *string* is not the same as checking that a database
+is there, and `ci.yml` sets a placeholder DSN with no server behind it.
 """
 
 from __future__ import annotations
@@ -45,9 +49,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 DSN = os.environ.get("DATABASE_URL", "")
+# Set in `integration.yml`, where a real Postgres with the full migration
+# chain is guaranteed. When it is set, an unreachable database fails the
+# build instead of skipping past the isolation proof.
+REQUIRED = os.environ.get("MSSP_ISOLATION_REQUIRED", "").strip() not in ("", "0", "false")
+
 pytestmark = [
     pytest.mark.skipif(
-        "postgres" not in DSN,
+        "postgres" not in DSN and not REQUIRED,
         reason="needs a live Postgres with the migration chain applied (integration.yml)",
     ),
     pytest.mark.asyncio,
@@ -76,6 +85,18 @@ _ALL_USERS = (OWNER_P, OPERATOR_P, NEWCOMER_P, STRANGER)
 @pytest_asyncio.fixture
 async def db():
     engine = create_async_engine(DSN)
+    try:
+        async with engine.connect() as probe:
+            await probe.execute(text("SELECT 1"))
+    except Exception as exc:
+        await engine.dispose()
+        if REQUIRED:
+            pytest.fail(
+                "MSSP_ISOLATION_REQUIRED is set but no database answered at DATABASE_URL — "
+                f"the cross-tenant isolation proof did not run: {type(exc).__name__}: {exc}"
+            )
+        pytest.skip(f"no database at DATABASE_URL ({type(exc).__name__}) — runs in integration.yml")
+
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         await _seed(session)

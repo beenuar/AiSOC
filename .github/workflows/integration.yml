@@ -331,8 +331,16 @@ jobs:
       # migration chain already applied, which makes it the honest home for
       # the replay: it seeds two organisations plus an unmanaged tenant and
       # asserts an aggregate as one operator never returns the others.
+      #
+      # MSSP_ISOLATION_REQUIRED turns an unreachable database into a failure
+      # rather than a skip. A gate that quietly declines to run looks
+      # identical to one that passed, which is how the public scoreboard sat
+      # ten weeks stale; here it would mean shipping a cross-tenant surface
+      # with nobody having checked it stays inside its portfolio.
       - name: Cross-tenant MSSP portfolio isolation (live Postgres)
         working-directory: services/api
+        env:
+          MSSP_ISOLATION_REQUIRED: '1'
         run: pip install --quiet pytest pytest-asyncio && python -m pytest tests/test_mssp_portfolio_isolation.py -v --tb=short
 
       # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
