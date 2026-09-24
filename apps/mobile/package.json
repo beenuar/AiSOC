@@ -14,7 +14,7 @@
   "dependencies": {
     "@aisoc/sdk": "file:../../packages/sdk-ts",
     "expo": "^54.0.0",
-    "expo-constants": "^18.0.0",
+    "expo-constants": "^57.0.19",
     "expo-device": "^8.0.0",
     "expo-linking": "^8.0.0",
     "expo-local-authentication": "^17.0.0",
