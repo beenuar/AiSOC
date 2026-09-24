@@ -15,9 +15,12 @@ This document describes the REST endpoints exposed by AiSOC services. For the au
 All examples assume:
 
 ```bash
+# AISOC_ADMIN_PASSWORD is the password `make bootstrap` printed. There is no
+# default credential — each deployment generates its own at first run.
 export AISOC_TOKEN="$(curl -sX POST http://localhost:8000/v1/auth/login \
   -H 'content-type: application/json' \
-  -d '{"email":"admin@aisoc.local","password":"changeme"}' | jq -r .access_token)"
+  -d "{\"email\":\"admin@aisoc.internal\",\"password\":\"$AISOC_ADMIN_PASSWORD\"}" \
+  | jq -r .access_token)"
 export AISOC_TENANT="00000000-0000-0000-0000-000000000001"
 ```
 

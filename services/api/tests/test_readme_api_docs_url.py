@@ -17,7 +17,21 @@ import re
 from app.core.config import settings
 from app.main import create_application
 
-README = pathlib.Path(__file__).resolve().parents[3] / "README.md"
+REPO = pathlib.Path(__file__).resolve().parents[3]
+README = REPO / "README.md"
+
+# Everything else that prints this URL at a user. The README was corrected on
+# its own and these were not, so `make up` went on telling every new user to
+# open a 404 — the fix reached the document and not the tool.
+TOOL_OUTPUT = (
+    "Makefile",
+    "install.sh",
+    "install.ps1",
+    "scripts/lab.sh",
+    "docs/runbooks/LOCAL_DEVELOPMENT.md",
+    "apps/docs/docs/api/rest.md",
+    "apps/docs/docs/architecture/overview.md",
+)
 
 
 def test_the_readme_points_at_the_url_the_app_mounts() -> None:
@@ -34,3 +48,27 @@ def test_the_readme_points_at_the_url_the_app_mounts() -> None:
         assert path in {docs_url, app.openapi_url, app.redoc_url, "/health"}, (
             f"README advertises http://localhost:8000{path}, which the app does not serve " f"(docs are at {docs_url})"
         )
+
+
+def test_nothing_the_tooling_prints_points_at_a_url_the_app_does_not_serve() -> None:
+    """Only the interactive-docs URLs, not every route these files mention.
+
+    `/docs`, `/redoc` and `/openapi.json` are the three that moved under
+    `/api`, and the three that 404 when a file still names the old spelling.
+    """
+    app = create_application()
+    served = {app.docs_url, app.openapi_url, app.redoc_url}
+    doc_url = re.compile(r"http://localhost:8000((?:/api)?/(?:docs|redoc|openapi\.json))")
+
+    offenders = []
+    for relative in TOOL_OUTPUT:
+        path = REPO / relative
+        if not path.exists():
+            continue
+        for advertised in sorted(set(doc_url.findall(path.read_text()))):
+            if advertised not in served:
+                offenders.append(f"{relative}: http://localhost:8000{advertised}")
+
+    assert not offenders, (
+        "these print an API docs URL the app does not serve:\n  " + "\n  ".join(offenders) + f"\n(docs are mounted at {app.docs_url})"
+    )

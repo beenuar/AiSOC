@@ -197,22 +197,33 @@ CREATE INDEX IF NOT EXISTS idx_rules_enabled ON detection_rules(enabled);
 CREATE INDEX IF NOT EXISTS idx_rules_type    ON detection_rules(rule_type);
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- Seed: default tenant & admin user
+-- Seed: default tenant
 -- ──────────────────────────────────────────────────────────────────────────────
 
 INSERT INTO tenants (id, name, slug, plan)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Default', 'default', 'enterprise')
 ON CONFLICT (slug) DO NOTHING;
 
--- password = "admin" (bcrypt)
-INSERT INTO users (id, tenant_id, email, username, hashed_password, role, is_active, is_verified)
-VALUES (
-    '00000000-0000-0000-0000-000000000002',
-    '00000000-0000-0000-0000-000000000001',
-    'admin@aisoc.local',
-    'admin',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj3EEbF7FtRS',
-    'admin',
-    TRUE,
-    TRUE
-) ON CONFLICT (email) DO NOTHING;
+-- No administrator is seeded here, deliberately.
+--
+-- This migration used to insert 'admin@aisoc.local' with a bcrypt hash and a
+-- comment claiming the password was "admin". Both halves were wrong, and
+-- together they made a fresh install impossible to sign into:
+--
+--   * `.local` is an RFC 6761 special-use domain. The login route validates
+--     with pydantic `EmailStr`, which rejects it with a 422 *before* comparing
+--     the password, so the address could never authenticate.
+--   * The hash matched neither "admin" nor the "changeme" four documentation
+--     pages published. Checked with the API's own `verify_password`, every
+--     candidate returned False — it corresponded to no known secret.
+--
+-- A password hash committed here is also a default credential on every
+-- deployment that clones this repository, which is the thing to avoid rather
+-- than the thing to get right. The deployment mints its own secret instead:
+--
+--     make bootstrap
+--     # docker compose run --rm api python -m app.scripts.bootstrap_admin
+--
+-- It is idempotent, validates the address against the same library the login
+-- route uses, and prints the password once. See
+-- services/api/app/scripts/bootstrap_admin.py.

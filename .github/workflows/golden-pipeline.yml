@@ -84,6 +84,53 @@ jobs:
       - name: make doctor reports a healthy stack
         run: ./scripts/doctor.sh
 
+      # The quick start ends at a login form, and for a long time that is
+      # where it ended: `make up` and `make smoke` both passed and no account
+      # existed that could sign in. A pipeline test cannot catch that, because
+      # nothing in the pipeline authenticates. So the documented command runs
+      # here and the credential it prints is used against the real route — the
+      # same two steps a new user performs, in the same order.
+      - name: make bootstrap creates an administrator that can log in
+        run: |
+          set -euo pipefail
+          out="$(docker compose run --rm -T api python -m app.scripts.bootstrap_admin)"
+          echo "$out" | sed 's/^\(  Password \).*/\1<redacted>/'
+
+          email="$(printf '%s' "$out" | awk '/^  Email/ {print $2}')"
+          password="$(printf '%s' "$out" | awk '/^  Password/ {print $2}')"
+          if [ -z "$email" ] || [ -z "$password" ]; then
+            echo "::error::bootstrap printed no credential a user could copy"
+            exit 1
+          fi
+
+          code="$(curl -s -o /tmp/login.json -w '%{http_code}' \
+            -X POST http://localhost:8000/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            --data "$(python3 -c 'import json,sys; print(json.dumps({"email":sys.argv[1],"password":sys.argv[2]}))' "$email" "$password")")"
+
+          if [ "$code" != "200" ]; then
+            # 422 is the original defect: the address was rejected before the
+            # password was ever compared. Name it so the next reader does not
+            # have to rediscover that it is not a wrong-password failure.
+            echo "::error::login returned $code for the credential bootstrap just printed"
+            jq . /tmp/login.json || cat /tmp/login.json
+            exit 1
+          fi
+          jq -e '.access_token | length > 0' /tmp/login.json >/dev/null
+          echo "logged in as $email with the password the tool printed"
+
+      # Re-running must not hand out a password that does not work. `make up`
+      # calls bootstrap unconditionally, so this runs on every start.
+      - name: bootstrap is idempotent
+        run: |
+          set -euo pipefail
+          out="$(docker compose run --rm -T api python -m app.scripts.bootstrap_admin)"
+          echo "$out"
+          printf '%s' "$out" | grep -q 'already exists' || {
+            echo "::error::a second bootstrap did not report the existing administrator"
+            exit 1
+          }
+
       - name: Golden pipeline — one real event end to end
         run: python3 tests/e2e/golden_pipeline/run_golden_pipeline.py
 

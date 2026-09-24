@@ -22,8 +22,15 @@ type Phase = 'idle' | 'pending' | 'success' | 'error';
 
 export const dynamic = 'force-dynamic';
 
-const DEMO_EMAIL = 'demo@example.com';
-const DEMO_PASSWORD = 'aisoc-demo';
+// Supplied by the build, never written here. Next inlines NEXT_PUBLIC_* into
+// the client bundle wherever they are referenced, so a literal in this module
+// would put a working login pair into every image the project ships —
+// including one built with demo mode off for somebody's own deployment.
+// Gating the *render* on isDemoMode() hides the panel; it does not remove the
+// strings. Only the demo build passes these.
+const DEMO_EMAIL = process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL?.trim() ?? '';
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD?.trim() ?? '';
+const HAS_DEMO_CREDENTIALS = Boolean(DEMO_EMAIL && DEMO_PASSWORD);
 
 /**
  * Sanitize the ``?next=`` redirect target so a crafted link can't be used to
@@ -126,19 +133,19 @@ function LoginInner() {
             </p>
           </div>
 
-          {/* Demo banner — demo mode only.
-              These credentials are seeded by the public demo and exist
-              nowhere else, so on a self-hosted deployment this rendered a
-              "Use demo" button that fails and told the operator's own users
-              to sign in with an account on somebody else's instance. */}
-          {isDemoMode() && (
+          {/* Demo banner — demo mode only, and only when the build supplied
+              credentials. These are seeded by a public demo and exist nowhere
+              else, so on a self-hosted deployment this rendered a "Use demo"
+              button that fails and told the operator's own users to sign in
+              with an account on somebody else's instance. */}
+          {isDemoMode() && HAS_DEMO_CREDENTIALS && (
           <div className="mb-6 rounded-xl border border-indigo-500/30 bg-indigo-500/5 px-4 py-3 text-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-indigo-300">Public demo</p>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  <code className="text-zinc-300">demo@example.com</code> /{' '}
-                  <code className="text-zinc-300">aisoc-demo</code>
+                  <code className="text-zinc-300">{DEMO_EMAIL}</code> /{' '}
+                  <code className="text-zinc-300">{DEMO_PASSWORD}</code>
                 </p>
               </div>
               <button

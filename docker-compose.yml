@@ -9,10 +9,23 @@
 # `docker compose up` does NOT expose Postgres / Kafka / OpenSearch /
 # Neo4j / Redis (with their development passwords) to the network the
 # host is attached to. This is intentional: the same passwords ship in
-# every clone of this repo. If you need to reach these from another
-# machine, write a docker-compose.override.yml that changes the host
-# binding for the specific service you're exposing — and rotate the
-# password while you're there.
+# every clone of this repo.
+#
+# To change a binding, write a docker-compose.override.yml and tag the list
+# `!override`:
+#
+#     services:
+#       postgres:
+#         ports: !override
+#           - "0.0.0.0:5432:5432"
+#
+# The tag is not optional. Compose *appends* sequences when it merges, so an
+# override without it publishes both the old binding and the new one — the
+# 127.0.0.1 binding stays, and on a port that was already taken the conflict
+# is still there. It looks like it worked and it did nothing. Use
+# `ports: !reset []` to stop publishing a service on the host entirely.
+#
+# Rotate the password while you're there.
 ###############################################################################
 
 networks:

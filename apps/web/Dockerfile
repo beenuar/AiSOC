@@ -72,11 +72,19 @@ ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 # `infra/compose/docker-compose.demo.yml`), so the safe default costs those
 # nothing. The api/agents/realtime images are unaffected — demo gating in
 # those services is runtime via AISOC_DEMO_MODE, not build-time.
+# The autologin credentials default to empty, and deliberately carry no
+# fallback anywhere else either. They used to default to a real address and
+# password here, which meant every image — including one built with demo mode
+# off — inlined a working login pair into the JavaScript it serves to browsers.
+# A build that does not ask for the demo should not be able to ship demo
+# credentials by omission. Every demo path passes them explicitly
+# (`publish-images.yml`, `release.yml`, `infra/fly/web/fly.toml`, the `build:`
+# block below this file's consumers), so the empty default costs those nothing.
 ARG NEXT_PUBLIC_DEMO_MODE=""
 ARG NEXT_PUBLIC_DEMO_DEEPLINK="/cases/INC-RT-001?tab=ledger"
 ARG NEXT_PUBLIC_DEMO_BANNER="Demo data resets daily at 00:00 UTC. All write actions are disabled."
-ARG NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL="demo@example.com"
-ARG NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD="aisoc-demo"
+ARG NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=""
+ARG NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=""
 ENV NEXT_PUBLIC_DEMO_MODE=${NEXT_PUBLIC_DEMO_MODE}
 ENV NEXT_PUBLIC_DEMO_DEEPLINK=${NEXT_PUBLIC_DEMO_DEEPLINK}
 ENV NEXT_PUBLIC_DEMO_BANNER=${NEXT_PUBLIC_DEMO_BANNER}

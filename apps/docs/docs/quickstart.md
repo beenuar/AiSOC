@@ -198,7 +198,29 @@ CI on every PR — see
 ### 7. Open the UI
 
 Visit [http://localhost:3000](http://localhost:3000) and log in with the
-default seeded credentials: `admin@aisoc.local` / `changeme`.
+credentials `make up` printed.
+
+There are no default credentials. `make up` runs `make bootstrap`, which
+creates `admin@aisoc.internal` with a password generated on your machine and
+printed once — it is stored nowhere, so copy it when you see it. If the
+terminal has already scrolled away, mint a new one:
+
+```bash
+make bootstrap ARGS=--reset-password
+```
+
+To choose the address or supply your own password instead:
+
+```bash
+AISOC_ADMIN_EMAIL=you@yourcompany.com make bootstrap
+printf '%s' "$MY_PASSWORD" | docker compose run --rm -T api \
+  python -m app.scripts.bootstrap_admin --password-stdin
+```
+
+The address has to be one the login route accepts. It is validated with the
+same library the API uses, so reserved domains (`.local`, `.test`, `.invalid`,
+`.localhost`) are refused here with an explanation rather than producing an
+account that fails at the login form with a schema error.
 
 The mobile **Responder PWA** lives at
 [http://localhost:3000/responder](http://localhost:3000/responder) — install

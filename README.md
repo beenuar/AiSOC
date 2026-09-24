@@ -40,8 +40,14 @@ recorded, and proposes an action. A human approves before anything executes.
 
 ```bash
 git clone https://github.com/beenuar/AiSOC && cd AiSOC
+cp .env.example .env
 make up
 ```
+
+`make up` finishes by creating an administrator and printing its password.
+That password is generated on your machine, shown once, and stored nowhere —
+copy it before the terminal scrolls. If you lose it, mint a new one with
+`make bootstrap ARGS=--reset-password`.
 
 Then **prove it actually works** — this is the part that matters:
 
@@ -59,7 +65,8 @@ of the public API. Every stage reports PASS or FAIL:
 [PASS] alert is retrievable by id from the API
 ```
 
-Open **http://localhost:3000** (API docs at **http://localhost:8000/api/docs**).
+Open **http://localhost:3000** and sign in with the credentials `make up`
+printed (API docs at **http://localhost:8000/api/docs**).
 
 Something wrong? `make doctor` checks every dependency and tells you what to
 run next. Requires Docker with ~6 GB of RAM.

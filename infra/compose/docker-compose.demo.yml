@@ -41,10 +41,22 @@
 # -------------
 # Host port publishings below are bound to 127.0.0.1 so the demo's
 # development passwords are not exposed on the LAN. The same passwords
-# ship with every clone of this repo. If you need to reach these from
-# another machine, write a docker-compose.override.yml that changes
-# the host binding for the specific service you're exposing — and
-# rotate the password while you're there.
+# ship with every clone of this repo.
+#
+# To change a binding, write a docker-compose.override.yml and tag the
+# list `!override`:
+#
+#     services:
+#       postgres:
+#         ports: !override
+#           - "0.0.0.0:5432:5432"
+#
+# The tag is not optional. Compose *appends* sequences when it merges, so
+# an override without it publishes both the old binding and the new one,
+# leaving the 127.0.0.1 binding in place. It looks like it worked and it
+# did nothing. Use `ports: !reset []` to stop publishing on the host.
+#
+# Rotate the password while you're there.
 ###############################################################################
 
 name: aisoc-demo
@@ -286,7 +298,11 @@ services:
     command: ["python", "-m", "app.scripts.seed_demo"]
 
   web:
-    image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-latest}
+    # `demo`, not `latest`. `latest` is the product build with demo mode off —
+    # pulling it here would give a demo stack with no banner, no auto-login and
+    # a visitor bounced to /login on first navigation. The two tags are built
+    # from the same commit by publish-images.yml.
+    image: ghcr.io/beenuar/aisoc-web:${AISOC_TAG:-demo}
     # Build context for `pnpm aisoc:demo --rebuild`. The Dockerfile bakes the
     # frontend bundle with empty NEXT_PUBLIC_* defaults so every fetch is a
     # same-origin relative path (`/api/v1/...`, `/ws/...`). Next.js then

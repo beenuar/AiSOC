@@ -119,6 +119,17 @@ jobs:
             dockerfile: apps/web/Dockerfile
             image: ghcr.io/beenuar/aisoc-web
 
+          # The demo build of the console. Kept off `vX.Y.Z` and `latest` — see
+          # the matching entry in publish-images.yml for why: Next inlines
+          # NEXT_PUBLIC_* at build time, so a demo bundle on the tag a
+          # self-hoster pulls is a console that calls their real data a demo,
+          # with no runtime way out.
+          - service: web-demo
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+
           # Full-stack backend images (pulled by `docker compose up -d` with
           # `pull_policy: missing` when AISOC_VERSION is pinned).
           - service: ingest
@@ -170,13 +181,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Web image needs NEXT_PUBLIC_DEMO_* flags baked in at build time so the
-      # released ghcr.io/beenuar/aisoc-web:vX.Y.Z image (used by AISOC_VERSION
-      # pinning) ships a bundle that knows it's a demo. Mirrors the same step
-      # in publish-images.yml. Other images gate demo behavior at runtime via
-      # AISOC_DEMO_MODE so they don't need build args.
+      # Only the demo build gets the NEXT_PUBLIC_DEMO_* flags, and only it is
+      # published under a demo tag. Mirrors publish-images.yml. Other images
+      # gate demo behaviour at runtime via AISOC_DEMO_MODE so they need no
+      # build args. The credentials live here rather than in the Dockerfile so
+      # a non-demo build cannot inline them into a shipped bundle.
       - id: web-build-args
-        if: matrix.service == 'web'
+        if: matrix.demo == 'true'
         run: |
           {
             echo 'build_args<<EOF'
@@ -188,15 +199,30 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # `vX.Y.Z-demo` is pinnable the same way `vX.Y.Z` is, and `demo` tracks
+      # the newest one. Neither `vX.Y.Z` nor `latest` ever carries a demo
+      # bundle.
+      - id: image-tags
+        run: |
+          {
+            echo 'tags<<EOF'
+            if [ "${{ matrix.demo }}" = "true" ]; then
+              echo "${{ matrix.image }}:${{ github.ref_name }}-demo"
+              echo "${{ matrix.image }}:demo"
+            else
+              echo "${{ matrix.image }}:${{ github.ref_name }}"
+              echo "${{ matrix.image }}:latest"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           push: true
-          tags: |
-            ${{ matrix.image }}:${{ github.ref_name }}
-            ${{ matrix.image }}:latest
+          tags: ${{ steps.image-tags.outputs.tags }}
           build-args: ${{ steps.web-build-args.outputs.build_args }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}

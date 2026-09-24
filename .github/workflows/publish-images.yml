@@ -56,6 +56,25 @@ jobs:
             dockerfile: apps/web/Dockerfile
             image: ghcr.io/beenuar/aisoc-web
 
+          # The demo build of the console, published under its own `demo` tag.
+          #
+          # It used to be the *only* build: `latest` carried the demo bundle,
+          # and `latest` is what `docker-compose.yml` pulls for `make up`. Next
+          # inlines NEXT_PUBLIC_* at build time, so a self-hoster had no runtime
+          # escape — their console announced "Demo data resets daily at 00:00
+          # UTC. All write actions are disabled." over their own real alerts,
+          # disabled every write control, and offered a "Self-host AiSOC" link
+          # inside an already self-hosted install.
+          #
+          # Splitting the tag means nobody has to choose between a working demo
+          # and a usable self-host image. `latest` is the product;
+          # `infra/compose/docker-compose.demo.yml` pulls `demo`.
+          - service: web-demo
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+
           # Full-stack backend images. Published so `docker compose up -d` can
           # pull instead of build (with `pull_policy: missing`), shaving the
           # cold-start time from ~15 min to ~90 s on a fresh clone.
@@ -114,21 +133,26 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ matrix.image }}
+          # The demo build shares the repository but never the moving tags a
+          # self-hoster pulls. `latest` and `main` are the product.
           tags: |
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=sha-,format=short
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' && matrix.demo != 'true' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.demo != 'true' }}
+            type=sha,prefix=sha-,format=short,enable=${{ matrix.demo != 'true' }}
+            type=raw,value=demo,enable=${{ github.ref == 'refs/heads/main' && matrix.demo == 'true' }}
+            type=sha,prefix=demo-sha-,format=short,enable=${{ matrix.demo == 'true' }}
 
-      # Web image needs NEXT_PUBLIC_DEMO_* flags baked in at build time so
-      # the published ghcr.io/beenuar/aisoc-web image used by `pnpm aisoc:demo`
-      # ships a bundle that knows it's a demo (banner, auto-login, deeplink).
-      # Without these the bundle has empty strings → demo affordances no-op
-      # and visitors get bounced to /login on first navigation. Other images
-      # (api/agents/realtime) gate demo behavior at runtime via AISOC_DEMO_MODE
-      # so they don't need build args. The Dockerfile already defaults these
-      # to demo values; setting them here is explicit-is-better-than-implicit.
+      # Only the `demo` tag gets the NEXT_PUBLIC_DEMO_* flags. Next inlines
+      # them at build time, so this is the whole difference between the two
+      # images — and why it has to be a separate build rather than a runtime
+      # switch. Other images (api/agents/realtime) gate demo behaviour at
+      # runtime via AISOC_DEMO_MODE and need no build args at all.
+      #
+      # The credentials are supplied here rather than defaulted in the
+      # Dockerfile so a build that does not ask for the demo cannot inline
+      # them into a bundle it ships to a customer.
       - id: web-build-args
-        if: matrix.service == 'web'
+        if: matrix.demo == 'true'
         run: |
           {
             echo 'build_args<<EOF'
