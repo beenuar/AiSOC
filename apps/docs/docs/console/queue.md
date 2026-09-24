@@ -16,7 +16,7 @@ This page documents the bucket model, the SLA timer, the action set, and the API
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  Investigation Queue                          [Mine 3] [Unassigned 12] [All 15] │
 │  ──────────────────────────────────────────────────────────────────────  │
-│  ● CRIT  Impossible travel · analyst@tryaisoc.com SLA -2m 04s  [Open]    │
+│  ● CRIT  Impossible travel · analyst@example.com  SLA -2m 04s  [Open]    │
 │  ● HIGH  Defender — credential dump · web-01      SLA  3m 41s  [Open]    │
 │  ● HIGH  GitHub PAT exfil · svc-deploy            SLA  9m 12s  [Open]    │
 │  ● MED   New OAuth grant · helpdesk@…             SLA  1h 22m  [Open]    │

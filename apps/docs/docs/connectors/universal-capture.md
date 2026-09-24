@@ -50,7 +50,7 @@ The token never grants any privilege beyond "write events scoped to this templat
 The default route. Accepts a single JSON object **or** an NDJSON batch.
 
 ```bash
-curl -X POST https://ingest.tryaisoc.com/v1/inbox/aisoc_inbox_xxxxx \
+curl -X POST https://ingest.example.com/v1/inbox/aisoc_inbox_xxxxx \
   -H "Content-Type: application/json" \
   -d '{
     "event": {
@@ -109,7 +109,7 @@ CEF:0|Vendor|Product|1.0|100|User login failed|3|src=10.0.0.1 suser=alice cs1=mf
 Drop-in replacement for `services/collector/event` — useful for on-prem fleets already configured to write to Splunk HEC. Authorization is the standard `Authorization: Splunk <token>` header where `<token>` is the inbox token minted in the console.
 
 ```bash
-curl -X POST https://ingest.tryaisoc.com/v1/inbox/hec \
+curl -X POST https://ingest.example.com/v1/inbox/hec \
   -H "Authorization: Splunk aisoc_inbox_xxxxx" \
   -H "Content-Type: application/json" \
   -d '{"event": {"action": "login_failed", "user": "alice"}, "sourcetype": "auth"}'

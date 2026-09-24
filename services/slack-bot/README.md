@@ -39,7 +39,7 @@ Configured entirely via environment variables (Pydantic settings):
 | `AISOC_ACTIONS_BASE_URL`              | yes      | e.g. `http://aisoc-actions:8085` (in-cluster).               |
 | `AISOC_API_SERVICE_TOKEN`             | yes      | `aisoc_…` API key with `cases:read,cases:write,alerts:read`. |
 | `AISOC_ACTIONS_SERVICE_TOKEN`         | yes      | `aisoc_…` API key with `actions:write` (or shared key).      |
-| `AISOC_WEB_BASE_URL`                  | no       | Public web URL used to deep-link case cards. Default `https://app.tryaisoc.com`. |
+| `AISOC_WEB_BASE_URL`                  | no       | Public web URL used to deep-link case cards. Default `http://localhost:3000`. |
 | `AISOC_DEFAULT_TENANT_ID`             | yes      | UUID of the tenant Slack actions belong to (single-tenant Slack workspace assumption). |
 | `AISOC_SLACK_BOT_PORT`                | no       | Bolt FastAPI port. Default `8089`.                           |
 

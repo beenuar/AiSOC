@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "Fixture corpus for the tool-attribution gate. One file, used four ways, so",
+    "the client-side hook and the CI gate are held to the same definition:",
+    "",
+    "  1. scripts/check_attribution.py must FLAG every sample in `bad`.",
+    "  2. scripts/check_attribution.py must NOT flag any sample in `good`.",
+    "  3. .githooks/commit-msg must REMOVE every `bad` line it is handed.",
+    "  4. .githooks/commit-msg must PRESERVE every `good` line it is handed.",
+    "",
+    "A gate that only ever runs against clean input cannot tell you it still",
+    "works. 1 and 3 prove it is not vacuous; 2 and 4 prove it has not grown so",
+    "broad that it would strip a real contributor's trailer or flag neutral",
+    "prose. Checking only one direction is how a gate passes while drift",
+    "accumulates in the direction things actually change."
+  ],
+
+  "bad": [
+    "Co-authored-by: Cursor <cursoragent@cursor.com>",
+    "Co-authored-by: cursor-agent <ai@cursor.local>",
+    "Co-authored-by: cursoragent <cursoragent@cursor.com>",
+    "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>",
+    "Co-authored-by: Claude <noreply@anthropic.com>",
+    "Co-authored-by: GitHub Copilot <copilot@github.com>",
+    "Co-authored-by: Devin <devin@cognition.ai>",
+    "Made with [Cursor](https://cursor.com)",
+    "made with cursor",
+    "\ud83e\udd16 Generated with [Claude Code](https://claude.com/claude-code)",
+    "Generated with Claude Code",
+    "Created by ChatGPT",
+    "Built with GitHub Copilot",
+    "Written by Codex",
+    "Powered by Claude",
+    "Assisted by Cursor",
+    "https://cursor.com",
+    "https://claude.com/claude-code"
+  ],
+
+  "good": [
+    "Co-authored-by: Beenu Arora <beenu@cyble.com>",
+    "Co-authored-by: Beenu Arora <beenu.a.arora@gmail.com>",
+    "Co-authored-by: Prince Sinha <prince.sinha@cyble.com>",
+    "Co-authored-by: beenuar <beenuar@users.noreply.github.com>",
+    "Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>",
+    "Co-authored-by: aisoc-papers-bot <papers-bot@example.com>",
+    "Signed-off-by: Beenu Arora <beenu@cyble.com>",
+    "Lockfile regenerated with pnpm@8.15.1 (lockfileVersion 6.0).",
+    "pnpm-lock.yaml regenerated with pnpm@8.15.1, lockfileVersion: '6.0'.",
+    "The mock cost table named gpt-4o, gpt-4o-mini and claude-3.5-sonnet.",
+    "Add gpt-4o-mini and gpt-4o aliases to the LiteLLM gateway config.",
+    "The agent is model-agnostic and has been graded against several providers.",
+    "OpenAI-compatible endpoints are supported by the LLM gateway.",
+    "Anthropic, OpenAI and DeepSeek are all reachable through the same alias.",
+    "This detection fires on anomalous Copilot usage in the customer's estate.",
+    "A reference AI-SOC platform reports a comparable figure.",
+    "The report was generated with scripts/render_eval_charts.py.",
+    "Fixtures are created by build_positive() from the rule under test."
+  ]
+}

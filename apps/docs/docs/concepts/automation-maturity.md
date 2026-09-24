@@ -16,7 +16,7 @@ audit-log decision in `remediation_gate_log`.
 This page is the canonical reference for the model. For a longer,
 narrative-style treatment with worked examples, migration playbooks, and
 references to industry frameworks, read the
-[**L0–L4 Automation Maturity white paper**](https://tryaisoc.com/papers/l0-l4-automation-maturity.pdf).
+[**L0–L4 Automation Maturity white paper**](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/papers/l0-l4-automation-maturity.pdf).
 
 ## Why a tier model
 
@@ -342,7 +342,7 @@ story is mature. A small number of pilot tenants are running L4-whitelisted
 closed loops for `isolate_host` on quarantine-tagged hosts.
 
 The white paper companion to this page —
-[`l0-l4-automation-maturity.pdf`](https://tryaisoc.com/papers/l0-l4-automation-maturity.pdf) —
+[`l0-l4-automation-maturity.pdf`](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/papers/l0-l4-automation-maturity.pdf) —
 goes deeper on:
 
 - The case for an explicit maturity model (vs. opaque "automation level"

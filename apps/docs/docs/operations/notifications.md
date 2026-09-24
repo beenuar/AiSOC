@@ -112,7 +112,7 @@ If push delivery returns `404` or `410` (subscription expired or removed by the 
 | `AISOC_API_SERVICE_TOKEN` | API key with `cases:read,cases:write,alerts:read`. |
 | `AISOC_ACTIONS_SERVICE_TOKEN` | API key with `actions:write` (or shared key). |
 | `AISOC_DEFAULT_TENANT_ID` | UUID of the tenant Slack actions belong to. |
-| `AISOC_WEB_BASE_URL` | Optional. Public web URL used for deep-linked cards. Default `https://app.tryaisoc.com`. |
+| `AISOC_WEB_BASE_URL` | Optional. Public web URL used for deep-linked cards. Default `http://localhost:3000`. |
 
 Slack tokens **must** come from your secret store (Doppler / Vault / k8s Secret). `pnpm preflight` fails the build if it spots a Slack token in tracked files.
 

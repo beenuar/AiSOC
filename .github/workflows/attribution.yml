@@ -1,0 +1,85 @@
+name: Attribution
+
+# AiSOC never attributes work to a development tool or AI assistant. This gate
+# fails when such an attribution reaches a commit message, a changed file, or a
+# pull request body.
+#
+# It runs on BOTH pull_request and push-to-main on purpose. A PR-only gate is
+# one-directional: it checks what contributors propose but never what actually
+# lands, so anything introduced by the merge itself — a squash message composed
+# from branch commits, a commit_message passed to the merge API, an edit made in
+# the GitHub UI at merge time — would slip past it while the gate stayed green.
+# Checking main after the fact closes that direction.
+#
+# No paths filter. Attribution can appear in any file, and a filtered gate that
+# skips is indistinguishable from a gate that passes.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: attribution-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attribution:
+    name: No tool attribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history: the gate reads commit messages, not just the tree.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Runs first and on every invocation. If the patterns stop matching, this
+      # fails here rather than letting the scan below report a clean tree it
+      # never actually inspected properly.
+      - name: Self-test (gate is not vacuous, and agrees with the hook)
+        run: python3 scripts/check_attribution.py --self-test
+
+      - name: Scan the tree
+        run: python3 scripts/check_attribution.py --all
+
+      - name: Scan commit messages and the PR body
+        if: github.event_name == 'pull_request'
+        env:
+          # Via env, never string-interpolated into the shell: a PR body is
+          # attacker-controlled text.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.md
+          git fetch --no-tags origin "$BASE_REF"
+          python3 scripts/check_attribution.py \
+            --commits "origin/$BASE_REF..HEAD" \
+            --diff-base "origin/$BASE_REF" \
+            --text-file /tmp/pr-body.md
+
+      - name: Scan commits that landed on main
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # A new branch, a force-push, or a first push gives an all-zero or
+          # unreachable `before`. Fall back to the tip commit so the step checks
+          # something real instead of silently scanning an empty range.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            RANGE="$AFTER~1..$AFTER"
+          else
+            RANGE="$BEFORE..$AFTER"
+          fi
+          echo "scanning commit range: $RANGE"
+          python3 scripts/check_attribution.py --commits "$RANGE"

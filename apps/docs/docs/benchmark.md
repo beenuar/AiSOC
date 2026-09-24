@@ -759,8 +759,8 @@ python3 scripts/run_evals.py --json --out report.json
 
 Submissions go through a structured GitHub issue template
 ([`.github/ISSUE_TEMPLATE/benchmark_submission.yml`](https://github.com/beenuar/AiSOC/blob/main/.github/ISSUE_TEMPLATE/benchmark_submission.yml)).
-Accepted entries are rendered on the [benchmark scoreboard](https://tryaisoc.com/benchmark) in the
-web console. Submission rules:
+Accepted entries are rendered on the [public benchmark scoreboard](./benchmark-scoreboard.mdx).
+Submission rules:
 
 1. **Same fixed dataset** — run against the deterministic 200-incident dataset on the commit you submit. No private fixtures.
 2. **Same harness** — run `scripts/run_evals.py --json --out report.json` with no flags that disable gates. Attach the full `report.json` so per-template macros are auditable.
