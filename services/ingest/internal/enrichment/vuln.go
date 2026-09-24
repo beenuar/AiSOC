@@ -25,12 +25,12 @@ const (
 
 // VulnMatch is the payload emitted to Kafka when a CVE correlation fires.
 type VulnMatch struct {
-	EventID    string     `json:"event_id"`
-	SourceIP   string     `json:"source_ip"`
-	CVE        string     `json:"cve_id"`
-	KEVEntry   *KevEntry  `json:"kev_entry,omitempty"`
-	DetectedAt time.Time  `json:"detected_at"`
-	TenantID   string     `json:"tenant_id,omitempty"`
+	EventID    string    `json:"event_id"`
+	SourceIP   string    `json:"source_ip"`
+	CVE        string    `json:"cve_id"`
+	KEVEntry   *KevEntry `json:"kev_entry,omitempty"`
+	DetectedAt time.Time `json:"detected_at"`
+	TenantID   string    `json:"tenant_id,omitempty"`
 }
 
 // KevEntry represents a single CISA KEV catalogue entry.

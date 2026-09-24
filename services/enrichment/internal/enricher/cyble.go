@@ -6,7 +6,8 @@
 // brand-risk signals.
 //
 // API docs (gated, requires a tenant):
-//   https://docs.cyble.com/cyble-vision/api/v2/
+//
+//	https://docs.cyble.com/cyble-vision/api/v2/
 //
 // This client targets the v2 REST surface and degrades gracefully:
 //   - returns (nil, nil) when no API key is configured
@@ -88,14 +89,14 @@ func (c *CybleClient) configured() bool { return c != nil && c.apiKey != "" }
 // cybleIndicatorResponse is the v2 indicator schema (subset).
 type cybleIndicatorResponse struct {
 	Data struct {
-		Indicator   string  `json:"indicator"`
-		Type        string  `json:"type"`
-		RiskScore   float64 `json:"risk_score"`   // 0-100
-		Confidence  float64 `json:"confidence"`   // 0-100
-		Reputation  int     `json:"reputation"`   // -100 to 100
-		FirstSeen   string  `json:"first_seen"`
-		LastSeen    string  `json:"last_seen"`
-		Verdict     string  `json:"verdict"` // malicious | suspicious | benign | unknown
+		Indicator   string   `json:"indicator"`
+		Type        string   `json:"type"`
+		RiskScore   float64  `json:"risk_score"` // 0-100
+		Confidence  float64  `json:"confidence"` // 0-100
+		Reputation  int      `json:"reputation"` // -100 to 100
+		FirstSeen   string   `json:"first_seen"`
+		LastSeen    string   `json:"last_seen"`
+		Verdict     string   `json:"verdict"` // malicious | suspicious | benign | unknown
 		Categories  []string `json:"categories"`
 		Tags        []string `json:"tags"`
 		Actors      []string `json:"threat_actors"`

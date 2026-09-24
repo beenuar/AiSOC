@@ -1,25 +1,25 @@
 // cache.go — TTL cache for resource-config lookups.
 //
 // The snapshotter (snapshotter.go) sits on the graph-flush path. Every event
-// that references a resource may trigger a ``get_resource_config`` round-trip
+// that references a resource may trigger a get_resource_config round-trip
 // to the connectors service. In a busy SOC the same EC2 instance, GitHub
 // repo, or Okta app shows up in dozens of events per minute; without a cache
 // the connectors service would get hammered for the same resource over and
 // over.
 //
-// Two backends are exposed behind a single ``Cache`` interface:
+// Two backends are exposed behind a single Cache interface:
 //
-//   - ``RedisCache`` — production. Backed by ``github.com/redis/go-redis/v9``.
+//   - RedisCache — production. Backed by github.com/redis/go-redis/v9.
 //     A failure to connect at construction time is *non-fatal* — we fall
 //     back to the in-memory cache. The graph writer must NEVER fail because
 //     Redis is unhealthy.
 //
-//   - ``MemoryCache`` — tests + the in-process default. Bounded LRU-ish via
-//     a simple ``map`` + janitor goroutine. Good enough for single-pod
+//   - MemoryCache — tests + the in-process default. Bounded LRU-ish via
+//     a simple map + janitor goroutine. Good enough for single-pod
 //     deployments and for the unit tests here.
 //
 // Keys collapse the three coordinates that uniquely identify a config
-// snapshot: ``(connector_id, resource_id, ts_bucket)``. The ts is bucketed
+// snapshot: (connector_id, resource_id, ts_bucket). The ts is bucketed
 // to the cache TTL so two events 30 seconds apart against the same resource
 // hit the same cache slot — that's the whole point of the cache.
 //
@@ -87,9 +87,9 @@ type memEntry struct {
 	expiry time.Time
 }
 
-// NewMemoryCache builds a process-local TTL cache. ``ttl <= 0`` defaults to
+// NewMemoryCache builds a process-local TTL cache. ttl <= 0 defaults to
 // 10 minutes. Spawns a janitor goroutine that evicts expired entries every
-// ``ttl/2`` so a quiet pod doesn't grow unbounded.
+// ttl/2 so a quiet pod doesn't grow unbounded.
 func NewMemoryCache(ttl time.Duration) *MemoryCache {
 	if ttl <= 0 {
 		ttl = 10 * time.Minute
@@ -168,7 +168,7 @@ type RedisCache struct {
 }
 
 // RedisConfig wires the Redis client. Address follows the standard
-// ``host:port`` shape; password is optional.
+// host:port shape; password is optional.
 type RedisConfig struct {
 	Addr     string
 	Password string

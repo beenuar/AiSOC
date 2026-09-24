@@ -41,8 +41,8 @@ type ShodanHost struct {
 }
 
 type cacheEntry struct {
-	host    *ShodanHost
-	expiry  time.Time
+	host   *ShodanHost
+	expiry time.Time
 }
 
 // ShodanEnricher looks up IP addresses using the Shodan Internet DB API

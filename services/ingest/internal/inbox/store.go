@@ -1,7 +1,7 @@
 // Package inbox is the universal-capture push path (Workstream 6 of the
 // AI Stack & Data Integration plan).
 //
-// The Python services/api service mints rows in ``tenant_inbox_tokens``
+// The Python services/api service mints rows in tenant_inbox_tokens
 // (see migration 033) when an operator clicks "Push (any vendor)" in the
 // onboarding wizard. This package is the Go side: it resolves an inbox
 // token presented on /v1/inbox/{token} (or /v1/inbox/cef, /v1/inbox/hec,
@@ -12,13 +12,13 @@
 // Why direct Postgres access (and not an internal HTTP call to
 // services/api)?
 //
-//   * Hot path. Every webhook from PagerDuty / Opsgenie / Cloudflare
+//   - Hot path. Every webhook from PagerDuty / Opsgenie / Cloudflare
 //     hits this code; one extra cross-service HTTP hop would double our
 //     ingest latency budget.
-//   * The DB is already shared. services/connectors writes connector
+//   - The DB is already shared. services/connectors writes connector
 //     state, services/api reads it back; this is one more table in the
 //     same schema with the same RLS posture.
-//   * Postgres RLS is a hard backstop. The ingest service connects with
+//   - Postgres RLS is a hard backstop. The ingest service connects with
 //     a service-role DSN (BYPASSRLS), but if a future change ever wires
 //     it through a tenant-scoped pool the policy in migration 033 keeps
 //     cross-tenant lookups from leaking.
@@ -56,13 +56,13 @@ var (
 // template processes its payloads, and (optionally) the HMAC secret used
 // to verify the X-Signature header.
 type Token struct {
-	Token       string
-	TenantID    uuid.UUID
-	TemplateID  string
-	Label       string
-	HMACSecret  string
-	CreatedAt   time.Time
-	LastUsedAt  *time.Time
+	Token      string
+	TenantID   uuid.UUID
+	TemplateID string
+	Label      string
+	HMACSecret string
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
 }
 
 // Store resolves inbox tokens against Postgres with a tiny in-process
@@ -82,9 +82,9 @@ type Store struct {
 }
 
 type cachedEntry struct {
-	token    *Token
-	revoked  bool // remembered separately so we can fail fast
-	expires  time.Time
+	token   *Token
+	revoked bool // remembered separately so we can fail fast
+	expires time.Time
 }
 
 // NewStore wraps a pgx pool with the resolver + cache.
@@ -154,9 +154,9 @@ func (s *Store) Resolve(ctx context.Context, token string) (*Token, error) {
 	`, token)
 
 	var (
-		t          Token
-		revokedAt  *time.Time
-		lastUsed   *time.Time
+		t         Token
+		revokedAt *time.Time
+		lastUsed  *time.Time
 	)
 	err := row.Scan(
 		&t.Token,

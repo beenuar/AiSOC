@@ -37,11 +37,11 @@ type OcsfBaseEvent struct {
 
 // OcsfMetadata contains event metadata
 type OcsfMetadata struct {
-	Version     string      `json:"version"`
-	Product     OcsfProduct `json:"product"`
-	TenantUID   string      `json:"tenant_uid,omitempty"`
-	IngestedAt  string      `json:"ingested_time"`
-	OriginalAt  string      `json:"original_time,omitempty"`
+	Version    string      `json:"version"`
+	Product    OcsfProduct `json:"product"`
+	TenantUID  string      `json:"tenant_uid,omitempty"`
+	IngestedAt string      `json:"ingested_time"`
+	OriginalAt string      `json:"original_time,omitempty"`
 }
 
 // OcsfProduct identifies the source product
@@ -85,10 +85,10 @@ type Normalizer struct {
 
 // connectorProfile defines normalization rules for a connector type
 type connectorProfile struct {
-	product    OcsfProduct
-	classUID   int
-	className  string
-	fieldMap   map[string]string
+	product     OcsfProduct
+	classUID    int
+	className   string
+	fieldMap    map[string]string
 	severityMap map[string]int
 }
 
@@ -113,10 +113,10 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  2002,
 		className: "Security Finding",
 		fieldMap: map[string]string{
-			"TimeGenerated":  "time",
-			"AlertName":      "message",
+			"TimeGenerated":     "time",
+			"AlertName":         "message",
 			"CompromisedEntity": "device.name",
-			"Severity":       "severity",
+			"Severity":          "severity",
 		},
 		severityMap: map[string]int{
 			"High": 4, "Medium": 3, "Low": 2, "Informational": 1,
@@ -160,11 +160,11 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  3002,
 		className: "Authentication",
 		fieldMap: map[string]string{
-			"published":           "time",
-			"actor.alternateId":   "actor.user.email_addr",
-			"actor.displayName":   "actor.user.name",
-			"client.ipAddress":    "src_endpoint.ip",
-			"outcome.result":      "status",
+			"published":         "time",
+			"actor.alternateId": "actor.user.email_addr",
+			"actor.displayName": "actor.user.name",
+			"client.ipAddress":  "src_endpoint.ip",
+			"outcome.result":    "status",
 		},
 		severityMap: map[string]int{
 			"ERROR": 4, "WARN": 3, "INFO": 1, "DEBUG": 1,
@@ -175,9 +175,9 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  2001,
 		className: "Security Finding",
 		fieldMap: map[string]string{
-			"UpdatedAt":   "time",
-			"Title":       "message",
-			"Description": "raw_data",
+			"UpdatedAt":      "time",
+			"Title":          "message",
+			"Description":    "raw_data",
 			"Severity.Label": "severity",
 		},
 		severityMap: map[string]int{
@@ -286,17 +286,17 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  6003,
 		className: "API Activity",
 		fieldMap: map[string]string{
-			"auditID":              "finding.uid",
-			"verb":                 "activity_name",
-			"user.username":        "actor.user.name",
-			"objectRef.resource":   "finding.title",
-			"objectRef.namespace":  "cloud.account.uid",
-			"objectRef.name":       "resource.name",
-			"sourceIPs.0":          "src_endpoint.ip",
-			"userAgent":            "http_request.user_agent",
-			"responseStatus.code":  "status_code",
-			"stage":                "status_detail",
-			"stageTimestamp":       "time",
+			"auditID":             "finding.uid",
+			"verb":                "activity_name",
+			"user.username":       "actor.user.name",
+			"objectRef.resource":  "finding.title",
+			"objectRef.namespace": "cloud.account.uid",
+			"objectRef.name":      "resource.name",
+			"sourceIPs.0":         "src_endpoint.ip",
+			"userAgent":           "http_request.user_agent",
+			"responseStatus.code": "status_code",
+			"stage":               "status_detail",
+			"stageTimestamp":      "time",
 		},
 		severityMap: map[string]int{
 			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
@@ -678,9 +678,9 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 
 	// Set metadata
 	ocsf["metadata"] = map[string]interface{}{
-		"version": n.version,
-		"product": profile.product,
-		"tenant_uid": raw.TenantID,
+		"version":       n.version,
+		"product":       profile.product,
+		"tenant_uid":    raw.TenantID,
 		"ingested_time": time.Now().UTC().Format(time.RFC3339),
 	}
 

@@ -46,19 +46,19 @@ func (c *RecordedFutureClient) configured() bool { return c != nil && c.apiKey !
 type rfResponse struct {
 	Data struct {
 		Risk struct {
-			Score             int      `json:"score"`            // 0-99
-			Criticality       int      `json:"criticality"`      // 0-4
-			CriticalityLabel  string   `json:"criticalityLabel"` // None | Unusual | Suspicious | Malicious | Very Malicious
-			RiskString        string   `json:"riskString"`
-			RiskSummary       string   `json:"riskSummary"`
-			Rules             int      `json:"rules"` // count of triggered rules
-			EvidenceDetails   []rfEvidenceDetail `json:"evidenceDetails"`
+			Score            int                `json:"score"`            // 0-99
+			Criticality      int                `json:"criticality"`      // 0-4
+			CriticalityLabel string             `json:"criticalityLabel"` // None | Unusual | Suspicious | Malicious | Very Malicious
+			RiskString       string             `json:"riskString"`
+			RiskSummary      string             `json:"riskSummary"`
+			Rules            int                `json:"rules"` // count of triggered rules
+			EvidenceDetails  []rfEvidenceDetail `json:"evidenceDetails"`
 		} `json:"risk"`
 		ThreatLists []struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
 		} `json:"threatLists"`
-		IntelCard string `json:"intelCard"`
+		IntelCard  string `json:"intelCard"`
 		Timestamps struct {
 			FirstSeen string `json:"firstSeen"`
 			LastSeen  string `json:"lastSeen"`
@@ -88,12 +88,12 @@ type rfResponse struct {
 }
 
 type rfEvidenceDetail struct {
-	Rule              string `json:"rule"`
-	EvidenceString    string `json:"evidenceString"`
-	CriticalityLabel  string `json:"criticalityLabel"`
-	Criticality       int    `json:"criticality"`
-	Timestamp         string `json:"timestamp"`
-	MitigationString  string `json:"mitigationString"`
+	Rule             string `json:"rule"`
+	EvidenceString   string `json:"evidenceString"`
+	CriticalityLabel string `json:"criticalityLabel"`
+	Criticality      int    `json:"criticality"`
+	Timestamp        string `json:"timestamp"`
+	MitigationString string `json:"mitigationString"`
 }
 
 // EnrichIP queries Recorded Future for IP risk + context.

@@ -3,7 +3,7 @@
 // T1.2 (v8.0) extends the T1.1 ingest-side graph writer: every event that
 // names a resource gets the resource's *configuration at event-time*
 // attached as a versioned :Configuration node connected via
-// ``:CONFIGURED_AS {ts}``. The whole point is "what did this S3 bucket /
+// :CONFIGURED_AS {ts}. The whole point is "what did this S3 bucket /
 // IAM policy / GitHub repo look like the moment the alert fired", which is
 // the difference between "the bucket is public NOW" (boring) and "the bucket
 // was made public 90 seconds before the data exfil" (incident-defining).
@@ -24,11 +24,11 @@
 //
 // Two pluggable seams:
 //
-//   - ``Provider``: how the snapshotter actually fetches the config.
+//   - Provider: how the snapshotter actually fetches the config.
 //     Production wires an HTTP provider that calls the connectors service.
-//     Tests wire ``StaticProvider`` with a fixture map.
+//     Tests wire StaticProvider with a fixture map.
 //
-//   - ``Cache``: how snapshots are remembered between events. See cache.go.
+//   - Cache: how snapshots are remembered between events. See cache.go.
 //
 // Failure isolation: a Provider error is logged + the snapshot is skipped.
 // The graph writer still upserts the underlying :Resource node, so the
@@ -58,13 +58,13 @@ import (
 
 // ErrNotImplemented is the sentinel returned by Provider implementations
 // that don't (yet) support a given connector. Mirrors the Python
-// ``BaseConnector.get_resource_config`` default. The snapshotter treats
+// BaseConnector.get_resource_config default. The snapshotter treats
 // this as a soft skip — no error counter, no log spam.
 var ErrNotImplemented = errors.New("snapshot: get_resource_config not implemented")
 
 // Provider fetches a resource's configuration at event time.
 //
-// Implementations MUST honor ``ctx`` deadlines aggressively: the
+// Implementations MUST honor ctx deadlines aggressively: the
 // snapshotter sits on the graph flush path and a slow provider would push
 // back on the writer queue.
 type Provider interface {
@@ -77,17 +77,17 @@ type Provider interface {
 }
 
 // StaticProvider is the test-friendly Provider. Configs are keyed by
-// ``connectorID + resourceID``; entries can be time-ordered to model
+// connectorID + resourceID; entries can be time-ordered to model
 // configuration history (the AWS Config-style fixture).
 type StaticProvider struct {
 	// Configs is the per-connector resource config history. The history
-	// MUST be sorted by Recorded ascending; ``GetResourceConfig`` returns
+	// MUST be sorted by Recorded ascending; GetResourceConfig returns
 	// the most recent entry whose Recorded <= ts.
 	Configs map[string]map[string][]ConfigSnapshot
 }
 
-// ConfigSnapshot is one point-in-time configuration. ``Recorded`` is when
-// the config took effect; ``Data`` is the connector-specific payload.
+// ConfigSnapshot is one point-in-time configuration. Recorded is when
+// the config took effect; Data is the connector-specific payload.
 type ConfigSnapshot struct {
 	Recorded time.Time
 	Data     map[string]interface{}
@@ -162,7 +162,7 @@ type HTTPProvider struct {
 	Client  *http.Client
 }
 
-// NewHTTPProvider constructs the production provider. ``timeout`` caps each
+// NewHTTPProvider constructs the production provider. timeout caps each
 // round-trip — defaults to 1.5s if non-positive (matches
 // AISOC_SNAPSHOT_PROVIDER_TIMEOUT_MS).
 func NewHTTPProvider(baseURL string, timeout time.Duration) *HTTPProvider {
@@ -228,11 +228,11 @@ type Snapshotter struct {
 
 	// metrics — atomic counters surfaced for tests and the Prometheus
 	// collector.
-	hits        atomic.Uint64
-	misses      atomic.Uint64
-	errors      atomic.Uint64
-	skipped     atomic.Uint64
-	attached    atomic.Uint64
+	hits     atomic.Uint64
+	misses   atomic.Uint64
+	errors   atomic.Uint64
+	skipped  atomic.Uint64
+	attached atomic.Uint64
 }
 
 // Config wires the snapshotter at construction time.
@@ -458,7 +458,7 @@ func resourceRefsFromEvent(ev *graph.Event, connectorID string) []resourceRef {
 }
 
 // connectorIDForEvent looks at any :Resource / :Repo / :SaaSApp / :User
-// node and returns the ``provider`` property the extractor stamps. That's
+// node and returns the provider property the extractor stamps. That's
 // the connector_id the snapshotter dispatches on.
 //
 // Falls back to the first :Resource's connector hint, or "" if no node

@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	cdnURL         = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
-	cacheTTLHours  = 24
+	cdnURL        = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
+	cacheTTLHours = 24
 )
 
 // Technique holds key ATT&CK technique fields.
@@ -32,11 +32,11 @@ type Technique struct {
 }
 
 var (
-	mu           sync.RWMutex
-	techniques   = map[string]*Technique{}
-	tacticMap    = map[string]string{} // phase_name → display_name
-	loaded       bool
-	loadedAt     time.Time
+	mu         sync.RWMutex
+	techniques = map[string]*Technique{}
+	tacticMap  = map[string]string{} // phase_name → display_name
+	loaded     bool
+	loadedAt   time.Time
 )
 
 // Loaded returns true if the corpus has been successfully loaded.

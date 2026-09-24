@@ -15,8 +15,8 @@ import (
 
 // Client talks to the AiSOC API on behalf of the extension.
 type Client struct {
-	cfg    *config.Config
-	http   *http.Client
+	cfg  *config.Config
+	http *http.Client
 }
 
 // New returns a Client backed by cfg.

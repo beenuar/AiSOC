@@ -30,13 +30,13 @@ func NewVirusTotalClient(apiKey string) *VirusTotalClient {
 }
 
 type vtAttributes struct {
-	LastAnalysisStats map[string]int    `json:"last_analysis_stats"`
-	Reputation        int               `json:"reputation"`
-	Tags              []string          `json:"tags"`
-	Country           string            `json:"country"`
-	ASN               int64             `json:"asn"`
-	ASOwner           string            `json:"as_owner"`
-	Network           string            `json:"network"`
+	LastAnalysisStats    map[string]int `json:"last_analysis_stats"`
+	Reputation           int            `json:"reputation"`
+	Tags                 []string       `json:"tags"`
+	Country              string         `json:"country"`
+	ASN                  int64          `json:"asn"`
+	ASOwner              string         `json:"as_owner"`
+	Network              string         `json:"network"`
 	LastModificationDate int64          `json:"last_modification_date"`
 }
 

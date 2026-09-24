@@ -18,9 +18,9 @@ const (
 type AlertStatus string
 
 const (
-	AlertStatusOpen         AlertStatus = "open"
-	AlertStatusInProgress   AlertStatus = "in_progress"
-	AlertStatusClosed       AlertStatus = "closed"
+	AlertStatusOpen          AlertStatus = "open"
+	AlertStatusInProgress    AlertStatus = "in_progress"
+	AlertStatusClosed        AlertStatus = "closed"
 	AlertStatusFalsePositive AlertStatus = "false_positive"
 )
 

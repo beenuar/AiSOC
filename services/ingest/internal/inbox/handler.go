@@ -345,8 +345,8 @@ func (h *Handler) readBody(w http.ResponseWriter, r *http.Request, route, templa
 // verifyHMACOrFail enforces the optional HMAC-SHA256 signature header
 // when the token has hmac_secret set. We accept either:
 //
-//   X-Signature: sha256=<hex>
-//   X-Hub-Signature-256: sha256=<hex>   (GitHub-style)
+//	X-Signature: sha256=<hex>
+//	X-Hub-Signature-256: sha256=<hex>   (GitHub-style)
 //
 // Constant-time comparison protects against timing oracles.
 func (h *Handler) verifyHMACOrFail(w http.ResponseWriter, r *http.Request, route string, tok *Token, body []byte) bool {

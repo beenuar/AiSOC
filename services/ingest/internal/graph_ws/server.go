@@ -1,7 +1,7 @@
 // HTTP upgrade handler for the graph_ws broadcaster (T1.4 — v8.0).
 //
 // The handler is intentionally minimal: tenant-scoped channels keyed
-// off the ``?tenant_id=<id>`` query param, no auth (auth is enforced
+// off the ?tenant_id=<id> query param, no auth (auth is enforced
 // by the Python API proxy at services/api/app/api/v1/endpoints/
 // graph_ws.py — this server is expected to listen on the internal
 // service network only). Each connection registers a Subscriber with

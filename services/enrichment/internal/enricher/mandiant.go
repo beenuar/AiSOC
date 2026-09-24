@@ -99,12 +99,12 @@ func (c *MandiantClient) token(ctx context.Context) (string, error) {
 
 // mandiantIndicator captures the v4 /indicator schema (subset).
 type mandiantIndicator struct {
-	ID          string  `json:"id"`
-	Type        string  `json:"type"`
-	Value       string  `json:"value"`
-	Mscore      int     `json:"mscore"`        // 0-100
-	FirstSeen   string  `json:"first_seen"`
-	LastSeen    string  `json:"last_seen"`
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+	Value        string `json:"value"`
+	Mscore       int    `json:"mscore"` // 0-100
+	FirstSeen    string `json:"first_seen"`
+	LastSeen     string `json:"last_seen"`
 	ThreatRating struct {
 		ThreatScore int    `json:"threat_score"`
 		Severity    string `json:"severity"`
@@ -116,7 +116,7 @@ type mandiantIndicator struct {
 	} `json:"attributed_associations"`
 	Categories []string `json:"categories"`
 	MISPTags   []string `json:"misp"`
-	Sources []struct {
+	Sources    []struct {
 		FirstSeen  string `json:"first_seen"`
 		LastSeen   string `json:"last_seen"`
 		OsintURL   string `json:"osint_url"`

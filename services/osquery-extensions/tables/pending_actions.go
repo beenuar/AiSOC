@@ -37,13 +37,13 @@ func PendingActionsGenerate(client *aisocapi.Client) table.GenerateFunc {
 		for _, a := range actions {
 			rows = append(rows, map[string]string{
 				"action_id":    a.ActionID,
-				"case_id":     a.CaseID,
-				"action_type": a.ActionType,
-				"target":      a.Target,
+				"case_id":      a.CaseID,
+				"action_type":  a.ActionType,
+				"target":       a.Target,
 				"requested_by": a.RequestedBy,
 				"requested_at": a.RequestedAt,
-				"expires_at":  a.ExpiresAt,
-				"description": a.Description,
+				"expires_at":   a.ExpiresAt,
+				"description":  a.Description,
 			})
 		}
 		return rows, nil
