@@ -557,7 +557,7 @@ services:
   # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
   # `agents` service above.
   litellm:
-    # CORE, deliberately — see docs/architecture/decisions/0001-llm-gateway-in-core.md.
+    # CORE, deliberately — see docs/decisions/0006-llm-gateway-in-core.md.
     #
     # This was `profiles: ["full"]` on the reasoning that the gateway is "only
     # needed when a provider key is configured". The reasoning skipped a step:
