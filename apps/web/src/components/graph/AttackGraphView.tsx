@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import cytoscape, {
   type Core,
@@ -331,8 +332,52 @@ function MitreHeatmap({ coverage }: { coverage: MitreCoverage }) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 
+/**
+ * Match `?entity=` against a loaded node.
+ *
+ * Accepts both the `host:WIN-DC01` form the Investigation Rail and federated
+ * search emit, and a bare `WIN-DC01`, because `HuntView`'s existing pivot
+ * sends the bare value. The type half is used as a hint rather than a
+ * requirement: an operator who pastes `ip:10.0.0.7` should still land on the
+ * node if the graph happens to label it differently.
+ */
+export function findNodeForEntityParam(
+  nodes: readonly GraphNode[],
+  entity: string | null,
+): GraphNode | null {
+  if (!entity) return null;
+  const raw = entity.trim();
+  if (raw === '') return null;
+
+  const sep = raw.indexOf(':');
+  const value = (sep > 0 ? raw.slice(sep + 1) : raw).trim().toLowerCase();
+  if (value === '') return null;
+
+  return (
+    nodes.find((n) => n.id.toLowerCase() === value) ??
+    nodes.find((n) => n.label.toLowerCase() === value) ??
+    null
+  );
+}
+
 export function AttackGraphView() {
-  const [selected, setSelected] = useState<GraphNode | null>(null);
+  const searchParams = useSearchParams();
+  const entityParam = searchParams?.get('entity') ?? null;
+
+  /**
+   * Selection is derived from `?entity=` until the analyst picks for
+   * themselves, then their choice wins.
+   *
+   * The wrapper object is what distinguishes "has not chosen yet" (`null`)
+   * from "explicitly dismissed the panel" (`{ node: null }`); collapsing
+   * those would make the deep-linked node reappear every time the 30-second
+   * graph refresh landed.
+   *
+   * Deriving rather than syncing in an effect also keeps the deep link
+   * working when the parameter is present on first render but the nodes
+   * arrive with the fetch, which is the normal case.
+   */
+  const [override, setOverride] = useState<{ node: GraphNode | null } | null>(null);
 
   const graphState = useSWR<AttackGraph>(
     'attack-graph',
@@ -368,6 +413,13 @@ export function AttackGraphView() {
 
   const graph = graphState.data;
   const mitre = mitreState.data;
+
+  const entityMatch = useMemo(
+    () => findNodeForEntityParam(graph?.nodes ?? [], entityParam),
+    [graph?.nodes, entityParam],
+  );
+  const selected = override ? override.node : entityMatch;
+  const setSelected = (node: GraphNode | null) => setOverride({ node });
 
   return (
     <div className="space-y-6">

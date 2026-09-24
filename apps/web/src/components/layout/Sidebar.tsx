@@ -155,6 +155,11 @@ const navSections: NavSection[] = [
         href: '/dashboards/soc-insights',
         icon: <ChartBarIcon />,
       },
+      {
+        label: 'SOC Operations',
+        href: '/dashboards/operations',
+        icon: <ChartBarIcon />,
+      },
     ],
   },
   {
@@ -181,6 +186,11 @@ const navSections: NavSection[] = [
       {
         label: 'Hunt',
         href: '/hunt',
+        icon: <SearchIcon />,
+      },
+      {
+        label: 'Federated Search',
+        href: '/federated-search',
         icon: <SearchIcon />,
       },
       {

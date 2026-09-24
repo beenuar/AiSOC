@@ -1965,6 +1965,87 @@ export const metricsApi = {
   getSOC: () => request<SOCMetrics>('/api/v1/metrics/soc'),
 };
 
+// ─── Operational health: connector fleet, rejected events, alert posture ─────
+//
+// Three endpoints that existed server-side with no client. They answer the
+// question the alert-centric dashboards structurally cannot: whether the
+// absence of alerts means the estate is quiet or the pipeline stopped.
+
+/** How a connector is doing against *its own* configured poll cadence. */
+export type FleetHealthState = 'healthy' | 'degraded' | 'failed' | 'unproven' | 'disabled';
+
+export interface FleetConnectorHealth {
+  connector_id: string;
+  name: string;
+  connector_type: string;
+  state: FleetHealthState;
+  /** Operator-actionable wording from the server. Never bare "unhealthy". */
+  reason: string;
+  last_sync: string | null;
+  seconds_since_sync: number | null;
+  poll_interval_seconds: number;
+  /** How many poll cycles have been missed. Fractional. */
+  missed_intervals: number | null;
+  error_count: number;
+  events_ingested: number;
+  oauth_refresh_failures: number;
+  schema_drift_at: string | null;
+}
+
+export interface FleetHealth {
+  generated_at: string;
+  /** Worst enabled connector's state — deliberately not an average. */
+  state: FleetHealthState;
+  counts: Record<FleetHealthState, number>;
+  connectors: FleetConnectorHealth[];
+}
+
+export interface DeadLetterEntry {
+  id: string;
+  topic: string;
+  reason: string;
+  schema_version: string | null;
+  payload_excerpt: string | null;
+  source_event_id: string | null;
+  occurred_at: string | null;
+  acknowledged: boolean;
+}
+
+export interface DeadLetters {
+  window_hours: number;
+  total: number;
+  by_reason: Array<{ reason: string; count: number }>;
+  truncated: boolean;
+  dead_letters: DeadLetterEntry[];
+}
+
+export interface AlertStats {
+  total: number;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  new_last_24h: number;
+  critical_open: number;
+}
+
+export const operationsApi = {
+  /**
+   * Which connectors have quietly stopped working.
+   *
+   * Staleness is judged per connector against its own cadence, so a daily
+   * connector is not reported as failing eleven hours in.
+   */
+  fleetHealth: () => request<FleetHealth>('/api/v1/health/fleet'),
+
+  /** Events the pipeline refused, and why. */
+  deadLetters: (params: { hours?: number; limit?: number } = {}) =>
+    request<DeadLetters>('/api/v1/health/dead-letters', {
+      params: params as Record<string, string>,
+    }),
+
+  /** Severity / status distribution plus the two counters worth paging on. */
+  alertStats: () => request<AlertStats>('/api/v1/alerts/stats'),
+};
+
 // ─── Investigations ─────────────────────────────────────────────────────────
 
 export const investigationsApi = {
@@ -3059,6 +3140,170 @@ export const lakeApi = {
     }),
 
   schema: () => request<LakeSchemaResponse>('/api/v1/lake/schema'),
+};
+
+// ─── Federated SIEM search ───────────────────────────────────────────────────
+//
+// Client for `services/api/app/api/v1/endpoints/federated.py`, which fans one
+// `UnifiedQuery` out to every federated-capable connector the tenant has
+// enabled (Splunk, Microsoft Sentinel, Elastic, QRadar) using that tenant's
+// own vault-encrypted credentials, and merges the rows.
+//
+// The shape worth preserving through the client is `sources[]`. The endpoint
+// deliberately never fails the whole call because one backend is slow, 401s or
+// 5xxs — it returns a per-backend verdict instead. Collapsing that into a
+// single throw would discard exactly the information an analyst needs to tell
+// "Sentinel has nothing" from "Sentinel did not answer", so nothing here
+// treats a per-source error as a request error.
+
+/** Operator vocabulary accepted by `Indicator` in the connectors service. */
+export type FederatedOperator =
+  | 'eq'
+  | 'ne'
+  | 'contains'
+  | 'starts_with'
+  | 'ends_with'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'in';
+
+export const FEDERATED_OPERATORS: readonly FederatedOperator[] = [
+  'eq',
+  'ne',
+  'contains',
+  'starts_with',
+  'ends_with',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'in',
+] as const;
+
+/** One `field <op> value` triple. Stacking indicators implies AND. */
+export interface FederatedIndicator {
+  field: string;
+  operator: FederatedOperator;
+  value: unknown;
+}
+
+export interface FederatedSearchRequest {
+  free_text?: string;
+  indicators?: FederatedIndicator[];
+  since_seconds?: number;
+  limit?: number;
+  connector_ids?: string[] | null;
+  per_backend_timeout_seconds?: number | null;
+}
+
+/**
+ * Per-backend outcome.
+ *
+ * `status` is `ok` (rows returned, possibly zero), `error` (this backend
+ * failed and `error` carries the message; others may have succeeded), or
+ * `unsupported` (the connector type does not speak federated search).
+ */
+export interface FederatedSourceVerdict {
+  connector_id: string;
+  connector_name: string;
+  connector_type: string;
+  status: 'ok' | 'error' | 'unsupported';
+  row_count: number;
+  duration_ms: number;
+  error: string | null;
+}
+
+/** Source tag the API stamps onto every merged row. */
+export interface FederatedRowSource {
+  connector_id: string;
+  connector_name: string;
+  connector_type: string;
+}
+
+export type FederatedRow = Record<string, unknown> & {
+  _aisoc_source?: FederatedRowSource;
+};
+
+export interface FederatedSearchResponse {
+  rows: FederatedRow[];
+  row_count: number;
+  sources: FederatedSourceVerdict[];
+  truncated: boolean;
+}
+
+export interface FederatedBackend {
+  connector_id: string;
+  connector_type: string;
+  name: string;
+  health_status: string;
+  is_enabled: boolean;
+}
+
+export interface FederatedBackendsResponse {
+  backends: FederatedBackend[];
+}
+
+/**
+ * Thrown when the deployment has `AISOC_FEATURE_FED_SEARCH=false`.
+ *
+ * The endpoint answers 404 for that case, which is indistinguishable from a
+ * routing mistake unless the client names it. A disabled feature is a
+ * configuration fact the operator can act on; a generic "not found" is not.
+ */
+export class FederatedSearchDisabledError extends Error {
+  constructor() {
+    super('Federated search is disabled on this deployment (AISOC_FEATURE_FED_SEARCH).');
+    this.name = 'FederatedSearchDisabledError';
+  }
+}
+
+function asFederatedError(err: unknown): never {
+  // `_ensure_feature_enabled` answers 404 with this detail. The same endpoint
+  // also 404s for an unknown `connector_ids` entry, so match on the body
+  // rather than the status alone — misreporting a typo'd connector id as a
+  // disabled feature would send the operator to the wrong config file.
+  if (
+    err instanceof ApiError &&
+    err.status === 404 &&
+    /AISOC_FEATURE_FED_SEARCH|federated search is disabled/i.test(err.body)
+  ) {
+    throw new FederatedSearchDisabledError();
+  }
+  throw err;
+}
+
+export const federatedApi = {
+  /** Connector instances `search()` would fan out to, with their health. */
+  listBackends: async (): Promise<FederatedBackendsResponse> => {
+    try {
+      const raw = await request<Partial<FederatedBackendsResponse>>(
+        '/api/v1/federated/backends',
+      );
+      return { backends: Array.isArray(raw.backends) ? raw.backends : [] };
+    } catch (err) {
+      return asFederatedError(err);
+    }
+  },
+
+  search: async (body: FederatedSearchRequest): Promise<FederatedSearchResponse> => {
+    try {
+      const raw = await request<Partial<FederatedSearchResponse>>(
+        '/api/v1/federated/search',
+        { method: 'POST', body: JSON.stringify(body) },
+      );
+      const rows = Array.isArray(raw.rows) ? raw.rows : [];
+      return {
+        rows,
+        row_count: typeof raw.row_count === 'number' ? raw.row_count : rows.length,
+        sources: Array.isArray(raw.sources) ? raw.sources : [],
+        truncated: raw.truncated === true,
+      };
+    } catch (err) {
+      return asFederatedError(err);
+    }
+  },
 };
 
 // ─── Natural-language query translator (T3.4) ────────────────────────────────
