@@ -27,7 +27,7 @@ env:
     opentelemetry-exporter-otlp-proto-grpc
     "opentelemetry-instrumentation-fastapi"
     "strawberry-graphql[fastapi]" httpx email-validator PyJWT
-    sqlglot
+    "sqlglot>=23,<27"
 
 jobs:
   openapi-check:
