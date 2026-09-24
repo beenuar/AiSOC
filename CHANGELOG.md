@@ -52,6 +52,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`main` went red because an install list depended on an extra it never
+  declared, and an upstream release stopped supplying it by accident.** The
+  `Python — Service unit tests (fusion, honeytokens, purple-team)` job failed
+  on `purple-team`'s `test_every_api_route_requires_auth` with
+  `ModuleNotFoundError: No module named 'greenlet'` — 99 other tests in the
+  job passed. Nothing about `purple-team` had changed: the test has imported
+  `app.api.routes` since it was written, that module has always imported
+  `sqlalchemy.ext.asyncio`, its `pyproject.toml` has always declared
+  `sqlalchemy[asyncio]`, and its `poetry.lock` resolves `greenlet 3.5.6`. The
+  declaration was right and the install path was wrong: this job consults
+  neither the manifest nor the lock, it pip-installs a hand-curated list, and
+  that list named a bare, unbounded `sqlalchemy`.
+
+  It passed for months anyway. Through SQLAlchemy 2.0.x, `greenlet` was
+  required *outside* the `asyncio` extra whenever `platform_machine` matched
+  one of `aarch64 | ppc64le | x86_64 | amd64 | AMD64 | win32 | WIN32` — true
+  on `ubuntu-latest` — so a bare `sqlalchemy` installed it incidentally and
+  the extra was load-bearing and unnamed at the same time. SQLAlchemy 2.1.0
+  removed that clause, leaving `greenlet>=1; extra == "asyncio"` as the only
+  requirement. 2.1.0 was published at 20:12:49 UTC on 2026-09-24; the last
+  green commit on `main` (`ba0c6429`) is timestamped eleven minutes before it
+  and the first red one (`ad775e8d`, #829) ten minutes after. #829 was an
+  LLM-routing change that touched no file under `services/purple-team` and
+  nothing in that import chain — it is the commit whose run happened to
+  re-resolve first, not the cause. So this was neither a dependency that went
+  missing nor an import path newly reached; it was an unpinned install
+  re-resolving across an upstream minor.
+
+  The job now installs `"sqlalchemy[asyncio]>=2,<3"`, matching both the
+  manifest and the wave-2 matrix job, which had it right all along.
+  `greenlet` is deliberately *not* added as a top-level pin: the extra exists
+  to pull it, and naming the transitive package instead would record the
+  workaround rather than the dependency. `isolation.yml`, which had done
+  exactly that — bare `sqlalchemy` plus an explicit `greenlet` — now declares
+  the extra and drops the compensating entry.
+
+- **`services/connectors` reached `sqlalchemy.ext.asyncio` without declaring
+  the extra that makes it importable.** `app/db/engine.py` calls
+  `create_async_engine`, and the manifest declared `sqlalchemy = "^2.0.0"`.
+  It resolved only because of the same pre-2.1.0 accident, which means the
+  next SQLAlchemy bump would have dropped `greenlet` from the lock the image
+  installs from and broken the poller in production rather than in CI. It was
+  the only service in this position — every other service that imports the
+  module already declared `[asyncio]`. Re-locking with the extra changes two
+  lines and no resolved version.
+
+- **`scripts/check_dependency_pins.py` now compares extras, not just
+  version ranges.** `sqlalchemy` and `sqlalchemy[asyncio]` are two different
+  dependency sets, and the gate that exists to assert every install path
+  agrees was reading the name and the range and discarding the extras — so it
+  reported agreement between a manifest and a workflow installing strictly
+  less software. Extras are now part of a declaration's identity in both
+  syntaxes (PEP 621 brackets and Poetry's `extras = [...]` table, the latter
+  being the one that was silently dropped), with three directions checked
+  because the direction nobody aims a gate at is the one that rots:
+  `manifest -> install path` (a workflow or image dropping an extra a
+  manifest declares), `source -> manifest` (code importing the module an
+  extra enables under a manifest that does not declare it, read out of the
+  source so the manifest is not asked to vouch for itself), and
+  `extra -> lock` (an extra declared while the lock resolved nothing it
+  provides — "the extra is declared and the library is absent" is now a
+  sentence this gate can say). Run against the pre-fix tree it names all
+  three defects above and the files holding them; `--self-test` injects each
+  direction separately, and six tests in
+  `tests/test_dependency_pin_gate.py` pin the parsing and the directions.
+
 - **`scripts/check_toolchain_pins.py` compares every Node install root
   against every other.** There are four — the workspace root, `apps/mobile`,
   `services/realtime` and `services/mcp/cursor-extension` — and the gate read

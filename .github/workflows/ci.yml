@@ -861,20 +861,24 @@ jobs:
         # archives normalized events into the ClickHouse event lake.
         # pyyaml: required since Phase A2 — the detection-matcher parity test
         # loads the canonical scripts/generate_detections.py (imports yaml).
-        # sqlalchemy[asyncio]: required by the purple-team router-contract
-        # test. That test asserts every route on the router carries the
-        # service-auth dependency, and importing the router to enumerate its
-        # routes pulls sqlalchemy. Skipping the import instead would leave a
-        # gate that cannot fail, which is worse than installing one more
-        # package.
+        # sqlalchemy: required by the purple-team router-contract test. That
+        # test asserts every route on the router carries the service-auth
+        # dependency, and importing the router to enumerate its routes pulls
+        # sqlalchemy. Skipping the import instead would leave a gate that
+        # cannot fail, which is worse than installing one more package.
         #
-        # The `[asyncio]` extra is what pulls `greenlet`, and without it this
-        # job failed intermittently on `main` with "No module named 'greenlet'"
-        # — SQLAlchemy 2.x only declares greenlet for some platform/version
-        # resolutions, so bare `sqlalchemy` sometimes brings it and sometimes
-        # does not. Intermittent because it is a resolution outcome, not a
-        # race. The API job's own dep list already spells it `sqlalchemy[asyncio]`.
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis "fastapi>=0.117,<0.142" httpx aiokafka asyncpg clickhouse-driver pyyaml "cryptography>=46,<51" "sqlalchemy[asyncio]"
+        # The `[asyncio]` extra is load-bearing, and it is the extra that
+        # `services/purple-team/pyproject.toml` has always declared. Importing
+        # the router reaches `sqlalchemy.ext.asyncio`, which needs `greenlet`.
+        # `greenlet` is only in the `asyncio` extra — but through SQLAlchemy
+        # 2.0.x it was *also* a non-extra requirement gated on
+        # `platform_machine`, which is true on this runner, so a bare
+        # `sqlalchemy` installed it by accident and this list passed for
+        # months without declaring what it depended on. SQLAlchemy 2.1.0
+        # dropped that clause, the unbounded install re-resolved onto it, and
+        # the import died at collection. Bounding the range is the second half:
+        # unbounded, any upstream release lands here before anyone reads it.
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis "fastapi>=0.117,<0.142" httpx aiokafka asyncpg clickhouse-driver pyyaml "cryptography>=46,<51" "sqlalchemy[asyncio]>=2,<3"
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage

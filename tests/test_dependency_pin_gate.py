@@ -241,6 +241,101 @@ def test_satisfies_refuses_an_operator_it_cannot_reason_about() -> None:
     assert gate.satisfies("2.0.0", "^2.0") is False
 
 
+# ── extras are part of a dependency's identity ───────────────────────────────
+#
+# `sqlalchemy` and `sqlalchemy[asyncio]` install different sets, and the gate
+# used to compare only their ranges — so it called them equal. That is what let
+# the wave-1 service-test job install a bare `sqlalchemy` against a manifest
+# declaring the extra, and `main` stayed green until SQLAlchemy 2.1.0 stopped
+# supplying `greenlet` outside the extra.
+
+
+def _with_sqlalchemy(tree: Path, *, extra: bool, greenlet: bool, ci_extra: bool) -> None:
+    """The three files the extras directions compare, in a chosen state."""
+    manifest = tree / "services" / "demo" / "pyproject.toml"
+    declaration = 'sqlalchemy = { version = ">=2,<3", extras = ["asyncio"] }\n' if extra else 'sqlalchemy = ">=2,<3"\n'
+    manifest.write_text(manifest.read_text() + declaration)
+
+    lock = tree / "services" / "demo" / "poetry.lock"
+    entries = '\n[[package]]\nname = "sqlalchemy"\nversion = "2.0.54"\n'
+    if greenlet:
+        entries += '\n[[package]]\nname = "greenlet"\nversion = "3.5.6"\n'
+    lock.write_text(lock.read_text() + entries)
+
+    workflow = tree / ".github" / "workflows" / "ci.yml"
+    token = '"sqlalchemy[asyncio]>=2,<3"' if ci_extra else '"sqlalchemy>=2,<3"'
+    workflow.write_text(workflow.read_text() + f"      - run: pip install {token}\n")
+
+
+def test_extras_survive_parsing_in_both_declaration_styles() -> None:
+    """A dropped extra is only comparable if both syntaxes yield the same shape.
+
+    Poetry writes extras in a table and PEP 621 writes them in brackets. The
+    table form was the one being lost: `parse_manifest` read `version` and
+    discarded the rest, so a manifest declaring the extra looked identical to
+    one that did not.
+    """
+    _name, extras, spec = gate._requirement("sqlalchemy[asyncio]>=2,<3")
+    assert extras == frozenset({"asyncio"})
+    assert spec == ">=2,<3"
+
+    _name, bare, _spec = gate._requirement("sqlalchemy>=2,<3")
+    assert bare == frozenset()
+
+    assert gate._extras(["asyncio"]) == frozenset({"asyncio"})
+    assert gate._extras("[bcrypt,argon2]") == frozenset({"bcrypt", "argon2"})
+
+
+def test_detects_an_install_path_dropping_a_declared_extra(tree: Path) -> None:
+    """The break itself: manifest declares `[asyncio]`, the workflow does not."""
+    _with_sqlalchemy(tree, extra=True, greenlet=True, ci_extra=False)
+    code, problems = gate.run(tree)
+    assert code == 1
+    assert any("manifest -> install path" in p and "asyncio" in p for p in problems), problems
+
+
+def test_detects_source_reaching_a_module_whose_extra_is_undeclared(tree: Path) -> None:
+    """The direction that found `services/connectors` on `main`.
+
+    Code importing `sqlalchemy.ext.asyncio` under a manifest declaring bare
+    `sqlalchemy` resolves only while an upstream accident keeps installing
+    `greenlet`, which is precisely the accident that ended at 2.1.0.
+    """
+    _with_sqlalchemy(tree, extra=False, greenlet=True, ci_extra=False)
+    app = tree / "services" / "demo" / "app"
+    app.mkdir(parents=True, exist_ok=True)
+    (app / "db.py").write_text("from sqlalchemy.ext.asyncio import create_async_engine\n")
+    code, problems = gate.run(tree)
+    assert code == 1
+    assert any("source -> manifest" in p for p in problems), problems
+
+
+def test_detects_a_declared_extra_that_resolved_nothing(tree: Path) -> None:
+    """"The extra is declared and the library is absent" must be sayable."""
+    _with_sqlalchemy(tree, extra=True, greenlet=False, ci_extra=True)
+    code, problems = gate.run(tree)
+    assert code == 1
+    assert any("extra -> lock" in p and "greenlet" in p for p in problems), problems
+
+
+def test_a_consistent_extra_declaration_passes(tree: Path) -> None:
+    """The gate must not fire when every path agrees — otherwise it is noise."""
+    _with_sqlalchemy(tree, extra=True, greenlet=True, ci_extra=True)
+    code, problems = gate.run(tree)
+    assert code == 0, problems
+
+
+def test_every_service_reaching_the_asyncio_module_declares_the_extra() -> None:
+    """The property, asserted against this repository rather than a fixture."""
+    rule = gate.EXTRAS["sqlalchemy"]
+    scanned = gate.scan(REPO_ROOT)
+    declaring = {
+        d.service for d in scanned.by_package("sqlalchemy") if d.kind == "manifest" and rule.extra in d.extras
+    }
+    missing = sorted(gate._services_reaching(REPO_ROOT, rule.module) - declaring)
+    assert not missing, f"services importing {rule.module} without declaring the extra: {missing}"
+
+
 def test_tokeniser_ignores_prose_and_stops_at_shell_operators() -> None:
     """Comments discussing `pip install`, and `&&`-chained commands.
 
@@ -257,5 +352,5 @@ def test_tokeniser_ignores_prose_and_stops_at_shell_operators() -> None:
         'RUN pip install "fastapi>=0.117,<0.142"\n'
     )
     tokens = [gate._requirement(token) for token, _raw in gate._pip_install_tokens(text)]
-    found = {name for name, _spec in tokens if name}
+    found = {name for name, _extras, _spec in tokens if name}
     assert found == {"poetry", "fastapi"}, found

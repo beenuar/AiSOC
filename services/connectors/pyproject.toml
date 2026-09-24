@@ -22,8 +22,15 @@ boto3 = "^1.34.0"
 # read the canonical connectors table that lives in the API service's
 # Postgres so this microservice stays a stateless poller — no schema
 # ownership, no migrations.
+#
+# The `asyncio` extra is what pulls `greenlet`, and `app/db/engine.py` calls
+# `create_async_engine`, so without it the poller cannot open its connection.
+# It resolved anyway up to SQLAlchemy 2.0.x, which required `greenlet` outside
+# the extra on this platform; 2.1.0 dropped that and the extra became the only
+# thing that installs it. Every other service reaching
+# `sqlalchemy.ext.asyncio` already declared it — this one was the exception.
 apscheduler = "^3.10.0"
-sqlalchemy = "^2.0.0"
+sqlalchemy = { version = "^2.0.0", extras = ["asyncio"] }
 asyncpg = "^0.29.0"
 # Cryptography is required to decrypt the auth_config blob written by the
 # API service's CredentialVault. We share AISOC_CREDENTIAL_KEY across both
