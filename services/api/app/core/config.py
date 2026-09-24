@@ -386,6 +386,18 @@ class Settings(BaseSettings):
     MAX_TENANTS: int = 1000
     DEFAULT_TENANT_PLAN: str = "starter"
 
+    # Deployment-wide per-tenant ceilings, e.g.
+    # `{"connectors": 25, "seats": 50}`. Empty by default: AiSOC ships
+    # uncapped, and `app/services/entitlements.py` reports `unlimited`
+    # rather than drawing headroom against a ceiling nobody set. A
+    # tenant's own `tenants.limits` JSONB overrides anything here, in
+    # either direction.
+    #
+    # Declared as a real field rather than read with `getattr`: an
+    # undeclared setting is silently dropped by `extra="ignore"`, so an
+    # operator who exports it gets no limits and no explanation.
+    AISOC_DEFAULT_TENANT_LIMITS: dict = {}
+
     # Plugin system
     AISOC_PLUGINS_DIR: str = "/opt/aisoc/plugins"
 

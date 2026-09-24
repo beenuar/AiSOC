@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **Three MSSP response schemas describing fabricated data are removed:
+  `MSSPKpiOverview`, `ManagedTenantRow`, `CrossTenantIncident`.** They were
+  the shape of five hardcoded companies with invented alert counts, not the
+  shape of anything the platform measured. `/mssp/overview`,
+  `/mssp/tenants` and `/mssp/incidents` keep their paths and now return
+  `PortfolioSummaryOut`, `PortfolioTenantOut` and `PortfolioAlertOut`,
+  computed from real rows.
+
+  What moved, and why it could not be preserved:
+
+  - `health_score` / `avg_health_score` are **gone**, not nulled. It was an
+    undefined composite with no formula anywhere in the tree; keeping the
+    field would promise a measurement that does not exist. (`MetricsOut` on
+    the separate `/mssp/metrics` route still carries a `health_score` and is
+    unchanged by this release.)
+  - `avg_mttr_minutes` → `mttr_minutes`, measured from cases a tenant
+    actually closed in the trailing 30 days, and **null** when it closed
+    none. The old value was the literal `23.4`. Present on both the per-tenant
+    row and the portfolio summary, where it averages only over tenants that
+    closed something rather than counting a null as a zero.
+  - `sla_breach_count` and `sla_breaches` → `sla_breached_cases`, counted
+    from `cases.sla_breached`.
+  - `connectors_online` / `connectors_degraded` / `connector_status` →
+    `total` / `healthy` / `stale` / `error`, derived from each connector's
+    `health_status` and `last_sync`. Nested under a `connectors` object on
+    the per-tenant row; flat `connectors_*` fields on the summary.
+  - `tenant_id` is now a real tenant UUID rather than a string like
+    `"t-acme"`.
+  - `assignee` is gone from the incident rows. It named invented analysts;
+    an alert's real owner is `case_id`, which is now returned instead.
+  - New: `synthetic_alerts`, so seeded demo rows are counted apart from a
+    tenant's real posture instead of inflating it.
+
+  The routes also return `403` to a caller who belongs to no operator
+  organisation, where they previously returned an empty list to anyone
+  authenticated.
+
+  Nothing in `apps/web` consumes these three routes; it calls
+  `/mssp/children`, which is unchanged.
+
 ### Security
 
 - **`/api/v1/identity-timeline` read every tenant's alerts.** Both routes bound
@@ -532,6 +574,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every pivot navigated to the graph and dropped the entity, leaving the
   analyst to find the node by eye. Both the typed form (`host:WIN-DC01`) and
   the bare form `HuntView` emits are accepted, matching on node id then label.
+- **A real operator organisation above tenants, so the MSSP console can be
+  backed by data instead of gated behind demo mode.** `/mssp/overview`,
+  `/mssp/tenants` and `/mssp/incidents` returned five hardcoded companies —
+  "Acme Corp, health 92.4, 12 open alerts", "Wayne Enterprises", invented
+  incidents with invented assignees — because the cross-tenant aggregation
+  query behind them was never written. Gating the sample behind demo mode
+  removed the lie but left the feature unbuilt: outside demo mode the
+  console showed zeros forever. Making it real was a schema change, not an
+  ungating.
+
+  Migration `058` adds `organizations`, `organization_members`,
+  `organization_tenants` and `organization_member_tenants`, and backfills
+  from `tenants.parent_tenant_id`, which keeps working. Three constraints
+  hold the boundary in the database rather than in whichever code path
+  writes a row: `organization_tenants` is unique on `tenant_id` so two
+  providers cannot claim one customer; `organization_member_tenants` has
+  composite foreign keys onto both the membership and the portfolio, so a
+  grant cannot name an unmanaged tenant and releasing a tenant revokes every
+  grant over it; and `organizations.home_tenant_id` cascades, so erasing a
+  provider's own tenant removes the organisation while leaving its customers
+  standing as unclaimed tenants.
+
+  Roles carry two separate axes. `owner`/`admin` reach the whole portfolio;
+  `operator`/`viewer` reach only tenants granted to them, and **nothing**
+  when they have no grants — "no scope" degrading into "all scopes" is the
+  shape every cross-tenant leak in this codebase has had.
+
+  Every cross-tenant read resolves its tenant list through
+  `resolve_portfolio_scope` and nowhere else, then passes it to
+  `require_scope`, which raises rather than letting an aggregate run
+  unfiltered; the list is bound as a query parameter. A `?tenant_id=` filter
+  is intersected with the portfolio, so naming an outside tenant narrows to
+  nothing instead of reaching out. An AST gate fails the build if a new
+  cross-tenant function is added that never calls `require_scope`, and
+  `test_mssp_portfolio_isolation.py` replays two organisations plus an
+  unmanaged tenant against live Postgres in `integration.yml`.
+
+  The sample rows are deleted rather than gated. `health_score` is gone
+  because it was an undefined composite; `mttr_minutes` is measured from
+  cases a tenant actually closed and is null when it closed none; seeded
+  rows are counted separately as `synthetic_alerts` and excluded from the
+  headline figures.
+
+- **Per-tenant limit headroom, so a cap cannot throttle a customer
+  silently.** A tenant that hits a ceiling raises no error anyone sees —
+  alerts keep arriving and stop being triaged, which reads to an evaluator
+  as "the AI doesn't work". `app/services/entitlements.py` measures
+  `connectors`, `seats`, `alerts_per_day` and `triages_per_month` from real
+  rows, reports `ok` / `warning` / `exhausted` per tenant across a
+  portfolio, and logs exhaustion at `warning`. AiSOC ships uncapped: a key
+  with no configured ceiling reports `unlimited` rather than a default
+  nobody set. Ceilings come from `tenants.limits` (per tenant, wins in
+  either direction) or the new `AISOC_DEFAULT_TENANT_LIMITS` setting —
+  declared as a real field, because an undeclared setting is dropped by
+  `extra="ignore"` and the operator who exports it gets no explanation.
+
 
 - **The Splunk warehouse driver executes.** It previously raised
   `HuntNotConfigured("provider scaffolded but live SPL execution not yet

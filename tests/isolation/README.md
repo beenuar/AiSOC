@@ -32,6 +32,26 @@ See `stores.py::STORES`. Each store is one of:
 - `container_gated` — live-container A-vs-B replay in `isolation-live.yml`
   (Neo4j, Redis, ClickHouse, Kafka).
 
+## Deliberate cross-tenant reads
+
+The MSSP portfolio surface reads several tenants at once by design, which
+makes it the one place where "filter by the caller's tenant" is not the rule
+and therefore the one place a bypass would look like a feature. It is scoped
+in one place — `services/api/app/services/org_scope.py` — and the aggregates
+in `mssp_portfolio.py` take that scope as a parameter and pass it through
+`require_scope`, which raises on an empty portfolio rather than running SQL
+with no filter. Two gates:
+
+- `services/api/tests/test_org_scope.py` (every PR) — an empty scope refuses,
+  a `?tenant_id=` filter can only narrow, and an AST check fails the build if
+  a new cross-tenant function is added that never calls `require_scope`.
+- `services/api/tests/test_mssp_portfolio_isolation.py` (live Postgres, in
+  `integration.yml`) — seeds two organisations plus an unmanaged tenant and
+  asserts an aggregate run as one operator never returns the others, that an
+  operator with no grants resolves to empty rather than to everything, and
+  that the database itself rejects a grant naming a tenant outside the
+  portfolio.
+
 ## The parser that enforces ClickHouse isolation is itself a dependency
 
 ClickHouse scoping is produced by `sqlglot` walking a parse tree, so the
