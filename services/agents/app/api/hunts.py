@@ -24,14 +24,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.hunt import HuntCorpus
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
+from app.security.tenant_scope import require_console_or_service_auth
 
 logger = logging.getLogger("aisoc.api.hunts")
-router = APIRouter(prefix="/api/v1/hunts", tags=["hunts"])
+#: Default-deny. The console reaches this router directly through a Next
+#: rewrite carrying the first-party access token, so the guard resolves
+#: either that session or a trusted service declaring the tenant it acts
+#: for — a bearer-token-only scheme would lock the browser out.
+router = APIRouter(prefix="/api/v1/hunts", tags=["hunts"], dependencies=[Depends(require_console_or_service_auth)])
 
 
 def _hunt_summary(h: Any) -> dict[str, Any]:

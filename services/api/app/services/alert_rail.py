@@ -482,7 +482,12 @@ async def build_mini_timeline(
 
     # ── Case timeline ───────────────────────────────────────────────────
     if alert.case_id is not None:
-        case_q = select(CaseTimeline).where(CaseTimeline.case_id == alert.case_id).order_by(CaseTimeline.created_at.desc()).limit(limit)
+        case_q = (
+            select(CaseTimeline)
+            .where(CaseTimeline.case_id == alert.case_id, CaseTimeline.tenant_id == alert.tenant_id)
+            .order_by(CaseTimeline.created_at.desc())
+            .limit(limit)
+        )
         case_rows = (await db.execute(case_q)).scalars().all()
         events.extend(_case_event(row) for row in case_rows)
 

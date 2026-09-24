@@ -98,13 +98,13 @@ class PackAssignmentOut(BaseModel):
 
 
 @router.get("/packs", response_model=list[PackOut])
-async def list_packs() -> list[PackOut]:
+async def list_packs(principal: ScopedPrincipal) -> list[PackOut]:
     """Return all packs loaded from the on-disk YAML catalog."""
     return [PackOut.from_pack(p) for p in get_all_packs()]
 
 
 @router.get("/packs/{pack_id}", response_model=PackOut)
-async def get_pack_detail(pack_id: str) -> PackOut:
+async def get_pack_detail(pack_id: str, principal: ScopedPrincipal) -> PackOut:
     """Return a single pack by id."""
     pack = get_pack(pack_id)
     if pack is None:
@@ -115,6 +115,7 @@ async def get_pack_detail(pack_id: str) -> PackOut:
 @router.get("/packs/{pack_id}/render")
 async def render_pack(
     pack_id: str,
+    principal: ScopedPrincipal,
     format: Annotated[
         Literal["osquery-json", "osctrl", "fleetdm"],
         Query(description="Target render format"),

@@ -229,7 +229,7 @@ async def list_framework_controls(framework_id: str) -> ControlsResponse:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger evidence collection job",
 )
-async def trigger_evidence_collection(body: CollectJobRequest) -> CollectJobResponse:
+async def trigger_evidence_collection(body: CollectJobRequest, user: AuthUser) -> CollectJobResponse:
     if body.framework not in FRAMEWORKS:
         raise HTTPException(status_code=404, detail=f"Framework '{body.framework}' not found.")
     return CollectJobResponse(

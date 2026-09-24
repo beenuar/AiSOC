@@ -875,6 +875,7 @@ def build_postmortem_from_rows(
 async def build_case_postmortem(
     db: AsyncSession,
     case_id: uuid.UUID,
+    tenant_id: uuid.UUID,
     *,
     now: datetime | None = None,
 ) -> CasePostmortem | None:
@@ -884,13 +885,16 @@ async def build_case_postmortem(
     clean 404 without conflating the data layer with HTTP semantics.
 
     SQL access is delegated to the auto-summary fetchers — they already
-    return the exact dataclasses we need.
+    return the exact dataclasses we need, and they now take the tenant for
+    the same reason: none of ``aisoc_cases``, ``aisoc_case_comments`` or
+    ``aisoc_case_tasks`` carries an RLS policy, so the predicate is the only
+    thing between two customers' retrospectives.
     """
-    case = await _fetch_case_for_summary(db, case_id)
+    case = await _fetch_case_for_summary(db, case_id, tenant_id)
     if case is None:
         return None
-    comments = await _fetch_comments(db, case_id)
-    tasks = await _fetch_tasks(db, case_id)
+    comments = await _fetch_comments(db, case_id, tenant_id)
+    tasks = await _fetch_tasks(db, case_id, tenant_id)
     inputs = PostmortemInputs(case=case, comments=comments, tasks=tasks)
     return build_postmortem_from_rows(inputs, now=now)
 

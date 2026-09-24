@@ -22,11 +22,13 @@ by ``test_security_defaults.py``.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from app.api.v1.deps import CurrentUser, get_current_user
 from app.api.v1.endpoints import stix_taxii
 from app.api.v1.endpoints.stix_taxii import (
     MispPushResult,
@@ -791,6 +793,17 @@ def stub_app() -> FastAPI:
     """
     app = FastAPI()
     app.include_router(stix_router, prefix="/api/v1")
+    # The STIX routes are authenticated now (they read and write tenant threat
+    # intelligence). This file is about routing and serialization, so it
+    # supplies a resolved user rather than credential material; that the
+    # routes refuse an anonymous caller is asserted by scripts/check_route_auth.py.
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        user_id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        tenant_id=uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a"),
+        email="stub@example.test",
+        role="admin",
+        scopes=["*"],
+    )
     return app
 
 

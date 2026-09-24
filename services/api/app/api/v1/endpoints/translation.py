@@ -21,6 +21,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import resolve_model_alias
@@ -246,7 +247,7 @@ def _fallback_templates(req: TranslateRequest) -> dict[str, Any]:
     status_code=status.HTTP_200_OK,
     summary="Translate a detection rule across formats",
 )
-async def translate_rule(body: TranslateRequest) -> TranslateResponse:
+async def translate_rule(body: TranslateRequest, user: AuthUser) -> TranslateResponse:
     if not body.target_formats:
         raise HTTPException(status_code=400, detail="At least one target_format is required.")
 

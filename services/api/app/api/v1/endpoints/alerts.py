@@ -846,7 +846,11 @@ async def update_alert(
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
-        await db.execute(update(Alert).where(Alert.id == alert_id).values(**updates))
+        # Tenant predicate on the write as well as the read above. The read
+        # already 404s another tenant's alert, so this is belt and braces
+        # today — but a write scoped only by a preceding read is one reorder
+        # away from being scoped by nothing.
+        await db.execute(update(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id).values(**updates))
         await db.commit()
         await db.refresh(alert)
 
@@ -870,7 +874,11 @@ async def escalate_alert(
     current_idx = severity_ladder.index(alert.severity) if alert.severity in severity_ladder else 2
     new_severity = severity_ladder[min(current_idx + 1, len(severity_ladder) - 1)]
 
-    await db.execute(update(Alert).where(Alert.id == alert_id).values(severity=new_severity, updated_at=datetime.now(UTC)))
+    await db.execute(
+        update(Alert)
+        .where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
+        .values(severity=new_severity, updated_at=datetime.now(UTC))
+    )
     await db.commit()
     await db.refresh(alert)
 
@@ -941,7 +949,7 @@ async def snooze_alert(
 
     await db.execute(
         update(Alert)
-        .where(Alert.id == alert_id)
+        .where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id)
         .values(
             snoozed_until=snoozed_until,
             snoozed_by_id=current_user.user_id,

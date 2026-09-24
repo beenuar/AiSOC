@@ -609,17 +609,20 @@ def _row_to_summary_case(row: Any) -> SummaryCaseRow:
     )
 
 
-async def _fetch_case_for_summary(db: AsyncSession, case_id: uuid.UUID) -> SummaryCaseRow | None:
-    row = (await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id").bindparams(id=case_id))).fetchone()
+async def _fetch_case_for_summary(db: AsyncSession, case_id: uuid.UUID, tenant_id: uuid.UUID) -> SummaryCaseRow | None:
+    row = (
+        await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tid").bindparams(id=case_id, tid=tenant_id))
+    ).fetchone()
     return _row_to_summary_case(row) if row else None
 
 
-async def _fetch_comments(db: AsyncSession, case_id: uuid.UUID) -> list[SummaryCommentRow]:
+async def _fetch_comments(db: AsyncSession, case_id: uuid.UUID, tenant_id: uuid.UUID) -> list[SummaryCommentRow]:
     rows = (
         await db.execute(
-            text("SELECT author, body, is_system, created_at FROM aisoc_case_comments WHERE case_id = :id ORDER BY created_at").bindparams(
-                id=case_id
-            )
+            text(
+                "SELECT author, body, is_system, created_at FROM aisoc_case_comments "
+                "WHERE case_id = :id AND tenant_id = :tid ORDER BY created_at"
+            ).bindparams(id=case_id, tid=tenant_id)
         )
     ).fetchall()
     return [
@@ -633,15 +636,15 @@ async def _fetch_comments(db: AsyncSession, case_id: uuid.UUID) -> list[SummaryC
     ]
 
 
-async def _fetch_tasks(db: AsyncSession, case_id: uuid.UUID) -> list[SummaryTaskRow]:
+async def _fetch_tasks(db: AsyncSession, case_id: uuid.UUID, tenant_id: uuid.UUID) -> list[SummaryTaskRow]:
     """Pull tasks; tolerate the absence of ``aisoc_case_tasks`` on older deployments."""
     try:
         rows = (
             await db.execute(
                 text(
                     "SELECT title, status, assignee, due_at, created_at, updated_at "
-                    "FROM aisoc_case_tasks WHERE case_id = :id ORDER BY created_at"
-                ).bindparams(id=case_id)
+                    "FROM aisoc_case_tasks WHERE case_id = :id AND tenant_id = :tid ORDER BY created_at"
+                ).bindparams(id=case_id, tid=tenant_id)
             )
         ).fetchall()
     except Exception:  # pragma: no cover — defensive: missing table on older DBs.
@@ -662,6 +665,7 @@ async def _fetch_tasks(db: AsyncSession, case_id: uuid.UUID) -> list[SummaryTask
 async def build_case_summary(
     db: AsyncSession,
     case_id: uuid.UUID,
+    tenant_id: uuid.UUID,
     *,
     now: datetime | None = None,
 ) -> CaseAutoSummary | None:
@@ -669,12 +673,17 @@ async def build_case_summary(
 
     Returns ``None`` if the case isn't found, so endpoints can surface a
     clean 404 without conflating the data layer with HTTP semantics.
+
+    ``tenant_id`` is required rather than optional. The caller resolves the
+    case id against the tenant before getting here, but none of these three
+    tables carries an RLS policy, so a caller that forgot would read another
+    tenant's case body, comments and tasks with nothing to stop it.
     """
-    case = await _fetch_case_for_summary(db, case_id)
+    case = await _fetch_case_for_summary(db, case_id, tenant_id)
     if case is None:
         return None
-    comments = await _fetch_comments(db, case_id)
-    tasks = await _fetch_tasks(db, case_id)
+    comments = await _fetch_comments(db, case_id, tenant_id)
+    tasks = await _fetch_tasks(db, case_id, tenant_id)
     inputs = CaseSummaryInputs(case=case, comments=comments, tasks=tasks)
     return build_summary_from_rows(inputs, now=now)
 

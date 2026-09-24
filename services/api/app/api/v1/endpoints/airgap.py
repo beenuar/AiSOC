@@ -21,13 +21,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.api.v1.deps import AuthUser
 from app.core.airgap import airgap_status
 
 router = APIRouter(prefix="/airgap", tags=["airgap"])
 
 
 @router.get("/status", summary="Current air-gap egress policy")
-async def get_airgap_status() -> dict[str, object]:
+async def get_airgap_status(user: AuthUser) -> dict[str, object]:
     """Return the live air-gap policy snapshot for this pod.
 
     Response shape::

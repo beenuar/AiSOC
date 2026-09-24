@@ -460,6 +460,7 @@ async def _apply_status_to_case(
     db: Any,
     *,
     case_row: Any,
+    tenant_id: Any,
     new_status: str,
     actor_label: str,
     external_id: str,
@@ -506,9 +507,9 @@ async def _apply_status_to_case(
                 {triaged_at_set}
                 {resolved_at_set}
                 {closed_at_set}
-            WHERE id = :id
+            WHERE id = :id AND tenant_id = :tid
             """
-        ).bindparams(status=new_status, now=now, id=case_row.id)
+        ).bindparams(status=new_status, now=now, id=case_row.id, tid=tenant_id)
     )
 
     await db.execute(
@@ -518,13 +519,14 @@ async def _apply_status_to_case(
             SET external_status = :ext_status,
                 last_synced_at = :now,
                 updated_at = :now
-            WHERE case_id = :case_id AND external_id = :external_id
+            WHERE case_id = :case_id AND external_id = :external_id AND tenant_id = :tid
             """
         ).bindparams(
             ext_status=new_status,
             now=now,
             case_id=case_row.id,
             external_id=external_id,
+            tid=tenant_id,
         )
     )
 
@@ -533,12 +535,13 @@ async def _apply_status_to_case(
         text(
             """
             INSERT INTO aisoc_case_comments
-                (id, case_id, author, body, is_system, created_at)
+                (id, tenant_id, case_id, author, body, is_system, created_at)
             VALUES
-                (:id, :case_id, :author, :body, TRUE, :now)
+                (:id, :tid, :case_id, :author, :body, TRUE, :now)
             """
         ).bindparams(
             id=uuid.uuid4(),
+            tid=tenant_id,
             case_id=case_row.id,
             author=actor_label,
             body=note_body,
@@ -659,13 +662,14 @@ async def inbound_itsm_webhook(
                 SELECT r.id, r.case_id, r.external_status,
                        c.id AS aisoc_case_id, c.case_number, c.status
                 FROM case_external_refs r
-                JOIN aisoc_cases c ON c.id = r.case_id
+                JOIN aisoc_cases c ON c.id = r.case_id AND c.tenant_id = :tenant_id
                 WHERE r.connector_instance_id = :connector_id
                   AND r.external_id = :external_id
                 """
             ).bindparams(
                 connector_id=connector_instance_id,
                 external_id=external_id,
+                tenant_id=token_row.tenant_id,
             )
         )
     ).fetchone()
@@ -698,7 +702,11 @@ async def inbound_itsm_webhook(
     # status changed, so operators can see "this token is alive". Done
     # on every successful auth+resolve, not just on writes.
     now = datetime.now(UTC)
-    await db.execute(text("UPDATE tenant_inbox_tokens SET last_used_at = :now WHERE token = :tok").bindparams(now=now, tok=tenant_token))
+    await db.execute(
+        text("UPDATE tenant_inbox_tokens SET last_used_at = :now WHERE token = :tok AND tenant_id = :tenant_id").bindparams(
+            now=now, tok=tenant_token, tenant_id=token_row.tenant_id
+        )
+    )
 
     new_status = _map_inbound_status(vendor, raw_status)
     if new_status is None:
@@ -758,6 +766,7 @@ async def inbound_itsm_webhook(
         await _apply_status_to_case(
             db,
             case_row=ref_row,
+            tenant_id=token_row.tenant_id,
             new_status=new_status,
             actor_label=actor_label,
             external_id=external_id,

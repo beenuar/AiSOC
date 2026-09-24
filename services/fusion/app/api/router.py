@@ -42,7 +42,7 @@ async def metrics():
 
 
 @router.get("/ml/status")
-async def ml_status():
+async def ml_status(principal: ScopedPrincipal):
     """Return current ML model training status."""
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
@@ -50,7 +50,7 @@ async def ml_status():
 
 
 @router.post("/ml/feedback")
-async def submit_feedback(feedback: AnalystFeedback):
+async def submit_feedback(feedback: AnalystFeedback, principal: ScopedPrincipal):
     """Submit analyst feedback to improve ML ranker."""
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
@@ -59,7 +59,7 @@ async def submit_feedback(feedback: AnalystFeedback):
 
 
 @router.post("/ml/retrain")
-async def trigger_retrain():
+async def trigger_retrain(principal: ScopedPrincipal):
     """Manually trigger ML model retraining."""
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
@@ -73,7 +73,7 @@ async def trigger_retrain():
 
 
 @router.post("/process", response_model=FusedAlert)
-async def process_alert(alert: RawAlert) -> FusedAlert:
+async def process_alert(alert: RawAlert, principal: ScopedPrincipal) -> FusedAlert:
     """Run a single ``RawAlert`` through the full fusion pipeline.
 
     The Kafka consumer path (``FusionWorker``) is still the production
@@ -172,7 +172,7 @@ async def entity_risk_detail(
 
 
 @router.post("/confidence/score")
-async def score_confidence(alert: RawAlert):
+async def score_confidence(alert: RawAlert, principal: ScopedPrincipal):
     """Run an alert through the confidence + explainability scorer in
     isolation and return the rationale chain.
 

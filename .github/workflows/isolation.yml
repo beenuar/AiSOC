@@ -21,6 +21,8 @@ on:
       - "tests/isolation/**"
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
+      - "scripts/check_route_auth.py"
+      - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
       - ".github/workflows/isolation.yml"
   pull_request:
@@ -28,6 +30,8 @@ on:
       - "tests/isolation/**"
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
+      - "scripts/check_route_auth.py"
+      - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
       - ".github/workflows/isolation.yml"
   # Matching isolation-live.yml, so a maintainer can run the isolation gate on
@@ -53,7 +57,10 @@ jobs:
         run: pip install --quiet qdrant-client structlog pytest pytest-asyncio
 
       - name: Run isolation suite
-        run: python -m pytest tests/isolation -v --tb=short --ignore=tests/isolation/test_route_tenant_scope.py
+        run: >-
+          python -m pytest tests/isolation -v --tb=short
+          --ignore=tests/isolation/test_route_tenant_scope.py
+          --ignore=tests/isolation/test_route_auth_default_deny.py
 
   route-scope:
     name: Route tenant scope (no route lets its caller name the tenant)
@@ -66,12 +73,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      # The gate itself is stdlib-only (ast). The suite additionally drives the
-      # real fusion router over ASGI, which is the point — a stubbed router
-      # would not prove anything about the shipped one — so its module-level
-      # import chain has to resolve here. `aiokafka` and `asyncpg` arrive
-      # through `app.workers.consumer` and the alert/DLQ sinks. The heavier
-      # ML and ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
+      # The gate itself is stdlib-only (ast). The suites additionally drive the
+      # real fusion and agents routers over ASGI, which is the point — a
+      # stubbed router would not prove anything about the shipped one — so
+      # their module-level import chains have to resolve here. `aiokafka` and
+      # `asyncpg` arrive through `app.workers.consumer` and the alert/DLQ
+      # sinks; `langchain-core` and `langchain-openai` through `app.llm` and
+      # `app.llm.factory`, which the contextual and copilot routers import at
+      # module level — they are 7 of the 37 routes this suite exists to cover,
+      # so skipping them when the import fails would quietly shrink the gate.
+      # `sqlalchemy` + `aiosqlite` + `greenlet` back the seeded two-tenant
+      # by-id read. The heavier ML and
+      # ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
       # `clickhouse-driver` are all imported inside functions, so they stay
       # out of this job rather than adding minutes to it.
       - name: Install deps
@@ -80,6 +93,7 @@ jobs:
           pytest pytest-asyncio httpx "fastapi>=0.117,<0.142" pydantic
           structlog "redis>=5,<6" "pydantic-settings>=2.1,<3"
           "aiokafka>=0.10,<0.15" "asyncpg>=0.29,<0.31" "cryptography>=46,<51"
+          "sqlalchemy>=2,<3" aiosqlite greenlet "langchain-core>=1.2.22,<2" "langchain-openai>=0.2.0,<2"
 
       # Proves the gate can fail before trusting it to pass. Injects a route
       # taking a tenant with no auth, one taking a tenant with auth but no
@@ -96,6 +110,31 @@ jobs:
 
       - name: Vendored tenant_scope copies are in lockstep
         run: python scripts/sync_vendored_tenant_scope.py --check
+
+      # Default-deny over every route in the tree. `check_route_tenant_scope`
+      # only looks at routes that take a tenant; 37 agents routes took none
+      # and were reachable with no credential at all, including the one that
+      # executes a response playbook.
+      - name: Route-auth gate self-test (both directions)
+        run: python scripts/check_route_auth.py --self-test
+
+      - name: Route authentication inventory
+        run: python scripts/check_route_auth.py --inventory
+
+      - name: Every route authenticates or records why it is public
+        run: python scripts/check_route_auth.py
+
+      # The predicate question, which the parameter gate structurally cannot
+      # ask: a route that matches on an id takes no tenant, which is exactly
+      # why it was missing the filter.
+      - name: Tenant-predicate gate self-test (both directions)
+        run: python scripts/check_tenant_query_predicates.py --self-test
+
+      - name: Tenant-predicate inventory
+        run: python scripts/check_tenant_query_predicates.py --inventory
+
+      - name: Every query on a tenant-scoped table filters on a tenant
+        run: python scripts/check_tenant_query_predicates.py
 
       - name: Start Redis for the two-tenant route replay
         run: |
@@ -117,6 +156,12 @@ jobs:
         env:
           AISOC_ISOLATION_REDIS_URL: redis://localhost:6379/9
         run: python -m pytest tests/isolation/test_route_tenant_scope.py -v --tb=short
+
+      # Anonymous calls against the real agents routers, and a two-tenant
+      # seeded read of a distributed-query result addressed by id. Both
+      # tenants' rows are asserted present before either absence is asserted.
+      - name: Default-deny + by-id replay against the real routes
+        run: python -m pytest tests/isolation/test_route_auth_default_deny.py -v --tb=short
 
       - name: Stop Redis
         if: always()

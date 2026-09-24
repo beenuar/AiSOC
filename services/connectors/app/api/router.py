@@ -29,7 +29,7 @@ import re
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from pydantic import Field as PydField
 
@@ -39,9 +39,20 @@ from app.db.connector_repo import fetch_enabled_connectors
 from app.db.engine import get_engine
 from app.federated.query import QueryError, parse_unified_query
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.security.tenant_scope import require_console_or_service_auth
 
 logger = structlog.get_logger()
-router = APIRouter()
+#: Default-deny. Everything on this router either reads the connector
+#: catalogue, decrypts a saved instance's credentials to test them, or
+#: pushes a case into a customer's ITSM — none of which should answer an
+#: anonymous caller. The console reaches these routes directly through a
+#: Next rewrite, so the guard accepts a console session as well as a
+#: service token declaring the tenant it acts for.
+router = APIRouter(dependencies=[Depends(require_console_or_service_auth)])
+
+#: Liveness is deliberately off the guarded router: a probe holds no
+#: credential, and an unauthenticated 401 would read as an outage.
+health_router = APIRouter()
 
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -570,6 +581,6 @@ async def push_status_change(connector_id: str, payload: PushStatusChangeRequest
     return result
 
 
-@router.get("/health")
+@health_router.get("/health")
 async def health():
     return {"status": "healthy", "service": "aisoc-connectors"}

@@ -29,7 +29,11 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from app.security.tenant_scope import TenantPrincipal, require_console_or_service_auth
+
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 log = logging.getLogger(__name__)
 
@@ -109,6 +113,7 @@ def _persistence_baseline_stub(host: str) -> list[dict[str, Any]]:
 
 @router.get("/pending-actions")
 async def get_pending_actions(
+    principal: ScopedPrincipal,
     host_identifier: Annotated[str | None, Query(description="Host identifier")] = None,
 ) -> list[dict[str, Any]]:
     """Return pending HITL response actions for the given host."""
@@ -118,6 +123,7 @@ async def get_pending_actions(
 
 @router.get("/alert-cache")
 async def get_alert_cache(
+    principal: ScopedPrincipal,
     host_identifier: Annotated[str | None, Query()] = None,
     since: Annotated[
         str | None,
@@ -138,6 +144,7 @@ async def get_alert_cache(
 
 @router.get("/persistence-baseline")
 async def get_persistence_baseline(
+    principal: ScopedPrincipal,
     host_identifier: Annotated[str | None, Query()] = None,
 ) -> list[dict[str, Any]]:
     """Return the approved persistence-mechanism baseline for this host."""

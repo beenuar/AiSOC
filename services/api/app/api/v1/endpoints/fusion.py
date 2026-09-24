@@ -133,7 +133,7 @@ async def _proxy_get(
 
 
 @router.get("/health", summary="Fusion service health")
-async def fusion_health() -> dict[str, Any]:
+async def fusion_health(user: AuthUser) -> dict[str, Any]:
     upstream = await _proxy_get("/health")
     if upstream is not None:
         return upstream
@@ -145,7 +145,7 @@ async def fusion_health() -> dict[str, Any]:
 
 
 @router.get("/metrics", summary="Fusion worker metrics")
-async def fusion_metrics() -> dict[str, Any]:
+async def fusion_metrics(user: AuthUser) -> dict[str, Any]:
     upstream = await _proxy_get("/metrics")
     if upstream is not None:
         return upstream

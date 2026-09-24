@@ -263,8 +263,14 @@ async def reject_action(
 
 
 @router.get("/actions/{action_id}")
-async def get_action(action_id: str):
-    """Get action status and result."""
+async def get_action(action_id: str, _auth: None = Depends(require_service_auth)):
+    """Get action status and result.
+
+    Behind the service guard: an action record names the host or account an
+    action was aimed at and the parameters it ran with, and ``GET`` by id was
+    reachable with no credential at all. ``aisoc_action_records`` carries no
+    RLS policy, so the id was the only thing standing in front of it.
+    """
     record = await action_store.get(action_id)
     if not record:
         raise HTTPException(status_code=404, detail="Action not found")

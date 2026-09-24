@@ -41,17 +41,22 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
 from app.llm.factory import resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
+from app.security.tenant_scope import require_console_or_service_auth
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/contextual", tags=["contextual"])
+#: Default-deny. The console reaches this router directly through a Next
+#: rewrite carrying the first-party access token, so the guard resolves
+#: either that session or a trusted service declaring the tenant it acts
+#: for — a bearer-token-only scheme would lock the browser out.
+router = APIRouter(prefix="/api/v1/contextual", tags=["contextual"], dependencies=[Depends(require_console_or_service_auth)])
 
 
 # ---------------------------------------------------------------------------

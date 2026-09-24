@@ -476,7 +476,7 @@ async def run_saved_hunt(
     # reset the cron" bug.
     await db.execute(
         update(SavedHunt)
-        .where(SavedHunt.id == hunt_uuid)
+        .where(SavedHunt.id == hunt_uuid, SavedHunt.tenant_id == user.tenant_id)
         .values(
             translated_query=translated.model_dump(),
             last_run_at=now,

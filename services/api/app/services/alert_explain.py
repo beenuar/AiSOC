@@ -51,7 +51,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
@@ -230,7 +230,16 @@ async def _resolve_rule_lineage(db: AsyncSession, alert: Alert) -> tuple[Detecti
     # 1. Explicit reference in raw_event or tags.
     explicit_id = _explicit_rule_id_from_alert(alert)
     if explicit_id is not None:
-        result = await db.execute(select(DetectionRule).where(DetectionRule.id == explicit_id))
+        # `explicit_id` is read out of the alert's raw_event, so it is
+        # vendor-supplied rather than ours. Narrowed to this alert's tenant
+        # plus the platform-wide rules, or a crafted raw_event could name
+        # another tenant's rule and have its definition explained back.
+        result = await db.execute(
+            select(DetectionRule).where(
+                DetectionRule.id == explicit_id,
+                or_(DetectionRule.tenant_id == alert.tenant_id, DetectionRule.tenant_id.is_(None)),
+            )
+        )
         rule = result.scalar_one_or_none()
         if rule is not None:
             # The raw_event probe wins over the tag probe; we don't

@@ -12,7 +12,12 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.security.tenant_scope import TenantPrincipal, require_console_or_service_auth, scoped_tenant_or_403
 from app.services.distributed_queue import get_query_by_id
+
+#: Dual-mode guard: the console reads query status through a Next rewrite,
+#: and the tenant comes from the credential rather than the query_id.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 router = APIRouter()
 
@@ -28,8 +33,9 @@ class QueryStatusResponse(BaseModel):
 async def distributed_status(
     query_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    principal: ScopedPrincipal,
 ) -> QueryStatusResponse:
-    dq = await get_query_by_id(db, query_id)
+    dq = await get_query_by_id(db, query_id, scoped_tenant_or_403(principal))
     if dq is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

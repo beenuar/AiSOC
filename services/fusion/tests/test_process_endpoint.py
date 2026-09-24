@@ -30,6 +30,7 @@ from app.models.alert import (
     FusionDecision,
     RawAlert,
 )
+from app.security.tenant_scope import TenantPrincipal, require_console_or_service_auth
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -91,6 +92,13 @@ def _make_app(worker: Any | None) -> FastAPI:
     set_worker(worker) if worker is not None else _clear_worker()
     app = FastAPI()
     app.include_router(router)
+    # `/process` is authenticated now — it was reachable with no credential
+    # and it runs the fusion pipeline. These tests are about the pipeline's
+    # response envelope, so they supply a resolved principal; the refusal of
+    # an anonymous caller is asserted by scripts/check_route_auth.py.
+    app.dependency_overrides[require_console_or_service_auth] = lambda: TenantPrincipal(
+        tenant_ids=frozenset({UUID("aaaaaaaa-0000-0000-0000-00000000000a")}), subject="test"
+    )
     return app
 
 

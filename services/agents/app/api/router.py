@@ -93,7 +93,7 @@ async def start_investigation(
 
 
 @router.get("/investigations/{run_id}")
-async def get_investigation(run_id: str):
+async def get_investigation(run_id: str, principal: ScopedPrincipal):
     """Get the status and results of an investigation run."""
     run = _runs.get(run_id)
     if not run:

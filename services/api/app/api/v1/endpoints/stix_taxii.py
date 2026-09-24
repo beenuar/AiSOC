@@ -16,6 +16,7 @@ from enum import Enum
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.api.v1.deps import AuthUser
 from app.core.airgap import AirgapViolation
 from app.core.config import settings
 from app.services.misp_push import (
@@ -257,6 +258,7 @@ DEMO_TAXII_COLLECTIONS: list[TAXIICollection] = [
 
 @router.get("/indicators", response_model=IndicatorListResponse)
 async def list_indicators(
+    user: AuthUser,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     label: str | None = Query(default=None),
@@ -345,6 +347,7 @@ async def _push_bundle_or_swallow(bundle: STIXBundle) -> MispPushResult | None:
 )
 async def create_indicator(
     body: STIXIndicatorCreate,
+    user: AuthUser,
     push_to_misp: bool | None = Query(
         default=None,
         description=("Mirror this indicator to the configured MISP instance. Defaults to the value of MISP_PUSH_AUTO."),
@@ -376,7 +379,7 @@ async def create_indicator(
 
 
 @router.get("/bundles", response_model=BundleListResponse)
-async def list_bundles() -> BundleListResponse:
+async def list_bundles(user: AuthUser) -> BundleListResponse:
     """List STIX 2.1 bundles."""
     return BundleListResponse(items=DEMO_BUNDLES, total=len(DEMO_BUNDLES))
 
@@ -388,6 +391,7 @@ async def list_bundles() -> BundleListResponse:
 )
 async def create_bundle(
     body: STIXBundleCreate,
+    user: AuthUser,
     push_to_misp: bool | None = Query(
         default=None,
         description=(
@@ -418,7 +422,7 @@ async def create_bundle(
 
 
 @router.get("/taxii/collections", response_model=TAXIICollectionListResponse)
-async def list_taxii_collections() -> TAXIICollectionListResponse:
+async def list_taxii_collections(user: AuthUser) -> TAXIICollectionListResponse:
     """List TAXII 2.1 collections for server compatibility."""
     return TAXIICollectionListResponse(
         items=DEMO_TAXII_COLLECTIONS,
@@ -430,7 +434,7 @@ async def list_taxii_collections() -> TAXIICollectionListResponse:
 
 
 @router.get("/misp/health", response_model=MispPushHealth, tags=["MISP push"])
-async def misp_push_health() -> MispPushHealth:
+async def misp_push_health(user: AuthUser) -> MispPushHealth:
     """Check whether MISP push is configured and reachable.
 
     Surfaces enough state for an operator to debug a misconfigured
@@ -463,7 +467,7 @@ async def misp_push_health() -> MispPushHealth:
 
 
 @router.post("/misp/dry-run", response_model=MispDryRunResponse, tags=["MISP push"])
-async def misp_push_dry_run(body: MispDryRunRequest) -> MispDryRunResponse:
+async def misp_push_dry_run(body: MispDryRunRequest, user: AuthUser) -> MispDryRunResponse:
     """Show the MISP event payload that *would* be pushed, without sending it.
 
     Useful for operators tuning STIX → MISP mappings, and for proving

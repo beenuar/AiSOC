@@ -704,7 +704,9 @@ async def update_connector(
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
-        await db.execute(update(Connector).where(Connector.id == connector_id).values(**updates))
+        await db.execute(
+            update(Connector).where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id).values(**updates)
+        )
         await db.commit()
         await db.refresh(connector)
 
@@ -774,7 +776,7 @@ async def update_connector_capabilities(
 
     await db.execute(
         update(Connector)
-        .where(Connector.id == connector_id)
+        .where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id)
         .values(
             allowed_capabilities=request.allowed_capabilities,
             updated_at=datetime.now(UTC),
@@ -873,7 +875,7 @@ async def test_existing_connector(
     health_status = "healthy" if verdict.get("success") else "unhealthy"
     await db.execute(
         update(Connector)
-        .where(Connector.id == connector_id)
+        .where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id)
         .values(
             last_health_check=datetime.now(UTC),
             health_status=health_status,
@@ -1175,7 +1177,11 @@ async def refresh_ingest_token(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
 
     new_token = _generate_ingest_token()
-    await db.execute(update(Connector).where(Connector.id == connector_id).values(ingest_token=new_token, updated_at=datetime.now(UTC)))
+    await db.execute(
+        update(Connector)
+        .where(Connector.id == connector_id, Connector.tenant_id == current_user.tenant_id)
+        .values(ingest_token=new_token, updated_at=datetime.now(UTC))
+    )
     await db.commit()
 
     base = (getattr(settings, "INGEST_PUBLIC_URL", "") or "").rstrip("/")
