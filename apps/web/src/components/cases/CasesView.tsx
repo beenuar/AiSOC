@@ -175,7 +175,9 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
     return true;
   });
 
-  const allCases = casesData?.cases ?? MOCK_CASES;
+  // The list above already falls back to `[]`; this counted MOCK_CASES, so a
+  // failed request rendered an empty table under stat cards claiming 18 cases.
+  const allCases = casesData?.cases ?? [];
   const statCounts = {
     all: allCases.length,
     open: allCases.filter(c => c.status === 'open').length,

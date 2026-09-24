@@ -253,12 +253,44 @@ fi
 
 if [ "$PROFILE_FULL" = "1" ]; then
   head2 "Full-profile stores"
+  # Probed over the published host port, the same way every other HTTP service
+  # in this script is checked. The previous spelling shelled into the container
+  # and ran `wget`, which answers "is wget installed" as much as "is the store
+  # up": the opensearch image ships curl and no wget, and the qdrant image
+  # ships neither. Both reported "running but did not answer" while serving
+  # 200 on every request — a false alarm on two of the four stores, which is
+  # worse than no check, because it teaches the operator to ignore this one.
+  store_probe() {
+    # $1 service, $2 container port, $3 path. Prints 200 or 000.
+    _sb_host_port="$(svc_published_port "$1" "$2" || true)"
+    if [ -n "${_sb_host_port:-}" ]; then
+      http_ok "http://localhost:${_sb_host_port}$3" 6
+      return
+    fi
+    # Not published on the host (a compose override may have dropped the
+    # mapping). Fall back to whichever client the image actually has.
+    dc_exec "$1" sh -c "
+      if command -v curl >/dev/null 2>&1; then
+        curl -fsS -m 3 -o /dev/null http://localhost:$2$3 && echo 200 || echo 000
+      elif command -v wget >/dev/null 2>&1; then
+        wget -qO- -T 3 http://localhost:$2$3 >/dev/null 2>&1 && echo 200 || echo 000
+      else
+        echo noclient
+      fi" || echo 000
+  }
+
   for spec in "clickhouse 8123 /ping" "neo4j 7474 /" "qdrant 6333 /readyz" "opensearch 9200 /"; do
     set -- $spec; name="$1"; port="$2"; path="$3"
     if svc_running "$name"; then
-      code="$(dc_exec "$name" sh -c "wget -qO- -T 3 http://localhost:${port}${path} >/dev/null 2>&1 && echo 200 || echo 000")"
-      if [ "$code" = "200" ]; then pass "$name responding on $port"
-      else warn "$name is running but did not answer http://localhost:${port}${path}" "docker compose logs $name | tail -20"; fi
+      code="$(store_probe "$name" "$port" "$path")"
+      case "$code" in
+        200) pass "$name responding on $port" ;;
+        noclient)
+          warn "$name could not be probed: no host port published and the image has no curl or wget" \
+               "publish the port, or check it by hand: docker compose logs $name | tail -20" ;;
+        *)   warn "$name is running but did not answer http://localhost:${port}${path}" \
+                  "docker compose logs $name | tail -20" ;;
+      esac
     else
       warn "$name is not running (full profile)" "docker compose --profile full up -d $name"
     fi

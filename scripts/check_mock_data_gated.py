@@ -86,6 +86,38 @@ MOCK_ASSIGN = re.compile(rf"\bset[A-Z]\w*\(\s*{MOCK_NAME}")
 #: dispatched") whenever no run was selected.
 MOCK_FACTORY_ASSIGN = re.compile(r"\bset[A-Z]\w*\(\s*(?:make|build|get|create)(?:Mock|Demo|Sample|Fake|Fallback)\w*\(")
 
+#: Sample data reached through a nullish/OR fallback at the point of *render*,
+#: e.g. `const rows = data?.items ?? MOCK_ROWS;`.
+#:
+#: This is the shape the three patterns above cannot see, because the file can
+#: be correctly gated at the SWR boundary and still bypass it one line later.
+#: `ThreatIntelView.tsx` did exactly that: line 239 passed
+#: `fallbackData: demoFallback({ indicators: MOCK_INDICATORS })` — which the
+#: gate accepted, correctly — and line 242 then read
+#: `data?.indicators ?? MOCK_INDICATORS`. With demo mode off and the API
+#: returning 404, `data` is undefined and the mock renders anyway: five
+#: invented IOCs (a "Tor exit node with ransomware C2", a LockBit payload
+#: hash) under the counters "5 Total IOCs · 4 Malicious · 3 Added Today", on a
+#: deployment where no indicator had ever been ingested. Observed live; this
+#: gate reported "All sample-data fallbacks are gated behind demo mode."
+MOCK_RENDER_FALLBACK = re.compile(rf"(?:\?\?|\|\|)\s*{MOCK_NAME}\b")
+
+#: Sites where the fallback is UI configuration rather than a tenant's data.
+#: Keyed by `(path suffix, constant)` with the reason it is not a finding.
+#: Kept deliberately small: this gate's value depends on it staying quiet on
+#: the filter lists and option sets that make up most module-scope arrays in
+#: this console, and a gate that flags those gets switched off.
+RENDER_FALLBACK_EXEMPT: dict[tuple[str, str], str] = {
+    (
+        "identity/permissions/EffectivePermissionsView.tsx",
+        "DEMO_PROVIDERS",
+    ): "the provider capability list (aws/azure/gcp/gws/okta + coverage tier), not tenant data",
+    (
+        "identity/permissions/EffectivePermissionsView.tsx",
+        "DEMO_RESULT",
+    ): "supplies the default value of the principal input, not a rendered result",
+}
+
 #: Files exempt by nature: the gate helper itself, tests, and stories.
 EXEMPT_SUFFIXES = (".test.ts", ".test.tsx", ".stories.tsx", "demoFallback.ts")
 
@@ -158,6 +190,14 @@ DEMO_GATE = re.compile(r"demoFallback|canUseDemoData|isDemoMode")
 #: the section. Deleting the component was the fix; improving its disclaimer
 #: would have left the numbers in the tree for the next person to inherit.
 ALLOWED_ILLUSTRATIVE: dict[tuple[str, str], str] = {}
+
+
+def _render_fallback_exempt(rel_path: str, matched: str) -> bool:
+    """True when this `?? MOCK_*` site is documented UI configuration."""
+    return any(
+        rel_path.endswith(suffix) and const in matched
+        for (suffix, const) in RENDER_FALLBACK_EXEMPT
+    )
 
 
 def _array_body(lines: list[str], start: int) -> str:
@@ -233,6 +273,15 @@ def scan(root: pathlib.Path) -> list[str]:
                 problems.append(
                     f"{rel}:{number}: sample data assigned to state with no canUseDemoData() "
                     f"check in this file. Show an error or empty state instead."
+                )
+
+            render_fallback = MOCK_RENDER_FALLBACK.search(line)
+            if render_fallback and not file_has_guard and not _render_fallback_exempt(str(rel), render_fallback.group(0)):
+                problems.append(
+                    f"{rel}:{number}: sample data is reached through a `??`/`||` fallback with "
+                    f"no canUseDemoData() check in this file. Gating the SWR fallbackData does "
+                    f"not cover this — when the request fails the mock renders anyway. Fall back "
+                    f"to an empty value and let the view show its error state."
                 )
 
             if MOCK_FACTORY_ASSIGN.search(line) and not file_has_guard:
