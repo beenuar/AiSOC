@@ -1728,8 +1728,11 @@ def check_override_propagation(root: Path, data: Scan) -> list[str]:
 
     # ── exemption <-> tree ───────────────────────────────────────────────
     for (package, directory), (versions, _) in sorted(CROSS_ROOT_OVERRIDE_EXEMPT.items()):
-        node_root = by_dir.get(directory)
-        if node_root is None:
+        # Named apart from the `node_root` the loops above bind: this one is
+        # a lookup that can miss, and reusing the name would narrow an
+        # optional into a type the earlier loops guaranteed.
+        exempt_root = by_dir.get(directory)
+        if exempt_root is None:
             # Only reported when the directory is *there* and has stopped
             # resolving its own node_modules. An exemption for a directory
             # that does not exist in this tree at all is a fixture or a fork,
@@ -1742,7 +1745,7 @@ def check_override_propagation(root: Path, data: Scan) -> list[str]:
                     f"nothing is under (override propagation)"
                 )
             continue
-        got = set(node_root.resolved.get(package, []))
+        got = set(exempt_root.resolved.get(package, []))
         if not got:
             problems.append(
                 f"CROSS_ROOT_OVERRIDE_EXEMPT exempts `{package}` in `{directory}`, which no longer "

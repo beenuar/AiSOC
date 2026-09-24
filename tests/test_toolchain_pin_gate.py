@@ -343,7 +343,7 @@ def test_every_runtime_records_why_it_matters():
 # ── esbuild overrides ────────────────────────────────────────────────────────
 
 
-def _write_workspace(root: Path, overrides: dict, resolved: list[str], subdir: str = "") -> gate.Scan:
+def _write_workspace(root: Path, overrides: dict, resolved: list[str], subdir: str = ""):
     """One install root, returned as the Scan the checks take.
 
     `subdir` puts the manifest somewhere other than the repository root,
@@ -409,7 +409,7 @@ def no_exemptions(monkeypatch):
     monkeypatch.setattr(gate, "CROSS_ROOT_OVERRIDE_EXEMPT", {})
 
 
-def _two_roots(root: Path, root_overrides: dict, root_lock: dict, sat_overrides: dict, sat_lock: dict) -> gate.Scan:
+def _two_roots(root: Path, root_overrides: dict, root_lock: dict, sat_overrides: dict, sat_lock: dict):
     """A workspace plus one independent install root, as `apps/mobile` is."""
     for directory, overrides, lock in (
         (root, root_overrides, root_lock),
