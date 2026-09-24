@@ -1026,6 +1026,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The four services that run their own alembic chain now migrate as the
+  owner and serve as the runtime role, and three of them were not reached by
+  the role switch at all.** `honeytokens`, `osquery-tls`, `purple-team` and
+  `ueba` manage their own schema, and each applied it as whatever DSN the
+  operator supplied — so their migration and runtime credentials were the same
+  one, and pointing such a service at the owner turned off row-level security
+  for the twelve tables those chains own with nothing objecting. Each
+  `env.py` now reads `<SERVICE>_DATABASE_MIGRATION_URL`, then
+  `DATABASE_MIGRATION_URL`, and only then falls back to the runtime DSN with a
+  warning on stderr naming what will break.
+
+  Three things were found while wiring it, each measured rather than inferred:
+
+  - **`DATABASE_URL` was inert on three of the four.** `docker-compose.yml`
+    sets it on every service, but `honeytokens`, `purple-team` and
+    `osquery-tls` declare `env_prefix` in their settings, so the name they
+    read is `HONEYTOKEN_DATABASE_URL` and the compose entry did nothing: each
+    fell back to a default naming the **owner**. Both spellings now resolve,
+    unprefixed first, the convention `services/ueba` and `services/fusion`
+    already used. Operator note: on a deployment that sets both to *different*
+    databases, the unprefixed one now wins.
+  - **The four chains shared one `alembic_version` table** — they share one
+    database in the default deployment and number their revisions identically.
+    Following `apps/docs/docs/quickstart.md` against `postgres:16`: after
+    `ueba` reached `0002`, `honeytokens alembic upgrade head` ran **zero**
+    migrations and `purple-team` failed applying its RLS revision to tables
+    that had never been created, so two services had no tables and no policies
+    and every command reported success. Each chain now keeps its own version
+    table and adopts an existing deployment's recorded version on the next
+    upgrade — only when that chain's own tables are already present, so it
+    cannot claim a sibling's row.
+  - **The runtime role had no grant on those tables.**
+    `061_runtime_app_role.sql` grants over `ALL TABLES` as they stood and sets
+    `ALTER DEFAULT PRIVILEGES` for the role that issued it; nothing orders the
+    chains against it, and a deployment applying them under different owners
+    gets neither. Each chain now grants `SELECT, INSERT, UPDATE, DELETE` on its
+    own tables, guarded so it is a notice rather than a failure where the role
+    does not exist.
+
+  Verified live on `postgres:16` with all four chains applied and two tenants
+  seeded: bound to one tenant the runtime role sees one row of two in
+  `ueba_entity_baselines`, `honeytokens` and `osquery_node`; unbound it sees
+  both, which is the fail-open arm the cross-tenant sweeps depend on; a
+  cross-tenant insert is refused by the policy; `CREATE TABLE` is refused with
+  `permission denied for schema public`; `ALTER TABLE … NO FORCE ROW LEVEL
+  SECURITY` with `must be owner of table`; and `SET LOCAL row_security = off`
+  raises rather than doing nothing. None of the four chains creates a view, so
+  the `security_invoker` hazard does not arise there, and none of the four
+  services issues DDL outside its chain.
+
+- **`approval_timers` is in a migration and carries a policy.**
+  `services/slack-bot`'s `PostgresTimerStore` created it at startup with
+  `CREATE TABLE IF NOT EXISTS`, outside every chain in the repository — so
+  `060_rls_coverage.sql` never saw it, it had no `tenant_id` for a policy to
+  filter on, and it decides whether a pending containment auto-rejects. Under
+  the DML-only runtime role the DDL itself fails, because Postgres checks the
+  schema ACL before the existence test, and `main.py` caught that into a
+  warning and fell back to the non-durable store: durable approval timers
+  would have quietly stopped being durable. `062_approval_timers.sql` adds the
+  table, a `tenant_id`, and the canonical policy; the store probes with
+  `to_regclass` and refuses with the migration's name rather than creating
+  anything, carries the tenant in every statement, and binds
+  `app.current_tenant_id` on each pooled connection so the policy engages too.
+  A deployment already carrying the runtime-created table converges on the
+  same shape, with its existing rows defaulting to an empty `tenant_id` that
+  the migration says how to backfill.
+
 - **The services no longer connect to Postgres as a superuser, so the 92
   row-level-security policies added below now actually filter.** The previous
   entry closed the coverage gap and measured, in the same breath, that none of
@@ -1469,6 +1536,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **Two more gates were exempt from the empty-corpus rule only by accident.**
+  `check_route_auth.py` and `check_tenant_query_predicates.py` did not exit 0
+  over an empty tree, but neither had a corpus floor: each happened to fail
+  first on its own stale-exemption ratchet, because every entry stopped
+  matching at once. That is a true statement about the wrong thing, and it
+  disappears the moment somebody empties the table. Both now refuse the
+  corpus itself, ahead of every output mode including `--inventory`, which CI
+  runs as its own step — a green step printing `TOTAL 0` is the same defect
+  one level out. The route gates share one floor, in
+  `check_route_tenant_scope.py`, because they share one collector; the
+  predicate gate refuses each of the three ways its scan can empty
+  separately, since files, tenant-scoped tables and statements reaching zero
+  are three different losses and the middle one is the quiet one. Proven both
+  ways: with every exemption table emptied the floor is still what refuses,
+  and the real repository is unaffected.
+
+  `check_route_auth.py` now imports its scanner as a module rather than by
+  name. It took `REPO_ROOT` and `SERVICES_DIR` by value at import time, so the
+  shared self-test rebinding them would have left this gate scanning the real
+  checkout while believing it was pointed at an empty one — a self-test that
+  proves nothing, which is the shape the whole exercise is about.
+
+- **`check_gate_contract.py` can now ask "the directory exists and is empty",
+  not only "the repository is not there".** Its scratch tree omitted
+  `services/` and `detections/` entirely, so a gate opening with
+  `if not X.is_dir(): return 2` refused it for a reason that says nothing
+  about its corpus — and the way a corpus is actually lost is a renamed
+  package or a glob that stopped matching, neither of which removes the
+  directory. A second **skeleton** shape creates them empty and every check is
+  probed against both. The cost was measured rather than assumed before
+  committing to it: 64 of the 71 checks already refused the skeleton, and of
+  the five that did not, three were defects now fixed and two were already
+  recorded exceptions. The exception table is keyed by shape and has five
+  entries. Probe runtime went from ~8 s to ~16 s.
 
 - **`check_route_tenant_scope.py` reported OK having scanned zero routes.** It
   refused a tree with no `services/` directory, which is not how a scan loses

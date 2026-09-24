@@ -231,8 +231,8 @@ def test_a_gate_in_the_scratch_tree_resolves_the_scratch_tree():
 
 
 # ── The verdict ──────────────────────────────────────────────────────────────
-def _probe(*dispositions: str) -> dict[str, cgc.Probe]:
-    runs = [cgc.Run(args=["--check"], source="test", disposition=d, why=d) for d in dispositions]
+def _probe(*dispositions: str, shape: str = gate_toolkit.BARE) -> dict[str, cgc.Probe]:
+    runs = [cgc.Run(args=["--check"], source="test", shape=shape, disposition=d, why=d) for d in dispositions]
     return {"check_x.py": cgc.Probe(script="check_x.py", runs=runs)}
 
 
@@ -264,7 +264,7 @@ def test_the_worst_invocation_decides_not_the_first():
 
 
 def test_an_exception_is_checked_against_the_disposition_it_was_written_for():
-    excused = {"check_x.py": (cgc.INCONCLUSIVE, "its inputs are named on the command line")}
+    excused = {"check_x.py": {cgc.ANY_SHAPE: (cgc.INCONCLUSIVE, "its inputs are named on the command line")}}
 
     assert not _codes(_probe(cgc.INCONCLUSIVE), accepted=excused)
     assert "exception-stale" in _codes(_probe(cgc.PASSED), accepted=excused)
@@ -272,11 +272,11 @@ def test_an_exception_is_checked_against_the_disposition_it_was_written_for():
 
 
 def test_an_exception_naming_nothing_fails():
-    assert "ratchet-names-nothing" in _codes(_probe(cgc.REFUSED), accepted={"check_gone.py": (cgc.PASSED, "reason")})
+    assert "ratchet-names-nothing" in _codes(_probe(cgc.REFUSED), accepted={"check_gone.py": {cgc.ANY_SHAPE: (cgc.PASSED, "reason")}})
 
 
 def test_an_exception_with_no_reason_fails():
-    assert "ratchet-unexplained" in _codes(_probe(cgc.REFUSED), accepted={"check_x.py": (cgc.REFUSED, "  ")})
+    assert "ratchet-unexplained" in _codes(_probe(cgc.REFUSED), accepted={"check_x.py": {cgc.ANY_SHAPE: (cgc.REFUSED, "  ")}})
 
 
 # ── The real tree ────────────────────────────────────────────────────────────
@@ -292,9 +292,36 @@ def test_every_recorded_exception_names_a_check_that_exists():
 
 
 def test_every_recorded_exception_carries_a_disposition_the_gate_understands():
-    for name, (disposition, reason) in cgc.EMPTY_TREE_EXCEPTIONS.items():
-        assert disposition in {cgc.PASSED, cgc.REFUSED, cgc.INCONCLUSIVE}, name
-        assert len(reason.split()) >= 10, f"{name}: a one-line reason is not a justification"
+    for name, per_shape in cgc.EMPTY_TREE_EXCEPTIONS.items():
+        assert per_shape, f"{name} is listed with no shape at all"
+        for shape, (disposition, reason) in per_shape.items():
+            assert shape == cgc.ANY_SHAPE or shape in gate_toolkit.TREE_SHAPES, f"{name}: unknown tree shape {shape!r}"
+            assert disposition in {cgc.PASSED, cgc.REFUSED, cgc.INCONCLUSIVE}, name
+            assert len(reason.split()) >= 10, f"{name}[{shape}]: a one-line reason is not a justification"
+
+
+def test_a_shape_specific_exemption_does_not_cover_the_other_shape():
+    """The reason the second tree shape is worth having, asserted rather than assumed.
+
+    A gate can refuse a missing directory for a reason that says nothing
+    about its corpus and then credit the same directory when it exists and is
+    empty. An exemption written for one shape must not silently carry over.
+    """
+    excused = {"check_x.py": {gate_toolkit.SKELETON: (cgc.PASSED, "its corpus is not the directory in question at all")}}
+    both = _probe(cgc.PASSED)
+    both["check_x.py"].runs.append(
+        cgc.Run(args=["--check"], source="test", shape=gate_toolkit.SKELETON, disposition=cgc.PASSED, why="exited 0")
+    )
+    assert "passes-over-empty-tree" in _codes(both, accepted=excused)
+
+
+def test_the_skeleton_tree_has_the_directories_the_bare_one_omits():
+    with gate_toolkit.scratch_tree(shape=gate_toolkit.SKELETON) as tree:
+        assert (tree / "services").is_dir()
+        assert (tree / "detections").is_dir()
+        assert [p.name for p in (tree / "services").iterdir()] == [".gitkeep"]
+    with gate_toolkit.scratch_tree(shape=gate_toolkit.BARE) as tree:
+        assert not (tree / "services").exists()
 
 
 def test_the_self_test_catches_every_defect_it_claims_to():

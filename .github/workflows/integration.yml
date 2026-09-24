@@ -453,26 +453,77 @@ jobs:
       - name: Runtime DB role cannot bypass RLS (live)
         run: python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL" --owner-dsn "$DATABASE_MIGRATION_URL"
 
-      # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
-      # env.py only needs `app.models.ueba` importable, so run in-place with
+      # These four service layouts (app/ dir) aren't wheel-buildable; each
+      # env.py only needs its own `app.*` importable, so run in-place with
       # PYTHONPATH instead of pip-installing the service.
       - name: Install alembic
-        run: pip install --quiet alembic
+        run: pip install --quiet alembic "sqlalchemy[asyncio]" asyncpg pydantic pydantic-settings
 
-      - name: UEBA alembic round-trip (upgrade → downgrade → upgrade)
-        working-directory: services/ueba
+      # Four chains, each in its own database, and each applied with **only**
+      # its migration variable in the environment — no DATABASE_URL at all.
+      #
+      # That is deliberate and is the behavioural half of a static check.
+      # `scripts/check_runtime_db_role.py` can read which variables an env.py
+      # *names*; it cannot run the file, so an env.py naming a migration
+      # credential it never reads would pass there. Here it cannot: with no
+      # runtime variable set, a chain that ignores its migration variable
+      # falls back to the hard-coded localhost default and fails to connect.
+      - name: Alembic round-trips as the owner only (upgrade → downgrade → upgrade)
         env:
-          PYTHONPATH: .
-          # Dedicated database so the SQL-runner schema above is untouched.
-          # aisoc-db-role: owner — alembic applies DDL and reads DATABASE_URL by its own convention
-          DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/ueba_ci
+          PGPASSWORD: aisoc_ci_secret
         run: |
           set -euo pipefail
-          PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -c "CREATE DATABASE ueba_ci"
-          alembic upgrade head
-          alembic downgrade base
-          alembic upgrade head
-          echo "alembic round-trip clean"
+          for db in ueba_ci honeytokens_ci purple_team_ci osquery_tls_ci; do
+            psql -h localhost -U aisoc -d aisoc -c "CREATE DATABASE $db"
+          done
+          # aisoc-db-role: owner — alembic applies DDL; these are the owner's, and no runtime DSN is set here
+          owner=postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432
+          round_trip () {
+            echo "── $1 ($2)"
+            ( cd "services/$1" \
+              && env -u DATABASE_URL PYTHONPATH=. "$2=$owner/$3" sh -euc \
+                   'alembic upgrade head && alembic downgrade base && alembic upgrade head' )
+          }
+          round_trip ueba         UEBA_DATABASE_MIGRATION_URL             ueba_ci
+          round_trip honeytokens  HONEYTOKEN_DATABASE_MIGRATION_URL       honeytokens_ci
+          round_trip purple-team  PURPLE_TEAM_DATABASE_MIGRATION_URL      purple_team_ci
+          round_trip osquery-tls  AISOC_OSQUERY_TLS_DATABASE_MIGRATION_URL osquery_tls_ci
+          echo "alembic round-trips clean"
+
+      # The four chains share one database in the default deployment, and used
+      # to share one `alembic_version` table with it — so the second chain to
+      # run believed it was already at head. Measured before the fix: after
+      # ueba reached 0002, honeytokens ran zero migrations and purple-team
+      # failed applying RLS to tables that were never created, leaving two
+      # services with no tenant policies and nothing saying so.
+      #
+      # The assertion is on the tables, not on the exit status: every chain
+      # "succeeded" while that was true.
+      - name: Four chains, one database (per-chain version tables)
+        env:
+          PGPASSWORD: aisoc_ci_secret
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -c "CREATE DATABASE shared_ci"
+          # aisoc-db-role: owner — the four chains apply DDL here; no runtime DSN is set
+          shared=postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/shared_ci
+          for pair in "ueba:UEBA_DATABASE_MIGRATION_URL" \
+                      "honeytokens:HONEYTOKEN_DATABASE_MIGRATION_URL" \
+                      "purple-team:PURPLE_TEAM_DATABASE_MIGRATION_URL" \
+                      "osquery-tls:AISOC_OSQUERY_TLS_DATABASE_MIGRATION_URL"; do
+            ( cd "services/${pair%%:*}" && env -u DATABASE_URL PYTHONPATH=. "${pair##*:}=$shared" alembic upgrade head )
+          done
+          missing=0
+          for t in ueba_anomalies honeytokens honeytoken_triggers \
+                   purple_team_executions purple_team_detection_drift_snapshots \
+                   osquery_node fim_event; do
+            if [ "$(psql -h localhost -U aisoc -d shared_ci -tAc "SELECT to_regclass('public.$t') IS NOT NULL")" != "t" ]; then
+              echo "::error::$t was not created — a chain believed itself at head over a sibling's version row"
+              missing=$((missing + 1))
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "all four chains applied to one database"
 
   # ── Disaster recovery: an untested backup is not a backup ─────────────────
   #

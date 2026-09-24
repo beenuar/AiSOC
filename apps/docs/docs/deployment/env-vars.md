@@ -124,7 +124,43 @@ even under `FORCE ROW LEVEL SECURITY`. See
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@localhost:5432/aisoc` | Async Postgres DSN for the **runtime** role. DML only. |
-| `DATABASE_MIGRATION_URL` | unset → falls back to `DATABASE_URL` | Async Postgres DSN for the **owner**. Used only by `python -m app.scripts.run_migrations`, which needs DDL. |
+| `DATABASE_MIGRATION_URL` | unset → falls back to `DATABASE_URL` | Async Postgres DSN for the **owner**. Read by `python -m app.scripts.run_migrations` and by the four alembic chains below, all of which need DDL. |
+
+#### The four services that manage their own schema
+
+`honeytokens`, `osquery-tls`, `purple-team` and `ueba` run their own alembic
+chain rather than the API's SQL runner, and until now each applied it as
+whatever DSN the operator supplied — so their migration and runtime
+credentials were the same one. Pointing such a service at the owner turned off
+row-level security for the twelve tables those chains own, and nothing
+objected.
+
+Each now reads a migration credential first and falls back to the runtime one
+with a warning on stderr:
+
+| Service | Migration DSN (owner) | Runtime DSN |
+|---------|-----------------------|-------------|
+| `honeytokens` | `HONEYTOKEN_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `HONEYTOKEN_DATABASE_URL` |
+| `osquery-tls` | `AISOC_OSQUERY_TLS_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `AISOC_OSQUERY_TLS_DATABASE_URL` |
+| `purple-team` | `PURPLE_TEAM_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `PURPLE_TEAM_DATABASE_URL` |
+| `ueba` | `UEBA_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `UEBA_DATABASE_URL` |
+
+Two things changed alongside, both of which an operator can observe:
+
+- **The unprefixed `DATABASE_URL` now reaches all four.** `honeytokens`,
+  `purple-team` and `osquery-tls` previously read only their prefixed
+  spelling, while `docker-compose.yml` set the unprefixed one — so the
+  variable was inert and each fell back to a default naming the *owner*. The
+  prefixed spelling still works; the unprefixed one wins when both are set.
+- **Each chain keeps its own alembic version table** (`alembic_version_ueba`
+  and so on). They share one database in the default deployment and used to
+  share one `alembic_version`, so the second chain to run believed it was
+  already at head — measured: after `ueba` reached `0002`, `honeytokens
+  alembic upgrade head` ran zero migrations and `purple-team` failed applying
+  its RLS revision to tables that had never been created. An existing
+  deployment is adopted automatically on the next `alembic upgrade`: the
+  recorded version is copied into the per-chain table when, and only when,
+  that chain's own tables are already present.
 | `AISOC_APP_DB_PASSWORD` | `aisoc_app_dev_secret` in compose; unset elsewhere | Password applied to the runtime role, by the postgres init hook on a fresh volume and by the migration runner on every run. Unset leaves the role's credential alone. |
 | `DATABASE_POOL_SIZE` | `20` | SQLAlchemy pool size |
 | `DATABASE_MAX_OVERFLOW` | `10` | SQLAlchemy max overflow |
@@ -285,7 +321,7 @@ The table below shows the canonical (unprefixed) name first and the legacy alias
 | `HOST` | `UEBA_HOST` | `0.0.0.0` | HTTP listener interface |
 | `PORT` | `UEBA_PORT` | `8004` | HTTP listener port |
 
-`services/ueba/alembic/env.py` follows the same rule: it reads `DATABASE_URL` first and falls back to `UEBA_DATABASE_URL`, so `alembic upgrade head` and the running service always see the same DSN.
+`services/ueba/alembic/env.py` no longer follows the same rule, deliberately. It reads `UEBA_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL`, and only then falls back to the runtime DSN — because `alembic upgrade` issues DDL and the runtime role holds none. See [The four services that manage their own schema](#the-four-services-that-manage-their-own-schema).
 
 ---
 
