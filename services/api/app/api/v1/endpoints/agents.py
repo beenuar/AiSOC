@@ -261,9 +261,9 @@ async def list_agent_tools(
     # 2. Catalog lookup, once. We index by connector_id (the catalog's
     #    notion of "type slug", not a UUID) so we can answer per-instance
     #    questions without N round-trips to the connectors service.
-    catalog = await _fetch_catalog()
+    catalog = await _fetch_catalog(current_user.tenant_id)
     catalog_by_type: dict[str, dict[str, Any]] = {
-        entry["connector_id"]: entry for entry in catalog if isinstance(entry, dict) and isinstance(entry.get("connector_id"), str)
+        entry["connector_id"]: entry for entry in catalog.entries if isinstance(entry, dict) and isinstance(entry.get("connector_id"), str)
     }
 
     tools: list[AgentToolDescriptor] = []

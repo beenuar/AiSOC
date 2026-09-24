@@ -62,7 +62,7 @@ class _FakeSession:
 
 @pytest.fixture
 def session(monkeypatch: pytest.MonkeyPatch) -> _FakeSession:
-    fake = _FakeSession(record={"source": None, "neighbors": [], "all_nodes": [], "affected": []})
+    fake = _FakeSession(record={"source": None, "neighbors": [], "all_nodes": [], "affected": [], "nodes": []})
 
     @contextlib.asynccontextmanager
     async def _get_session():
@@ -133,6 +133,74 @@ async def test_the_apoc_free_fallback_is_scoped_too(session: _FakeSession):
     cypher, params = session.calls[0]
     _assert_scoped(cypher, params, ["start", "pn"])
     assert "tenant_id IS NULL" not in cypher
+
+
+# ── tenant overview (GET /api/v1/graph) ───────────────────────────────────
+#
+# The newest read path, and the one with the widest reach: it does not name an
+# entity, it walks outward from whatever the tenant owns. Every property the
+# two traversals above had to learn the hard way applies here from the start,
+# so they are asserted here rather than assumed.
+
+
+@pytest.mark.asyncio
+async def test_overview_scopes_every_node_of_every_path(session: _FakeSession):
+    await graph_service.get_graph_overview(tenant_id=TENANT, depth=3)
+    cypher, params = session.calls[0]
+    _assert_scoped(cypher, params, ["seed", "pn"])
+    assert "all(pn IN nodes(path)" in cypher, "path nodes are not checked collectively"
+
+
+@pytest.mark.asyncio
+async def test_overview_does_not_accept_an_untagged_node(session: _FakeSession):
+    """An untagged node readable by everyone is a bridge between tenants."""
+    await graph_service.get_graph_overview(tenant_id=TENANT, depth=3)
+    cypher, _ = session.calls[0]
+    assert "tenant_id IS NULL" not in cypher
+
+
+@pytest.mark.asyncio
+async def test_overview_does_not_seed_on_global_reference_labels(session: _FakeSession):
+    """Techniques are shared, so seeding on them would start every tenant's
+    overview from the same vocabulary. They stay reachable as neighbours."""
+    await graph_service.get_graph_overview(tenant_id=TENANT, depth=3)
+    cypher, _ = session.calls[0]
+    assert f"NOT {graph_service._is_global('seed')}" in cypher
+
+
+@pytest.mark.asyncio
+async def test_overview_depth_never_reaches_the_query_as_text(session: _FakeSession):
+    """Cypher cannot parameterise a variable-length bound, so `depth` is
+    interpolated. It must therefore be impossible for anything but an integer
+    to land in the string."""
+    await graph_service.get_graph_overview(tenant_id=TENANT, depth=99)
+    cypher, _ = session.calls[0]
+    # Clamped, not passed through.
+    assert "[*0..6]" in cypher
+    assert "99" not in cypher
+
+
+@pytest.mark.asyncio
+async def test_overview_entity_filter_is_a_bound_parameter(session: _FakeSession):
+    """The entity name comes from a query string, so it is bound rather than
+    interpolated — it must not be able to add a clause to the statement."""
+    await graph_service.get_graph_overview(tenant_id=TENANT, depth=2, entity="host-1' OR 1=1 //")
+    cypher, params = session.calls[0]
+    assert params["entity"] == "host-1' OR 1=1 //"
+    assert "OR 1=1" not in cypher
+
+
+@pytest.mark.asyncio
+async def test_overview_asks_for_no_edges_when_the_tenant_has_no_nodes(session: _FakeSession):
+    """An empty node set means there is nothing an edge could legally join.
+
+    Skipping the second statement is not an optimisation: `$refs` would be
+    empty, and a future edit that dropped the `IN $refs` predicate would then
+    return every relationship in the database.
+    """
+    result = await graph_service.get_graph_overview(tenant_id=TENANT, depth=3)
+    assert result == {"nodes": [], "edges": [], "truncated": False}
+    assert len(session.calls) == 1
 
 
 # ── global reference data ─────────────────────────────────────────────────

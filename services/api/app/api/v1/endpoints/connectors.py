@@ -35,8 +35,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -319,15 +321,85 @@ def _connectors_service_url(path: str) -> str:
     return f"{base}/api/v1{suffix}"
 
 
-# Fallback catalog shipped with the API image. Generated from the connectors
-# microservice's registry and committed alongside the API source. Used when
-# the connectors microservice is not deployed (single-tenant / demo) or
-# temporarily unreachable so the AddConnector wizard still renders. Refresh:
-#
-#   cd services/connectors && python -c "import json; \\
-#     from app.connectors import list_connector_schemas as l; \\
-#     print(json.dumps(l(), indent=2))" \\
-#     > ../api/app/data/connector_catalog_fallback.json
+# Header the connectors service reads to learn which tenant a trusted service
+# is acting for. Must match ``TENANT_HEADER`` in
+# services/connectors/app/security/tenant_scope.py.
+_TENANT_HEADER = "X-AiSOC-Tenant-ID"
+
+
+def _service_token() -> str:
+    """The shared secret this service presents to the connectors service."""
+    specific = (os.getenv("AISOC_CONNECTORS_SERVICE_TOKEN") or "").strip()
+    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+
+
+def _catalog_headers(tenant_id: uuid.UUID | str | None) -> dict[str, str]:
+    """Credential + tenant assertion for a proxied connectors-service call.
+
+    Every route on the connectors service sits behind
+    ``require_console_or_service_auth``: a bearer credential is mandatory, and
+    a *service* token must additionally declare the tenant it acts for,
+    because an absent scope there is an empty scope rather than every scope.
+    This proxy sent neither, so it was answered with 401 on every single call
+    and fell through to the bundled catalog every time — which is how a
+    26-entry list stood in for an 84-connector registry while every check
+    passed. Mirrors ``_upstream_headers`` in the fusion gateway.
+    """
+    headers: dict[str, str] = {}
+    token = _service_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if tenant_id is not None:
+        headers[_TENANT_HEADER] = str(tenant_id)
+    return headers
+
+
+#: Where a catalog came from. The distinction is load-bearing: see
+#: :class:`CatalogResult`.
+CATALOG_LIVE = "live"
+CATALOG_BUNDLED = "bundled"
+
+
+@dataclass(frozen=True)
+class CatalogResult:
+    """A connector catalog and an honest account of where it came from.
+
+    The bundled catalog exists for exactly one situation: **the connectors
+    service is not deployed, or is not answering, and the console still has
+    to render the AddConnector wizard.** That is worth having. What is not
+    worth having is a fallback that cannot be told apart from the live
+    registry, because then a wrong catalog is served with the same confidence
+    as a right one — and this one was wrong, by 58 connectors, for as long as
+    nobody happened to compare the two by hand.
+
+    So provenance travels with the payload:
+
+    ``source``
+        ``live`` when the connectors service answered, ``bundled`` when the
+        catalog came out of the image.
+    ``degraded``
+        True only when we *wanted* live and could not get it. A deployment
+        with no connectors service at all is ``bundled`` but not degraded —
+        the bundle is that deployment's source of truth, and flagging it
+        would train operators to ignore the flag.
+    ``reason``
+        Why, in one token, for the log line and the API response.
+
+    ``degraded`` is what stops :func:`_validate_connector_type` from claiming
+    a connector type is unknown when it simply could not look it up.
+    """
+
+    entries: list[dict[str, Any]]
+    source: str
+    degraded: bool = False
+    reason: str = ""
+
+
+# Catalog bundled into the API image, generated from the connectors registry
+# by `scripts/generate_connector_catalog_fallback.py` and kept in sync by
+# `--check` in CI. Generated rather than hand-refreshed because a hand-refresh
+# is a step someone has to remember: this file sat 58 connectors behind the
+# registry it is a copy of, and nothing failed.
 _FALLBACK_CATALOG_PATH = Path(__file__).resolve().parents[3] / "data" / "connector_catalog_fallback.json"
 
 
@@ -346,35 +418,51 @@ def _load_fallback_catalog() -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-async def _fetch_catalog() -> list[dict[str, Any]]:
-    """Pull the connector catalog from the connectors microservice, with fallback.
+async def _fetch_catalog(tenant_id: uuid.UUID | str | None) -> CatalogResult:
+    """Pull the connector catalog from the connectors service, with fallback.
+
+    ``tenant_id`` is the tenant this call is being made on behalf of, and is
+    required rather than defaulted: the connectors service will refuse a
+    service token that does not declare one, and a parameter that defaults to
+    ``None`` is a parameter call sites forget. Pass ``None`` explicitly for
+    the few callers that genuinely act outside a tenant.
 
     Resolution order:
-      1. If ``CONNECTORS_SERVICE_URL`` is set and reachable, use it (live source
-         of truth — supports newly-added connectors without an API redeploy).
-      2. Otherwise, fall back to the catalog bundled with the API image. This
-         is what keeps demo / single-tenant deploys functional even when the
-         dedicated connectors microservice is not deployed.
+      1. ``CONNECTORS_SERVICE_URL`` set and answering — the live registry, so
+         a newly added connector works without an API redeploy.
+      2. The catalog bundled in the image, tagged with why it was used.
     """
     base_url = (getattr(settings, "CONNECTORS_SERVICE_URL", "") or "").strip()
     if not base_url:
-        logger.info("connectors_service.catalog.using_fallback reason=no_url_configured")
-        return _load_fallback_catalog()
+        # Not degraded: no connectors service is deployed, so the bundle is
+        # this deployment's source of truth rather than a stand-in for one.
+        logger.info("connectors_service.catalog.using_bundled reason=no_url_configured")
+        return CatalogResult(entries=_load_fallback_catalog(), source=CATALOG_BUNDLED, reason="no_url_configured")
 
     url = _connectors_service_url("/connectors/schemas")
     try:
         async with httpx.AsyncClient(timeout=_CATALOG_TIMEOUT) as client:
-            resp = await client.get(url)
+            resp = await client.get(url, headers=_catalog_headers(tenant_id))
             resp.raise_for_status()
     except httpx.HTTPError as exc:
+        # Logged at warning with the status when there was one: a 401 here
+        # means this proxy's credential is wrong, which is a configuration
+        # fault that previously presented as "the service is down".
+        upstream_status = getattr(getattr(exc, "response", None), "status_code", None)
         logger.warning(
-            "connectors_service.catalog.unreachable url=%s error_type=%s falling_back=true",
-            url,
+            "connectors_service.catalog.unreachable url=%s error_type=%s status=%s falling_back=true",
+            _safe_log_val(url),
             type(exc).__name__,
+            upstream_status,
         )
         fallback = _load_fallback_catalog()
         if fallback:
-            return fallback
+            return CatalogResult(
+                entries=fallback,
+                source=CATALOG_BUNDLED,
+                degraded=True,
+                reason=f"connectors_service_unreachable:{type(exc).__name__}",
+            )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="connectors service is unavailable; cannot list connector catalog",
@@ -387,22 +475,40 @@ async def _fetch_catalog() -> list[dict[str, Any]]:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="connectors service returned a malformed catalog",
         )
-    return schemas
+    return CatalogResult(entries=schemas, source=CATALOG_LIVE)
 
 
-async def _validate_connector_type(connector_type: str) -> dict[str, Any]:
-    """Return the catalog entry for ``connector_type`` or raise 422.
+async def _validate_connector_type(connector_type: str, tenant_id: uuid.UUID | str | None) -> dict[str, Any]:
+    """Return the catalog entry for ``connector_type``, or refuse.
 
-    Validating against the live catalog (rather than a hand-maintained
-    enum) means a freshly-added connector is automatically usable as soon
-    as the connectors microservice picks it up — no API-side allowlist to
-    keep in sync.
+    Two different refusals, because "this connector does not exist" and "I
+    could not find out whether it exists" are different facts:
+
+    422
+        The catalog we consulted is authoritative for this deployment and
+        does not list the type.
+    503
+        The connectors service was configured but unreachable, so the bundled
+        catalog stood in. It is generated from the registry at image-build
+        time, so it is not stale — but a connectors service rolled forward
+        ahead of this image legitimately knows types this image does not, and
+        telling an operator their brand-new connector is "unknown" sends them
+        to debug the wrong thing. This is the failure mode the stale bundle
+        used to produce on every single request.
     """
-    catalog = await _fetch_catalog()
-    for entry in catalog:
+    catalog = await _fetch_catalog(tenant_id)
+    for entry in catalog.entries:
         if entry.get("connector_id") == connector_type:
             return entry
-    known = sorted(e.get("connector_id", "?") for e in catalog)
+    if catalog.degraded:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"cannot validate connector_type '{_safe_connector_type(connector_type)}': the connectors "
+                f"service is unreachable ({catalog.reason}) and the bundled catalog may lag it"
+            ),
+        )
+    known = sorted(e.get("connector_id", "?") for e in catalog.entries)
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail=f"unknown connector_type '{connector_type}'. Known types: {', '.join(known) or '(none)'}",
@@ -495,8 +601,15 @@ async def list_catalog(
     — every tenant in this build sees the same catalog — but still gated
     behind authentication.
     """
-    schemas = await _fetch_catalog()
-    return {"connectors": schemas}
+    catalog = await _fetch_catalog(current_user.tenant_id)
+    return {
+        "connectors": catalog.entries,
+        # Provenance ships with the list so the wizard can say "this may lag
+        # the live registry" instead of presenting a stand-in as the real one.
+        "source": catalog.source,
+        "degraded": catalog.degraded,
+        "reason": catalog.reason,
+    }
 
 
 # ------------------------------------------------------------------ health summary
@@ -579,7 +692,7 @@ async def test_connection(
     connectors microservice's stateless test endpoint. **Nothing is
     persisted** — these credentials never touch Postgres or the vault.
     """
-    await _validate_connector_type(request.connector_type)
+    await _validate_connector_type(request.connector_type, current_user.tenant_id)
     return await _proxy_test_connection(
         request.connector_type,
         request.auth_config,
@@ -615,7 +728,7 @@ async def create_connector(
     ``auth_config`` is encrypted with the credential vault before it
     touches Postgres.
     """
-    catalog_entry = await _validate_connector_type(request.connector_type)
+    catalog_entry = await _validate_connector_type(request.connector_type, current_user.tenant_id)
     category = request.category or catalog_entry.get("category") or "uncategorized"
 
     try:
@@ -758,7 +871,7 @@ async def update_connector_capabilities(
         # declared set. We pull from the live catalog (rather than a hard-coded
         # enum on the API side) so newly-added capabilities are usable as soon
         # as the connectors microservice rolls them out, with no API redeploy.
-        catalog_entry = await _validate_connector_type(connector.connector_type)
+        catalog_entry = await _validate_connector_type(connector.connector_type, current_user.tenant_id)
         declared_caps_raw = catalog_entry.get("capabilities") or []
         declared_caps = {str(c) for c in declared_caps_raw}
         requested_caps = {str(c) for c in request.allowed_capabilities}

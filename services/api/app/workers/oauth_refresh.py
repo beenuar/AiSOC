@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -65,17 +66,21 @@ class _CatalogResolver:
     """
 
     @staticmethod
-    async def hints_for(connector_type: str) -> dict[str, Any]:
+    async def hints_for(connector_type: str, tenant_id: uuid.UUID | str | None) -> dict[str, Any]:
         """Return the ``oauth`` hints block for ``connector_type``.
 
         Empty dict when the catalog is unreachable or the entry doesn't
         ship hints — the caller falls back to the per-tenant
         ``OAuthAppCredential.token_url`` override.
+
+        ``tenant_id`` is the tenant whose credential is being refreshed. The
+        connectors service requires a service caller to declare one, and the
+        worker always has it: it walks connectors tenant by tenant.
         """
         from app.api.v1.endpoints.connectors import _fetch_catalog
 
         try:
-            catalog = await _fetch_catalog()
+            catalog = await _fetch_catalog(tenant_id)
         except Exception as exc:  # pragma: no cover - logged + bubbled to fallback
             logger.warning(
                 "oauth_refresh.catalog_unreachable connector_type=%s err=%s",
@@ -83,7 +88,7 @@ class _CatalogResolver:
                 type(exc).__name__,
             )
             return {}
-        for entry in catalog:
+        for entry in catalog.entries:
             if not isinstance(entry, dict):
                 continue
             if entry.get("name") == connector_type:
@@ -262,7 +267,7 @@ async def _refresh_one(
         return False
 
     # 3. Resolve token_url from the per-tenant override or catalog hints.
-    hints = await _CatalogResolver.hints_for(connector_type)
+    hints = await _CatalogResolver.hints_for(connector_type, tenant_id)
     token_url = _resolve_token_url(app_credential, hints)
     if not token_url:
         logger.warning(

@@ -19,17 +19,25 @@ We mock ``httpx.AsyncClient`` directly because:
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from app.api.v1.endpoints.connectors import (
+    _catalog_headers,
     _fetch_catalog,
+    _load_fallback_catalog,
     _proxy_test_connection,
     _validate_connector_type,
+    settings,
 )
 from fastapi import HTTPException
+
+#: The tenant every proxied call is made on behalf of. The connectors
+#: service refuses a service token that does not declare one.
+_TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 def _mock_response(status_code: int, json_body: Any) -> MagicMock:
@@ -68,8 +76,10 @@ async def test_fetch_catalog_returns_schemas() -> None:
     ]
     resp = _mock_response(200, {"schemas": fake_schemas})
     with _patched_client(get_resp=resp):
-        result = await _fetch_catalog()
-    assert result == fake_schemas
+        result = await _fetch_catalog(_TENANT)
+    assert result.entries == fake_schemas
+    assert result.source == "live"
+    assert result.degraded is False
 
 
 @pytest.mark.asyncio
@@ -88,13 +98,18 @@ async def test_fetch_catalog_falls_back_when_service_unreachable() -> None:
         "app.api.v1.endpoints.connectors.httpx.AsyncClient",
         return_value=client_cm,
     ):
-        result = await _fetch_catalog()
+        result = await _fetch_catalog(_TENANT)
     # The bundled catalog ships with at least one connector schema; we
     # don't pin a specific count because that's churned by the marketplace
     # sync. The contract is "non-empty list of schemas" — that's enough
     # for the API surface to keep serving.
-    assert isinstance(result, list)
-    assert result, "expected bundled fallback catalog to be non-empty"
+    assert isinstance(result.entries, list)
+    assert result.entries, "expected bundled fallback catalog to be non-empty"
+    # Provenance is the point: a stand-in must be distinguishable from
+    # the live registry, because this one stood in silently for 58 connectors.
+    assert result.source == "bundled"
+    assert result.degraded is True
+    assert "unreachable" in result.reason
 
 
 @pytest.mark.asyncio
@@ -119,7 +134,7 @@ async def test_fetch_catalog_raises_503_when_unreachable_and_no_fallback() -> No
         ),
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await _fetch_catalog()
+            await _fetch_catalog(_TENANT)
     assert exc_info.value.status_code == 503
 
 
@@ -129,7 +144,7 @@ async def test_fetch_catalog_raises_502_for_malformed_body() -> None:
     resp = _mock_response(200, {"schemas": "not-a-list"})
     with _patched_client(get_resp=resp):
         with pytest.raises(HTTPException) as exc_info:
-            await _fetch_catalog()
+            await _fetch_catalog(_TENANT)
     assert exc_info.value.status_code == 502
 
 
@@ -141,7 +156,7 @@ async def test_validate_connector_type_accepts_known() -> None:
     fake_schemas = [{"connector_id": "splunk", "category": "siem", "name": "Splunk"}]
     resp = _mock_response(200, {"schemas": fake_schemas})
     with _patched_client(get_resp=resp):
-        entry = await _validate_connector_type("splunk")
+        entry = await _validate_connector_type("splunk", _TENANT)
     assert entry["connector_id"] == "splunk"
     assert entry["category"] == "siem"
 
@@ -153,9 +168,128 @@ async def test_validate_connector_type_rejects_unknown() -> None:
     resp = _mock_response(200, {"schemas": fake_schemas})
     with _patched_client(get_resp=resp):
         with pytest.raises(HTTPException) as exc_info:
-            await _validate_connector_type("not_a_real_connector")
+            await _validate_connector_type("not_a_real_connector", _TENANT)
     assert exc_info.value.status_code == 422
     assert "splunk" in exc_info.value.detail
+
+
+# ------------------------------------------- catalog authentication (the defect)
+
+
+@pytest.mark.asyncio
+async def test_catalog_request_carries_the_service_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The proxy must authenticate. This is the whole of the original defect.
+
+    Every route on the connectors service sits behind
+    ``require_console_or_service_auth``, which needs a bearer credential and —
+    for a service token — the tenant the caller is acting for. The proxy sent
+    neither, so it was answered 401 on every call and served the bundled
+    catalog *every time*, with 26 entries against a registry of 84. Nothing
+    failed; the wizard just showed a confidently wrong list.
+
+    Asserting on the outgoing request rather than the return value is
+    deliberate: a test that only checks "we got a catalog back" passes just as
+    happily when the catalog came from the fallback.
+    """
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "test-service-token")
+    monkeypatch.delenv("AISOC_CONNECTORS_SERVICE_TOKEN", raising=False)
+
+    fake_schemas = [{"connector_id": "splunk", "category": "siem", "fields": []}]
+    client_instance = MagicMock()
+    client_instance.get = AsyncMock(return_value=_mock_response(200, {"schemas": fake_schemas}))
+    client_cm = MagicMock()
+    client_cm.__aenter__ = AsyncMock(return_value=client_instance)
+    client_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("app.api.v1.endpoints.connectors.httpx.AsyncClient", return_value=client_cm):
+        result = await _fetch_catalog(_TENANT)
+
+    assert result.source == "live"
+    headers = client_instance.get.await_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer test-service-token"
+    assert headers["X-AiSOC-Tenant-ID"] == str(_TENANT)
+
+
+def test_catalog_headers_prefer_the_connectors_specific_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Per-service override wins over the shared platform token."""
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "shared")
+    monkeypatch.setenv("AISOC_CONNECTORS_SERVICE_TOKEN", "specific")
+    assert _catalog_headers(_TENANT)["Authorization"] == "Bearer specific"
+
+
+def test_catalog_headers_still_assert_the_tenant_without_a_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No token configured: send the tenant anyway, never a blank credential.
+
+    A dev-mode connectors service accepts the call; a production one fails
+    closed, which is the correct outcome for a deployment that never
+    configured a service token. Sending ``Bearer `` would be neither.
+    """
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_CONNECTORS_SERVICE_TOKEN", raising=False)
+    headers = _catalog_headers(_TENANT)
+    assert "Authorization" not in headers
+    assert headers["X-AiSOC-Tenant-ID"] == str(_TENANT)
+
+
+@pytest.mark.asyncio
+async def test_unknown_type_is_503_not_422_when_the_catalog_is_degraded() -> None:
+    """ "I could not look it up" must not be reported as "it does not exist".
+
+    A connectors service rolled forward ahead of this API image legitimately
+    knows connector types the bundled catalog does not. Answering 422
+    "unknown connector_type" sends the operator to debug a connector that is
+    fine — which is exactly what the stale bundle did, on every request, for
+    58 connectors.
+    """
+    client_instance = MagicMock()
+    client_instance.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+    client_cm = MagicMock()
+    client_cm.__aenter__ = AsyncMock(return_value=client_instance)
+    client_cm.__aexit__ = AsyncMock(return_value=None)
+    with (
+        patch("app.api.v1.endpoints.connectors.httpx.AsyncClient", return_value=client_cm),
+        patch(
+            "app.api.v1.endpoints.connectors._load_fallback_catalog",
+            return_value=[{"connector_id": "splunk", "category": "siem"}],
+        ),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await _validate_connector_type("a_newer_connector", _TENANT)
+    assert exc_info.value.status_code == 503
+    assert "unreachable" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_unknown_type_is_422_when_the_bundle_is_authoritative(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no connectors service deployed, the bundle *is* the source of truth.
+
+    That deployment is not degraded and 422 is the honest answer, so the
+    503 above must not swallow the real rejection.
+    """
+    monkeypatch.setattr(settings, "CONNECTORS_SERVICE_URL", "", raising=False)
+    with patch(
+        "app.api.v1.endpoints.connectors._load_fallback_catalog",
+        return_value=[{"connector_id": "splunk", "category": "siem"}],
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await _validate_connector_type("not_a_real_connector", _TENANT)
+    assert exc_info.value.status_code == 422
+    assert "splunk" in exc_info.value.detail
+
+
+def test_bundled_catalog_is_well_formed_and_covers_more_than_a_sample() -> None:
+    """The artefact the image ships is a real catalog, not a stub.
+
+    Deliberately a floor rather than an exact count — the exact number is the
+    generator's business, gated by
+    ``scripts/generate_connector_catalog_fallback.py --check``. What this
+    catches is the artefact silently becoming a placeholder again, which is
+    the shape it was in: a 26-entry subset that looked like a catalog.
+    """
+    bundled = _load_fallback_catalog()
+    assert len(bundled) >= 80, f"bundled catalog has only {len(bundled)} entries; regenerate it"
+    assert all(isinstance(e.get("connector_id"), str) and e["connector_id"] for e in bundled)
+    assert len({e["connector_id"] for e in bundled}) == len(bundled), "duplicate connector_id in the bundled catalog"
 
 
 # ------------------------------------------------------------ test proxy

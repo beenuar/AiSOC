@@ -122,6 +122,36 @@ The catalog ships with **84 connectors** out of the box, registered in [`service
 4. Click **Test connection**. The pre-save test is stateless — credentials are sent once over TLS, the target API is called, and **nothing is persisted** unless the test passes and you click **Save**.
 5. On save, the credentials are encrypted in the vault, the instance is stored with `is_enabled=true`, and the scheduler picks it up on the next reload (within 30 seconds).
 
+### Where the catalog grid comes from
+
+The wizard's grid is `GET /api/v1/connectors/catalog`, which the API service
+proxies to `services/connectors` when `CONNECTORS_SERVICE_URL` is set. That is
+the live registry, so a connector added to the connectors service appears in
+the wizard with no API redeploy.
+
+The API image also bundles a copy of the catalog, and the response says which
+one you got:
+
+| Field | Meaning |
+|---|---|
+| `source` | `live` — the connectors service answered. `bundled` — the copy in the API image was used. |
+| `degraded` | `true` only when the connectors service was configured and could not be reached. A deployment with no connectors service at all is `bundled` but not degraded: there, the bundle *is* the source of truth. |
+| `reason` | Why the bundle was used, when it was. |
+
+The bundle exists so a single-tenant or demo deployment — and a deployment
+whose connectors service is briefly down — still renders the wizard. It is
+**generated** from the connector registry by
+`scripts/generate_connector_catalog_fallback.py` and verified by `--check` in
+CI, so it cannot fall behind the registry it copies. It previously was
+hand-refreshed, drifted to 26 entries against a registry of 84, and was served
+on every request because the proxy authenticated with nothing and the
+connectors service (default-deny) answered `401`.
+
+While `degraded` is true, saving a connector whose type the bundle does not
+list returns **503**, not 422. A connectors service rolled ahead of the API
+image legitimately knows types that image does not, and reporting "unknown
+connector_type" would send you to debug a connector that is fine.
+
 ## How polling works
 
 Each enabled connector instance becomes one job in an in-process [`APScheduler`](https://apscheduler.readthedocs.io/) running inside `services/connectors`:
