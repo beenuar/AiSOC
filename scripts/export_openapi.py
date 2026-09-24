@@ -14,6 +14,7 @@ and calls ``app.openapi()`` to get the schema, then serialises it to YAML.
 
 MIT License — AiSOC (open-source AI Security Operations Center)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,8 +64,7 @@ def check_yaml(schema: dict, dest: Path) -> bool:
 
     if existing != schema:
         print(
-            f"{dest.relative_to(REPO_ROOT)} is out of date.\n"
-            "    Run: python scripts/export_openapi.py  then commit the result.",
+            f"{dest.relative_to(REPO_ROOT)} is out of date.\n" "    Run: python scripts/export_openapi.py  then commit the result.",
             file=sys.stderr,
         )
         return False

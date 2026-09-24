@@ -20,9 +20,16 @@ Storage
 -------
 Redis hashes per entity, namespaced by tenant. Cheap, atomic, and TTLs match
 ``rba_window_seconds`` so cold entities self-evict. Two ZSETs keep top-N
-entities sorted (by score, by last_seen) for O(log N) queue reads. All
-keys are RLS-safe because the tenant_id is part of the key prefix and the
-API service re-checks tenant on read.
+entities sorted (by score, by last_seen) for O(log N) queue reads.
+
+The tenant is part of every key prefix, so this layer cannot mix two tenants'
+entities. That is storage, not authorisation: it isolates whatever tenant it
+is *given*. This docstring used to add "and the API service re-checks tenant
+on read", which was not true — neither the API gateway nor the fusion routes
+carried an auth dependency, so an anonymous caller naming any tenant UUID
+received that tenant's queue. The check now genuinely exists, in
+``app/security/tenant_scope.py``, and the routes derive the tenant from the
+caller's credential rather than from a query parameter.
 """
 
 from __future__ import annotations

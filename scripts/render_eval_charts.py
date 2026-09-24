@@ -37,6 +37,7 @@ SVG charts to ``apps/docs/docs/benchmark-charts/``.
 The SVG renderer is stdlib-only (hand-rolled emitter, no matplotlib) so
 it runs in any CI box that has Python.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -141,9 +142,7 @@ def _render_substrate_summary(report: dict[str, Any]) -> str:
         per_tpl = suite.get("per_template") or {}
         per_tpl_cell = _fmt_value(per_tpl.get("value"), as_pct=as_pct) if per_tpl else "n/a"
         verdict = "PASS" if suite.get("passed") else "FAIL"
-        lines.append(
-            f"| `{name}` | {metric} | {value_cell} | {per_tpl_cell} | {target_cell} | **{verdict}** |"
-        )
+        lines.append(f"| `{name}` | {metric} | {value_cell} | {per_tpl_cell} | {target_cell} | **{verdict}** |")
 
     overall = "ALL GATES PASSED" if report.get("all_passed") else "REGRESSION DETECTED"
     lines += ["", f"**Overall:** {overall}", ""]
@@ -176,8 +175,7 @@ def _render_per_investigation_block(per_inv: dict[str, Any]) -> str:
         ":::",
         "",
         f"_Model assumed for the rate-card projection: `{model}`_  ",
-        f"_Rate (USD per 1M tokens): input ${rate.get('input', 0):.2f}, "
-        f"output ${rate.get('output', 0):.2f}_",
+        f"_Rate (USD per 1M tokens): input ${rate.get('input', 0):.2f}, " f"output ${rate.get('output', 0):.2f}_",
         "",
         "## Tokens per investigation (substrate budget)",
         "",
@@ -329,10 +327,7 @@ def _render_wet_eval_real(wet: dict[str, Any]) -> str:
         sections.append("")
 
     if len(sections) == 2:
-        sections.append(
-            "_(wet_eval block is present but contains no latency / tokens /"
-            " usd sub-blocks; nothing to render)_"
-        )
+        sections.append("_(wet_eval block is present but contains no latency / tokens /" " usd sub-blocks; nothing to render)_")
         sections.append("")
     return "\n".join(sections)
 
@@ -374,15 +369,15 @@ _SVG_PAD = {"top": 64, "right": 32, "bottom": 64, "left": 88}
 # Colour-blind-friendly palette pinned to the Docusaurus light theme. The
 # charts read fine on dark themes too because the background is explicit.
 _SVG_PALETTE = {
-    "primary":    "#3b82f6",
-    "accent":     "#10b981",
-    "warn":       "#f59e0b",
-    "danger":     "#ef4444",
-    "axis":       "#94a3b8",
-    "label":      "#0f172a",
+    "primary": "#3b82f6",
+    "accent": "#10b981",
+    "warn": "#f59e0b",
+    "danger": "#ef4444",
+    "axis": "#94a3b8",
+    "label": "#0f172a",
     "label_muted": "#475569",
-    "grid":       "#e2e8f0",
-    "bg":         "#ffffff",
+    "grid": "#e2e8f0",
+    "bg": "#ffffff",
 }
 
 
@@ -397,13 +392,16 @@ def _svg_open(width: int, height: int, *, title: str) -> list[str]:
         f'viewBox="0 0 {width} {height}" '
         f'width="{width}" height="{height}" '
         f'role="img" aria-labelledby="title">',
-        f'  {title_xml}',
+        f"  {title_xml}",
         f'  <rect width="{width}" height="{height}" fill="{_SVG_PALETTE["bg"]}"/>',
     ]
 
 
 def _svg_text(
-    x: float, y: float, label: str, *,
+    x: float,
+    y: float,
+    label: str,
+    *,
     size: float = 12.0,
     color: str = _SVG_PALETTE["label"],
     anchor: str = "start",
@@ -417,16 +415,12 @@ def _svg_text(
 
 
 def _svg_line(x1: float, y1: float, x2: float, y2: float, color: str, width: float = 1.0) -> str:
-    return (
-        f'  <line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
-        f'stroke="{color}" stroke-width="{width}"/>'
-    )
+    return f'  <line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" ' f'stroke="{color}" stroke-width="{width}"/>'
 
 
 def _svg_rect(x: float, y: float, w: float, h: float, fill: str, *, opacity: float = 1.0) -> str:
     return (
-        f'  <rect x="{x:.1f}" y="{y:.1f}" width="{max(w, 0):.1f}" height="{max(h, 0):.1f}" '
-        f'fill="{fill}" fill-opacity="{opacity:.2f}"/>'
+        f'  <rect x="{x:.1f}" y="{y:.1f}" width="{max(w, 0):.1f}" height="{max(h, 0):.1f}" ' f'fill="{fill}" fill-opacity="{opacity:.2f}"/>'
     )
 
 
@@ -474,10 +468,7 @@ def _histogram(values: Iterable[float], bins: int = 20) -> tuple[list[tuple[floa
         if idx >= bins:
             idx = bins - 1
         buckets[idx] += 1
-    return [
-        (lo + i * width, lo + (i + 1) * width, count)
-        for i, count in enumerate(buckets)
-    ], max(buckets)
+    return [(lo + i * width, lo + (i + 1) * width, count) for i, count in enumerate(buckets)], max(buckets)
 
 
 def render_latency_p50_p95_p99(report: dict, out_path: Path) -> Path:
@@ -489,9 +480,9 @@ def render_latency_p50_p95_p99(report: dict, out_path: Path) -> Path:
     pi = report.get("per_investigation") or {}
     lat = pi.get("latency_per_investigation_ms") or {}
     series = [
-        ("p50",  float(lat.get("p50", 0.0)),  _SVG_PALETTE["primary"]),
-        ("p95",  float(lat.get("p95", 0.0)),  _SVG_PALETTE["accent"]),
-        ("p99",  float(lat.get("p99", 0.0)),  _SVG_PALETTE["warn"]),
+        ("p50", float(lat.get("p50", 0.0)), _SVG_PALETTE["primary"]),
+        ("p95", float(lat.get("p95", 0.0)), _SVG_PALETTE["accent"]),
+        ("p99", float(lat.get("p99", 0.0)), _SVG_PALETTE["warn"]),
         ("mean", float(lat.get("mean", 0.0)), _SVG_PALETTE["label_muted"]),
     ]
     max_value = max(v for _, v, _ in series) or 1.0
@@ -499,12 +490,16 @@ def render_latency_p50_p95_p99(report: dict, out_path: Path) -> Path:
     title = "Per-investigation latency (deterministic substrate)"
     lines = _svg_open(_SVG_W, _SVG_H, title=title)
     lines.append(_svg_text(_SVG_W / 2, 28, title, size=16, anchor="middle", weight="bold"))
-    lines.append(_svg_text(
-        _SVG_W / 2, 48,
-        f"model={pi.get('model', '?')} · n={pi.get('incidents', 0)} incidents · "
-        "substrate path; wet-eval lands in T5.5",
-        size=11, color=_SVG_PALETTE["label_muted"], anchor="middle",
-    ))
+    lines.append(
+        _svg_text(
+            _SVG_W / 2,
+            48,
+            f"model={pi.get('model', '?')} · n={pi.get('incidents', 0)} incidents · " "substrate path; wet-eval lands in T5.5",
+            size=11,
+            color=_SVG_PALETTE["label_muted"],
+            anchor="middle",
+        )
+    )
 
     pl_left = _SVG_PAD["left"]
     pl_right = _SVG_W - _SVG_PAD["right"]
@@ -516,10 +511,16 @@ def render_latency_p50_p95_p99(report: dict, out_path: Path) -> Path:
     for tick in _y_ticks(max_value):
         y = pl_bottom - (tick / max_value) * pl_h
         lines.append(_svg_line(pl_left, y, pl_right, y, _SVG_PALETTE["grid"]))
-        lines.append(_svg_text(
-            pl_left - 8, y + 4, _format_axis(tick, "ms"),
-            size=10, color=_SVG_PALETTE["label_muted"], anchor="end",
-        ))
+        lines.append(
+            _svg_text(
+                pl_left - 8,
+                y + 4,
+                _format_axis(tick, "ms"),
+                size=10,
+                color=_SVG_PALETTE["label_muted"],
+                anchor="end",
+            )
+        )
     lines.append(_svg_line(pl_left, pl_bottom, pl_right, pl_bottom, _SVG_PALETTE["axis"], 1.5))
 
     bar_count = len(series)
@@ -530,14 +531,26 @@ def render_latency_p50_p95_p99(report: dict, out_path: Path) -> Path:
         bar_h = (value / max_value) * pl_h
         y = pl_bottom - bar_h
         lines.append(_svg_rect(x, y, bar_w, bar_h, color))
-        lines.append(_svg_text(
-            x + bar_w / 2, pl_bottom + 18, label,
-            size=12, anchor="middle",
-        ))
-        lines.append(_svg_text(
-            x + bar_w / 2, y - 8, _format_axis(value, "ms"),
-            size=11, color=_SVG_PALETTE["label"], anchor="middle", weight="bold",
-        ))
+        lines.append(
+            _svg_text(
+                x + bar_w / 2,
+                pl_bottom + 18,
+                label,
+                size=12,
+                anchor="middle",
+            )
+        )
+        lines.append(
+            _svg_text(
+                x + bar_w / 2,
+                y - 8,
+                _format_axis(value, "ms"),
+                size=11,
+                color=_SVG_PALETTE["label"],
+                anchor="middle",
+                weight="bold",
+            )
+        )
 
     lines.append("</svg>")
     out_path.write_text("\n".join(lines))
@@ -565,10 +578,16 @@ def _render_histogram(
 
     lines = _svg_open(_SVG_W, _SVG_H, title=title)
     lines.append(_svg_text(_SVG_W / 2, 28, title, size=16, anchor="middle", weight="bold"))
-    lines.append(_svg_text(
-        _SVG_W / 2, 48, subtitle,
-        size=11, color=_SVG_PALETTE["label_muted"], anchor="middle",
-    ))
+    lines.append(
+        _svg_text(
+            _SVG_W / 2,
+            48,
+            subtitle,
+            size=11,
+            color=_SVG_PALETTE["label_muted"],
+            anchor="middle",
+        )
+    )
 
     pl_left = _SVG_PAD["left"]
     pl_right = _SVG_W - _SVG_PAD["right"]
@@ -580,10 +599,16 @@ def _render_histogram(
     for tick in _y_ticks(peak, ticks=4):
         y = pl_bottom - (tick / peak) * pl_h
         lines.append(_svg_line(pl_left, y, pl_right, y, _SVG_PALETTE["grid"]))
-        lines.append(_svg_text(
-            pl_left - 8, y + 4, f"{tick:.0f}",
-            size=10, color=_SVG_PALETTE["label_muted"], anchor="end",
-        ))
+        lines.append(
+            _svg_text(
+                pl_left - 8,
+                y + 4,
+                f"{tick:.0f}",
+                size=10,
+                color=_SVG_PALETTE["label_muted"],
+                anchor="end",
+            )
+        )
     lines.append(_svg_line(pl_left, pl_bottom, pl_right, pl_bottom, _SVG_PALETTE["axis"], 1.5))
 
     bar_w = pl_w / max(len(hist), 1)
@@ -593,10 +618,16 @@ def _render_histogram(
         y = pl_bottom - bar_h
         lines.append(_svg_rect(x + 1, y, bar_w - 2, bar_h, bar_color))
         if i == 0 or i == len(hist) - 1 or i == len(hist) // 2:
-            lines.append(_svg_text(
-                x + bar_w / 2, pl_bottom + 18, _format_axis(lo, axis_kind),
-                size=10, color=_SVG_PALETTE["label_muted"], anchor="middle",
-            ))
+            lines.append(
+                _svg_text(
+                    x + bar_w / 2,
+                    pl_bottom + 18,
+                    _format_axis(lo, axis_kind),
+                    size=10,
+                    color=_SVG_PALETTE["label_muted"],
+                    anchor="middle",
+                )
+            )
 
     lo, hi = hist[0][0], hist[-1][1]
     span = hi - lo if hi > lo else 1.0
@@ -609,10 +640,16 @@ def _render_histogram(
         x = pl_left + ((value - lo) / span) * pl_w
         x = max(pl_left, min(pl_right, x))
         lines.append(_svg_line(x, pl_top, x, pl_bottom, color, 1.5))
-        lines.append(_svg_text(
-            x + 6, pl_top + 14, f"{label} = {_format_axis(value, axis_kind)}",
-            size=10, color=color, weight="bold",
-        ))
+        lines.append(
+            _svg_text(
+                x + 6,
+                pl_top + 14,
+                f"{label} = {_format_axis(value, axis_kind)}",
+                size=10,
+                color=color,
+                weight="bold",
+            )
+        )
 
     lines.append("</svg>")
     out_path.write_text("\n".join(lines))
@@ -650,12 +687,13 @@ def render_tokens_distribution(report: dict, out_path: Path) -> Path:
     return _render_histogram(
         report,
         extractor=lambda rep: _records_or_synthesised(
-            rep, key="total_tokens", agg_path=("tokens", "total"),
+            rep,
+            key="total_tokens",
+            agg_path=("tokens", "total"),
         ),
         title="Tokens per investigation (deterministic substrate)",
         subtitle=(
-            f"prompt + completion · estimator = 4 chars/token · "
-            f"system-prompt budget = {pi.get('system_prompt_tokens', 0)} tokens"
+            f"prompt + completion · estimator = 4 chars/token · " f"system-prompt budget = {pi.get('system_prompt_tokens', 0)} tokens"
         ),
         axis_kind="tokens",
         bar_color=_SVG_PALETTE["primary"],
@@ -669,15 +707,14 @@ def render_usd_distribution(report: dict, out_path: Path) -> Path:
     pi = report.get("per_investigation") or {}
     usd_block = pi.get("usd_per_investigation", {})
     rate = pi.get("rate_card_per_m_tokens_usd", {})
-    rate_label = (
-        f"input ${rate.get('input', 0):.2f}/M, output ${rate.get('output', 0):.2f}/M"
-        if rate else "rate card per M tokens"
-    )
+    rate_label = f"input ${rate.get('input', 0):.2f}/M, output ${rate.get('output', 0):.2f}/M" if rate else "rate card per M tokens"
 
     return _render_histogram(
         report,
         extractor=lambda rep: _records_or_synthesised(
-            rep, key="usd", agg_path=("usd",),
+            rep,
+            key="usd",
+            agg_path=("usd",),
         ),
         title=f"USD per investigation · model={pi.get('model', '?')} (illustrative)",
         subtitle=f"{rate_label} · public 2025-era list pricing — substitute your own",
@@ -700,11 +737,16 @@ def render_latency_by_template(report: dict, out_path: Path, *, top_n: int = 20)
     title = f"Latency p95 by template (top {len(per_tpl)} of {pi.get('templates', 0)})"
     lines = _svg_open(_SVG_W, height, title=title)
     lines.append(_svg_text(_SVG_W / 2, 28, title, size=16, anchor="middle", weight="bold"))
-    lines.append(_svg_text(
-        _SVG_W / 2, 48,
-        "deterministic substrate path; wet-eval (T5.5) replaces these with real-LLM wall-clock",
-        size=11, color=_SVG_PALETTE["label_muted"], anchor="middle",
-    ))
+    lines.append(
+        _svg_text(
+            _SVG_W / 2,
+            48,
+            "deterministic substrate path; wet-eval (T5.5) replaces these with real-LLM wall-clock",
+            size=11,
+            color=_SVG_PALETTE["label_muted"],
+            anchor="middle",
+        )
+    )
 
     pl_left = 240
     pl_right = _SVG_W - _SVG_PAD["right"]
@@ -713,10 +755,16 @@ def render_latency_by_template(report: dict, out_path: Path, *, top_n: int = 20)
     pl_w = pl_right - pl_left
 
     if not per_tpl:
-        lines.append(_svg_text(
-            _SVG_W / 2, height / 2, "no per-template data in report",
-            size=12, color=_SVG_PALETTE["label_muted"], anchor="middle",
-        ))
+        lines.append(
+            _svg_text(
+                _SVG_W / 2,
+                height / 2,
+                "no per-template data in report",
+                size=12,
+                color=_SVG_PALETTE["label_muted"],
+                anchor="middle",
+            )
+        )
         lines.append("</svg>")
         out_path.write_text("\n".join(lines))
         return out_path
@@ -729,17 +777,27 @@ def render_latency_by_template(report: dict, out_path: Path, *, top_n: int = 20)
         bar_w_p95 = (p95 / max_p95) * pl_w
         bar_w_p50 = (p50 / max_p95) * pl_w
         y = pl_top + i * row_h + 4
-        lines.append(_svg_text(
-            pl_left - 12, y + row_h / 2 + 4, str(tpl["template_id"])[:38],
-            size=11, color=_SVG_PALETTE["label"], anchor="end",
-        ))
+        lines.append(
+            _svg_text(
+                pl_left - 12,
+                y + row_h / 2 + 4,
+                str(tpl["template_id"])[:38],
+                size=11,
+                color=_SVG_PALETTE["label"],
+                anchor="end",
+            )
+        )
         lines.append(_svg_rect(pl_left, y, bar_w_p95, row_h - 8, _SVG_PALETTE["accent"], opacity=0.35))
         lines.append(_svg_rect(pl_left, y, bar_w_p50, row_h - 8, _SVG_PALETTE["primary"], opacity=0.85))
-        lines.append(_svg_text(
-            pl_left + bar_w_p95 + 6, y + row_h / 2 + 4,
-            f"p95={_format_axis(p95, 'ms')}  p50={_format_axis(p50, 'ms')}  n={tpl.get('incidents', 0)}",
-            size=10, color=_SVG_PALETTE["label_muted"],
-        ))
+        lines.append(
+            _svg_text(
+                pl_left + bar_w_p95 + 6,
+                y + row_h / 2 + 4,
+                f"p95={_format_axis(p95, 'ms')}  p50={_format_axis(p50, 'ms')}  n={tpl.get('incidents', 0)}",
+                size=10,
+                color=_SVG_PALETTE["label_muted"],
+            )
+        )
 
     lx = pl_left
     ly = height - _SVG_PAD["bottom"] / 2 + 12
@@ -771,8 +829,7 @@ def _load_report_or_compute(path: Path) -> dict[str, Any]:
     if path.is_file():
         return json.loads(path.read_text())
     print(
-        f"[render_eval_charts] {path} not found; "
-        "computing per-investigation block on the fly from the dataset.",
+        f"[render_eval_charts] {path} not found; " "computing per-investigation block on the fly from the dataset.",
         file=sys.stderr,
     )
     pi = compute_per_investigation_telemetry(
@@ -785,18 +842,24 @@ def _load_report_or_compute(path: Path) -> dict[str, Any]:
     usd = block["aggregate"]["usd"]
     latency = block["aggregate"]["latency_ms"]
     block["tokens_per_investigation"] = {
-        "mean": total["mean"], "median": total["median"],
-        "p95": total["p95"],   "p99": total["p99"],
+        "mean": total["mean"],
+        "median": total["median"],
+        "p95": total["p95"],
+        "p99": total["p99"],
         "prompt_mean": block["aggregate"]["tokens"]["prompt"]["mean"],
         "completion_mean": block["aggregate"]["tokens"]["completion"]["mean"],
     }
     block["usd_per_investigation"] = {
-        "mean": usd["mean"], "median": usd["median"],
-        "p95": usd["p95"],   "p99": usd["p99"],
+        "mean": usd["mean"],
+        "median": usd["median"],
+        "p95": usd["p95"],
+        "p99": usd["p99"],
     }
     block["latency_per_investigation_ms"] = {
-        "p50": latency["p50"], "p95": latency["p95"],
-        "p99": latency["p99"], "mean": latency["mean"],
+        "p50": latency["p50"],
+        "p95": latency["p95"],
+        "p99": latency["p99"],
+        "mean": latency["mean"],
     }
     return {"per_investigation": block}
 

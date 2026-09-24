@@ -24,8 +24,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.fim_event import FimEvent
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 router = APIRouter(prefix="/fim", tags=["fim"])
+
+#: The console reaches this service directly through a Next rewrite, so the
+#: FIM and pack surfaces are internet-reachable. The tenant comes from the
+#: caller's credential; a `tenant_id` on the request is a filter intersected
+#: with it, never a selector.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +94,8 @@ class FimSummary(BaseModel):
 
 @router.get("/events", response_model=FimEventPage)
 async def list_fim_events(
-    tenant_id: Annotated[str, Query(description="Tenant to scope results to")],
+    principal: ScopedPrincipal,
+    tenant_id: Annotated[str | None, Query(description="Optional filter; intersected with the caller's scope")] = None,
     action: Annotated[str | None, Query()] = None,
     path_prefix: Annotated[str | None, Query(description="Filter by path prefix")] = None,
     hostname: Annotated[str | None, Query()] = None,
@@ -92,7 +104,8 @@ async def list_fim_events(
     db: AsyncSession = Depends(get_db),
 ) -> FimEventPage:
     """Return a paginated list of FIM events for a tenant."""
-    base_query = select(FimEvent).where(FimEvent.tenant_id == tenant_id)
+    scoped = str(scoped_tenant_or_403(principal, tenant_id))
+    base_query = select(FimEvent).where(FimEvent.tenant_id == scoped)
 
     if action:
         base_query = base_query.where(FimEvent.action == action.upper())
@@ -119,12 +132,14 @@ async def list_fim_events(
 
 @router.get("/summary", response_model=FimSummary)
 async def fim_summary(
-    tenant_id: Annotated[str, Query(description="Tenant to summarise")],
+    principal: ScopedPrincipal,
+    tenant_id: Annotated[str | None, Query(description="Optional filter; intersected with the caller's scope")] = None,
     db: AsyncSession = Depends(get_db),
 ) -> FimSummary:
     """Return aggregate FIM statistics for a tenant."""
+    scoped = str(scoped_tenant_or_403(principal, tenant_id))
     # Total event count
-    total = (await db.execute(select(func.count()).where(FimEvent.tenant_id == tenant_id))).scalar_one()
+    total = (await db.execute(select(func.count()).where(FimEvent.tenant_id == scoped))).scalar_one()
 
     # By-action breakdown
     action_rows = (

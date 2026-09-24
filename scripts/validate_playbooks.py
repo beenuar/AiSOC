@@ -24,6 +24,7 @@ Usage:
     python scripts/validate_playbooks.py
     python scripts/validate_playbooks.py path/to/extra/dir
 """
+
 from __future__ import annotations
 
 import json
@@ -94,9 +95,7 @@ def _validate_one(fp: Path) -> tuple[Playbook | None, list[str]]:
             # Allow trailing condition with no branches (acts as filter / gate).
         else:
             if s.next_true or s.next_false:
-                errors.append(
-                    f"step '{s.id}': non-condition step has next_true/next_false"
-                )
+                errors.append(f"step '{s.id}': non-condition step has next_true/next_false")
 
     # Trigger sanity
     on = pb.trigger.get("on") if isinstance(pb.trigger, dict) else None
@@ -128,10 +127,7 @@ def main() -> int:
         if pb is None:
             continue
         if pb.id in seen_ids:
-            all_errors.append(
-                f"{rel}: duplicate playbook id '{pb.id}' "
-                f"(also in {seen_ids[pb.id].relative_to(ROOT)})"
-            )
+            all_errors.append(f"{rel}: duplicate playbook id '{pb.id}' " f"(also in {seen_ids[pb.id].relative_to(ROOT)})")
         else:
             seen_ids[pb.id] = fp
         # Category is the parent dir name relative to packs/v1.

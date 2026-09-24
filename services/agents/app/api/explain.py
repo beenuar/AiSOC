@@ -109,20 +109,32 @@ import json
 import os
 import re
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
 from app.llm.contract import LLMContractViolation, safe_chat_completions_request
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1", tags=["explain"])
+
+#: The console reaches this service directly through a Next rewrite, sending
+#: the first-party access token as a bearer credential. The tenant comes from
+#: that verified token; a `tenant_id` on the request is only ever a filter,
+#: intersected with it, so naming a foreign tenant is a 403 rather than a
+#: selector for somebody else's investigation.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 
 # ---------------------------------------------------------------------------
@@ -699,7 +711,7 @@ async def _stream_explanation(req: ExplainRequest, llm_config: LlmConfig) -> Asy
 
 
 @router.post("/explain")
-async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
+async def explain(req: ExplainRequest, request: Request, principal: ScopedPrincipal) -> StreamingResponse:
     """Stream an OCSF + MITRE-grounded explanation of an alert as NDJSON.
 
     Each request consumes one token from a per-tenant bucket (see the
@@ -709,6 +721,10 @@ async def explain(req: ExplainRequest, request: Request) -> StreamingResponse:
     throttle. The body is still NDJSON so an SSE/EventSource client
     that ignores status codes still gets a structured failure.
     """
+    # Resolved before the rate-limit bucket is touched: the bucket is keyed
+    # per tenant, so an unauthorised tenant must not be able to drain another
+    # tenant's quota on the way to being refused.
+    req.tenant_id = str(scoped_tenant_or_403(principal, req.tenant_id))
     limiter = _get_explain_limiter()
     decision: RateLimitDecision | None = None
     if limiter is not None:

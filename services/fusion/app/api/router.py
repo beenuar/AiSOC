@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.models.alert import AnalystFeedback, FusedAlert, FusionDecision, RawAlert
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 from app.workers.consumer import FusionWorker
+
+#: The console reaches this service *directly* through a Next rewrite when
+#: `FUSION_URL` is set, so these routes are internet-reachable and must
+#: establish the tenant from the caller's credential rather than from a query
+#: parameter. See app/security/tenant_scope.py.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 router = APIRouter()
 
@@ -100,7 +112,8 @@ def _require_entity_risk():
 
 @router.get("/entity-risk/queue")
 async def entity_risk_queue(
-    tenant_id: UUID,
+    principal: ScopedPrincipal,
+    tenant_id: UUID | None = None,
     limit: int = Query(default=25, ge=1, le=200),
     promoted_only: bool = False,
 ):
@@ -110,31 +123,44 @@ async def entity_risk_queue(
     enabled — analysts work the highest-risk entities and the contributing
     alerts are surfaced as evidence. Closes the 2026 KPI bar of
     ``alert-to-incident ratio ≥ 50:1``.
+
+    ``tenant_id`` is an optional *filter*, not a selector: it is intersected
+    with the credential's scope, so naming a tenant the caller does not hold
+    returns 403 rather than that tenant's queue. Omitting it reads the
+    caller's own tenant.
     """
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     eng = _require_entity_risk()
-    records = await eng.top_entities(tenant_id, limit=limit, promoted_only=promoted_only)
+    records = await eng.top_entities(scoped, limit=limit, promoted_only=promoted_only)
     return {
-        "tenant_id": str(tenant_id),
+        "tenant_id": str(scoped),
         "threshold": eng.threshold,
         "entities": [r.to_dict() for r in records],
     }
 
 
 @router.get("/entity-risk/stats")
-async def entity_risk_stats(tenant_id: UUID):
+async def entity_risk_stats(principal: ScopedPrincipal, tenant_id: UUID | None = None):
     """Tenant-scoped queue stats for dashboards (banding, totals, threshold)."""
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     eng = _require_entity_risk()
-    return {"tenant_id": str(tenant_id), **(await eng.stats(tenant_id))}
+    return {"tenant_id": str(scoped), **(await eng.stats(scoped))}
 
 
 @router.get("/entity-risk/{entity_type}/{entity_value}")
-async def entity_risk_detail(entity_type: str, entity_value: str, tenant_id: UUID):
+async def entity_risk_detail(
+    entity_type: str,
+    entity_value: str,
+    principal: ScopedPrincipal,
+    tenant_id: UUID | None = None,
+):
     """Return the full risk record (contributing alerts + severity histogram)
     for a single entity, used by the alert-detail drawer."""
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     if entity_type == "ip":
         entity_type = "src_ip"
     eng = _require_entity_risk()
-    record = await eng.get(tenant_id, entity_type, entity_value)
+    record = await eng.get(scoped, entity_type, entity_value)
     if record is None:
         raise HTTPException(status_code=404, detail="entity_not_found")
     return record.to_dict()

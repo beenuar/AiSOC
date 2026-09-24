@@ -46,6 +46,7 @@ Usage
     # Real preflight:
     python scripts/wet_eval_check.py --status-out /tmp/wet-eval-check.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,10 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         "--status-out",
         type=Path,
         default=None,
-        help=(
-            "Write a JSON status file to this path so the workflow can "
-            "branch on ``should_run``. If omitted, only stdout is used."
-        ),
+        help=("Write a JSON status file to this path so the workflow can " "branch on ``should_run``. If omitted, only stdout is used."),
     )
     args = parser.parse_args(argv)
 
@@ -102,23 +100,15 @@ def main(argv: list[str] | None = None) -> int:
     is_live = has_all and not args.dry_run
 
     if args.dry_run:
-        reason = (
-            "dry-run mode: status reported as no-op. The workflow will "
-            "not dispatch the live wet eval."
-        )
+        reason = "dry-run mode: status reported as no-op. The workflow will " "not dispatch the live wet eval."
     elif missing:
         reason = (
-            "Missing required secret(s): "
-            + ", ".join(missing)
-            + ". This is expected on forks and first-run CI; configure them "
-              "in the repo settings to enable the weekly wet eval. See "
-              "`apps/docs/docs/operations/secrets.md`."
+            "Missing required secret(s): " + ", ".join(missing) + ". This is expected on forks and first-run CI; configure them "
+            "in the repo settings to enable the weekly wet eval. See "
+            "`apps/docs/docs/operations/secrets.md`."
         )
     else:
-        reason = (
-            "All required secrets are present. Proceeding to the live "
-            "wet-eval run."
-        )
+        reason = "All required secrets are present. Proceeding to the live " "wet-eval run."
 
     status = {
         "should_run": bool(is_live),
@@ -127,10 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         "reason": reason,
         # Each secret keyed by name so the workflow can render a checklist
         # without revealing values. Booleans only — never the secret itself.
-        "secrets_present": {
-            name: bool(os.environ.get(name))
-            for name in _REQUIRED_SECRETS_FOR_LIVE_RUN
-        },
+        "secrets_present": {name: bool(os.environ.get(name)) for name in _REQUIRED_SECRETS_FOR_LIVE_RUN},
         "checked_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 

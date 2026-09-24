@@ -430,6 +430,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     properties. Wired into `.github/workflows/competitor-names.yml`, which runs
     on pull requests *and* pushes to `main` with no paths filter.
 
+- **A gate that fails when a route lets its caller name the tenant.**
+  `scripts/check_route_tenant_scope.py` is an AST pass over every route
+  decorator and signature under `services/` — a structural property needs a
+  structural check, and the thing being looked for (a parameter's name, a
+  decorator's `dependencies` list, the router object the decorator hangs off)
+  survives renames a regex would miss. It fails in **both** directions: a
+  route that takes a tenant identifier with no auth dependency, and a route
+  that accepts one without intersecting it with the caller's scope. It reads
+  request-body models too, because `POST {"tenant_id": "<someone else's>"}` is
+  the same hole as `?tenant_id=` and the mutating routes carry it on the body.
+
+  `--self-test` injects a violation of each kind and asserts both are caught
+  while two clean controls pass, so the gate cannot quietly stop detecting
+  things. Exemptions each carry a written reason and are as narrow as the
+  facts allow: `services/mesh` is public by design (Ed25519 + k-anonymity, a
+  bearer token would break federation rather than secure it); three MSSP
+  routes *define* a scope rather than read within one, so intersecting would
+  make them impossible; and `osquery-tls` `/enroll` authenticates with a
+  per-tenant enroll secret because osqueryd has no session yet. That last
+  exemption is **conditional** — the self-test strips the verifier it names
+  and asserts the route is then reported, so deleting the check and keeping
+  the entry fails the build. The gate resolves its repository root from `git
+  rev-parse` rather than its own file location, and prints how many routes
+  across how many files it opened, so an OK can be distinguished from a scan
+  that never happened. `--inventory` prints the per-service table.
+
 - **Tool attribution is now prevented at commit time and blocked in CI.** AiSOC
   does not attribute work to a development tool or AI assistant. An audit found
   the rule was being broken automatically: a `Co-authored-by:` trailer naming an
@@ -568,6 +594,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot catch `SystemExit` — a broken environment would have killed the
   parity gate's interpreter instead of producing its diagnostic. The import
   now raises `ImportError`, which that handler catches.
+
+- **Thirty routes across six services let the caller name the tenant they were
+  reading.** `/fusion/entity-risk/*` was the reported instance and the worst
+  one: three routes on the API gateway and three on the fusion service took
+  `tenant_id` as a query parameter with no auth dependency at all. The console
+  reaches fusion *directly* through a Next rewrite when `FUSION_URL` is set, so
+  those routes were reachable from any browser on the internet, and an
+  anonymous request naming another tenant's UUID returned that tenant's
+  entity-risk queue, stats and per-entity detail. The engine's own docstring
+  asserted the missing control — "the tenant_id is part of the key prefix and
+  the API service re-checks tenant on read" — and the second half was not true
+  on either side. Key prefixing isolates whichever tenant it is handed;
+  validating the parameter's *value* fixes nothing, because a UUID that parses
+  is still a UUID the caller chose.
+
+  An AST pass over all 600 routes in `services/` found the same shape in five
+  more places, in two flavours. Taking a tenant with no authentication:
+  `services/agents` `/triage/{run_id}`, `/cases/{id}/triage`,
+  `/cases/{id}/investigate`, `/investigations` and `/explain`; and six
+  `services/osquery-tls` routes. Taking one *with* authentication but never
+  intersecting it with the caller's scope: `honeytokens`, `purple-team` and
+  `ueba`, where a router-level service token proved the caller was a trusted
+  service but said nothing about which tenant it was acting for.
+
+  The tenant now comes from the credential. A new
+  `app/security/tenant_scope.py`, vendored into the six services that need it,
+  resolves either a console session (the first-party HS256 access token, whose
+  verified `tenant_id` claim is authoritative) or a trusted service declaring
+  the tenant it acts for on `X-AiSOC-Tenant-ID`. A `tenant_id` on the request
+  survives only as a *filter*, intersected with that scope, so an MSSP
+  operator can still narrow to one managed customer while naming an outside
+  tenant narrows to nothing and returns 403. A service token that declares no
+  tenant resolves to an empty scope and is refused: absent is never all, which
+  is the shape every cross-tenant leak in this codebase has had. The HS256
+  verification is stdlib-only and mirrors `services/realtime/src/auth.ts`,
+  rejecting `alg: none`, a refresh token presented for access, and an expired
+  or wrongly-signed token.
+
+  Closing these surfaced a worse variant the parameter audit could not see:
+  eight routes matched on an id with **no tenant predicate at all**.
+  `honeytokens` `GET/PATCH/DELETE /{token_id}` and `/{token_id}/triggers`,
+  `purple-team` `PATCH /executions/{id}/detection` and the three
+  `/tabletop/{session_id}` routes, and `ueba`
+  `PATCH /anomalies/{id}/acknowledge`. Any caller could read, revoke or delete
+  another tenant's honeytoken, overwrite another tenant's detection outcome,
+  or acknowledge away another tenant's anomaly by naming its UUID. All eight
+  now filter on the caller's tenant as well as the id, so a foreign row is a
+  404 — which is what it is, from that caller's point of view.
+
+- **`services/osquery-tls` enrolled every node under the literal `"default"`,
+  which resolves to no tenant on any seeded deployment.** The service keys
+  `tenant_id` as a `String(64)` while the platform keys UUIDs, and nothing
+  translated. Migration `001` seeds the canonical tenant with slug `default`,
+  but the demo seed renames that slug to `demo`, so the literal matched
+  neither the UUID nor the slug and silently matched nothing: FIM events were
+  written under a string the console could never ask for, and the FIM surface
+  returned an empty table that looked like "no file changes" rather than "the
+  read and the write disagree". `app/services/tenant_resolver.py` now resolves
+  the placeholder to the canonical seed tenant by its **stable UUID** —
+  ignoring whatever the slug has been renamed to — falling back to the sole
+  tenant of a single-tenant install, and refusing enrolment for a genuinely
+  unknown ref rather than filing the node under an unreadable tenancy. Skips
+  log at `warning` with the ref; a silent `debug` skip is how the original bug
+  survived.
 
 - **The maintainers' hosted origin shipped in the default CORS allow-list of
   nine services.** `services/{api,agents,connectors,honeytokens,purple-team,ueba}`
@@ -884,6 +974,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected their code. Rewritten to mirror `StepType`, `PlaybookStep`,
   `RunStatus` and the dispatch report, and `check_playbook_schema_parity.py`
   now compares the published union against the engine's in both directions.
+
+- **`false_positive_rate` and `escalation_rate` published `0.0` on an empty
+  denominator.** `x / n if n > 0 else 0.0` renders an undefined ratio as a
+  measured zero, and for these two the zero is flattering: "0% false
+  positives" and "0% escalated" are the two best numbers on the SOC metrics
+  page, and a tenant that had resolved nothing and gated nothing scored both.
+  This is the same defect as the MTTD/MTTR/MTTC means that shipped a NULL
+  average as a confident `0.0`, one step removed, and it takes the same fix:
+  `/metrics/soc` now reports `false_positive_rate_sample_count` and
+  `escalation_rate_sample_count` alongside the rates, and the console renders
+  "not measured · no resolved alerts in 7d" rather than a percentage. The
+  fields are additive and optional, so a console running against an older API
+  keeps its previous behaviour rather than blanking the tiles — a paired test
+  holds that direction too, because "blank everything" would be a worse
+  regression than the bug.
 
 - **An event ingested under a connector type with no profile became an alert
   with no host, no user and no source IP.** `_canonicalAliases` in

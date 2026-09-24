@@ -27,6 +27,10 @@ a running realtime service.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 import sys
 import time
 from pathlib import Path
@@ -48,6 +52,48 @@ from app.orchestrator import PARALLEL_TOPOLOGY_FLAG  # noqa: E402
 
 SUBAGENT_SLEEP_MS = 10
 AUTO_TRIAGE_SLEEP_MS = 5
+
+
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+#
+# These routes take their tenant from the caller's credential now, not from a
+# `tenant_id` the caller supplies. The tests mint the same first-party HS256
+# access token `services/api` issues, so they drive the real verification
+# rather than a bypass.
+
+TENANT_A = "aaaaaaaa-0000-0000-0000-00000000000a"
+TENANT_B = "bbbbbbbb-0000-0000-0000-00000000000b"
+_TEST_SECRET = "agents-triage-test-secret-at-least-32-chars"
+
+
+def _console_token(tenant: str, *, sub: str = "analyst") -> str:
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = b64(
+        json.dumps(
+            {"sub": sub, "tenant_id": tenant, "type": "access", "exp": int(time.time()) + 600},
+            separators=(",", ":"),
+        ).encode()
+    )
+    sig = b64(hmac.new(_TEST_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    return f"{header}.{payload}.{sig}"
+
+
+def _auth(tenant: str = TENANT_A) -> dict[str, str]:
+    return {"Authorization": f"Bearer {_console_token(tenant)}"}
+
+
+@pytest.fixture(autouse=True)
+def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure the signing secret these tests mint tokens against."""
+    monkeypatch.setenv("SECRET_KEY", _TEST_SECRET)
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_AGENTS_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_DEV_MODE", raising=False)
 
 
 def _build_app() -> FastAPI:
@@ -86,7 +132,7 @@ def _multi_signal_payload() -> dict[str, Any]:
             "destination_domain": "attacker[.]example",
             "is_off_hours": True,
         },
-        "tenant_id": "acme",
+        "tenant_id": TENANT_A,
         "incident_id": "INC-PH-LATERAL",
     }
 
@@ -162,18 +208,19 @@ def _poll_until_done(
     run_id: str,
     *,
     timeout_s: float = 2.0,
-    tenant_id: str = "acme",
+    tenant_id: str = TENANT_A,
 ) -> dict[str, Any]:
     """Poll GET /triage/{run_id} until ``status != "running"`` or timeout.
 
-    Defaults to ``tenant_id="acme"`` because that's what
-    :func:`_multi_signal_payload` posts; pass an override for tests that
-    launch from a different tenant.
+    Polls as ``TENANT_A`` because that is what :func:`_multi_signal_payload`
+    launches under; pass an override for tests that launch elsewhere. The
+    tenant travels in the credential, not the query string — the route
+    compares the run's tenant against the verified one.
     """
     deadline = time.perf_counter() + timeout_s
     last: dict[str, Any] = {}
     while time.perf_counter() < deadline:
-        resp = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": tenant_id})
+        resp = client.get(f"/api/v1/triage/{run_id}", headers=_auth(tenant_id))
         assert resp.status_code == 200, resp.text
         last = resp.json()
         if last.get("status") != "running":
@@ -200,7 +247,7 @@ def test_post_launches_run_and_defaults_to_parallel(
     _patch_runners(monkeypatch)
     client = TestClient(_build_app())
 
-    resp = client.post("/api/v1/cases/CASE-001/triage", json=_multi_signal_payload())
+    resp = client.post("/api/v1/cases/CASE-001/triage", json=_multi_signal_payload(), headers=_auth())
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["status"] == "running"
@@ -218,7 +265,7 @@ def test_flag_off_runs_sequential_topology(
     _patch_runners(monkeypatch)
     client = TestClient(_build_app())
 
-    resp = client.post("/api/v1/cases/CASE-002/triage", json=_multi_signal_payload())
+    resp = client.post("/api/v1/cases/CASE-002/triage", json=_multi_signal_payload(), headers=_auth())
     assert resp.status_code == 200, resp.text
     assert resp.json()["topology"] == "sequential"
 
@@ -237,7 +284,7 @@ def test_explicit_topology_override_beats_env_flag(
 
     body = _multi_signal_payload()
     body["topology"] = "parallel"
-    resp = client.post("/api/v1/cases/CASE-003/triage", json=body)
+    resp = client.post("/api/v1/cases/CASE-003/triage", json=body, headers=_auth())
     assert resp.status_code == 200
     assert resp.json()["topology"] == "parallel"
 
@@ -254,7 +301,7 @@ def test_invalid_topology_value_returns_400(
 
     body = _multi_signal_payload()
     body["topology"] = "diagonal"
-    resp = client.post("/api/v1/cases/CASE-004/triage", json=body)
+    resp = client.post("/api/v1/cases/CASE-004/triage", json=body, headers=_auth())
     assert resp.status_code == 400
     assert "diagonal" in resp.json()["detail"]
 
@@ -273,7 +320,7 @@ def test_run_completes_and_exposes_router_telemetry(
     _patch_runners(monkeypatch)
     client = TestClient(_build_app())
 
-    resp = client.post("/api/v1/cases/CASE-005/triage", json=_multi_signal_payload())
+    resp = client.post("/api/v1/cases/CASE-005/triage", json=_multi_signal_payload(), headers=_auth())
     assert resp.status_code == 200
     run_id = resp.json()["run_id"]
 
@@ -299,7 +346,7 @@ def test_auto_close_short_circuits_router(
     _patch_runners(monkeypatch, auto_close=True)
     client = TestClient(_build_app())
 
-    resp = client.post("/api/v1/cases/CASE-006/triage", json=_multi_signal_payload())
+    resp = client.post("/api/v1/cases/CASE-006/triage", json=_multi_signal_payload(), headers=_auth())
     assert resp.status_code == 200
     run_id = resp.json()["run_id"]
 
@@ -319,7 +366,7 @@ def test_get_unknown_run_id_returns_404(monkeypatch: pytest.MonkeyPatch) -> None
     _silence_realtime(monkeypatch)
     client = TestClient(_build_app())
 
-    resp = client.get(f"/api/v1/triage/{uuid4()}")
+    resp = client.get(f"/api/v1/triage/{uuid4()}", headers=_auth())
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Triage run not found"
 
@@ -333,7 +380,7 @@ def test_post_accepts_minimal_body_with_only_case_path(
     _patch_runners(monkeypatch)
     client = TestClient(_build_app())
 
-    resp = client.post("/api/v1/cases/CASE-007/triage", json={})
+    resp = client.post("/api/v1/cases/CASE-007/triage", json={}, headers=_auth())
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["topology"] == "parallel"
@@ -354,6 +401,13 @@ def test_get_with_mismatched_tenant_returns_404(
     The handler returns 404 (not 403) on mismatch so a probing caller
     can't distinguish "wrong tenant" from "no such run" — same shape as
     the unknown-run-id branch above.
+
+    This test used to pass a `tenant_id` query parameter for both sides, so
+    all it really checked was that the route compared a value against a copy
+    of itself — which any caller enumerating run IDs could satisfy by simply
+    guessing the tenant string too. Tenant B now arrives holding tenant B's
+    credential, which is the only version of this assertion that means
+    anything.
     """
     monkeypatch.delenv(PARALLEL_TOPOLOGY_FLAG, raising=False)
     _silence_realtime(monkeypatch)
@@ -363,22 +417,29 @@ def test_get_with_mismatched_tenant_returns_404(
     # Launch a run as tenant "acme".
     resp = client.post(
         "/api/v1/cases/CASE-TENANT-A/triage",
-        json={**_multi_signal_payload(), "tenant_id": "acme"},
+        json={**_multi_signal_payload(), "tenant_id": TENANT_A},
+        headers=_auth(TENANT_A),
     )
     assert resp.status_code == 200, resp.text
     run_id = resp.json()["run_id"]
 
-    # Owning tenant gets 200.
-    own = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": "acme"})
+    # Owning tenant gets 200. Asserted first, so the refusals below are
+    # refusals of something that genuinely exists.
+    own = client.get(f"/api/v1/triage/{run_id}", headers=_auth(TENANT_A))
     assert own.status_code == 200, own.text
-    assert own.json()["tenant_id"] == "acme"
+    assert own.json()["tenant_id"] == TENANT_A
 
-    # Different tenant gets 404, NOT 200 with the other tenant's findings.
-    other = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": "evilcorp"})
+    # Tenant B, holding tenant B's own valid credential, gets 404 — not 200
+    # with tenant A's findings, and not 403 either.
+    other = client.get(f"/api/v1/triage/{run_id}", headers=_auth(TENANT_B))
     assert other.status_code == 404
     assert other.json()["detail"] == "Triage run not found"
 
-    # Absent tenant_id falls back to "default" and still 404s — fail closed.
-    no_tenant = client.get(f"/api/v1/triage/{run_id}")
-    assert no_tenant.status_code == 404
-    assert no_tenant.json()["detail"] == "Triage run not found"
+    # No credential at all is refused before the run is even looked up.
+    anon = client.get(f"/api/v1/triage/{run_id}")
+    assert anon.status_code == 401
+
+    # A tenant named in the query string is not a tenant. The parameter is
+    # gone; supplying it must not resurrect the old behaviour.
+    spoofed = client.get(f"/api/v1/triage/{run_id}", params={"tenant_id": TENANT_A}, headers=_auth(TENANT_B))
+    assert spoofed.status_code == 404

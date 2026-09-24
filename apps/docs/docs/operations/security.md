@@ -116,6 +116,55 @@ If `app.current_tenant_id` is not set (e.g. an internal job that needs to operat
 
 The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 
+### The tenant comes from the credential, never from the request
+
+Row-Level Security answers one question: *given* a tenant, can this query see
+another one's rows? It cannot answer the question above it — where did that
+tenant come from? If a route reads it out of the query string, RLS dutifully
+isolates whichever tenant the caller typed.
+
+That is not hypothetical. `/fusion/entity-risk/*` took `tenant_id` as a query
+parameter with no auth dependency on the route, on both the API gateway and
+the fusion service, and the console reaches fusion *directly* through a
+Next.js rewrite when `FUSION_URL` is set. An anonymous request naming another
+tenant's UUID returned that tenant's entity-risk queue. Redis key prefixing
+(`aisoc:fusion:rba:topn:{tenant}`) did not help, because prefixing isolates
+whichever tenant it is handed. Nor would validating the parameter: a UUID that
+parses is still a UUID the caller chose.
+
+So the rule across every service is:
+
+- **The authoritative tenant is the authenticated principal's.** In
+  `services/api` that is `CurrentUser.tenant_id`. In the services the browser
+  reaches directly (`agents`, `fusion`, `osquery-tls`) and the
+  service-to-service ones (`honeytokens`, `purple-team`, `ueba`), it is
+  resolved by `app/security/tenant_scope.py`, which accepts either a console
+  session — the first-party HS256 access token, whose verified `tenant_id`
+  claim is authoritative — or a trusted service declaring the tenant it acts
+  for on the `X-AiSOC-Tenant-ID` header.
+- **A `tenant_id` on the request is a filter, not a selector.** It is
+  intersected with the caller's scope through `resolve_scoped_tenant()`, so an
+  MSSP operator can narrow to one managed customer while naming an outside
+  tenant returns `403` rather than that tenant's data. Omitting it reads the
+  caller's own tenant, which is what the console does.
+- **No scope never becomes all scopes.** A service token that declares no
+  tenant resolves to an *empty* scope and is refused. Cross-tenant surfaces
+  (the MSSP portfolio) resolve their tenant list in
+  `app/services/org_scope.py` and pass it through `require_scope()`, which
+  raises rather than running unfiltered SQL. Every cross-tenant leak this
+  codebase has had took the shape of a scope that was absent rather than
+  narrow, and a read that treated absent as "no filter".
+
+`scripts/check_route_tenant_scope.py` enforces this structurally. It is an AST
+pass over every route in `services/` and fails in both directions — a route
+taking a tenant identifier with no auth dependency, and a route accepting one
+without intersecting it with scope — including tenant fields on request-body
+models, since `POST {"tenant_id": …}` is the same hole as `?tenant_id=`. Run
+`--inventory` for the per-service table or `--self-test` to watch it catch
+injected drift. `services/mesh` is exempt by design: it is a federated hub
+protected by Ed25519 signatures and k-anonymity, where a shared bearer token
+would break federation rather than secure it.
+
 ### MSSP parent/child links require the child's consent
 
 A managed provider can hold other tenants as children (`tenants.parent_tenant_id`), which grants the parent real authority over them: rule packs, per-rule overrides, notes and delegations are all keyed on the child's tenant id, and an override with `action: "exclude"` removes a detection rule from the ruleset that child's hunts run against.

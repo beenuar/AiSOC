@@ -71,18 +71,18 @@ from typing import Any
 # benchmark.md — do not treat these as authoritative for billing.
 RATE_CARD_2025_USD_PER_M: dict[str, dict[str, float]] = {
     # OpenAI
-    "gpt-4o":           {"input": 2.50,  "output": 10.00},
-    "gpt-4o-mini":      {"input": 0.15,  "output": 0.60},
-    "gpt-4-turbo":      {"input": 10.00, "output": 30.00},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
     # Placeholder for the next-gen model name used in the v8 plan; pricing
     # mirrors gpt-4o until the public price for the real "gpt-5" lands.
-    "gpt-5":            {"input": 5.00,  "output": 15.00},
+    "gpt-5": {"input": 5.00, "output": 15.00},
     # Anthropic
-    "claude-3.5-sonnet": {"input": 3.00,  "output": 15.00},
-    "claude-3-haiku":    {"input": 0.25,  "output": 1.25},
+    "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3-haiku": {"input": 0.25, "output": 1.25},
     # Google
-    "gemini-1.5-pro":    {"input": 1.25,  "output": 5.00},
-    "gemini-1.5-flash":  {"input": 0.075, "output": 0.30},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
 }
 
 # Models we report against by default. Picking a "headline" model lets the
@@ -118,10 +118,10 @@ _COMPLETION_BASE_TOKENS = 800
 # Severity scaling for completion length. Higher-severity incidents get
 # longer reports / response plans because the response section expands.
 _SEVERITY_COMPLETION_FACTOR = {
-    "info":     0.5,
-    "low":      0.7,
-    "medium":   1.0,
-    "high":     1.4,
+    "info": 0.5,
+    "low": 0.7,
+    "medium": 1.0,
+    "high": 1.4,
     "critical": 1.8,
 }
 
@@ -129,9 +129,7 @@ _SEVERITY_COMPLETION_FACTOR = {
 # Default eval dataset path (relative to repo root).
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_INCIDENTS_PATH = (
-    _REPO_ROOT / "services" / "agents" / "tests" / "eval_data" / "synthetic_incidents.json"
-)
+DEFAULT_INCIDENTS_PATH = _REPO_ROOT / "services" / "agents" / "tests" / "eval_data" / "synthetic_incidents.json"
 
 
 # ---------------------------------------------------------------------------
@@ -161,10 +159,7 @@ def cost_usd(
     """
     rates = rate_card if rate_card is not None else RATE_CARD_2025_USD_PER_M
     entry = rates.get(model) or rates.get(DEFAULT_MODEL) or {"input": 2.5, "output": 10.0}
-    return (
-        (prompt_tokens / 1_000_000.0) * entry["input"]
-        + (completion_tokens / 1_000_000.0) * entry["output"]
-    )
+    return (prompt_tokens / 1_000_000.0) * entry["input"] + (completion_tokens / 1_000_000.0) * entry["output"]
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +247,13 @@ def _summarise(values: list[float], decimals: int = 4) -> dict[str, float]:
     if not values:
         return {
             "count": 0,
-            "min": 0.0, "max": 0.0,
-            "mean": 0.0, "median": 0.0,
-            "p50": 0.0, "p95": 0.0, "p99": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
         }
     return {
         "count": len(values),
@@ -328,10 +327,7 @@ def compute_per_investigation_telemetry(
     rates = rate_card if rate_card is not None else RATE_CARD_2025_USD_PER_M
     entry = rates.get(model) or rates.get(DEFAULT_MODEL) or {"input": 2.5, "output": 10.0}
 
-    records: list[InvestigationTelemetry] = [
-        _telemetry_for_incident(inc, model=model, rate_card=rate_card)
-        for inc in incidents
-    ]
+    records: list[InvestigationTelemetry] = [_telemetry_for_incident(inc, model=model, rate_card=rate_card) for inc in incidents]
 
     prompt_tokens = [r.prompt_tokens for r in records]
     completion_tokens = [r.completion_tokens for r in records]
@@ -341,11 +337,11 @@ def compute_per_investigation_telemetry(
 
     aggregate = {
         "tokens": {
-            "prompt":     _summarise(prompt_tokens, decimals=2),
+            "prompt": _summarise(prompt_tokens, decimals=2),
             "completion": _summarise(completion_tokens, decimals=2),
-            "total":      _summarise(total_tokens, decimals=2),
+            "total": _summarise(total_tokens, decimals=2),
         },
-        "usd":     _summarise(usds, decimals=6),
+        "usd": _summarise(usds, decimals=6),
         "latency_ms": _summarise(latencies, decimals=4),
     }
 
@@ -356,17 +352,19 @@ def compute_per_investigation_telemetry(
     per_template: list[dict[str, Any]] = []
     for tpl_id in sorted(by_template):
         bucket = by_template[tpl_id]
-        per_template.append({
-            "template_id": tpl_id,
-            "incidents": len(bucket),
-            "tokens": {
-                "prompt":     _summarise([r.prompt_tokens     for r in bucket], decimals=2),
-                "completion": _summarise([r.completion_tokens for r in bucket], decimals=2),
-                "total":      _summarise([r.total_tokens      for r in bucket], decimals=2),
-            },
-            "usd":        _summarise([r.usd        for r in bucket], decimals=6),
-            "latency_ms": _summarise([r.latency_ms for r in bucket], decimals=4),
-        })
+        per_template.append(
+            {
+                "template_id": tpl_id,
+                "incidents": len(bucket),
+                "tokens": {
+                    "prompt": _summarise([r.prompt_tokens for r in bucket], decimals=2),
+                    "completion": _summarise([r.completion_tokens for r in bucket], decimals=2),
+                    "total": _summarise([r.total_tokens for r in bucket], decimals=2),
+                },
+                "usd": _summarise([r.usd for r in bucket], decimals=6),
+                "latency_ms": _summarise([r.latency_ms for r in bucket], decimals=4),
+            }
+        )
 
     incident_records = (
         [
@@ -404,9 +402,7 @@ def compute_per_investigation_telemetry(
 def _cli() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Per-investigation token/USD telemetry (deterministic substrate)."
-    )
+    parser = argparse.ArgumentParser(description="Per-investigation token/USD telemetry (deterministic substrate).")
     parser.add_argument("--incidents", type=Path, default=DEFAULT_INCIDENTS_PATH)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(

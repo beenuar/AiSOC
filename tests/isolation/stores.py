@@ -45,7 +45,10 @@ STORES: tuple[StoreCoverage, ...] = (
     StoreCoverage(
         "redis",
         "container_gated",
-        "aisoc:t:<tenant>:* keyspace namespacing; live-replay test_live_stores.py::test_redis_scan_as_A_excludes_B (isolation-live.yml)",
+        "aisoc:t:<tenant>:* keyspace namespacing; live-replay test_live_stores.py::test_redis_scan_as_A_excludes_B (isolation-live.yml); "
+        "the RBA entity rollup (aisoc:fusion:rba:*) is additionally replayed at the route layer by "
+        "test_route_tenant_scope.py, because key prefixing isolates whichever tenant it is handed and the "
+        "fusion routes used to take that tenant from the query string",
     ),
     StoreCoverage(
         "kafka",

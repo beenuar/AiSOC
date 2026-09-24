@@ -358,9 +358,7 @@ def _alternative_value(field: str, constraints: list[tuple[str, Any]], avoid: An
     emit a fixture that cannot satisfy its rule.
     """
     for op, expected in constraints:
-        if op in {"in", "match_any", "contains_any", "startswith_any", "endswith_any"} and isinstance(
-            expected, list
-        ):
+        if op in {"in", "match_any", "contains_any", "startswith_any", "endswith_any"} and isinstance(expected, list):
             for candidate in expected:
                 value = _pos_for(op, [candidate])
                 if value != avoid:
@@ -395,15 +393,11 @@ def _resolve_comparison(
         return operands or {}
 
     if left_value is None:
-        left_value = right_value if want_equal else _alternative_value(
-            left, by_field.get(left, []), right_value
-        )
+        left_value = right_value if want_equal else _alternative_value(left, by_field.get(left, []), right_value)
         return {left: left_value}
 
     if right_value is None:
-        right_value = left_value if want_equal else _alternative_value(
-            right, by_field.get(right, []), left_value
-        )
+        right_value = left_value if want_equal else _alternative_value(right, by_field.get(right, []), left_value)
         return {right: right_value}
 
     # Both pinned. Adjust the right side only, so the left keeps whatever
@@ -423,10 +417,7 @@ def build_positive(when: dict[str, Any]) -> dict[str, Any]:
     yield ``path='/tmp/.tar'`` — satisfying both clauses.
     """
     if _has_compound(when):
-        raise ValueError(
-            "build_positive cannot auto-generate fixtures for any_of/all_of clauses. "
-            "Pass an explicit positive= to S()."
-        )
+        raise ValueError("build_positive cannot auto-generate fixtures for any_of/all_of clauses. " "Pass an explicit positive= to S().")
     by_field: dict[str, list[tuple[str, Any]]] = {}
     comparisons: list[tuple[str, bool]] = []
     for key, val in when.items():
@@ -462,10 +453,7 @@ def build_negative(
 ) -> dict[str, Any]:
     """Build a synthetic negative by flipping one clause of a flat match_when."""
     if _has_compound(when):
-        raise ValueError(
-            "build_negative cannot auto-generate fixtures for any_of/all_of clauses. "
-            "Pass an explicit negative= to S()."
-        )
+        raise ValueError("build_negative cannot auto-generate fixtures for any_of/all_of clauses. " "Pass an explicit negative= to S().")
     neg = build_positive(when)
     target_key: str | None = None
     target_op: str | None = None
@@ -477,9 +465,7 @@ def build_negative(
                 target_key, target_op, target_expected = key, op, when[key]
                 break
         if target_key is None:
-            raise ValueError(
-                f"neg_field={neg_field!r} not found in match_when keys: {list(when.keys())}"
-            )
+            raise ValueError(f"neg_field={neg_field!r} not found in match_when keys: {list(when.keys())}")
     else:
         # Prefer the clause the rule is *about*. Taking the first key made
         # every negative flip whatever happened to be written first — for
@@ -490,9 +476,7 @@ def build_negative(
         # A comparison or neq clause is the discriminating one by
         # construction: the other clauses say *where* to look, this one
         # says what makes it suspicious.
-        comparison_key = next(
-            (k for k in when if _COMPARISON_KEY_RE.match(k)), None
-        )
+        comparison_key = next((k for k in when if _COMPARISON_KEY_RE.match(k)), None)
         if comparison_key is not None:
             # Through the resolver, not the raw operand picker: the
             # operands may also be constrained by other clauses, and a
@@ -504,16 +488,10 @@ def build_negative(
                     continue
                 field, op = split_op(key)
                 by_field.setdefault(field, []).append((op, when[key]))
-            neg.update(
-                _resolve_comparison(
-                    comparison_key, not bool(when[comparison_key]), neg, by_field
-                )
-            )
+            neg.update(_resolve_comparison(comparison_key, not bool(when[comparison_key]), neg, by_field))
             return neg
 
-        neq_key = next(
-            (k for k in when if split_op(k)[1] == "neq"), None
-        )
+        neq_key = next((k for k in when if split_op(k)[1] == "neq"), None)
         first_key = neq_key or next(iter(when.keys()))
         neg_field, target_op = split_op(first_key)
         target_expected = when[first_key]

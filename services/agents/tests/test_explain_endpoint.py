@@ -14,9 +14,13 @@ effect for the next request.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +44,49 @@ from app.api.explain import (  # noqa: E402
     _reset_explain_limiter,
     router as explain_router,
 )
+
+
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+#
+# `/explain` takes its tenant from the caller's credential now, and the
+# per-tenant rate-limit bucket is keyed on the *verified* tenant — so an
+# unauthorised caller cannot drain another tenant's quota on the way to being
+# refused. These helpers mint the same first-party HS256 access token
+# `services/api` issues.
+
+TENANT_A = "aaaaaaaa-0000-0000-0000-00000000000a"
+TENANT_B = "bbbbbbbb-0000-0000-0000-00000000000b"
+_TEST_SECRET = "agents-explain-test-secret-at-least-32-chars"
+
+
+def _console_token(tenant: str) -> str:
+    def b64(raw: bytes) -> str:
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = b64(
+        json.dumps(
+            {"sub": "analyst", "tenant_id": tenant, "type": "access", "exp": int(time.time()) + 600},
+            separators=(",", ":"),
+        ).encode()
+    )
+    sig = b64(hmac.new(_TEST_SECRET.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    return f"{header}.{payload}.{sig}"
+
+
+def _auth(tenant: str = TENANT_A) -> dict[str, str]:
+    return {"Authorization": f"Bearer {_console_token(tenant)}"}
+
+
+@pytest.fixture(autouse=True)
+def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECRET_KEY", _TEST_SECRET)
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_AGENTS_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_DEV_MODE", raising=False)
+
 
 # ----- shared fixtures ------------------------------------------------------
 
@@ -125,8 +172,9 @@ def test_explain_streams_grounded_ndjson(monkeypatch: pytest.MonkeyPatch) -> Non
         json={
             "alert": SAMPLE_ALERT,
             "alert_id": SAMPLE_ALERT["id"],
-            "tenant_id": "tenant-a",
+            "tenant_id": TENANT_A,
         },
+        headers=_auth(TENANT_A),
     )
 
     assert response.status_code == 200, response.text
@@ -174,9 +222,12 @@ def test_explain_uses_default_tenant_when_omitted(
 ) -> None:
     """Omitting ``tenant_id`` must still produce a valid stream.
 
-    The body model defaults ``tenant_id`` to ``"default"`` which the
-    rate-limit-key resolver explicitly treats as "no tenant — fall back
-    to client IP", so the call must not 500 on a missing field.
+    The body model defaults ``tenant_id`` to the literal ``"default"``. That
+    is a placeholder meaning "the caller did not say", not a request for a
+    tenant of that name — no such tenant exists on any deployment, because
+    the demo seed renames the slug. The resolver treats it as absent and
+    falls back to the credential's own tenant, so a caller who leaves the
+    field alone gets their own data rather than a 403.
     """
     monkeypatch.setenv("AISOC_EXPLAIN_RPM", "120")
     monkeypatch.setenv("AISOC_EXPLAIN_BURST", "60")
@@ -187,10 +238,36 @@ def test_explain_uses_default_tenant_when_omitted(
     response = client.post(
         "/api/v1/explain",
         json={"alert": SAMPLE_ALERT, "alert_id": SAMPLE_ALERT["id"]},
+        headers=_auth(TENANT_A),
     )
     assert response.status_code == 200, response.text
     frames = _parse_ndjson(response.text)
     assert frames[-1]["kind"] == "done"
+
+
+def test_explain_refuses_an_unauthenticated_caller() -> None:
+    """The rate-limit bucket is keyed per tenant, so the credential must come first.
+
+    If an unauthenticated request reached the limiter it could drain another
+    tenant's quota by naming them, turning a missing auth check into a
+    denial-of-service primitive.
+    """
+    client = TestClient(_build_app())
+    response = client.post(
+        "/api/v1/explain",
+        json={"alert": SAMPLE_ALERT, "alert_id": SAMPLE_ALERT["id"], "tenant_id": TENANT_A},
+    )
+    assert response.status_code == 401
+
+
+def test_explain_refuses_a_tenant_the_caller_does_not_hold() -> None:
+    client = TestClient(_build_app())
+    response = client.post(
+        "/api/v1/explain",
+        json={"alert": SAMPLE_ALERT, "alert_id": SAMPLE_ALERT["id"], "tenant_id": TENANT_A},
+        headers=_auth(TENANT_B),
+    )
+    assert response.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -217,13 +294,13 @@ def test_explain_throttles_with_429_and_ndjson_error_frame(
     body = {
         "alert": SAMPLE_ALERT,
         "alert_id": SAMPLE_ALERT["id"],
-        "tenant_id": "tenant-a",
+        "tenant_id": TENANT_A,
     }
 
-    first = client.post("/api/v1/explain", json=body)
+    first = client.post("/api/v1/explain", json=body, headers=_auth())
     assert first.status_code == 200, first.text
 
-    second = client.post("/api/v1/explain", json=body)
+    second = client.post("/api/v1/explain", json=body, headers=_auth())
     assert second.status_code == 429, second.text
     assert second.headers["content-type"].startswith("application/x-ndjson")
     assert int(second.headers["X-RateLimit-Limit"]) == 1
@@ -249,19 +326,22 @@ def test_explain_buckets_are_per_tenant(monkeypatch: pytest.MonkeyPatch) -> None
 
     drain = client.post(
         "/api/v1/explain",
-        json={"alert": SAMPLE_ALERT, "tenant_id": "tenant-a"},
+        json={"alert": SAMPLE_ALERT, "tenant_id": TENANT_A},
+        headers=_auth(TENANT_A),
     )
     assert drain.status_code == 200
     deny = client.post(
         "/api/v1/explain",
-        json={"alert": SAMPLE_ALERT, "tenant_id": "tenant-a"},
+        json={"alert": SAMPLE_ALERT, "tenant_id": TENANT_A},
+        headers=_auth(TENANT_A),
     )
     assert deny.status_code == 429
 
     # tenant-b is fresh — its bucket has not been touched.
     fresh = client.post(
         "/api/v1/explain",
-        json={"alert": SAMPLE_ALERT, "tenant_id": "tenant-b"},
+        json={"alert": SAMPLE_ALERT, "tenant_id": TENANT_B},
+        headers=_auth(TENANT_B),
     )
     assert fresh.status_code == 200, fresh.text
 
@@ -278,7 +358,8 @@ def test_explain_limiter_disabled_when_rpm_zero(
     client = TestClient(_build_app())
     response = client.post(
         "/api/v1/explain",
-        json={"alert": SAMPLE_ALERT, "tenant_id": "tenant-a"},
+        json={"alert": SAMPLE_ALERT, "tenant_id": TENANT_A},
+        headers=_auth(TENANT_A),
     )
     assert response.status_code == 200
     assert "X-RateLimit-Limit" not in response.headers
@@ -298,7 +379,8 @@ def test_explain_limiter_handles_invalid_env_values(
     client = TestClient(_build_app())
     response = client.post(
         "/api/v1/explain",
-        json={"alert": SAMPLE_ALERT, "tenant_id": "tenant-a"},
+        json={"alert": SAMPLE_ALERT, "tenant_id": TENANT_A},
+        headers=_auth(TENANT_A),
     )
     assert response.status_code == 200, response.text
     # Defaults kick in → headers are present and the limit > 0.

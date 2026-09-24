@@ -130,9 +130,7 @@ LAYOUT_KEYS = frozenset(
 PROPER_NOUN = re.compile(r"^[A-Z][A-Za-z.&]*(?:[ -][A-Z][A-Za-z.&]*)+$")
 
 #: WIN-DC01, srv-01.corp.local, 10.0.0.4, jsmith@acme.corp.
-ESTATE_IDENTIFIER = re.compile(
-    r"^(?:[A-Z]{2,}-[A-Z0-9-]{2,}|[a-z][\w-]*-\d+\.[a-z][\w.-]+|\d{1,3}(?:\.\d{1,3}){3}|[\w.+-]+@[\w-]+\.\w+)$"
-)
+ESTATE_IDENTIFIER = re.compile(r"^(?:[A-Z]{2,}-[A-Z0-9-]{2,}|[a-z][\w-]*-\d+\.[a-z][\w.-]+|\d{1,3}(?:\.\d{1,3}){3}|[\w.+-]+@[\w-]+\.\w+)$")
 
 #: Any of these in the file means the author considered demo mode.
 DEMO_GATE = re.compile(r"demoFallback|canUseDemoData|isDemoMode")

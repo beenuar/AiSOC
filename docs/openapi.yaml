@@ -13809,13 +13809,17 @@ paths:
       - fusion
       summary: Top entities by risk score
       operationId: entity_risk_queue_api_v1_fusion_entity_risk_queue_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: tenant_id
         in: query
-        required: true
+        required: false
         schema:
-          type: string
-          format: uuid
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
           title: Tenant Id
       - name: limit
         in: query
@@ -13855,13 +13859,17 @@ paths:
       - fusion
       summary: Entity-risk queue stats
       operationId: entity_risk_stats_api_v1_fusion_entity_risk_stats_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: tenant_id
         in: query
-        required: true
+        required: false
         schema:
-          type: string
-          format: uuid
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
           title: Tenant Id
       responses:
         '200':
@@ -13885,6 +13893,8 @@ paths:
       - fusion
       summary: Entity risk record detail
       operationId: entity_risk_detail_api_v1_fusion_entity_risk__entity_type___entity_value__get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: entity_type
         in: path
@@ -13900,10 +13910,12 @@ paths:
           title: Entity Value
       - name: tenant_id
         in: query
-        required: true
+        required: false
         schema:
-          type: string
-          format: uuid
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
           title: Tenant Id
       responses:
         '200':
@@ -26029,6 +26041,14 @@ components:
         mttc_sample_count:
           type: integer
           title: Mttc Sample Count
+          default: 0
+        false_positive_rate_sample_count:
+          type: integer
+          title: False Positive Rate Sample Count
+          default: 0
+        escalation_rate_sample_count:
+          type: integer
+          title: Escalation Rate Sample Count
           default: 0
       type: object
       required:

@@ -28,6 +28,8 @@ const MOCK_SOC_METRICS: SOCMetrics = {
     mttd_sample_count: 1247,
     mttr_sample_count: 34,
     mttc_sample_count: 12,
+    false_positive_rate_sample_count: 412,
+    escalation_rate_sample_count: 168,
   },
   attack_heatmap: [
     { tactic: "Execution", technique: "T1059 Command & Scripting", count: 42 },
@@ -144,6 +146,58 @@ function MeanHoursCard({
         sampleCount === undefined
           ? undefined
           : `mean of ${sampleCount} over ${window}`
+      }
+    />
+  );
+}
+
+/**
+ * A ratio over an empty denominator is unmeasured, not zero.
+ *
+ * Same defect as the means above, one step removed: the API computed
+ * `x / n if n > 0 else 0.0`, so a tenant that had resolved nothing and gated
+ * nothing scored 0% false positives and 0% escalations — the two best numbers
+ * on the page, both awarded for having done nothing. The denominator now
+ * travels with each rate, so the tile can say which it is. `sampleCount` is
+ * optional, so an older API that sends no counts keeps its previous
+ * behaviour rather than blanking the tile.
+ */
+function RateCard({
+  label,
+  rate,
+  sampleCount,
+  denominatorLabel,
+  warnAbove,
+  cautionAbove,
+  window,
+}: {
+  label: string;
+  rate: number | undefined;
+  sampleCount: number | undefined;
+  denominatorLabel: string;
+  warnAbove: number;
+  cautionAbove: number;
+  window: string;
+}) {
+  if (rate === undefined || sampleCount === 0) {
+    return (
+      <KpiCard
+        label={label}
+        value="—"
+        color="text-gray-500"
+        hint={sampleCount === 0 ? `not measured · no ${denominatorLabel} in ${window}` : undefined}
+      />
+    );
+  }
+  return (
+    <KpiCard
+      label={label}
+      value={`${(rate * 100).toFixed(1)}%`}
+      color={rate > warnAbove ? "text-red-400" : rate > cautionAbove ? "text-yellow-400" : "text-green-400"}
+      hint={
+        sampleCount === undefined
+          ? undefined
+          : `over ${sampleCount} ${denominatorLabel} in ${window}`
       }
     />
   );
@@ -310,33 +364,23 @@ export function SOCMetricsDashboard() {
             cautionAbove={8}
             window="7d"
           />
-          <KpiCard
+          <RateCard
             label="Escalation Rate"
-            value={
-              kpis ? `${(kpis.escalation_rate * 100).toFixed(1)}%` : "—"
-            }
-            color={
-              (kpis?.escalation_rate ?? 0) > 0.5
-                ? "text-red-400"
-                : (kpis?.escalation_rate ?? 0) > 0.25
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            rate={kpis?.escalation_rate}
+            sampleCount={kpis?.escalation_rate_sample_count}
+            denominatorLabel="gate decisions"
+            warnAbove={0.5}
+            cautionAbove={0.25}
+            window="7d"
           />
-          <KpiCard
+          <RateCard
             label="False Positive Rate"
-            value={
-              kpis
-                ? `${(kpis.false_positive_rate * 100).toFixed(1)}%`
-                : "—"
-            }
-            color={
-              (kpis?.false_positive_rate ?? 0) > 0.3
-                ? "text-red-400"
-                : (kpis?.false_positive_rate ?? 0) > 0.15
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            rate={kpis?.false_positive_rate}
+            sampleCount={kpis?.false_positive_rate_sample_count}
+            denominatorLabel="resolved alerts"
+            warnAbove={0.3}
+            cautionAbove={0.15}
+            window="7d"
           />
           <KpiCard
             label="Alert Volume (7d)"

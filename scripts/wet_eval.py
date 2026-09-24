@@ -58,6 +58,7 @@ Output shape
       }
     }
 """
+
 from __future__ import annotations
 
 import json
@@ -92,43 +93,102 @@ from eval_telemetry import (  # type: ignore
 # ``ec2-spot-credential-theft`` automatically lands in the cloud bucket
 # without a code change.
 _FAMILY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("cloud", (
-        "ec2", "s3", "imds", "azure", "gcp", "aws", "k8s", "docker",
-        "container", "cloud", "saml-golden",
-    )),
-    ("identity", (
-        "oauth", "phish", "credential-spray", "ad-dcsync", "kerberoasting",
-        "saml", "vpn-new-geography", "helpdesk-password",
-        "service-account-privileged",
-    )),
-    ("network", (
-        "ddos", "dns", "rdp-lateral", "smb", "https-c2", "dga", "ldap",
-        "vpn",
-    )),
-    ("application", (
-        "webapp", "bec", "outlook", "insider-mailbox", "personal-drive",
-        "github-pat", "npm-supply-chain", "compromised-ci-runner",
-        "confluence", "office-vsto", "bulk-pii-download",
-        "public-s3-bucket-pii",
-    )),
-    ("endpoint", (
-        "process-hollowing", "registry-run", "scheduled-task", "uac-bypass",
-        "wmi", "lsass", "ransomware", "powershell", "certutil",
-        "clipboard-keylogger", "cron-backdoor", "disable-edr",
-        "event-log-cleared", "linux-journald-tampering", "linux-suid",
-        "pass-the-hash", "uefi", "usb-autorun", "xmrig",
-        "malicious-container-image", "phishing-macro-email",
-    )),
+    (
+        "cloud",
+        (
+            "ec2",
+            "s3",
+            "imds",
+            "azure",
+            "gcp",
+            "aws",
+            "k8s",
+            "docker",
+            "container",
+            "cloud",
+            "saml-golden",
+        ),
+    ),
+    (
+        "identity",
+        (
+            "oauth",
+            "phish",
+            "credential-spray",
+            "ad-dcsync",
+            "kerberoasting",
+            "saml",
+            "vpn-new-geography",
+            "helpdesk-password",
+            "service-account-privileged",
+        ),
+    ),
+    (
+        "network",
+        (
+            "ddos",
+            "dns",
+            "rdp-lateral",
+            "smb",
+            "https-c2",
+            "dga",
+            "ldap",
+            "vpn",
+        ),
+    ),
+    (
+        "application",
+        (
+            "webapp",
+            "bec",
+            "outlook",
+            "insider-mailbox",
+            "personal-drive",
+            "github-pat",
+            "npm-supply-chain",
+            "compromised-ci-runner",
+            "confluence",
+            "office-vsto",
+            "bulk-pii-download",
+            "public-s3-bucket-pii",
+        ),
+    ),
+    (
+        "endpoint",
+        (
+            "process-hollowing",
+            "registry-run",
+            "scheduled-task",
+            "uac-bypass",
+            "wmi",
+            "lsass",
+            "ransomware",
+            "powershell",
+            "certutil",
+            "clipboard-keylogger",
+            "cron-backdoor",
+            "disable-edr",
+            "event-log-cleared",
+            "linux-journald-tampering",
+            "linux-suid",
+            "pass-the-hash",
+            "uefi",
+            "usb-autorun",
+            "xmrig",
+            "malicious-container-image",
+            "phishing-macro-email",
+        ),
+    ),
 )
 
 # Display labels for the markdown writer. Keys must match the family
 # identifiers above; ``aggregate`` is special-cased.
 _FAMILY_LABELS = {
-    "aggregate":   "Aggregate (all 200)",
-    "endpoint":    "Endpoint compromise",
-    "identity":    "Identity / OAuth phish",
-    "cloud":       "Cloud (AWS / Azure / GCP)",
-    "network":     "Network / WAF / DNS",
+    "aggregate": "Aggregate (all 200)",
+    "endpoint": "Endpoint compromise",
+    "identity": "Identity / OAuth phish",
+    "cloud": "Cloud (AWS / Azure / GCP)",
+    "network": "Network / WAF / DNS",
     "application": "Application / SaaS",
 }
 
@@ -171,9 +231,7 @@ def _dry_run_latency_seconds(prompt_tokens: int, completion_tokens: int) -> floa
     target with comfortable headroom.
     """
     return (
-        _DRY_RUN_TTFT_S
-        + (completion_tokens / _DRY_RUN_TOKENS_PER_SECOND)
-        + (prompt_tokens / 4000.0)  # ~250ms per 1K prompt tokens.
+        _DRY_RUN_TTFT_S + (completion_tokens / _DRY_RUN_TOKENS_PER_SECOND) + (prompt_tokens / 4000.0)  # ~250ms per 1K prompt tokens.
     )
 
 
@@ -240,9 +298,7 @@ def _dry_run_records(
                 severity=rec["severity"],
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                latency_seconds=round(
-                    _dry_run_latency_seconds(prompt_tokens, completion_tokens), 4
-                ),
+                latency_seconds=round(_dry_run_latency_seconds(prompt_tokens, completion_tokens), 4),
                 usd=float(rec["usd"]),
                 # Dry-run MITRE accuracy: every incident counted as
                 # correct, then we deflate the headline number by a
@@ -344,25 +400,15 @@ def _live_records(
         try:
             result = agent.investigate(inc)  # type: ignore[attr-defined]
         except Exception as exc:  # pragma: no cover - defensive.
-            warnings.append(
-                f"Live agent failed on incident {inc.get('id')}: {exc!r}; "
-                "skipping."
-            )
+            warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; " "skipping.")
             continue
         latency_s = time.perf_counter() - t0
 
         usage = getattr(result, "usage_metadata", None) or {}
         prompt_tokens = int(
-            usage.get("input_tokens")
-            or usage.get("prompt_tokens")
-            or estimate_tokens(str(inc.get("description") or ""))
-            + 800
+            usage.get("input_tokens") or usage.get("prompt_tokens") or estimate_tokens(str(inc.get("description") or "")) + 800
         )
-        completion_tokens = int(
-            usage.get("output_tokens")
-            or usage.get("completion_tokens")
-            or 0
-        )
+        completion_tokens = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
 
         predicted = set(getattr(result, "predicted_tactics", []) or [])
         expected = set(inc.get("expected_mitre_tactics") or [])
@@ -398,9 +444,7 @@ def _live_records(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 latency_seconds=round(latency_s, 4),
-                usd=round(
-                    cost_usd(prompt_tokens, completion_tokens, model=model), 6
-                ),
+                usd=round(cost_usd(prompt_tokens, completion_tokens, model=model), 6),
                 mitre_correct=mitre_correct,
             )
         )
@@ -449,12 +493,12 @@ class WetEvalReport:
                 "quote dry-run numbers as agent performance."
                 if self.mode == "dry_run"
                 else "Live mode: real LangGraph agent dispatch over the "
-                     "200-incident corpus. Token counts come from the "
-                     "LLM provider's response metadata; latency is "
-                     "wall-clock per investigation; MITRE accuracy is "
-                     "predicted-vs-expected tactic overlap. Rate card "
-                     "captured at run time and written into the report "
-                     "so historic re-pricing is faithful."
+                "200-incident corpus. Token counts come from the "
+                "LLM provider's response metadata; latency is "
+                "wall-clock per investigation; MITRE accuracy is "
+                "predicted-vs-expected tactic overlap. Rate card "
+                "captured at run time and written into the report "
+                "so historic re-pricing is faithful."
             ),
         }
         if self.warnings:
@@ -475,20 +519,25 @@ def _build_report(
 ) -> WetEvalReport:
     """Aggregate ``records`` into a wet-eval report block."""
     rates = rate_card if rate_card is not None else RATE_CARD_2025_USD_PER_M
-    rate_entry = rates.get(model) or rates.get(DEFAULT_MODEL) or {
-        "input": 2.5, "output": 10.0,
-    }
+    rate_entry = (
+        rates.get(model)
+        or rates.get(DEFAULT_MODEL)
+        or {
+            "input": 2.5,
+            "output": 10.0,
+        }
+    )
 
     if not records:
         # Empty input → return a well-formed empty report rather than
         # crash. Lets the workflow render a clean "no data" cell.
-        empty = {"count": 0, "min": 0.0, "max": 0.0,
-                 "mean": 0.0, "median": 0.0,
-                 "p50": 0.0, "p95": 0.0, "p99": 0.0}
+        empty = {"count": 0, "min": 0.0, "max": 0.0, "mean": 0.0, "median": 0.0, "p50": 0.0, "p95": 0.0, "p99": 0.0}
         return WetEvalReport(
-            mode=mode, model=model,
+            mode=mode,
+            model=model,
             rate_card_per_m=rate_entry,
-            incidents=0, templates=0,
+            incidents=0,
+            templates=0,
             aggregate={
                 "latency_seconds": empty,
                 "tokens": {
@@ -529,9 +578,9 @@ def _build_report(
     aggregate = {
         "latency_seconds": _summarise(latencies, decimals=4),
         "tokens": {
-            "prompt":     _summarise(prompt_tokens, decimals=2),
+            "prompt": _summarise(prompt_tokens, decimals=2),
             "completion": _summarise(completion_tokens, decimals=2),
-            "total":      _summarise(total_tokens, decimals=2),
+            "total": _summarise(total_tokens, decimals=2),
         },
         "usd": _summarise(usds, decimals=6),
     }
@@ -542,30 +591,29 @@ def _build_report(
 
     # Stable family order so the markdown writer doesn't shuffle rows
     # across runs. ``aggregate`` is always the first row.
-    family_order = [
-        f for f in ("endpoint", "identity", "cloud", "network", "application")
-        if f in by_family
-    ]
+    family_order = [f for f in ("endpoint", "identity", "cloud", "network", "application") if f in by_family]
     per_family: list[dict[str, Any]] = []
     for fam in family_order:
         bucket = by_family[fam]
         b_lat = [r.latency_seconds for r in bucket]
         b_tok = [r.total_tokens for r in bucket]
         b_usd = [r.usd for r in bucket]
-        per_family.append({
-            "family": fam,
-            "label": _FAMILY_LABELS.get(fam, fam),
-            "n": len(bucket),
-            "latency_p50_s": round(_percentile(b_lat, 50), 4),
-            "latency_p95_s": round(_percentile(b_lat, 95), 4),
-            "latency_p99_s": round(_percentile(b_lat, 99), 4),
-            "tokens_mean":   round(mean(b_tok), 2),
-            "tokens_median": round(median(b_tok), 2),
-            "tokens_p95":    round(_percentile(b_tok, 95), 2),
-            "usd_mean":      round(mean(b_usd), 6),
-            "usd_median":    round(median(b_usd), 6),
-            "usd_p95":       round(_percentile(b_usd, 95), 6),
-        })
+        per_family.append(
+            {
+                "family": fam,
+                "label": _FAMILY_LABELS.get(fam, fam),
+                "n": len(bucket),
+                "latency_p50_s": round(_percentile(b_lat, 50), 4),
+                "latency_p95_s": round(_percentile(b_lat, 95), 4),
+                "latency_p99_s": round(_percentile(b_lat, 99), 4),
+                "tokens_mean": round(mean(b_tok), 2),
+                "tokens_median": round(median(b_tok), 2),
+                "tokens_p95": round(_percentile(b_tok, 95), 2),
+                "usd_mean": round(mean(b_usd), 6),
+                "usd_median": round(median(b_usd), 6),
+                "usd_p95": round(_percentile(b_usd, 95), 6),
+            }
+        )
 
     incident_records = [
         {
@@ -634,26 +682,17 @@ def compute_wet_eval(
         records = _dry_run_records(incidents_path, model=model)
         warnings: list[str] = []
     else:
-        records, warnings, degraded = _live_records(
-            incidents_path, model=model, limit=limit
-        )
+        records, warnings, degraded = _live_records(incidents_path, model=model, limit=limit)
         if require_live and degraded:
-            raise RuntimeError(
-                "require_live=True but the live path fell back to substrate "
-                "numbers:\n  - " + "\n  - ".join(warnings)
-            )
+            raise RuntimeError("require_live=True but the live path fell back to substrate " "numbers:\n  - " + "\n  - ".join(warnings))
         # Degrade-cleanly: if the live path could not produce records
         # we re-tag the report as ``dry_run`` so consumers don't think
         # they're looking at real numbers.
         if not records:
             if require_live:
-                raise RuntimeError(
-                    "require_live=True but the live agent produced zero records."
-                )
+                raise RuntimeError("require_live=True but the live agent produced zero records.")
             warnings.append(
-                "Live agent path produced zero records. Re-tagging as "
-                "dry_run with synthesised shape to keep the report well-"
-                "formed."
+                "Live agent path produced zero records. Re-tagging as " "dry_run with synthesised shape to keep the report well-" "formed."
             )
             records = _dry_run_records(incidents_path, model=model)
             mode = "dry_run"

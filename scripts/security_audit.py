@@ -481,9 +481,7 @@ def run_govulncheck(repo_root: Path, ignores: list[Ignore]) -> Report:
             # module — means this module was not analysed. That is a coverage
             # gap, not a warning: a warning exits 0 and the arm would print
             # "go: 0 findings" for a module it never managed to read.
-            combined.unscanned.append(
-                f"{module}: govulncheck exited {proc.returncode} — NOT scanned ({proc.stderr[:160].strip()})"
-            )
+            combined.unscanned.append(f"{module}: govulncheck exited {proc.returncode} — NOT scanned ({proc.stderr[:160].strip()})")
             continue
 
         vulns = parse_govulncheck_json(proc.stdout)

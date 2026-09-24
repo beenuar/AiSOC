@@ -31,19 +31,31 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 import httpx
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.models.state import AgentStatus, InvestigationState
 from app.orchestrator import PARALLEL_TOPOLOGY_FLAG, RouterOrchestrator
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["triage"])
+
+#: The console reaches this service directly through a Next rewrite, sending
+#: the first-party access token as a bearer credential. The tenant comes from
+#: that verified token; a `tenant_id` on the request is only ever a filter,
+#: intersected with it, so naming a foreign tenant is a 403 rather than a
+#: selector for somebody else's investigation.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 # ---------------------------------------------------------------------------
 # Config
@@ -262,6 +274,7 @@ async def launch_triage(
     case_id: str,
     body: TriageRequest,
     background_tasks: BackgroundTasks,
+    principal: ScopedPrincipal,
 ) -> TriageResponse:
     """Launch a router-topology triage run for ``case_id``.
 
@@ -271,7 +284,8 @@ async def launch_triage(
     topology = _resolve_topology(body.topology)
 
     run_id = str(uuid4())
-    tenant_uuid = _coerce_uuid(body.tenant_id, fallback=body.tenant_id or "default")
+    # The body may name a tenant, but only one the credential already holds.
+    tenant_uuid = scoped_tenant_or_403(principal, body.tenant_id)
     incident_uuid = _coerce_uuid(body.incident_id, fallback=case_id)
 
     state = InvestigationState(
@@ -288,7 +302,7 @@ async def launch_triage(
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
         "topology": topology,
-        "tenant_id": body.tenant_id,
+        "tenant_id": str(tenant_uuid),
         "incident_id": str(incident_uuid),
     }
 
@@ -318,20 +332,21 @@ async def launch_triage(
 @router.get("/triage/{run_id}")
 async def get_triage(
     run_id: str,
-    tenant_id: str = "default",
+    principal: ScopedPrincipal,
 ) -> dict[str, Any]:
     """Return the current state of a router triage run.
 
-    Tenant isolation is enforced at the query layer (project convention,
-    see PRs #116–#128): the caller MUST pass the same ``tenant_id`` the
-    run was launched with. Mismatched (or absent) tenant returns 404
-    rather than 403 to avoid leaking the existence of run IDs across
-    tenant boundaries.
+    The run's tenant is compared against the *credential's*, not against a
+    ``tenant_id`` query parameter. Taking it from the query string meant the
+    comparison only ever checked that the caller could repeat a value they
+    had themselves supplied, which a caller enumerating run IDs can always
+    do. A mismatch returns 404 rather than 403 so a probing caller cannot
+    distinguish "wrong tenant" from "no such run".
     """
     run = _triage_runs.get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Triage run not found")
-    if str(run.get("tenant_id")) != tenant_id:
+    if str(run.get("tenant_id")) != str(scoped_tenant_or_403(principal)):
         # Same response shape as the not-found branch so a probing
         # caller can't distinguish "wrong tenant" from "no such run".
         raise HTTPException(status_code=404, detail="Triage run not found")

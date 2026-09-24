@@ -102,9 +102,7 @@ def collect() -> dict:
             snap["github"][f"unique_{kind}_14d"] = None
             notes.append(f"traffic/{kind} unavailable ({err}; needs push access)")
 
-    contributors, err = _get(
-        f"https://api.github.com/repos/{REPO}/contributors?per_page=100", token
-    )
+    contributors, err = _get(f"https://api.github.com/repos/{REPO}/contributors?per_page=100", token)
     snap["github"]["contributors"] = len(contributors) if contributors else None
     if contributors is None:
         notes.append(f"contributors unavailable ({err})")
@@ -112,9 +110,7 @@ def collect() -> dict:
     releases, err = _get(f"https://api.github.com/repos/{REPO}/releases?per_page=100", token)
     if releases is not None:
         snap["github"]["releases"] = len(releases)
-        snap["github"]["release_asset_downloads"] = sum(
-            a.get("download_count", 0) for r in releases for a in r.get("assets", [])
-        )
+        snap["github"]["release_asset_downloads"] = sum(a.get("download_count", 0) for r in releases for a in r.get("assets", []))
     else:
         snap["github"]["releases"] = None
         snap["github"]["release_asset_downloads"] = None
@@ -218,9 +214,7 @@ def render_markdown(history: list[dict]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--write", action="store_true", help="update the committed snapshot files"
-    )
+    parser.add_argument("--write", action="store_true", help="update the committed snapshot files")
     args = parser.parse_args()
 
     snapshot = collect()

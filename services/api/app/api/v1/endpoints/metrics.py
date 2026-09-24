@@ -406,6 +406,14 @@ class SOCKpis(BaseModel):
     mttd_sample_count: int = 0
     mttr_sample_count: int = 0
     mttc_sample_count: int = 0
+    # The two rates have the same defect as the means had, one step removed:
+    # `x / n if n > 0 else 0.0` renders an undefined ratio as a confident
+    # zero. "0% false positives" and "0% escalated" are the two best numbers
+    # on the page, and a tenant that has resolved nothing and gated nothing
+    # scored both. The denominator travels with each rate for the same reason
+    # and in the same shape as the sample counts above.
+    false_positive_rate_sample_count: int = 0
+    escalation_rate_sample_count: int = 0
 
 
 class AttackHeatmapCell(BaseModel):
@@ -582,6 +590,8 @@ async def get_soc_metrics(
         mttd_sample_count=mttd_samples,
         mttr_sample_count=mttr_samples,
         mttc_sample_count=mttc_samples,
+        false_positive_rate_sample_count=total_resolved,
+        escalation_rate_sample_count=total_decisions,
     )
 
     # ── ATT&CK heatmap ────────────────────────────────────────────────────────

@@ -286,8 +286,7 @@ def build_detection_item(
     }
     if quarantined:
         item["quarantine_reason"] = data.get("quarantine_reason") or (
-            "imported rule; upstream query language not directly executable "
-            "by the AiSOC engine yet"
+            "imported rule; upstream query language not directly executable " "by the AiSOC engine yet"
         )
     provenance = data.get("provenance")
     if isinstance(provenance, dict):
@@ -303,9 +302,7 @@ def build_detection_item(
     return item
 
 
-def build_playbook_item(
-    path: Path, *, source: str, tier: str
-) -> dict[str, Any] | None:
+def build_playbook_item(path: Path, *, source: str, tier: str) -> dict[str, Any] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -318,9 +315,7 @@ def build_playbook_item(
     tags = normalise_tags(raw_tags)
     trigger_block = data.get("trigger") or {}
     trigger = trigger_block.get("on") if isinstance(trigger_block, dict) else None
-    severities = (
-        trigger_block.get("severity") if isinstance(trigger_block, dict) else None
-    )
+    severities = trigger_block.get("severity") if isinstance(trigger_block, dict) else None
     severity: str | None = None
     if isinstance(severities, list) and severities:
         # Pick the highest declared severity for display.
@@ -350,9 +345,7 @@ def build_playbook_item(
     }
 
 
-def build_plugin_item(
-    path: Path, *, source: str, tier: str | None = None
-) -> dict[str, Any] | None:
+def build_plugin_item(path: Path, *, source: str, tier: str | None = None) -> dict[str, Any] | None:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -419,9 +412,7 @@ def collect_items() -> list[dict[str, Any]]:
 
     # Detections — imported tiers (one per upstream corpus)
     for f, src_name, quarantined in imported_detection_files():
-        item = build_detection_item(
-            f, source=src_name, tier="imported", quarantined=quarantined
-        )
+        item = build_detection_item(f, source=src_name, tier="imported", quarantined=quarantined)
         if item:
             items.append(item)
 
@@ -459,10 +450,7 @@ def categories_block(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             "id": "playbooks",
             "label": "Response Playbooks",
-            "description": (
-                "Automated incident-response workflows triggered by "
-                "alerts or manual invocation."
-            ),
+            "description": ("Automated incident-response workflows triggered by " "alerts or manual invocation."),
         },
         {
             "id": "detections",
@@ -524,12 +512,8 @@ def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "techniques": dict(sorted(techniques.items())),
         "unique_techniques": len(techniques),
-        "total_with_mitre": sum(
-            1 for i in items if i.get("mitre_techniques")
-        ),
-        "by_tier": {
-            tier: dict(sorted(tids.items())) for tier, tids in by_tier.items()
-        },
+        "total_with_mitre": sum(1 for i in items if i.get("mitre_techniques")),
+        "by_tier": {tier: dict(sorted(tids.items())) for tier, tids in by_tier.items()},
     }
 
 
@@ -539,10 +523,7 @@ def build_index() -> dict[str, Any]:
     return {
         "$schema": "https://example.com/schemas/marketplace/v1.json",
         "version": "1.0.0",
-        "generated": dt.datetime.now(dt.UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "generated": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "categories": categories_block(items),
         "stats": {
             "total": len(items),
@@ -553,9 +534,7 @@ def build_index() -> dict[str, Any]:
             "community": sum(1 for i in items if i.get("source") == "community"),
             "by_tier": _tier_breakdown(items),
             "detections_by_tier": _detection_tier_breakdown(items),
-            "quarantined": sum(
-                1 for i in items if i.get("quarantine_reason")
-            ),
+            "quarantined": sum(1 for i in items if i.get("quarantine_reason")),
         },
         "mitre_coverage": coverage_block(items),
         "items": items,
@@ -593,16 +572,8 @@ def main() -> int:
         return 0
 
     if args.check:
-        existing_primary = (
-            OUTPUT_PRIMARY.read_text(encoding="utf-8")
-            if OUTPUT_PRIMARY.exists()
-            else ""
-        )
-        existing_public = (
-            OUTPUT_PUBLIC.read_text(encoding="utf-8")
-            if OUTPUT_PUBLIC.exists()
-            else ""
-        )
+        existing_primary = OUTPUT_PRIMARY.read_text(encoding="utf-8") if OUTPUT_PRIMARY.exists() else ""
+        existing_public = OUTPUT_PUBLIC.read_text(encoding="utf-8") if OUTPUT_PUBLIC.exists() else ""
 
         # Compare ignoring `generated` timestamp.
         def _strip_generated(s: str) -> str:
@@ -616,20 +587,13 @@ def main() -> int:
             return json.dumps(obj, indent=2, sort_keys=False) + "\n"
 
         rebuilt_no_ts = _strip_generated(serialised)
-        if (
-            _strip_generated(existing_primary) != rebuilt_no_ts
-            or _strip_generated(existing_public) != rebuilt_no_ts
-        ):
+        if _strip_generated(existing_primary) != rebuilt_no_ts or _strip_generated(existing_public) != rebuilt_no_ts:
             print(
-                "marketplace/index.json is stale. Run: "
-                "pnpm marketplace:build",
+                "marketplace/index.json is stale. Run: " "pnpm marketplace:build",
                 file=sys.stderr,
             )
             return 1
-        print(
-            f"marketplace/index.json is up to date "
-            f"({index['stats']['total']} items)."
-        )
+        print(f"marketplace/index.json is up to date " f"({index['stats']['total']} items).")
         return 0
 
     write_index(index)

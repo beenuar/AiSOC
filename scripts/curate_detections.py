@@ -413,15 +413,11 @@ def _detect_executable_body(data: dict[str, Any]) -> bool:
         return False
     # Also need at least one selection or a condition that doesn't ref
     # missing identifiers.
-    has_selection = any(
-        k for k in detection.keys() if k != "condition" and k != "timeframe"
-    )
+    has_selection = any(k for k in detection.keys() if k != "condition" and k != "timeframe")
     return has_selection or bool(detection.get("condition"))
 
 
-def _parse_rule(
-    path: Path, *, tier: str, source: str, quarantined: bool
-) -> Rule | None:
+def _parse_rule(path: Path, *, tier: str, source: str, quarantined: bool) -> Rule | None:
     """Load a YAML rule file and return a :class:`Rule`.
 
     Returns ``None`` for rules that fail to parse, are quarantined,
@@ -621,9 +617,7 @@ def discover_rules() -> list[Rule]:
                 quarantined = bool(rel) and rel[0] == "_quarantine"
                 if quarantined:
                     continue
-                r = _parse_rule(
-                    path, tier="imported", source=source_name, quarantined=False
-                )
+                r = _parse_rule(path, tier="imported", source=source_name, quarantined=False)
                 if r:
                     rules.append(r)
 
@@ -632,9 +626,7 @@ def discover_rules() -> list[Rule]:
     if community_dir.exists():
         for ext in ("*.yaml", "*.yml"):
             for path in sorted(community_dir.rglob(ext)):
-                r = _parse_rule(
-                    path, tier="community", source="community", quarantined=False
-                )
+                r = _parse_rule(path, tier="community", source="community", quarantined=False)
                 if r:
                     rules.append(r)
 
@@ -690,13 +682,7 @@ def select_curated(
 
     # Top-up if union is below min_total.
     if len(selected) < min_total:
-        remaining = [
-            r
-            for r in sorted(
-                eligible, key=lambda r: (-r.quality_score, r.rule_id)
-            )
-            if r.rule_id not in selected
-        ]
+        remaining = [r for r in sorted(eligible, key=lambda r: (-r.quality_score, r.rule_id)) if r.rule_id not in selected]
         for r in remaining:
             if len(selected) >= min_total:
                 break
@@ -720,12 +706,7 @@ def select_curated(
 
 
 def _utc_now() -> str:
-    return (
-        dt.datetime.now(dt.UTC)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def build_manifest(
@@ -819,10 +800,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("## Headline numbers")
     lines.append("")
     lines.append(f"- **Curated v1.0 detections**: `{s['selected']}` (target: ≥ {s['min_total']})")
-    lines.append(
-        f"- **Total rules considered**: `{s['considered']}` "
-        f"(quality floor: {s['quality_floor']})"
-    )
+    lines.append(f"- **Total rules considered**: `{s['considered']}` " f"(quality floor: {s['quality_floor']})")
     lines.append(f"- **Unique MITRE techniques covered**: `{s['unique_techniques']}`")
     lines.append("")
 
@@ -832,10 +810,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("|---|---|---|---|")
     for fid, info in manifest["families"].items():
         check = "✅" if info["covered"] else "❌"
-        lines.append(
-            f"| **{info['label']}** | {info['count']} | "
-            f"≥ {info['min_target']} | {check} |"
-        )
+        lines.append(f"| **{info['label']}** | {info['count']} | " f"≥ {info['min_target']} | {check} |")
     lines.append("")
 
     lines.append("## Distribution")
@@ -919,18 +894,12 @@ def main() -> int:
         return 0
 
     # Quality gate: every family must be covered, total must hit min.
-    ok = stats["selected"] >= args.min and all(
-        info["covered"] for info in manifest["families"].values()
-    )
+    ok = stats["selected"] >= args.min and all(info["covered"] for info in manifest["families"].values())
 
     if args.check:
-        existing = (
-            OUT_MANIFEST.read_text(encoding="utf-8") if OUT_MANIFEST.exists() else ""
-        )
+        existing = OUT_MANIFEST.read_text(encoding="utf-8") if OUT_MANIFEST.exists() else ""
         report = build_report(manifest)
-        existing_report = (
-            OUT_REPORT.read_text(encoding="utf-8") if OUT_REPORT.exists() else ""
-        )
+        existing_report = OUT_REPORT.read_text(encoding="utf-8") if OUT_REPORT.exists() else ""
 
         def _strip_generated(s: str) -> str:
             try:
@@ -943,21 +912,15 @@ def main() -> int:
         def _strip_md_generated(s: str) -> str:
             return re.sub(r"Generated: `[^`]+`", "Generated: `<ts>`", s)
 
-        if (
-            _strip_generated(existing) != _strip_generated(serialised)
-            or _strip_md_generated(existing_report) != _strip_md_generated(report)
+        if _strip_generated(existing) != _strip_generated(serialised) or _strip_md_generated(existing_report) != _strip_md_generated(
+            report
         ):
             print(
-                "marketplace/curated.json or coverage.md is stale. Run: "
-                "pnpm marketplace:curate",
+                "marketplace/curated.json or coverage.md is stale. Run: " "pnpm marketplace:curate",
                 file=sys.stderr,
             )
             return 2
-        print(
-            f"curation up to date "
-            f"({stats['selected']} curated, "
-            f"{manifest['stats']['unique_techniques']} techniques)."
-        )
+        print(f"curation up to date " f"({stats['selected']} curated, " f"{manifest['stats']['unique_techniques']} techniques).")
         return 0 if ok else 1
 
     OUT_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
@@ -965,11 +928,7 @@ def main() -> int:
     OUT_REPORT.parent.mkdir(parents=True, exist_ok=True)
     OUT_REPORT.write_text(build_report(manifest), encoding="utf-8")
 
-    uncovered = [
-        info["label"]
-        for info in manifest["families"].values()
-        if not info["covered"]
-    ]
+    uncovered = [info["label"] for info in manifest["families"].values() if not info["covered"]]
     print(
         f"Wrote curated manifest: selected={stats['selected']} "
         f"techniques={manifest['stats']['unique_techniques']} "

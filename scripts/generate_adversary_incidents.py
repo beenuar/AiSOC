@@ -33,6 +33,7 @@ Usage:
     python3 scripts/generate_adversary_incidents.py --report
     python3 scripts/generate_adversary_incidents.py --out PATH
 """
+
 from __future__ import annotations
 
 import argparse
@@ -96,7 +97,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "compromised npm": ("trojanized js-libs release", "doctored js-libs build", "polluted js-libs feed"),
     "container image": ("workload bundle", "runtime workload artifact", "compute workload bundle"),
     "wire transfer initial": ("ach instruction", "outgoing remittance", "treasury debit instruction"),
-
     # TA0002 — Execution
     "execution": ("payload delivery step", "binary launch", "code activation"),
     "powershell": ("p0wer$hell", "p\u200bow\u200bersh\u200bell", "PoSh"),
@@ -119,7 +119,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "stage-2 payload": ("second-tier dropper", "follow-on artifact", "next-tier blob"),
     "vba": ("v\u200bba", "off1ce-automation language", "doc-embedded autom"),
     "browser exploitation": ("client-side rendering abuse", "html-engine abuse", "DOM-engine abuse"),
-
     # TA0003 — Persistence
     "persistence": ("re-establish footing", "reboot survival", "long-term foothold"),
     "registry run": ("hkcu autostart key", "winreg autorun stanza", "reg-autostart entry"),
@@ -137,7 +136,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "office add-in": ("off1ce plugin slot", "productivity-suite extension", "doc-suite extension"),
     "vsto": ("vs\u200bto", "off1ce add-in tooling", "off1ce plugin tooling"),
     "outlook startup": ("mailer load-time slot", "messaging-app boot slot", "mail-client boot slot"),
-
     # TA0004 — Privilege Escalation
     "privilege escalation": ("rights step-up", "rights uplift", "level-up of identity"),
     "escalation": ("rights step-up", "level-up", "rights uplift"),
@@ -152,7 +150,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "fodhelper": ("f0dhelper", "trusted helper binary", "feature-on-demand helper"),
     "suid": ("su\u200bid", "setuser bit", "setid-perm bit"),
     "metadata service": ("im\u200bds endpoint", "m\u200betadata svc", "instance-info endpoint"),
-
     # TA0005 — Defense Evasion
     "defense evasion": ("av-d0dging", "control-skirting", "telemetry-d0dging"),
     "obfuscat": ("scr@mbl", "deob h@rd'n", "morph"),
@@ -175,7 +172,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "stop crowdstrike": ("disable cs-falcon", "halt edr-agent", "kill edr-sensor"),
     "stop sysmon": ("disable sysmon-agent", "halt sysmon-collector", "kill sysmon-svc"),
     "secure boot": ("s\u200becure boot", "verified boot chain", "boot integrity"),
-
     # TA0006 — Credential Access
     "credential": ("cred", "auth-token", "login secret"),
     "brute force": ("repeated guess", "iterative login attempt", "dictionary attack"),
@@ -200,7 +196,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "session token": ("ses\u200bsion token", "auth-cookie", "bearer for active session"),
     "stolen session": ("hijacked sess1on", "co-opted active sess", "session-takeover"),
     "tgs": ("tg\u200bs", "kerb svc ticket", "svc-ticket"),
-
     # TA0007 — Discovery
     "discovery": ("scout-stage", "look-around stage", "environment-mapping"),
     "enumerat": ("listing-out", "walking the directory", "iterating across"),
@@ -214,7 +209,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "smb share": ("smb mount", "remote folder mount", "fileshare mount"),
     "share enum": ("mount listing", "fileshare listing", "smb-volume listing"),
     "system info": ("host fingerprinting", "host-detail pull", "machine-detail pull"),
-
     # TA0008 — Lateral Movement
     "lateral movement": ("east-west pivot", "horizontal hop", "side-to-side traversal"),
     "lateral": ("e-w hop", "horizontal", "side-to-side"),
@@ -227,7 +221,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "smb scan": ("smb sweep", "fileshare probe", "windows-share probe"),
     "wmic /node": ("wm\u200bic /machine", "mgmt-cli /remote", "mgmt-fabric cli /remote"),
     "wmi remote": ("wm\u200bi remote", "mgmt-fabric remote", "remote mgmt-fabric"),
-
     # TA0009 — Collection
     "collection": ("data-gathering stage", "skim stage", "asset-pull stage"),
     "data from local": ("data lifted from host", "local-host data pull", "on-host data pull"),
@@ -241,7 +234,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "pst": ("p\u200bst", "outlook archive", "mail archive"),
     "private repo": ("internal source repo", "non-public repo", "closed repo"),
     "private repos": ("internal source repos", "non-public repos", "closed repos"),
-
     # TA0010 — Exfiltration
     "exfiltrat": ("ex-bound transfer", "outbound siphon", "ex-bound siphon"),
     "c2 channel": ("operator channel", "comms-back tunnel", "callback channel"),
@@ -257,7 +249,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "s3 bucket": ("object-store bucket", "blob-store bucket", "aws object store"),
     "s3://": ("aws://obj/", "object-store-uri", "blob-uri"),
     "data egress": ("outbound data flow", "ex-bound data flow", "data outflow"),
-
     # TA0011 — Command and Control
     "command and control": ("operator-channel", "callback infra", "ops-channel"),
     "c2": ("c\u200b2", "ops channel", "callback infra"),
@@ -270,7 +261,6 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
     "cobalt strike": ("c0balt strike", "crimson-team toolkit", "red-team-grade dropper"),
     "https beacon": ("tls callback", "https callback", "tls heartbeat"),
     "ja3": ("j@3", "tls fingerprint hash", "tls-handshake fingerprint"),
-
     # TA0040 — Impact
     "impact": ("damage stage", "harm stage", "ko stage"),
     "ransom": ("ext0rt", "lockout-for-pay", "data-lockout demand"),
@@ -295,9 +285,9 @@ _SYNONYMS: dict[str, tuple[str, ...]] = {
 _LIGHT_LEET: dict[str, str] = {
     "phishing": "phi$hing",
     "powershell": "powershell",  # untouched — light tier
-    "execution": "execution",     # untouched — light tier
+    "execution": "execution",  # untouched — light tier
     "credential": "credentia1",
-    "exfiltrat": "exfiltrat",     # untouched — light tier
+    "exfiltrat": "exfiltrat",  # untouched — light tier
 }
 
 
@@ -325,14 +315,10 @@ def _validate_grammar() -> None:
                 if kw == src.lower():
                     continue
                 if kw in low:
-                    failures.append(
-                        f"alternate '{alt}' for '{src}' still contains keyword '{kw}'"
-                    )
+                    failures.append(f"alternate '{alt}' for '{src}' still contains keyword '{kw}'")
     if failures:
         msg = "\n  - ".join(failures[:20])
-        raise RuntimeError(
-            f"Adversary mutator grammar leaks defender keywords:\n  - {msg}"
-        )
+        raise RuntimeError(f"Adversary mutator grammar leaks defender keywords:\n  - {msg}")
 
 
 _validate_grammar()
@@ -351,9 +337,7 @@ _KEY_ORDER: list[str] = sorted(_SYNONYMS.keys(), key=len, reverse=True)
 # Pre-compile case-insensitive regexes per key. We escape the key directly
 # (no word boundaries — many keys contain punctuation like "cmd.exe" or
 # "s3://" where word boundaries fight us).
-_KEY_REGEX: dict[str, re.Pattern[str]] = {
-    k: re.compile(re.escape(k), re.IGNORECASE) for k in _KEY_ORDER
-}
+_KEY_REGEX: dict[str, re.Pattern[str]] = {k: re.compile(re.escape(k), re.IGNORECASE) for k in _KEY_ORDER}
 
 
 def _bucket(incident_id: str) -> str:
@@ -394,18 +378,12 @@ def _mutate_text_full(text: str, incident_id: str) -> str:
     return out
 
 
-def _mutate_text_partial(
-    text: str, incident_id: str, preserve_tactics: set[str]
-) -> str:
+def _mutate_text_partial(text: str, incident_id: str, preserve_tactics: set[str]) -> str:
     """Mutate keywords EXCEPT those tied to one preserved tactic.
 
     The defender still has at least one route to detect the incident.
     """
-    preserve_keywords = {
-        kw.lower()
-        for tactic in preserve_tactics
-        for kw in _TACTIC_KEYWORDS.get(tactic, [])
-    }
+    preserve_keywords = {kw.lower() for tactic in preserve_tactics for kw in _TACTIC_KEYWORDS.get(tactic, [])}
     out = text
     for key in _KEY_ORDER:
         if key.lower() in preserve_keywords:
@@ -442,17 +420,12 @@ def mutate_incident(incident: dict[str, Any]) -> dict[str, Any]:
     elif bucket == "medium":
         if expected_tactics:
             # Preserve the LAST expected tactic deterministically.
-            preserve_idx = (
-                int(hashlib.sha256(incident_id.encode()).hexdigest()[8:16], 16)
-                % len(expected_tactics)
-            )
+            preserve_idx = int(hashlib.sha256(incident_id.encode()).hexdigest()[8:16], 16) % len(expected_tactics)
             preserve = {expected_tactics[preserve_idx]}
         else:
             preserve = set()
         new_title = _mutate_text_partial(incident["title"], incident_id, preserve)
-        new_description = _mutate_text_partial(
-            incident["description"], incident_id, preserve
-        )
+        new_description = _mutate_text_partial(incident["description"], incident_id, preserve)
     else:
         new_title = _mutate_text_light(incident["title"])
         new_description = _mutate_text_light(incident["description"])
@@ -546,9 +519,7 @@ def adversary_coverage_report(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate the adversary-mutated incident dataset (Wave 2 — w2-aivai)."
-    )
+    parser = argparse.ArgumentParser(description="Generate the adversary-mutated incident dataset (Wave 2 — w2-aivai).")
     parser.add_argument(
         "--input",
         type=Path,
@@ -569,9 +540,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.input.exists():
-        sys.exit(
-            f"input not found: {args.input}. Run scripts/generate_eval_incidents.py first."
-        )
+        sys.exit(f"input not found: {args.input}. Run scripts/generate_eval_incidents.py first.")
 
     base = json.loads(args.input.read_text())
     mutated = mutate_dataset(base)
@@ -593,18 +562,12 @@ def main() -> None:
             f"light={report['buckets']['light']}"
         )
         print(
-            f"  Defender catch rate:      {report['defender_correct']}"
-            f"/{report['incidents']} = {report['defender_accuracy'] * 100:.1f}%"
+            f"  Defender catch rate:      {report['defender_correct']}" f"/{report['incidents']} = {report['defender_accuracy'] * 100:.1f}%"
         )
-        print(
-            f"  Defender lost-everything: "
-            f"{report['defender_lost_all_tactics']} incidents"
-        )
+        print(f"  Defender lost-everything: " f"{report['defender_lost_all_tactics']} incidents")
         print()
         print("  Tactics most-lost under mutation:")
-        for t, n in sorted(
-            report["per_tactic_lost"].items(), key=lambda kv: kv[1], reverse=True
-        )[:8]:
+        for t, n in sorted(report["per_tactic_lost"].items(), key=lambda kv: kv[1], reverse=True)[:8]:
             print(f"    {t}: -{n}")
         print("=" * 78)
     print(f"wrote {len(mutated)} mutated incidents to {args.out}")

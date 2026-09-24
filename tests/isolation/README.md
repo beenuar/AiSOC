@@ -5,6 +5,38 @@ six datastores; every other store is a potential silent cross-tenant leak. This
 suite is table-driven (see `stores.py`) so a new datastore or a new read path
 cannot ship without an isolation entry.
 
+## Where the tenant came from
+
+The store suites below all answer the same question — *given* a tenant, can a
+read see another one's rows? They cannot answer the question above them: where
+did that tenant come from in the first place?
+
+For `/fusion/entity-risk/*` the answer was "the query string", with no auth
+dependency on the route, on both the API gateway and the fusion service. The
+console reaches fusion directly through a Next rewrite when `FUSION_URL` is
+set, so the parameter was reachable from any browser and naming somebody
+else's tenant UUID returned their entity-risk queue. Redis key prefixing did
+not help and never could: `aisoc:fusion:rba:topn:{tenant}` isolates whichever
+tenant it is handed. Fixing the parameter's *value* would not have helped
+either — a UUID that parses is still a UUID the caller chose.
+
+`test_route_tenant_scope.py` covers that layer in three parts: the vendored
+HS256 verifier and intersection rule offline; a two-tenant replay driving the
+real fusion routes over ASGI against a live Redis; and a meta-assertion that
+`scripts/check_route_tenant_scope.py` finds no violations anywhere in
+`services/`. The gate is an AST pass over every route decorator and signature
+in the tree, and it fails in two directions — a route that takes a tenant
+identifier without an auth dependency, and a route that accepts one without
+intersecting it with the caller's scope. `--self-test` injects a violation of
+each kind plus a stale exemption and asserts all three are caught, because a
+gate nobody has seen fail is indistinguishable from one that cannot.
+
+The resolver is vendored into six services (each is built with its own
+directory as its Docker context, the same reason `service_auth.py` and
+`cors.py` are vendored), so `sync_vendored_tenant_scope.py --check` runs
+alongside it: a fix that lands in one copy and not the others is a fix in
+none.
+
 ## Two layers
 
 1. **Offline (gated on every PR, `.github/workflows/isolation.yml`).** Asserts

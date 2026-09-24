@@ -40,9 +40,7 @@ def workflow_go_versions() -> dict[str, set[str]]:
     """Every ``go-version:`` a workflow asks setup-go to install."""
     found: dict[str, set[str]] = {}
     for path in sorted(WORKFLOWS.glob("*.yml")):
-        versions = set(
-            re.findall(r"go-version:\s*['\"]?([0-9][0-9.x]*)['\"]?", path.read_text(encoding="utf-8"))
-        )
+        versions = set(re.findall(r"go-version:\s*['\"]?([0-9][0-9.x]*)['\"]?", path.read_text(encoding="utf-8")))
         if versions:
             found[path.name] = versions
     return found
@@ -85,10 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     declared = set(modules.values())
     if len(declared) > 1:
         detail = "\n".join(f"      {p}: {v}" for p, v in sorted(modules.items()))
-        errors.append(
-            f"go.mod files declare {len(declared)} different Go versions "
-            f"({', '.join(sorted(declared))}):\n{detail}"
-        )
+        errors.append(f"go.mod files declare {len(declared)} different Go versions " f"({', '.join(sorted(declared))}):\n{detail}")
 
     target = max(declared, key=_minor)
     target_minor = _minor(target)
@@ -107,8 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     for dockerfile, version in dockerfile_go_images().items():
         if _minor(version) < target_minor:
             errors.append(
-                f"{dockerfile} builds on golang:{version}, but a module declares "
-                f"{target}. `go mod download` fails inside the image."
+                f"{dockerfile} builds on golang:{version}, but a module declares " f"{target}. `go mod download` fails inside the image."
             )
 
     if errors:
@@ -118,10 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     images = dockerfile_go_images()
-    print(
-        f"toolchain: OK — {len(modules)} Go modules on {target}; CI and "
-        f"{len(images)} Dockerfile(s) install it"
-    )
+    print(f"toolchain: OK — {len(modules)} Go modules on {target}; CI and " f"{len(images)} Dockerfile(s) install it")
     return 0
 
 
