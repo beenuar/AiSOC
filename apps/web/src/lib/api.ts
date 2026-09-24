@@ -1236,12 +1236,15 @@ export interface EntityRiskStats {
  */
 const FUSION_PATH = '/api/v1/fusion';
 
-// These three routes take the tenant as a *query parameter* as well as the
-// `X-Tenant-Id` header, so the two have to agree or the queue reports on a
-// different tenant than the rest of the console. They read the module-scope
-// env constant, which is fixed at build time and therefore ignores both the
-// logged-in user and the tenant switcher; `getActiveTenantId()` is the same
-// resolution `request()` uses for the header.
+// The tenant is no longer sent by default. It used to be, resolved from the
+// build-time `NEXT_PUBLIC_TENANT_ID` when nothing better was cached — and the
+// server took whatever arrived, because the entity-risk routes had no auth
+// dependency at all. Now the server derives the tenant from the bearer token
+// and treats the parameter as a filter it intersects with that scope, so
+// sending a stale build-time value would turn into a 403 for a perfectly
+// legitimate session. Omitting it is both safer and more correct: an explicit
+// `tenantId` is still honoured for an operator narrowing to one managed
+// customer, and naming a tenant outside their scope is refused server-side.
 export const entityRiskApi = {
   /** Top-N entities by current decayed risk score. */
   queue: (params: {
@@ -1251,7 +1254,7 @@ export const entityRiskApi = {
   } = {}) =>
     request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
       params: {
-        tenant_id: params.tenantId ?? getActiveTenantId(),
+        tenant_id: params.tenantId,
         limit: params.limit ?? 25,
         promoted_only: params.promotedOnly ? 'true' : undefined,
       },
@@ -1260,7 +1263,7 @@ export const entityRiskApi = {
   /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
   stats: (tenantId?: string) =>
     request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
-      params: { tenant_id: tenantId ?? getActiveTenantId() },
+      params: { tenant_id: tenantId },
     }),
 
   /** Full risk record for a single entity (drawer detail). */
@@ -1268,7 +1271,7 @@ export const entityRiskApi = {
     const pathType = entityType === 'ip' ? 'src_ip' : entityType;
     return request<EntityRiskRecord>(
       `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
-      { params: { tenant_id: tenantId ?? getActiveTenantId() } },
+      { params: { tenant_id: tenantId } },
     );
   },
 };
@@ -2065,6 +2068,14 @@ export interface SOCKpis {
   mttd_sample_count?: number;
   mttr_sample_count?: number;
   mttc_sample_count?: number;
+  /**
+   * The denominator each rate above was computed over. Zero means the rate is
+   * undefined rather than 0% — a tenant that has resolved nothing has not
+   * achieved a 0% false-positive rate. Optional for the same reason as the
+   * sample counts.
+   */
+  false_positive_rate_sample_count?: number;
+  escalation_rate_sample_count?: number;
 }
 
 export interface AttackHeatmapCell {

@@ -5,17 +5,34 @@ name: Tenant Isolation
 # include tenant B). The live-container replay lands with Phase 3's integration
 # tier. Table-driven (tests/isolation/stores.py) so a new store cannot ship
 # without an isolation entry.
+#
+# The route-scope job answers the question the store jobs cannot: the stores
+# isolate whichever tenant they are handed, so it still matters where that
+# tenant came from. `/fusion/entity-risk/*` took it from the query string with
+# no auth dependency on the route, on both the API gateway and the fusion
+# service, and key-prefixed Redis storage did nothing to help. That job runs
+# over every service, which is why its path filter is `services/**` rather
+# than the narrow list the store jobs use.
 
 on:
   push:
     branches: [main, develop]
     paths:
       - "tests/isolation/**"
-      - "services/threatintel/app/storage/qdrant.py"
+      - "services/**"
+      - "scripts/check_route_tenant_scope.py"
+      - "scripts/sync_vendored_tenant_scope.py"
+      - ".github/workflows/isolation.yml"
   pull_request:
     paths:
       - "tests/isolation/**"
-      - "services/threatintel/app/storage/qdrant.py"
+      - "services/**"
+      - "scripts/check_route_tenant_scope.py"
+      - "scripts/sync_vendored_tenant_scope.py"
+      - ".github/workflows/isolation.yml"
+
+permissions:
+  contents: read
 
 jobs:
   isolation:
@@ -33,4 +50,64 @@ jobs:
         run: pip install --quiet qdrant-client structlog pytest pytest-asyncio
 
       - name: Run isolation suite
-        run: python -m pytest tests/isolation -v --tb=short
+        run: python -m pytest tests/isolation -v --tb=short --ignore=tests/isolation/test_route_tenant_scope.py
+
+  route-scope:
+    name: Route tenant scope (no route lets its caller name the tenant)
+    runs-on: ubuntu-latest
+    # A leak here is reachable from any browser, so this gate is not advisory.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # The gate itself is stdlib-only (ast). The suite additionally drives the
+      # real fusion router over ASGI against a live Redis.
+      - name: Install deps
+        run: >-
+          pip install --quiet
+          pytest pytest-asyncio httpx "fastapi>=0.109,<0.142" pydantic
+          structlog "redis>=5,<6" "pydantic-settings>=2,<3"
+
+      # Proves the gate can fail before trusting it to pass. Injects a route
+      # taking a tenant with no auth, one taking a tenant with auth but no
+      # intersection, and strips the verifier a conditional exemption names —
+      # all three must be reported, and the two clean controls must not be.
+      - name: Gate self-test (both directions)
+        run: python scripts/check_route_tenant_scope.py --self-test
+
+      - name: Route inventory
+        run: python scripts/check_route_tenant_scope.py --inventory
+
+      - name: Every tenant-taking route authenticates and intersects
+        run: python scripts/check_route_tenant_scope.py
+
+      - name: Vendored tenant_scope copies are in lockstep
+        run: python scripts/sync_vendored_tenant_scope.py --check
+
+      - name: Start Redis for the two-tenant route replay
+        run: |
+          docker run -d --name route-iso-redis -p 6379:6379 redis:7-alpine
+          for _ in $(seq 1 30); do
+            if docker exec route-iso-redis redis-cli PING 2>/dev/null | grep -q PONG; then
+              echo "redis up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "redis did not come up" >&2
+          exit 1
+
+      # Seeds tenant A and tenant B through the real EntityRiskEngine, asserts
+      # both genuinely hold rows, then drives the shipped fusion routes and
+      # asserts an anonymous caller, an undeclared service token, and a
+      # console session for B are each refused A's data.
+      - name: Two-tenant replay against the real routes
+        env:
+          AISOC_ISOLATION_REDIS_URL: redis://localhost:6379/9
+        run: python -m pytest tests/isolation/test_route_tenant_scope.py -v --tb=short
+
+      - name: Stop Redis
+        if: always()
+        run: docker rm -f route-iso-redis || true

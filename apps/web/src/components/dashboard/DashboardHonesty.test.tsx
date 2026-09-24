@@ -275,6 +275,77 @@ describe('a mean over no samples is unmeasured, not zero', () => {
     expect(screen.queryByText(/not measured/i)).toBeNull();
   });
 
+  /**
+   * The same defect as the means, one step removed. `x / n if n > 0 else 0.0`
+   * renders an undefined ratio as a confident zero, and for these two the
+   * zero is flattering: "0% false positives" and "0% escalated" are the best
+   * numbers on the page, and a tenant that had resolved nothing and gated
+   * nothing scored both. The API now sends each rate's denominator.
+   */
+  it('reports both rates as unmeasured when their denominators are empty', () => {
+    swrData.set('soc-metrics', {
+      kpis: {
+        ...KPIS,
+        mttd_sample_count: 1,
+        mttr_sample_count: 1,
+        mttc_sample_count: 1,
+        mttd_hours: 1.1,
+        mttr_hours: 2.2,
+        mttc_hours: 3.3,
+        false_positive_rate_sample_count: 0,
+        escalation_rate_sample_count: 0,
+      },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    // Exactly the two rate tiles; the three means have samples here, so a
+    // count of two also proves the change did not blank anything else.
+    expect(screen.getAllByText(/not measured/i).length).toBe(2);
+    expect(screen.getByText(/no resolved alerts in 7d/i)).toBeTruthy();
+    expect(screen.getByText(/no gate decisions in 7d/i)).toBeTruthy();
+    expect(screen.queryByText('0.0%')).toBeNull();
+  });
+
+  it('renders each rate, and what it was computed over, once the denominator is non-empty', () => {
+    swrData.set('soc-metrics', {
+      kpis: {
+        ...KPIS,
+        false_positive_rate: 0.25,
+        false_positive_rate_sample_count: 8,
+        escalation_rate: 0.5,
+        escalation_rate_sample_count: 4,
+      },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    expect(screen.getByText('25.0%')).toBeTruthy();
+    expect(screen.getByText(/over 8 resolved alerts in 7d/i)).toBeTruthy();
+    expect(screen.getByText('50.0%')).toBeTruthy();
+    expect(screen.getByText(/over 4 gate decisions in 7d/i)).toBeTruthy();
+  });
+
+  it('keeps rendering rates for an API build that sends no denominators', () => {
+    // Same back-compatibility rule as the means: additive fields, and an
+    // older API must not blank the tiles.
+    swrData.set('soc-metrics', {
+      kpis: { ...KPIS, false_positive_rate: 0.1, escalation_rate: 0.2, mttd_sample_count: 1, mttr_sample_count: 1, mttc_sample_count: 1 },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    expect(screen.getByText('10.0%')).toBeTruthy();
+    expect(screen.getByText('20.0%')).toBeTruthy();
+    expect(screen.queryByText(/not measured/i)).toBeNull();
+  });
+
   it('does not label an hours figure as minutes on the operations strip', () => {
     // `alerts.mttr` is hours and the tile rendered it with an `m` suffix, so
     // a 1.5-hour MTTR would have read "1.5m" had it ever been non-zero.

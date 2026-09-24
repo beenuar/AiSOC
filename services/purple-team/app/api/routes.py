@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -21,6 +21,11 @@ from app.models.purple_team import (
     TestExecution,
 )
 from app.security.service_auth import require_service_auth
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 from app.services.atomic_loader import load_atomics
 from app.services.caldera_client import CalderaClient
 from app.services.drift import (
@@ -48,6 +53,12 @@ LOG = logging.getLogger(__name__)
 # `/health` and the probes in `app/_health.py` are registered on the app, not
 # this router, so they stay reachable for orchestrators.
 router = APIRouter(dependencies=[Depends(require_service_auth)])
+
+#: Proving the caller is a trusted service is not the same as knowing which
+#: tenant it acts for. The router-level dependency above does the first; this
+#: one does the second, and every route that touches tenant data takes it so
+#: the tenant can never arrive as a bare query parameter.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -145,8 +156,9 @@ class ReportDetectionRequest(BaseModel):
 # Atomic Red Team endpoints
 # ---------------------------------------------------------------------------
 @router.post("/api/v1/purple-team/atomics/sync", tags=["Atomic Red Team"])
-async def sync_atomics(tenant_id: uuid.UUID) -> dict:
+async def sync_atomics(principal: ScopedPrincipal, tenant_id: uuid.UUID | None = None) -> dict:
     """Parse and upsert all Atomic Red Team tests from the local repo."""
+    tenant_id = scoped_tenant_or_403(principal, tenant_id)
     tests = load_atomics(settings.art_atomics_path)
     if not tests:
         return {"synced": 0, "message": "No tests found — check art_atomics_path"}
@@ -178,15 +190,17 @@ async def sync_atomics(tenant_id: uuid.UUID) -> dict:
 
 @router.get("/api/v1/purple-team/atomics", response_model=list[AtomicTestOut], tags=["Atomic Red Team"])
 async def list_atomics(
-    tenant_id: uuid.UUID,
+    principal: ScopedPrincipal,
+    tenant_id: uuid.UUID | None = None,
     technique_id: str | None = Query(None),
     tactic: str | None = Query(None),
     platform: str | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[AtomicTest]:
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        q = select(AtomicTest).where(AtomicTest.tenant_id == tenant_id)
+        q = select(AtomicTest).where(AtomicTest.tenant_id == scoped)
         if technique_id:
             q = q.where(AtomicTest.technique_id == technique_id)
         if tactic:
@@ -199,11 +213,12 @@ async def list_atomics(
 
 
 @router.post("/api/v1/purple-team/atomics/run", response_model=ExecutionOut, tags=["Atomic Red Team"])
-async def run_atomic(body: RunAtomicRequest) -> TestExecution:
+async def run_atomic(body: RunAtomicRequest, principal: ScopedPrincipal) -> TestExecution:
     """Create a pending execution record (actual execution is out-of-band)."""
+    scoped = scoped_tenant_or_403(principal, body.tenant_id)
     async with _async_session() as session:
         execution = TestExecution(
-            tenant_id=body.tenant_id,
+            tenant_id=scoped,
             source="atomic",
             technique_id=body.technique_id,
             test_name=body.test_name,
@@ -259,7 +274,11 @@ class CalderaRunRequest(BaseModel):
 
 
 @router.post("/api/v1/purple-team/caldera/run", response_model=ExecutionOut, tags=["Caldera"])
-async def run_caldera_operation(body: CalderaRunRequest) -> TestExecution:
+async def run_caldera_operation(body: CalderaRunRequest, principal: ScopedPrincipal) -> TestExecution:
+    # Resolved before the Caldera call, not after: this starts a real
+    # adversary-emulation operation against live hosts, so an unauthorised
+    # tenant must be refused before anything executes.
+    scoped = scoped_tenant_or_403(principal, body.tenant_id)
     try:
         op = await _caldera().start_operation(
             name=body.operation_name,
@@ -271,7 +290,7 @@ async def run_caldera_operation(body: CalderaRunRequest) -> TestExecution:
 
     async with _async_session() as session:
         execution = TestExecution(
-            tenant_id=body.tenant_id,
+            tenant_id=scoped,
             source="caldera",
             technique_id="multi",
             test_name=body.operation_name,
@@ -291,14 +310,16 @@ async def run_caldera_operation(body: CalderaRunRequest) -> TestExecution:
 # ---------------------------------------------------------------------------
 @router.get("/api/v1/purple-team/executions", response_model=list[ExecutionOut], tags=["Executions"])
 async def list_executions(
-    tenant_id: uuid.UUID,
+    principal: ScopedPrincipal,
+    tenant_id: uuid.UUID | None = None,
     technique_id: str | None = Query(None),
     status: str | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
 ) -> list[TestExecution]:
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        q = select(TestExecution).where(TestExecution.tenant_id == tenant_id)
+        q = select(TestExecution).where(TestExecution.tenant_id == scoped)
         if technique_id:
             q = q.where(TestExecution.technique_id == technique_id)
         if status:
@@ -313,9 +334,12 @@ async def list_executions(
     response_model=ExecutionOut,
     tags=["Executions"],
 )
-async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest) -> TestExecution:
+async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest, principal: ScopedPrincipal) -> TestExecution:
+    # Matched on id *and* tenant. On id alone, any caller could overwrite
+    # another tenant's detection outcome by naming its execution UUID.
+    scoped = scoped_tenant_or_403(principal)
     async with _async_session() as session:
-        result = await session.execute(select(TestExecution).where(TestExecution.id == execution_id))
+        result = await session.execute(select(TestExecution).where(TestExecution.id == execution_id, TestExecution.tenant_id == scoped))
         ex = result.scalar_one_or_none()
         if ex is None:
             raise HTTPException(status_code=404, detail="Execution not found")
@@ -332,7 +356,7 @@ async def report_detection(execution_id: uuid.UUID, body: ReportDetectionRequest
 # ATT&CK Coverage heatmap
 # ---------------------------------------------------------------------------
 @router.get("/api/v1/purple-team/coverage", tags=["Coverage"])
-async def get_coverage(tenant_id: uuid.UUID) -> dict:
+async def get_coverage(principal: ScopedPrincipal, tenant_id: uuid.UUID | None = None) -> dict:
     """Live coverage matrix computed from current execution history.
 
     Tactics are resolved by joining executions to the tenant's Atomic
@@ -340,8 +364,9 @@ async def get_coverage(tenant_id: uuid.UUID) -> dict:
     heatmap is grouped by real ATT&CK tactics rather than the legacy
     placeholder.
     """
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        return await compute_coverage_for_tenant(session, tenant_id)
+        return await compute_coverage_for_tenant(session, scoped)
 
 
 # ---------------------------------------------------------------------------
@@ -369,15 +394,17 @@ class DriftSnapshotDetail(DriftSnapshotOut):
     tags=["Drift"],
 )
 async def trigger_drift_snapshot(
-    tenant_id: uuid.UUID,
+    principal: ScopedPrincipal,
+    tenant_id: uuid.UUID | None = None,
     trigger: str = Query(
         "manual",
         description="Why this snapshot was captured (manual|scheduled|post-run)",
     ),
 ) -> DetectionDriftSnapshot:
     """Capture a coverage snapshot on demand (e.g. after a purple-team run)."""
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        snap = await capture_snapshot(session, tenant_id, trigger=trigger)
+        snap = await capture_snapshot(session, scoped, trigger=trigger)
         await session.commit()
         await session.refresh(snap)
         return snap
@@ -389,18 +416,21 @@ async def trigger_drift_snapshot(
     tags=["Drift"],
 )
 async def list_drift_snapshots(
-    tenant_id: uuid.UUID,
+    principal: ScopedPrincipal,
+    tenant_id: uuid.UUID | None = None,
     limit: int = Query(50, le=200),
 ) -> list[DetectionDriftSnapshot]:
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        return await list_snapshots(session, tenant_id, limit=limit)
+        return await list_snapshots(session, scoped, limit=limit)
 
 
 @router.get("/api/v1/purple-team/drift/latest", tags=["Drift"])
-async def get_latest_drift(tenant_id: uuid.UUID) -> dict:
+async def get_latest_drift(principal: ScopedPrincipal, tenant_id: uuid.UUID | None = None) -> dict:
     """Return the most recent snapshot plus delta-vs-previous for the heatmap."""
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        current, previous = await latest_two_snapshots(session, tenant_id)
+        current, previous = await latest_two_snapshots(session, scoped)
 
     return {
         "current": _serialize_snapshot(current),
@@ -431,10 +461,11 @@ def _serialize_snapshot(snap: DetectionDriftSnapshot | None) -> dict | None:
 # Tabletop simulator
 # ---------------------------------------------------------------------------
 @router.post("/api/v1/purple-team/tabletop", response_model=TabletopOut, tags=["Tabletop"])
-async def create_tabletop(body: TabletopCreateRequest) -> TabletopSession:
+async def create_tabletop(body: TabletopCreateRequest, principal: ScopedPrincipal) -> TabletopSession:
+    scoped = scoped_tenant_or_403(principal, body.tenant_id)
     async with _async_session() as session:
         ts = TabletopSession(
-            tenant_id=body.tenant_id,
+            tenant_id=scoped,
             name=body.name,
             description=body.description,
             scenario=body.scenario,
@@ -449,11 +480,13 @@ async def create_tabletop(body: TabletopCreateRequest) -> TabletopSession:
 
 @router.get("/api/v1/purple-team/tabletop", response_model=list[TabletopOut], tags=["Tabletop"])
 async def list_tabletops(
-    tenant_id: uuid.UUID,
+    principal: ScopedPrincipal,
+    tenant_id: uuid.UUID | None = None,
     status: str | None = Query(None),
 ) -> list[TabletopSession]:
+    scoped = scoped_tenant_or_403(principal, tenant_id)
     async with _async_session() as session:
-        q = select(TabletopSession).where(TabletopSession.tenant_id == tenant_id)
+        q = select(TabletopSession).where(TabletopSession.tenant_id == scoped)
         if status:
             q = q.where(TabletopSession.status == status)
         q = q.order_by(TabletopSession.created_at.desc())
@@ -466,9 +499,10 @@ async def list_tabletops(
     response_model=TabletopOut,
     tags=["Tabletop"],
 )
-async def get_tabletop(session_id: uuid.UUID) -> TabletopSession:
+async def get_tabletop(session_id: uuid.UUID, principal: ScopedPrincipal) -> TabletopSession:
+    scoped = scoped_tenant_or_403(principal)
     async with _async_session() as session:
-        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id, TabletopSession.tenant_id == scoped))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -480,9 +514,10 @@ async def get_tabletop(session_id: uuid.UUID) -> TabletopSession:
     response_model=TabletopOut,
     tags=["Tabletop"],
 )
-async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest) -> TabletopSession:
+async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest, principal: ScopedPrincipal) -> TabletopSession:
+    scoped = scoped_tenant_or_403(principal)
     async with _async_session() as session:
-        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id, TabletopSession.tenant_id == scoped))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -508,9 +543,10 @@ async def add_finding(session_id: uuid.UUID, body: TabletopAddFindingRequest) ->
     response_model=TabletopOut,
     tags=["Tabletop"],
 )
-async def complete_tabletop(session_id: uuid.UUID) -> TabletopSession:
+async def complete_tabletop(session_id: uuid.UUID, principal: ScopedPrincipal) -> TabletopSession:
+    scoped = scoped_tenant_or_403(principal)
     async with _async_session() as session:
-        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id))
+        result = await session.execute(select(TabletopSession).where(TabletopSession.id == session_id, TabletopSession.tenant_id == scoped))
         ts = result.scalar_one_or_none()
         if ts is None:
             raise HTTPException(status_code=404, detail="Session not found")

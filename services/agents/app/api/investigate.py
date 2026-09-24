@@ -16,20 +16,32 @@ import asyncio
 import json
 import os
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 import httpx
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from app.investigator import InvestigatorOrchestrator
 from app.orchestrator.router import RouterOrchestrator
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1", tags=["investigations"])
+
+#: The console reaches this service directly through a Next rewrite, sending
+#: the first-party access token as a bearer credential. The tenant comes from
+#: that verified token; a `tenant_id` on the request is only ever a filter,
+#: intersected with it, so naming a foreign tenant is a 403 rather than a
+#: selector for somebody else's investigation.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 # ---------------------------------------------------------------------------
 # Config
@@ -229,8 +241,10 @@ async def launch_investigation(
     case_id: str,
     body: InvestigateRequest,
     background_tasks: BackgroundTasks,
+    principal: ScopedPrincipal,
 ):
     """Launch a Pillar-1 autonomous investigation for a case."""
+    body.tenant_id = str(scoped_tenant_or_403(principal, body.tenant_id))
     run_id = str(uuid4())
     _runs[run_id] = {
         "run_id": run_id,

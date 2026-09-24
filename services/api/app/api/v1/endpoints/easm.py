@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.db.database import get_db
 from app.models.easm import ExternalAsset, ExternalAssetDrift, ExternalAssetType
 from app.models.tenant import Tenant
+from app.security.tenant_scope import scoped_tenant_or_403
 from app.services.easm_discovery import run_discovery
 from app.services.easm_drift import detect_drift
 
@@ -72,13 +73,12 @@ async def trigger_easm_scan(
     if not s.AISOC_FEATURE_EASM:
         raise HTTPException(status_code=403, detail="EASM feature is disabled")
 
-    if body.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot trigger EASM scan for a different tenant",
-        )
+    # The tenant on the body is a request, not an instruction: it is
+    # intersected with the caller's scope, and everything downstream uses the
+    # resolved value rather than `body.tenant_id`.
+    scoped_tenant = scoped_tenant_or_403(current_user, body.tenant_id)
 
-    tenant = await db.get(Tenant, body.tenant_id)
+    tenant = await db.get(Tenant, scoped_tenant)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
@@ -86,14 +86,14 @@ async def trigger_easm_scan(
 
     background_tasks.add_task(
         _run_scan_job,
-        body.tenant_id,
+        scoped_tenant,
         org_query,
         body.ip_targets,
     )
 
     return {
         "status": "accepted",
-        "tenant_id": str(body.tenant_id),
+        "tenant_id": str(scoped_tenant),
         "org_query": org_query,
         "message": "EASM scan enqueued.",
     }
@@ -114,12 +114,7 @@ async def list_external_assets(
     can never request another tenant's assets — supplying a foreign
     ``tenant_id`` returns 403.
     """
-    if tenant_id is not None and tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot list EASM assets for a different tenant",
-        )
-    effective_tenant = current_user.tenant_id
+    effective_tenant = scoped_tenant_or_403(current_user, tenant_id)
     stmt = select(ExternalAsset).where(ExternalAsset.tenant_id == effective_tenant).order_by(ExternalAsset.last_seen.desc()).limit(limit)
     if asset_type:
         stmt = stmt.where(ExternalAsset.asset_type == asset_type)
@@ -152,12 +147,7 @@ async def list_external_asset_drift(
     A user can never request another tenant's drift events — supplying a
     foreign ``tenant_id`` returns 403.
     """
-    if tenant_id is not None and tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot list EASM drift for a different tenant",
-        )
-    effective_tenant = current_user.tenant_id
+    effective_tenant = scoped_tenant_or_403(current_user, tenant_id)
     stmt = (
         select(ExternalAssetDrift)
         .where(ExternalAssetDrift.tenant_id == effective_tenant)
