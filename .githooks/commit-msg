@@ -1,0 +1,112 @@
+#!/bin/sh
+# commit-msg — remove tool-attribution lines before they reach a commit.
+#
+# Why this exists
+# ---------------
+# AiSOC never attributes work to a development tool or AI assistant, anywhere:
+# code, comments, docs, commit messages, commit trailers, PR bodies, release
+# notes or marketing copy. Some editors append a `Co-authored-by:` trailer or a
+# "Made with <tool>" footer at commit time, without asking and without anything
+# in the repository's git config causing it. This hook removes those lines from
+# the message after the editor is done with it.
+#
+# Why commit-msg and not prepare-commit-msg
+# -----------------------------------------
+# prepare-commit-msg runs BEFORE the editor, so anything the editor appends
+# afterwards survives it. commit-msg runs on the final message and therefore
+# also covers `git commit -m`, `git commit --amend` and message templates.
+#
+# Why this is load-bearing for `main`
+# -----------------------------------
+# The repository squash-merges with squash_merge_commit_message=COMMIT_MESSAGES,
+# which means GitHub composes the squash commit body from the branch commits.
+# A trailer on any branch commit is therefore copied onto `main` at merge time.
+# Stripping it at commit time is what stops it there; scripts/check_attribution.py
+# is the backstop that fails CI if one reaches a PR anyway.
+#
+# This hook NEVER rejects a commit. It rewrites the message and exits 0. A hook
+# that can block is a hook that can halt someone's work on a bad pattern; the
+# blocking job belongs in CI, where it is visible and can be fixed in one place.
+
+set -u
+
+MSG_FILE="${1:-}"
+[ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ] || exit 0
+
+HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PATTERNS="$HOOK_DIR/attribution-patterns.txt"
+ALLOWLIST="$HOOK_DIR/attribution-allowlist.txt"
+
+# Missing pattern file (partial checkout, submodule, older branch) — do nothing
+# rather than guess. CI still enforces the rule.
+[ -f "$PATTERNS" ] || exit 0
+[ -f "$ALLOWLIST" ] || ALLOWLIST=/dev/null
+
+TMP="$MSG_FILE.attribution.$$"
+
+awk -v patfile="$PATTERNS" -v allowfile="$ALLOWLIST" '
+function load(file, arr,   n, line) {
+    n = 0
+    while ((getline line < file) > 0) {
+        sub(/\r$/, "", line)
+        if (line ~ /^[ \t]*#/) continue
+        if (line ~ /^[ \t]*$/) continue
+        arr[++n] = line
+    }
+    close(file)
+    return n
+}
+BEGIN {
+    npat   = load(patfile,   pat)
+    nallow = load(allowfile, allow)
+}
+{
+    # Lowercase the line so the (all-lowercase) patterns match case-insensitively
+    # without relying on a non-POSIX awk flag.
+    probe = tolower($0)
+
+    keep = 1
+    for (i = 1; i <= npat; i++) {
+        if (probe ~ pat[i]) { keep = 0; break }
+    }
+    if (!keep) {
+        for (i = 1; i <= nallow; i++) {
+            if (probe ~ allow[i]) { keep = 1; break }
+        }
+    }
+
+    if (keep) {
+        out[++nout] = $0
+    } else {
+        removed++
+        # Note where the removal happened so an orphaned blank line can be
+        # collapsed below.
+        cut[nout] = 1
+    }
+    next
+}
+END {
+    if (!removed) exit 1          # nothing to do; caller keeps the original file
+
+    # Trim trailing blank lines left where the footer used to be. Comment lines
+    # git appends below the message are preserved.
+    while (nout > 0 && out[nout] ~ /^[ \t]*$/) nout--
+
+    if (nout == 0) exit 1         # never hand git an empty message
+
+    # A footer that sat on its own between two blank lines leaves both behind.
+    # Drop one at each removal site so surrounding prose keeps its spacing.
+    for (i = 1; i <= nout; i++) {
+        print out[i]
+        if (cut[i] && out[i] ~ /^[ \t]*$/ && (i + 1) <= nout && out[i + 1] ~ /^[ \t]*$/) i++
+    }
+}
+' "$MSG_FILE" > "$TMP" 2>/dev/null
+
+if [ $? -eq 0 ] && [ -s "$TMP" ]; then
+    cat "$TMP" > "$MSG_FILE"
+    printf 'commit-msg: removed tool-attribution line(s) from the commit message.\n' >&2
+fi
+rm -f "$TMP"
+
+exit 0
