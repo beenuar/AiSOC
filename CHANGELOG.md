@@ -77,6 +77,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The dependency audit only ever looked at one of the repository's two pnpm
+  install roots.** `run_pnpm_audit` ran `pnpm audit` in the repo root and
+  nowhere else, so `apps/mobile` — a deliberately separate install root, with
+  its own `pnpm-workspace.yaml` so its installs stop rewriting the root lock —
+  was never scanned. Two high-severity advisories stood open there while the
+  `security-audit` job reported a clean workspace, which is the same shape as
+  the stale `poetry.lock` that once dropped `services/slack-bot` and hid eleven
+  advisories. Install roots are now discovered from the tree (every directory
+  holding a `pnpm-lock.yaml`), each is audited, and a finding names the root it
+  came from rather than a generic "pnpm workspace". A tree with no lockfile
+  anywhere is recorded as a coverage gap instead of reported as clean.
+
+  The two advisories it surfaced (`GHSA-5p2g-fcmc-qvqq`, `GHSA-w3rx-r6r6-pgpr`
+  in `image-size`) are suppressed with an expiry rather than fixed, because no
+  fix is reachable: `apps/mobile` resolves `image-size 1.2.1` solely through
+  `metro 0.83.3`, no patched 1.x exists, every metro release through 0.87.1
+  still requires `^1.0.2`, and `image-size` 2.x drops the callable default
+  export `metro/src/Assets.js` calls — so an override would break asset
+  resolution at bundle time rather than bump a version. Dependabot's updater
+  reaches the same verdict independently (`security_update_not_possible`).
+  Both are denial-of-service only and build-time, reachable only from an image
+  already committed to this repository.
+
 - **AI triage could not reach a model in the default deployment, and it was
   not a missing key.** `docker-compose.yml` set `LLM_GATEWAY_URL` on the `api`
   and `agents` services. Nothing read it. Both resolvers honoured only
