@@ -43,7 +43,6 @@ from collections.abc import Iterable
 from typing import Any
 
 import httpx
-import structlog
 
 # `X as X` is the explicit re-export form (PEP 484). These names are this
 # module's public surface — callers do
@@ -67,8 +66,6 @@ from app._vendor.llm_contract_rules import (
 from app._vendor.llm_contract_rules import (
     validate_messages as validate_messages,
 )
-
-logger = structlog.get_logger(__name__)
 
 # These names are re-exports: callers do
 # `from app.services.llm_safety import LLMContractViolation`, and the rules
