@@ -99,8 +99,18 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import check_gate_coverage as coverage
-from gate_toolkit import SELF_TEST_FLAG, VERDICT_FLAG_PREFERENCE, repo_root, run_in_scratch_tree, scratch_tree
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. Its siblings sit beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import check_gate_coverage as coverage  # noqa: E402
+from gate_toolkit import (  # noqa: E402
+    SELF_TEST_FLAG,
+    VERDICT_FLAG_PREFERENCE,
+    repo_root,
+    run_in_scratch_tree,
+    scratch_tree,
+)
 
 # --------------------------------------------------------------------------
 # Recorded exceptions. Every one of these is shrink-only and checked in both
