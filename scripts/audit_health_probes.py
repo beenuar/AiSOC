@@ -81,6 +81,18 @@ def main() -> int:
     args = parser.parse_args()
 
     services = discover_fastapi_services()
+    if not services:
+        # Discovery walks `services/*/app/main.py`. An empty result printed a
+        # table header, no rows, and exit 0 — the audit passing because it
+        # found no service to hold to the standard, which reads identically
+        # to every service meeting it.
+        print(
+            f"health-probes: found no FastAPI service under {SERVICES_DIR}. "
+            f"Zero services audited is not zero services missing the probes.",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"{'service':<18} {'_health.py':<11} {'import':<7} {'wire':<5}")
     print(f"{'-' * 18} {'-' * 11} {'-' * 7} {'-' * 5}")
     drift: list[str] = []

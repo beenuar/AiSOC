@@ -1,4 +1,114 @@
 {
+  "(unmanaged)": {
+    "plugins/mttr-widget/plugin.py": {
+      "arg-type": 3,
+      "return-value": 1
+    },
+    "scripts/audit_managed_tenants.py": {
+      "import-untyped": 1
+    },
+    "scripts/build_marketplace.py": {
+      "import-untyped": 1
+    },
+    "scripts/build_quarantine_index.py": {
+      "import-untyped": 1
+    },
+    "scripts/check_codeql_alerts.py": {
+      "assignment": 1,
+      "index": 3
+    },
+    "scripts/check_fidelity_datasets.py": {
+      "import-untyped": 1
+    },
+    "scripts/check_gate_coverage.py": {
+      "import-untyped": 1
+    },
+    "scripts/check_slos.py": {
+      "import-untyped": 1
+    },
+    "scripts/curate_detections.py": {
+      "import-untyped": 1
+    },
+    "scripts/datasets/download_ait_lds.py": {
+      "arg-type": 1,
+      "misc": 1
+    },
+    "scripts/detection_specs_part3_helpers.py": {
+      "arg-type": 1
+    },
+    "scripts/detection_truth_table.py": {
+      "import-untyped": 1
+    },
+    "scripts/eval_telemetry.py": {
+      "arg-type": 3
+    },
+    "scripts/export_openapi.py": {
+      "import-untyped": 1
+    },
+    "scripts/generate_connector_types.py": {
+      "attr-defined": 2
+    },
+    "scripts/generate_detections.py": {
+      "import-untyped": 1
+    },
+    "scripts/generate_slo_alerts.py": {
+      "import-untyped": 1
+    },
+    "scripts/lint_playbooks.py": {
+      "assignment": 1
+    },
+    "scripts/openapi_diff.py": {
+      "import-untyped": 1
+    },
+    "scripts/project_stats.py": {
+      "assignment": 1,
+      "import-untyped": 1
+    },
+    "scripts/run_evals.py": {
+      "attr-defined": 9,
+      "index": 13,
+      "no-redef": 1
+    },
+    "scripts/upgrade_playbooks.py": {
+      "arg-type": 1
+    },
+    "scripts/validate_detections.py": {
+      "import-untyped": 1
+    },
+    "scripts/wet_eval.py": {
+      "arg-type": 4
+    },
+    "scripts/wet_eval_check.py": {
+      "arg-type": 1
+    },
+    "tests/test_detection_id_stability.py": {
+      "attr-defined": 2
+    },
+    "tests/test_first_run_gate.py": {
+      "import-untyped": 1
+    },
+    "tests/test_openapi_diff.py": {
+      "import-untyped": 1
+    },
+    "tests/test_readme_figures_gate.py": {
+      "attr-defined": 5
+    },
+    "tests/test_toolchain_pin_gate.py": {
+      "name-defined": 1
+    },
+    "tools/detection_import/car_importer.py": {
+      "import-untyped": 1
+    },
+    "tools/detection_import/common.py": {
+      "import-untyped": 1
+    },
+    "tools/detection_import/sigma_importer.py": {
+      "import-untyped": 1
+    },
+    "tools/detection_import/splunk_importer.py": {
+      "import-untyped": 1
+    }
+  },
   "packages/aisoc-ai-sdk": {
     "aisoc_ai/client.py": {
       "type-arg": 1

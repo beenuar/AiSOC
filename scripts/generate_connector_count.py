@@ -41,6 +41,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_FILE = REPO_ROOT / "services" / "connectors" / "app" / "connectors" / "__init__.py"
@@ -140,8 +141,15 @@ def parse_category_counts() -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
-def build_payload() -> dict[str, object]:
-    """Produce the on-disk payload."""
+def build_payload() -> dict[str, Any]:
+    """Produce the on-disk payload.
+
+    `Any` rather than `object`: this is a JSON document with heterogeneous
+    values, and declaring `object` forced the two read sites below to carry
+    `# type: ignore[arg-type]` comments for an error code mypy does not emit
+    here — a suppression that suppresses nothing while telling the next
+    reader a checker was consulted and agreed.
+    """
     count = parse_registry_count()
     categories = parse_category_counts()
     return {
@@ -218,7 +226,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     payload = build_payload()
-    count = int(payload["count"])  # type: ignore[arg-type]
+    count = int(payload["count"])
 
     drift: list[str] = []
 
@@ -240,10 +248,7 @@ def main(argv: list[str]) -> int:
             print(f"  - {line}", file=sys.stderr)
         return 1
 
-    print(
-        f"connector-count OK — {count} registered, {len(payload['categories'])}"  # type: ignore[arg-type]
-        " categories"
-    )
+    print(f"connector-count OK — {count} registered, {len(payload['categories'])}" " categories")
     return 0
 
 

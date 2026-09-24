@@ -28,6 +28,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import TypeVar
 
 import structlog
 
@@ -377,8 +378,10 @@ def check_capability_reachability() -> list[str]:
     errors: list[str] = []
     adapters = builtins._BUILTIN_ADAPTERS  # noqa: SLF001
     adapter_capabilities = {cls.capability for cls in adapters}
-    adapter_action_types = {getattr(cls, "_legacy_action_type", None) for cls in adapters}
-    adapter_action_types.discard(None)
+    # Built by filtering rather than by adding `None` and discarding it: the
+    # discard is invisible to a reader three hundred lines below, where the
+    # set is unpacked as `a.value`.
+    adapter_action_types = {t for t in (getattr(cls, "_legacy_action_type", None) for cls in adapters) if t is not None}
 
     # ── Direction 1: adapter → vocabulary ──────────────────────────────────
     # register_executor() only *warns* on an unknown capability, so this drift
@@ -693,8 +696,11 @@ def check_capability_mirror() -> list[str]:
     return errors
 
 
-def _all_subclasses(cls: type) -> list[type]:
-    found: list[type] = []
+_T = TypeVar("_T")
+
+
+def _all_subclasses(cls: type[_T]) -> list[type[_T]]:
+    found: list[type[_T]] = []
     for sub in cls.__subclasses__():
         found.append(sub)
         found.extend(_all_subclasses(sub))
