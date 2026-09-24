@@ -54,6 +54,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The invite is single-use. The child-scoped routes answer `404` rather than
   `403` for a tenant that is not yours, so they cannot enumerate tenant UUIDs.
 
+- **`python-jose` is gone, and `ecdsa` with it.** `ecdsa` carried
+  CVE-2024-23342 (Minerva timing attack on P-256) with no patched release —
+  OSV records the affected range as introduced at 0 with no fixed event,
+  because upstream states python-ecdsa offers no side-channel resistance and
+  will not fix it. It was an unconditional requirement of `python-jose`, so
+  the suppression was renewed rather than resolved. `services/api` now signs
+  and verifies with `PyJWT`, which it already depended on for the OIDC and
+  SAML paths; `python-jose`, `ecdsa` and `rsa` all leave the dependency tree.
+  Six CI workflows installed `python-jose[cryptography]` and never installed
+  `PyJWT`, and reached `cryptography` — a declared direct dependency of
+  `services/api` — only through that extra; they now install both by name.
+
+- **`image-size` moved to a patched release instead of staying suppressed.**
+  Both advisories were held open on the reading that no fix existed. They
+  record a vulnerable range of `<= 2.0.2`, and npm has published 2.0.3 and
+  2.0.4; a null `first_patched_version` is not the same claim as no fix
+  existing. A pnpm override pins `>=2.0.4 <3`, which
+  `@docusaurus/mdx-loader`'s `^2.0.2` range accepts. This clears the only two
+  high-severity advisories in the pnpm workspace.
+
+- **The dependency suppression list is empty.** All 42 entries in
+  `scripts/security_audit_ignores.txt` were re-verified against OSV and
+  against the versions the lockfiles actually resolve. Every one was
+  resolvable, and most of the justifications had stopped being true: nine
+  starlette entries blamed a `fastapi<0.137` cap that exists in neither bot
+  service, three cryptography entries blamed `<50`/`<49` caps that exist
+  nowhere in the repository, and the langchain, weasyprint, anyio, aiohttp,
+  h2, idna and pydantic-settings entries each named a version older than the
+  one their lock resolves. The file now records what was measured, so the next
+  review starts from evidence rather than from the previous reason string.
+
+- **The pnpm and Go arms of the audit could report success without scanning.**
+  A failed `govulncheck`, an unparseable `pnpm audit` response and a registry
+  that never answered were all recorded as warnings, which exit 0 — so the job
+  printed "0 findings" for ecosystems it had not read. All three now record a
+  coverage gap, which `exit_code_for` already failed on for the Python arm.
+  That property — an unscanned target fails the build — had no test; it does
+  now.
+
 ### Fixed
 
 - **Scheduled hunts ran against credentials that could not exist, so every one

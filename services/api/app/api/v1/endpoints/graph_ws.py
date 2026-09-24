@@ -59,7 +59,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from jose import JWTError
+from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,7 +139,7 @@ async def _authenticate_ws(
     # JWT path
     try:
         payload = decode_token(token)
-    except JWTError:
+    except PyJWTError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="invalid token")
         return None
     sub = payload.get("sub")

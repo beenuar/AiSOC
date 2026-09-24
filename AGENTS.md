@@ -23,7 +23,7 @@
 - Monorepo managed with pnpm (pnpm@8.15.1) and Turborepo; workspaces defined in `apps/*` and `packages/*`.
 - Apps: `apps/web` (Next.js frontend), `apps/docs` (documentation site).
 - Backend services in `services/`: `api` (FastAPI/Python 3.11), `agents`, `alert-fusion`, `connectors`, `demo-producer`, `enrichment`, `fusion`, `ingest`, `realtime`, `threatintel`, `ocsf`.
-- API service stack: FastAPI, Uvicorn, SQLAlchemy (async), asyncpg (PostgreSQL), Alembic (migrations), Redis, python-jose (JWT), Pydantic v2.
+- API service stack: FastAPI, Uvicorn, SQLAlchemy (async), asyncpg (PostgreSQL), Alembic (migrations), Redis, PyJWT (JWT), Pydantic v2.
 - Packages: `packages/types` (shared TypeScript types), `packages/ui`, `packages/sdk-go`, `packages/sdk-py`, `packages/sdk-ts`, `packages/plugin-sdk-go`, `packages/plugin-sdk-py`.
 - Docker Compose used for local dev: `infra/compose/` is the canonical home for all non-root compose files (`docker-compose.dev.yml`, `docker-compose.demo.yml`, `docker-compose.airgap.yml`); only the slim `docker-compose.yml` remains at repo root. Build contexts inside the moved files use `../../services/<name>` (two levels up). Terraform in `infra/terraform/` for infrastructure.
 - CI uses GitHub Actions (`.github/workflows/`); includes workflows for OpenAPI checks, CI, docs deployment, marketplace sync, and detection validation.

@@ -25,6 +25,7 @@ overrides:
   brace-expansion@1: '>=1.1.18 <2'
   browserslist: '>=4.28.7 <5'
   fast-uri: '>=3.1.6 <4'
+  image-size: '>=2.0.4 <3'
   ip-address: '>=10.3.1 <11'
   js-yaml@3: '>=3.15.2 <4'
   js-yaml@4: '>=4.3.2 <5'
@@ -3004,7 +3005,7 @@ packages:
       estree-util-value-to-estree: 3.5.0
       file-loader: 6.2.0(webpack@5.108.4)
       fs-extra: 11.3.4
-      image-size: 2.0.2
+      image-size: 2.0.4
       mdast-util-mdx: 3.0.0
       mdast-util-to-string: 4.0.0
       react: 19.3.0
@@ -12570,9 +12571,9 @@ packages:
     engines: {node: '>= 4'}
     dev: true
 
-  /image-size@2.0.2:
-    resolution: {integrity: sha512-IRqXKlaXwgSMAMtpNzZa1ZAe8m+Sa1770Dhk8VkSsP9LS+iHD62Zd8FQKs8fbPiagBE7BzoFX23cxFnwshpV6w==}
-    engines: {node: '>=16.x'}
+  /image-size@2.0.4:
+    resolution: {integrity: sha512-QRUkFFsRV/6fuESxb9Vkq+a0LkSrgKXuc2NEqfikiXxxN/G3tjWt5EVUlMaImRBZRZK/jRBEbYvpPYZL8t08Zw==}
+    engines: {node: '>=18'}
     hasBin: true
     dev: false
 

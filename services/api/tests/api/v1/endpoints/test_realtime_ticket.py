@@ -27,13 +27,13 @@ from __future__ import annotations
 
 import uuid
 
+import jwt
 import pytest
 from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints import realtime as realtime_ep
 from app.core.config import DEV_REALTIME_TICKET_SECRET, Settings, realtime_ticket_secret, warn_if_insecure_defaults
 from app.core.security import REALTIME_TICKET_AUDIENCE
 from fastapi import HTTPException
-from jose import jwt
 
 # A real 64-char secret used across the "happy path" tests — anything outside
 # INSECURE_SECRET_KEY_DEFAULTS and non-empty resolves as configured.
@@ -157,7 +157,7 @@ async def test_mint_rejects_foreign_audience(configured):
     """A ticket scoped to the realtime edge must not validate for any other
     audience — guards against a stolen ticket being replayed at the API."""
     ticket = await realtime_ep.mint_realtime_ticket(_user())
-    with pytest.raises(jwt.JWTError):
+    with pytest.raises(jwt.PyJWTError):
         jwt.decode(
             ticket.token,
             _REAL_SECRET,
