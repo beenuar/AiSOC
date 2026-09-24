@@ -2,6 +2,27 @@
  * Connector / Integration types
  */
 
+/**
+ * The `connector_type` values the ingest normalizer resolves.
+ *
+ * This union is the console's vocabulary, and it is a third name space beside
+ * the ids `services/connectors` declares and the keys `connectorProfiles` in
+ * `services/ingest/internal/normalizer/normalizer.go` uses. Ten members used to
+ * name nothing in either: `ibm_qradar` was not a profile key and no connector
+ * declared it, so strict mode rejected it and lenient mode minted a vendor
+ * called "ibm_qradar" — a second alert source for the QRadar deployment
+ * `qradar` already fed.
+ *
+ * Six were the same product under a longer name and now fold onto the declared
+ * id through `connectorTypeCanonical`. Four named nothing the platform ingests
+ * and are gone: `vectra_ai` (no Vectra connector exists), `teams` (a ChatOps
+ * destination, not a source), and `custom_webhook` / `http_pull` / `kafka`
+ * (transports — the webhook path is the tenant inbox, which keys off a template
+ * id and never sets `connector_type`).
+ *
+ * `scripts/check_connector_profiles.py` gates every member of this union
+ * against the normalizer and the connector registry, in both directions.
+ */
 export type ConnectorType =
   | "crowdstrike_falcon"
   | "microsoft_sentinel"
@@ -12,7 +33,6 @@ export type ConnectorType =
   | "palo_alto_cortex"
   | "google_chronicle"
   | "ibm_qradar"
-  | "vectra_ai"
   | "darktrace"
   | "tenable_io"
   | "qualys"
@@ -20,11 +40,7 @@ export type ConnectorType =
   | "servicenow"
   | "pagerduty"
   | "slack"
-  | "teams"
-  | "custom_webhook"
-  | "syslog"
-  | "http_pull"
-  | "kafka";
+  | "syslog";
 
 export type ConnectorCategory =
   | "edr"

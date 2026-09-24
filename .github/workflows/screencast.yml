@@ -56,7 +56,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          # The root workspace lockfile. `apps/web/pnpm-lock.yaml` does not
+          # exist — this is a pnpm workspace with one lockfile at the root —
+          # and setup-node hard-fails with "Some specified paths were not
+          # resolved" when the cache path matches nothing, so this workflow
+          # could never get past step three. It is workflow_dispatch-only, so
+          # no scheduled run ever exercised it. Every other workflow in the
+          # repo already points here.
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install web dependencies
         working-directory: apps/web

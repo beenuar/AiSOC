@@ -141,3 +141,38 @@ def test_an_absent_compliance_page_is_not_a_failure(tree: Path) -> None:
     """A partial checkout must skip the check, not fail it."""
     (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
     assert _load_gates(tree).gate_readme_figures() == []
+
+
+# The matrix's own Summary block. This gate compared every prose restatement
+# elsewhere against the rows and never the document doing the claiming, so the
+# summary read "GATED: 108" against 109 counted rows and CI stayed green — the
+# one-directional shape the matrix file's own counting note warns about.
+STALE_SUMMARY = MATRIX + "\n## Summary\n\n- GATED: 7\n- PARTIAL: 1\n- NO GATE: 0\n"
+CURRENT_SUMMARY = MATRIX + "\n## Summary\n\n- GATED: 2\n- PARTIAL: 1\n- NO GATE: 0\n"
+
+
+def test_matrix_summary_disagreeing_with_its_own_rows_fails(tree: Path) -> None:
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    (tree / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md").write_text(STALE_SUMMARY)
+
+    failures = _load_gates(tree).gate_readme_figures()
+    assert len(failures) == 1, failures
+    assert "CLAIM_TO_GATE_MATRIX.md" in failures[0].detail
+    assert "GATED: 7" in failures[0].detail
+    assert "2 GATED rows" in failures[0].detail
+
+
+def test_matrix_summary_matching_its_own_rows_passes(tree: Path) -> None:
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    (tree / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md").write_text(CURRENT_SUMMARY)
+    assert _load_gates(tree).gate_readme_figures() == []
+
+
+def test_a_stale_partial_count_in_the_summary_also_fails(tree: Path) -> None:
+    """Both figures, not just the one that happened to drift first."""
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    (tree / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md").write_text(MATRIX + "\n## Summary\n\n- GATED: 2\n- PARTIAL: 4\n")
+
+    failures = _load_gates(tree).gate_readme_figures()
+    assert len(failures) == 1, failures
+    assert "PARTIAL: 4" in failures[0].detail

@@ -429,6 +429,40 @@ var connectorTypeAliases = map[string]string{
 	"okta":        "okta_system_log",
 }
 
+// connectorTypeCanonical folds an alternate spelling of a connector type onto
+// the identifier services/connectors declares, before anything keys off it.
+//
+// connectorTypeAliases above solves the opposite direction: a declared id that
+// needs to reach a longer-named profile. This map exists because a third name
+// space — packages/types' ConnectorType union, the console's older vocabulary —
+// spells several sources differently from the connector that ingests them, and
+// those spellings reached nothing at all. `ibm_qradar` is not a profile key and
+// no connector declares it, so in strict mode the normalizer rejected it and in
+// lenient mode it produced a vendor named "ibm_qradar" — a second, parallel
+// alert source for the same QRadar deployment that `qradar` already feeds.
+//
+// Each entry names the same product on both sides, which is what makes folding
+// them safe: the connector's own connector_name is the long form (`qradar` is
+// "IBM QRadar", `chronicle` is "Google Chronicle", `syslog_cef` is
+// "Syslog / CEF"). Resolution happens once, at the top of Normalize, so the
+// profile lookup, the alias map, canonicalClassByConnector and the product
+// identity on the canonical path all agree on one name.
+var connectorTypeCanonical = map[string]string{
+	"google_chronicle": "chronicle",
+	"ibm_qradar":       "qradar",
+	"palo_alto_cortex": "cortex_xdr",
+	"slack":            "slack_audit",
+	"syslog":           "syslog_cef",
+}
+
+// canonicalConnectorType resolves an alternate spelling to the declared id.
+func canonicalConnectorType(connectorType string) string {
+	if canonical, ok := connectorTypeCanonical[connectorType]; ok {
+		return canonical
+	}
+	return connectorType
+}
+
 // canonicalClassByConnector overrides the default Security Finding class for
 // connector types whose canonical alerts are better modeled as another OCSF
 // class (identity providers -> Authentication 3002).
@@ -512,16 +546,21 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		return nil, fmt.Errorf("tenant_id is required")
 	}
 
+	// One name from here down. An alternate spelling that reached nothing is
+	// folded onto the declared id before the profile lookup, the alias map or
+	// the canonical class override get to disagree about which source this is.
+	connectorType := canonicalConnectorType(raw.ConnectorType)
+
 	var profile connectorProfile
 	isCanonical := isCanonicalEnvelope(raw.Payload)
 	if isCanonical {
 		// Connector-normalized envelope: map its canonical fields directly.
-		profile = canonicalProfile(raw.ConnectorType)
+		profile = canonicalProfile(connectorType)
 	} else {
 		var ok bool
-		profile, ok = connectorProfiles[raw.ConnectorType]
+		profile, ok = connectorProfiles[connectorType]
 		if !ok {
-			if aliased, isAlias := connectorTypeAliases[raw.ConnectorType]; isAlias {
+			if aliased, isAlias := connectorTypeAliases[connectorType]; isAlias {
 				profile, ok = connectorProfiles[aliased]
 			}
 		}
@@ -533,7 +572,7 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 			// splunk_enterprise, which mis-attributed every profile-less
 			// connector to Splunk and — because that profile is category 4
 			// with an empty severity map — made its events unpromotable.
-			profile = genericProfile(raw.ConnectorType)
+			profile = genericProfile(connectorType)
 			log.Warn().Str("connector_type", raw.ConnectorType).Msg("Using generic profile for unknown connector")
 		}
 	}

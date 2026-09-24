@@ -77,6 +77,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`scripts/check_gate_coverage.py` — the gate on the gates.** The most
+  expensive recurring defect in this repository is a mechanism that exists, is
+  tested, and has no caller on the path that needs it. A gate is the worst case
+  of that shape, because a gate *is* its caller: a conformance script no
+  workflow runs cannot fail, which is indistinguishable from no gate at all,
+  while its presence in `scripts/` advertises coverage to everyone who reads
+  the tree. Finding them had meant tracing the call graph by hand.
+
+  This resolves the graph mechanically instead of reading workflow names,
+  because a check can be reached four different ways and only one of them is
+  obvious: a workflow can run it directly, through a `make` recipe, through
+  another script it already runs, or through a pytest suite it collects.
+  `connector_conformance.py` is reached *only* by that last route — the
+  connectors matrix in `ci.yml` collects `test_conformance.py`, which imports
+  the script and asserts the published matrix is current — so calling it
+  orphaned, as an earlier pass did, would have been wrong. The inverse
+  direction is checked too: a workflow step naming a `scripts/` path that does
+  not exist cannot do what its name says.
+
+  Wired into `ci.yml` with its `--self-test` running first, which injects an
+  unreachable check, a check that loses its only workflow, a dangling workflow
+  path and both ratchet-drift directions, and additionally asserts the
+  resolver *discriminates* rather than returning "reached" for everything —
+  the failure mode that would make every other case pass vacuously. Current
+  state: **42 checks, 42 reachable, 0 on the deliberately-unwired ratchet.**
+
+  Three checks were genuinely orphaned and are now wired. Each passed on first
+  real run, which is the quiet part: they had been correct and unheard.
+
+  - `check_store_migrations.py` → `ci.yml`. Neo4j, ClickHouse and Qdrant all
+    create-if-absent, so a schema change lands on a fresh deployment and
+    silently does not land on an existing one. The gate asserts each store has
+    a runner, that something on the startup path calls it, and that migration
+    ids stay ordered and unique.
+  - `check_published_packages.py` → `readme-gates.yml`, on the daily cron
+    alongside `published-onramp`, with `--require-network` so a runner that
+    cannot reach a registry says so instead of reporting a clean result.
+    `RELEASES.md` cited this script as the reason the README's "Ready,
+    unpublished" claim cannot go stale; nothing ran it.
+  - `sync_vendored_redactor.py --check` → `ci.yml`. The only one of five
+    vendored mirrors with no drift gate. A redactor copy that drifts strips a
+    different set on one side of the wire than the other.
+
 - **`scripts/check_connector_profiles.py` — a connector-type drift gate that
   reads in both directions.** Nothing compared the profile keys in
   `services/ingest/internal/normalizer/normalizer.go` against the identifiers
@@ -383,6 +426,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **The connector-type ratchet is at zero: ten `ConnectorType` union members
+  named nothing the normalizer could resolve.** They were the console's older
+  vocabulary, a third name space beside the ids `services/connectors` declares
+  and the keys `connectorProfiles` uses, and they were recorded rather than
+  fixed because the file was shared with console work in flight.
+
+  Six denote a source the platform really does ingest, under a longer name,
+  and now fold onto the declared id through a new `connectorTypeCanonical` map
+  applied once at the top of `Normalize` — so the profile lookup, the alias
+  map, `canonicalClassByConnector` and the product identity on the canonical
+  path all agree on one name. The connectors' own `connector_name` values are
+  what make the fold safe rather than a guess: `qradar` *is* "IBM QRadar",
+  `chronicle` *is* "Google Chronicle", `syslog_cef` *is* "Syslog / CEF".
+
+  - `ibm_qradar` → `qradar`. `services/fusion/alert_sink.py` and
+    `services/actions/executors/siem.py` already aliased exactly this pair.
+  - `google_chronicle` → `chronicle`
+  - `palo_alto_cortex` → `cortex_xdr` (whose description reads "Palo Alto
+    Cortex XDR incidents via the public REST API"; XSIAM is a distinct later
+    product and stays reachable under `cortex_xsiam`)
+  - `slack` → `slack_audit`, the only Slack data the platform ingests
+  - `syslog` → `syslog_cef`
+
+  Four denote nothing the platform ingests and are removed from the union:
+  `vectra_ai` (no Vectra connector exists), `teams` (a ChatOps destination,
+  not a source) and `custom_webhook` / `http_pull` / `kafka` (transports — the
+  webhook path is the tenant inbox, which keys off a template id and never
+  sets `connector_type`). Nothing in the tree referenced any of them;
+  `ConnectorType` has no consumer outside its own file.
+
+  What this cost while it stood: an event tagged `ibm_qradar` reached no
+  profile and no connector, so strict mode rejected it outright and lenient
+  mode minted `OcsfProduct{Name: "ibm_qradar"}` — a second, parallel alert
+  source for the same QRadar deployment `qradar` already fed. The new Go tests
+  assert the two spellings produce one event (same product, class, category
+  and severity, with `critical` staying the fifth tier and category 2 so
+  `should_promote()` has no severity floor to clear), and that the fold cannot
+  be used to smuggle an unknown type past strict mode. A third test reads the
+  connector ids out of `services/connectors/app/connectors/` rather than
+  hardcoding them, and fails on an empty read instead of passing.
+
+- **`wet-eval.yml` reported success on eight consecutive weekly runs while
+  evaluating nothing.** The preflight step exited 0, every subsequent step was
+  `if: should_run == 'True'` and skipped, the notice step succeeded, and the
+  job went green. A green check that means "I did not run" is worse than a red
+  one: it is the only signal a reader gets and it says the opposite of the
+  truth. Preflight is now its own job and the run is gated on
+  `needs.preflight.outputs.should_run`, so with no funded key the benchmark
+  job reports as **skipped** — visibly distinct from success in the checks
+  list — and the preflight writes to the run summary that the published
+  numbers were not refreshed. Failing outright was the alternative and is
+  wrong here: a fork cannot configure the secret, and a weekly red cross
+  nobody can clear trains people to ignore the page. Staleness of the
+  published numbers is separately gated and does fail closed
+  (`scripts/check_scoreboard.py`, 45 days).
+
+- **The claim-gate figures gate checked every restatement of the tally except
+  the document making the claim.** `readme_gates.py` compared the README and
+  `evidence-pack.md` against the matrix rows and never compared the matrix's
+  own Summary block, so `docs/audit/CLAIM_TO_GATE_MATRIX.md` summarised
+  "GATED: 108" against 109 counted rows and every check in the repository
+  passed. The file even carries a counting note about this exact class of
+  error; it recurred because the gate written afterwards pointed outward only.
+  The matrix is now the first source checked, the bullet-list form its summary
+  uses is matched (the previous pattern needed both figures on one line and
+  silently matched nothing there), and three cases in
+  `tests/test_readme_figures_gate.py` pin it. The stale count is corrected and
+  the tally is **122 rows — 113 GATED, 9 PARTIAL, 0 NO GATE**, recomputed with
+  the script rather than typed.
+
+- **`screencast.yml` could never get past its third step.** Its
+  `cache-dependency-path` named `apps/web/pnpm-lock.yaml`, which does not
+  exist — this is a pnpm workspace with one lockfile at the root — and
+  `setup-node` hard-fails when the cache path matches nothing. Every other
+  workflow in the repo already pointed at the root lockfile; being
+  `workflow_dispatch`-only meant no scheduled run ever exercised it.
 
 - **An event ingested under a connector type with no profile became an alert
   with no host, no user and no source IP.** `_canonicalAliases` in

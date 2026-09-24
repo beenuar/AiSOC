@@ -1,10 +1,53 @@
 package normalizer
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 )
+
+// connectorsDirRel is services/connectors/app/connectors relative to this
+// package. Resolving it from the test's own location rather than a cwd
+// assumption keeps `go test ./...` from a different directory honest.
+const connectorsDirRel = "../../../connectors/app/connectors"
+
+var connectorIDRe = regexp.MustCompile(`(?m)^\s*connector_id(?:\s*:\s*\w+)?\s*=\s*"([^"]+)"`)
+
+// declaredConnectorIDs reads the connector ids services/connectors actually
+// declares. A hardcoded list here would drift from the registry and then agree
+// with itself forever, which is the failure this whole area keeps producing.
+func declaredConnectorIDs(t *testing.T) map[string]struct{} {
+	t.Helper()
+	entries, err := os.ReadDir(connectorsDirRel)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", connectorsDirRel, err)
+	}
+	ids := map[string]struct{}{}
+	files := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || filepath.Ext(name) != ".py" || name == "__init__.py" || name == "base.py" {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(connectorsDirRel, name))
+		if err != nil {
+			t.Fatalf("cannot read %s: %v", name, err)
+		}
+		files++
+		for _, m := range connectorIDRe.FindAllSubmatch(src, -1) {
+			ids[string(m[1])] = struct{}{}
+		}
+	}
+	// An empty read is a moved directory, not a clean tree.
+	if len(ids) == 0 {
+		t.Fatalf("parsed zero connector ids from %s (%d files) — refusing to pass on an empty read", connectorsDirRel, files)
+	}
+	t.Logf("read %d connector ids from %d files under %s", len(ids), files, connectorsDirRel)
+	return ids
+}
 
 func newTestNormalizer() *Normalizer {
 	return &Normalizer{cfg: &config.Config{NormalizerMode: "strict"}, version: "test"}
@@ -652,6 +695,128 @@ func TestConnectorTypeAliasesPointAtRealProfiles(t *testing.T) {
 		}
 		if _, ok := connectorProfiles[alias]; ok {
 			t.Errorf("alias %q shadows its own profile entry; the alias is dead code", alias)
+		}
+	}
+}
+
+// The console's older vocabulary must produce the same event as the declared
+// id, not a parallel one. `ibm_qradar` reached no profile and no connector, so
+// strict mode rejected it and lenient mode invented a vendor named after the
+// spelling — two alert sources for one QRadar deployment.
+func TestConsoleVocabularyNormalizesAsTheDeclaredConnector(t *testing.T) {
+	for alternate, declared := range connectorTypeCanonical {
+		t.Run(alternate, func(t *testing.T) {
+			payload := func() map[string]interface{} {
+				return map[string]interface{}{
+					"severity": "critical",
+					"title":    "Lateral movement detected",
+					"host":     "WIN-FIN-01",
+					"user":     "alice",
+					"src_ip":   "10.20.30.40",
+				}
+			}
+			n := newLenientNormalizer()
+			base := &RawEvent{
+				ConnectorID: "c-1",
+				TenantID:    "11111111-1111-1111-1111-111111111111",
+				ReceivedAt:  "2026-09-23T00:00:00Z",
+			}
+
+			viaAlternate := *base
+			viaAlternate.ConnectorType = alternate
+			viaAlternate.Payload = payload()
+			gotAlt, err := n.Normalize(&viaAlternate)
+			if err != nil {
+				t.Fatalf("Normalize(%q) returned error: %v", alternate, err)
+			}
+
+			viaDeclared := *base
+			viaDeclared.ConnectorType = declared
+			viaDeclared.Payload = payload()
+			gotDeclared, err := n.Normalize(&viaDeclared)
+			if err != nil {
+				t.Fatalf("Normalize(%q) returned error: %v", declared, err)
+			}
+
+			altMeta := gotAlt.OcsfEvent["metadata"].(map[string]interface{})
+			decMeta := gotDeclared.OcsfEvent["metadata"].(map[string]interface{})
+			altProduct := altMeta["product"].(OcsfProduct)
+			decProduct := decMeta["product"].(OcsfProduct)
+			if altProduct != decProduct {
+				t.Errorf("product %+v via %q != %+v via %q — the two spellings are still two sources",
+					altProduct, alternate, decProduct, declared)
+			}
+			for _, field := range []string{"class_uid", "class_name", "category_uid", "severity_id"} {
+				if gotAlt.OcsfEvent[field] != gotDeclared.OcsfEvent[field] {
+					t.Errorf("%s = %v via %q, %v via %q", field,
+						gotAlt.OcsfEvent[field], alternate, gotDeclared.OcsfEvent[field], declared)
+				}
+			}
+			// critical is the fifth tier on both paths, never collapsed.
+			if gotAlt.OcsfEvent["severity_id"] != 5 {
+				t.Errorf("severity_id = %v via %q, want 5 for critical", gotAlt.OcsfEvent["severity_id"], alternate)
+			}
+			// Category 2 is what should_promote() requires without a severity
+			// floor; a connector whose events cannot promote is the defect.
+			if gotAlt.OcsfEvent["category_uid"] != 2 {
+				t.Errorf("category_uid = %v via %q, want 2", gotAlt.OcsfEvent["category_uid"], alternate)
+			}
+		})
+	}
+}
+
+// Strict mode is the other half. An alternate spelling that folds onto a real
+// connector must be accepted; one that folds onto nothing must still be
+// rejected, or the map becomes a way to smuggle unknown types past strict mode.
+func TestConsoleVocabularyIsAcceptedInStrictModeOnlyWhenItResolves(t *testing.T) {
+	strict := newTestNormalizer()
+	for alternate := range connectorTypeCanonical {
+		ev, err := strict.Normalize(&RawEvent{
+			ConnectorID:   "c-1",
+			ConnectorType: alternate,
+			TenantID:      "11111111-1111-1111-1111-111111111111",
+			ReceivedAt:    "2026-09-23T00:00:00Z",
+			// Canonical envelope: what the connector itself emits.
+			Payload: map[string]interface{}{
+				"source":    "vendor",
+				"raw_event": map[string]interface{}{"id": "1"},
+				"severity":  "high",
+				"title":     "t",
+			},
+		})
+		if err != nil {
+			t.Errorf("strict mode rejected %q, which folds onto a declared connector: %v", alternate, err)
+			continue
+		}
+		if ev.OcsfEvent["category_uid"] != 2 {
+			t.Errorf("%q: category_uid = %v, want 2", alternate, ev.OcsfEvent["category_uid"])
+		}
+	}
+	if _, err := strict.Normalize(&RawEvent{
+		ConnectorID:   "c-1",
+		ConnectorType: "not_a_real_connector",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload:       map[string]interface{}{"severity": "high"},
+	}); err == nil {
+		t.Error("strict mode accepted an unknown connector type; the canonical map must not widen it")
+	}
+}
+
+// The fold must land on something real. A target nobody declares reintroduces
+// the defect one level down, and a source that already has a profile would
+// silently take precedence over the vendor field map it was meant to reach.
+func TestConnectorTypeCanonicalTargetsAreDeclaredAndUnshadowed(t *testing.T) {
+	declared := declaredConnectorIDs(t)
+	for alternate, target := range connectorTypeCanonical {
+		if _, ok := declared[target]; !ok {
+			t.Errorf("%q folds onto %q, which no connector in services/connectors declares", alternate, target)
+		}
+		if _, ok := connectorProfiles[alternate]; ok {
+			t.Errorf("%q has its own profile; folding it onto %q would never fire", alternate, target)
+		}
+		if _, ok := connectorTypeAliases[alternate]; ok {
+			t.Errorf("%q is in both connectorTypeAliases and connectorTypeCanonical; one of them is dead", alternate)
 		}
 	}
 }
