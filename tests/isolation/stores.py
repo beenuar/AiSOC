@@ -21,7 +21,9 @@ STORES: tuple[StoreCoverage, ...] = (
     StoreCoverage(
         "postgres",
         "rls",
-        "migrations/002_rls.sql + query-layer WHERE tenant_id; services/api/tests/test_*_tenant_isolation.py",
+        "migrations/002_rls.sql + query-layer WHERE tenant_id; services/api/tests/test_*_tenant_isolation.py; "
+        "deliberate cross-tenant reads (MSSP portfolio) resolve their tenant list through org_scope and are "
+        "replayed against live Postgres by test_mssp_portfolio_isolation.py (integration.yml)",
     ),
     StoreCoverage(
         "qdrant",
@@ -48,7 +50,8 @@ STORES: tuple[StoreCoverage, ...] = (
     StoreCoverage(
         "kafka",
         "container_gated",
-        "per-tenant envelope filter (graph_ws); live-replay test_live_stores.py::test_kafka_subscriber_A_never_receives_B (isolation-live.yml)",
+        "per-tenant envelope filter (graph_ws); live-replay "
+        "test_live_stores.py::test_kafka_subscriber_A_never_receives_B (isolation-live.yml)",
     ),
 )
 

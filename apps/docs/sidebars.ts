@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
       label: "Core Concepts",
       items: [
         "concepts/capabilities",
+        "concepts/multi-tenancy",
         "concepts/cases",
         "concepts/playbooks",
         "concepts/detections",
