@@ -30,8 +30,8 @@ from typing import Any
 
 import structlog
 
-from app.clients.factories import _entra_client, _okta_client
-from app.executors.endpoint import _cs_client
+from app.clients.factories import _entra_client, _mde_client, _okta_client
+from app.executors.endpoint import INVESTIGATION_PACKAGE_ACTION, _cs_client
 from app.executors.siem import _ack_vendor, _qradar_client, _splunk_client
 from app.models.action import ActionType
 from app.services.disposition_writeback import WritebackAction, plan_writeback
@@ -146,6 +146,80 @@ async def _probe_enable_user(target: str, params: dict[str, Any]) -> bool | None
     """
     blocked = await _probe_disable_user(target, params)
     return None if blocked is None else not blocked
+
+
+#: MDE machine-action states. Only one means the work finished; three mean it
+#: definitively did not; the rest mean it is still going.
+_MDE_ACTION_SUCCEEDED = "succeeded"
+_MDE_ACTION_TERMINAL_FAILURES = {"failed", "timeout", "cancelled"}
+
+
+async def _probe_capture_forensics(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm a forensic package actually exists and can be fetched.
+
+    This is the verb where "the API returned 200" is furthest from the truth.
+    Collection is asynchronous: MDE queues a machine action, replies
+    immediately with ``Pending``, and the package appears minutes later or
+    never. An executor reporting that as success tells an analyst the evidence
+    is preserved at exactly the moment they stop looking for it.
+
+    So VERIFIED requires two things, not one: the machine action reached
+    ``Succeeded`` *and* Defender will hand over a download URI for it. A
+    collection that claims to have finished and has nothing to download is a
+    failure, not a success — reading only the status would certify it.
+
+    Three outcomes, all of them real:
+
+    * ``Succeeded`` with a package URI → True.
+    * ``Failed`` / ``TimeOut`` / ``Cancelled`` → False. A genuine alarm: the
+      responder believes they hold evidence and they do not.
+    * ``Pending`` / ``InProgress`` → None. Not finished is not the same fact
+      as not happening, and the immediate post-dispatch probe will almost
+      always land here.
+
+    Which action it reads
+    ---------------------
+    ``mde_action_id`` in params is used when present and is exact — the
+    executor returns it, so a later re-verification can name the acquisition
+    it means. Without one the probe falls back to the newest
+    ``CollectInvestigationPackage`` action against that machine, which is this
+    one unless a second collection was started on the same host in the same
+    window. That ambiguity is narrow but real, so the action id is not
+    swallowed: it is logged, and a caller who needs certainty passes it in.
+    """
+    mde = _mde_client(params)
+    if mde is None:
+        return None
+
+    action_id = params.get("mde_action_id")
+    if not action_id:
+        machine = await mde.find_machine(target)
+        if not machine or not machine.get("id"):
+            # The host cannot be resolved, so nothing can be read back. Not a
+            # failed acquisition — a host we cannot look at.
+            return None
+        actions = await mde.list_machine_actions(str(machine["id"]), INVESTIGATION_PACKAGE_ACTION, limit=5)
+        if not actions:
+            return None
+        action_id = actions[0].get("id")
+        if not action_id:
+            return None
+
+    action = await mde.get_machine_action(str(action_id))
+    if not action:
+        return None
+
+    status = str(action.get("status") or "").lower()
+    logger.info("verification.capture_forensics.read", target=target, mde_action_id=str(action_id), mde_status=status)
+
+    if status in _MDE_ACTION_TERMINAL_FAILURES:
+        return False
+    if status != _MDE_ACTION_SUCCEEDED:
+        return None
+
+    # Succeeded. Now the part that makes this a check rather than a restatement
+    # of the vendor's own optimism: ask for the artefact.
+    return bool(await mde.get_investigation_package_uri(str(action_id)))
 
 
 async def _probe_allow_ip(target: str, params: dict[str, Any]) -> bool | None:
@@ -265,6 +339,7 @@ _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.BLOCK_IP: _probe_block_ip,
     ActionType.DISABLE_USER: _probe_disable_user,
     ActionType.ALLOW_IP: _probe_allow_ip,
+    ActionType.CAPTURE_FORENSICS: _probe_capture_forensics,
     ActionType.UPDATE_ALERT_DISPOSITION: _probe_alert_disposition,
     ActionType.ACK_ALERT: _probe_ack_alert,
     ActionType.SUPPRESS_ALERT: _probe_suppress_alert,

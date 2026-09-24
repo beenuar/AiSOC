@@ -177,6 +177,64 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
             "precisely because its blast radius is not knowable in advance."
         ),
     ),
+    "capture_forensics": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Collects an evidence package from one host. The estate is "
+            "unchanged, which is why the impact matches run_av_scan: some "
+            "endpoint CPU and IO, and it finishes on its own. "
+            "Analyst-gated rather than automatic on the same reasoning that "
+            "separated suppress_alert from update_alert_disposition — the "
+            "question is what bounds the verb, not how loud it is. The "
+            "writeback is bounded by a disposition mapping that refuses to "
+            "close a true positive; this one has no bound at all. It collects "
+            "whatever the vendor package contains, from whichever host it is "
+            "pointed at, and the result is a copy of somebody's endpoint — "
+            "processes, registry, event logs, temp files — in a vendor cloud "
+            "behind a download URI. Pointed at the wrong host that is a "
+            "data-handling event nobody can take back, which is also why the "
+            "reversal is manual: an operator deletes the package from the "
+            "console, the copy having already been made. "
+            "The probe is the reason this verb needed one at all: acquisition "
+            "is asynchronous, so the API response is emphatically not the "
+            "confirmation — it says a machine action was queued, and the "
+            "package appears minutes later or never. The probe reads that "
+            "machine action's terminal state and then asks for the download "
+            "URI, so VERIFIED means a package exists and can be fetched. "
+            "Still running answers indeterminate rather than either guess."
+        ),
+    ),
+    # ── Human-in-the-loop ──────────────────────────────────────────────────
+    "chatops_verify": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "There is no vendor state to read back. What this action produces "
+            "is a delivered prompt, and the transport's own response is the "
+            "confirmation of delivery — the case the probe rule waives below "
+            "MODERATE. The thing a probe might want to check, whether the "
+            "person answered, is not a state to poll: the answer arrives as a "
+            "signed callback, and until it does the action reports "
+            "awaiting_completion rather than success."
+        ),
+        note=(
+            "Asks the affected user 'was this you?' and routes the signed "
+            "answer onto the case. Shares notify's impact — a message cannot "
+            "be unsent — but not its approval tier, because notify addresses "
+            "a SOC channel and this addresses the account under "
+            "investigation. Sent automatically on a true positive it tells an "
+            "attacker they have been detected, and the verb has no way to "
+            "know whether the person it is asking is the suspect. That "
+            "missing bound is what makes it analyst-gated."
+        ),
+    ),
     # ── Identity ───────────────────────────────────────────────────────────
     "disable_user": CapabilityContract(
         impact=ActionImpact.HIGH,

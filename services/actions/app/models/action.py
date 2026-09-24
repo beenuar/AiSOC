@@ -21,10 +21,28 @@ class ActionType(str, Enum):
     KILL_PROCESS = "kill_process"
     QUARANTINE_FILE = "quarantine_file"
     CAPTURE_FORENSICS = "capture_forensics"
-    ADD_IOC_TO_BLOCKLIST = "add_ioc_to_blocklist"
     NOTIFY_SLACK = "notify_slack"
     CREATE_TICKET = "create_ticket"
-    RUN_PLAYBOOK = "run_playbook"
+    # `add_ioc_to_blocklist` and `run_playbook` were here and had no executor
+    # behind either of them, so the API accepted both and answered "No
+    # executor found for action type" — which reads as a broken deployment
+    # rather than a verb nobody built. Neither was a missing implementation:
+    #
+    #   add_ioc_to_blocklist  a second name for `block_ioc`, which has a
+    #                         Defender arm, a contract, an adapter and a place
+    #                         in the vocabulary. Two names for one verb means
+    #                         half the callers reach the dead one.
+    #   run_playbook          playbook execution lives in services/agents and
+    #                         always has. It is also the wrong shape for this
+    #                         registry: the contract belongs to the verb, and
+    #                         "run an arbitrary bundle of verbs" has no
+    #                         verb-level impact, reversal or probe. Approving
+    #                         it once would execute whatever steps it contains
+    #                         without each one meeting its own contract, which
+    #                         is precisely what the per-capability contract
+    #                         exists to prevent. Playbooks dispatch step by
+    #                         step through this service instead, so every step
+    #                         is graded on the way past.
     # ChatOps user verification: outbound interactive Slack/Teams prompt
     # asking the affected user to confirm or deny an event ("Was this you?").
     # The response is HMAC-validated and routed back into the case timeline.
@@ -85,10 +103,8 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.KILL_PROCESS: BlastRadius.MEDIUM,
     ActionType.QUARANTINE_FILE: BlastRadius.LOW,
     ActionType.CAPTURE_FORENSICS: BlastRadius.LOW,
-    ActionType.ADD_IOC_TO_BLOCKLIST: BlastRadius.LOW,
     ActionType.NOTIFY_SLACK: BlastRadius.MINIMAL,
     ActionType.CREATE_TICKET: BlastRadius.MINIMAL,
-    ActionType.RUN_PLAYBOOK: BlastRadius.MEDIUM,
     ActionType.CHATOPS_VERIFY: BlastRadius.MINIMAL,
     # WS-E live vendor action blast radii
     ActionType.RUN_SCRIPT: BlastRadius.HIGH,

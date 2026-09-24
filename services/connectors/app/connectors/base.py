@@ -146,6 +146,18 @@ class Capability(str, Enum):
     ACK_ALERT = "ack_alert"
     SUPPRESS_ALERT = "suppress_alert"
 
+    # EVIDENCE — acquire artefacts from a host before they age out.
+    # The investigation agent proposes this on the C2 / exfiltration path and
+    # nothing implemented it, so the product recommended an acquisition it
+    # could not perform at the point where evidence matters most.
+    CAPTURE_FORENSICS = "capture_forensics"
+
+    # HUMAN-IN-THE-LOOP — ask the affected person a question and route the
+    # answer back onto the case. Distinct from NOTIFY: notify tells a SOC
+    # channel something, this asks an end user to confirm or deny, and the
+    # action is not finished until they answer.
+    CHATOPS_VERIFY = "chatops_verify"
+
     # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     PUSH_CASE = "push_case"
     PUSH_STATUS = "push_status"

@@ -194,11 +194,17 @@ connector — Slack, Teams, PagerDuty, Opsgenie, or an ITSM connector for
 ticket creation — and has opted into L1 explicitly via the
 `/api/v1/remediation/config` endpoint.
 
-**What is auto-executed.** `notify_slack`, `create_ticket`,
-`chatops_verify`, `search_siem`. These are the `MINIMAL`-blast-radius
-actions defined in `ACTION_BLAST_RADIUS`.
+**What is auto-executed.** `notify_slack`, `create_ticket`, `search_siem`.
+These are the `MINIMAL`-blast-radius actions defined in
+`ACTION_BLAST_RADIUS`.
 
-**What is gated.** Every `LOW`, `MEDIUM`, and `HIGH` action is queued.
+**What is gated.** Every `LOW`, `MEDIUM`, and `HIGH` action is queued, and so
+is `chatops_verify` despite its MINIMAL blast radius. Its capability contract
+is analyst-gated, and a contract can raise the requirement a tier would allow
+and never lower it. The verb messages the account under investigation rather
+than a SOC channel: sent automatically on a true positive it tells an attacker
+they have been detected, and it has no way to know whether the person it is
+asking is the suspect.
 
 **MTTR target.** Time-to-notify drops from minutes to seconds; time-to-
 contain is still bounded by human review. For the most common case —
@@ -231,10 +237,15 @@ false-positive rate. The rollback semantics in
 accepted.
 
 **What is auto-executed.** Everything at L1 plus: `quarantine_file`,
-`capture_forensics`, `add_ioc_to_blocklist`, `run_av_scan`,
-`create_notable_event`.
+`run_av_scan`, `create_notable_event`.
 
-**What is gated.** Everything `MEDIUM` and above is queued.
+**What is gated.** Everything `MEDIUM` and above is queued, and so is
+`capture_forensics` despite its LOW blast radius. The tier ladder is the
+blast-radius axis; a capability contract can raise the requirement a tier
+would allow and never lower it. Evidence acquisition is analyst-gated because
+nothing bounds what it collects or from whom — the result is a copy of
+somebody's endpoint in a vendor cloud, and pointed at the wrong host that is
+not undoable.
 
 **MTTR target.** MTTR for the auto-execution path drops to single-digit
 minutes end-to-end. The bulk of AiSOC's published benchmark numbers come
@@ -271,9 +282,10 @@ firewall rule changes are auditable on the firewall, password resets are
 auditable in the IdP audit log).
 
 **What is auto-executed.** Everything at L2 plus: `block_ip`,
-`block_domain`, `kill_process`, `reset_password`, `force_mfa`,
-`run_playbook`, `allow_ip`, `block_ioc`, `sync_detection_rule`,
-`update_watcher`.
+`block_domain`, `kill_process`, `reset_password`, `force_mfa`, `allow_ip`,
+`block_ioc`, `sync_detection_rule`, `update_watcher`. A playbook is not an
+action here: it is a sequence of these verbs, dispatched step by step so each
+step meets its own contract rather than being approved wholesale.
 
 **What is gated.** Everything `HIGH` is queued.
 

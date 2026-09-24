@@ -122,11 +122,64 @@ def test_exemption_lists_only_ever_shrink() -> None:
         assert len(reason.strip()) > 40
 
 
-def test_every_action_type_has_an_executor_or_a_recorded_reason() -> None:
-    from check_action_contract import KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR
+def test_both_exemption_baselines_are_empty() -> None:
+    """The ratchet's floor, asserted rather than assumed.
 
-    missing = {at.value for at in ActionType if at not in EXECUTOR_REGISTRY}
-    assert missing <= set(KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR)
+    Both lists held entries and both are now empty: ``capture_forensics``
+    gained a Defender arm, ``chatops_verify`` gained the status its honest
+    result needed, and ``add_ioc_to_blocklist`` / ``run_playbook`` left the
+    ``ActionType`` surface because neither had an implementation path. The
+    previous form of this test compared the lists against reality and passed
+    vacuously once they were empty, so it could not notice a new entry being
+    added. This can: a verb may only be exempted by editing this assertion,
+    which is a reviewable act rather than a quiet append.
+    """
+    from check_action_contract import (
+        KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR,
+        KNOWN_UNGOVERNED_EXECUTORS,
+    )
+
+    assert KNOWN_UNGOVERNED_EXECUTORS == {}
+    assert KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR == {}
+
+
+def test_every_action_type_has_an_executor() -> None:
+    """No exemptions left, so this is the whole claim.
+
+    The API accepts any ``ActionType`` and then answers "No executor found for
+    action type" for one with nothing behind it, which reads as a broken
+    deployment rather than a verb nobody built.
+    """
+    missing = sorted(at.value for at in ActionType if at not in EXECUTOR_REGISTRY)
+    assert missing == [], f"{missing} are accepted by the action API and dispatch to nothing"
+
+
+def test_every_legacy_executor_is_reachable_through_governed_dispatch() -> None:
+    """Likewise: nothing is reachable only through the ungoverned route."""
+    reachable = {cls._legacy_action_type for cls in BRIDGING_ADAPTERS}
+    unreachable = sorted(at.value for at in EXECUTOR_REGISTRY if at not in reachable)
+    assert unreachable == [], f"{unreachable} work and governed dispatch answers executor_not_found for them"
+
+
+def test_the_agent_proposes_only_verbs_this_service_can_execute() -> None:
+    """The fifth registry: what the agent recommends to a human.
+
+    ``investigation_agent`` proposes ``capture_forensics`` on the C2 /
+    exfiltration path with ``requires_approval=True``, and no executor
+    implemented it — so the product raised an approval for evidence
+    acquisition on its most serious incidents and failed on approval. The
+    other five directions compare the actions service against itself; this is
+    the one that compares it against the thing that puts a verb in front of a
+    person.
+    """
+    from check_action_contract import _proposed_action_verbs
+
+    proposed = _proposed_action_verbs()
+    assert proposed, "found no ProposedAction call sites; the parser has drifted from the agents package"
+
+    executable = {action.value for action in EXECUTOR_REGISTRY}
+    dead = {verb: locations for verb, locations in proposed.items() if verb not in executable}
+    assert dead == {}, f"the agent recommends verbs that dispatch to nothing: {dead}"
 
 
 def _run_gate() -> subprocess.CompletedProcess:
@@ -154,6 +207,10 @@ def test_the_gate_passes_on_the_tree_as_committed() -> None:
         ("adapter", "no live-action adapter reaches it"),
         # Remove the contract while the adapter stays.
         ("contract", "no capability contract declares"),
+        # Remove the executor for a verb the agent proposes by name: the
+        # direction that spans two services, and the one capture_forensics
+        # drifted in for as long as it existed.
+        ("agent_proposal", "Implement the verb or stop proposing it"),
     ],
 )
 def test_the_gate_fails_when_drift_is_introduced_in_each_direction(tmp_path: Path, drift: str, expected: str) -> None:
@@ -173,6 +230,15 @@ def test_the_gate_fails_when_drift_is_introduced_in_each_direction(tmp_path: Pat
             "b._BUILTIN_ADAPTERS = tuple(c for c in b._BUILTIN_ADAPTERS if c.capability != 'ack_alert')\n"
         ),
         "contract": "import app.live_actions.capability_contracts as cc\ncc.CAPABILITY_CONTRACTS.pop('ack_alert', None)\n",
+        # The adapter goes too, otherwise direction 5 fires first and the
+        # assertion would pass on the wrong message.
+        "agent_proposal": (
+            "import app.services.executor_registry as er\n"
+            "import app.models.action as ma\n"
+            "import app.live_actions.builtins as b\n"
+            "er.EXECUTOR_REGISTRY.pop(ma.ActionType.CAPTURE_FORENSICS, None)\n"
+            "b._BUILTIN_ADAPTERS = tuple(c for c in b._BUILTIN_ADAPTERS if c.capability != 'capture_forensics')\n"
+        ),
     }[drift]
 
     driver = tmp_path / "drive.py"

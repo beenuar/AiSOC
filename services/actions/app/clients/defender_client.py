@@ -177,6 +177,125 @@ class DefenderClient:
                 "mde_action_id": action.get("id"),
             }
 
+    async def collect_investigation_package(
+        self,
+        hostname: str,
+        comment: str = "AiSOC forensic acquisition",
+    ) -> dict[str, Any]:
+        """Start an investigation-package collection on a machine.
+
+        MDE's investigation package is the one broad forensic acquisition in
+        this client's vendor set: the agent bundles running processes, network
+        connections, registry hives, prefetch, scheduled tasks and event logs
+        and uploads them for download.
+
+        Collection is **asynchronous**. This returns as soon as Defender has
+        queued the machine action, with ``status`` at ``Pending`` — the package
+        does not exist yet. ``get_machine_action`` is how a caller finds out
+        whether it ever did.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            machine = await self._resolve_machine(client, hostname)
+            machine_id = machine["id"]
+
+            resp = await client.post(
+                f"{_MDE_BASE}/machines/{machine_id}/collectInvestigationPackage",
+                headers=self._headers(),
+                json={"Comment": comment},
+            )
+            resp.raise_for_status()
+            action = resp.json()
+            logger.info("mde.collect_investigation_package.queued", machine_id=machine_id, hostname=hostname)
+            return {
+                "success": True,
+                "action": "collect_investigation_package",
+                "machine_id": machine_id,
+                "hostname": hostname,
+                "mde_action_id": action.get("id"),
+                "status": action.get("status"),
+            }
+
+    async def get_machine_action(self, action_id: str) -> dict[str, Any] | None:
+        """Read a machine action's current state.
+
+        The read-back half of every asynchronous MDE action. ``status`` is one
+        of ``Pending`` / ``InProgress`` / ``Succeeded`` / ``Failed`` /
+        ``TimeOut`` / ``Cancelled``; only the third means the work finished.
+
+        Returns ``None`` when the action cannot be read, so a verifier can tell
+        "I could not check" apart from "it failed" — which are different facts
+        and are acted on differently.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_MDE_BASE}/machineactions/{action_id}",
+                headers=self._headers(),
+            )
+            if resp.status_code != 200:
+                logger.warning("mde.get_machine_action.failed", action_id=action_id, status=resp.status_code)
+                return None
+            return resp.json()
+
+    async def list_machine_actions(
+        self,
+        machine_id: str,
+        action_type: str,
+        *,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Machine actions of one type against one machine, newest first.
+
+        Sorted here rather than with ``$orderby`` because the ordering is the
+        part a verifier depends on, and a server-side sort that silently is not
+        applied would hand back the oldest action as if it were the newest.
+
+        Returns an empty list both when there are none and when the read
+        fails — the caller treats "nothing to read back" as indeterminate
+        either way, and the failure is logged so it is not silent.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_MDE_BASE}/machineactions",
+                headers=self._headers(),
+                params={
+                    "$filter": f"machineId eq '{machine_id}' and type eq '{action_type}'",
+                    "$top": max(1, min(limit, 100)),
+                },
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    "mde.list_machine_actions.failed",
+                    machine_id=machine_id,
+                    type=action_type,
+                    status=resp.status_code,
+                )
+                return []
+            actions = resp.json().get("value", [])
+            return sorted(actions, key=lambda a: str(a.get("creationDateTimeUtc") or ""), reverse=True)
+
+    async def get_investigation_package_uri(self, action_id: str) -> str | None:
+        """The download URI for a completed investigation package.
+
+        Defender only issues one once the collection succeeded, which is what
+        makes it usable as evidence that a package exists rather than that a
+        request was accepted. Returns ``None`` while the action is still
+        running or if it never produced a package.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_MDE_BASE}/machineactions/{action_id}/getPackageUri",
+                headers=self._headers(),
+            )
+            if resp.status_code != 200:
+                logger.warning("mde.get_package_uri.unavailable", action_id=action_id, status=resp.status_code)
+                return None
+            uri = resp.json().get("value")
+            return str(uri) if uri else None
+
     async def _resolve_machine(self, client: httpx.AsyncClient, hostname: str) -> dict[str, Any]:
         """Resolve hostname to MDE machine object (with auth already ensured)."""
         resp = await client.get(

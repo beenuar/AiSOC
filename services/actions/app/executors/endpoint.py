@@ -511,6 +511,109 @@ class RunScriptExecutor(BaseExecutor):
         )
 
 
+#: The MDE machine-action type a forensic acquisition produces. Named once so
+#: the executor and the verification probe cannot look for different things.
+INVESTIGATION_PACKAGE_ACTION = "CollectInvestigationPackage"
+
+
+class CaptureForensicsExecutor(BaseExecutor):
+    """Acquire a forensic evidence package from a host.
+
+    ``capture_forensics`` was an ``ActionType`` with no executor behind it,
+    and ``services/agents`` proposes it by name whenever an investigation maps
+    to the C2 or exfiltration stage. So on the one class of incident where
+    preserving evidence matters most, the product recommended an acquisition
+    it could not perform and an analyst who approved it got "No executor found
+    for action type" — which reads as a broken deployment rather than a verb
+    nobody built.
+
+    Defender only, deliberately
+    ---------------------------
+    Microsoft Defender's investigation package is the one broad acquisition in
+    this service's vendor set: the agent bundles processes, network
+    connections, registry, prefetch, scheduled tasks and event logs, and MDE
+    exposes both the collection's completion state and a download URI, so the
+    claim "evidence exists" is checkable rather than inferred from a 202.
+
+    CrowdStrike RTR's ``get`` retrieves one *named file*, which is a different
+    verb with a different blast radius. Wiring it here would make
+    ``capture_forensics`` mean "collect the host's forensic package" on one
+    vendor and "fetch this path" on another — the per-vendor drift the
+    capability contract exists to prevent. A tenant without MDE credentials
+    gets an honest simulation naming what to configure, not a fabricated
+    acquisition.
+
+    Reports ``RUNNING``, not ``COMPLETED``
+    --------------------------------------
+    Collection is asynchronous: MDE queues a machine action and the package
+    appears minutes later. Reporting the queued request as completed is the
+    same gap as reporting an accepted isolate call as a contained host — an
+    analyst reads "done" and stops looking for the evidence. ``RUNNING`` says
+    what is true: the acquisition started and the package is not there yet.
+    """
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        hostname = request.target
+        logger.info("Executing capture_forensics", hostname=hostname)
+
+        mde = _mde_client(request.parameters)
+        if mde:
+            try:
+                result = await mde.collect_investigation_package(
+                    hostname,
+                    comment=request.rationale or "AiSOC forensic acquisition",
+                )
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.RUNNING,
+                    blast_radius=BlastRadius.LOW,
+                    output={
+                        **result,
+                        # `executed` is the single field meaning a vendor was
+                        # actually touched. The acquisition being unfinished is
+                        # carried by `package_ready`, not by pretending nothing
+                        # ran.
+                        "executed": True,
+                        "package_ready": False,
+                        "vendor": "defender",
+                    },
+                    rollback_data={"hostname": hostname, "vendor": "defender"},
+                )
+            except Exception as exc:
+                logger.error("capture_forensics.defender.failed", hostname=hostname, error=str(exc))
+                return ActionResult(
+                    action_id=request.id,
+                    status=ActionStatus.FAILED,
+                    blast_radius=BlastRadius.LOW,
+                    error=str(exc),
+                    completed_at=datetime.utcnow(),
+                )
+
+        logger.warning(
+            "capture_forensics.simulation",
+            hostname=hostname,
+            reason="no Defender credentials provided",
+            funnel="plugin-sdk",
+        )
+        return ActionResult(
+            action_id=request.id,
+            status=ActionStatus.COMPLETED,
+            blast_radius=BlastRadius.LOW,
+            output={
+                "action": "capture_forensics",
+                "hostname": hostname,
+                "executed": False,
+                "package_ready": False,
+                "note": (
+                    "Simulation mode — provide mde_tenant_id/mde_client_id/mde_client_secret "
+                    "to collect a Defender investigation package." + _SIM_FUNNEL_CTA
+                ),
+            },
+            rollback_data={},
+            completed_at=datetime.utcnow(),
+        )
+
+
 class RunAVScanExecutor(BaseExecutor):
     """Triggers an antivirus scan via Microsoft Defender for Endpoint.
 

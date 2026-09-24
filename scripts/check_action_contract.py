@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Gate: every response action must declare what it does to a production estate.
+"""Gate: every response action must declare what it does to a production estate,
+and every verb the agent recommends must be one this service can perform.
 
 Pillar 3. An action registry is only useful if it can answer, before running,
 what an action does when the finding is wrong. Four things were previously
@@ -319,37 +320,31 @@ def check_verification_probes() -> list[str]:
 #:
 #: A baseline, not a pass: the gate fails on anything new, and fails again when
 #: one of these gains an adapter and is not removed.
-KNOWN_UNGOVERNED_EXECUTORS: dict[str, str] = {
-    "chatops_verify": (
-        "returns ActionStatus.RUNNING — the prompt was delivered and a human "
-        "has not answered yet. LiveActionStatus has no state for that, and "
-        "_to_live_status collapses everything that is not FAILED or a "
-        "simulation into SUCCEEDED, so registering it as-is would report an "
-        "unanswered question as a completed action. Needs a status for "
-        "'delivered, awaiting a reply' before it can be dispatched honestly."
-    ),
-}
+#:
+#: **Empty, and that is the point.** It held one entry, ``chatops_verify``,
+#: whose reason was that it returns ``ActionStatus.RUNNING`` — the prompt went
+#: out and nobody has answered — while ``LiveActionStatus`` had no state for
+#: that and ``_to_live_status`` folded everything not FAILED or simulated into
+#: SUCCEEDED. Registering it then would have reported an unanswered question
+#: as a completed action. The answer was to build the missing state
+#: (``AWAITING_COMPLETION``) rather than to keep the exemption, and the same
+#: state turned out to be what evidence acquisition needed too.
+KNOWN_UNGOVERNED_EXECUTORS: dict[str, str] = {}
 
 #: ``ActionType`` members with no executor behind them at all. The legacy REST
 #: route answers "No executor found for action type", which reads as a
 #: misconfiguration rather than a verb nobody built.
-KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR: dict[str, str] = {
-    "capture_forensics": (
-        "No executor anywhere. Worse than unused: "
-        "services/agents/app/agents/investigation_agent.py proposes it by name "
-        "on the C2/exfiltration path, so the product recommends evidence "
-        "acquisition it cannot perform, at the point where preserving evidence "
-        "matters most. Needs a real acquisition arm, not a stub."
-    ),
-    "add_ioc_to_blocklist": (
-        "Superseded by block_ioc, which has a Defender arm, a contract and a "
-        "registered adapter. Nothing dispatches this one."
-    ),
-    "run_playbook": (
-        "Playbook execution lives in services/agents. This member is a leftover "
-        "from before that split; the actions service has never run one."
-    ),
-}
+#:
+#: **Also empty.** It held three. ``capture_forensics`` was the urgent one —
+#: ``services/agents/app/agents/investigation_agent.py`` proposes it by name on
+#: the C2 / exfiltration path, so on the most serious class of incident the
+#: product recommended evidence acquisition it could not perform — and it now
+#: has a Defender investigation-package arm and a probe that reads the package
+#: back. The other two were removed rather than built: ``add_ioc_to_blocklist``
+#: was a second name for ``block_ioc``, and ``run_playbook`` belongs to
+#: ``services/agents`` and has no verb-level contract to declare. A verb with
+#: no implementation path should leave the surface, not sit on it dead.
+KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR: dict[str, str] = {}
 
 
 def check_capability_reachability() -> list[str]:
@@ -482,6 +477,102 @@ def check_capability_reachability() -> list[str]:
     return errors
 
 
+#: Where the agent decides what to recommend. Parsed rather than imported: the
+#: gate runs with ``services/actions`` on the path and importing the agents
+#: package would pull in its whole dependency tree for three string literals.
+AGENTS_APP = REPO_ROOT / "services" / "agents" / "app"
+
+
+def _proposed_action_verbs() -> dict[str, list[str]]:
+    """Every verb the agent can put in front of an analyst, and where from.
+
+    Returns ``{verb: [source locations]}``. Handles the conditional form
+    (``action_type=("isolate_host" if ... else "disable_user")``) because
+    ``attack_path_agent`` uses it and a walker that only understood plain
+    literals would silently grade half the vocabulary.
+    """
+    import ast
+
+    found: dict[str, list[str]] = {}
+    if not AGENTS_APP.exists():
+        return found
+
+    for path in sorted(AGENTS_APP.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
+            if name != "ProposedAction":
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "action_type":
+                    continue
+                for value in _string_literals(keyword.value):
+                    found.setdefault(value, []).append(f"{path.relative_to(REPO_ROOT)}:{keyword.value.lineno}")
+    return found
+
+
+def _string_literals(node: object) -> list[str]:
+    """Constant strings a value expression can evaluate to."""
+    import ast
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    if isinstance(node, ast.IfExp):
+        return _string_literals(node.body) + _string_literals(node.orelse)
+    return []
+
+
+def check_agent_proposed_actions() -> list[str]:
+    """A verb the agent recommends must be one this service can perform.
+
+    The fifth registry, and the one that made ``capture_forensics`` urgent
+    rather than merely untidy. The other five directions compare the actions
+    service against itself; this compares it against the thing that puts a
+    verb in front of a human.
+
+    ``investigation_agent`` proposes ``capture_forensics`` by name whenever an
+    investigation reaches the C2 or exfiltration stage, with
+    ``requires_approval=True``. So on the most serious class of incident the
+    product recommended evidence acquisition, raised an approval for it, and
+    answered "No executor found for action type" when somebody approved — a
+    dead control on the path where preserving evidence matters most.
+
+    Nothing compared the two, because they live in different services and the
+    proposal is a free-text string rather than the enum. That is exactly the
+    shape of drift this file exists to catch, so it is checked here rather
+    than left to be rediscovered.
+    """
+    from app.models.action import ActionType
+    from app.services.executor_registry import EXECUTOR_REGISTRY
+
+    errors: list[str] = []
+    executable = {action.value for action in EXECUTOR_REGISTRY}
+    known = {action.value for action in ActionType}
+
+    for verb, locations in sorted(_proposed_action_verbs().items()):
+        where = ", ".join(sorted(set(locations)))
+        if verb not in known:
+            errors.append(
+                f"{verb}: the agent proposes this at {where} and it is not an "
+                f"ActionType at all, so the action API rejects it outright. "
+                f"Implement the verb or stop proposing it."
+            )
+        elif verb not in executable:
+            errors.append(
+                f"{verb}: the agent proposes this at {where} and no executor "
+                f"implements it. An analyst who approves the recommendation "
+                f"gets 'No executor found for action type' — a control that is "
+                f"reachable from a recommendation and dead on approval. "
+                f"Implement the verb or stop proposing it."
+            )
+    return errors
+
+
 def _ratchet(name: str, baseline: dict[str, str], resolved_set: set[str]) -> list[str]:
     """A baseline may only ever shrink.
 
@@ -557,6 +648,7 @@ def main(argv: list[str] | None = None) -> int:
             + check_verification_probes()
             + check_no_orphan_capabilities()
             + check_capability_reachability()
+            + check_agent_proposed_actions()
         )
     except ImportError as exc:
         print(f"action-contract: cannot import the actions package: {exc}", file=sys.stderr)
