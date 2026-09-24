@@ -51,9 +51,11 @@ opened is worse than no gate.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -65,23 +67,53 @@ MAKEFILE_REL = Path("Makefile")
 #: Directories whose pytest suites a workflow can name.
 TEST_ROOTS = ("tests", "services/*/tests", "packages/*/tests", "apps/*/tests")
 
-#: A script is a "check" when its name says it decides something. Generators,
-#: exporters and fixtures are out of scope: they have no verdict to report.
-_CHECK_PREFIXES = ("check_", "validate_", "audit_", "lint_", "verify_")
-_CHECK_SUFFIXES = ("_check.py", "_gates.py", "_conformance.py", "_audit.py")
+# --------------------------------------------------------------------------
+# What counts as a check
+# --------------------------------------------------------------------------
+# This used to be a filename test: `check_*`, `validate_*`, `_conformance.py`
+# and a hand-kept list of five exceptions for the ones whose names did not
+# announce a verdict. That is the same defect the script exists to catch, one
+# level up — a gate named something unexpected was simply not inventoried, and
+# an uninventoried gate is indistinguishable from one that does not exist.
+# Nineteen were in that state, every one of them a CI gate: eleven
+# `generate_*`/`export_*`/`build_*` scripts a workflow runs with `--check`,
+# `project_stats.py`, `storage_cost_model.py`, `curate_detections.py` and the
+# rest. Deleting any of their workflow steps would have left this script
+# reporting full coverage.
+#
+# Classification is now structural: what a script *does*.
+#
+#   verdict-flag      it declares a CLI option whose only purpose is to turn
+#                     the run into a verdict.
+#   findings-exit     its exit status is derived from findings it accumulates
+#                     — non-zero when the accumulator is non-empty, or zero
+#                     when it is empty. The polarity matters: `if not specs:
+#                     return 1` is a generator aborting on an empty read, not
+#                     a gate reporting a finding.
+#   gates-a-workflow  a workflow job that runs it publishes an output another
+#                     job branches on. `wet_eval_check.py` is a preflight that
+#                     always exits 0 by design and reports its verdict in a
+#                     JSON status file; the job graph is where that shows.
+#
+# All three are read from the tree, never from the name. The first two are
+# intrinsic, so a gate is inventoried whether or not anything calls it — which
+# is what keeps the SCRIPT -> WORKFLOW direction below from being vacuous.
 
-#: Named individually because their filenames do not announce a verdict, but
-#: they exit non-zero on a real finding and are relied on as gates.
-_CHECK_EXTRA = {
-    "connector_conformance.py",
-    "detection_truth_table.py",
-    "openapi_diff.py",
-    "readme_gates.py",
-    "security_audit.py",
-}
+#: Flags that exist only so a caller can act on the result.
+_VERDICT_FLAGS = ("--check", "--check-only", "--verify", "--strict", "--self-test")
+_VERDICT_PREFIXES = ("--fail-", "--max-", "--require-", "--assert-")
 
-#: `sync_vendored_*.py --check` are drift gates; the sync half is a generator.
-_CHECK_GLOBS = ("sync_vendored_*.py",)
+#: A check reports on the repository. Scripts that talk only to a running
+#: service (`inject_scenario.py` posts alerts, `generate_runbook.py` queries a
+#: tracing backend) exit non-zero when the network call fails, which is an
+#: operational error and not a finding about the tree.
+_INSPECTS_TREE = re.compile(r"Path\(__file__\)|\.glob\(|\.rglob\(|\.iterdir\(|\.read_text\(|\.read_bytes\(|os\.walk\(")
+
+#: Calls that grow a collection.
+_MUTATORS = {"append", "add", "extend", "update"}
+
+#: Annotations that say a name holds a collection of findings.
+_COLLECTION_TYPES = {"list", "set", "dict", "tuple", "List", "Set", "Dict", "Counter", "defaultdict"}
 
 #: Checks that are deliberately not wired, with the reason. Shrink-only: a
 #: name here that turns out to be reachable fails the gate, so the list cannot
@@ -96,19 +128,231 @@ class GateError(RuntimeError):
 # --------------------------------------------------------------------------
 # Inventory
 # --------------------------------------------------------------------------
-def is_check(name: str) -> bool:
-    if name in _CHECK_EXTRA:
-        return True
-    if any(Path(name).match(g) for g in _CHECK_GLOBS):
-        return True
-    return name.startswith(_CHECK_PREFIXES) or name.endswith(_CHECK_SUFFIXES)
+def _with_parents(tree: ast.Module) -> ast.Module:
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            child.parent = node  # type: ignore[attr-defined]
+    return tree
 
 
-def collect_checks(root: Path) -> list[str]:
+def _inside_except(node: ast.AST) -> bool:
+    parent = getattr(node, "parent", None)
+    while parent is not None:
+        if isinstance(parent, ast.ExceptHandler):
+            return True
+        parent = getattr(parent, "parent", None)
+    return False
+
+
+def _verdict_flags(tree: ast.Module) -> list[str]:
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument":
+            for arg in node.args:
+                if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value.startswith("--")):
+                    continue
+                if arg.value in _VERDICT_FLAGS or arg.value.startswith(_VERDICT_PREFIXES):
+                    found.add(arg.value)
+    return sorted(found)
+
+
+def _is_collection_annotation(node: ast.AST | None) -> bool:
+    if node is None:
+        return False
+    base = node.value if isinstance(node, ast.Subscript) else node
+    return isinstance(base, ast.Name) and base.id in _COLLECTION_TYPES
+
+
+def _accumulators(tree: ast.Module) -> set[str]:
+    """Names and attributes the script collects findings into.
+
+    Attributes are included because a report object is the other common shape:
+    `security_audit.py` decides on `report.high_critical` and
+    `report.unscanned`, which are list fields it appends to.
+    """
+    assigned: set[str] = set()
+    zeroed: set[str] = set()
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        targets: list[ast.AST] = []
+        value: ast.AST | None = None
+        annotation: ast.AST | None = None
+        if isinstance(node, ast.Assign):
+            targets, value = list(node.targets), node.value
+        elif isinstance(node, ast.AnnAssign):
+            targets, value, annotation = [node.target], node.value, node.annotation
+        for target in targets:
+            key = target.id if isinstance(target, ast.Name) else (target.attr if isinstance(target, ast.Attribute) else None)
+            if key is None:
+                continue
+            if isinstance(target, ast.Name):
+                assigned.add(key)
+            if isinstance(value, ast.List | ast.Set | ast.Dict | ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp):
+                found.add(key)
+            if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id in {"list", "set", "dict", "sorted"}:
+                found.add(key)
+            if _is_collection_annotation(annotation):
+                found.add(key)
+            if isinstance(value, ast.Constant) and value.value == 0:
+                zeroed.add(key)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and _is_collection_annotation(node.returns):
+            found.add(node.name)
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id in zeroed:
+            found.add(node.target.id)  # a counter of findings
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _MUTATORS:
+            container = node.func.value
+            if isinstance(container, ast.Name):
+                found.add(container.id)
+            elif isinstance(container, ast.Attribute):
+                found.add(container.attr)
+        if isinstance(node, ast.For):
+            if isinstance(node.iter, ast.Name) and node.iter.id in assigned:
+                found.add(node.iter.id)
+            elif isinstance(node.iter, ast.Attribute):
+                found.add(node.iter.attr)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len":
+            for arg in node.args:
+                if isinstance(arg, ast.Name) and arg.id in assigned:
+                    found.add(arg.id)
+                elif isinstance(arg, ast.Attribute):
+                    found.add(arg.attr)
+    return found
+
+
+def _referenced(node: ast.AST) -> set[str]:
+    out: set[str] = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name):
+            out.add(sub.id)
+        elif isinstance(sub, ast.Attribute):
+            out.add(sub.attr)
+    return out
+
+
+def _negated(test: ast.AST, names: set[str]) -> bool:
+    """Whether every accumulator in `test` appears under a `not`."""
+    positive = set()
+    for node in ast.walk(test):
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            continue
+        if isinstance(node, ast.Name) and node.id in names:
+            positive.add(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in names:
+            positive.add(node.attr)
+    negated = set()
+    for node in ast.walk(test):
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            negated |= _referenced(node.operand) & names
+    return bool(negated) and not (positive - negated)
+
+
+def _exit_status(node: ast.AST) -> ast.AST | None:
+    if isinstance(node, ast.Return):
+        return node.value
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "exit" and node.args:
+        return node.args[0]
+    if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+        if node.exc.func.id == "SystemExit" and node.exc.args:
+            return node.exc.args[0]
+    return None
+
+
+def _is_int(node: ast.AST | None, *, zero: bool) -> bool:
+    if not (isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool)):
+        return False
+    return (node.value == 0) if zero else (node.value != 0)
+
+
+def _exit_path(tree: ast.Module) -> list[ast.AST]:
+    """Functions whose return value becomes the process exit status.
+
+    Bounded transitive closure from whatever is passed to `sys.exit(...)`,
+    because dispatchers are common: `security_audit.py`'s `main` returns
+    `handlers[args.command](args)` and the verdict is three frames down. A
+    module with no exit path at all is a library, not a check.
+    """
+    funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)}
+    entries: set[str] = set()
+    for node in ast.walk(tree):
+        args = None
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "exit":
+            args = node.args
+        elif isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+            args = node.exc.args if node.exc.func.id == "SystemExit" else None
+        for arg in args or []:
+            entries |= {n.id for n in ast.walk(arg) if isinstance(n, ast.Name)} & set(funcs)
+    if not entries and "main" in funcs:
+        entries = {"main"}
+
+    seen: set[str] = set()
+    frontier, depth = entries, 0
+    while frontier and depth < 4:
+        seen |= frontier
+        nxt: set[str] = set()
+        for name in frontier:
+            nxt |= ({n.id for n in ast.walk(funcs[name]) if isinstance(n, ast.Name)} & set(funcs)) - seen
+        frontier, depth = nxt, depth + 1
+    return [funcs[name] for name in sorted(seen)]
+
+
+def _findings_exit(tree: ast.Module) -> str | None:
+    """The guard that turns accumulated findings into an exit status."""
+    accumulators = _accumulators(tree)
+    if not accumulators:
+        return None
+    for function in _exit_path(tree):
+        for node in ast.walk(function):
+            if isinstance(node, ast.IfExp) and (_is_int(node.body, zero=False) or _is_int(node.orelse, zero=False)):
+                if _referenced(node.test) & accumulators:
+                    return ast.unparse(node)[:72]
+                continue
+            status = _exit_status(node)
+            if status is None or _inside_except(node):
+                continue
+            nonzero = _is_int(status, zero=False)
+            if not nonzero and not _is_int(status, zero=True):
+                continue
+            parent = getattr(node, "parent", None)
+            while parent is not None:
+                if isinstance(parent, ast.If) and (_referenced(parent.test) & accumulators):
+                    # Findings present -> fail. The inverse (`if not specs:
+                    # return 1`) is an abort on an empty read: the script
+                    # could not do its job, which is not a verdict on the tree.
+                    if nonzero != _negated(parent.test, accumulators):
+                        return ast.unparse(parent.test)[:72]
+                    break
+                parent = getattr(parent, "parent", None)
+    return None
+
+
+def classify_source(source: str) -> dict[str, str]:
+    """Structural signals that make a script a check. Empty means it is not."""
+    try:
+        tree = _with_parents(ast.parse(source))
+    except SyntaxError:
+        return {}
+    if not _INSPECTS_TREE.search(source):
+        return {}
+    signals: dict[str, str] = {}
+    if flags := _verdict_flags(tree):
+        signals["verdict-flag"] = " ".join(flags)
+    if guard := _findings_exit(tree):
+        signals["findings-exit"] = guard
+    return signals
+
+
+def collect_checks(root: Path, gating: dict[str, str] | None = None) -> dict[str, dict[str, str]]:
+    """script name -> the structural signals that classify it as a check."""
     scripts = root / SCRIPTS_REL
     if not scripts.is_dir():
         raise GateError(f"no scripts directory at {scripts}")
-    found = sorted(p.name for p in scripts.glob("*.py") if is_check(p.name))
+    found: dict[str, dict[str, str]] = {}
+    for path in sorted(scripts.glob("*.py")):
+        signals = classify_source(path.read_text(encoding="utf-8", errors="replace"))
+        if gating and path.name in gating:
+            signals["gates-a-workflow"] = gating[path.name]
+        if signals:
+            found[path.name] = signals
     if not found:
         raise GateError(f"parsed zero check scripts from {scripts} — refusing to report a clean tree from an empty read")
     return found
@@ -161,12 +405,38 @@ def _command_text(step: dict) -> str:
     return "\n".join(parts)
 
 
+_NEEDS_OUTPUT = re.compile(r"needs\.([A-Za-z0-9_-]+)\.outputs")
+_SCRIPT_IN_JOB = re.compile(r"scripts/([\w.-]+\.py)")
+
+
+def _gating_jobs(doc: dict, workflow: str) -> dict[str, str]:
+    """script -> "workflow:job" for jobs whose output another job branches on.
+
+    A workflow that merely runs a script is not evidence the script is a gate.
+    A workflow that publishes a job output and makes a downstream job
+    conditional on it has, structurally, asked the script for a verdict.
+    """
+    jobs = doc.get("jobs") or {}
+    branched: set[str] = set()
+    for job in jobs.values():
+        if isinstance(job, dict):
+            branched.update(_NEEDS_OUTPUT.findall(yaml.safe_dump(job, default_flow_style=False)))
+    out: dict[str, str] = {}
+    for job_id, job in jobs.items():
+        if job_id not in branched or not isinstance(job, dict) or not job.get("outputs"):
+            continue
+        for name in _SCRIPT_IN_JOB.findall(yaml.safe_dump(job, default_flow_style=False)):
+            out.setdefault(name, f"{workflow}:{job_id}")
+    return out
+
+
 class Surface:
     """The text a workflow executes, with working directories resolved."""
 
     def __init__(self, root: Path):
         self.root = root
         self.by_workflow: dict[str, list[tuple[str, str]]] = {}
+        self.gating: dict[str, str] = {}
         wf_dir = root / WORKFLOWS_REL
         if not wf_dir.is_dir():
             raise GateError(f"no workflows directory at {wf_dir}")
@@ -186,10 +456,27 @@ class Surface:
                     for concrete in _expand_matrix(text, matrix):
                         rows.append((concrete_wd.strip().strip("./"), concrete))
             self.by_workflow[path.name] = rows
+            for name, origin in _gating_jobs(doc, path.name).items():
+                self.gating.setdefault(name, origin)
         self.workflow_count = len(files)
 
     def texts(self) -> list[tuple[str, str, str]]:
         return [(wf, wd, text) for wf, rows in self.by_workflow.items() for wd, text in rows]
+
+    def invoked_with_verdict_flag(self) -> dict[str, str]:
+        """script -> the workflow that runs it with a verdict flag.
+
+        The other direction on the classifier itself. If a workflow asks a
+        script for a verdict and the classifier does not call it a check, the
+        classifier has a blind spot — which is the defect this file is about.
+        """
+        flags = "|".join(re.escape(f) for f in (*_VERDICT_FLAGS, *_VERDICT_PREFIXES))
+        pattern = re.compile(rf"scripts/([\w.-]+\.py)[^\n;&|]*?\s(?:{flags})")
+        out: dict[str, str] = {}
+        for workflow, _wd, text in self.texts():
+            for name in pattern.findall(text):
+                out.setdefault(name, workflow)
+        return out
 
 
 # --------------------------------------------------------------------------
@@ -339,10 +626,11 @@ def missing_script_paths(root: Path, surface: Surface) -> list[tuple[str, str]]:
 
 
 def evaluate(
-    checks: list[str],
+    checks: dict[str, dict[str, str]],
     routes: dict[str, list[str]],
     dangling: list[tuple[str, str]],
     ratchet: dict[str, str],
+    verdict_invocations: dict[str, str] | None = None,
 ) -> list[tuple[str, str]]:
     failures: list[tuple[str, str]] = []
 
@@ -352,9 +640,9 @@ def evaluate(
             failures.append(
                 (
                     "check-unreachable",
-                    f"{name} is a check and no workflow reaches it, directly or through make, "
-                    "another script or a test suite CI runs. A gate that cannot fail is "
-                    "indistinguishable from no gate, while its presence implies coverage.",
+                    f"{name} is a check ({', '.join(sorted(checks[name]))}) and no workflow reaches it, "
+                    "directly or through make, another script or a test suite CI runs. A gate that cannot "
+                    "fail is indistinguishable from no gate, while its presence implies coverage.",
                 )
             )
         if reached and name in ratchet:
@@ -371,18 +659,33 @@ def evaluate(
     for wf, rel in dangling:
         failures.append(("workflow-path-missing", f"{wf} names {rel}, which does not exist — the step cannot do what it says"))
 
+    # CLASSIFIER -> WORKFLOW. The classifier read in the other direction: a
+    # script CI runs with `--check` is being asked for a verdict, so anything
+    # the classifier leaves out is a blind spot in the classifier, not a
+    # script that stopped being a gate.
+    for name, workflow in sorted((verdict_invocations or {}).items()):
+        if name not in checks:
+            failures.append(
+                (
+                    "classifier-blind-spot",
+                    f"{workflow} runs {name} with a verdict flag, but no structural signal classifies it as a check — "
+                    "it would not be inventoried, and losing its workflow step would go unnoticed",
+                )
+            )
+
     return failures
 
 
 def load(root: Path) -> dict:
     surface = Surface(root)
-    checks = collect_checks(root)
+    checks = collect_checks(root, surface.gating)
     routes, _, corpus = resolve(root, surface)
     return {
         "checks": checks,
         "routes": routes,
         "dangling": missing_script_paths(root, surface),
         "corpus": corpus,
+        "verdict_invocations": surface.invoked_with_verdict_flag(),
     }
 
 
@@ -405,7 +708,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     checks, routes, corpus = data["checks"], data["routes"], data["corpus"]
-    failures = evaluate(checks, routes, data["dangling"], KNOWN_UNREACHED)
+    failures = evaluate(checks, routes, data["dangling"], KNOWN_UNREACHED, data["verdict_invocations"])
 
     if args.json:
         print(
@@ -413,9 +716,10 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "repo_root": str(root),
                     "corpus": corpus,
-                    "checks": {name: routes.get(name, []) for name in checks},
+                    "checks": {name: {"signals": checks[name], "routes": routes.get(name, [])} for name in checks},
                     "dangling_workflow_paths": [{"workflow": w, "path": p} for w, p in data["dangling"]],
                     "known_unreached": KNOWN_UNREACHED,
+                    "verdict_invocations": data["verdict_invocations"],
                     "failures": [{"code": c, "detail": d} for c, d in failures],
                 },
                 indent=2,
@@ -424,11 +728,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1 if failures else 0
 
+    by_signal = Counter(signal for signals in checks.values() for signal in signals)
+    intrinsic = sum(1 for s in checks.values() if set(s) - {"gates-a-workflow"})
     print(f"repo root        {root}")
     print(f"workflows        {WORKFLOWS_REL}  ({corpus['workflows']} files)")
     print(f"scripts          {SCRIPTS_REL}  ({corpus['scripts']} python files, {len(checks)} of them checks)")
     print(f"make recipes     {MAKEFILE_REL}  ({corpus['make_recipes']} targets)")
     print(f"reachable nodes  {corpus['reachable_nodes']} (workflows + make recipes + CI-collected tests + scripts they reach)")
+    print("classified by    " + ", ".join(f"{signal} {count}" for signal, count in sorted(by_signal.items())))
+    print(f"                 {intrinsic} of {len(checks)} from an intrinsic signal, so they are inventoried with or without a caller")
     print(f"ratchet          {len(KNOWN_UNREACHED)} check(s) deliberately unwired")
     print()
 
@@ -437,7 +745,8 @@ def main(argv: list[str] | None = None) -> int:
         for name in checks:
             hits = routes.get(name, [])
             print(f"  {name:{width}}  {hits[0] if hits else '— NO WORKFLOW —'}")
-            for extra in hits[1:4]:
+            print(f"  {'':{width}}  signals: {', '.join(sorted(checks[name]))}")
+            for extra in hits[1:3]:
                 print(f"  {'':{width}}  {extra}")
         print()
 
@@ -462,24 +771,25 @@ def self_test(root: Path) -> int:
         print(f"self-test: cannot read the tree: {exc}", file=sys.stderr)
         return 2
 
-    clean = evaluate(base["checks"], base["routes"], base["dangling"], KNOWN_UNREACHED)
+    clean = evaluate(base["checks"], base["routes"], base["dangling"], KNOWN_UNREACHED, base["verdict_invocations"])
     if clean:
         print("self-test: the unmodified tree already fails; fix that first", file=sys.stderr)
         for code, detail in clean:
             print(f"  [{code}] {detail}", file=sys.stderr)
         return 1
 
-    def case(checks=None, routes=None, dangling=None, ratchet=None):
+    def case(checks=None, routes=None, dangling=None, ratchet=None, invocations=None):
         return (
             checks if checks is not None else base["checks"],
             routes if routes is not None else base["routes"],
             dangling if dangling is not None else base["dangling"],
             ratchet if ratchet is not None else KNOWN_UNREACHED,
+            invocations if invocations is not None else base["verdict_invocations"],
         )
 
-    orphan_checks = [*base["checks"], "check_brand_new_thing.py"]
-    orphan_routes = {**base["routes"], "check_brand_new_thing.py": []}
-
+    orphan = "check_brand_new_thing.py"
+    orphan_checks = {**base["checks"], orphan: {"verdict-flag": "--check"}}
+    orphan_routes = {**base["routes"], orphan: []}
     reached_name = next(n for n in base["checks"] if base["routes"].get(n))
 
     cases: list[tuple[str, str, tuple]] = [
@@ -508,6 +818,11 @@ def self_test(root: Path) -> int:
             "ratchet-names-nothing",
             case(ratchet={"check_ghost.py": "example"}),
         ),
+        (
+            "CLASSIFIER -> WORKFLOW: CI asks a script for a verdict the classifier does not inventory",
+            "classifier-blind-spot",
+            case(invocations={**base["verdict_invocations"], "some_unclassified_thing.py": "ci.yml"}),
+        ),
     ]
 
     print(f"self-test against {root}")
@@ -519,6 +834,53 @@ def self_test(root: Path) -> int:
         ok &= caught
         print(f"  {'PASS' if caught else 'FAIL'}  {description}")
         print(f"        expected [{expected}]  got {sorted(codes) or 'nothing'}")
+
+    # The classifier itself. The defect this replaced was a filename test, so
+    # the case that matters is a gate whose name announces nothing: a
+    # structural classifier must find it, and the old one could not.
+    planted = '''\
+"""A gate that no naming convention would reveal."""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+def main() -> int:
+    offenders = [p.name for p in ROOT.glob("*.md") if "\\t" in p.read_text(errors="replace")]
+    if offenders:
+        print("tabs in markdown:", offenders)
+        return 1
+    return 0
+
+sys.exit(main())
+'''
+    signals = classify_source(planted)
+    print(f"  {'PASS' if signals else 'FAIL'}  CLASSIFIER: a gate planted under an unconventional name is still found")
+    print(f"        `frobnicate_widgets.py` matches no check_/validate_/audit_ prefix; signals {sorted(signals) or 'none'}")
+    ok &= bool(signals)
+
+    # And the inverse, because a classifier that said yes to everything would
+    # pass the case above: a generator that aborts on an empty read is not a
+    # gate, and the polarity of its guard is the only thing that says so.
+    generator = '''\
+"""Writes a document. Not a gate."""
+import sys
+from pathlib import Path
+
+def main() -> int:
+    specs = [p for p in Path("specs").glob("*.yaml")]
+    if not specs:
+        print("nothing to render")
+        return 1
+    Path("out.md").write_text("\\n".join(p.name for p in specs))
+    return 0
+
+sys.exit(main())
+'''
+    rejected = not classify_source(generator)
+    print(f"  {'PASS' if rejected else 'FAIL'}  CLASSIFIER: a generator that aborts on an empty read is not a check")
+    print(f"        `if not specs: return 1` is an abort, not a finding; signals {sorted(classify_source(generator)) or 'none'}")
+    ok &= rejected
 
     # The reachability resolver itself, not just the rules on top of it: a
     # resolver that returned "reached" for everything would pass every case

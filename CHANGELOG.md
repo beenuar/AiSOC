@@ -77,6 +77,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The console's `ConnectorType` union is generated from the connector
+  registry.** Its members were corrected in the previous release; the
+  mechanism that let them drift was not. Hand-maintenance is how ten of them
+  came to name nothing the platform could ingest, and `ibm_qradar` is what
+  that costs: no connector declared it and no profile was keyed on it, so
+  strict mode rejected those events while lenient mode minted a vendor called
+  "ibm_qradar" — a second alert source for the QRadar deployment `qradar`
+  already fed.
+
+  `scripts/generate_connector_types.py` derives the union from the three
+  places that decide what the normalizer resolves: the `_CONNECTOR_CLASSES`
+  tuple in `services/connectors/app/connectors/__init__.py` (84 ids), the
+  `connectorProfiles` keys in the ingest normalizer (5 more that no connector
+  declares under that spelling, including the legacy `splunk_enterprise`), and
+  the `connectorTypeCanonical` fold sources (5 alternate spellings the console
+  still emits). 94 members, written to
+  `packages/types/src/generated/connector-types.ts` as a `CONNECTOR_TYPES`
+  tuple the union is taken from, alongside a machine-readable
+  `connector-types.json` recording each member's origin. `connector.ts`
+  re-exports rather than redeclares, and `--check` fails if it goes back to
+  declaring its own — a generated file can be perfectly current and completely
+  ignored while a hand-written union three directories away is what TypeScript
+  resolves.
+
+  That set is, by construction, the `resolvable` set
+  `scripts/check_connector_profiles.py` already computed, so the two gates now
+  share one definition instead of holding two. The fold map is emitted with
+  the union as `CONNECTOR_TYPE_CANONICAL`, so the console can resolve a stored
+  spelling to one product name the same way the normalizer does.
+
+  Nothing is positional, so no lock file is needed and the
+  `generate_detections.py` renumbering trap does not apply: a member *is* its
+  `connector_id` and the output is a sorted set. A test reverses the registry
+  and asserts the output does not move a byte. Identity is read off the class,
+  the way `_build_registry()` resolves it — `jira_connector.py` declares
+  `jira` and `tenable.py` declares `tenable_io`, so a filename slug would
+  misname both, which is the defect `generate_connector_docs.py` shipped when
+  it generated duplicate pages for six connectors while reporting 100%
+  coverage.
+
+  The `palo_alto_cortex` fold was the one entry naming a vendor rather than a
+  product, and Palo Alto ships two the platform ingests. It stays on
+  `cortex_xdr`: the spelling entered the union in the initial-release commit
+  before either connector existed, it appears nowhere else in the tree and
+  never has (no console code, no saved instance, no seed, no catalog entry, no
+  fixture), the console's own catalog names "Cortex XDR" under EDR and lists
+  no XSIAM, and XSIAM is reachable under `cortex_xsiam` for any deployment
+  that means it. The evidence is recorded beside the map in `normalizer.go`.
+
 - **`scripts/check_gate_coverage.py` — the gate on the gates.** The most
   expensive recurring defect in this repository is a mechanism that exists, is
   tested, and has no caller on the path that needs it. A gate is the worst case
@@ -338,6 +387,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     word sat between the verb and the tool name.
 
 ### Changed
+
+- **`check_gate_coverage.py` decides what a check is from what a script does,
+  not what it is called.** It classified by filename — `check_*`,
+  `validate_*`, `_conformance.py`, plus a hand-kept list of five exceptions
+  for the ones whose names did not announce a verdict. That is the same defect
+  the script exists to catch, one level up: a gate named something unexpected
+  was simply not inventoried, and an uninventoried gate is indistinguishable
+  from one that does not exist.
+
+  Nineteen were in that state and every one is a CI gate. Fifteen are run by a
+  workflow with `--check` — `generate_connector_count.py`,
+  `generate_connector_docs.py`, `generate_detections.py`,
+  `generate_slo_alerts.py`, the four `export_*` scripts, `build_marketplace.py`,
+  `build_quarantine_index.py`, `curate_detections.py`, `project_stats.py`,
+  `storage_cost_model.py` and two more. Deleting any of those steps would have
+  left the script reporting full coverage over a smaller tree.
+
+  Classification is now three structural signals, all read from the tree: a
+  declared verdict flag (`--check`, `--verify`, `--strict`, `--fail-*`,
+  `--max-*`, `--self-test`); an exit status derived from findings the script
+  accumulates; or a workflow job whose output another job branches on, which
+  is how `wet_eval_check.py` gates — it always exits 0 by design and publishes
+  its verdict as a JSON status file. The first two are intrinsic, so a gate
+  nothing calls is still inventoried and the "unreachable check" direction
+  does not become vacuous.
+
+  Polarity is the distinction that keeps it from over-reporting: `if
+  offenders: return 1` is a finding, `if not specs: return 1` is a generator
+  aborting on an empty read. A script that only talks to a running service is
+  excluded for the same reason — its non-zero exit is an operational error,
+  not a verdict on the tree.
+
+  The classifier is checked in reverse too: a script CI runs with a verdict
+  flag that the classifier does not inventory now fails as
+  `classifier-blind-spot`, so the classifier cannot silently narrow. The
+  inventory goes 42 → 59, and the first run of the new one found a real
+  orphan — `list_python_services_with_tests.py`, whose own docstring says
+  "wire this into CI itself once the matrix has stabilised" and which had
+  stayed unwired. It is wired now, and passes: all 13 tested Python services
+  are gated.
 
 - **A hosted deployment's hostname no longer appears in self-hosted docs as the
   reader's own URL.** Seven files under `apps/docs/` pointed at the managed
