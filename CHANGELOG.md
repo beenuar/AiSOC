@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **Three MSSP response schemas describing fabricated data are removed:
+  `MSSPKpiOverview`, `ManagedTenantRow`, `CrossTenantIncident`.** They were
+  the shape of five hardcoded companies with invented alert counts, not the
+  shape of anything the platform measured. `/mssp/overview`,
+  `/mssp/tenants` and `/mssp/incidents` keep their paths and now return
+  `PortfolioSummaryOut`, `PortfolioTenantOut` and `PortfolioAlertOut`,
+  computed from real rows.
+
+  What moved, and why it could not be preserved:
+
+  - `health_score` is **gone**, not nulled. It was an undefined composite
+    with no formula anywhere in the tree; keeping the field would promise a
+    measurement that does not exist.
+  - `avg_mttr_minutes` → `mttr_minutes`, measured from cases a tenant
+    actually closed in the trailing 30 days, and **null** when it closed
+    none. The old value was the literal `23.4`.
+  - `sla_breach_count` → `sla_breached_cases`, counted from
+    `cases.sla_breached`.
+  - `connectors_online` / `connectors_degraded` → a `connectors` object with
+    `total` / `healthy` / `stale` / `error`, derived from each connector's
+    `health_status` and `last_sync`.
+  - `tenant_id` is now a real tenant UUID rather than a string like
+    `"t-acme"`.
+  - New: `synthetic_alerts`, so seeded demo rows are counted apart from a
+    tenant's real posture instead of inflating it.
+
+  The routes also return `403` to a caller who belongs to no operator
+  organisation, where they previously returned an empty list to anyone
+  authenticated.
+
+  Nothing in `apps/web` consumes these three routes; it calls
+  `/mssp/children`, which is unchanged.
+
 ### Fixed
 
 - **The lake's tenant isolation could be switched off by resolving a
