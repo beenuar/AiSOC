@@ -113,8 +113,6 @@ REQUIRED_GO_TESTS = (
     "TestConsoleVocabularyIsAcceptedInStrictModeOnlyWhenItResolves",
 )
 
-_GO_BLOCK = "var {name} = map[string]{vtype}{{"
-
 
 class GateError(RuntimeError):
     """An input could not be read. Never downgraded to a passing result."""
