@@ -100,7 +100,7 @@ def _no_probe(monkeypatch: pytest.MonkeyPatch):
 
             return VerificationResult(VerificationOutcome.UNVERIFIED, action_type, target, reason="stub")
 
-    monkeypatch.setattr(dispatcher_mod, "PostActionVerifier", lambda: _V())
+    monkeypatch.setattr(dispatcher_mod, "PostActionVerifier", _V)
 
 
 async def test_a_verb_the_blast_table_calls_medium_is_held_at_its_declared_high_impact(

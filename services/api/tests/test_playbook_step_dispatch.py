@@ -59,7 +59,7 @@ def _wire(
 
     monkeypatch.setattr(actions_client, "vendors_for_capability", _vendors)
     monkeypatch.setattr(actions_client, "dispatch_live_action", _dispatch)
-    monkeypatch.setattr(playbook_step_dispatch, "get_vault", lambda: _Vault())
+    monkeypatch.setattr(playbook_step_dispatch, "get_vault", _Vault)
 
     rows = connectors if connectors is not None else [_Connector("crowdstrike")]
 
@@ -153,7 +153,7 @@ class TestWhenItCannotDispatch:
             def decrypt_dict(self, blob: dict) -> dict:
                 raise CredentialVaultError("key rotated out")
 
-        monkeypatch.setattr(playbook_step_dispatch, "get_vault", lambda: _Broken())
+        monkeypatch.setattr(playbook_step_dispatch, "get_vault", _Broken)
         report = await _run()
         assert report.status == "failed"
         assert report.executed is False
