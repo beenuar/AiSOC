@@ -137,6 +137,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The MSSP console showed six invented tenants and made no API call at all.**
+  `MSSPDashboardView.tsx` declared `const TENANTS = [...]` — "Acme Financial",
+  "GlobalRetail Corp", "MedSecure Health" and three more, with invented alert
+  counts, MTTD/MTTR figures, risk scores, analyst headcounts and ARR — handed
+  it to `useState`, and never fetched anything. Every operator on every
+  deployment saw the same six rows, permanently, with no state in which they
+  would not. The "Export Report" button raised a success toast and did nothing.
+
+  It now reads `GET /api/v1/mssp/portfolio` and
+  `GET /api/v1/mssp/portfolio/alerts` with no sample-data fallback and no SWR
+  `fallbackData` (supplying it disables revalidation, so a placeholder becomes
+  what the view permanently shows). Four states, each saying which it is:
+  loading; a `403` explained as "you do not manage any tenants" rather than an
+  outage; a portfolio failure surfaced with its message and a retry; and an
+  empty portfolio that distinguishes "this organisation manages no tenants"
+  from "you were granted none" using `portfolio_wide` and `scoped_tenants`,
+  because those have different fixes. The alert feed has its own states so a
+  failure there does not claim the portfolio is down. Export now writes a CSV
+  of the rows on screen — a real action rather than a toast.
+
+  **ARR, risk score and analyst allocation are gone, not sourced.** There is no
+  revenue, composite-risk or analyst-allocation data anywhere in this product.
+  A column of nulls would still imply the measurement exists.
+
+- **The fabricated-data gate could not see either of the two worst cases.**
+  `scripts/check_mock_data_gated.py` recognised only mock data that announces
+  itself: all three of its patterns required a `MOCK_` / `DEMO_` name *and* an
+  assignment through a state setter or SWR `fallbackData`, which models one
+  situation — a view that fetches and substitutes a sample when the fetch
+  fails. A dataset written inline under an ordinary name, in a component with
+  no fetch at all, matched nothing; and with no fetch there was no real path
+  for a fallback to fall back *from*, which is the worse defect, not the
+  lesser one. The gate reported "All sample-data fallbacks are gated behind
+  demo mode" while both fabricated tables shipped.
+
+  A third check looks for what makes fabricated domain data harmful rather
+  than for what an author happened to call it: a module-scope array of records
+  that names an entity a customer would recognise — a company, a person, a
+  host, an IP, an address — *and* attaches numbers to it. Numeric keys that
+  describe how something is drawn are excluded, which is what keeps it quiet:
+  93 module-scope object arrays in the console, 7 matched, and the 4 already
+  behind `demoFallback()` were the mocks. It newly caught
+  `MSSPDashboardView.tsx` and `TeamAnalyticsView.tsx`.
+
+  The reviewed-exception list is checked in **both** directions: an entry that
+  no longer matches anything fails the gate, so an exemption cannot outlive the
+  code it excused and become cover for whatever is written next under that
+  name. One entry, `MitreStrip.tsx` — a public landing-page illustration whose
+  visible copy already tells the reader the tiles are illustrative.
+  `tests/test_mock_data_gate.py` covers both properties, including that filter
+  lists, graph stylesheets, decorative SVG coordinates and pricing copy stay
+  unflagged; a gate that cries wolf on every configuration array gets deleted,
+  which is worse than the gap.
+
+- **`/analytics/team` ranked six invented analysts by invented accuracy.**
+  "Sarah Chen, 47 cases closed, 96.2% accuracy, score 945" and five more, plus
+  a highlights feed of things that never happened. Nothing in the platform
+  measures per-analyst performance — no route, no table, no column — so the
+  sample is confined to the hosted demo via `canUseDemoData()` and everyone
+  else is told plainly that the measurement does not exist yet. The aggregate
+  tiles read `—` rather than dividing by zero.
+
 - **The OpenAPI gate's documented escape hatch did not exist.** The workflow
   header told a maintainer to "re-run with `--allow-breaking`" and
   `scripts/openapi_diff.py` claimed the flag was what "the release flow uses" —
