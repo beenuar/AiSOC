@@ -94,10 +94,22 @@ bootstrap:
 # The lake and graph writers target stores that exist only in `full`, so the
 # flags travel with the profile. In CORE they default off rather than
 # retrying forever against a host that is not there.
-up-full:
+#
+# `_ports` runs here for the same reason it runs for `up`, more so: this
+# starts twenty-one services, so the bind failure compose reports arrives
+# even later and against even more unrelated output. Observed: a conflict on
+# 8123 stopped the stack after eight containers had already started, with
+# `Bind for 0.0.0.0:8123 failed: port is already allocated` naming neither the
+# process holding it nor what to do.
+up-full: _ports
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
-	@$(MAKE) --no-print-directory _wait
-	@echo "Full profile up. Prove the pipeline works: make smoke"
+	@$(MAKE) --no-print-directory _wait PROFILE=full
+	@echo ""
+	@echo "  Console:  http://localhost:3000"
+	@echo "  API:      http://localhost:8000/api/docs"
+	@echo ""
+	@echo "Prove the pipeline works:  make smoke"
+	@$(MAKE) --no-print-directory bootstrap
 
 # Names a port conflict before compose hits it. Silent when every port is
 # either free or already held by this deployment's own containers — re-running
@@ -112,14 +124,31 @@ _ports:
 	  exit 1; \
 	}
 
-# Waits on the services that declare a healthcheck. Silent on success.
+# Waits on the services that declare a healthcheck, and refuses to call a
+# stack up while any container is dead.
+#
+# The old loop read `ps` without `-a` and looked only at Health. An *exited*
+# container is absent from that listing entirely and a *restarting* one
+# reports no health, so both were invisible: `make up-full` printed
+# "Full profile up." with OpenSearch OOM-killed and threatintel in a crash
+# loop. A container that is not running is the one thing a wait loop must
+# never score as success.
 _wait:
 	@for i in $$(seq 1 60); do \
-	  unhealthy=$$($(COMPOSE) ps --format '{{.Service}} {{.Health}}' 2>/dev/null | awk '$$2=="starting"||$$2=="unhealthy"{print $$1}'); \
-	  [ -z "$$unhealthy" ] && exit 0; \
+	  status=$$($(COMPOSE) $(PROFILE_ARG) ps -a --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null); \
+	  pending=$$(echo "$$status" | awk '$$3=="starting"{print $$1}'); \
+	  broken=$$(echo "$$status" | awk '$$2=="exited"||$$2=="dead"||$$2=="restarting"||$$3=="unhealthy"{print $$1}'); \
+	  if [ -n "$$broken" ]; then \
+	    echo ""; \
+	    echo "These services are not running: $$broken"; \
+	    for s in $$broken; do echo "  docker compose logs $$s | tail -30"; done; \
+	    echo "Run 'make doctor' for the full picture."; \
+	    exit 1; \
+	  fi; \
+	  [ -z "$$pending" ] && exit 0; \
 	  sleep 3; \
 	done; \
-	echo "Still not healthy after 3 minutes: $$unhealthy"; \
+	echo "Still not healthy after 3 minutes: $$pending"; \
 	echo "Run 'make doctor' to find out why."; \
 	exit 1
 

@@ -239,7 +239,11 @@ export function ThreatIntelView() {
     { fallbackData: demoFallback({ indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length }) },
   );
 
-  const allIndicators = data?.indicators ?? MOCK_INDICATORS;
+  // Not `?? MOCK_INDICATORS`. `fallbackData` above already withholds the
+  // sample set outside the hosted demo; repeating the constant here put it
+  // back, so a 404 from the indicators API rendered five invented IOCs and a
+  // "3 Added Today" counter on a tenant that had never ingested one.
+  const allIndicators = data?.indicators ?? [];
 
   const indicators = allIndicators.filter((ioc) => {
     if (typeFilter !== 'all' && ioc.type !== typeFilter) return false;

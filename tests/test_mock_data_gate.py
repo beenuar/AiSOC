@@ -83,6 +83,83 @@ def test_the_same_records_pass_once_demo_gated(tmp_path):
     assert gate.scan(root) == []
 
 
+#: A file that gates its SWR fallback correctly and then bypasses the gate one
+#: line later. `ThreatIntelView.tsx` shipped this shape: with demo mode off and
+#: the indicators API returning 404, `data` is undefined and the `??` renders
+#: five invented IOCs under a "3 Added Today" counter, on a deployment that had
+#: never ingested one. The gate reported everything gated.
+GATED_THEN_BYPASSED = """\
+const MOCK_INDICATORS: ThreatIndicator[] = [
+  { id: 'ioc-001', type: 'ip', value: '185.220.101.45', confidence: 95 },
+];
+
+export function ThreatIntelView() {
+  const { data } = useSWR(
+    'threat-intel-indicators',
+    () => threatIntelApi.list(),
+    { fallbackData: demoFallback({ indicators: MOCK_INDICATORS }) },
+  );
+  const allIndicators = data?.indicators ?? MOCK_INDICATORS;
+  return <IndicatorTable rows={allIndicators} />;
+}
+"""
+
+
+def test_a_gated_fallback_bypassed_at_render_is_caught(tmp_path):
+    root = _tree(tmp_path, "components/threat-intel/View.tsx", GATED_THEN_BYPASSED)
+    problems = gate.scan(root)
+    assert len(problems) == 1
+    assert "MOCK_INDICATORS" in (root / "components/threat-intel/View.tsx").read_text()
+    assert "`??`/`||` fallback" in problems[0]
+
+
+def test_the_three_older_patterns_alone_would_have_missed_the_bypass(tmp_path):
+    """Why the render-fallback check had to exist separately.
+
+    The `fallbackData:` line is correctly wrapped in `demoFallback(`, so the
+    first check passes it — as it should. Nothing is assigned through a setter.
+    The bypass is on a line none of the three shipped patterns describe.
+    """
+    root = _tree(tmp_path, "components/threat-intel/View.tsx", GATED_THEN_BYPASSED)
+    text = (root / "components/threat-intel/View.tsx").read_text(encoding="utf-8")
+    for line in text.split("\n"):
+        assert not (gate.FALLBACK_WITH_MOCK.search(line) and "demoFallback(" not in line)
+        assert not gate.MOCK_ASSIGN.search(line)
+        assert not gate.MOCK_FACTORY_ASSIGN.search(line)
+
+
+def test_an_empty_fallback_passes(tmp_path):
+    fixed = GATED_THEN_BYPASSED.replace(
+        "data?.indicators ?? MOCK_INDICATORS", "data?.indicators ?? []"
+    )
+    root = _tree(tmp_path, "components/threat-intel/View.tsx", fixed)
+    assert gate.scan(root) == []
+
+
+def test_a_demo_guarded_file_may_still_use_a_render_fallback(tmp_path):
+    guarded = GATED_THEN_BYPASSED.replace(
+        "data?.indicators ?? MOCK_INDICATORS",
+        "data?.indicators ?? (canUseDemoData() ? MOCK_INDICATORS : [])",
+    )
+    root = _tree(tmp_path, "components/threat-intel/View.tsx", guarded)
+    assert gate.scan(root) == []
+
+
+def test_documented_ui_configuration_is_exempt(tmp_path, monkeypatch):
+    """The exemption is keyed on file *and* constant, not the file alone."""
+    monkeypatch.setattr(
+        gate,
+        "RENDER_FALLBACK_EXEMPT",
+        {("identity/Perms.tsx", "DEMO_PROVIDERS"): "provider capability list, not tenant data"},
+    )
+    exempt = "const providers = info?.providers ?? DEMO_PROVIDERS;\n"
+    assert gate.scan(_tree(tmp_path, "identity/Perms.tsx", exempt)) == []
+
+    # A different constant in the same exempted file is still reported.
+    other = "const rows = data?.rows ?? MOCK_FINDINGS;\n"
+    assert len(gate.scan(_tree(tmp_path, "identity/Perms.tsx", other))) == 1
+
+
 def test_named_people_with_scores_are_caught(tmp_path):
     """The second live instance: an analyst leaderboard with no backend."""
     root = _tree(

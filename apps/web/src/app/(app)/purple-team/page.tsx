@@ -237,13 +237,26 @@ function CoverageHeatmap() {
     }
   }
 
-  const resolved = data ?? MOCK_COVERAGE
+  // `fallbackData` above withholds MOCK_COVERAGE outside the hosted demo.
+  // Naming the constant again here put it back: with the purple-team service
+  // absent — it is an `extras`-profile service, so it is not running in
+  // `core` or `full` — the page rendered an invented ATT&CK matrix with
+  // per-technique test and detection counts as the tenant's own coverage.
+  // Zeroed rather than absent: `summary` is required by CoverageMatrix and is
+  // dereferenced unguarded below, and "0 of 0 techniques, 0% coverage" is the
+  // truthful reading when the service has told us nothing.
+  const EMPTY_COVERAGE: CoverageMatrix = {
+    tactics: [],
+    techniques: {},
+    summary: { total_techniques: 0, tested_techniques: 0, detected_techniques: 0, overall_coverage: 0 },
+  }
+  const resolved = data ?? EMPTY_COVERAGE
   const {
     summary: rawSummary,
-    tactics = MOCK_COVERAGE.tactics,
-    techniques = MOCK_COVERAGE.techniques,
+    tactics = EMPTY_COVERAGE.tactics,
+    techniques = EMPTY_COVERAGE.techniques,
   } = resolved
-  const summary = rawSummary ?? MOCK_COVERAGE.summary
+  const summary = rawSummary ?? EMPTY_COVERAGE.summary
 
   // Index drift status by technique_id for O(1) lookup while rendering cells.
   const driftByTid = new Map<string, DriftTechnique>()
