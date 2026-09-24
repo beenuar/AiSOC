@@ -19,3 +19,9 @@ packages = ["aisoc_benchmark"]
 
 [tool.hatch.build.targets.sdist]
 include = ["aisoc_benchmark", "corpus", "README.md"]
+
+# Same shape as packages/sdk-py, plugin-sdk-py and aisoc-cli — the three
+# package trees that already declare one.
+[tool.mypy]
+strict = true
+python_version = "3.11"

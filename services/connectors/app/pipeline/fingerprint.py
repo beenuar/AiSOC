@@ -77,7 +77,7 @@ def compute_fingerprint(events: Iterable[dict[str, Any]]) -> str | None:
 def diff_fingerprints(
     previous_keys: Iterable[str],
     current_keys: Iterable[str],
-) -> dict[str, list[str]]:
+) -> dict[str, Any]:
     """Describe what changed between two field sets.
 
     Used by the scheduler to populate ``last_drift_details`` so the UI can
@@ -85,6 +85,16 @@ def diff_fingerprints(
     Both arguments are the raw key sets — the caller is responsible for
     pulling them from the most recent batch and the prior baseline batch
     (we cache the prior batch's keys in-memory in the scheduler).
+
+    The mapping is not homogeneous: ``added`` and ``removed`` are sorted key
+    lists and ``unchanged_count`` is an int. It was declared
+    ``dict[str, list[str]]``, which the body has never returned — and because
+    the scheduler assigns the result straight into a ``dict[str, Any]``
+    variable, the wrong declaration narrowed that variable and made the three
+    correct lines underneath it look like type errors instead. Both
+    consumers, ``connector_repo`` and the API's connector model, already
+    declare ``dict[str, Any]``, which is what actually reaches the JSONB
+    column.
     """
     prev = set(previous_keys)
     curr = set(current_keys)

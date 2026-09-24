@@ -88,7 +88,16 @@ class GoogleWorkspaceClient:
                 service_account_key = json.loads(service_account_key)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"gws_service_account_key is not valid JSON: {exc}") from exc
-        self._key = service_account_key
+        # `json.loads` happily returns a str, list or int for a document that
+        # is valid JSON but not an object. Without this the credential passed
+        # construction and failed at `self._key["client_email"]` — inside the
+        # JWT signing path, with `TypeError: string indices must be integers`,
+        # at the moment an operator triggered a live containment action. The
+        # configuration is wrong either way; it should say so when it is
+        # saved, not when it is used.
+        if not isinstance(service_account_key, dict):
+            raise ValueError(f"gws_service_account_key must be a JSON object, got {type(service_account_key).__name__}")
+        self._key: dict[str, Any] = service_account_key
         self._subject = subject_email
         self._token: str | None = None
         self._token_expiry: float = 0.0

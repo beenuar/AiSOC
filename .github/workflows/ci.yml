@@ -235,25 +235,50 @@ jobs:
       - name: Ruff format check (all services)
         run: ruff format --check services/
       # This job has been called "Lint & Type-check" since it was written, and
-      # until now it installed mypy and never ran it. Six manifests declare a
-      # `[tool.mypy]` table and three set `strict = true`, so the config asked
-      # for a check that had never once executed.
+      # for most of that time it installed mypy and never ran it. #818 ran it
+      # over the six manifests that declared a `[tool.mypy]` table — which
+      # left fourteen Python trees checked by nothing while the job reported
+      # green, and a tool that appears to cover the repository while covering
+      # a third of it is indistinguishable from no tool at all, only more
+      # reassuring. All twenty trees now declare one, matching the two
+      # strictness shapes that already existed rather than inventing a third.
       #
-      # The findings are real and there are 690 of them. They are recorded in
-      # `scripts/mypy_baseline.json` exactly as mypy reports them and the gate
-      # fails when any grows — no `ignore_errors`, no widened config, no tree
-      # excluded. Nothing installs the services' dependencies here on purpose:
-      # mypy's answer depends on what is importable, so the baseline is only
-      # reproducible against a fixed environment, and "mypy alone on 3.11" is
-      # that environment — 3.11 because that is the interpreter every service
-      # image ships, and a baseline recorded on an interpreter production does
-      # not run is a baseline for software nobody ships. Re-record with
+      # The findings are recorded in `scripts/mypy_baseline.json` exactly as
+      # mypy reports them and the gate fails when any grows — no
+      # `ignore_errors`, no widened config, no tree excluded. Nothing installs
+      # the services' dependencies here on purpose: mypy's answer depends on
+      # what is importable, so the baseline is only reproducible against a
+      # fixed environment, and "mypy alone on 3.11" is that environment — 3.11
+      # because that is the interpreter every service image ships, and a
+      # baseline recorded on an interpreter production does not run is a
+      # baseline for software nobody ships. Re-record with
       # `python scripts/check_mypy_baseline.py --update` under the same
       # conditions.
+      #
+      # The same gate now also fails when a Python tree declares no
+      # `[tool.mypy]`, and when a configured or recorded tree is no longer on
+      # disk. Both directions, because the dominant failure shape here is a
+      # check that compares A against B and never B against A.
       - name: The type-check this job is named after
         run: |
           python scripts/check_mypy_baseline.py --self-test
           python scripts/check_mypy_baseline.py
+      # `logging.Logger.warning` accepts four keywords; structlog's bound
+      # logger accepts any. Both are used in this tree, so
+      # `logger.warning("x", reason=...)` is correct in one module and a
+      # TypeError in the next, and the call sites are identical to read. #818
+      # found five, all inside `except` blocks — where the raised TypeError
+      # replaces the exception being handled and no sibling handler can catch
+      # it, so the one path whose job was to degrade gracefully was the only
+      # path that raised. A type checker only sees this in a tree it checks;
+      # this scan covers every Python file in the repository, including the
+      # ~150 under scripts/, tests/, tools/ and plugins/ that belong to no
+      # tree, and reports how many receivers it could not classify rather than
+      # counting them as clean.
+      - name: No stdlib logger is called with a structlog keyword
+        run: |
+          python scripts/check_logger_kwargs.py --self-test
+          python scripts/check_logger_kwargs.py
       # The aisoc-api Docker image is built with `services/api` as its build
       # context, so anything under `services/agents` is *not* shipped in the
       # container. The natural-language query translator is consumed by both

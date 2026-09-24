@@ -42,7 +42,14 @@ class CaptureMode(str, Enum):
 #: Deliberately narrow and high-confidence. A greedy redactor that mangles
 #: ordinary prose trains people to turn redaction off, which is a worse
 #: outcome than a narrow one that they leave on.
-_SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], None | str] | tuple = (
+#: The declared type used to be
+#: ``tuple[tuple[str, re.Pattern[str]], None | str] | tuple``, whose first
+#: member is a two-element tuple — structurally impossible for the eight-pair
+#: value below, so it only ever matched through the bare ``| tuple``. That
+#: erases the element type to ``Any``, which is why nothing objected to
+#: ``pattern.subn`` on something typed as possibly a ``str``. In a masking
+#: path, a checker that has been silently switched off is worse than none.
+_SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("aws_access_key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
     ("openai_key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),

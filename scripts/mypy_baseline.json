@@ -1,4 +1,30 @@
 {
+  "packages/aisoc-ai-sdk": {
+    "aisoc_ai/client.py": {
+      "type-arg": 1
+    },
+    "tests/test_ai_sdk.py": {
+      "import-not-found": 1,
+      "no-untyped-def": 21,
+      "type-arg": 3,
+      "untyped-decorator": 1
+    }
+  },
+  "packages/aisoc-benchmark": {
+    "aisoc_benchmark/adapter.py": {
+      "import-not-found": 1
+    },
+    "aisoc_benchmark/runner.py": {
+      "no-untyped-def": 1
+    },
+    "build_corpus.py": {
+      "type-arg": 2
+    },
+    "tests/test_benchmark.py": {
+      "import-not-found": 1,
+      "untyped-decorator": 2
+    }
+  },
   "packages/aisoc-cli": {
     "src/aisoc_cli/main.py": {
       "import-not-found": 7,
@@ -29,6 +55,34 @@
       "misc": 1,
       "no-untyped-call": 1,
       "no-untyped-def": 3,
+      "untyped-decorator": 1
+    }
+  },
+  "packages/aisoc-detections": {
+    "detections/aws_root_console_login.py": {
+      "no-any-return": 1,
+      "type-arg": 2
+    },
+    "detections/okta_mfa_fatigue.py": {
+      "type-arg": 3
+    },
+    "tests/test_framework.py": {
+      "import-not-found": 1,
+      "no-untyped-def": 7
+    }
+  },
+  "packages/aisoc-sandbox": {
+    "src/aisoc_sandbox/cli.py": {
+      "attr-defined": 7
+    },
+    "tests/test_determinism.py": {
+      "import-not-found": 1,
+      "no-any-return": 1,
+      "untyped-decorator": 2
+    },
+    "tests/test_smoke.py": {
+      "attr-defined": 2,
+      "import-not-found": 1,
       "untyped-decorator": 1
     }
   },
@@ -99,6 +153,129 @@
       "import-not-found": 2,
       "no-untyped-def": 10,
       "untyped-decorator": 8
+    }
+  },
+  "services/actions": {
+    "app/executors/network.py": {
+      "arg-type": 1
+    },
+    "app/executors/notification.py": {
+      "arg-type": 2,
+      "assignment": 2
+    },
+    "app/live_actions/capability_contracts.py": {
+      "attr-defined": 7
+    },
+    "app/services/approval_gate.py": {
+      "arg-type": 1
+    },
+    "tests/test_approval_gate_wiring.py": {
+      "attr-defined": 1
+    },
+    "tests/test_capability_reachability.py": {
+      "attr-defined": 4
+    },
+    "tests/test_capture_forensics.py": {
+      "attr-defined": 3
+    },
+    "tests/test_disposition_writeback.py": {
+      "assignment": 1
+    },
+    "tests/test_tenant_policy.py": {
+      "var-annotated": 1
+    },
+    "tests/test_vendor_breadth.py": {
+      "attr-defined": 1
+    }
+  },
+  "services/agents": {
+    "app/hunt/loader.py": {
+      "import-untyped": 1
+    },
+    "app/investigator/report_writer_agent.py": {
+      "import-untyped": 1
+    },
+    "app/nl_query/translator.py": {
+      "no-redef": 3
+    },
+    "app/orchestrator/report.py": {
+      "import-untyped": 1
+    },
+    "app/orchestrator/router.py": {
+      "arg-type": 5
+    },
+    "app/playbook/engine.py": {
+      "misc": 1
+    },
+    "app/playbook/ssrf_guard.py": {
+      "attr-defined": 6,
+      "union-attr": 1
+    },
+    "app/playbook/store.py": {
+      "valid-type": 1
+    },
+    "app/policy/guardrails.py": {
+      "arg-type": 1
+    },
+    "app/security/llm_resolver.py": {
+      "arg-type": 2
+    },
+    "app/tools/mitre_full.py": {
+      "attr-defined": 19,
+      "call-overload": 2,
+      "var-annotated": 2
+    },
+    "app/workers/business_context.py": {
+      "import-untyped": 1
+    },
+    "app/workers/fused_alert_consumer.py": {
+      "union-attr": 1
+    },
+    "tests/test_alert_reduction.py": {
+      "valid-type": 1
+    },
+    "tests/test_audit_helpers.py": {
+      "attr-defined": 24,
+      "valid-type": 1
+    },
+    "tests/test_autonomy_guardrails.py": {
+      "import-untyped": 1
+    },
+    "tests/test_business_context_not_clause.py": {
+      "attr-defined": 1,
+      "misc": 1
+    },
+    "tests/test_cost_governor.py": {
+      "arg-type": 1
+    },
+    "tests/test_detection_fp_rate.py": {
+      "attr-defined": 8
+    },
+    "tests/test_eval_telemetry.py": {
+      "attr-defined": 4
+    },
+    "tests/test_fidelity_harness.py": {
+      "index": 2
+    },
+    "tests/test_four_agent_facade.py": {
+      "attr-defined": 2
+    },
+    "tests/test_hunt_corpus.py": {
+      "attr-defined": 12
+    },
+    "tests/test_litellm_config.py": {
+      "import-untyped": 1
+    },
+    "tests/test_llm_resolver.py": {
+      "misc": 1,
+      "var-annotated": 1
+    },
+    "tests/test_osquery_live_query_step.py": {
+      "func-returns-value": 2,
+      "misc": 2
+    },
+    "tests/test_playbook_completion_rate.py": {
+      "attr-defined": 15
     }
   },
   "services/api": {
@@ -267,6 +444,42 @@
       "misc": 3
     }
   },
+  "services/connectors": {
+    "app/api/router.py": {
+      "attr-defined": 1
+    },
+    "app/connectors/ai_gateway.py": {
+      "attr-defined": 1
+    },
+    "app/connectors/aws_security_hub.py": {
+      "override": 1
+    },
+    "app/connectors/email_inbox.py": {
+      "union-attr": 4
+    },
+    "app/connectors/github.py": {
+      "override": 1
+    },
+    "app/connectors/oci.py": {
+      "operator": 1,
+      "union-attr": 7
+    },
+    "app/connectors/okta.py": {
+      "override": 1
+    },
+    "app/connectors/tenable.py": {
+      "arg-type": 1
+    },
+    "tests/test_pipeline_filter_rules.py": {
+      "arg-type": 1
+    },
+    "tests/test_pipeline_fingerprint.py": {
+      "arg-type": 1
+    },
+    "tests/test_push_capabilities.py": {
+      "union-attr": 16
+    }
+  },
   "services/fusion": {
     "tests/test_consumer_dlq.py": {
       "arg-type": 1
@@ -275,9 +488,58 @@
       "arg-type": 1
     }
   },
+  "services/honeytokens": {
+    "alembic/env.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0001_initial_honeytoken_tables.py": {
+      "attr-defined": 1
+    }
+  },
+  "services/mesh": {},
   "services/osquery-tls": {
     "app/services/pack_loader.py": {
       "import-untyped": 1
+    }
+  },
+  "services/purple-team": {
+    "alembic/env.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0001_initial_purple_team_tables.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0002_detection_drift_snapshots.py": {
+      "attr-defined": 1
+    },
+    "app/services/atomic_loader.py": {
+      "import-untyped": 1
+    }
+  },
+  "services/slack-bot": {
+    "app/notify.py": {
+      "union-attr": 1
+    },
+    "app/services/approval_timeout.py": {
+      "func-returns-value": 1
+    }
+  },
+  "services/teams-bot": {
+    "tests/test_callbacks_approver.py": {
+      "index": 1
+    }
+  },
+  "services/threatintel": {
+    "app/feeds/pipeline.py": {
+      "union-attr": 1
+    }
+  },
+  "services/ueba": {
+    "alembic/env.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0001_initial_ueba_tables.py": {
+      "attr-defined": 1
     }
   }
 }

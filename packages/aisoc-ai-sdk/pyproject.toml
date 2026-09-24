@@ -32,3 +32,9 @@ Source = "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-ai-sdk"
 
 [tool.hatch.build.targets.wheel]
 packages = ["aisoc_ai"]
+
+# Same shape as packages/sdk-py, plugin-sdk-py and aisoc-cli — the three
+# package trees that already declare one.
+[tool.mypy]
+strict = true
+python_version = "3.11"

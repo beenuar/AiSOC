@@ -633,7 +633,12 @@ class ContextBundleBuilder:
         out: dict[str, EntityNeighborhood] = {}
         results = await asyncio.gather(*[_walk(e) for e in principals], return_exceptions=True)
         for r in results:
-            if isinstance(r, Exception):
+            # BaseException, not Exception: `gather(return_exceptions=True)`
+            # hands back a cancelled child's `CancelledError`, which is a
+            # BaseException on 3.8+. Filtering on `Exception` let it through
+            # to the unpack below, turning a cancelled graph walk into
+            # `TypeError: cannot unpack non-sequence CancelledError`.
+            if isinstance(r, BaseException):
                 logger.debug("context.neighborhood.failed", error=str(r))
                 continue
             key, nbr = r
@@ -738,7 +743,9 @@ class ContextBundleBuilder:
 
             results = await asyncio.gather(*[_one(e) for e in principals], return_exceptions=True)
             for r in results:
-                if isinstance(r, Exception) or r is None:
+                # See `_fetch_neighborhoods`: a cancelled child returns a
+                # `CancelledError`, which is not an `Exception`.
+                if isinstance(r, BaseException) or r is None:
                     continue
                 key, baseline = r
                 out[key] = baseline

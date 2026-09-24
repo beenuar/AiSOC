@@ -77,6 +77,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **All twenty Python trees are type-checked, and the coverage is gated in both
+  directions.** `#818` ran mypy for the first time, over the six trees that
+  declared a `[tool.mypy]` table. Fourteen declared none, so the job named
+  "Lint & Type-check" reported green over 787 Python files it never opened — a
+  tool that appears to cover the repository while covering a third of it is
+  indistinguishable from no tool at all, only more reassuring.
+
+  Every tree now declares one, matching the two strictness shapes that already
+  existed rather than inventing a third: the ten services take
+  `python_version = "3.11"` / `strict = false` / `ignore_missing_imports = true`
+  like `services/api` and `services/osquery-tls`; the four packages take
+  `strict = true` / `python_version = "3.11"` like `packages/sdk-py`,
+  `plugin-sdk-py` and `aisoc-cli`. No `ignore_errors`, no widened config, no
+  `# type: ignore` added to reach a number.
+
+  `scripts/check_mypy_baseline.py` gains the coverage check itself, rather than
+  a second gate with its own idea of what a tree is. A Python tree on disk that
+  declares no `[tool.mypy]` fails (`tree -> config`), and a configured or
+  recorded tree that is no longer on disk fails (`config -> tree`) — the
+  direction that rots quietly, because nothing ever fails when a stale entry is
+  simply never consulted. Discovery is now structural, every directory holding a
+  `pyproject.toml`, instead of `services/*` plus `packages/*`: the glob was a
+  naming convention, and a Python tree added anywhere else would have satisfied
+  a coverage gate written against that same glob while being checked by nothing.
+  The gate resolves its root from `git rev-parse` rather than from its own file
+  location, prints how many trees and files were in scope, and its `--self-test`
+  injects coverage drift each way against a throwaway repository.
+
+- **`scripts/check_logger_kwargs.py` — no stdlib logger may be called with a
+  structlog keyword.** `logging.Logger.warning` accepts exactly `exc_info`,
+  `stack_info`, `stacklevel` and `extra`; structlog's bound logger accepts any
+  keyword and turns it into the event dict. Both libraries are used in this
+  tree, so `logger.warning("x", reason=exc.reason)` is correct in one module and
+  a `TypeError` in the next, and the two call sites are identical to read — only
+  the binding decides.
+
+  This needs a checker rather than a grep because of *where* it hides. All five
+  instances `#818` fixed were inside `except` blocks, where the raised
+  `TypeError` replaces the exception being handled and no sibling handler can
+  catch it. A misused keyword on the happy path is found by the first person to
+  run the code; the same keyword in a fallback runs only when something has
+  already gone wrong. The report sorts by context and names how many findings
+  sit on such a path.
+
+  The scanner resolves each module's logger flavour rather than assuming one:
+  every binding, not just `logger`; `self._log` and class-body loggers reached
+  through the instance; `from app.core.logging import get_logger` followed to
+  the defining module, because both in-repo `get_logger` helpers return
+  structlog while their name says nothing; `.bind()` / `.getChild()` chains;
+  annotations, including parameters, for a logger that is handed in; and
+  `logging.warning(...)` on the root logger. A `**kwargs` splat onto a stdlib
+  logger cannot be decided statically and is reported separately rather than
+  counted as clean, and a receiver it cannot classify is counted as
+  `unresolved`, never as clean.
+
+  It covers all 1,408 Python files including the ~150 under `scripts/`,
+  `tests/`, `tools/` and `plugins/` that belong to no tree and so are checked by
+  no `[tool.mypy]` at all. It classifies 514 stdlib and 970 structlog call sites
+  with 18 unresolved receivers, and reports zero defects — and fails outright if
+  it classifies no stdlib logger, because "found nothing" and "resolved nothing"
+  otherwise print the same word. Pointed at the pre-`#818` files it reports all
+  five, each labelled `[inside except]`.
+
+  Three shapes were added after the first version reported a clean tree and the
+  shapes were then found *in* that tree: an inline
+  `logging.getLogger(__name__).warning(...)` with no binding to look up
+  (`detection_proposals.py`), a class-body logger reached as `self.logger`
+  (`core/config.py`), and an annotation with no factory call in sight. All three
+  were invisible to a scanner that only read assignments of a name.
+
 - **CI now runs the interpreter production runs, and `gofmt`, `services/realtime`
   and the published image list are gated.** Three loose ends `#817` named and
   did not close.
@@ -913,6 +983,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **Every live Okta password reset raised `TypeError` and came back FAILED.**
+  `ResetPasswordExecutor` documents `parameters.send_email` as "used only for
+  the Okta path", reads it, and passed `send_email=` to
+  `OktaClient.reset_password(self, login_or_id)` — which did not accept it. The
+  executor's `except Exception` turned the `TypeError` into a FAILED
+  `ActionResult`, so the verb did not crash; it simply could never succeed
+  against Okta, and the failure read as an Okta problem. Simulation mode never
+  constructs a vendor client, which is why no test saw it: the one that covers
+  this executor stubs the client as `async def reset_password(self, *_args,
+  **_kw)`, and a fake that accepts anything proves the dispatch order and
+  nothing about the call. The client now takes `send_email` and maps it to
+  Okta's `sendEmail` parameter, and `test_identity_client_signatures.py`
+  autospecs all three IdP clients across every executor arm — the companion to
+  `test_siem_client_signatures.py`, for the third instance of the same defect.
+
+- **The natural-language playbook drafter could never reach an LLM.**
+  `nl_drafter._llm_factory` called `make_chat_model()`, and `role` is a required
+  positional parameter; every other caller in the tree passes one. The
+  `TypeError` was caught by the `except Exception` two lines down, which logged
+  "no chat model available" and returned `None`, so the drafter fell back to its
+  deterministic substrate path on every call, permanently, while reporting the
+  condition as a missing provider. Every test monkeypatches `_llm_factory`, so
+  the one line that mattered was the one line nothing exercised. Now passes
+  `"nl"`, the declared role in `app.llm.model_pins`.
+
+- **A cancelled context-graph walk crashed the context bundle.**
+  `_fetch_neighborhoods` and `_fetch_ueba_baselines` filter
+  `asyncio.gather(..., return_exceptions=True)` results with
+  `isinstance(r, Exception)`, then unpack the survivors as a tuple.
+  `asyncio.CancelledError` is a `BaseException` and not an `Exception` on 3.8+,
+  so a cancelled child task passed the filter and reached the unpack as
+  `TypeError: cannot unpack non-sequence CancelledError`. `services/slack-bot`
+  carries a comment spelling out this exact trap; these two sites got it wrong.
+  Both now filter on `BaseException`.
+
+- **`_SECRET_PATTERNS` was declared with a type its value cannot have, which
+  switched off checking of the secret-masking loop.** The annotation in the AI
+  SDK's redaction module read
+  `tuple[tuple[str, re.Pattern[str]], None | str] | tuple`, whose first member
+  is a two-element tuple — structurally impossible for the eight-pair value, so
+  it only ever matched through the bare `| tuple`. That erases the element type
+  to `Any`, which is why nothing objected to calling `.subn` on something typed
+  as possibly a `str`. In a path whose job is to stop secrets leaving the
+  process, a checker that has been silently switched off is worse than none.
+  Declared `tuple[tuple[str, re.Pattern[str]], ...]`, which is what it is.
+
+- **`diff_fingerprints` was declared to return `dict[str, list[str]]` and never
+  has.** It returns `unchanged_count` as an `int`, which the connector
+  scheduler stores and a test asserts on. Because the scheduler assigns the
+  result straight into a `dict[str, Any]` variable, the wrong declaration
+  narrowed that variable and made the three correct lines underneath it look
+  like type errors instead — one wrong annotation producing four findings across
+  two modules. Declared `dict[str, Any]`, which is what both consumers and the
+  JSONB column already expect.
+
+- **A Google Workspace key that was valid JSON but not an object failed inside
+  the JWT signing path.** `json.loads` returns a `str`, `list` or `int` for a
+  document that is valid JSON and not an object, and the constructor accepted
+  it; the failure surfaced later as `TypeError: string indices must be integers`
+  at `self._key["client_email"]`, at the moment an operator triggered a live
+  action. The configuration is wrong either way — it now says so when the
+  credential is saved rather than when it is used.
 
 - **Five LLM input-contract handlers raised `TypeError` instead of degrading.**
   `/translation`, `/phishing`, `/knowledge-base`, `/hunts` and `/detection-loop`

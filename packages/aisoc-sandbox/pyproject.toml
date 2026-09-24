@@ -56,3 +56,11 @@ aisoc_sandbox = ["scenarios/*.json", "py.typed"]
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
+
+# Same shape as packages/sdk-py, plugin-sdk-py and aisoc-cli — the three
+# package trees that already declare one. `python_version` is pinned to 3.11
+# even though the wheel supports 3.10+: the baseline has to be reproducible,
+# and 3.11 is the interpreter CI runs.
+[tool.mypy]
+strict = true
+python_version = "3.11"

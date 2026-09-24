@@ -38,6 +38,14 @@ pytest = ">=9.0.3,<10.0"
 pytest-asyncio = ">=1.0,<2.0"
 respx = "^0.21.1"
 
+# Same shape as services/api and services/osquery-tls rather than a third
+# strictness level. `python_version` is pinned so the finding set does not
+# move with whatever interpreter mypy happens to run on.
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

@@ -143,15 +143,23 @@ class OktaClient:
             logger.info("okta.clear_sessions.success", user_id=user_id)
             return {"success": True, "action": "clear_sessions", "user_id": user_id, "login": login_or_id}
 
-    async def reset_password(self, login_or_id: str) -> dict[str, Any]:
-        """Trigger a password reset email for the user."""
+    async def reset_password(self, login_or_id: str, *, send_email: bool = True) -> dict[str, Any]:
+        """Trigger a password reset for the user.
+
+        ``send_email`` maps to Okta's ``sendEmail`` query parameter. It is a
+        keyword because ``ResetPasswordExecutor`` has always read
+        ``parameters.send_email`` and passed it here — against a signature
+        that did not accept it, so every live Okta reset raised ``TypeError``
+        and came back as a FAILED action. Simulation mode never constructs
+        this client, which is why nothing caught it.
+        """
         async with httpx.AsyncClient(timeout=20.0) as client:
             user = await self._find_user(client, login_or_id)
             user_id = user["id"]
             resp = await client.post(
                 f"{self._domain}/api/v1/users/{user_id}/lifecycle/reset_password",
                 headers=self._headers(),
-                params={"sendEmail": "true"},
+                params={"sendEmail": "true" if send_email else "false"},
             )
             resp.raise_for_status()
             data = resp.json()
