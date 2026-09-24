@@ -24,8 +24,11 @@ Run:  python3 scripts/check_action_contract.py
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
+
+import structlog
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ACTIONS = REPO_ROOT / "services" / "actions"
@@ -311,6 +314,190 @@ def check_verification_probes() -> list[str]:
     return errors
 
 
+#: Legacy ``ActionType`` executors that are deliberately not reachable through
+#: governed live-action dispatch, with the reason each one is not.
+#:
+#: A baseline, not a pass: the gate fails on anything new, and fails again when
+#: one of these gains an adapter and is not removed.
+KNOWN_UNGOVERNED_EXECUTORS: dict[str, str] = {
+    "chatops_verify": (
+        "returns ActionStatus.RUNNING — the prompt was delivered and a human "
+        "has not answered yet. LiveActionStatus has no state for that, and "
+        "_to_live_status collapses everything that is not FAILED or a "
+        "simulation into SUCCEEDED, so registering it as-is would report an "
+        "unanswered question as a completed action. Needs a status for "
+        "'delivered, awaiting a reply' before it can be dispatched honestly."
+    ),
+}
+
+#: ``ActionType`` members with no executor behind them at all. The legacy REST
+#: route answers "No executor found for action type", which reads as a
+#: misconfiguration rather than a verb nobody built.
+KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR: dict[str, str] = {
+    "capture_forensics": (
+        "No executor anywhere. Worse than unused: "
+        "services/agents/app/agents/investigation_agent.py proposes it by name "
+        "on the C2/exfiltration path, so the product recommends evidence "
+        "acquisition it cannot perform, at the point where preserving evidence "
+        "matters most. Needs a real acquisition arm, not a stub."
+    ),
+    "add_ioc_to_blocklist": (
+        "Superseded by block_ioc, which has a Defender arm, a contract and a "
+        "registered adapter. Nothing dispatches this one."
+    ),
+    "run_playbook": (
+        "Playbook execution lives in services/agents. This member is a leftover "
+        "from before that split; the actions service has never run one."
+    ),
+}
+
+
+def check_capability_reachability() -> list[str]:
+    """Every direction between an executor and the things that make it reachable.
+
+    Four registries have to agree before a verb can be dispatched under
+    governance: the legacy ``ActionType`` executor, the live-action adapter,
+    the capability contract, and the capability vocabulary. Nothing compared
+    them, so a verb could be complete in three of the four and unreachable.
+
+    ``ack_alert`` and ``suppress_alert`` were exactly that — real executors
+    with Splunk, Elastic and Defender arms, wired into ``EXECUTOR_REGISTRY``,
+    and absent from the adapters, the contracts and the vocabulary. Governed
+    dispatch answered ``executor_not_found`` for code that worked.
+
+    Every comparison below runs **both ways**, which is the part that matters.
+    The dominant failure in this repository is a check that compares A against
+    B and never B against A: the graph-schema drift check reported OK while the
+    YAML declared 17 labels and the Go code had 28, because it only ever looked
+    for labels the YAML had and the code lacked. A one-directional version of
+    this check would have passed on ``ack_alert`` too — it is missing in the
+    direction nothing was looking.
+    """
+    from app.live_actions import builtins, registry
+    from app.live_actions.capabilities import KNOWN_CAPABILITIES
+    from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
+    from app.models.action import ActionType
+    from app.services.executor_registry import EXECUTOR_REGISTRY
+
+    errors: list[str] = []
+    adapters = builtins._BUILTIN_ADAPTERS  # noqa: SLF001
+    adapter_capabilities = {cls.capability for cls in adapters}
+    adapter_action_types = {getattr(cls, "_legacy_action_type", None) for cls in adapters}
+    adapter_action_types.discard(None)
+
+    # ── Direction 1: adapter → vocabulary ──────────────────────────────────
+    # register_executor() only *warns* on an unknown capability, so this drift
+    # is invisible outside a startup log. check_capability_mirror compares the
+    # connectors enum against the mirror in both directions but neither
+    # against the executors, which is how create_ticket and notify came to be
+    # registered, contracted and dispatchable while absent from the vocabulary
+    # they are validated against.
+    for capability in sorted(adapter_capabilities - KNOWN_CAPABILITIES):
+        errors.append(
+            f"{capability}: a registered executor implements it, but it is absent "
+            f"from KNOWN_CAPABILITIES and therefore from the connectors "
+            f"Capability enum. The registry logs live_action.capability_unknown "
+            f"for it at every startup and anything validating against the "
+            f"vocabulary rejects it. Add it to both."
+        )
+
+    # ── Direction 2: adapter → contract ────────────────────────────────────
+    # apply_contract() leaves the unsafe defaults when there is no entry, which
+    # the per-executor grading catches indirectly. Name it directly so the
+    # failure says what to do rather than "declares no required_permission".
+    for capability in sorted(adapter_capabilities - set(CAPABILITY_CONTRACTS)):
+        errors.append(
+            f"{capability}: a registered executor implements it and no capability "
+            f"contract declares what it does to an estate. Nothing decided its "
+            f"impact, reversibility, verification or approval tier."
+        )
+
+    # ── Direction 3: adapter → live-action registry ────────────────────────
+    # An adapter that never registers is as unreachable as one that does not
+    # exist, and the only difference is that this one looks finished.
+    #
+    # Registering ~60 executors emits a line each; the gate's own output is
+    # what a failing build needs to be readable, so drop anything below ERROR
+    # for the duration.
+    structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.ERROR))
+    registry.reset_for_tests()
+    builtin_count = builtins.register_builtin_executors(overwrite=True)
+    for cls in adapters:
+        if registry.get_executor(cls.vendor_id, cls.capability) is None:
+            errors.append(f"{cls.__module__}.{cls.__name__}: declares " f"{cls.vendor_id}/{cls.capability} but did not register")
+    if builtin_count != len(adapters):
+        errors.append(f"register_builtin_executors registered {builtin_count} of " f"{len(adapters)} adapters")
+
+    # ── Direction 4: legacy executor → adapter ─────────────────────────────
+    # The one that was missing. A legacy executor with no adapter is reachable
+    # only through the ActionType REST route, which has no contract, no
+    # approval matrix and no autonomy policy in front of it.
+    for action_type in sorted(EXECUTOR_REGISTRY, key=lambda a: a.value):
+        if action_type in adapter_action_types:
+            continue
+        if action_type.value in KNOWN_UNGOVERNED_EXECUTORS:
+            continue
+        executor = EXECUTOR_REGISTRY[action_type]
+        errors.append(
+            f"{action_type.value}: {type(executor).__name__} is registered in "
+            f"EXECUTOR_REGISTRY and no live-action adapter reaches it. Governed "
+            f"dispatch answers executor_not_found for a verb that works, so the "
+            f"code is unreachable from the agent loop, the planner and the "
+            f"approval matrix. Add an adapter per vendor arm, a capability "
+            f"contract, and the verb to the vocabulary."
+        )
+
+    # ── Direction 5: adapter → legacy executor ─────────────────────────────
+    # The mirror of 4. An adapter pointing at an ActionType with no legacy
+    # executor raises at execute() rather than at registration.
+    for action_type in sorted(adapter_action_types, key=lambda a: a.value):
+        if action_type not in EXECUTOR_REGISTRY:
+            errors.append(
+                f"{action_type.value}: a live-action adapter delegates to this "
+                f"ActionType and EXECUTOR_REGISTRY has no executor for it. The "
+                f"failure would surface at execute(), not at registration."
+            )
+
+    # ── Direction 6: ActionType → legacy executor ──────────────────────────
+    for action_type in sorted(ActionType, key=lambda a: a.value):
+        if action_type in EXECUTOR_REGISTRY:
+            continue
+        if action_type.value in KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR:
+            continue
+        errors.append(
+            f"{action_type.value}: an ActionType with no executor in "
+            f"EXECUTOR_REGISTRY. The API accepts it and then answers 'No "
+            f"executor found for action type', which reads as a broken "
+            f"deployment rather than a verb that was never built."
+        )
+
+    errors.extend(_ratchet("KNOWN_UNGOVERNED_EXECUTORS", KNOWN_UNGOVERNED_EXECUTORS, {a.value for a in adapter_action_types}))
+    errors.extend(
+        _ratchet(
+            "KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR",
+            KNOWN_ACTION_TYPES_WITHOUT_EXECUTOR,
+            {a.value for a in EXECUTOR_REGISTRY},
+        )
+    )
+    return errors
+
+
+def _ratchet(name: str, baseline: dict[str, str], resolved_set: set[str]) -> list[str]:
+    """A baseline may only ever shrink.
+
+    Without this the exemption list is where the next one hides: an entry that
+    quietly gained an implementation leaves the gate checking one fewer thing
+    every release, and nothing says so.
+    """
+    resolved = sorted(set(baseline) & resolved_set)
+    if not resolved:
+        return []
+    return [
+        f"{name} lists {', '.join(resolved)}, which is no longer missing. "
+        f"Remove the entry — a stale exemption is a gate that stopped checking."
+    ]
+
+
 def check_capability_mirror() -> list[str]:
     """The actions mirror must match the connectors Capability enum.
 
@@ -369,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
             + check_capability_mirror()
             + check_verification_probes()
             + check_no_orphan_capabilities()
+            + check_capability_reachability()
         )
     except ImportError as exc:
         print(f"action-contract: cannot import the actions package: {exc}", file=sys.stderr)

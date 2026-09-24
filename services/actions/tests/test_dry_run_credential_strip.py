@@ -72,11 +72,15 @@ FACTORIES = {
 }
 
 #: vendor_id -> the declared key tuple every adapter for that vendor must use.
+#: Defender is here too: it has no factory (the arms build the client inline),
+#: but its adapters strip a key tuple like everyone else, and the ack /
+#: suppress arms added it as a third capability.
 VENDOR_KEYS = {
     "splunk": siem.SPLUNK_CLIENT_PARAM_KEYS,
     "elastic": siem.ELASTIC_CLIENT_PARAM_KEYS,
     "sentinel": siem.SENTINEL_CLIENT_PARAM_KEYS,
     "qradar": siem.QRADAR_CLIENT_PARAM_KEYS,
+    "defender": siem.DEFENDER_CLIENT_PARAM_KEYS,
 }
 
 
@@ -132,6 +136,11 @@ def test_every_registered_siem_adapter_strips_its_vendors_full_key_set() -> None
         if expected is None:
             continue
         executor = registry.get_executor(descriptor.vendor_id, descriptor.capability)
+        # The strip list is how ``_LegacyExecutorAdapter`` implements dry_run.
+        # The native read-only executors honour it with an early return before
+        # they build a client, so they have no strip list to grade.
+        if not isinstance(executor, builtins._LegacyExecutorAdapter):  # noqa: SLF001
+            continue
         strip = getattr(executor, "_credential_keys", ())
         detail = f"{descriptor.vendor_id}/{descriptor.capability}: strips {sorted(strip)} vs factory {sorted(expected)}"
         assert set(strip) == set(expected), detail
@@ -177,3 +186,46 @@ async def test_dry_run_writeback_never_reaches_a_vendor(monkeypatch) -> None:
     )
     assert result.status is LiveActionStatus.SIMULATED
     assert result.details.get("written") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("capability", ["ack_alert", "suppress_alert"])
+@pytest.mark.parametrize("vendor", ["splunk", "elastic"])
+async def test_dry_run_alert_lifecycle_never_reaches_a_vendor(monkeypatch, vendor: str, capability: str) -> None:
+    """The same guarantee for the two verbs that just became reachable.
+
+    They pin ``alert_vendor`` per arm so a tenant with two SIEMs configured
+    does not have the target chosen by credential ordering. A pin is a routing
+    hint and never a licence to skip the credential check, so a dry run — which
+    works by removing the credentials — must still simulate rather than
+    resolving to the pinned vendor and calling it.
+    """
+    builtins.register_builtin_executors(overwrite=True)
+
+    def _tripwire(name, real):
+        def _wrapped(params):
+            client = real(params)
+            if client is not None:
+                raise AssertionError(f"a dry run built a live client via {name}")
+            return None
+
+        return _wrapped
+
+    for name in ("_splunk_client", "_elastic_client", "_sentinel_client", "_qradar_client"):
+        monkeypatch.setattr(siem, name, _tripwire(name, getattr(siem, name)))
+
+    executor = registry.get_executor(vendor, capability)
+    assert executor is not None, f"{vendor}/{capability} is not registered"
+    result = await executor.execute(
+        LiveActionRequest(
+            capability=capability,
+            vendor_id=vendor,
+            target="FINDING-1",
+            params=dict(FULL_CREDENTIALS),
+            dry_run=True,
+            tenant_id=uuid4(),
+        )
+    )
+
+    assert result.status is LiveActionStatus.SIMULATED
+    assert "Simulation mode" in str(result.details.get("note", ""))

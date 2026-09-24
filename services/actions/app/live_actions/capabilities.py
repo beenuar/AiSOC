@@ -90,9 +90,18 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # written back onto the vendor finding that produced the alert.
         "update_alert_disposition",
         "update_watcher",
+        # Alert lifecycle. Executors with three vendor arms each existed for
+        # both of these while neither verb appeared here, in the contracts or
+        # in the live-action registry, so governed dispatch answered
+        # executor_not_found for code that worked.
+        "ack_alert",
+        "suppress_alert",
         # TICKET
         "push_case",
         "push_status",
+        "create_ticket",
+        # NOTIFY
+        "notify",
         # AUDIT
         "read_audit_trail",
     }

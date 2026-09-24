@@ -32,7 +32,9 @@ import structlog
 
 from app.clients.factories import _entra_client, _okta_client
 from app.executors.endpoint import _cs_client
+from app.executors.siem import _ack_vendor, _qradar_client, _splunk_client
 from app.models.action import ActionType
+from app.services.disposition_writeback import WritebackAction, plan_writeback
 
 logger = structlog.get_logger()
 
@@ -160,11 +162,112 @@ async def _probe_allow_ip(target: str, params: dict[str, Any]) -> bool | None:
     return None if still_blocked is None else not still_blocked
 
 
+#: Splunk ES notable status codes. A new notable is 0 ("unassigned"), so
+#: reading 1 back is evidence an acknowledgement landed; 5 is closed.
+_SPLUNK_STATUS_IN_PROGRESS = "1"
+_SPLUNK_STATUS_CLOSED = "5"
+
+
+async def _read_back_finding_state(target: str, params: dict[str, Any], *, expect_closed: bool) -> bool | None:
+    """Re-read a vendor finding and say whether it reached the expected state.
+
+    Shared by the three verbs that move a finding through its lifecycle:
+    acknowledge, suppress, and the disposition writeback that does one or the
+    other depending on the verdict.
+
+    Two of the five vendor arms expose a read-back and three do not, so this
+    answers ``None`` for the rest rather than inventing a confirmation. That
+    is the same shape as ``_probe_block_ip``, where only AWS security groups
+    are readable.
+    """
+    vendor = _ack_vendor(params)
+
+    if vendor == "splunk":
+        splunk = _splunk_client(params)
+        if splunk is None:
+            return None
+        state = await splunk.get_notable_event_state(target)
+        if state is None or state.get("status") is None:
+            return None
+        status = str(state["status"])
+        if expect_closed:
+            # Unambiguous: a notable nobody closed is not status 5.
+            return status == _SPLUNK_STATUS_CLOSED
+        # An acknowledgement sets status to "in progress" *and* assigns an
+        # owner. Status alone would be weak — a notable an analyst had already
+        # picked up reads the same — so the owner has to match too. An analyst
+        # who takes the notable over afterwards makes this report FAILED,
+        # which is the safe direction to be wrong in.
+        expected_owner = str(params.get("owner") or "aisoc")
+        return status == _SPLUNK_STATUS_IN_PROGRESS and str(state.get("owner") or "") == expected_owner
+
+    if vendor == "qradar":
+        qradar = _qradar_client(params)
+        if qradar is None:
+            return None
+        offense = await qradar.get_offense(target)
+        status = str(offense.get("status") or "").upper()
+        if not status:
+            return None
+        if expect_closed:
+            return status == "CLOSED"
+        # An escalation annotates the offense and leaves it OPEN — which is
+        # also the state it was in beforehand. Returning True for "still OPEN"
+        # would certify a write that never happened, which is exactly what the
+        # isolation probe did when it returned bool(device_id). Indeterminate
+        # is the honest answer, and QRadar exposes nothing better: the note
+        # that carries the verdict is not on the offense record.
+        return None
+
+    # Elastic, Sentinel and Defender: their clients expose no read of a
+    # finding's current state, so there is nothing to compare against.
+    return None
+
+
+async def _probe_alert_disposition(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an AiSOC verdict actually reached the finding that produced it.
+
+    The writeback shipped claiming no probe, which was honest — a declared
+    probe that does not run is the defect the contract gate exists to catch —
+    but the standing rule is that an unverifiable action is not an autonomous
+    one, and this one is automatic. So it gets a real read-back.
+
+    The expected state is re-derived from the same ``disposition`` through the
+    same :func:`plan_writeback` the executor used, rather than passed in
+    alongside it. A probe told separately what to expect can be told wrong.
+    """
+    plan = plan_writeback(params.get("disposition"), confidence=params.get("confidence"))
+    if plan.action is WritebackAction.REFUSE:
+        # The executor deliberately wrote nothing, so there is no effect to
+        # confirm. Reporting VERIFIED here would mean "the refusal worked",
+        # which is not what a verification outcome is read as.
+        return None
+    return await _read_back_finding_state(target, params, expect_closed=plan.action is WritebackAction.CLOSE)
+
+
+async def _probe_ack_alert(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an acknowledgement moved the finding to in-progress and owned."""
+    return await _read_back_finding_state(target, params, expect_closed=False)
+
+
+async def _probe_suppress_alert(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm a suppression actually closed the finding.
+
+    Worth having in its own right: a close that silently fails leaves the
+    alert in the analyst queue while AiSOC reports it handled, and the two
+    views of the same finding then disagree with nobody watching.
+    """
+    return await _read_back_finding_state(target, params, expect_closed=True)
+
+
 _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.ISOLATE_HOST: _probe_isolate,
     ActionType.BLOCK_IP: _probe_block_ip,
     ActionType.DISABLE_USER: _probe_disable_user,
     ActionType.ALLOW_IP: _probe_allow_ip,
+    ActionType.UPDATE_ALERT_DISPOSITION: _probe_alert_disposition,
+    ActionType.ACK_ALERT: _probe_ack_alert,
+    ActionType.SUPPRESS_ALERT: _probe_suppress_alert,
 }
 
 

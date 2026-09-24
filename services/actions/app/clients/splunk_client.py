@@ -12,6 +12,7 @@ Credentials expected in ActionRequest.parameters:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -243,6 +244,53 @@ class SplunkClient:
                 "event_id": event_id,
                 "owner": owner,
                 "response": resp.json() if resp.content else {},
+            }
+
+    async def get_notable_event_state(self, event_id: str) -> dict[str, Any] | None:
+        """Read a notable event's current status and owner back from Splunk ES.
+
+        The read-back half of acknowledge / suppress / disposition writeback.
+        Every lifecycle change made through ``/services/notable_update`` lands
+        in the ``incident_review`` KV store collection, keyed by ``rule_id`` —
+        the same value sent there as ``ruleUIDs`` — so this reads the effect of
+        the write rather than the acceptance of the request.
+
+        Returns ``{"status": "5", "owner": "aisoc"}`` for the most recent
+        review entry, or ``None`` when the collection cannot be read (Splunk ES
+        not installed, the token lacks access) or has no entry for this
+        notable. ``None`` is deliberate and load-bearing: "we cannot tell" and
+        "the write did not land" are different facts, and only the caller knows
+        which state it was expecting.
+        """
+        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl) as client:
+            await self._authenticate(client)
+            resp = await client.get(
+                f"{self._host}/servicesNS/nobody/SplunkEnterpriseSecuritySuite/storage/collections/data/incident_review",
+                headers=self._headers(),
+                params={
+                    "query": json.dumps({"rule_id": event_id}),
+                    "sort": "-time",
+                    "limit": 1,
+                    "output_mode": "json",
+                },
+            )
+            if resp.status_code == 404:
+                # The Enterprise Security app is not installed, so there is no
+                # incident review store to read. Not an error — this deployment
+                # simply has no read-back, and saying so beats raising.
+                logger.info("splunk.notable_event.no_incident_review", event_id=event_id)
+                return None
+            resp.raise_for_status()
+            entries = resp.json() if resp.content else []
+            if not isinstance(entries, list) or not entries:
+                return None
+            entry = entries[0]
+            if not isinstance(entry, dict):
+                return None
+            status = entry.get("status")
+            return {
+                "status": None if status is None else str(status),
+                "owner": entry.get("owner"),
             }
 
     async def suppress_notable_event(

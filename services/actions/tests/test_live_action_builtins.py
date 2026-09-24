@@ -59,7 +59,7 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # reachable, Entra six with one. The writeback arms are the return leg
     # of a two-way SIEM integration: AiSOC's verdict back onto the notable,
     # signal, incident or offense that produced the alert.
-    assert count == 57
+    assert count == 63
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -92,13 +92,17 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("crowdstrike", "quarantine_file"),
         ("crowdstrike", "run_script"),
         ("crowdstrike", "unisolate_host"),
+        ("defender", "ack_alert"),
         ("defender", "block_ioc"),
         ("defender", "update_alert_disposition"),
         ("defender", "get_host"),
         ("defender", "isolate_host"),
         ("defender", "run_av_scan"),
+        ("defender", "suppress_alert"),
         ("defender", "unisolate_host"),
+        ("elastic", "ack_alert"),
         ("elastic", "search_siem"),
+        ("elastic", "suppress_alert"),
         ("elastic", "update_alert_disposition"),
         ("elastic", "update_watcher"),
         ("fortigate", "allow_ip"),
@@ -127,7 +131,9 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("sentinelone", "unisolate_host"),
         ("servicenow", "create_ticket"),
         ("slack", "notify"),
+        ("splunk", "ack_alert"),
         ("splunk", "create_notable_event"),
+        ("splunk", "suppress_alert"),
         ("splunk", "search_siem"),
         ("splunk", "sync_detection_rule"),
         ("splunk", "update_alert_disposition"),
@@ -161,7 +167,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 57
+    assert count == 63
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

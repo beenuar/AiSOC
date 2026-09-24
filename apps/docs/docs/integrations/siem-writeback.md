@@ -177,3 +177,38 @@ What bounds it is not the approval tier but the disposition mapping above,
 plus the execute flag. Re-opening a finding an analyst may since have actioned
 would race them in their own console, so there is no automatic rollback: the
 contract says `MANUAL_ONLY` and means it.
+
+### Verification
+
+The writeback shipped declaring no verification probe. That was honest —
+claiming a probe that does not run is worse than claiming nothing — but the
+standing rule is that an unverifiable action is not an autonomous one, and
+this action is automatic. It now has a real read-back.
+
+After a writeback, AiSOC re-reads the finding and compares its state against
+the plan it derived from the same verdict, through the same code path the
+executor used. The expectation is re-derived rather than passed alongside the
+disposition: a probe told separately what to expect can be told wrong.
+
+| Vendor | Closing verdict | Escalating verdict |
+| --- | --- | --- |
+| Splunk ES | Reads the `incident_review` collection; confirms status `5` (closed) | Confirms status `1` (in progress) **and** that the owner is the one AiSOC set |
+| QRadar | Reads the offense; confirms status `CLOSED` | Not verifiable — see below |
+| Elastic, Sentinel, Defender | Not verifiable | Not verifiable |
+
+Three results are possible and they mean different things. `verified` is a
+real query that found the effect. `failed` is a real query that found the
+effect **absent** — the write did not land, and the finding is still sitting
+in an analyst's queue while AiSOC believes it is handled. `unverified` means
+no read-back was available, said plainly rather than reported as success.
+
+**A QRadar escalation is honestly unverifiable.** Escalating annotates the
+offense and leaves it `OPEN`, which is also the state it was in beforehand, so
+"still OPEN" would confirm a write that never happened. That is the same shape
+as an earlier isolation probe which returned "does this hostname resolve to a
+device" — true of every host in the fleet, contained or not — and would have
+certified an uncontained host. Where a vendor cannot tell you, AiSOC says so.
+
+The three vendors with no read-back are a limitation of what their APIs
+expose, not a decision. If you run only Elastic, a writeback reports
+`unverified` and that is the accurate answer.
