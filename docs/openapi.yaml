@@ -6255,6 +6255,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/compliance/evidence:
     post:
       tags:
@@ -10875,6 +10877,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/nl-detection/propose:
     post:
       tags:
@@ -11170,6 +11174,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/translation/formats:
     get:
       tags:
@@ -13260,6 +13266,8 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Get Airgap Status Api V1 Airgap Status Get
+      security:
+      - HTTPBearer: []
   /api/v1/llm/status:
     get:
       tags:
@@ -13284,6 +13292,8 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Get Llm Status Api V1 Llm Status Get
+      security:
+      - HTTPBearer: []
   /api/v1/llm/credentials:
     get:
       tags:
@@ -13365,6 +13375,8 @@ paths:
       summary: List Indicators
       description: List STIX 2.1 indicators from the threat intelligence store.
       operationId: list_indicators_api_v1_threatintel_stix_indicators_get
+      security:
+      - HTTPBearer: []
       parameters:
       - name: page
         in: query
@@ -13410,6 +13422,8 @@ paths:
       summary: Create Indicator
       description: Publish a new STIX 2.1 indicator and optionally mirror it to MISP.
       operationId: create_indicator_api_v1_threatintel_stix_indicators_post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: push_to_misp
         in: query
@@ -13449,6 +13463,8 @@ paths:
       summary: List Bundles
       description: List STIX 2.1 bundles.
       operationId: list_bundles_api_v1_threatintel_stix_bundles_get
+      security:
+      - HTTPBearer: []
       responses:
         '200':
           description: Successful Response
@@ -13462,6 +13478,8 @@ paths:
       summary: Create Bundle
       description: Create a new STIX 2.1 bundle and optionally mirror it to MISP.
       operationId: create_bundle_api_v1_threatintel_stix_bundles_post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: push_to_misp
         in: query
@@ -13508,6 +13526,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TAXIICollectionListResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/threatintel/stix/misp/health:
     get:
       tags:
@@ -13530,6 +13550,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MispPushHealth'
+      security:
+      - HTTPBearer: []
   /api/v1/threatintel/stix/misp/dry-run:
     post:
       tags:
@@ -13567,6 +13589,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/shifts:
     get:
       tags:
@@ -13704,6 +13728,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeploymentConfig'
+      security:
+      - HTTPBearer: []
     put:
       tags:
       - Deployment
@@ -13729,6 +13755,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/deployment/airgap/status:
     get:
       tags:
@@ -13744,6 +13772,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AirgapStatus'
+      security:
+      - HTTPBearer: []
   /api/v1/deployment/airgap/bundle:
     post:
       tags:
@@ -13758,6 +13788,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BundleJob'
+      security:
+      - HTTPBearer: []
   /api/v1/fusion/health:
     get:
       tags:
@@ -13773,6 +13805,8 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Fusion Health Api V1 Fusion Health Get
+      security:
+      - HTTPBearer: []
   /api/v1/fusion/metrics:
     get:
       tags:
@@ -13788,6 +13822,8 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Fusion Metrics Api V1 Fusion Metrics Get
+      security:
+      - HTTPBearer: []
   /api/v1/fusion/ml/status:
     get:
       tags:
