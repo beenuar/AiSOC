@@ -43,7 +43,6 @@ RUN set -eux; \
             "alembic>=1.13,<2" \
             "redis[hiredis]>=5.0.4,<8.0.0" \
             "httpx>=0.27,<0.29" \
-            "python-jose[cryptography]>=3.3,<4" \
             "PyJWT>=2.8,<3" \
             "cryptography>=42,<43" \
             "bcrypt>=4.1,<5" \

@@ -18,7 +18,7 @@ of the answers.
 | Credential encryption (`vault:v2`) | AES-128-CBC per-secret DEK, KEK in AWS KMS | `cryptography` + KMS | KMS side: yes |
 | Backup encryption | AES-256-GCM | `cryptography` / OpenSSL | No |
 | Audit hash chain | SHA-256 | `hashlib` / OpenSSL | No |
-| Session tokens | HMAC-SHA256 (JWT) | `python-jose` | No |
+| Session tokens | HMAC-SHA256 (JWT) | `PyJWT` / `hashlib` | No |
 | Sandbox determinism | BLAKE2b | `hashlib` | **Not a FIPS algorithm** |
 | TLS | Whatever the deployment terminates with | Operator's choice | Operator's choice |
 
@@ -45,7 +45,7 @@ Not a configuration flag. In rough order of effort:
    incidental use — including BLAKE2b above, and any transitive dependency
    reaching for MD5 in a non-security context, which several libraries do
    for cache keys.
-3. **An audit of transitive dependencies.** `python-jose`, `passlib`,
+3. **An audit of transitive dependencies.** `PyJWT`, `passlib`,
    `neo4j`, `clickhouse-driver` and the Kafka clients all perform
    cryptographic operations. Each needs checking against the validated
    module rather than assumed.

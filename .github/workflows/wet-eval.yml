@@ -121,7 +121,7 @@ jobs:
           pip install --quiet \
             "fastapi" "pydantic[email]" "pydantic-settings" \
             "sqlalchemy[asyncio]" "asyncpg" "structlog" \
-            "python-jose[cryptography]" "passlib[bcrypt]" \
+            PyJWT cryptography "passlib[bcrypt]" \
             "tenacity" "pyyaml" "prometheus-client" \
             "neo4j" "redis" "celery" "httpx" "aiofiles" \
             "email-validator" "PyJWT" "aiosqlite" \

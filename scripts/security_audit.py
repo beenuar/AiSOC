@@ -212,13 +212,17 @@ def run_pnpm_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
         except json.JSONDecodeError:
             print(f"Failed to parse pnpm audit output:\n{output}", file=sys.stderr)
             report = Report()
-            report.warnings.append("pnpm audit returned unparseable output")
+            # Unparseable output means the workspace was not audited. Recorded
+            # as a coverage gap rather than a warning for the same reason the
+            # Python arm does it: a warning still exits 0, so the job would
+            # report "pnpm: 0 findings" having scanned nothing at all.
+            report.unscanned.append("pnpm workspace: audit returned unparseable output — NOT scanned")
             return report
 
         return classify_pnpm_audit(data, ignores)
 
     report = Report()
-    report.warnings.append("pnpm audit failed on all registries")
+    report.unscanned.append("pnpm workspace: audit failed on every registry — NOT scanned")
     return report
 
 
@@ -472,7 +476,14 @@ def run_govulncheck(repo_root: Path, ignores: list[Ignore]) -> Report:
             break
 
         if proc.returncode not in (0, 3):
-            combined.warnings.append(f"govulncheck on {module} exited {proc.returncode}: {proc.stderr[:200]}")
+            # govulncheck exits 0 (clean) or 3 (vulnerabilities found); anything
+            # else — a build failure, a missing toolchain, an unresolvable
+            # module — means this module was not analysed. That is a coverage
+            # gap, not a warning: a warning exits 0 and the arm would print
+            # "go: 0 findings" for a module it never managed to read.
+            combined.unscanned.append(
+                f"{module}: govulncheck exited {proc.returncode} — NOT scanned ({proc.stderr[:160].strip()})"
+            )
             continue
 
         vulns = parse_govulncheck_json(proc.stdout)

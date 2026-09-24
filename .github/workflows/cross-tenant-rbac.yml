@@ -80,7 +80,7 @@ jobs:
       # having to maintain a parallel pin list here.
       API_DEPS: >-
         fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-        structlog "python-jose[cryptography]" "passlib[bcrypt]" tenacity pyyaml
+        structlog PyJWT cryptography "passlib[bcrypt]" tenacity pyyaml
         prometheus-client "opentelemetry-sdk" "opentelemetry-api"
         "opentelemetry-exporter-otlp-proto-grpc"
         "opentelemetry-instrumentation-fastapi"

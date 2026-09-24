@@ -12,6 +12,7 @@ import pytest
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import security_audit
 from security_audit import (
     Finding,
     Ignore,
@@ -24,6 +25,8 @@ from security_audit import (
     load_ignores,
     parse_govulncheck_json,
     parse_pip_audit_json,
+    run_govulncheck,
+    run_pnpm_audit,
 )
 
 
@@ -413,6 +416,32 @@ class TestExitCodeFor:
         )
         assert exit_code_for(r) == 1
 
+    def test_unscanned_alone_fails(self):
+        """A clean scan and a skipped scan must not both exit 0.
+
+        This is the property that makes an exit of 0 mean anything: without
+        it, a service the gate could not read is indistinguishable from a
+        service the gate read and cleared. `services/slack-bot` sat in that
+        state behind a stale poetry.lock while its lock resolved advisories
+        every other service had already moved past (#650).
+        """
+        r = Report(unscanned=["services/slack-bot: poetry export failed — NOT scanned"])
+        assert exit_code_for(r) == 1
+
+    def test_unscanned_fails_even_with_only_low_findings(self):
+        r = Report(
+            findings=[Finding("python", "low", "X", "p", "l", "t")],
+            unscanned=["services/api: pip-audit exited 2 — NOT scanned"],
+        )
+        assert exit_code_for(r) == 1
+
+    def test_warnings_alone_do_not_fail(self):
+        """Warnings are observations about a scan that happened; they must stay
+        non-fatal so that a coverage gap remains the only reason a finding-free
+        run can still exit 1."""
+        r = Report(warnings=["some non-fatal note"])
+        assert exit_code_for(r) == 0
+
 
 # ─── Report property tests ───────────────────────────────────────────────────
 
@@ -446,3 +475,121 @@ class TestReportProperties:
             ]
         )
         assert len(r.low_info) == 3
+
+
+# ─── Coverage-gap tests: a scan that did not happen must not read as clean ───
+
+
+class _Proc:
+    """Minimal stand-in for subprocess.CompletedProcess."""
+
+    def __init__(self, returncode: int = 0, stdout: str = "", stderr: str = "") -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class TestPnpmCoverageGaps:
+    def test_unparseable_output_is_a_coverage_gap_not_a_warning(self, monkeypatch, tmp_path: Path):
+        """pnpm audit that returns garbage has audited nothing.
+
+        Recorded as `unscanned` so `exit_code_for` fails. As a `warning` the
+        arm exited 0 and printed "pnpm: 0 findings" for a workspace it had
+        never successfully read.
+        """
+        monkeypatch.setattr(
+            security_audit.subprocess,
+            "run",
+            lambda *a, **k: _Proc(returncode=1, stdout="<html>not json</html>"),
+        )
+
+        report = run_pnpm_audit(tmp_path, [])
+
+        assert report.unscanned, "unparseable pnpm output must be recorded as a coverage gap"
+        assert not report.findings
+        assert exit_code_for(report) == 1
+
+    def test_successful_audit_records_no_gap(self, monkeypatch, tmp_path: Path):
+        monkeypatch.setattr(
+            security_audit.subprocess,
+            "run",
+            lambda *a, **k: _Proc(returncode=0, stdout='{"advisories": {}}'),
+        )
+
+        report = run_pnpm_audit(tmp_path, [])
+
+        assert report.unscanned == []
+        assert exit_code_for(report) == 0
+
+
+class TestGoCoverageGaps:
+    @staticmethod
+    def _module(tmp_path: Path) -> Path:
+        mod = tmp_path / "services" / "ingest"
+        mod.mkdir(parents=True)
+        (mod / "go.mod").write_text("module example.com/ingest\n")
+        return tmp_path
+
+    def test_unexpected_exit_is_a_coverage_gap(self, monkeypatch, tmp_path: Path):
+        """govulncheck exits 0 (clean) or 3 (vulnerabilities found).
+
+        Any other code means the module never got analysed — a build failure
+        or a missing toolchain. Treated as a coverage gap for the same reason
+        as the Python arm: otherwise the arm prints "go: 0 findings" for a
+        module it could not read.
+        """
+        root = self._module(tmp_path)
+        monkeypatch.setattr(
+            security_audit.subprocess,
+            "run",
+            lambda *a, **k: _Proc(returncode=1, stderr="build failed: no required module provides package"),
+        )
+
+        report = run_govulncheck(root, [])
+
+        assert report.unscanned, "a failed govulncheck run must be recorded as a coverage gap"
+        assert "services/ingest" in report.unscanned[0]
+        assert exit_code_for(report) == 1
+
+    def test_missing_binary_is_a_coverage_gap(self, monkeypatch, tmp_path: Path):
+        root = self._module(tmp_path)
+
+        def _raise(*a, **k):
+            raise FileNotFoundError("govulncheck")
+
+        monkeypatch.setattr(security_audit.subprocess, "run", _raise)
+
+        report = run_govulncheck(root, [])
+
+        assert report.unscanned
+        assert exit_code_for(report) == 1
+
+    def test_clean_module_records_no_gap(self, monkeypatch, tmp_path: Path):
+        root = self._module(tmp_path)
+        monkeypatch.setattr(security_audit.subprocess, "run", lambda *a, **k: _Proc(returncode=0, stdout=""))
+
+        report = run_govulncheck(root, [])
+
+        assert report.unscanned == []
+        assert report.findings == []
+        assert exit_code_for(report) == 0
+
+    def test_findings_exit_code_3_still_counts_as_scanned(self, monkeypatch, tmp_path: Path):
+        root = self._module(tmp_path)
+        stdout = "\n".join(
+            [
+                '{"osv": {"id": "GO-2026-0001", "aliases": ["CVE-2026-0001"], "summary": "boom"}}',
+                '{"finding": {"osv": "GO-2026-0001"}}',
+            ]
+        )
+        monkeypatch.setattr(
+            security_audit.subprocess,
+            "run",
+            lambda *a, **k: _Proc(returncode=3, stdout=stdout),
+        )
+
+        report = run_govulncheck(root, [])
+
+        assert report.unscanned == []
+        assert [f.vuln_id for f in report.findings] == ["GO-2026-0001"]
+        assert exit_code_for(report) == 1
