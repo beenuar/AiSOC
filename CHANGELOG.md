@@ -760,6 +760,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The tenant-predicate gate can now tell a guard from a log line, and the
+  ratchet shrank from 34 to 32.** It credited any query addressed by a key
+  passed to a call that also received the caller's tenant — which
+  `investigations.py` does correctly fourteen times — but a guard that logs
+  and continues was indistinguishable from one that raises. The only real
+  instance of the fail-soft shape was caught solely because its unscoped query
+  lived in a different function; written inline it would have been credited.
+  The distinction is now made structurally, and the undecidable remainder is
+  refused rather than guessed: a guard whose result is tested in a branch that
+  only logs demonstrably continues on failure and earns nothing; a guard whose
+  callee raises is enforcing; a callee the module cannot resolve is not
+  credited, so the statement becomes a finding that needs a reason.
+
+  The gate also recognises an RLS context bound on the connection, on a table
+  that carries a policy — the mechanism four ratchet entries described instead
+  of a defect. Re-checking all four rather than trusting them found that none
+  of the four reasons was accurate: two named a `_set_rls_context` that wrote
+  the wrong session variable (fixed, and those two entries are now retired by
+  the rule), and two named "a per-tenant RLS session" that their only caller
+  deliberately does not use — `_purge_alerts` runs with row security *off* and
+  appends the tenant predicate itself. Those two keep their exemption with a
+  corrected reason. Credit granted this way is counted and printed on every
+  run, because it lapses on a deployment whose role bypasses RLS.
+
+  Two further blind spots, found by checking what the gate *credits* rather
+  than what it flags: its RLS inventory globbed only
+  `services/*/migrations/*.sql`, so twelve tenant-scoped tables in four
+  alembic-managed services read as unprotected however many policies they
+  carried; and a policy created inside a PL/pgSQL `EXECUTE` is invisible to
+  it, which is why `060_rls_coverage.sql` spells out 56 literal `ALTER TABLE` /
+  `CREATE POLICY` statements instead of looping over an array. And the rule
+  credited the *session* as a validated key — `db` is passed to the guard and
+  appears in every raw statement's expression, so `keys & resolved` matched
+  whatever the query was really keyed on; a call receiver is now excluded
+  structurally rather than by naming `db`. `--self-test` grew from 8 cases to
+  15, covering all of it in both directions.
+
 - **`check_gate_coverage.py` decides what a check is from what a script does,
   not what it is called.** It classified by filename — `check_*`,
   `validate_*`, `_conformance.py`, plus a hand-kept list of five exceptions
@@ -817,6 +854,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were corrected with it.
 
 ### Security
+
+- **Row-level security covered 31 of 95 tenant-scoped tables; it now covers 92,
+  and the seven policies that already existed but could never work are
+  repaired.** On the other 64 tables the query predicate was the only thing
+  between two customers, so one missing `WHERE tenant_id` was a leak rather
+  than something a second layer caught — which is not the design the
+  repository documents. `060_rls_coverage.sql` adds a policy to every
+  remaining table in the API chain, and the four services that manage their
+  own schema (honeytokens, osquery-tls, purple-team, ueba) each carry a
+  matching alembic revision. The three that remain are named rather than
+  rounded away: `users` is excluded so authentication can resolve a principal
+  before a tenant exists, and `case_tasks` / `case_timeline` are ORM models
+  that no migration creates.
+
+  Four things found along the way, each invisible for the same reason:
+
+  - **The application bypasses RLS entirely.** `docker-compose.yml` and the CI
+    service containers run every service as `POSTGRES_USER=aisoc`, which the
+    postgres image creates as a superuser, and a superuser ignores policies
+    even under `FORCE ROW LEVEL SECURITY`. Measured, not inferred: with two
+    alerts seeded one per tenant and the session bound to tenant A, that role
+    sees both and a `NOSUPERUSER NOBYPASSRLS` role sees one. The security doc
+    claimed the opposite — "there is no superuser escape hatch via the
+    application's DB role" — and now carries the grant that makes it true.
+  - **Seven policies were keyed on a session variable nothing sets.**
+    `alert_sla_events` and `tenant_sla_config` read `app.tenant_id`;
+    `custom_parsers` and `retention_policies` read `app.current_tenant`;
+    `compliance_evidence` had no unset-context arm. All five returned zero
+    rows once RLS engaged. `external_assets` and `external_asset_drift` called
+    `current_setting` without `missing_ok`, so an unbound session raised
+    `unrecognized configuration parameter` instead. All seven are normalised
+    to the canonical predicate.
+  - **The agents service had the mirror-image bug.** Its four
+    `_set_rls_context` helpers wrote `app.tenant_id` while every policy reads
+    `app.current_tenant_id`, so the scoping they exist to provide had never
+    been applied — the policies fell through their fail-open arm every time.
+  - **Five tables had RLS enabled without `FORCE`**, so the table owner —
+    which is the application — walked past the policy regardless.
+
+  `tests/isolation/test_postgres_rls.py` is the evidence, wired into
+  `integration.yml`'s migrations job where a real database with the full chain
+  already exists. It seeds an A row and a B row into every RLS-covered tenant
+  table (80 of 80 in the API chain), asserts both are visible unscoped before
+  asserting either absence, then binds the session to A and asserts B's row is
+  unreachable. It also asserts the shipped role's bypass, so a green run here
+  can never be read as "tenant isolation is on in production".
+
+- **The attack-path relational fallback is verified against a real Postgres.**
+  `GET /graph/attack-path/{case_id}` reads `aisoc_cases` by id whenever the
+  Neo4j traversal fails — which for a deployment shipping no graph database is
+  always. It gained a tenant predicate in the previous release, but that fix
+  was covered by a gate and by review only: the statement uses
+  `CAST(:cid AS UUID)`, which SQLite mangles, so no offline suite could execute
+  it. Tenant B naming tenant A's case UUID is now demonstrated to be refused
+  against the database the query is written for, with tenant A's row asserted
+  present first.
 
 - **Fifty-eight routes across four services carried no authentication at all,
   and the previous gate could not see them.** `check_route_tenant_scope.py`
@@ -1131,6 +1224,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **Four tests failed on a clean checkout and belonged to nobody.** A suite
+  with known-failing tests teaches everyone to skim past red, so each is now
+  either fixed or skipped with a reason that says what to do about it.
+
+  - `test_hunt_scheduler_cron.py::TestNextFireAt::test_basic_hourly` asserted
+    croniter's answer (the top of the next hour) from a class that, unlike its
+    neighbour, carried no `_CRONITER_AVAILABLE` guard — so without the
+    dependency it failed rather than skipped. Not environmental: the fallback
+    is an interval stepper with defined behaviour that nothing was checking.
+    It now asserts the right answer on each path, so both are tested.
+  - `test_router_report.py::test_findings_with_html_tags_are_escaped` required
+    the literal `&lt;script&gt;`, which only the `markdown` branch produces —
+    the `<pre>` fallback escapes the already-escaped body again and emits
+    `&amp;lt;script&amp;gt;`. That is more escaped, not less, so a correct
+    branch was reporting a security failure. It now asserts the property that
+    matters (nothing reaches the document as an executable tag, and the
+    payload is still present rather than dropped) on either branch.
+  - `test_router_report.py::test_html_wraps_markdown_with_document_chrome`
+    genuinely needs `markdown` — a declared dependency of the service — and
+    now skips with that stated, while CI installs it and runs the file, which
+    it had never done.
+  - `test_graph_freshness.py::test_graph_writer_does_not_block_fusion_on_failure`
+    treated "something answered on port 8080" as "the ingest service
+    answered". Its only escape hatch was a connection error, so an unrelated
+    local service returning 401 became a failure reading "fusion should never
+    block on graph". It now checks `GET /health` reports `service: ingest`
+    before asserting anything, and the skip names what did answer.
+
+- **Two alembic chains could never run.** `services/honeytokens/alembic/` and
+  `services/purple-team/alembic/` each contained an empty `__init__.py`, which
+  shadows the installed `alembic` package whenever the working directory is on
+  `sys.path` — so `alembic upgrade head` failed with
+  `No module named 'alembic.config'` from inside the service directory, and
+  `env.py`'s own `from alembic import context` would have failed the same way.
+  Removed, matching `services/ueba/alembic/`, which never had one. All four
+  service chains are now verified upgrade → downgrade → upgrade against a live
+  Postgres.
 
 - **Every live Okta password reset raised `TypeError` and came back FAILED.**
   `ResetPasswordExecutor` documents `parameters.send_email` as "used only for

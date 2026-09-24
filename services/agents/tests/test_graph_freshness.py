@@ -67,6 +67,39 @@ def _import_or_skip(mod_name: str, hint: str) -> Any:
         return None  # unreachable; pytest.skip raises, but keeps return paths consistent
 
 
+def _require_ingest_service(httpx: Any) -> None:
+    """Skip unless the thing on ``INGEST_BASE_URL`` really is the ingest service.
+
+    ``AISOC_INGEST_URL`` defaults to ``http://localhost:8080``, which is the
+    single most contended port on a developer machine. The suite's only
+    escape hatch was a connection exception, so *anything* that answered was
+    treated as ingest: a local gateway returning
+    ``401 {"detail":"node credential required"}`` became a test failure
+    reading "fusion should never block on graph", which is neither what
+    happened nor anybody's bug.
+
+    ``GET /health`` on the real service returns ``{"status":"ok",
+    "service":"ingest"}`` (``services/ingest/internal/handler/handler.go``),
+    so identity is checkable rather than assumed. A skip here names what
+    answered, because "skipped" with no reason is how a suite quietly stops
+    testing anything.
+    """
+    try:
+        resp = httpx.get(f"{INGEST_BASE_URL}/health", timeout=2.0)
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"no service answering at {INGEST_BASE_URL}: {exc}")
+        return
+    try:
+        service = resp.json().get("service")
+    except (ValueError, AttributeError):
+        service = None
+    if resp.status_code != 200 or service != "ingest":
+        pytest.skip(
+            f"{INGEST_BASE_URL}/health answered {resp.status_code} as service={service!r}, not the AiSOC "
+            "ingest service — something else owns that port. Set AISOC_INGEST_URL to the real one."
+        )
+
+
 def _build_event(idx: int) -> dict:
     """Synthetic AWS Security Hub event with deterministic natural keys."""
     return {
@@ -136,6 +169,7 @@ def test_graph_freshness_p95_under_2s() -> None:
     """
     httpx = _import_or_skip("httpx", "`pip install httpx`")
     neo4j_pkg = _import_or_skip("neo4j", "`pip install neo4j>=5`")
+    _require_ingest_service(httpx)
 
     tenant = f"test-{uuid.uuid4().hex[:8]}"
 
@@ -190,6 +224,7 @@ def test_graph_writer_does_not_block_fusion_on_failure() -> None:
     Marked integration so it runs in CI alongside the freshness probe.
     """
     httpx = _import_or_skip("httpx", "`pip install httpx`")
+    _require_ingest_service(httpx)
 
     tenant = f"failtest-{uuid.uuid4().hex[:8]}"
     event = _build_event(0)

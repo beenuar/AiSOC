@@ -21,9 +21,14 @@ STORES: tuple[StoreCoverage, ...] = (
     StoreCoverage(
         "postgres",
         "rls",
-        "migrations/002_rls.sql + query-layer WHERE tenant_id; services/api/tests/test_*_tenant_isolation.py; "
-        "deliberate cross-tenant reads (MSSP portfolio) resolve their tenant list through org_scope and are "
-        "replayed against live Postgres by test_mssp_portfolio_isolation.py (integration.yml)",
+        "query-layer WHERE tenant_id (the primary control, gated by check_tenant_query_predicates.py) with RLS "
+        "beneath it: migrations/002_rls.sql covered six tables, 060_rls_coverage.sql plus one alembic revision in "
+        "each of honeytokens / osquery-tls / purple-team / ueba take it to 92 of 95 tenant-scoped tables. "
+        "test_postgres_rls.py replays two tenants through every covered table against live Postgres "
+        "(integration.yml) as a NOSUPERUSER NOBYPASSRLS role — and asserts that the role the services actually "
+        "ship with bypasses RLS entirely, so the coverage figure is never read as a live guarantee. "
+        "services/api/tests/test_*_tenant_isolation.py; deliberate cross-tenant reads (MSSP portfolio) resolve "
+        "their tenant list through org_scope and are replayed by test_mssp_portfolio_isolation.py",
     ),
     StoreCoverage(
         "qdrant",

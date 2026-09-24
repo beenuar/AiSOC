@@ -207,7 +207,10 @@ async def resolve_splunk_credentials(state: InvestigationState) -> SplunkCreds |
         return None
     try:
         async with pool.acquire() as conn:
-            await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(state.tenant_id))
+            # app.current_tenant_id is the variable the connectors policy
+            # reads; this said app.tenant_id until 2026-09. See
+            # app/investigator/ledger.py.
+            await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(state.tenant_id))
             row = await conn.fetchrow(
                 """
                 SELECT auth_config, connector_config

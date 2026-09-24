@@ -343,6 +343,24 @@ jobs:
           MSSP_ISOLATION_REQUIRED: '1'
         run: pip install --quiet pytest pytest-asyncio && python -m pytest tests/test_mssp_portfolio_isolation.py -v --tb=short
 
+      # 060_rls_coverage.sql takes RLS from 31 of 95 tenant-scoped tables to
+      # every one of them bar a documented exclusion. A migration that adds 49
+      # policies is worth what the evidence that they filter is worth, so the
+      # replay runs here — the only job with a real database and the full
+      # chain already applied.
+      #
+      # It connects as a purpose-made role with neither SUPERUSER nor
+      # BYPASSRLS, because the role the services actually use is a superuser
+      # and would sail past every policy. That fact is itself asserted, so
+      # nobody can read a green tick here as "isolation is on in production".
+      #
+      # POSTGRES_RLS_ISOLATION_REQUIRED turns an unreachable database into a
+      # failure rather than a skip, for the same reason as the job above.
+      - name: Postgres row-level security isolation (live, two tenants)
+        env:
+          POSTGRES_RLS_ISOLATION_REQUIRED: '1'
+        run: python -m pytest tests/isolation/test_postgres_rls.py -v --tb=short
+
       # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
       # env.py only needs `app.models.ueba` importable, so run in-place with
       # PYTHONPATH instead of pip-installing the service.

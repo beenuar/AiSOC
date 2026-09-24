@@ -103,18 +103,46 @@ When a user hits an endpoint they don't have permission for, AiSOC returns `403 
 
 ## Multi-tenant isolation (RLS)
 
-AiSOC is multi-tenant by design. Every tenant-partitioned table has Postgres Row-Level Security enforced. The migration that sets this up is [`002_rls.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/002_rls.sql).
+AiSOC is multi-tenant by design, and Postgres Row-Level Security is the **second** layer under that. The primary control is the `tenant_id` predicate in the query, gated by [`scripts/check_tenant_query_predicates.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_tenant_query_predicates.py). This section describes the layer beneath it, including where it does not currently engage.
 
 The model:
 
 1. The application layer authenticates the user and resolves their `tenant_id`.
-2. Before issuing any query, the SQLAlchemy middleware sets `SET LOCAL app.current_tenant_id = '<uuid>'`.
-3. RLS policies on every tenant-scoped table (`cases`, `alerts`, `connectors`, `detection_rules`, `api_keys`, `playbooks`, `audit_log`, …) enforce `tenant_id = current_tenant_id()`.
-4. The `FORCE ROW LEVEL SECURITY` flag ensures even the table owner is subject to the policy — there is no superuser escape hatch via the application's DB role.
+2. Before issuing any query, the session sets `SET LOCAL app.current_tenant_id = '<uuid>'`.
+3. RLS policies on tenant-scoped tables enforce `tenant_id = current_tenant_id()`.
+4. `FORCE ROW LEVEL SECURITY` is set on every one of them, so the *table owner* is also subject to the policy.
 
-If `app.current_tenant_id` is not set (e.g. an internal job that needs to operate cross-tenant), the policy permits the query. This is intentional for system-level workers but means **the application-level ORM session must always set the tenant** before serving user requests. The middleware that does this is wired in [`services/api/app/api/v1/deps.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/deps.py).
+[`002_rls.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/002_rls.sql) introduced this for six tables. [`060_rls_coverage.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/060_rls_coverage.sql) extended it to the rest of the API chain, and the four services that manage their own schema (honeytokens, osquery-tls, purple-team, ueba) each carry a matching alembic revision. Coverage went from **31 of 95 tenant-scoped tables to 92 of 95**. Run `python scripts/check_tenant_query_predicates.py --inventory` for the live figure rather than trusting this one.
 
-The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
+The three that remain are named rather than rounded away: `users` is excluded deliberately (below), and `case_tasks` / `case_timeline` are ORM models that no migration creates, so there is no table to protect.
+
+### Two reasons RLS may not be protecting you right now
+
+**Your database role probably bypasses it.** A role with `SUPERUSER` or `BYPASSRLS` ignores policies *even under* `FORCE ROW LEVEL SECURITY` — FORCE binds the table owner, not a superuser. `docker-compose.yml` and the CI service containers both run every service as `POSTGRES_USER=aisoc`, and the `postgres` image creates that role as a superuser. In that configuration **no policy in this database is doing anything**, and it is measured rather than assumed: `tests/isolation/test_postgres_rls.py` seeds two tenants, binds the session to one, and asserts the shipped role still sees both.
+
+To make the policies live, connect the services as a role with neither attribute:
+
+```sql
+CREATE ROLE aisoc_app LOGIN PASSWORD '<a real secret>' NOSUPERUSER NOBYPASSRLS;
+GRANT USAGE ON SCHEMA public TO aisoc_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO aisoc_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO aisoc_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO aisoc_app;
+```
+
+Then point `DATABASE_URL` at `aisoc_app` and keep migrations running as the owner. Verify with:
+
+```sql
+SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+```
+
+Both flags must read `f`. `002_rls.sql` already creates an `aisoc_app` role with the literal password `changeme`; set a real one before using it.
+
+**A session that never bound a tenant sees everything.** If `app.current_tenant_id` is not set the policy permits the query. That is deliberate — ingest, fusion, the hunt scheduler and the retention purge all operate across tenants and would otherwise process nothing, silently. The paths that *do* bind a tenant are `TenantDBSession` in the API, `_set_rls_context` in the agents ledger / hunt store / LLM resolver / Splunk evidence reader, and the per-hunt rebind in the hunt scheduler. Everywhere else the query predicate is the only control, which is why that gate is the one that matters.
+
+Until 2026-09 the agents-service helpers set `app.tenant_id` — a variable no policy reads — so their scoping had never applied. Four policies had the mirror-image bug from the other side, reading `app.tenant_id` or `app.current_tenant`, and two called `current_setting` without `missing_ok` so an unbound session raised `unrecognized configuration parameter` instead of returning rows. All of it was invisible behind the superuser bypass. `test_no_policy_reads_a_session_variable_nothing_sets` keeps that class closed.
+
+The `users` table is excluded from RLS deliberately — it would create a chicken-and-egg problem during authentication, and platform-admin user administration is cross-tenant by design. Tenant filtering on `users` is enforced at the application layer through `get_current_user()`.
 
 ### The tenant comes from the credential, never from the request
 
@@ -205,12 +233,12 @@ table.
 
 ### Reads addressed by an id still filter on a tenant
 
-Tenant isolation is enforced at read time, per store, and **most of this schema
-has nothing behind that**: of 95 tenant-scoped tables only 31 carry an RLS
-policy, and RLS engages only on a session that has run
-`SET LOCAL app.current_tenant_id` (a `TenantDBSession`). On an `aisoc_*` table
-read through a plain session, a missing predicate is a leak, not a
-defence-in-depth gap.
+Tenant isolation is enforced at read time, per store, and the predicate is the
+control that matters. 92 of 95 tenant-scoped tables now carry an RLS policy (it
+was 31), but RLS engages only on a session that has run
+`SET LOCAL app.current_tenant_id` — and only for a database role that does not
+bypass it, which the shipped role does. On an `aisoc_*` table read through a
+plain session, a missing predicate is still a leak, not a defence-in-depth gap.
 
 The dangerous shape is a query that matches on an id and nothing else —
 `select(Honeytoken).where(Honeytoken.id == token_id)`. It takes no tenant, so

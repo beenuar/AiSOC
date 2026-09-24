@@ -150,8 +150,16 @@ async def resolve_tenant(tenant_ref: str) -> uuid.UUID | None:
 
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
     """Match the API service's set_rls_context — required so the audit-log
-    immutability trigger and tenant policies allow our INSERTs."""
-    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
+    immutability trigger and tenant policies allow our INSERTs.
+
+    The variable is ``app.current_tenant_id``. It said ``app.tenant_id`` until
+    2026-09, which is a name no policy in this schema reads, so the scoping
+    this function exists to provide was never applied: every policy fell
+    through its ``current_tenant_id() IS NULL`` arm and admitted everything.
+    Nothing failed, because failing open is what an unset context does — and
+    because the role the services connect as bypasses RLS outright.
+    """
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(tenant_id))
 
 
 async def start_run(

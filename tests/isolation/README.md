@@ -84,10 +84,43 @@ See `stores.py::STORES`. Each store is one of:
 
 - `offline_gated` — query-construction isolation asserted here, every PR
   (Qdrant).
-- `rls` — enforced by Postgres RLS + query-layer filters (tested in
+- `rls` — query-layer filters with Postgres RLS beneath them, replayed live in
+  `integration.yml` (`test_postgres_rls.py`, plus
   `services/api/tests/test_*_tenant_isolation.py`).
 - `container_gated` — live-container A-vs-B replay in `isolation-live.yml`
   (Neo4j, Redis, ClickHouse, Kafka).
+
+## What "RLS" is worth, stated where somebody will read it
+
+Two conditions have to hold before a policy does anything, and in the shipped
+configuration the second does not.
+
+**The session must have bound a tenant.** A policy reads
+`app.current_tenant_id`, and permits everything when it is unset. That is
+deliberate — ingest, fusion, the hunt scheduler and the retention purge all
+work across tenants and would otherwise process nothing, silently — but it
+means RLS only engages on `TenantDBSession` and the agents' `_set_rls_context`
+paths. Everywhere else the query predicate is the only control, which is why
+`scripts/check_tenant_query_predicates.py` is the gate that matters and RLS is
+the layer under it.
+
+**The role must not bypass RLS.** A superuser, or any role with `BYPASSRLS`,
+ignores policies even under `FORCE ROW LEVEL SECURITY` — FORCE binds the table
+*owner*, not a superuser. `docker-compose.yml` and the CI service containers
+run every service as `POSTGRES_USER=aisoc`, which the postgres image creates
+as a superuser. So out of the box **no policy in this database is doing
+anything**, and `test_postgres_rls.py` asserts that rather than footnoting it:
+if the connecting role ever stops bypassing RLS, that test tells you, and the
+docs should stop hedging. Everything else in that file reads as a
+purpose-made `NOSUPERUSER NOBYPASSRLS` role, which is the configuration the
+policies are written for and the one
+`apps/docs/docs/operations/security.md` gives the grants for.
+
+The suite also holds the line on three things that made policies inert before
+anyone noticed: a tenant-scoped table with no policy at all, a policy without
+`FORCE`, and a policy keyed on a session variable nothing sets (four read
+`app.tenant_id` or `app.current_tenant`; two raised
+`unrecognized configuration parameter` on an unbound session).
 
 ## Deliberate cross-tenant reads
 

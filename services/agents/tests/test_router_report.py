@@ -190,7 +190,21 @@ def test_markdown_renders_without_info_dict() -> None:
 
 
 def test_html_wraps_markdown_with_document_chrome() -> None:
-    """The HTML output is a full document with the case id in the title."""
+    """The HTML output is a full document with the case id in the title.
+
+    The ``<h1>``/``<table>`` assertions are about what the ``markdown``
+    library produces, so without it this asserted the ``<pre>`` fallback's
+    output against the rendered form and failed. ``markdown`` is a declared
+    dependency of this service (``pyproject.toml``: ``markdown = "^3.5"``) and
+    is installed in CI, so a missing one means an incomplete environment
+    rather than a defect — hence a skip that says so, not a red test nobody
+    reads. The fallback branch has its own coverage immediately below.
+    """
+    pytest.importorskip(
+        "markdown",
+        reason="markdown is a declared agents dependency; these assertions are about its rendering, "
+        "and the <pre> fallback is covered by test_html_fallback_when_markdown_module_missing",
+    )
     md = "# Incident Report — case-42\n\n## Summary\n\n| Field | Value |\n|---|---|\n| Verdict | tp |\n"
     html = render_router_report_html(md, case_id="case-42")
 
@@ -257,6 +271,14 @@ def test_findings_with_html_tags_are_escaped() -> None:
     pipeline (``render_router_report_md`` → ``markdown.markdown``) must
     escape these so a payload like ``<script>alert(1)</script>`` ships as
     literal text rather than an executable script tag.
+
+    The property holds on both rendering branches, so this asserts it on
+    whichever one ran. It used to require the literal ``&lt;script&gt;`` in
+    the HTML, which only the ``markdown`` branch produces: the ``<pre>``
+    fallback escapes the already-escaped Markdown body a second time and
+    emits ``&amp;lt;script&amp;gt;``. That is *more* escaped, not less, so the
+    old assertion failed on a branch that was behaving correctly — a
+    misleading red for a payload that was never executable either way.
     """
     payload = "<script>alert('xss')</script>"
     state = _build_state(findings=[payload])
@@ -266,10 +288,16 @@ def test_findings_with_html_tags_are_escaped() -> None:
     # Markdown body keeps the escaped form, not the raw tag
     assert "<script>" not in md
     assert "&lt;script&gt;" in md
-    # Rendered HTML must not contain an executable script tag derived
-    # from the finding
+    # The property that matters, and it is branch-independent: nothing a
+    # finding carried can reach the document as an executable tag.
     assert "<script>alert" not in html_out
-    assert "&lt;script&gt;" in html_out
+    assert "<script>" not in html_out
+    # The payload is still *present*, escaped, so this is not passing because
+    # the finding was silently dropped.
+    assert "script" in html_out
+    # Either branch's escaping is acceptable; naming both keeps the assertion
+    # honest about which one ran rather than skipping the fallback.
+    assert "&lt;script&gt;" in html_out or "&amp;lt;script&amp;gt;" in html_out
 
 
 def test_error_field_with_html_is_escaped() -> None:
