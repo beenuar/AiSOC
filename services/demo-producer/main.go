@@ -103,16 +103,16 @@ func crowdstrikeEvent(r *rand.Rand) map[string]interface{} {
 func defenderEvent(r *rand.Rand) map[string]interface{} {
 	host := hosts[r.Intn(len(hosts))]
 	return map[string]interface{}{
-		"AlertId":     fmt.Sprintf("da%d", r.Int63()),
-		"AlertTitle":  "Suspicious LSASS access",
-		"Severity":    severities[r.Intn(len(severities))],
-		"Category":    "CredentialAccess",
+		"AlertId":         fmt.Sprintf("da%d", r.Int63()),
+		"AlertTitle":      "Suspicious LSASS access",
+		"Severity":        severities[r.Intn(len(severities))],
+		"Category":        "CredentialAccess",
 		"ComputerDnsName": host,
 		"InitiatedByUser": users[r.Intn(len(users))],
-		"FileName":    "lsass.exe",
+		"FileName":        "lsass.exe",
 		"DetectionSource": "WindowsDefenderAv",
-		"SrcIP":       randIP(r),
-		"Timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"SrcIP":           randIP(r),
+		"Timestamp":       time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
@@ -126,9 +126,9 @@ func suricataEvent(r *rand.Rand) map[string]interface{} {
 		"dest_port":  443,
 		"proto":      "TCP",
 		"alert": map[string]interface{}{
-			"signature":   "ET TROJAN Possible Cobalt Strike Beacon",
-			"category":    "A Network Trojan was Detected",
-			"severity":    1,
+			"signature":    "ET TROJAN Possible Cobalt Strike Beacon",
+			"category":     "A Network Trojan was Detected",
+			"severity":     1,
 			"signature_id": 2024555,
 		},
 	}
@@ -157,27 +157,27 @@ func guarddutyEvent(r *rand.Rand) map[string]interface{} {
 
 func oktaEvent(r *rand.Rand) map[string]interface{} {
 	return map[string]interface{}{
-		"eventType":  "user.session.start",
-		"published":  time.Now().UTC().Format(time.RFC3339),
-		"actor":      map[string]string{"alternateId": users[r.Intn(len(users))]},
-		"client":     map[string]interface{}{"ipAddress": randIP(r), "userAgent": map[string]string{"os": "Mac OS X"}},
-		"outcome":    map[string]string{"result": []string{"SUCCESS", "FAILURE"}[r.Intn(2)]},
-		"severity":   severities[r.Intn(len(severities))],
+		"eventType":      "user.session.start",
+		"published":      time.Now().UTC().Format(time.RFC3339),
+		"actor":          map[string]string{"alternateId": users[r.Intn(len(users))]},
+		"client":         map[string]interface{}{"ipAddress": randIP(r), "userAgent": map[string]string{"os": "Mac OS X"}},
+		"outcome":        map[string]string{"result": []string{"SUCCESS", "FAILURE"}[r.Intn(2)]},
+		"severity":       severities[r.Intn(len(severities))],
 		"displayMessage": "User login attempt",
 	}
 }
 
 func splunkEvent(r *rand.Rand) map[string]interface{} {
 	return map[string]interface{}{
-		"_time":     time.Now().UTC().Unix(),
+		"_time":      time.Now().UTC().Unix(),
 		"sourcetype": "wineventlog:security",
-		"source":    "WinEventLog:Security",
-		"host":      hosts[r.Intn(len(hosts))],
-		"EventCode": 4625,
-		"message":   "An account failed to log on",
-		"user":      users[r.Intn(len(users))],
-		"src_ip":    randIP(r),
-		"severity":  severities[r.Intn(len(severities))],
+		"source":     "WinEventLog:Security",
+		"host":       hosts[r.Intn(len(hosts))],
+		"EventCode":  4625,
+		"message":    "An account failed to log on",
+		"user":       users[r.Intn(len(users))],
+		"src_ip":     randIP(r),
+		"severity":   severities[r.Intn(len(severities))],
 	}
 }
 

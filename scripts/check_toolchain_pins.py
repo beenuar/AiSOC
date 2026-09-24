@@ -54,6 +54,16 @@ separately and asserts this file reports it:
                    file that does not exist
   module -> CI     a Go module no workflow builds
   CI -> module     a workflow building a module directory that is not there
+  module -> format a Go module no formatting check covers
+  format -> module a formatting step scoped to a directory holding no module,
+                   or a `gofmt -l` whose result reaches no exit status — a
+                   step that can only ever pass
+  image -> CI      a service published as a container image that no workflow
+                   builds, lints or tests
+  CI -> image      a publish entry naming a context or Dockerfile that is not
+                   in the tree
+  target -> ship   a ruff or mypy target naming an interpreter no image ships
+  ship -> target   an interpreter shipped that no tooling config targets
   override scope   an `esbuild` override that escapes its parent package
   coverage         a file declaring a runtime or an install path that this
                    gate never opened
@@ -72,6 +82,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -133,47 +144,27 @@ UNLOCKED_INSTALL_EXEMPT: dict[str, str] = {
     ),
 }
 
-# Workflows that run a Python interpreter the service images do not ship.
+# Python is checked exactly as strictly as Go and Node. It was not, and the
+# note that used to sit here recorded why: twenty-four workflows ran 3.12
+# while all thirteen images shipped 3.11, and because every manifest declares
+# `^3.11` — which *permits* 3.12 — nothing written down was being violated.
+# That is precisely why it survived. CI was not exercising the interpreter
+# production runs, which is the disjoint-`cryptography`-ranges defect one
+# level up and one notch milder.
 #
-# This is a real gap, recorded rather than closed, and it is weaker than the
-# Go and Node checks on purpose — saying so is the point. Every service
-# manifest declares `python = "^3.11"`, which *permits* 3.12, so none of these
-# workflows violates anything written down; but every image ships 3.11, so
-# what CI exercises is not what production runs. That is the same shape as a
-# workflow compiling on a different Go version, one notch milder because the
-# ranges overlap instead of being disjoint.
+# It is closed in the direction of 3.11, and the reason is that 3.11 was
+# already the answer everywhere except CI. The images ship it, the
+# devcontainer installs it, `ruff.toml` targets `py311`, every `[tool.mypy]`
+# sets `python_version = "3.11"`, and all twenty-two manifests floor at 3.11
+# or below. Moving CI down aligned one set of files; moving the images up
+# would have meant changing all of those *and* raising the published floor
+# for seven installable packages — a breaking change for downstream
+# consumers, made to fix a CI hygiene problem. Testing at the declared floor
+# is also the stronger guarantee: a project that publishes `>=3.11` and tests
+# only 3.12 has never run the configuration it tells people to use.
 #
-# Closing it means moving twenty-four workflows to 3.11 or thirteen images to
-# 3.12 and re-locking all thirteen manifests; neither belongs in the change
-# that discovered it. What is enforced meanwhile is that the set cannot grow
-# silently and cannot rot: a workflow added to the split without being listed
-# fails, and a listed workflow that no longer differs fails too.
-PYTHON_INTERPRETER_SPLIT: set[str] = {
-    ".github/workflows/adoption-snapshot.yml",
-    ".github/workflows/ai-sdk.yml",
-    ".github/workflows/attribution.yml",
-    ".github/workflows/check-openapi.yml",
-    ".github/workflows/ci.yml",
-    ".github/workflows/codeql-alert-gate.yml",
-    ".github/workflows/competitor-names.yml",
-    ".github/workflows/cross-tenant-rbac.yml",
-    ".github/workflows/golden-pipeline.yml",
-    ".github/workflows/governance.yml",
-    ".github/workflows/graph-schema-check.yml",
-    ".github/workflows/hosted-hostname.yml",
-    ".github/workflows/integration.yml",
-    ".github/workflows/isolation-live.yml",
-    ".github/workflows/isolation.yml",
-    ".github/workflows/openapi-breaking.yml",
-    ".github/workflows/papers.yml",
-    ".github/workflows/perf.yml",
-    ".github/workflows/python-detections.yml",
-    ".github/workflows/release.yml",
-    ".github/workflows/reproducible-builds.yml",
-    ".github/workflows/security-audit.yml",
-    ".github/workflows/security.yml",
-    ".github/workflows/wet-eval.yml",
-}
+# There is deliberately no exemption list. An interpreter split that can be
+# recorded is an interpreter split that can grow.
 
 # Every resolved esbuild version pnpm-lock.yaml is expected to contain.
 #
@@ -206,6 +197,33 @@ SKIP_PREFIXES = (
 # `6.* || 8.* || >= 10.*` from other people's packages. A gate whose answer
 # depends on whether someone has run `pnpm install` is not structural.
 SKIP_SEGMENTS = frozenset({"node_modules", ".git", ".venv", "venv", "dist", ".next", "vendor", "__pycache__"})
+
+
+def git_root() -> Path:
+    """The repository being checked, asked of git rather than inferred.
+
+    This used to be `Path(__file__).parent.parent`, which is the tree the
+    *script* lives in — not necessarily the tree anyone wants checked. A copy
+    of this file vendored, symlinked or invoked from a sibling checkout would
+    have printed a confident OK about a tree it never opened. `git rev-parse`
+    answers the question actually being asked.
+    """
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).resolve().parent,
+        )
+        return Path(completed.stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        # Not a git checkout (a release tarball, a container build context).
+        # Falling back is fine; silently falling back is not, because the
+        # caller would never learn which tree was read.
+        fallback = Path(__file__).resolve().parent.parent
+        print(f"check_toolchain_pins: not a git checkout — falling back to {fallback}", file=sys.stderr)
+        return fallback
 
 
 def skipped(rel: str) -> bool:
@@ -299,6 +317,22 @@ class Scan:
     go_cache_paths: list[tuple[str, str]] = field(default_factory=list)
     pnpm_actions: list[tuple[str, str]] = field(default_factory=list)
     go_ci_builds: set[str] = field(default_factory=set)
+    # (workflow, scope, command, enclosing run block). `scope` is "" for a
+    # repo-wide run and a directory when the step is confined to one. The
+    # block is kept so "can this step actually fail?" is answered from the
+    # step itself: searching the rest of the file for an `exit 1` would find
+    # one in an unrelated job and call the step safe.
+    gofmt_steps: list[tuple[str, str, str, str]] = field(default_factory=list)
+    # Directory -> (workflow, the line that proves it). Kept as evidence
+    # rather than a bare set so `report` can print *why* each published
+    # service counts as covered: the first version of this recorded a
+    # directory because a quoted path appeared in a shell array, and a set
+    # of strings gives a reader no way to notice that.
+    ci_dirs: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # service name -> (context, dockerfile), from the publish matrix.
+    published: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Manifests declaring [tool.mypy] without a `python_version`.
+    untargeted_mypy: list[str] = field(default_factory=list)
 
     def by_runtime(self, runtime: str) -> list[Pin]:
         return [p for p in self.pins if p.runtime == runtime]
@@ -376,19 +410,134 @@ _GO_CD = re.compile(r"cd\s+(?P<dir>(?:services|packages)/[\w.${}\s-]+?)\s*$", re
 # of a `cd`, and `build-extensions.yml` does. A parser that knew only about
 # `cd` reported `services/osquery-extensions` as compiled by nothing while the
 # workflow that compiles it sat two directories away.
-_GO_WORKDIR = re.compile(r"^\s*working-directory:\s*(?P<dir>\S+)\s*$", re.MULTILINE)
+# `\S+` was not enough: `working-directory: services/${{ matrix.service }}`
+# contains spaces, so it captured `services/${{` and resolved to nothing —
+# the eight services in `python-services-test` looked exercised by no step
+# at all. It never bit the Go check because `build-extensions.yml` names a
+# literal path, which is how a blind spot survives: the one caller that
+# would expose it does not use the syntax.
+# `(?:-\s+)?` because `working-directory:` can be the *first* key of a step,
+# in which case the line begins `- working-directory:` and an anchor of
+# `^\s*` alone does not reach it. Found by this file's own self-test.
+_GO_WORKDIR = re.compile(
+    r"^\s*(?:-\s+)?working-directory:\s*(?P<dir>\S+(?:\s*\$\{\{[^}]*\}\}\S*)?|\S+)\s*$",
+    re.MULTILINE,
+)
 _GO_VERB = re.compile(r"\bgo\s+(?:build|test|vet|mod)\b")
-_MATRIX_LIST = re.compile(r"^\s*(?P<key>\w+):\s*\[(?P<items>[^\]]+)\]\s*$", re.MULTILINE)
 _EXPANSION = re.compile(r"\$\{\{\s*matrix\.(?P<key>\w+)\s*\}\}")
+
+_MATRIX_HEADER = re.compile(r"^(?P<indent>\s*)matrix:\s*(?:#.*)?$")
+_MATRIX_INLINE = re.compile(r"^(?P<indent>\s*)(?P<key>\w+):\s*\[(?P<items>.+)\]\s*(?:#.*)?$")
+_MATRIX_DECLARE = re.compile(r"^(?P<indent>\s*)(?P<key>\w+):\s*(?:#.*)?$")
+_MATRIX_ITEM = re.compile(r"^(?P<indent>\s*)-\s*(?P<value>.+?)\s*$")
 
 
 def _matrix_values(text: str) -> dict[str, list[str]]:
-    """Inline `key: [a, b, c]` matrix legs, so `${{ matrix.key }}` can be resolved."""
+    """Every matrix leg, so `${{ matrix.key }}` can be resolved to real paths.
+
+    Both spellings, because this tree uses both and the first version of this
+    function read only one. `ci.yml` writes the Go matrices inline —
+    `service: [enrichment, ingest, demo-producer]` — and the Python one as a
+    block list of eight services. A reader that knows only the inline form
+    reports those eight as tested by nothing, and the reason it was never
+    noticed is that the inline form happens to be the one both *Go* matrices
+    use, so every existing check passed over the gap.
+
+    Scoped to the block under a `matrix:` key rather than matched anywhere in
+    the file: a bare `key:` followed by `- item` lines also describes `steps:`
+    and `ports:`, and attributing those to the matrix invents legs.
+    """
     values: dict[str, list[str]] = {}
-    for match in _MATRIX_LIST.finditer(text):
-        items = [i.strip().strip("\"'") for i in match.group("items").split(",")]
-        values.setdefault(match.group("key"), []).extend(i for i in items if i)
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        header = _MATRIX_HEADER.match(lines[index])
+        if not header:
+            index += 1
+            continue
+        base = len(header.group("indent"))
+        index += 1
+        key: str | None = None
+        key_indent = -1
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and (len(line) - len(line.lstrip())) <= base:
+                break  # dedented out of the matrix block
+            inline = _MATRIX_INLINE.match(line)
+            declare = _MATRIX_DECLARE.match(line)
+            item = _MATRIX_ITEM.match(line)
+            if inline:
+                found = [v.strip().strip("\"'") for v in inline.group("items").split(",")]
+                values.setdefault(inline.group("key"), []).extend(v for v in found if v)
+                key = None
+            elif declare:
+                key, key_indent = declare.group("key"), len(declare.group("indent"))
+            elif item and key and len(item.group("indent")) > key_indent:
+                value = item.group("value").strip().strip("\"'")
+                # An `include:` leg is a mapping (`- service: api`), not a
+                # scalar. Those are parsed by `_publish_targets`, which needs
+                # the other keys of the same leg; taking the first one here
+                # would record `service: api` as if it were a leg value.
+                if ":" not in value:
+                    values.setdefault(key, []).append(value)
+            index += 1
     return values
+
+
+# `- service: realtime` / `context: services/realtime` legs of a publish
+# matrix. A service published as an image and built by no CI job is how
+# `services/realtime` shipped untested; finding that requires reading the
+# publish list rather than guessing from directory names.
+_PUBLISH_LEG = re.compile(
+    r"^\s*-\s*service:\s*(?P<service>\S+)\s*$\n(?P<body>(?:^\s+\w[\w-]*:.*$\n?)+)",
+    re.MULTILINE,
+)
+_PUBLISH_FIELD = re.compile(r"^\s*(?P<key>context|dockerfile):\s*(?P<value>\S+)\s*$", re.MULTILINE)
+
+# The devcontainer installs Python from apt, not `FROM python:X.Y`, so the
+# Dockerfile parser above extracts nothing from it. A contributor's first
+# build runs on that interpreter; a version there that CI does not use is a
+# local green that reds on push.
+_APT_PYTHON = re.compile(r"\bpython(?P<version>3\.\d+)(?:\s|-venv|\b)")
+
+# `target-version = "py311"` (ruff) and `python_version = "3.11"` (mypy).
+# These decide which syntax ruff accepts and which standard library mypy
+# checks against. A tooling target that is not the shipped interpreter means
+# both tools are reasoning about a Python nobody runs.
+_RUFF_TARGET = re.compile(r"""^\s*target-version\s*=\s*["']py(?P<major>\d)(?P<minor>\d+)["']""", re.MULTILINE)
+_MYPY_TARGET = re.compile(r"""^\s*python_version\s*=\s*["'](?P<version>\d+\.\d+)["']""", re.MULTILINE)
+
+# A `gofmt` invocation in a workflow, and the shapes that make its result
+# reach an exit status. `gofmt -l` prints offenders and exits 0, so without
+# one of these the step is a log message with a green tick on it.
+_GOFMT = re.compile(r"\bgofmt\b[^\n]*")
+_GOFMT_FAILS = re.compile(r"exit\s+1|\|\|\s*(?:exit|false)\b|-n\s+[\"']?\$|\bif\s+\[\s*-n\b|--exit-code\b")
+
+# A first-party directory named in a command — `cd services/api`,
+# `pytest services/api/tests`, `--filter apps/web`. Evidence that CI
+# exercises that tree, however the step spells it.
+#
+# The `${{ matrix.x }}` alternative is spelled out rather than folded into a
+# character class, because the expansion contains spaces: a class of
+# `[\w.${}/-]+` stops at the first one, yielding `services/${{`, which
+# resolves to nothing and reports every matrix-driven service as untested.
+# That is the `cd services/${{ matrix.service }}` blind spot #817 found,
+# re-entering through a different regex.
+_SEGMENT = r"(?:\$\{\{[^}]*\}\}|[\w.-]+)"
+_PROJECT_DIR = re.compile(rf"(?<![\w./-])(?P<dir>(?:services|apps|packages)/{_SEGMENT}(?:/{_SEGMENT})*)")
+
+# A path counts as exercised only when something *runs* on it. Without this,
+# any line that happens to contain a path is evidence, and a list of paths
+# is not a test of them.
+_COMMAND_VERB = re.compile(
+    r"(?<![\w-])(?:cd|pytest|python3?|pip|poetry|uv|npm|pnpm|yarn|node|npx|go|gofmt|ruff|mypy|"
+    r"tsc|eslint|vitest|docker|make|bash|sh|cargo|terraform|helm)(?![\w-])"
+)
+
+
+def _record_ci_dir(scan_result: Scan, directory: str, workflow: str, evidence: str) -> None:
+    """First sighting wins, so the printed evidence is stable across runs."""
+    scan_result.ci_dirs.setdefault(directory, (workflow, evidence))
 
 
 def _expand(template: str, matrix: dict[str, list[str]]) -> list[str]:
@@ -468,6 +617,87 @@ def _fold_yaml_run_blocks(text: str) -> str:
     return "\n".join(out)
 
 
+_JOBS_HEADER = re.compile(r"^jobs:\s*(?:#.*)?$")
+_JOB_ID = re.compile(r"^(?P<indent>\s+)(?P<name>[\w-]+):\s*(?:#.*)?$")
+
+
+def _jobs(text: str) -> list[tuple[str, str]]:
+    """Split a workflow into its jobs.
+
+    A matrix, a `working-directory:` and a `run:` block all belong to one
+    job, and reading them file-wide attributes one job's context to another.
+    Measured, on this repository: `ci.yml` declares `service:` twice — the Go
+    build matrix inline as `[enrichment, ingest, demo-producer]`, and the
+    Python one as a block list of eight — so a file-wide reader resolved
+    `cd services/${{ matrix.service }}` in the *Go* job to all eleven and
+    reported eight Python services as Go modules that had gone missing. The
+    same read took the first `working-directory:` in the file, `apps/web`,
+    and applied it to a job five hundred lines away.
+    """
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if _JOBS_HEADER.match(line)), None)
+    if start is None:
+        return []
+    jobs: list[tuple[str, str]] = []
+    current: str | None = None
+    body: list[str] = []
+    indent: int | None = None
+    for line in lines[start + 1 :]:
+        if line.strip() and not line[0].isspace():
+            break  # dedented back out of `jobs:`
+        found = _JOB_ID.match(line)
+        if found and (indent is None or len(found.group("indent")) == indent):
+            indent = len(found.group("indent"))
+            if current is not None:
+                jobs.append((current, "\n".join(body)))
+            current, body = found.group("name"), []
+            continue
+        body.append(line)
+    if current is not None:
+        jobs.append((current, "\n".join(body)))
+    return jobs
+
+
+_RUN_HEADER = re.compile(r"^(?P<indent>\s*)(?:-\s+)?run:\s*(?P<inline>.*)$")
+_BLOCK_SCALAR = frozenset({"|", ">", "|-", ">-", "|+", ">+", ""})
+
+
+def _run_blocks(text: str) -> list[str]:
+    """Every `run:` block body, and nothing else.
+
+    Scanning a whole workflow for a command finds it in three places that are
+    not commands: a `name:` describing the step, an `echo` explaining the
+    failure, and a comment. The first version of the gofmt check matched all
+    three — `- name: gofmt -l (whole tree)` and
+    `echo "gofmt: OK — ..."` each counted as an invocation, so one step
+    looked like seven. Reading only run bodies removes the first and the
+    third; `_strip_quoted` at the call site removes the second.
+    """
+    lines = text.splitlines()
+    blocks: list[str] = []
+    index = 0
+    while index < len(lines):
+        header = _RUN_HEADER.match(lines[index])
+        if not header:
+            index += 1
+            continue
+        indent = len(header.group("indent"))
+        inline = header.group("inline").strip()
+        index += 1
+        if inline and inline not in _BLOCK_SCALAR:
+            blocks.append(inline)
+            continue
+        body: list[str] = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and (len(line) - len(line.lstrip())) <= indent:
+                break
+            body.append(line)
+            index += 1
+        blocks.append("\n".join(body))
+    return blocks
+
+
 def _install_commands(text: str, rel: str, owner: str, shell_source: bool = False) -> list[Install]:
     """Every command in a file that materialises node_modules."""
     body = _fold_yaml_run_blocks(_uncommented(text))
@@ -512,26 +742,70 @@ def parse_workflow(path: Path, rel: str, scan_result: Scan, root: Path) -> None:
         target = match.group("path").strip("\"'")
         if "${{" not in target:
             scan_result.go_cache_paths.append((rel, target))
-    # A `cd` only counts as compiling a module when a `go` verb follows it.
-    # Matching every `cd services/<x>` reported five Python services as Go
-    # modules the workflow built; matching only literal paths reported five
-    # real Go modules as built by nothing, because `ci.yml` drives them
-    # through `cd services/${{ matrix.service }}`. Both halves are needed.
-    matrix = _matrix_values(text)
-    for match in _GO_CD.finditer(text):
-        if not _GO_VERB.search(text[match.end() : match.end() + 300]):
-            continue
-        for directory in _expand(match.group("dir"), matrix):
-            scan_result.go_ci_builds.add(directory)
-    # `working-directory:` is job- or step-scoped and this reader is not, so a
-    # workflow with a Go job and a Python job would otherwise attribute the
-    # Python job's directory to Go. Accepting only directories that actually
-    # hold a go.mod keeps it precise without parsing the job graph.
-    if _GO_VERB.search(text):
-        for match in _GO_WORKDIR.finditer(text):
-            for directory in _expand(match.group("dir").strip("\"'"), matrix):
-                if (root / directory / "go.mod").exists():
-                    scan_result.go_ci_builds.add(directory)
+    # Everything below is job-scoped, because a matrix, a `working-directory:`
+    # and a `run:` block each belong to one job. See `_jobs`.
+    for _job, job_text in _jobs(text) or [("", text)]:
+        matrix = _matrix_values(job_text)
+
+        # A `cd` only counts as compiling a module when a `go` verb follows
+        # it. Matching every `cd services/<x>` reported five Python services
+        # as Go modules the workflow built; matching only literal paths
+        # reported five real Go modules as built by nothing, because `ci.yml`
+        # drives them through `cd services/${{ matrix.service }}`. Both
+        # halves are needed.
+        for match in _GO_CD.finditer(job_text):
+            if not _GO_VERB.search(job_text[match.end() : match.end() + 300]):
+                continue
+            for directory in _expand(match.group("dir"), matrix):
+                scan_result.go_ci_builds.add(directory)
+        # Accepting only directories that actually hold a go.mod keeps this
+        # precise even when a job mixes languages.
+        if _GO_VERB.search(job_text):
+            for match in _GO_WORKDIR.finditer(job_text):
+                for directory in _expand(match.group("dir").strip("\"'"), matrix):
+                    if (root / directory / "go.mod").exists():
+                        scan_result.go_ci_builds.add(directory)
+
+        # Every directory this job runs something in. Used by
+        # `check_published_service_ci`; deliberately wider than
+        # `go_ci_builds`, which is narrowed to directories holding a go.mod.
+        job_scope = ""
+        folded = _fold_yaml_run_blocks(job_text)
+        for match in _GO_WORKDIR.finditer(folded):
+            scoped = _expand(match.group("dir").strip("\"'"), matrix)
+            for directory in scoped:
+                _record_ci_dir(scan_result, directory, rel, match.group(0).strip())
+            if len(scoped) == 1:
+                job_scope = scoped[0]
+        for block in _run_blocks(folded):
+            # Quoted spans are data, not commands. `compose-smoke.yml` holds
+            # a shell array of build-context paths — `'services/realtime/'`
+            # among them — used to decide whether an image is stale. Read
+            # literally that array says CI exercises eleven services; it
+            # tests none of them. Same shape as `die "pnpm install failed."`
+            # counting as an install path.
+            commands = _strip_quoted(block)
+            for line in commands.splitlines():
+                # A path is evidence only when a command acts on it. A bare
+                # path in a list is a mention.
+                if not _COMMAND_VERB.search(line):
+                    continue
+                for match in _PROJECT_DIR.finditer(line):
+                    for directory in _expand(match.group("dir"), matrix):
+                        # `services/api/tests` is evidence that
+                        # `services/api` is exercised, so every prefix counts.
+                        parts = directory.split("/")
+                        for depth in range(2, len(parts) + 1):
+                            _record_ci_dir(scan_result, "/".join(parts[:depth]), rel, line.strip()[:100])
+
+            # gofmt, read from the command and not from the prose around it.
+            # `_strip_quoted` because `echo "gofmt: OK"` is a message about a
+            # check, not a check — the same shape as `die "pnpm install
+            # failed."` counting as an install path.
+            for match in _GOFMT.finditer(commands):
+                confined = re.findall(r"cd\s+(?P<dir>(?:services|packages|apps)/[\w.${}/-]+)", commands[: match.start()])
+                scope = confined[-1] if confined else job_scope
+                scan_result.gofmt_steps.append((rel, scope, match.group(0).strip(), block))
 
     # A setup step with no version input takes whatever the runner ships.
     for match in _SETUP_ACTION.finditer(text):
@@ -542,6 +816,12 @@ def parse_workflow(path: Path, rel: str, scan_result: Scan, root: Path) -> None:
             scan_result.pins.append(Pin(runtime, "", rel, "test", match.group(0).strip()))
 
     scan_result.installs += _install_commands(path.read_text(encoding="utf-8"), rel, "")
+
+    # The publish matrix: which services are built into container images.
+    for leg in _PUBLISH_LEG.finditer(text):
+        fields = {m.group("key"): m.group("value").strip("\"'") for m in _PUBLISH_FIELD.finditer(leg.group("body"))}
+        if "context" in fields:
+            scan_result.published[leg.group("service")] = (fields["context"], fields.get("dockerfile", "Dockerfile"))
 
 
 def parse_dockerfile(path: Path, rel: str, scan_result: Scan, role: str) -> None:
@@ -560,6 +840,12 @@ def parse_dockerfile(path: Path, rel: str, scan_result: Scan, role: str) -> None
         scan_result.pins.append(Pin("node", normalise_version(match.group("version")), rel, role, match.group(0).strip()))
     for match in _PNPM_GLOBAL.finditer(text):
         scan_result.pins.append(Pin("pnpm", match.group("version"), rel, role, match.group(0).strip()))
+    # The devcontainer gets its interpreter from apt, so `FROM python:X.Y`
+    # matches nothing and the file contributed no Python declaration at all
+    # — scanned, counted, and silent.
+    if role == "dev":
+        for match in _APT_PYTHON.finditer(text):
+            scan_result.pins.append(Pin("python", match.group("version"), rel, role, match.group(0).strip()))
 
     scan_result.installs += _install_commands(raw, rel, str(Path(rel).parent), shell_source=True)
 
@@ -582,6 +868,22 @@ def parse_shell(path: Path, rel: str, scan_result: Scan) -> None:
         version = next(g for g in match.groups() if g)
         scan_result.pins.append(Pin("node", normalise_version(version), rel, "dev", match.group(0).strip()))
     scan_result.installs += _install_commands(raw, rel, "", shell_source=True)
+
+
+def _parse_python_targets(text: str, rel: str, scan_result: Scan) -> None:
+    """ruff's `target-version` and mypy's `python_version`, as role `target`.
+
+    Not a toolchain — neither line installs anything — and not a floor
+    either, because both are exact: ruff refuses syntax newer than its
+    target, and mypy checks against that version's standard library. They
+    are the interpreter the *static* tools believe in, and they are worth
+    comparing because they are written once and then never revisited.
+    """
+    for match in _RUFF_TARGET.finditer(text):
+        version = f"{match.group('major')}.{match.group('minor')}"
+        scan_result.pins.append(Pin("python", version, rel, "target", match.group(0).strip()))
+    for match in _MYPY_TARGET.finditer(text):
+        scan_result.pins.append(Pin("python", match.group("version"), rel, "target", match.group(0).strip()))
 
 
 def parse_go_mod(path: Path, rel: str, scan_result: Scan) -> None:
@@ -651,15 +953,33 @@ def scan(root: Path) -> Scan:
         result.files.append(rel)
         parse_package_json(manifest, rel, result)
 
-    for pyproject in sorted(root.glob("services/*/pyproject.toml")):
+    # `packages/*` as well as `services/*`: the packages are the *published*
+    # artefacts, so their floor is a promise to a downstream consumer rather
+    # than an internal note. Reading only `services/` meant the floor that
+    # actually ships to users was the one nothing compared.
+    for pyproject in sorted(root.glob("services/*/pyproject.toml")) + sorted(root.glob("packages/*/pyproject.toml")):
         rel = pyproject.relative_to(root).as_posix()
         result.files.append(rel)
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        raw = pyproject.read_text(encoding="utf-8")
+        data = tomllib.loads(raw)
         declared = data.get("tool", {}).get("poetry", {}).get("dependencies", {}).get("python") or data.get("project", {}).get(
             "requires-python"
         )
         if isinstance(declared, str):
             result.pins.append(Pin("python", re.sub(r"^[^\d]*", "", declared), rel, "floor", f"python {declared}"))
+        _parse_python_targets(raw, rel, result)
+        # A tree that asks to be type-checked and does not say against which
+        # Python gets the interpreter mypy happens to run on.
+        mypy_config = data.get("tool", {}).get("mypy")
+        if isinstance(mypy_config, dict) and "python_version" not in mypy_config:
+            result.untargeted_mypy.append(rel)
+
+    # `ruff.toml` at the root configures every tree that has no local table.
+    ruff_config = root / "ruff.toml"
+    if ruff_config.exists():
+        rel = ruff_config.relative_to(root).as_posix()
+        result.files.append(rel)
+        _parse_python_targets(ruff_config.read_text(encoding="utf-8"), rel, result)
 
     installer = root / "install.sh"
     if installer.exists():
@@ -691,15 +1011,15 @@ def _toolchains(data: Scan, runtime: str) -> list[Pin]:
 def check_runtime_agreement(data: Scan) -> list[str]:
     """Every path installing a runtime must install the same version.
 
-    Python is excluded from strict equality and handled by
-    `check_python_split` instead: its manifests declare a floor rather than a
-    pin, so CI on 3.12 and an image on 3.11 both satisfy what is written. That
-    is a weaker property than Go and Node have, and saying so is the point.
+    Python is held to this now. It used to be excused here because its
+    manifests declare a floor rather than a pin, so CI on 3.12 and an image
+    on 3.11 both satisfied what was written — which is exactly how the split
+    survived twenty-four workflows. A floor is what a *consumer* may use; it
+    is not a licence for the project's own paths to disagree about what they
+    run.
     """
     problems: list[str] = []
     for runtime, reason in sorted(RUNTIMES.items()):
-        if runtime == "python":
-            continue
         declarations = _toolchains(data, runtime)
         if not declarations:
             continue
@@ -739,8 +1059,6 @@ def check_ship_test_parity(data: Scan) -> list[str]:
     """
     problems: list[str] = []
     for runtime in sorted(RUNTIMES):
-        if runtime == "python":
-            continue  # ratcheted by check_python_split, which explains why
         shipped = {p.version for p in data.by_runtime(runtime) if p.role == "ship" and p.version}
         tested = {p.version for p in data.by_runtime(runtime) if p.role == "test" and p.version}
         if not shipped or not tested:
@@ -774,43 +1092,145 @@ def check_floors(data: Scan) -> list[str]:
     return problems
 
 
-def check_python_split(data: Scan) -> list[str]:
-    """Every service image must ship one interpreter, and CI must satisfy it.
+def check_python_tooling_target(data: Scan) -> list[str]:
+    """Both directions between the shipped interpreter and the static tools' target.
 
-    Deliberately weaker than the Go and Node checks, and the difference is
-    stated rather than hidden. The manifests declare `^3.11`, which permits
-    3.12, so a workflow on 3.12 is not violating anything written down — but
-    it is still not the interpreter the image runs. What is enforced here is
-    the part that is unambiguous: the images agree with each other, and no
-    workflow drops below the floor the manifests declare. The residual split
-    is printed by `report` so the number is visible rather than implied.
+    `ruff.toml` says `target-version = "py311"` and every `[tool.mypy]` says
+    `python_version = "3.11"`. Neither installs anything, so no other check
+    in this file looks at them — and both decide what the tools *believe*.
+    ruff rejects syntax newer than its target and accepts syntax the runtime
+    may not have; mypy resolves the standard library for the version it is
+    told. Pointed at the wrong interpreter they are two more checks reasoning
+    about software nobody runs, which is the defect this gate exists for,
+    arrived at from a third direction.
+
+    Forward (target -> ship) catches a target left behind after the images
+    move. Reverse (ship -> target) catches the images moving while the
+    targets stay, which is the direction that actually happens: a Dockerfile
+    bump is one line and nobody greps for `target-version`.
     """
     problems: list[str] = []
     pins = data.by_runtime("python")
-    shipped = {p.version for p in pins if p.role == "ship"}
-    if len(shipped) > 1:
-        detail = "; ".join(
-            f"[{version}] " + ", ".join(sorted({p.path for p in pins if p.role == "ship" and p.version == version}))
-            for version in sorted(shipped)
-        )
-        problems.append(f"service images ship {len(shipped)} different Python interpreters: {detail}")
+    shipped = {p.version for p in pins if p.role == "ship" and p.version}
+    targets = [p for p in pins if p.role == "target" and p.version]
+    if not shipped or not targets:
         return problems
 
-    if not shipped:
-        return problems  # no Python images in this tree; nothing to compare against
+    for pin in targets:
+        if pin.version not in shipped:
+            problems.append(
+                f"{pin.path} targets Python {pin.version} (`{pin.raw}`) but the images ship "
+                f"{', '.join(sorted(shipped))} — ruff and mypy are reasoning about an "
+                f"interpreter nothing runs (target -> ship)"
+            )
+    declared = {p.version for p in targets}
+    for version in sorted(shipped - declared):
+        problems.append(
+            f"images ship Python {version}, which no ruff `target-version` or mypy "
+            f"`python_version` names ({', '.join(sorted(declared))}) — the static tools were "
+            f"left behind by a Dockerfile bump (ship -> target)"
+        )
+    # A declared-but-untargeted tree is the same defect with nothing to
+    # compare: five of the six trees declaring [tool.mypy] pin 3.11 and one
+    # did not, so its share of the recorded baseline followed whatever
+    # interpreter CI ran and a workflow change could red the ratchet without
+    # touching the code.
+    for path in sorted(data.untargeted_mypy):
+        problems.append(
+            f"{path} declares [tool.mypy] with no `python_version`, so it is checked against "
+            f"whichever interpreter the job happens to run — pin it to the shipped "
+            f"{', '.join(sorted(shipped))} (target -> ship)"
+        )
+    return problems
 
-    differing = {p.path for p in pins if p.role == "test" and p.version and p.version not in shipped}
-    scanned_workflows = {f for f in data.files if f.startswith(".github/workflows/")}
-    for path in sorted(differing - PYTHON_INTERPRETER_SPLIT):
-        problems.append(
-            f"{path} tests on a Python interpreter no image ships ({', '.join(sorted(shipped))}) "
-            f"and is not in PYTHON_INTERPRETER_SPLIT — the split may not grow silently"
-        )
-    for path in sorted((PYTHON_INTERPRETER_SPLIT & scanned_workflows) - differing):
-        problems.append(
-            f"PYTHON_INTERPRETER_SPLIT names {path}, which now matches the shipped "
-            f"interpreter — remove it so the recorded gap stays the real one"
-        )
+
+def check_go_formatting(data: Scan) -> list[str]:
+    """Both directions between the Go modules and the formatting check in CI.
+
+    CI ran `go vet` and `go build` and never `gofmt`; `go vet` does not look
+    at formatting, so 28 unformatted files across four modules were invisible
+    to a pipeline that otherwise compiled every one of them.
+
+    Forward (module -> format) catches a module no formatting step reaches.
+    Reverse (format -> module) catches the two ways the step itself can be
+    hollow: scoped to a directory that holds no module, or written as a bare
+    `gofmt -l`, which prints the offenders and exits 0 — a step that reports
+    the problem in its log and passes anyway. That second shape is the whole
+    family of defect this repository keeps finding, so it is checked rather
+    than assumed.
+    """
+    problems: list[str] = []
+    modules = {directory for directory, entry in data.go_modules.items() if entry.get("mod")}
+    if not modules:
+        return problems
+
+    if not data.gofmt_steps:
+        return [
+            f"no workflow runs `gofmt` anywhere, but this tree has {len(modules)} Go module(s) "
+            f"({', '.join(sorted(modules))}). `go vet` does not check formatting (module -> format)"
+        ]
+
+    repo_wide = [s for s in data.gofmt_steps if not s[1]]
+    scoped = {s[1] for s in data.gofmt_steps if s[1]}
+
+    for workflow, scope, command, block in data.gofmt_steps:
+        # `gofmt -l` succeeds whether or not it printed anything. Turning that
+        # into a failure takes an explicit test of the output; without one the
+        # step is decoration.
+        if "-l" in command.split() and not _GOFMT_FAILS.search(block):
+            problems.append(
+                f"{workflow} runs `{command}` but nothing in that step turns the result into a "
+                f"non-zero exit — `gofmt -l` prints the offenders and succeeds, so the step can "
+                f"only ever pass (format -> module)"
+            )
+        if scope and scope not in modules:
+            problems.append(
+                f"{workflow} runs gofmt confined to `{scope}`, which holds no go.mod — the step "
+                f"formats nothing this repository builds (format -> module)"
+            )
+
+    if not repo_wide:
+        for directory in sorted(modules - scoped):
+            problems.append(
+                f"{directory}/go.mod is covered by no formatting check — every gofmt step in CI "
+                f"is scoped to another directory (module -> format)"
+            )
+    return problems
+
+
+def check_published_service_ci(root: Path, data: Scan) -> list[str]:
+    """Both directions between what is published as an image and what CI builds.
+
+    `services/realtime` was published to GHCR on every release with no build,
+    test, lint or type-check job anywhere in the pipeline. It is one of the
+    two ends of the Kafka spine and it holds the TypeScript CORS guard, so
+    "nobody noticed" meant "a break reached whoever deployed it first".
+
+    Forward (image -> CI) is that finding. Reverse (CI -> image) catches the
+    publish matrix naming a context or Dockerfile that is not in the tree,
+    which fails the release rather than the pull request and so is found at
+    the worst possible moment.
+    """
+    problems: list[str] = []
+    if not data.published:
+        return problems
+
+    for service, (context, dockerfile) in sorted(data.published.items()):
+        target = context if context != "." else str(Path(dockerfile).parent)
+        if not (root / target).is_dir():
+            problems.append(
+                f"the publish matrix builds `{service}` from `{target}`, which is not a "
+                f"directory in this tree — the release fails, not the pull request (CI -> image)"
+            )
+            continue
+        if not (root / dockerfile).is_file() and not (root / target / dockerfile).is_file():
+            problems.append(f"the publish matrix builds `{service}` with dockerfile `{dockerfile}`, which " f"does not exist (CI -> image)")
+        if target not in data.ci_dirs:
+            problems.append(
+                f"`{service}` is published as a container image from `{target}`, and no workflow "
+                f"builds, lints or tests it — a break in it is found by whoever deploys it "
+                f"(image -> CI)"
+            )
     return problems
 
 
@@ -1098,26 +1518,30 @@ def report(data: Scan) -> None:
             continue
         toolchains = sorted({p.version for p in pins if p.role in {"ship", "test", "dev"} and p.version})
         floors = sorted({p.version for p in pins if p.role == "floor" and p.version})
+        targets = sorted({p.version for p in pins if p.role == "target" and p.version})
         print(
             f"  {runtime}: {len(pins)} declarations across {len({p.path for p in pins})} files"
-            f" — toolchain {', '.join(toolchains) or 'none'}" + (f", floors {', '.join(floors)}" if floors else "")
+            f" — toolchain {', '.join(toolchains) or 'none'}"
+            + (f", floors {', '.join(floors)}" if floors else "")
+            + (f", static-tool target {', '.join(targets)}" if targets else "")
         )
-        if runtime == "python":
-            shipped = sorted({p.version for p in pins if p.role == "ship"})
-            differing = sorted({p.path for p in pins if p.role == "test" and p.version and p.version not in shipped})
-            if differing:
-                # Not a failure: the manifests declare a floor, and every one
-                # of these satisfies it. Printed because a gap nobody can see
-                # is a gap nobody fixes.
-                print(
-                    f"      note: {len(differing)} workflow(s) test on an interpreter the images "
-                    f"do not ship ({', '.join(shipped)}): {', '.join(Path(p).name for p in differing)}"
-                )
 
     locked = sum(1 for i in data.installs if i.locked)
     print(f"  node installs: {len(data.installs)} ({locked} locked, {len(data.installs) - locked} unlocked)")
     modules = sorted(d for d, e in data.go_modules.items() if e.get("mod"))
     print(f"  go modules: {len(modules)} — {', '.join(modules)}")
+    scopes = ", ".join(f"{w.split('/')[-1]}{f' [{s}]' if s else ' [repo-wide]'}" for w, s, _, _ in data.gofmt_steps) or "none"
+    print(f"  gofmt steps: {len(data.gofmt_steps)} — {scopes}")
+    # Printed with the line that proves it, not as a tally. A count says
+    # "13 covered" whether the evidence is `working-directory: services/api`
+    # or a quoted path in an unrelated shell array, and this check recorded
+    # the second kind until someone read the list.
+    print(f"  published images: {len(data.published)} — each with the CI step that exercises it")
+    for service, (context, dockerfile) in sorted(data.published.items()):
+        target = context if context != "." else str(Path(dockerfile).parent)
+        evidence = data.ci_dirs.get(target)
+        detail = f"{evidence[0].split('/')[-1]}: {evidence[1]}" if evidence else "NOTHING"
+        print(f"      {service:<12} {target:<20} {detail}")
 
 
 def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
@@ -1132,11 +1556,13 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
         check_runtime_agreement(data)
         + check_ship_test_parity(data)
         + check_floors(data)
-        + check_python_split(data)
+        + check_python_tooling_target(data)
         + check_locked_installs(data)
         + check_dead_lockfiles(root, data)
         + check_image_copies_lockfile(root, data)
         + check_go_modules(root, data)
+        + check_go_formatting(data)
+        + check_published_service_ci(root, data)
         + check_esbuild_overrides(root)
         + check_pnpm_actions(data)
         + check_parser_coverage(root, data)
@@ -1173,6 +1599,7 @@ def _fixture(root: Path) -> None:
     (root / ".github" / "workflows").mkdir(parents=True)
     (root / "services" / "web-svc").mkdir(parents=True)
     (root / "services" / "go-svc").mkdir(parents=True)
+    (root / "services" / "py-svc").mkdir(parents=True)
 
     (root / "package.json").write_text(
         json.dumps(
@@ -1201,6 +1628,12 @@ def _fixture(root: Path) -> None:
     )
     (root / "services" / "go-svc" / "go.sum").write_text("github.com/x/y v1.0.0 h1:abc=\n", encoding="utf-8")
 
+    (root / "services" / "py-svc" / "Dockerfile").write_text("FROM python:3.11-slim\nCOPY . /app\n", encoding="utf-8")
+    (root / "services" / "py-svc" / "pyproject.toml").write_text(
+        '[tool.poetry.dependencies]\npython = "^3.11"\n\n[tool.mypy]\npython_version = "3.11"\n', encoding="utf-8"
+    )
+    (root / "ruff.toml").write_text('target-version = "py311"\n', encoding="utf-8")
+
     (root / "install.sh").write_text(
         "#!/usr/bin/env bash\n"
         'if version_at_least node 22 "node --version"; then ok; fi\n'
@@ -1216,11 +1649,33 @@ def _fixture(root: Path) -> None:
         "      - uses: actions/setup-node@bbb # v6\n"
         "        with:\n          node-version: '22'\n"
         "      - run: pnpm install --frozen-lockfile\n"
+        "      - run: |\n          cd services/web-svc\n          npm test\n"
         "  go:\n    steps:\n"
         "      - uses: actions/setup-go@ccc # v7\n"
         "        with:\n          go-version: '1.26'\n"
         "          cache-dependency-path: services/go-svc/go.sum\n"
-        "      - run: |\n          cd services/go-svc\n          go build ./...\n",
+        "      - run: |\n          cd services/go-svc\n          go build ./...\n"
+        # A second `service:` matrix in the same file, written as a block
+        # list: the shape a file-wide matrix reader resolves into the job
+        # above. Keeping it in the clean fixture means removing job scoping
+        # breaks `clean fixture passes`, not merely one injected case.
+        "  py:\n    strategy:\n      matrix:\n        service:\n          - py-svc\n    steps:\n"
+        "      - uses: actions/setup-python@ddd # v7\n"
+        "        with:\n          python-version: '3.11'\n"
+        "      - run: |\n          cd services/${{ matrix.service }}\n          pytest\n"
+        "  gofmt:\n    steps:\n"
+        "      - name: gofmt -l every file\n"
+        "        run: |\n"
+        "          out=$(gofmt -l .)\n"
+        '          if [ -n "$out" ]; then echo "$out"; exit 1; fi\n',
+        encoding="utf-8",
+    )
+    (root / ".github" / "workflows" / "publish-images.yml").write_text(
+        "name: Publish\njobs:\n  publish:\n    strategy:\n      matrix:\n        include:\n"
+        "          - service: go-svc\n            context: services/go-svc\n            dockerfile: Dockerfile\n"
+        "          - service: py-svc\n            context: services/py-svc\n            dockerfile: Dockerfile\n"
+        "          - service: web-svc\n            context: services/web-svc\n            dockerfile: Dockerfile\n"
+        "    steps:\n      - run: docker build .\n",
         encoding="utf-8",
     )
 
@@ -1339,6 +1794,119 @@ def self_test() -> int:
             encoding="utf-8",
         )
 
+    def drift_python_ci_ahead_of_images(root: Path) -> None:
+        """The measured bug this change closes: CI on 3.12, images on 3.11.
+
+        Python used to be excused from strict equality here because the
+        manifests declare a floor that permits both. Twenty-four workflows
+        drifted under that exemption.
+        """
+        path = root / ".github" / "workflows" / "ci.yml"
+        path.write_text(path.read_text().replace("python-version: '3.11'", "python-version: '3.12'"), encoding="utf-8")
+
+    def drift_python_image_ahead_of_ci(root: Path) -> None:
+        """The other direction: the image moves and CI is forgotten."""
+        path = root / "services" / "py-svc" / "Dockerfile"
+        path.write_text(path.read_text().replace("python:3.11", "python:3.13"), encoding="utf-8")
+
+    def drift_ruff_target(root: Path) -> None:
+        """A static-tool target left behind — ruff linting for another Python."""
+        (root / "ruff.toml").write_text('target-version = "py312"\n', encoding="utf-8")
+
+    def drift_mypy_target(root: Path) -> None:
+        path = root / "services" / "py-svc" / "pyproject.toml"
+        path.write_text(path.read_text().replace('python_version = "3.11"', 'python_version = "3.10"'), encoding="utf-8")
+
+    def drift_mypy_without_a_target(root: Path) -> None:
+        """A tree asking to be type-checked without saying against which Python."""
+        path = root / "services" / "py-svc" / "pyproject.toml"
+        path.write_text(path.read_text().replace('python_version = "3.11"', "strict = true"), encoding="utf-8")
+
+    def drift_no_gofmt_at_all(root: Path) -> None:
+        """The measured bug: `go vet` and `go build`, and no formatting check."""
+        path = root / ".github" / "workflows" / "ci.yml"
+        text = path.read_text()
+        path.write_text(text[: text.index("  gofmt:\n")], encoding="utf-8")
+
+    def drift_gofmt_scoped_off_the_modules(root: Path) -> None:
+        """A formatting step that runs, passes, and covers no module."""
+        path = root / ".github" / "workflows" / "ci.yml"
+        path.write_text(path.read_text().replace("out=$(gofmt -l .)", "cd services/web-svc\n          out=$(gofmt -l .)"), encoding="utf-8")
+
+    def drift_gofmt_that_cannot_fail(root: Path) -> None:
+        """`gofmt -l` prints the offenders and exits 0 — a step with no verdict."""
+        path = root / ".github" / "workflows" / "ci.yml"
+        text = path.read_text()
+        path.write_text(
+            text[: text.index("  gofmt:\n")] + "  gofmt:\n    steps:\n      - run: gofmt -l .\n",
+            encoding="utf-8",
+        )
+
+    def drift_published_service_without_ci(root: Path) -> None:
+        """The measured `services/realtime` shape: an image nothing builds."""
+        (root / "services" / "orphan-svc").mkdir()
+        (root / "services" / "orphan-svc" / "Dockerfile").write_text("FROM python:3.11-slim\n", encoding="utf-8")
+        path = root / ".github" / "workflows" / "publish-images.yml"
+        path.write_text(
+            path.read_text().replace(
+                "    steps:\n",
+                "          - service: orphan-svc\n            context: services/orphan-svc\n"
+                "            dockerfile: Dockerfile\n    steps:\n",
+            ),
+            encoding="utf-8",
+        )
+
+    def drift_coverage_claimed_by_a_quoted_path(root: Path) -> None:
+        """A published service whose only mention is a path inside a shell array.
+
+        Measured: `compose-smoke.yml` holds a list of build-context paths to
+        decide whether a GHCR image is stale, `'services/realtime/'` among
+        them. The first version of this check read that list as evidence
+        that CI exercised eleven services, so the very defect it was written
+        to find reported OK. If `_strip_quoted` or `_COMMAND_VERB` is ever
+        dropped, this case fails.
+        """
+        (root / "services" / "orphan-svc").mkdir()
+        (root / "services" / "orphan-svc" / "Dockerfile").write_text("FROM python:3.11-slim\n", encoding="utf-8")
+        publish = root / ".github" / "workflows" / "publish-images.yml"
+        publish.write_text(
+            publish.read_text().replace(
+                "    steps:\n",
+                "          - service: orphan-svc\n            context: services/orphan-svc\n"
+                "            dockerfile: Dockerfile\n    steps:\n",
+            ),
+            encoding="utf-8",
+        )
+        ci = root / ".github" / "workflows" / "ci.yml"
+        ci.write_text(
+            ci.read_text() + "  stale:\n    steps:\n      - run: |\n"
+            "          contexts=(\n            'services/orphan-svc/'\n          )\n"
+            '          echo "${contexts[@]}"\n',
+            encoding="utf-8",
+        )
+
+    def drift_matrix_working_directory(root: Path) -> None:
+        """A service exercised only through `working-directory: .../${{ matrix.x }}`.
+
+        `\\S+` stops at the space inside the expansion, so the directory
+        resolved to `services/${{` and eight real services looked untested.
+        Putting the surviving service behind that syntax means a regression
+        in the pattern shows up as a false *failure* here.
+        """
+        ci = root / ".github" / "workflows" / "ci.yml"
+        ci.write_text(
+            ci.read_text().replace(
+                "      - run: |\n          cd services/${{ matrix.service }}\n          pytest\n",
+                "      - working-directory: services/${{ matrix.service }}\n        run: pytest\n",
+            ),
+            encoding="utf-8",
+        )
+
+    def drift_publish_context_that_moved(root: Path) -> None:
+        """The reverse: a publish entry for a directory that is not there."""
+        path = root / ".github" / "workflows" / "publish-images.yml"
+        path.write_text(path.read_text().replace("context: services/py-svc", "context: services/renamed-svc"), encoding="utf-8")
+
     def drift_inside_a_folded_run_block(root: Path) -> None:
         """An unlocked install reaching the shell through a folded scalar."""
         path = root / ".github" / "workflows" / "ci.yml"
@@ -1374,6 +1942,18 @@ def self_test() -> int:
         ("unscanned install path", drift_unscanned_install_path, "coverage"),
         ("declaration in a syntax the parser skips", drift_into_a_syntax_the_parser_skips, "ship -> test"),
         ("drift inside a folded run block", drift_inside_a_folded_run_block, "unlocked install"),
+        ("python: CI ahead of the images", drift_python_ci_ahead_of_images, "`python` is pinned 2 different ways"),
+        ("python: image ahead of CI", drift_python_image_ahead_of_ci, "`python` is pinned 2 different ways"),
+        ("ruff targets another interpreter", drift_ruff_target, "target -> ship"),
+        ("mypy targets another interpreter", drift_mypy_target, "target -> ship"),
+        ("mypy declared with no target at all", drift_mypy_without_a_target, "no `python_version`"),
+        ("no gofmt anywhere", drift_no_gofmt_at_all, "module -> format"),
+        ("gofmt scoped off the modules", drift_gofmt_scoped_off_the_modules, "format -> module"),
+        ("gofmt -l that cannot fail", drift_gofmt_that_cannot_fail, "can only ever pass"),
+        ("published image with no CI job", drift_published_service_without_ci, "image -> CI"),
+        ("coverage claimed by a quoted path in a list", drift_coverage_claimed_by_a_quoted_path, "image -> CI"),
+        ("coverage through a matrix working-directory", drift_matrix_working_directory, None),
+        ("publish entry for a directory that moved", drift_publish_context_that_moved, "CI -> image"),
     ]
 
     failures: list[str] = []
@@ -1421,8 +2001,7 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
-    root = (args.repo_root or Path(__file__).resolve().parent.parent).resolve()
-    return run(root, verbose=args.verbose)[0]
+    return run((args.repo_root or git_root()).resolve(), verbose=args.verbose)[0]
 
 
 if __name__ == "__main__":

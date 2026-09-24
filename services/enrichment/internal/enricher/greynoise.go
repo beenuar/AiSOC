@@ -30,7 +30,7 @@ func NewGreyNoiseClient(apiKey string) *GreyNoiseClient {
 type greyNoiseIPResponse struct {
 	IP             string `json:"ip"`
 	Noise          bool   `json:"noise"`
-	Riot           bool   `json:"riot"`  // benign internet activity
+	Riot           bool   `json:"riot"`           // benign internet activity
 	Classification string `json:"classification"` // benign, malicious, unknown
 	Name           string `json:"name"`
 	Link           string `json:"link"`

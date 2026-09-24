@@ -132,7 +132,11 @@ async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageRe
         # Degrading to heuristic triage is the right outcome, but it must be
         # visible: this `except` used to swallow everything, so a refused
         # prompt was indistinguishable from a missing API key.
-        logger.warning("phishing.llm_contract_violation", reason=exc.reason)
+        # %-style: `logger` is the stdlib one, which raises TypeError on an
+        # unknown keyword — and a raise inside an `except` is not caught by
+        # the sibling handler below. The line added to stop this path
+        # degrading silently was itself throwing.
+        logger.warning("phishing.llm_contract_violation reason=%s", exc.reason)
         return None
     except Exception:
         return None

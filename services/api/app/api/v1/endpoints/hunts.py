@@ -163,7 +163,8 @@ async def _generate_queries(hypothesis: str, mitre: str | None) -> dict[str, str
         )
         return json.loads(body["choices"][0]["message"]["content"])
     except LLMContractViolation as exc:
-        logger.warning("hunts.llm_contract_violation", reason=exc.reason)
+        # %-style: stdlib Logger, not structlog. See translation.py.
+        logger.warning("hunts.llm_contract_violation reason=%s", exc.reason)
         return None
     except Exception:
         return None

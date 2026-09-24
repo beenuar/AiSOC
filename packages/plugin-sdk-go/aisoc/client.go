@@ -33,9 +33,9 @@ func (e *ClientError) Error() string {
 //	client := aisoc.NewClient(pctx)
 //	data, err := client.GetCase(ctx, "case-123")
 type Client struct {
-	base    string
-	token   string
-	http    *http.Client
+	base  string
+	token string
+	http  *http.Client
 }
 
 // NewClient creates a Client using credentials from the given PluginContext.

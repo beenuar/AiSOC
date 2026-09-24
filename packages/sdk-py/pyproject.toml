@@ -43,3 +43,10 @@ line-length = 100
 
 [tool.mypy]
 strict = true
+# Pinned, like the other five trees that declare [tool.mypy]. Without it
+# mypy resolves the standard library for whatever interpreter it happens to
+# run on, so this tree's share of the recorded baseline moved whenever CI's
+# Python did — and the ratchet would red on a workflow change that touched
+# none of this code. 3.11 is the interpreter every service image ships and
+# the one CI now runs.
+python_version = "3.11"

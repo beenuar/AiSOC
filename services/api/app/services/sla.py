@@ -28,34 +28,32 @@ DEFAULT_KPI_BAR_TARGETS: dict[str, float] = {
     "mitre_subtechnique_tagging_min_pct": 60.0,
 }
 
-# Default per-severity SLA targets (minutes) used as the fallback when a tenant
-# has not provided overrides via ``tenant_sla_config``. The queue's `sla_due_at`
-# expression also reads ``DEFAULT_SLA_TARGETS["info"]["mttd_target"]`` as a
-# catch-all for severities that fall outside the standard four-tier ladder.
-DEFAULT_SLA_TARGETS: dict[str, dict[str, int]] = {
-    "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
-    "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
-    "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
-    "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
-    "info": {"mttd_target": 240, "mttr_target": 960, "mttc_target": 2880},
-}
-
-
-# Default per-severity SLA targets (minutes). These mirror the seed values
-# in migrations 007 (critical/high/medium/low) and 040 (info) — `critical`
+# Default per-severity SLA targets (minutes), used when a tenant has no
+# override row in ``tenant_sla_config``. They mirror the seed values in
+# migrations 007 (critical/high/medium/low) and 040 (info) — `critical`
 # carries the v1.5 P1 ≤15 min MTTD promise (W2 in the v1.5 SOC Console
-# Parity plan), and `info` is the widest band because info-tier alerts
-# are background context, not work items the analyst is on the clock for.
+# Parity plan), and `info` is the widest band because info-tier alerts are
+# background context, not work items the analyst is on the clock for.
 #
-# Lifted to a module-level constant so it can be asserted against in
-# tests; the row is also the source of truth used by ``compute_sla_metrics``
-# when a tenant hasn't overridden it via ``tenant_sla_config``.
+# The queue's `sla_due_at` expression also reads
+# ``DEFAULT_SLA_TARGETS["info"]["mttd_target"]`` as the catch-all for
+# severities outside the standard four-tier ladder, so this row decides a
+# deadline even for alerts that never match a tier.
+#
+# This was declared twice, and the two bodies disagreed: the second — the
+# one that actually won, being later in the file — put `info` at
+# (480, 1440, 2880) against the first's (240, 960, 2880), and migration 040
+# seeds (240, 1440, 4320). So all three disagreed, and a tenant's info-tier
+# deadline depended on whether it had a seeded row (240 min) or fell back to
+# Python (480 min). The migration is the source of truth here because it is
+# what is in the database; the duplicate is gone and the values now match
+# it. Found by mypy's `no-redef`, which had never been run.
 DEFAULT_SLA_TARGETS: dict[str, dict[str, int]] = {
     "critical": {"mttd_target": 15, "mttr_target": 60, "mttc_target": 120},
     "high": {"mttd_target": 30, "mttr_target": 120, "mttc_target": 240},
     "medium": {"mttd_target": 60, "mttr_target": 240, "mttc_target": 480},
     "low": {"mttd_target": 120, "mttr_target": 480, "mttc_target": 1440},
-    "info": {"mttd_target": 480, "mttr_target": 1440, "mttc_target": 2880},
+    "info": {"mttd_target": 240, "mttr_target": 1440, "mttc_target": 4320},
 }
 
 
@@ -88,8 +86,10 @@ def merge_tenant_settings_patch(existing: dict | None, patch: dict) -> dict:
 async def load_kpi_bar_targets(db: AsyncSession, tenant_id: uuid.UUID) -> dict[str, float]:
     row = await db.execute(select(Tenant.settings).where(Tenant.id == tenant_id))
     raw = row.scalar_one_or_none() or {}
-    kb = (raw or {}).get("kpi_bar") if isinstance((raw or {}).get("kpi_bar"), dict) else {}
-    return merge_kpi_bar_dict(kb, {})
+    # Fetched once and then tested; the two-`get` form guards one call's
+    # result and uses another's.
+    kb = raw.get("kpi_bar")
+    return merge_kpi_bar_dict(kb if isinstance(kb, dict) else {}, {})
 
 
 async def patch_tenant_kpi_bar_targets(
@@ -103,8 +103,8 @@ async def patch_tenant_kpi_bar_targets(
     if tenant is None:
         raise ValueError("tenant not found")
     settings = dict(tenant.settings or {})
-    prev_bar = settings.get("kpi_bar") if isinstance(settings.get("kpi_bar"), dict) else {}
-    merged_bar = merge_kpi_bar_dict(prev_bar, patch)
+    prev_bar = settings.get("kpi_bar")
+    merged_bar = merge_kpi_bar_dict(prev_bar if isinstance(prev_bar, dict) else {}, patch)
     settings["kpi_bar"] = merged_bar
     tenant.settings = settings
     tenant.updated_at = datetime.now(UTC)
@@ -154,8 +154,15 @@ async def _fetch_alert_events(
 
 def _compute_durations(
     events: list[AlertSLAEvent],
-) -> dict[str, int | None]:
-    """Compute MTTD/MTTR/MTTC in minutes for a single alert lifecycle."""
+) -> dict[str, Any]:
+    """Compute MTTD/MTTR/MTTC in minutes for a single alert lifecycle.
+
+    The returned mapping is heterogeneous: three `int | None` durations and
+    a `str` severity. It was annotated `dict[str, int | None]`, so every
+    caller of `d["severity"]` was typed `int | None` — which is how
+    `buckets.setdefault(sev, ...)` on a `dict[str, ...]` came to be four
+    separate findings about a key that is always a string.
+    """
     by_type: dict[str, datetime] = {e.event_type: e.occurred_at for e in events}
 
     detected_at = by_type.get("detected")

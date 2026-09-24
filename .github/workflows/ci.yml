@@ -217,7 +217,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Install Ruff & Mypy
         # Pin to versions compatible with the constraints declared in each
         # service's ``pyproject.toml`` (``ruff = ">=0.4.4,<0.5"``, ``mypy = ">=1.10,<2"``).
@@ -244,8 +244,10 @@ jobs:
       # fails when any grows — no `ignore_errors`, no widened config, no tree
       # excluded. Nothing installs the services' dependencies here on purpose:
       # mypy's answer depends on what is importable, so the baseline is only
-      # reproducible against a fixed environment, and "mypy alone on 3.12" is
-      # that environment. Re-record with
+      # reproducible against a fixed environment, and "mypy alone on 3.11" is
+      # that environment — 3.11 because that is the interpreter every service
+      # image ships, and a baseline recorded on an interpreter production does
+      # not run is a baseline for software nobody ships. Re-record with
       # `python scripts/check_mypy_baseline.py --update` under the same
       # conditions.
       - name: The type-check this job is named after
@@ -493,7 +495,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
       - name: Install API dependencies
         run: pip install --quiet ${{ env.API_DEPS }}
@@ -676,7 +678,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
       - name: Install minimal deps
         # ``fastapi`` + ``httpx`` are required by the fusion router-contract
@@ -785,7 +787,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
       - name: Install shared dependency set
         # Pinned to the pyproject constraints in each service. The set
@@ -852,7 +854,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
       - name: Install SDKs in editable mode (with dev extras)
         # Each `[dev]` extra pins pytest + pytest-asyncio; pytest-httpx is
@@ -896,6 +898,102 @@ jobs:
         run: pnpm --filter @aisoc/sdk test
       - name: Build
         run: pnpm --filter @aisoc/sdk build
+
+  # ──────────────────────────────────────────────
+  # services/realtime (WebSocket / SSE)
+  #   Published as a container image and, until now, built by nothing. No
+  #   build job, no type-check, no lint, no test run — so a break was found
+  #   by whoever deployed it. It is not a peripheral service: it is one of
+  #   the two ends of the Kafka spine, it carries the OpenTelemetry
+  #   instrumentation that keeps the distributed trace continuous across
+  #   that boundary, and `src/index.ts` holds the TypeScript CORS guard
+  #   enforcing the same wildcard-plus-credentials refusal as the vendored
+  #   Python `cors.py` copies.
+  #
+  #   `npm`, not `pnpm`: this service is deliberately outside the root pnpm
+  #   workspace (it is not in `pnpm-workspace.yaml`) and keeps its own
+  #   `package-lock.json`. `npm ci` — never `npm install` — so the job
+  #   installs the committed resolution rather than a fresh one, and so this
+  #   job fails if the lock and the manifest ever disagree.
+  #
+  #   Node 22 matches the Dockerfile's `FROM node:22-alpine`. The manifest
+  #   declared `@types/node: ^20` against that runtime: types only, so
+  #   nothing broke at runtime, but the compiler was checking this code
+  #   against a different standard library from the one it executes on.
+  # ──────────────────────────────────────────────
+  realtime:
+    name: Realtime — Build, type-check, lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/realtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/realtime/package-lock.json
+      - name: Install from the committed lock
+        run: npm ci
+      - name: Build
+        run: npm run build
+      # Wider than the build: `tsconfig.json` includes only `src/**/*`
+      # because `rootDir` decides the shape of `dist`, which left
+      # `test/auth.test.ts` — the file asserting this service's
+      # authentication contract — type-checked by nothing.
+      - name: Type-check (including tests)
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+
+  # ──────────────────────────────────────────────
+  # gofmt
+  #   CI ran `go vet` and `go build` and never `gofmt`, and 28 files across
+  #   four modules had drifted out of canonical form. `go vet` does not look
+  #   at formatting, so nothing in the pipeline ever would have said so.
+  #
+  #   Deliberately repo-wide rather than one step per module. The Go jobs
+  #   below drive their modules from a matrix, and a matrix is a list
+  #   somebody has to remember to add to — that is how `services/sdk-go`
+  #   came to be compiled by nothing at all until #817. Walking every `.go`
+  #   file in the tree cannot miss a module, because it never enumerates
+  #   them.
+  #
+  #   `gofmt -l` prints the offenders and exits 0, so the file count has to
+  #   be turned into the exit status explicitly; a bare `gofmt -l` here
+  #   would be a step that can only ever pass.
+  # ──────────────────────────────────────────────
+  go-fmt:
+    name: Go — gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+      - name: gofmt -l (whole tree)
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -name '*.go' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/vendor/*' \
+            -not -path './plans/*' | sort)
+          echo "checking ${#files[@]} Go file(s)"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "gofmt: found no Go files to check — the filter is wrong, not the tree"
+            exit 1
+          fi
+          unformatted=$(gofmt -l "${files[@]}")
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would rewrite these files. Run: gofmt -w <file>"
+            echo "$unformatted"
+            gofmt -d "${files[@]}"
+            exit 1
+          fi
+          echo "gofmt: OK — ${#files[@]} file(s) already in canonical form"
 
   # ──────────────────────────────────────────────
   # Go services (enrichment, ingest, demo-producer)
@@ -1000,7 +1098,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Pull last published baseline from eval-results branch
         # Wave 2 — w2-dac. We fetch `eval/results/latest.json` from the
         # `eval-results` orphan branch (published by the publish step below
@@ -1126,7 +1224,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - name: Install deps
         # pydantic + httpx let the parity check import the real engine rather
         # than parse it; a parser can disagree with the handler table that is

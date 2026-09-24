@@ -295,8 +295,16 @@ def _interpret(capability: str, vendor_id: str, body: dict[str, Any], *, dry_run
     lose an action that is genuinely in flight; reporting the second as
     executed would be the fake success this replaces.
     """
-    result = body.get("result") if isinstance(body.get("result"), dict) else {}
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    # Fetched once and then tested, rather than `x.get(k) if
+    # isinstance(x.get(k), dict) else {}`: that form calls `get` twice, so
+    # the value the guard inspects is not the value that gets used. It
+    # happens to be safe for a plain dict and it is not a property anything
+    # enforces, which is why the fourteen `union-attr` findings under it
+    # were real reports about a guard that does not guard.
+    raw_result = body.get("result")
+    result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
+    raw_details = result.get("details")
+    details: dict[str, Any] = raw_details if isinstance(raw_details, dict) else {}
     status = str(result.get("status") or "")
     summary = str(result.get("summary") or "")
 

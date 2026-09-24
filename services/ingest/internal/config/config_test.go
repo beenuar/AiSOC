@@ -1,6 +1,6 @@
 // Package config tests cover the JWT_SECRET dev-mode gate. The
-// pre-H-8 implementation accepted only ``ENV=development``; these
-// cases pin the new behaviour so ``ENVIRONMENT=development`` (the
+// pre-H-8 implementation accepted only ENV=development; these
+// cases pin the new behaviour so ENVIRONMENT=development (the
 // alias every other service honours) and the rest of the
 // development-class allow-list keep working.
 package config
@@ -51,8 +51,8 @@ func TestLoad_DevEnvAllowsMissingJWTSecret(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Always clear both names before applying the case so a
-			// stale ``ENV=production`` from the parent shell can't
-			// swamp the ``ENVIRONMENT`` alias under test.
+			// stale ENV=production from the parent shell can't
+			// swamp the ENVIRONMENT alias under test.
 			withEnv(t, "ENV", "")
 			withEnv(t, "ENVIRONMENT", "")
 			withEnv(t, "JWT_SECRET", "")
@@ -116,7 +116,7 @@ func TestLoad_NonDevEnvWithJWTSecretSucceeds(t *testing.T) {
 }
 
 func TestLoad_ENVTakesPrecedenceOverENVIRONMENT(t *testing.T) {
-	// If both are set, ``ENV`` wins, matching envmode.Current(). The
+	// If both are set, ENV wins, matching envmode.Current(). The
 	// pre-H-8 code already had this implicit behaviour because it
 	// only looked at ENV; the test pins it now that ENVIRONMENT is
 	// also consulted.

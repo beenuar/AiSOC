@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       # The gate first: it names every file it scanned and every critical
       # package it compared, so the log shows what was checked rather than
       # only that something passed.
@@ -86,17 +86,19 @@ jobs:
           python -m pytest tests/test_dependency_pin_gate.py -v --tb=short
 
   toolchain-agreement:
-    name: Go, Node and pnpm toolchains agree
+    name: Go, Node, pnpm and Python toolchains agree
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       # Names its root and every path it scanned, so the log shows which tree
-      # was checked. One gate in this repository resolved its root from its
-      # own file location and would have printed a confident OK about a tree
-      # it never opened.
+      # was checked. This gate used to resolve its own root from its file
+      # location — the tree the *script* lives in, not the one anyone asked
+      # about — so a vendored or symlinked copy would have printed a
+      # confident OK about a tree it never opened. It asks `git rev-parse`
+      # now, and says so when there is no git to ask.
       - name: Every path declaring a toolchain agrees, and every install is locked
         run: python scripts/check_toolchain_pins.py --verbose
       - name: The gate detects injected drift in every direction
@@ -177,7 +179,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
       - name: Install with fastapi pinned to ${{ matrix.fastapi }}
         run: pip install --quiet ${{ env.API_DEPS }} "fastapi==${{ matrix.fastapi }}"

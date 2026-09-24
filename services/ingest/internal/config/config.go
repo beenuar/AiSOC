@@ -38,20 +38,20 @@ type Config struct {
 	// topic with no reader. It remains available as an opt-in export for an
 	// external consumer; the messages carry an `event_type:
 	// VULNERABILITY_MATCH` header for exactly that.
-	VulnCorrelEnabled   bool
-	VulnKafkaTopic      string // topic for VULNERABILITY_MATCH events
-	NvdAPIKey           string // optional NVD API key for higher rate limits
+	VulnCorrelEnabled bool
+	VulnKafkaTopic    string // topic for VULNERABILITY_MATCH events
+	NvdAPIKey         string // optional NVD API key for higher rate limits
 
 	// Workstream 6 — universal capture push paths.
 	// InboxEnabled toggles the /v1/inbox/* routes. Off by default in
 	// development if no DATABASE_DSN is set, since the inbox store needs
 	// Postgres to resolve tokens.
-	InboxEnabled       bool
-	InboxTemplatesDir  string // path to vendor template YAMLs
+	InboxEnabled      bool
+	InboxTemplatesDir string // path to vendor template YAMLs
 	// InboxMaxBodyBytes caps a single inbox webhook body. Anything
 	// bigger gets a 413; vendors that page through alerts should batch
 	// at the source rather than push 50MB at once.
-	InboxMaxBodyBytes  int64
+	InboxMaxBodyBytes int64
 	// Per-tenant rate limits on the inbox. /v1/inbox/* is the one route
 	// deliberately open to the internet, authenticated only by a bearer
 	// token that lives in a vendor's webhook config, and it previously had
@@ -129,9 +129,9 @@ type Config struct {
 	//
 	// SnapshotEnabled toggles the per-event resource config snapshotter.
 	// When on, every event referencing a resource triggers a (cached)
-	// ``get_resource_config`` call on the relevant connector and the
+	// get_resource_config call on the relevant connector and the
 	// result lands as a versioned :Configuration node connected via
-	// ``:CONFIGURED_AS {ts}``. Off by default — the writer still runs,
+	// :CONFIGURED_AS {ts}. Off by default — the writer still runs,
 	// it just skips the snapshot lookup until the operator opts in.
 	SnapshotEnabled bool
 	// SnapshotCacheTTLSecs is the TTL for the Redis-backed config cache.
@@ -139,7 +139,7 @@ type Config struct {
 	// minute) only do one round-trip to the connector per TTL window.
 	SnapshotCacheTTLSecs int
 	// SnapshotProviderURL is the HTTP base URL of the connectors service
-	// that serves ``GET /v1/connectors/{id}/resource-config``. The
+	// that serves GET /v1/connectors/{id}/resource-config. The
 	// snapshotter calls this in lieu of importing the connector code
 	// directly (the connectors live in Python; the writer is Go).
 	// Empty disables remote lookups — the snapshotter then only emits
@@ -156,11 +156,11 @@ type Config struct {
 func Load() (*Config, error) {
 	cfg := &Config{
 		HTTPPort: mustGetEnvInt("HTTP_PORT", 8080),
-		// Canonical env var is ``KAFKA_BOOTSTRAP_SERVERS`` (matches
-		// ``.env.example`` and docker-compose). ``KAFKA_BROKERS`` is honored
+		// Canonical env var is KAFKA_BOOTSTRAP_SERVERS (matches
+		// .env.example and docker-compose). KAFKA_BROKERS is honored
 		// as a back-compat alias for older deployments.
-		KafkaBrokers: getEnvFallback("KAFKA_BOOTSTRAP_SERVERS", "KAFKA_BROKERS", "localhost:9092"),
-		KafkaTopic:   getEnv("KAFKA_TOPIC", "aisoc.raw_events"),
+		KafkaBrokers:    getEnvFallback("KAFKA_BOOTSTRAP_SERVERS", "KAFKA_BROKERS", "localhost:9092"),
+		KafkaTopic:      getEnv("KAFKA_TOPIC", "aisoc.raw_events"),
 		RedisAddr:       getEnv("REDIS_ADDR", "localhost:6379"),
 		DatabaseDSN:     getEnv("DATABASE_DSN", ""),
 		AttckDataPath:   getEnv("ATTCK_DATA_PATH", "/data/enterprise-attack.json"),
@@ -227,9 +227,9 @@ func Load() (*Config, error) {
 	}
 
 	// JWT_SECRET is required outside development-class environments. The
-	// previous check exact-matched ``ENV == "development"`` only, so an
-	// operator who set ``ENVIRONMENT=development`` (the alias the Python
-	// API treats as equivalent) without also setting ``ENV`` would crash
+	// previous check exact-matched ENV == "development" only, so an
+	// operator who set ENVIRONMENT=development (the alias the Python
+	// API treats as equivalent) without also setting ENV would crash
 	// here even though every other service treated their stack as dev.
 	// envmode.IsDevRuntime closes that gap.
 	if cfg.JWTSecret == "" && !envmode.IsDevRuntime() {

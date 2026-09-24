@@ -92,21 +92,21 @@ func (c *AnomaliClient) configured() bool {
 
 type anomaliResponse struct {
 	Objects []struct {
-		Value      string   `json:"value"`
-		Confidence int      `json:"confidence"`
-		Severity   string   `json:"severity"` // low | medium | high | very-high
-		Type       string   `json:"type"`
-		Source     string   `json:"source"`
+		Value      string `json:"value"`
+		Confidence int    `json:"confidence"`
+		Severity   string `json:"severity"` // low | medium | high | very-high
+		Type       string `json:"type"`
+		Source     string `json:"source"`
 		Tags       []struct {
 			Name string `json:"name"`
 		} `json:"tags"`
-		Classification string `json:"classification"`
+		Classification string   `json:"classification"`
 		ITypes         []string `json:"itype"`
-		Country        string `json:"country"`
-		ASN            int64  `json:"asn"`
-		Org            string `json:"org"`
-		ModifiedTS     string `json:"modified_ts"`
-		CreatedTS      string `json:"created_ts"`
+		Country        string   `json:"country"`
+		ASN            int64    `json:"asn"`
+		Org            string   `json:"org"`
+		ModifiedTS     string   `json:"modified_ts"`
+		CreatedTS      string   `json:"created_ts"`
 	} `json:"objects"`
 }
 
@@ -236,8 +236,8 @@ func (c *XForceClient) configured() bool {
 }
 
 type xforceIPReport struct {
-	IP    string  `json:"ip"`
-	Score float64 `json:"score"` // 1-10
+	IP    string         `json:"ip"`
+	Score float64        `json:"score"` // 1-10
 	Cats  map[string]int `json:"cats"`
 	Geo   struct {
 		Country     string `json:"country"`
@@ -286,7 +286,7 @@ func (c *XForceClient) EnrichDomain(ctx context.Context, domain string) (*Enrich
 	}
 	var rep struct {
 		Result struct {
-			Score float64        `json:"score"`
+			Score float64         `json:"score"`
 			Cats  map[string]bool `json:"cats"`
 		} `json:"result"`
 	}
@@ -356,14 +356,14 @@ type flashpointResponse struct {
 		} `json:"total"`
 		Hits []struct {
 			Source struct {
-				Indicator    string   `json:"indicator"`
-				Type         string   `json:"type"`
-				Confidence   int      `json:"confidence"`
-				Tags         []string `json:"tags"`
-				Categories   []string `json:"categories"`
-				FirstSeen    string   `json:"first_observed_at"`
-				LastSeen     string   `json:"last_observed_at"`
-				ForumMentions int     `json:"forum_mentions"`
+				Indicator     string   `json:"indicator"`
+				Type          string   `json:"type"`
+				Confidence    int      `json:"confidence"`
+				Tags          []string `json:"tags"`
+				Categories    []string `json:"categories"`
+				FirstSeen     string   `json:"first_observed_at"`
+				LastSeen      string   `json:"last_observed_at"`
+				ForumMentions int      `json:"forum_mentions"`
 				Sources       []string `json:"sources"`
 				Excerpt       string   `json:"excerpt"`
 			} `json:"_source"`
@@ -490,9 +490,9 @@ type intel471Response struct {
 				Type  string `json:"type"`
 				Value string `json:"value"`
 			} `json:"indicator"`
-			Confidence string   `json:"confidence"` // low | medium | high
+			Confidence   string   `json:"confidence"` // low | medium | high
 			MitreTactics []string `json:"mitreTactics"`
-			Threat struct {
+			Threat       struct {
 				Type string `json:"type"`
 				Data struct {
 					FamilyProfile struct {
@@ -730,9 +730,9 @@ func (c *RiskIQClient) configured() bool {
 }
 
 type riskIQReputation struct {
-	Score      int      `json:"score"` // 0-100
+	Score          int    `json:"score"` // 0-100
 	Classification string `json:"classification"`
-	Rules      []struct {
+	Rules          []struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Severity    int    `json:"severity"`
@@ -869,15 +869,15 @@ func (c *CrowdstrikeIntelClient) token(ctx context.Context) (string, error) {
 
 type crowdstrikeIndicator struct {
 	Resources []struct {
-		Indicator     string   `json:"indicator"`
-		Type          string   `json:"type"`
-		MaliciousConfidence string `json:"malicious_confidence"` // high | medium | low | unverified
-		PublishedDate int64    `json:"published_date"`
-		LastUpdated   int64    `json:"last_updated"`
-		Actors        []string `json:"actors"`
-		MalwareFamilies []string `json:"malware_families"`
-		KillChains    []string `json:"kill_chains"`
-		Labels        []struct {
+		Indicator           string   `json:"indicator"`
+		Type                string   `json:"type"`
+		MaliciousConfidence string   `json:"malicious_confidence"` // high | medium | low | unverified
+		PublishedDate       int64    `json:"published_date"`
+		LastUpdated         int64    `json:"last_updated"`
+		Actors              []string `json:"actors"`
+		MalwareFamilies     []string `json:"malware_families"`
+		KillChains          []string `json:"kill_chains"`
+		Labels              []struct {
 			Name string `json:"name"`
 		} `json:"labels"`
 	} `json:"resources"`

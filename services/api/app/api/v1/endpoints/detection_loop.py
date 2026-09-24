@@ -127,7 +127,8 @@ async def _llm_draft_sigma(
         )
         return json.loads(body["choices"][0]["message"]["content"])
     except LLMContractViolation as exc:
-        logger.warning("detection_loop.llm_contract_violation", reason=exc.reason)
+        # %-style: stdlib Logger, not structlog. See translation.py.
+        logger.warning("detection_loop.llm_contract_violation reason=%s", exc.reason)
         return _template_fallback(current_sigma, alert_fields, analyst_note)
     except Exception:
         return _template_fallback(current_sigma, alert_fields, analyst_note)

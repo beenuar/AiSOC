@@ -8,13 +8,13 @@
 //     per flush — this is the idiomatic pattern from Neo4j's own examples
 //     and avoids holding a session across goroutine boundaries.
 //
-//   - The hot path (``WriteEvent``) does NOT touch the network. It enqueues
+//   - The hot path (WriteEvent) does NOT touch the network. It enqueues
 //     onto an in-process channel that is drained by a background flusher.
 //     This is what lets the Kafka consumer pipeline (handler.go) stay snappy
 //     even when Neo4j stutters.
 //
 //   - Batched upserts use a single UNWIND query per (node-label, batch) and
-//     per (edge-type, batch). MERGE is keyed on ``natural_key`` so the same
+//     per (edge-type, batch). MERGE is keyed on natural_key so the same
 //     entity from two different events collapses to one node — critical for
 //     the graph-as-state-of-the-world invariant.
 //
@@ -39,7 +39,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Driver is the subset of neo4j.DriverWithContext that ``Writer`` actually
+// Driver is the subset of neo4j.DriverWithContext that Writer actually
 // uses. Defined as an interface so unit tests can plug in a fake without
 // running a real Neo4j instance — that's the contract writer_test.go relies
 // on.
@@ -71,7 +71,7 @@ type UpdatePublisher interface {
 	PublishGraphUpdate(ctx context.Context, update GraphUpdate) error
 }
 
-// GraphUpdate is the envelope emitted on ``security.graph_updates`` for
+// GraphUpdate is the envelope emitted on security.graph_updates for
 // every node/edge mutation. Downstream consumers subscribe to this topic to
 // drive realtime UI without re-querying Neo4j.
 type GraphUpdate struct {
@@ -140,12 +140,12 @@ type Writer struct {
 	rootDone context.CancelFunc
 
 	// metrics — small atomic counters surfaced for the Prometheus collector
-	mu              sync.Mutex
-	eventsAccepted  uint64
-	eventsDropped   uint64
-	flushErrors     uint64
-	lastFlushNodes  int
-	lastFlushEdges  int
+	mu             sync.Mutex
+	eventsAccepted uint64
+	eventsDropped  uint64
+	flushErrors    uint64
+	lastFlushNodes int
+	lastFlushEdges int
 }
 
 // Config configures Writer.
@@ -303,7 +303,7 @@ func verifyWithRetry(ctx context.Context, driver neo4j.DriverWithContext, window
 
 // newWriterFromDriver is the test-friendly constructor — takes a Driver
 // interface so writer_test.go can inject a fake without touching the
-// network. Production code uses ``New``.
+// network. Production code uses New.
 func newWriterFromDriver(driver Driver, cfg Config) *Writer {
 	rootCtx, rootDone := context.WithCancel(context.Background())
 	w := &Writer{
@@ -582,7 +582,7 @@ SET r += row.props`,
 	)
 }
 
-// edgeGroup is an internal grouping key for ``flush``.
+// edgeGroup is an internal grouping key for flush.
 type edgeGroup struct {
 	fromLabel NodeLabel
 	toLabel   NodeLabel
@@ -676,7 +676,7 @@ func (w *Writer) Stats() Stats {
 }
 
 // hashProperties produces the short stable digest used in the idempotency
-// key. Tied to the v1.0 contract: ``(entity_type, natural_key, hash(properties))``.
+// key. Tied to the v1.0 contract: (entity_type, natural_key, hash(properties)).
 func hashProperties(props map[string]interface{}) string {
 	keys := make([]string, 0, len(props))
 	for k := range props {

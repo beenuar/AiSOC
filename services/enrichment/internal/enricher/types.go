@@ -37,11 +37,11 @@ type GeoLocation struct {
 
 // PortInfo describes an open port detected by Shodan.
 type PortInfo struct {
-	Port      int      `json:"port"`
-	Protocol  string   `json:"protocol"`
-	Service   string   `json:"service,omitempty"`
-	Banner    string   `json:"banner,omitempty"`
-	Vulns     []string `json:"vulns,omitempty"`
+	Port     int      `json:"port"`
+	Protocol string   `json:"protocol"`
+	Service  string   `json:"service,omitempty"`
+	Banner   string   `json:"banner,omitempty"`
+	Vulns    []string `json:"vulns,omitempty"`
 }
 
 // EnrichmentSource tracks which data sources contributed to enrichment.
@@ -55,44 +55,44 @@ type EnrichmentSource struct {
 // DarkWebContext captures dark-web / underground forum mentions
 // (Cyble, Flashpoint, Intel 471).
 type DarkWebContext struct {
-	Mentions   int      `json:"mentions"`
-	Sources    []string `json:"sources,omitempty"` // forum / market names
+	Mentions   int        `json:"mentions"`
+	Sources    []string   `json:"sources,omitempty"` // forum / market names
 	FirstSeen  *time.Time `json:"first_seen,omitempty"`
 	LastSeen   *time.Time `json:"last_seen,omitempty"`
-	Categories []string `json:"categories,omitempty"` // e.g. "ransomware-leak", "credential-dump"
-	Excerpt    string   `json:"excerpt,omitempty"`    // redacted snippet
+	Categories []string   `json:"categories,omitempty"` // e.g. "ransomware-leak", "credential-dump"
+	Excerpt    string     `json:"excerpt,omitempty"`    // redacted snippet
 }
 
 // VulnerabilityRef links an IOC to disclosed vulnerabilities.
 type VulnerabilityRef struct {
-	CVE          string  `json:"cve"`
-	CVSS         float64 `json:"cvss,omitempty"`
-	EPSS         float64 `json:"epss,omitempty"`
-	Exploited    bool    `json:"exploited"`
-	KEV          bool    `json:"kev"`             // CISA Known Exploited Vuln
-	Description  string  `json:"description,omitempty"`
+	CVE         string  `json:"cve"`
+	CVSS        float64 `json:"cvss,omitempty"`
+	EPSS        float64 `json:"epss,omitempty"`
+	Exploited   bool    `json:"exploited"`
+	KEV         bool    `json:"kev"` // CISA Known Exploited Vuln
+	Description string  `json:"description,omitempty"`
 }
 
 // BrandRisk surfaces brand-protection signals (Cyble, RiskIQ, DomainTools).
 type BrandRisk struct {
-	Score        int      `json:"score"` // 0-100
-	LookalikeOf  string   `json:"lookalike_of,omitempty"`
-	Phishing     bool     `json:"phishing"`
-	Defacement   bool     `json:"defacement"`
-	Indicators   []string `json:"indicators,omitempty"`
+	Score       int      `json:"score"` // 0-100
+	LookalikeOf string   `json:"lookalike_of,omitempty"`
+	Phishing    bool     `json:"phishing"`
+	Defacement  bool     `json:"defacement"`
+	Indicators  []string `json:"indicators,omitempty"`
 }
 
 // EnrichmentResult is the unified enrichment output for any IOC type.
 type EnrichmentResult struct {
 	IOCType          IOCType              `json:"ioc_type"`
 	Value            string               `json:"value"`
-	RiskScore        float64              `json:"risk_score"`        // 0-100
-	Confidence       float64              `json:"confidence"`        // 0-100
+	RiskScore        float64              `json:"risk_score"` // 0-100
+	Confidence       float64              `json:"confidence"` // 0-100
 	MaliciousVotes   int                  `json:"malicious_votes"`
 	HarmlessVotes    int                  `json:"harmless_votes"`
 	TotalEngines     int                  `json:"total_engines"`
 	Tags             []string             `json:"tags,omitempty"`
-	Reputation       int                  `json:"reputation"`        // -128 to 127
+	Reputation       int                  `json:"reputation"` // -128 to 127
 	ThreatCategory   string               `json:"threat_category,omitempty"`
 	Classification   ThreatClassification `json:"classification"`
 	GeoLocation      *GeoLocation         `json:"geo_location,omitempty"`

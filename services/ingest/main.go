@@ -31,8 +31,8 @@ import (
 func main() {
 	// Configure structured logging. Use the human-friendly console writer
 	// in any dev-class environment (development, dev, local, demo, test) —
-	// previously this exact-matched ``ENV == "development"`` only, so
-	// ``ENVIRONMENT=development`` (the alias the Python API treats as
+	// previously this exact-matched ENV == "development" only, so
+	// ENVIRONMENT=development (the alias the Python API treats as
 	// equivalent) silently flipped this service to JSON logs and made
 	// local debugging confusing. envmode.IsDevRuntime keeps both layers
 	// in lock-step.

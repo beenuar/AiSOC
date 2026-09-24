@@ -234,11 +234,14 @@ def test_ship_and_test_parity_runs_in_both_directions():
     assert any("test -> ship" in p for p in problems)
 
 
-def test_python_is_ratcheted_rather_than_required_to_match():
-    """Python's manifests declare a floor, so 3.12 in CI violates nothing written.
+def test_python_is_held_to_the_same_standard_as_go_and_node():
+    """The exemption that let twenty-four workflows drift is gone.
 
-    The gap is recorded instead of enforced, and the recording is what must
-    not drift: a workflow joining the split without being listed fails.
+    Python used to be excused from strict equality because its manifests
+    declare a floor that permits both 3.11 and 3.12, so a workflow on 3.12
+    violated nothing written down. That is exactly why the split survived:
+    the gate agreed with it. A floor is what a *consumer* may use; it is not
+    a licence for the project's own paths to disagree about what they run.
     """
     scan = _scan_with(
         pins=[
@@ -247,20 +250,19 @@ def test_python_is_ratcheted_rather_than_required_to_match():
         ],
         files=[".github/workflows/brand-new.yml"],
     )
-    assert gate.check_ship_test_parity(scan) == []
-    assert any("may not grow silently" in p for p in gate.check_python_split(scan))
+    assert any("test -> ship" in p for p in gate.check_ship_test_parity(scan))
+    assert any("`python` is pinned 2 different ways" in p for p in gate.check_runtime_agreement(scan))
 
 
-def test_a_listed_python_workflow_that_no_longer_differs_must_be_removed():
-    listed = sorted(gate.PYTHON_INTERPRETER_SPLIT)[0]
-    scan = _scan_with(
-        pins=[
-            gate.Pin("python", "3.11", "services/api/Dockerfile", "ship", ""),
-            gate.Pin("python", "3.11", listed, "test", ""),
-        ],
-        files=[listed],
-    )
-    assert any("remove it" in p for p in gate.check_python_split(scan))
+def test_no_exemption_list_exists_for_the_python_split():
+    """A split that can be recorded is a split that can grow.
+
+    The previous design held a set of twenty-four workflow paths allowed to
+    run another interpreter. Re-adding one would make the gate pass while
+    the defect returned, so the absence of the escape hatch is asserted
+    rather than left to convention.
+    """
+    assert not hasattr(gate, "PYTHON_INTERPRETER_SPLIT")
 
 
 def test_two_shipped_python_interpreters_fail_outright():
@@ -270,7 +272,33 @@ def test_two_shipped_python_interpreters_fail_outright():
             gate.Pin("python", "3.12", "services/fusion/Dockerfile", "ship", ""),
         ]
     )
-    assert any("different Python interpreters" in p for p in gate.check_python_split(scan))
+    assert any("`python` is pinned 2 different ways" in p for p in gate.check_runtime_agreement(scan))
+
+
+def test_static_tool_targets_are_compared_in_both_directions():
+    """ruff's `target-version` and mypy's `python_version` install nothing.
+
+    No other check in the gate reads them, and both decide what the tools
+    believe: ruff rejects syntax newer than its target and mypy resolves the
+    standard library for the version it is told. Pointed at an interpreter
+    nothing ships, they are two more checks reasoning about software nobody
+    runs.
+    """
+    stale_target = _scan_with(
+        pins=[
+            gate.Pin("python", "3.11", "services/api/Dockerfile", "ship", ""),
+            gate.Pin("python", "3.12", "ruff.toml", "target", 'target-version = "py312"'),
+        ]
+    )
+    assert any("target -> ship" in p for p in gate.check_python_tooling_target(stale_target))
+
+    image_moved = _scan_with(
+        pins=[
+            gate.Pin("python", "3.13", "services/api/Dockerfile", "ship", ""),
+            gate.Pin("python", "3.11", "ruff.toml", "target", 'target-version = "py311"'),
+        ]
+    )
+    assert any("ship -> target" in p for p in gate.check_python_tooling_target(image_moved))
 
 
 def test_pnpm_action_version_is_declared_not_voted_on():

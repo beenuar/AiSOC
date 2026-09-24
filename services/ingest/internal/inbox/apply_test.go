@@ -55,12 +55,12 @@ func TestApply_BasicMapping(t *testing.T) {
 	tmpl := newTestTemplate()
 	payload := map[string]any{
 		"event": map[string]any{
-			"id":           "INC-12345",
-			"title":        "prod-db-1: high CPU",
-			"urgency":      "high",
-			"occurred_at":  "2026-05-08T12:30:00Z",
-			"service":      map[string]any{"summary": "production-db"},
-			"html_url":     "https://acme.pagerduty.com/incidents/INC-12345",
+			"id":          "INC-12345",
+			"title":       "prod-db-1: high CPU",
+			"urgency":     "high",
+			"occurred_at": "2026-05-08T12:30:00Z",
+			"service":     map[string]any{"summary": "production-db"},
+			"html_url":    "https://acme.pagerduty.com/incidents/INC-12345",
 		},
 	}
 
