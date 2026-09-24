@@ -38,6 +38,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.entitlements import Headroom, headroom_for_tenant
 from app.services.org_scope import PortfolioScope, require_scope
+from app.services.resolution_time import (
+    CLOSED_CASE_PREDICATE,
+    MTTR_MINUTES_EXPR,
+    MTTR_WINDOW,
+)
 
 # A connector that has not synced in this long is stale. Chosen against the
 # platform's own defaults: the connector scheduler polls every five minutes,
@@ -45,10 +50,15 @@ from app.services.org_scope import PortfolioScope, require_scope
 # well short of a working day.
 STALE_AFTER = timedelta(hours=1)
 
-# Window for the resolution-time average. Long enough that a tenant closing
-# a handful of cases a week still has a number, short enough that it tracks
-# how the account is being run now rather than a year ago.
-MTTR_WINDOW = timedelta(days=30)
+__all__ = [
+    "EMPTY_SUMMARY",
+    "MTTR_WINDOW",
+    "STALE_AFTER",
+    "TenantRollup",
+    "portfolio_alerts",
+    "summarise",
+    "tenant_rollups",
+]
 
 
 @dataclass(frozen=True)
@@ -138,7 +148,10 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
     rows = (
         await db.execute(
             text(
-                """
+                # Interpolated fragments are module constants from
+                # `resolution_time`, never caller input; the tenant list and
+                # every window stay bound parameters below.
+                f"""
                 SELECT
                     t.id,
                     t.name,
@@ -193,15 +206,11 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
                 LEFT JOIN (
                     SELECT
                         tenant_id,
-                        round(
-                            (avg(EXTRACT(EPOCH FROM (closed_at - created_at))) / 60.0)::numeric,
-                            1
-                        )::float8                                                          AS mttr_minutes
+                        {MTTR_MINUTES_EXPR}                                    AS mttr_minutes
                     FROM cases
                     WHERE tenant_id = ANY(:tenant_ids)
-                      AND closed_at IS NOT NULL
+                      AND {CLOSED_CASE_PREDICATE}
                       AND closed_at >= :mttr_since
-                      AND closed_at >= created_at
                     GROUP BY tenant_id
                 ) r ON r.tenant_id = t.id
                 LEFT JOIN (

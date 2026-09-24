@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path and both ratchet-drift directions, and additionally asserts the
   resolver *discriminates* rather than returning "reached" for everything —
   the failure mode that would make every other case pass vacuously. Current
-  state: **41 checks, 41 reachable, 0 on the deliberately-unwired ratchet.**
+  state: **42 checks, 42 reachable, 0 on the deliberately-unwired ratchet.**
 
   Three checks were genuinely orphaned and are now wired. Each passed on first
   real run, which is the quiet part: they had been correct and unheard.
@@ -140,6 +140,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and every count are printed before the verdict, and an input that is missing
   or parses empty is a hard error rather than a quiet pass — a gate that
   reports OK about a tree it never opened is worse than no gate.
+
+- **The published playbook schema now describes the engine that runs
+  playbooks, and a gate keeps it that way in both directions.**
+  `schemas/playbook.schema.json` is the contract authors are told to trust,
+  and it had drifted from `services/agents/app/playbook/` in every available
+  direction at once. Two schema files existed with different step
+  vocabularies — 15 types at the repo root, 9 under `schemas/` — against a
+  `StepType` enum of 22, and the NL drafter silently fell back from one to
+  the other if the primary was missing. Eleven step types were declared by a
+  schema and implemented nowhere (`trigger`, `action`, `loop`, `parallel`,
+  `human_approval`, `wait`, `isolate`, `block`, `create_case`,
+  `run_playbook`, `script`); thirteen were accepted by the engine and
+  declared by neither schema. Six step fields (`blast_radius`, `depends_on`,
+  `output_key`, `retry.max_attempts`, `retry.backoff_seconds`,
+  `retry.backoff_multiplier`) were declared and never read — `blast_radius`
+  carried the description "engine enforces analyst approval for destructive
+  steps", and the engine could not see the field at all.
+
+  Resolved by making `schemas/playbook.schema.json` the only schema, widened
+  to the full `StepType` range with the condition-as-string form the engine
+  already accepted, bounds matched to `bounds.py` (3600s / 25 retries, not
+  600s / 5), and the two authored-but-inert playbook keys (`inputs`,
+  `dry_run_support`) declared as the documentation they are. The root
+  duplicate is deleted. The schema also carries `x-aisoc-execution`, a
+  machine-checked map recording whether each step type is `executed`,
+  `simulated`, or vocabulary with no handler — so an author can tell what
+  will happen before writing the playbook rather than after running it.
+
+  `run_playbook` is deliberately **not** implemented as a step, on its own
+  merits rather than by inheriting the argument that removed it as an action.
+  A nested playbook's steps are not visible where the parent declares its
+  step-level policy, so the parent cannot bound them; the engine reads no
+  step-level approval or blast-radius field today, so nesting would let one
+  ungated parent pull in an arbitrary tree; and twelve of the engine's own
+  step types have no handler, so a verb whose purpose is to execute more
+  steps would multiply that. It can return when playbook steps are graded
+  individually — recursion depth and an ancestor set are the easy part.
+
+  `scripts/check_playbook_schema_parity.py` compares the schema enum, the
+  `StepType` enum, the engine's handler table, the execution map, the bounds
+  module and the pack validator's trigger list — every pair in both
+  directions, because the characteristic failure here is a check that asks
+  only whether the schema declares something the engine lacks and never the
+  reverse, which is the direction things actually drift. It carries a
+  `--self-test` that injects drift each way and fails if any goes undetected,
+  refuses to run at all on a tree missing its marker files rather than
+  printing OK about files it never opened, and names the root, schema, step
+  counts and playbook count it inspected.
+
+- **Every `ActionType` now resolves a capability contract.** `notify_slack`
+  was the last one without, and it was a naming gap rather than a missing
+  capability: the verb is `notify`, it has had a contract throughout, and the
+  `SlackNotify` adapter already bridged the two names. Nothing connected a
+  lookup *by `ActionType` value* to that bridge, so `approval_gate` found no
+  contract and skipped the confidence matrix — a 10%-confidence
+  `notify_slack` was approved for auto-execution, and the verb most likely to
+  auto-execute was the one graded without reference to confidence. It now
+  requires an analyst under the default L1 tier.
+
+  Closed with a one-entry alias (`ACTION_TYPE_CAPABILITY_ALIASES`) rather
+  than a rename, because `action_type` is persisted operator intent:
+  `remediation_whitelist` (migration 015) stores per-tenant pre-approvals
+  keyed `UNIQUE (tenant_id, action_type)`, so renaming the member silently
+  orphans every row an operator created for `notify_slack`. It is also a
+  documented request field and a member of the `ActionType` union in
+  `packages/types`. The retirement condition is recorded rather than left
+  open-ended: the map goes when `ActionType` does. `check_action_contract.py`
+  gains two directions — every `ActionType` must resolve a contract, and
+  every alias must name a real `ActionType`, point at a real contract, not
+  shadow a capability of the same name, and describe a bridge some adapter
+  actually implements.
 
 - **Competitor product names removed from the docs portal, the benchmark page
   and the archived plan subtree, and a CI gate added to keep them out.** AiSOC
@@ -423,7 +494,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses is matched (the previous pattern needed both figures on one line and
   silently matched nothing there), and three cases in
   `tests/test_readme_figures_gate.py` pin it. The stale count is corrected and
-  the tally is **119 rows — 110 GATED, 9 PARTIAL, 0 NO GATE**, recomputed with
+  the tally is **122 rows — 113 GATED, 9 PARTIAL, 0 NO GATE**, recomputed with
   the script rather than typed.
 
 - **`screencast.yml` could never get past its third step.** Its
@@ -487,6 +558,210 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `email-forwarded.yaml`, so it matched neither branch and strict mode
   rejected it outright; it now has a profile mirroring that template, the way
   `ai_runtime` mirrors `ai-runtime.yaml`.
+- **The dashboard published two numbers that contradicted the database, and a
+  third surface that contradicted both.** A live acceptance pass measured a
+  tenant with two cases closed in the last seven days at a 90-minute mean.
+  `/mssp/portfolio` reported that correctly as 1.5h. The dashboard reported
+  **CASES CLOSED (7D) 0** and **MTTR 0.0 hrs**, directly above its own
+  "CASES OPENED (7D) 2".
+
+  The portfolio was right and the dashboard was wrong, for two separate
+  reasons that each read plausibly in isolation:
+
+  - `cases_closed_7d` filtered `status = 'resolved' AND updated_at >= …`.
+    `resolved` is an *intermediate* state — the lifecycle's terminal one is
+    `closed`, and it is that transition which writes `closed_at` — so a case
+    that completed its lifecycle was invisible to the count. `updated_at` was
+    also the wrong clock: it moves whenever anyone edits the case, so an old
+    case gets a comment and re-enters the window while a closed one
+    eventually leaves it.
+  - `mttr_hours` averaged `alerts.resolved_at - alerts.created_at`, a
+    different lifecycle on a different table from the one the portfolio
+    measures. Nothing in ordinary case work writes that column, so the
+    average was over zero rows and `float(None or 0.0)` published the empty
+    result as a confident `0.0`.
+
+  Both now come from `app/services/resolution_time.py`, which owns the window
+  and the SQL expression that *both* surfaces use, so the two cannot quote
+  different MTTRs for one tenant again. The portfolio keeps computing its
+  figure inside one bound cross-tenant statement — one round trip for the
+  whole portfolio — and interpolates the shared fragments rather than calling
+  the shared function; a test asserts it still does, and the load-bearing
+  assertion is that the two surfaces produce the *same* number from the same
+  rows rather than that each matches a hardcoded 90.0.
+
+  The third surface was the `MTTR` tile in the Security Operations Center
+  strip, reading `alerts.mttr` off `/metrics/dashboard` — the same dead column,
+  and rendered with an `m` suffix although the field is hours, so a real
+  1.5-hour MTTR would have displayed as "1.5m" had it ever been non-zero.
+
+  Rather than make the three means nullable — a breaking response change for
+  every existing client — each now travels with the number of rows it was
+  averaged over (`mttd_sample_count`, `mttr_sample_count`,
+  `mttc_sample_count`, and `alerts.mttr_sample_count`). A mean over zero rows
+  is unmeasured, not zero, and the tiles say "not measured" instead of
+  claiming an unbeatable response time for a tenant that has resolved nothing.
+  The fields are additive: a client that ignores them sees what it saw before.
+
+- **The entity-risk queue sent a tenant slug where a UUID was required, then
+  blamed a healthy service for the rejection.** `apps/web/next.config.js`
+  inlined `NEXT_PUBLIC_TENANT_ID` with a fallback of the literal string
+  `'default'`. Three tenant-scoped surfaces pass that value as a query
+  parameter to routes typed `tenant_id: UUID` — `/fusion/entity-risk/*`,
+  `/honeytokens/*` and `/business-context/*` — and all three answered 422.
+
+  Two things kept it hidden. `lib/api.ts` carries the correct canonical UUID
+  as its own fallback, so reading it suggested the console was already doing
+  the right thing; Next's inlining runs first, which made that fallback
+  unreachable code. And the slug is not a dependable handle either: migration
+  001 seeds tenant `…0001` with slug `default` and the demo seed renames that
+  slug to `demo`, so on a seeded install the literal matched neither the id
+  nor the slug. The entity-risk client also read the build-time constant
+  rather than `getActiveTenantId()`, so the queue ignored both the logged-in
+  user and the tenant switcher; it now resolves the tenant the same way
+  `request()` resolves the `X-Tenant-Id` header.
+
+  `components/fim/FimDashboard.tsx` is deliberately pinned to `'default'`
+  instead: `services/osquery-tls` types its tenant as a plain string and
+  enrols nodes under that literal, so this one surface is keyed on that
+  service's own convention and reading the shared UUID here would match no
+  enrolled node. The two tenancy models still need reconciling in
+  osquery-tls.
+
+  With the request failing, the queue rendered five invented entities —
+  `jsmith@acme.corp`, `updates.evil-cdn.xyz`, "last seen 5 months ago" on a
+  stack that had been up for an hour. Above them, and *outside* the amber
+  banner that disclosed them, four cards read "Contributing alerts 26" and
+  "Alert → Incident 13.0:1" off the same sample payload. A disclosure that
+  covers the rows and not the headline numbers is decorative, so the banner
+  moved above the cards and every card now reads "not measured" when its
+  request fails; the derived alert-to-incident ratio is withheld whenever the
+  counts it divides are unknown.
+
+  The banner also named the wrong subsystem. It said "Fusion service
+  unreachable" while fusion was healthy and the actual failure was a 422 —
+  a diagnosis that sends an operator to debug something that is not broken,
+  which is worse than none. It is now derived from the response status: a 422
+  reads as a console bug rather than an outage, a 5xx names fusion because
+  that is when fusion is genuinely at fault, status 0 reads as unreachable,
+  and an unrecognised failure stays vague rather than guessing. Every variant
+  says the queue is *unknown* rather than empty.
+
+- **`/alerts/[id]` rendered a confidence of 21 as `2100%`, and negative
+  evidence as `+-0.30`.** Confidence reaches the console on two keys at two
+  scales: the API surfaces `confidence` as an integer 0-100, while fusion's
+  `confidence_score` is the raw [0.0, 1.0] float the band was derived from.
+  `normalizeAlert` accepted whichever key appeared first and passed it
+  through unchanged, so `Alert.confidenceScore` meant one thing or the other
+  depending on the payload — and its consumers guessed differently.
+  `AlertDetailView` multiplied by 100; `AttackStory`, on the same page,
+  divided and rendered "21/100". Each was right for one payload shape, and
+  each had a passing test because its own mock used the scale it assumed.
+
+  Normalised once at the boundary to the canonical 0-100 integer, deciding the
+  scale from the *key* rather than the magnitude: a genuine confidence of 1 is
+  indistinguishable from a raw score of 1.0 by value alone, so the tempting
+  `v <= 1 ? v * 100 : v` would render the least-confident alert in the estate
+  as the most confident. The two mocks that encoded the old scale were
+  corrected with it, since sample data on a different scale than the real
+  payload is what hid the bug.
+
+  The rationale rows hardcoded a `+` prefix on a signed contribution, so a
+  factor that argued *against* the verdict read `+-0.30`; they now carry one
+  sign, matching the glyphs the narrative builder uses. Those rows also
+  clamped `contribution / weight` into [0, 1], which rendered every negative
+  factor at zero width — an invisible bar beside a nonsense label. Width now
+  follows the magnitude and colour follows the sign.
+
+- **The Investigation Rail's Details tab showed analysts the markup.**
+  `build_narrative` documents its output as markdown-light — `**bold**`,
+  backtick code spans, `- ` bullets, blank-line paragraphs — and the rail put
+  the string in a `whitespace-pre-wrap` paragraph, which preserves the
+  newlines and the asterisks alike. The panel read `**Medium** alert: … on
+  **Finance & Legal #2**`.
+
+  `components/alerts/NarrativeMarkdown.tsx` renders exactly that dialect and
+  nothing more; an unrecognised construct falls through as literal text rather
+  than being dropped. It builds React elements, never markup: the narrative
+  embeds the alert title and entity names, which originate in connector
+  payloads, so an HTML path here would make anyone who can name a host an XSS
+  author. It introduces no heading, leaving the page's heading order intact.
+
+- **The connector fleet badge claimed every source was reporting when none
+  was.** `ConnectorFleetPanel` rendered the badge whenever the endpoint
+  answered, and with zero connectors `failed + degraded` is zero — so a green
+  "All sources reporting" sat directly above the panel's own "No connectors
+  configured". Zero sources reporting is not the same statement as all of
+  them reporting, and the green is the part an operator scans for. There is
+  now no badge until there is a fleet, and when there is one it names the
+  count it is vouching for.
+
+- **`apps/web/src/components/landing/MitreStrip.tsx` is deleted.** Its twelve
+  ATT&CK tactic tiles carried unsourced coverage counts — 27 of 42 for Defense
+  Evasion, 9 of 11 for Initial Access — that correspond to nothing in the
+  tree. The component was imported nowhere and rendered on no route: the
+  landing page composes fifteen sections and this was not one of them, so the
+  caveat in its body copy was the only thing between those numbers and a
+  reader, and it would have stopped being so the moment somebody mounted the
+  section. Improving the disclaimer would have left the numbers in place for
+  the next person to inherit. Its entry in `ALLOWED_ILLUSTRATIVE` goes with
+  it; `scripts/check_mock_data_gated.py` checks that allow-list in both
+  directions, so a stale exemption fails the build rather than accumulating as
+  cover. The one MITRE figure the project does publish — 97.0% in
+  `BenchmarkBand` — is labelled "substrate" and is unchanged.
+
+- **A playbook step the engine could not run reported success.** Twelve of
+  the twenty-two `StepType` members had no entry in the engine's handler
+  table. The run loop answered those with `{"skipped": true}` and left the
+  step's status at its `SUCCESS` default, so a playbook containing them ran
+  to `COMPLETED` having done nothing it said it did. `approval` is the one
+  that mattered: it is a human decision point, it appears in 14 steps across
+  the shipped packs, and it passed on its own — the run continued straight
+  into the action an analyst was meant to authorise. An unimplemented step
+  type now fails closed with `unimplemented: true` and an error naming the
+  verb, is not retried (a missing handler will still be missing next
+  attempt), and halts the run under the default `on_failure: abort` while
+  still honouring an explicit `continue`. A dry run reports `would_fail` for
+  such a step instead of a bare `dry_run: true`.
+
+  `apps/docs/docs/concepts/playbooks.md` had documented the safe behaviour
+  all along — "recorded as `SKIPPED` … so unknown actions never silently
+  succeed" — and has been corrected to describe what the code now does. The
+  same page described a manual approval gate backed by
+  `POST /v1/playbook-runs/{id}/approve`, where "the engine pauses on the
+  condition until the field flips, then resumes". No such endpoint exists and
+  the engine has no pause or resume; that section now says so and points at
+  the actions service, which does hold an action for an analyst.
+
+- **The playbook lint job validated two files and reported "2/2 passed".**
+  `scripts/lint_playbooks.py` claimed in its own docstring to check "any
+  `*.playbook.json` files anywhere in the repo" and only ever scanned the two
+  under `services/agents/data/playbooks/`. Pointed at the whole tree, 32 of
+  the 62 playbooks in `playbooks/packs/v1/` did not match the published
+  schema. It now scans recursively, treats finding no files as a broken scan
+  rather than a clean bill of health, and no longer crashes in its own error
+  path when a file passed on argv sits outside the repo.
+
+- **20 shipped playbooks carried a duplicated tag.**
+  `scripts/generate_playbooks.py` emitted `[category, *tags]` where several
+  categories already lead their tag list with the category name, producing
+  e.g. `["supply-chain", "supply-chain", "npm", …]`. Fixed in the generator,
+  which is what the reproducibility gate diffs, rather than in the 20
+  generated files.
+
+- **The NL drafter rewrote steps to make its own output pass lint.** Because
+  the schema declared 9 of 22 step types, `_collapse_step_types_for_schema`
+  mapped the other 13 onto a "nearest neighbour" — `run_av_scan` and
+  `revoke_session` both became `investigate`, `approval` became `condition` —
+  keeping the original in `params.original_type`. The playbook that shipped
+  said it would investigate when the author had asked to disable an account,
+  and an approval gate came out as an ungated branch. The projection and its
+  second validation pass are removed; the schema covers the full range, so a
+  validation failure is now a real failure. The drafter's system prompt also
+  restated the vocabulary by hand and had drifted from it — offering
+  `webhook` as a trigger, which no validator in the repo accepts, and capping
+  `retry_max` at 5 against a model allowing 25 — and is now generated from
+  `StepType` and `bounds.py`.
 
 - **The agent recommended evidence acquisition the platform could not
   perform.** `capture_forensics` was an `ActionType` with no executor

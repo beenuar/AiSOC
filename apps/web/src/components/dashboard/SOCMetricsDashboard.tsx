@@ -25,6 +25,9 @@ const MOCK_SOC_METRICS: SOCMetrics = {
     cases_opened_7d: 23,
     cases_closed_7d: 34,
     analyst_overrides_7d: 8,
+    mttd_sample_count: 1247,
+    mttr_sample_count: 34,
+    mttc_sample_count: 12,
   },
   attack_heatmap: [
     { tactic: "Execution", technique: "T1059 Command & Scripting", count: 42 },
@@ -76,11 +79,13 @@ function KpiCard({
   value,
   unit,
   color,
+  hint,
 }: {
   label: string;
   value: string | number;
   unit?: string;
   color?: string;
+  hint?: string;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 flex flex-col gap-1">
@@ -89,7 +94,58 @@ function KpiCard({
         {value}
         {unit && <span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>}
       </span>
+      {hint && <span className="text-[10px] text-gray-500">{hint}</span>}
     </div>
+  );
+}
+
+/**
+ * A mean over no samples is unmeasured, not zero.
+ *
+ * The API reports each mean alongside the number of rows it averaged. Without
+ * that, these tiles could not distinguish "we respond in 0.0 hours" from
+ * "nothing has been resolved yet", and they rendered the first — an
+ * unbeatable MTTR for a tenant that had done nothing. `sampleCount` is
+ * optional so an older API, which sends no counts, keeps its previous
+ * behaviour rather than blanking every tile.
+ */
+function MeanHoursCard({
+  label,
+  hours,
+  sampleCount,
+  warnAbove,
+  cautionAbove,
+  window,
+}: {
+  label: string;
+  hours: number | undefined;
+  sampleCount: number | undefined;
+  warnAbove: number;
+  cautionAbove: number;
+  window: string;
+}) {
+  if (hours === undefined || sampleCount === 0) {
+    return (
+      <KpiCard
+        label={label}
+        value="—"
+        color="text-gray-500"
+        hint={sampleCount === 0 ? `not measured · no closures in ${window}` : undefined}
+      />
+    );
+  }
+  return (
+    <KpiCard
+      label={label}
+      value={hours.toFixed(1)}
+      unit="hrs"
+      color={hours > warnAbove ? "text-red-400" : hours > cautionAbove ? "text-yellow-400" : "text-green-400"}
+      hint={
+        sampleCount === undefined
+          ? undefined
+          : `mean of ${sampleCount} over ${window}`
+      }
+    />
   );
 }
 
@@ -230,41 +286,29 @@ export function SOCMetricsDashboard() {
       {/* KPI Grid */}
       {kpis && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard
+          <MeanHoursCard
             label="MTTD"
-            value={kpis?.mttd_hours.toFixed(1) ?? "—"}
-            unit="hrs"
-            color={
-              (kpis?.mttd_hours ?? 0) > 4
-                ? "text-red-400"
-                : (kpis?.mttd_hours ?? 0) > 2
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            hours={kpis?.mttd_hours}
+            sampleCount={kpis?.mttd_sample_count}
+            warnAbove={4}
+            cautionAbove={2}
+            window="7d"
           />
-          <KpiCard
+          <MeanHoursCard
             label="MTTR"
-            value={kpis?.mttr_hours.toFixed(1) ?? "—"}
-            unit="hrs"
-            color={
-              (kpis?.mttr_hours ?? 0) > 24
-                ? "text-red-400"
-                : (kpis?.mttr_hours ?? 0) > 8
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            hours={kpis?.mttr_hours}
+            sampleCount={kpis?.mttr_sample_count}
+            warnAbove={24}
+            cautionAbove={8}
+            window="30d"
           />
-          <KpiCard
+          <MeanHoursCard
             label="MTTC"
-            value={kpis?.mttc_hours.toFixed(1) ?? "—"}
-            unit="hrs"
-            color={
-              (kpis?.mttc_hours ?? 0) > 24
-                ? "text-red-400"
-                : (kpis?.mttc_hours ?? 0) > 8
-                ? "text-yellow-400"
-                : "text-green-400"
-            }
+            hours={kpis?.mttc_hours}
+            sampleCount={kpis?.mttc_sample_count}
+            warnAbove={24}
+            cautionAbove={8}
+            window="7d"
           />
           <KpiCard
             label="Escalation Rate"

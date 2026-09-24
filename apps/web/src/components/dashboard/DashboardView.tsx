@@ -129,7 +129,10 @@ const MOCK_METRICS: DashboardMetrics = {
     medium: 156,
     low: 289,
     resolvedToday: 67,
-    mttr: 42,
+    // Hours, matching the API field. This read `42`, which looked like a
+    // plausible number of minutes next to the tile's old `m` suffix.
+    mttr: 4.2,
+    mttr_sample_count: 34,
   },
   cases: {
     open: 23,
@@ -550,10 +553,23 @@ export function DashboardView() {
               sub={`${metrics.cases.inProgress} in progress`}
               color="orange"
             />
+            {/* `mttr` is hours and this rendered it with an `m` suffix, so a
+                1.5-hour MTTR would have read "1.5m". It only ever showed
+                "0m" because the figure was averaged over a column nothing
+                writes during case work — and 0 with no closures is not a
+                measurement, so the tile now says so. */}
             <MetricCard
               label="MTTR"
-              value={`${metrics.alerts.mttr}m`}
-              sub="Mean time to resolve"
+              value={
+                metrics.alerts.mttr_sample_count === 0
+                  ? '—'
+                  : `${metrics.alerts.mttr.toFixed(1)}h`
+              }
+              sub={
+                metrics.alerts.mttr_sample_count === 0
+                  ? 'not measured · no cases closed'
+                  : 'Mean time to resolve'
+              }
               color="green"
             />
             <MetricCard

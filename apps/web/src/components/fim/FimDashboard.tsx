@@ -8,10 +8,14 @@ import { getFimEvents, getFimSummary } from '@/lib/osquery-api';
 import { FimSummaryCards } from './FimSummaryCards';
 import { FimEventsTable } from './FimEventsTable';
 
-const TENANT_ID =
-  typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_TENANT_ID ?? 'default')
-    : 'default';
+// Deliberately *not* `NEXT_PUBLIC_TENANT_ID`. `services/osquery-tls` types its
+// tenant as a plain string and enrols nodes under the literal "default" when no
+// `X-AiSOC-Tenant` header is supplied, so this surface is keyed on that
+// service's own convention rather than on the platform tenant UUID the rest of
+// the console uses. Reading the shared env var here would send a UUID that
+// matches no enrolled node. The two tenancy models need reconciling in
+// osquery-tls; until then this is pinned so it cannot drift silently.
+const TENANT_ID = 'default';
 
 const PAGE_SIZE = 25;
 

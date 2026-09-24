@@ -23,9 +23,9 @@ Two execution paths:
    :func:`services.agents.app.llm.safe_ainvoke` and asks for a
    JSON playbook back. The output is validated against the canonical
    :class:`Playbook` Pydantic model AND against the project's
-   `playbook.schema.json` (JSON Schema 2020-12) before being
-   returned. Any validation failure falls back to the substrate
-   draft so the UX never hangs.
+   `schemas/playbook.schema.json` (JSON Schema draft-07) before
+   being returned. Any validation failure falls back to the
+   substrate draft so the UX never hangs.
 
 The drafter is the single Pydantic-aware Python entry point for
 NL → playbook drafting; the API route at
@@ -44,6 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .bounds import ABSOLUTE_MAX_RETRIES, ABSOLUTE_MAX_TIMEOUT_SECONDS
 from .models import Playbook, PlaybookStep, StepType
 
 logger = logging.getLogger("aisoc.playbook.nl_drafter")
@@ -392,63 +393,39 @@ def _summarise_prompt_for_name(prompt: str) -> str:
 
 
 def _schema_path() -> Path:
-    """Resolve the canonical playbook.schema.json bundled with the repo.
+    """Resolve the one canonical ``schemas/playbook.schema.json``.
 
-    CI uses ``schemas/playbook.schema.json`` (the path baked into
-    ``scripts/lint_playbooks.py`` and the ``validate-playbooks``
-    workflow), so we prefer that location and fall back to the
-    legacy root-level copy only if it is missing.
+    There used to be a second copy at the repo root declaring a different
+    step vocabulary, and this function fell back to it whenever the primary
+    was missing — so a packaging slip did not fail, it silently validated
+    against a different contract. There is now exactly one schema (a parity
+    gate enforces that), and a missing one is an error rather than a cue to
+    go looking for something else to trust.
+
+    The walk stops at the first ancestor that has the file so a checkout at
+    any depth works, but it never accepts a differently-shaped substitute.
     """
 
     here = Path(__file__).resolve()
     for parent in here.parents:
-        primary = parent / "schemas" / "playbook.schema.json"
-        if primary.exists():
-            return primary
-        fallback = parent / "playbook.schema.json"
-        if fallback.exists():
-            return fallback
-    raise FileNotFoundError("playbook.schema.json not found alongside the repo root")
+        candidate = parent / "schemas" / "playbook.schema.json"
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError("schemas/playbook.schema.json not found in any parent of services/agents/app/playbook/")
 
 
-# Schema-allowed step types (from ``schemas/playbook.schema.json``). The
-# Pydantic StepType enum is broader than the JSON Schema today; for the
-# drafter we collapse the extended types down to their nearest
-# schema-compatible neighbour so the resulting playbook ALSO passes
-# ``scripts/lint_playbooks.py`` without the user having to touch the
-# schema.
-_SCHEMA_STEP_TYPES: frozenset[str] = frozenset(
-    {
-        "enrich",
-        "investigate",
-        "notify",
-        "block_ip",
-        "isolate_host",
-        "create_ticket",
-        "close_case",
-        "http",
-        "condition",
-    }
-)
-
-# Pydantic-only StepType → schema-allowed StepType. Anything not in the
-# schema enum collapses to ``investigate`` because the analyst can still
-# upgrade the step in the editor without losing the prompt-derived name.
-_PYDANTIC_TO_SCHEMA_TYPE: dict[str, str] = {
-    "block_ioc": "block_ip",
-    "disable_user": "investigate",
-    "reset_password": "investigate",
-    "revoke_session": "investigate",
-    "force_mfa": "investigate",
-    "kill_process": "investigate",
-    "quarantine_file": "investigate",
-    "run_av_scan": "investigate",
-    "run_script": "http",
-    "search_siem": "investigate",
-    "create_notable_event": "create_ticket",
-    "osquery_live_query": "investigate",
-    "approval": "condition",
-}
+# The step-type collapse that used to live here is gone.
+#
+# The JSON Schema declared 9 step types against a StepType enum of 22, so the
+# drafter rewrote the 13 it could not express onto their "nearest neighbour"
+# — ``disable_user`` and ``revoke_session`` both became ``investigate``,
+# ``approval`` became ``condition`` — purely so the output would pass
+# ``scripts/lint_playbooks.py``. The original was preserved in
+# ``params.original_type``, but the step that shipped said it would
+# investigate when the analyst had asked to disable an account, and the
+# approval gate an author wrote came out as an ungated branch.
+#
+# The schema now declares all 22, so there is nothing to collapse.
 
 
 def _strip_nulls(obj: Any) -> Any:
@@ -469,57 +446,22 @@ def _strip_nulls(obj: Any) -> Any:
     return obj
 
 
-def _collapse_step_types_for_schema(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``payload`` with each step ``type`` collapsed
-    to the JSON-Schema-allowed enum AND with ``null`` fields stripped.
-    Preserves the original type as ``params.original_type`` so the
-    editor can recover it.
-
-    Pydantic remains the source of truth at runtime — this projection
-    exists only so the drafter's output passes ``lint_playbooks.py``.
-    """
-
-    proj = _strip_nulls(json.loads(json.dumps(payload)))  # deep copy + null-strip
-    steps = proj.get("steps", [])
-    if not isinstance(steps, list):
-        return proj
-    for step in steps:
-        if not isinstance(step, dict):
-            continue
-        st = step.get("type")
-        if not isinstance(st, str) or st in _SCHEMA_STEP_TYPES:
-            continue
-        mapped = _PYDANTIC_TO_SCHEMA_TYPE.get(st, "investigate")
-        params = step.get("params")
-        if not isinstance(params, dict):
-            params = {}
-        params.setdefault("original_type", st)
-        step["params"] = params
-        step["type"] = mapped
-    return proj
-
-
 def _load_schema() -> dict[str, Any]:
     return json.loads(_schema_path().read_text(encoding="utf-8"))
 
 
 def _validate_against_schema(payload: dict[str, Any]) -> tuple[bool, str | None]:
-    """Validate ``payload`` against playbook.schema.json.
+    """Validate ``payload`` against ``schemas/playbook.schema.json``.
 
-    We try two passes: the raw payload first, then the
-    step-type-collapsed projection (see
-    :func:`_collapse_step_types_for_schema`). Returning ``True`` from
-    pass-one means the playbook is **strictly** schema-conformant;
-    falling through to pass-two means the drafter is producing a
-    Pydantic-richer step set that the JSON Schema can't yet describe
-    — that's a known gap tracked in the v8.0 plan, and we widen the
-    Pydantic model first because the React Flow editor consumes the
-    Pydantic shape directly.
+    One pass. There used to be a second that rewrote any step type the
+    schema could not express onto a "nearest neighbour" and re-validated;
+    it made the drafter's output lint-clean by changing what the playbook
+    said it would do. The schema now covers the whole ``StepType`` range,
+    so a failure here is a real failure.
 
-    Returns ``(True, None)`` on success of either pass,
-    ``(False, error_message)`` on failure of both. ``jsonschema`` is
-    imported lazily so the module is importable in environments
-    without it.
+    Returns ``(True, None)`` on success, ``(False, error_message)`` on
+    failure. ``jsonschema`` is imported lazily so the module stays
+    importable in environments without it.
     """
 
     try:
@@ -534,24 +476,14 @@ def _validate_against_schema(payload: dict[str, Any]) -> tuple[bool, str | None]
         logger.warning("playbook.schema.json missing: %s", exc)
         return True, None
 
-    # Pass 1 — null-stripped payload (Pydantic emits ``null`` keys that
-    # the schema rejects under ``additionalProperties: false``).
+    # Null-stripped: Pydantic emits ``null`` for unset optional keys and the
+    # schema rejects those under ``additionalProperties: false``.
     cleaned = _strip_nulls(payload)
     try:
         jsonschema.validate(cleaned, schema)  # type: ignore[attr-defined]
         return True, None
     except jsonschema.ValidationError as exc:  # type: ignore[attr-defined]
-        first_err = exc.message
-
-    # Pass 2 — also collapse Pydantic-only step types to schema-allowed
-    # equivalents. This lets the drafter use the full StepType range
-    # internally while still emitting a CI-clean draft.
-    try:
-        projection = _collapse_step_types_for_schema(payload)
-        jsonschema.validate(projection, schema)  # type: ignore[attr-defined]
-        return True, None
-    except jsonschema.ValidationError as exc:  # type: ignore[attr-defined]
-        return False, f"{first_err} (also failed after step-type collapse: {exc.message})"
+        return False, exc.message
 
 
 # ---------------------------------------------------------------------------
@@ -571,23 +503,33 @@ Rules — follow exactly:
    ``^[a-z0-9][a-z0-9-]{2,62}$``. The ``version`` must be semantic,
    e.g. ``"1.0.0"``.
 3. ``trigger`` must contain ``on`` (one of ``alert`` / ``case`` /
-   ``schedule`` / ``manual`` / ``webhook``). Severities, when present,
+   ``schedule`` / ``manual``). Severities, when present,
    must be an array of any of: ``info`` / ``low`` / ``medium`` /
    ``high`` / ``critical``.
-4. Each step must declare a ``type``. Allowed types include
-   ``enrich``, ``investigate``, ``notify``, ``block_ip``, ``block_ioc``,
-   ``isolate_host``, ``create_ticket``, ``close_case``, ``http``,
-   ``condition``, ``approval``, ``disable_user``, ``reset_password``,
-   ``revoke_session``, ``force_mfa``, ``kill_process``,
-   ``quarantine_file``, ``run_av_scan``, ``run_script``,
-   ``search_siem``, ``create_notable_event``, ``osquery_live_query``.
+4. Each step must declare a ``type``, one of exactly:
+   __STEP_TYPES__.
 5. Each step must carry a short, action-oriented ``name``, an ``id``
-   (8-32 char hex), an ``on_failure`` ∈ ``{abort, continue, retry}``,
-   ``retry_max`` (0-5), and ``timeout_seconds`` (1-3600).
+   (8-32 char hex), an ``on_failure`` ∈ ``abort`` / ``continue`` /
+   ``retry``, ``retry_max`` (0-__MAX_RETRIES__), and
+   ``timeout_seconds`` (1-__MAX_TIMEOUT__).
 6. The output's ``enabled`` MUST be ``false``. A human reviews before
    enabling.
 7. Do NOT invent fields not in the schema. Do NOT emit prose. JSON only.
 """
+
+# Filled from the enum and the bounds module rather than restated, because a
+# hand-written copy of the vocabulary in a prompt is one more place for it to
+# drift — this list previously offered ``webhook`` as a trigger, which no
+# validator in the repo accepts, and capped ``retry_max`` at 5 against a
+# model that allows 25.
+#
+# Token substitution rather than ``str.format`` because the prompt contains
+# a regex with brace quantifiers that format would try to interpret.
+_SYSTEM_PROMPT = (
+    _SYSTEM_PROMPT.replace("__STEP_TYPES__", ", ".join(f"``{st.value}``" for st in StepType))
+    .replace("__MAX_RETRIES__", str(ABSOLUTE_MAX_RETRIES))
+    .replace("__MAX_TIMEOUT__", str(ABSOLUTE_MAX_TIMEOUT_SECONDS))
+)
 
 _USER_TEMPLATE = """\
 Analyst prompt:

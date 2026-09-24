@@ -2,10 +2,37 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/beenuar/AiSOC/schemas/playbook.schema.json",
   "title": "AiSOC Playbook",
-  "description": "Schema for AiSOC v4 Pillar-2 playbook definitions.",
+  "description": "The authoring contract for AiSOC playbooks. Every step type listed in `properties.steps.items.properties.type.enum` is accepted by the runtime model (`services/agents/app/playbook/models.py::StepType`), and `x-aisoc-execution` records what the engine actually does with it. Kept in lockstep with the engine by `scripts/check_playbook_schema_parity.py`.",
   "type": "object",
   "required": ["name", "steps"],
   "additionalProperties": false,
+
+  "x-aisoc-execution": {
+    "description": "What `services/agents/app/playbook/engine.py` does with each step type. `executed` = a handler runs and has a real effect (an outbound call to a service, or engine-internal control flow). `simulated` = a handler runs and returns `simulated: true` without touching a vendor. `unimplemented` = no handler is registered; the engine fails the step closed rather than reporting a success it did not achieve. This map is machine-checked against the engine's handler table, so it cannot drift into an aspirational claim.",
+    "enrich": "executed",
+    "investigate": "executed",
+    "notify": "executed",
+    "http": "executed",
+    "close_case": "executed",
+    "condition": "executed",
+    "osquery_live_query": "executed",
+    "block_ip": "simulated",
+    "isolate_host": "simulated",
+    "create_ticket": "simulated",
+    "approval": "unimplemented",
+    "block_ioc": "unimplemented",
+    "disable_user": "unimplemented",
+    "reset_password": "unimplemented",
+    "revoke_session": "unimplemented",
+    "force_mfa": "unimplemented",
+    "kill_process": "unimplemented",
+    "quarantine_file": "unimplemented",
+    "run_av_scan": "unimplemented",
+    "run_script": "unimplemented",
+    "search_siem": "unimplemented",
+    "create_notable_event": "unimplemented"
+  },
+
   "properties": {
     "id": {
       "type": "string",
@@ -79,12 +106,33 @@
     "updated_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Authored documentation of the trigger-context fields this playbook expects. The engine does NOT bind, inject or validate these — a step reads its own values from `params` and from the run context. Present so a pack can describe its interface to a reader; do not treat it as a parameter-binding mechanism.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "field": {
+            "type": "string",
+            "description": "Dot-path on the trigger event where this input is expected to be found."
+          },
+          "required": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "dry_run_support": {
+      "type": "boolean",
+      "description": "Authored assertion that this playbook is safe to run with the engine's `dry_run` flag. The engine's `dry_run` applies uniformly to every step regardless of this value, so it is catalogue metadata rather than a runtime switch."
     }
   },
+
   "definitions": {
     "StepCondition": {
       "type": "object",
-      "required": ["field", "operator"],
+      "description": "Structured condition form. Every field has a runtime default, so none is required; an empty object is a condition that always passes.",
       "additionalProperties": false,
       "properties": {
         "field": {
@@ -97,6 +145,10 @@
         },
         "value": {
           "description": "Expected value (not required for 'exists' operator)."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Expression form, e.g. \"inputs.source_ip != null\". Mutually exclusive with field/operator/value; evaluated at runtime by the engine."
         }
       }
     },
@@ -115,16 +167,30 @@
         },
         "type": {
           "type": "string",
+          "description": "The step verb. See `x-aisoc-execution` at the root of this schema for what the engine does with each one — a type listed there as `unimplemented` is a valid authoring vocabulary word that the engine will fail closed on rather than execute.",
           "enum": [
             "enrich",
             "investigate",
             "notify",
+            "http",
+            "close_case",
+            "condition",
+            "osquery_live_query",
             "block_ip",
             "isolate_host",
             "create_ticket",
-            "close_case",
-            "http",
-            "condition"
+            "approval",
+            "block_ioc",
+            "disable_user",
+            "reset_password",
+            "revoke_session",
+            "force_mfa",
+            "kill_process",
+            "quarantine_file",
+            "run_av_scan",
+            "run_script",
+            "search_siem",
+            "create_notable_event"
           ]
         },
         "params": {
@@ -133,7 +199,14 @@
           "additionalProperties": true
         },
         "condition": {
-          "$ref": "#/definitions/StepCondition"
+          "description": "Guard that must pass before the step runs. Accepts either an expression string or the structured form; the engine coerces a bare string into `{\"expression\": ...}`.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Expression form, e.g. \"steps.approval_isolate.outcome == 'approved'\"."
+            },
+            { "$ref": "#/definitions/StepCondition" }
+          ]
         },
         "on_failure": {
           "type": "string",
@@ -143,14 +216,16 @@
         "retry_max": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 5,
-          "default": 0
+          "maximum": 25,
+          "default": 0,
+          "description": "Retry attempts. Ceiling mirrors `bounds.ABSOLUTE_MAX_RETRIES`."
         },
         "timeout_seconds": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 600,
-          "default": 30
+          "maximum": 3600,
+          "default": 30,
+          "description": "Per-step timeout. Ceiling mirrors `bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS`; long values exist for `approval` steps that wait on a human. Note that handlers reading `params.timeout_seconds` are separately clamped to `bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS`."
         },
         "next_true": {
           "type": "string",

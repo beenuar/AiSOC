@@ -110,7 +110,12 @@ export function ConnectorFleetPanel() {
             Staleness measured against each connector&apos;s own poll cadence.
           </p>
         </div>
-        {data && (
+        {/* With no connectors the badge read "All sources reporting" in green,
+            directly above an empty state saying nothing was configured. Zero
+            sources reporting is not the same statement as all of them
+            reporting, and the green is the part an operator scans for. There
+            is nothing to summarise until there is a fleet. */}
+        {data && connectors.length > 0 && (
           <span
             className={clsx(
               'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -121,7 +126,7 @@ export function ConnectorFleetPanel() {
           >
             {needsAttention > 0
               ? `${needsAttention} need attention`
-              : 'All sources reporting'}
+              : `All ${connectors.length} sources reporting`}
           </span>
         )}
       </div>

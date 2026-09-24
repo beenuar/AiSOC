@@ -399,6 +399,28 @@ describe('InvestigationRail — narrative section', () => {
     renderDetails(vi.fn());
     expect(screen.queryByText('Narrative')).toBeNull();
   });
+
+  it('renders the builder\u2019s markdown rather than showing it to the analyst', () => {
+    // `build_narrative` emits `**bold**`, backtick code spans and `- `
+    // bullets. The rail put the string in a `whitespace-pre-wrap` paragraph,
+    // which preserves the newlines and the markup alike, so this tab read
+    // "**Medium** alert: ... on **Finance & Legal #2**".
+    swrState.data = buildAlert({
+      narrative:
+        '**Medium** alert: Unusual sign-in on **Finance & Legal #2** from `okta`.\n\n' +
+        'Why we believe it:\n- Confidence: **low** (21/100)',
+    });
+    const { container } = renderDetails(vi.fn());
+
+    // Scoped to the section: the rail header also shows the connector name.
+    const narrative = screen.getByText('Narrative').closest('section')!;
+
+    expect(within(narrative).getByText('Medium').tagName).toBe('STRONG');
+    expect(within(narrative).getByText('Finance & Legal #2').tagName).toBe('STRONG');
+    expect(within(narrative).getByText('okta').tagName).toBe('CODE');
+    expect(within(narrative).getAllByRole('listitem').length).toBe(1);
+    expect(container.textContent).not.toContain('**');
+  });
 });
 
 // ─── Loaded rail — related entities ──────────────────────────────────────────
