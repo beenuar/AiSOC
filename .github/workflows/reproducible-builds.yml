@@ -18,19 +18,38 @@ name: Reproducible builds
 # Four jobs, each proving a different half of "reproducible":
 #
 #   pin-agreement  — no two install paths for one package may disagree.
+#   toolchain      — the Go, Node, pnpm and Python *toolchains* agree too. A
+#                    workflow compiling with a different Go or Node version
+#                    than the Dockerfile ships is the same defect one level
+#                    up, and it is how the disjoint `cryptography` range
+#                    stayed invisible.
 #   lock-freshness — every lock still matches the manifest it was made from,
 #                    so `poetry install` cannot be pushed back into resolving.
 #   fastapi-range  — the service imports on both ends of the range it declares,
 #                    so the bound is a tested claim rather than a guess.
 #   twice          — two `--no-cache` builds of this commit install the same
-#                    versions. This is the only job that proves the property
-#                    directly; the other three explain why it holds.
+#                    versions. This is the job that proves the property
+#                    directly; the others explain why it holds.
+#   twice-all      — the same proof for every remaining service, nightly.
+#                    `twice` covered `api` alone: the other twelve used the
+#                    same mechanism and nothing asserted it, which is the
+#                    repository's dominant defect (a property that holds by
+#                    construction and is checked nowhere) in its mildest
+#                    costume. Nightly rather than per-PR because it is 24
+#                    from-scratch image builds; `coverage` below fails if the
+#                    run did not actually reach every service, so the
+#                    schedule cannot quietly cover less than it claims.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # 03:17 UTC daily. Every service is therefore re-proved within 24 hours
+    # of any merge. Offset off the hour because the runner pool is busiest on
+    # it, and a job that queues past its window is a job that did not run.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -65,6 +84,27 @@ jobs:
         run: |
           pip install --quiet 'pytest>=7.4,<9'
           python -m pytest tests/test_dependency_pin_gate.py -v --tb=short
+
+  toolchain-agreement:
+    name: Go, Node and pnpm toolchains agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # Names its root and every path it scanned, so the log shows which tree
+      # was checked. One gate in this repository resolved its root from its
+      # own file location and would have printed a confident OK about a tree
+      # it never opened.
+      - name: Every path declaring a toolchain agrees, and every install is locked
+        run: python scripts/check_toolchain_pins.py --verbose
+      - name: The gate detects injected drift in every direction
+        run: python scripts/check_toolchain_pins.py --self-test
+      - name: Gate unit tests
+        run: |
+          pip install --quiet 'pytest>=7.4,<9'
+          python -m pytest tests/test_toolchain_pin_gate.py -v --tb=short
 
   lock-freshness:
     name: Every lock still matches its manifest
@@ -189,3 +229,161 @@ jobs:
           [ "$(wc -l < first.txt)" -ge 50 ] || { echo "::error::pip freeze returned almost nothing"; exit 1; }
           grep -q '^fastapi==' first.txt || { echo "::error::fastapi absent from the image"; exit 1; }
           echo "identical: $(wc -l < first.txt) packages, byte-for-byte"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # The same proof, every remaining service, nightly.
+  # ───────────────────────────────────────────────────────────────────────────
+
+  discover:
+    name: Which services must be proved
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.find.outputs.images }}
+      lockonly: ${{ steps.find.outputs.lockonly }}
+      total: ${{ steps.find.outputs.total }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Derived from the tree, never hand-listed. A hand-written matrix is a
+      # second inventory that drifts from the first, and the service added
+      # after it was written is exactly the one nobody proves.
+      - id: find
+        run: |
+          set -euo pipefail
+          images=(); lockonly=(); total=0
+          for manifest in services/*/pyproject.toml; do
+            service="$(basename "$(dirname "$manifest")")"
+            total=$((total + 1))
+            if [ ! -f "services/$service/poetry.lock" ]; then
+              echo "::error::services/$service has no poetry.lock — it resolves afresh on every build"
+              exit 1
+            fi
+            if [ -f "services/$service/Dockerfile" ]; then
+              images+=("$service")
+            else
+              # No image to build twice, so the lock is proved one layer down:
+              # two installs from it must produce the same version set.
+              lockonly+=("$service")
+            fi
+          done
+          printf 'images=%s\n' "$(printf '%s\n' "${images[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+          printf 'lockonly=%s\n' "$(printf '%s\n' "${lockonly[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+          printf 'total=%s\n' "$total" >> "$GITHUB_OUTPUT"
+          echo "$total service(s): ${#images[@]} with an image, ${#lockonly[@]} lock-only"
+
+  twice-all:
+    name: ${{ matrix.service }} builds the same twice
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.discover.outputs.images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build ${{ matrix.service }} twice, from scratch each time
+        run: |
+          set -euo pipefail
+          svc='${{ matrix.service }}'
+          docker build --no-cache -t "aisoc-$svc:first"  -f "services/$svc/Dockerfile" "services/$svc"
+          docker build --no-cache -t "aisoc-$svc:second" -f "services/$svc/Dockerfile" "services/$svc"
+      - name: The two images must contain identical versions
+        run: |
+          set -euo pipefail
+          svc='${{ matrix.service }}'
+          docker run --rm --entrypoint pip "aisoc-$svc:first"  freeze | sort > first.txt
+          docker run --rm --entrypoint pip "aisoc-$svc:second" freeze | sort > second.txt
+          echo "first:  $(wc -l < first.txt) packages, sha256 $(sha256sum first.txt | cut -d' ' -f1)"
+          echo "second: $(wc -l < second.txt) packages, sha256 $(sha256sum second.txt | cut -d' ' -f1)"
+          if ! diff -u first.txt second.txt; then
+            echo "::error::two builds of $svc at the same commit resolved different versions"
+            exit 1
+          fi
+          # Two empty files also diff clean. A service image that installs
+          # nothing is a broken build reported as a reproducible one.
+          [ "$(wc -l < first.txt)" -ge 20 ] || {
+            echo "::error::pip freeze in $svc returned $(wc -l < first.txt) packages — too few to be a real install"
+            exit 1
+          }
+          echo "$svc: identical, $(wc -l < first.txt) packages" >> "$GITHUB_STEP_SUMMARY"
+
+  twice-lockonly:
+    name: ${{ matrix.service }} resolves the same twice
+    needs: discover
+    if: needs.discover.outputs.lockonly != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.discover.outputs.lockonly) }}
+    container: python:3.11-slim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Same resolver the images install with — a different one is a
+      # different answer to what this commit installs.
+      - run: pip install --quiet "poetry==2.4.1"
+      - name: Install from the lock twice, into separate environments
+        # `poetry install`, the same command the twelve images run, rather
+        # than `poetry export | pip install`: export is a plugin in Poetry 2.x
+        # and is not present here, and a second install mechanism would prove
+        # a property about a path nothing uses.
+        run: |
+          set -euo pipefail
+          svc='${{ matrix.service }}'
+          cd "services/$svc"
+          for attempt in first second; do
+            POETRY_VIRTUALENVS_PATH="/tmp/venvs-$attempt" \
+              poetry install --only main --no-root --no-interaction
+            POETRY_VIRTUALENVS_PATH="/tmp/venvs-$attempt" \
+              poetry run pip freeze | sort > "/tmp/$attempt-freeze.txt"
+          done
+          echo "first:  $(wc -l < /tmp/first-freeze.txt) packages, sha256 $(sha256sum /tmp/first-freeze.txt | cut -d' ' -f1)"
+          echo "second: $(wc -l < /tmp/second-freeze.txt) packages, sha256 $(sha256sum /tmp/second-freeze.txt | cut -d' ' -f1)"
+          diff -u /tmp/first-freeze.txt /tmp/second-freeze.txt || {
+            echo "::error::two installs of $svc at the same commit resolved different versions"
+            exit 1
+          }
+          [ "$(wc -l < /tmp/first-freeze.txt)" -ge 10 ] || {
+            echo "::error::$svc installed $(wc -l < /tmp/first-freeze.txt) packages — too few to be a real install"
+            exit 1
+          }
+          echo "$svc: identical, $(wc -l < /tmp/first-freeze.txt) packages (no image; proved from the lock)" >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    name: Every service was actually proved
+    needs: [discover, twice-all, twice-lockonly]
+    if: always() && needs.discover.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      # The point of this job. A nightly matrix that silently shrinks —
+      # because a leg was skipped, a service lost its lock, or `fail-fast`
+      # cancelled the rest — would keep reporting a green schedule while
+      # covering less than it claims. That is the `wet-eval` failure: eight
+      # consecutive green weekly runs with every real step skipped.
+      - name: Count what ran against what exists
+        run: |
+          set -euo pipefail
+          images='${{ needs.discover.outputs.images }}'
+          lockonly='${{ needs.discover.outputs.lockonly }}'
+          total='${{ needs.discover.outputs.total }}'
+          covered=$(( $(echo "$images" | jq 'length') + $(echo "$lockonly" | jq 'length') ))
+          echo "discovered $total service(s); matrix covered $covered"
+          echo "  images:   $(echo "$images" | jq -r 'join(", ")')"
+          echo "  lock-only: $(echo "$lockonly" | jq -r 'join(", ")')"
+          [ "$covered" -eq "$total" ] || {
+            echo "::error::$covered of $total services were in the matrix"
+            exit 1
+          }
+          # Independent of the discovery that produced the matrix: if a
+          # fourteenth service lands, this floor makes the omission loud
+          # rather than letting the run pass with thirteen.
+          [ "$total" -ge 13 ] || { echo "::error::only $total services found; expected at least 13"; exit 1; }
+          for result in '${{ needs.twice-all.result }}' '${{ needs.twice-lockonly.result }}'; do
+            case "$result" in
+              success) ;;
+              *) echo "::error::a reproducibility matrix finished as '$result', so not every service was proved"; exit 1 ;;
+            esac
+          done
+          echo "all $total service(s) proved reproducible at this commit" >> "$GITHUB_STEP_SUMMARY"

@@ -203,12 +203,20 @@ class MLScorer:
 
     def _predict_anomaly(self, features: list[float]) -> float:
         """Run IsolationForest prediction synchronously."""
+        # Bound locally so the "caller already checked `_iso_forest is not
+        # None`" invariant is visible here rather than only at the call site.
+        # Without it the attribute access on None was reachable as far as any
+        # reader or checker could tell, and the only thing turning it into a
+        # score of 0.0 was the blanket `except Exception` below.
+        model = self._iso_forest
+        if model is None:
+            return 0.0
         try:
             import numpy as np
 
             X = np.array(features).reshape(1, -1)
             # decision_function: negative = anomaly, normalize to [0,1]
-            raw = self._iso_forest.decision_function(X)[0]
+            raw = model.decision_function(X)[0]
             # Map decision score: lower = more anomalous
             # Typical range is -0.5 to +0.5; map to 0→1 (inverted)
             score = 1.0 / (1.0 + math.exp(5 * raw))  # sigmoid inversion
@@ -219,11 +227,14 @@ class MLScorer:
 
     def _predict_priority(self, features: list[float]) -> float:
         """Run LightGBM ranker prediction synchronously."""
+        model = self._lgbm_ranker  # see `_predict_anomaly` for why this is bound
+        if model is None:
+            return 0.0
         try:
             import numpy as np
 
             X = np.array(features).reshape(1, -1)
-            raw = self._lgbm_ranker.predict(X)[0]
+            raw = model.predict(X)[0]
             # Normalize to [0,1] via sigmoid
             score = 1.0 / (1.0 + math.exp(-raw))
             return float(score)

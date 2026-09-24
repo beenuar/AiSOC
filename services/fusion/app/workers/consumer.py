@@ -147,7 +147,15 @@ class FusionWorker:
         logger.info("Fusion worker stopped", metrics=_METRICS)
 
     async def _consume_loop(self) -> None:
-        async for msg in self._consumer:
+        # `start()` is the only caller and assigns `_consumer` before getting
+        # here. Bound locally so that invariant is stated where it is relied
+        # on: iterating or committing a None consumer would otherwise be an
+        # AttributeError inside the message loop, reported as a processing
+        # failure rather than as the startup bug it is.
+        consumer = self._consumer
+        if consumer is None:  # pragma: no cover — unreachable via start()
+            raise RuntimeError("fusion consume loop started before the Kafka consumer")
+        async for msg in consumer:
             if not self._running:
                 break
             try:
@@ -161,7 +169,7 @@ class FusionWorker:
                 # before this line re-delivers the in-flight message on restart
                 # instead of losing it. Commit failure => reprocess on restart.
                 try:
-                    await self._consumer.commit()
+                    await consumer.commit()
                 except Exception as commit_exc:  # noqa: BLE001
                     logger.warning("fusion.commit_failed", error=str(commit_exc))
             # Flush any stale lake batch so archival isn't stranded during a
@@ -315,7 +323,10 @@ class FusionWorker:
         envelope = fused.model_dump(mode="json")
         envelope["alert_row_id"] = result.alert_id
         envelope["persist_outcome"] = result.outcome.value
-        await self._producer.send(
+        producer = self._producer
+        if producer is None:  # pragma: no cover — assigned by start()
+            raise RuntimeError("fusion produced a fused alert before the Kafka producer started")
+        await producer.send(
             settings.kafka_topic_alerts_fused,
             value=envelope,
         )

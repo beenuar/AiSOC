@@ -77,6 +77,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`scripts/check_toolchain_pins.py` — the Go, Node and toolchain half of
+  reproducible builds.** `check_dependency_pins.py` made every *package*
+  install path agree and stopped at the Python services. Go has `go.sum` and
+  pnpm has a frozen lockfile, so the raw material was already there — but
+  nothing compared the paths that use it, and nothing audited the *runtime*
+  those paths run on. Measured across 111 install paths, and every
+  disagreement found:
+
+  | What | Before |
+  |---|---|
+  | `apps/web/Dockerfile` | `pnpm install --no-frozen-lockfile` — the production web bundle was the one install path in the repository free to resolve its own dependency set, while all 13 workflows installing the same workspace used `--frozen-lockfile` |
+  | `services/realtime/Dockerfile` | `npm install` twice, and `package-lock.json` never copied into the build context, so the committed lockfile was inert and every image build re-resolved |
+  | `install.sh` | `pnpm install --no-frozen-lockfile`, so a self-hoster's install could differ from everything CI tested |
+  | `.devcontainer/devcontainer.json` | `pnpm install --frozen-lockfile=false` — an opt-out a substring test for the flag reads as *enabling* it |
+  | `deploy-docs.yml` | `pnpm --filter @aisoc/docs install`, unlocked; the published docs site could build from a tree no other job resolved |
+  | `apps/web/Dockerfile` | `npm install -g pnpm@8` against `packageManager: pnpm@8.15.1` — two resolvers, the `poetry 1.7.1 vs 1.8.2` finding again |
+  | Node | 20 in both images, the devcontainer, `deploy-docs.yml` and both installers; 22 in twelve workflows. Node 20 left security support in April 2026 |
+  | `services/enrichment/Dockerfile` | `COPY go.mod go.sum*` — the glob makes the checksum file optional, so deleting it downgrades the build to an unverified resolve without failing |
+  | `ci.yml` | `cache-dependency-path: packages/plugin-sdk-go/go.sum`, a file that does not exist. `setup-go` reports that as a **warning**, so the cache had been silently off while the job stayed green |
+  | `packages/sdk-go` | compiled by no workflow at all |
+
+  Everything above is now one version and one lockfile discipline, proved
+  rather than asserted: two `--no-cache` builds of each Node image resolve
+  byte-identically (web 1,172 packages, realtime 187, matching sha256 both
+  times).
+
+  Six directions, each with a `--self-test` injection that fails if it goes
+  undetected — 22 cases. Beyond agreement: *ship → test* (a version an image
+  ships that no workflow exercises) and *test → ship* (a version CI uses that
+  no image ships, which is the direction versions actually travel); *module →
+  sum* and *sum → module*; *module → CI* and *CI → module*; unlocked install
+  and its reverse, a lockfile nothing can consume; and both coverage
+  directions — a file declaring a toolchain that the gate never opened, and a
+  file it *did* open whose declaration the parser could not read.
+
+  That last direction earned its place immediately. Hunting for this parser's
+  equivalent of the blind spot `check_dependency_pins` found in itself, five
+  turned up: `cd services/${{ matrix.service }}` resolved to nothing, so five
+  of six Go modules looked ungated; `working-directory:` was not read at all,
+  so `services/osquery-extensions` looked uncompiled while the workflow that
+  compiles it sat two directories away; the npm pattern had no left word
+  boundary and matched inside every `pnpm install`; quoted shell text was read
+  as commands, so `die "pnpm install failed."` counted as an install path; and
+  the `node_modules` skip was a prefix rather than a path segment, so on a
+  checkout with dependencies installed the gate scanned 223 vendored manifests
+  and reported Node floors of `0.10` from other people's packages — an answer
+  that depended on whether someone had run `pnpm install`.
+
+  `EXPECTED_ESBUILD` pins the **resolved** esbuild set (0.25.12 bundled by
+  Next, 0.28.1 from the scoped overrides). The overrides are deliberately
+  per-parent because forcing esbuild workspace-wide broke Turbopack's font
+  import map, and that scoping means a `vite` bump can pull a different
+  esbuild with no esbuild line in the diff.
+
+- **`scripts/check_mypy_baseline.py` — the type check the CI job is named
+  after.** `ci.yml`'s **Python — Lint & Type-check** installed mypy and never
+  invoked it. Six manifests declare `[tool.mypy]` and three set
+  `strict = true`, so three authors had asked for a check that had never once
+  run. It runs now. The 690 findings are recorded in
+  `scripts/mypy_baseline.json` exactly as mypy reports them, keyed on
+  `(tree, file, error-code)` so an error cannot be introduced under cover of
+  fixing an unrelated one — no `ignore_errors`, no widened config, no excluded
+  tree. Both directions: a finding above baseline fails, and a *fixed* finding
+  still in the baseline fails too, so freed headroom must be banked rather
+  than left to absorb the next regression.
+
+  Its first run against a rebased tree earned the gate: 22 findings — 14
+  `union-attr`, 8 `arg-type` — in `services/api/app/services/playbook_step_dispatch.py`,
+  a file merged hours earlier that nothing had ever type-checked. They are
+  recorded rather than fixed because that file belongs to concurrent work;
+  what matters is that they are now visible and cannot grow. Five other
+  findings were real null-safety bugs in `services/fusion` — an
+  `IsolationForest` and an `LGBMRanker` used before training, and the Kafka
+  consumer and producer used before `start()` assigns them — and those are
+  fixed, taking fusion from 7 to 2.
+
+- **`Reproducible builds` now proves the property for all thirteen Python
+  services, not one.** The `twice` job asserted byte-identical resolution for
+  `api` alone; the other twelve used the same mechanism and nothing checked
+  it. A nightly matrix (03:17 UTC) double-builds all twelve services that have
+  a Dockerfile and double-installs the thirteenth, `teams-bot`, which has a
+  lock but no image. The matrix is derived from the tree rather than
+  hand-listed, and a `coverage` job fails when the number of services proved
+  is not the number that exist — a scheduled run that silently covers less
+  than it claims is the `wet-eval` failure, eight green weekly runs with every
+  real step skipped.
+
 - **The console's `ConnectorType` union is generated from the connector
   registry.** Its members were corrected in the previous release; the
   mechanism that let them drift was not. Hand-maintenance is how ten of them

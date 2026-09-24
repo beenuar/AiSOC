@@ -10,7 +10,7 @@
 #   2.  Installs (idempotently) the four prerequisites AiSOC needs:
 #         - git
 #         - Docker Engine + Docker Compose v2 plugin
-#         - Node.js 20 LTS
+#         - Node.js 22 LTS
 #         - pnpm 8+ (via corepack)
 #   3.  Clones the AiSOC repo (if you ran the script as a one-liner) or
 #       reuses it (if you ran ./install.sh from inside a clone).
@@ -561,39 +561,40 @@ ensure_docker_daemon() {
   exit 2
 }
 
-# ─── Step 3: Node.js 20 LTS ──────────────────────────────────────────────────
+# ─── Step 3: Node.js 22 LTS ──────────────────────────────────────────────────
 
 ensure_node() {
-  # We need Node >= 20 because tsx 4 + the workspace's "engines" field both
-  # require it. Node 18 reaches LTS end-of-life in April 2025 so we don't
-  # support it.
-  if version_at_least node 20 "node --version"; then
+  # Node 22, the version every workflow tests on and both Node images ship.
+  # Installing 20 here handed a self-hoster a different runtime from the one
+  # the project builds and tests against, and Node 20 left security support
+  # in April 2026.
+  if version_at_least node 22 "node --version"; then
     ok "node already installed: $(node --version)"
     return 0
   fi
-  info "Installing Node.js 20 LTS via $PKG_MGR..."
+  info "Installing Node.js 22 LTS via $PKG_MGR..."
   case "$PKG_MGR" in
     apt)
       # NodeSource is the upstream-blessed apt repo for current Node releases.
-      curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO bash -
+      curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO bash -
       $SUDO apt-get install -y nodejs
       ;;
     dnf|yum)
-      curl -fsSL https://rpm.nodesource.com/setup_20.x | $SUDO bash -
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | $SUDO bash -
       $SUDO "$PKG_MGR" install -y nodejs
       ;;
     pacman) $SUDO pacman -Sy --noconfirm --needed nodejs npm ;;
     zypper)
-      $SUDO zypper -n install -y nodejs20 npm20 \
+      $SUDO zypper -n install -y nodejs22 npm22 \
         || $SUDO zypper -n install -y nodejs npm
       ;;
     apk)    $SUDO apk add --no-cache nodejs npm ;;
-    brew)   brew install node@20 && brew link --overwrite --force node@20 ;;
+    brew)   brew install node@22 && brew link --overwrite --force node@22 ;;
     *) die "don't know how to install Node on PKG_MGR=$PKG_MGR" ;;
   esac
   have node || die "node install reported success but node is still not on PATH."
-  if ! version_at_least node 20 "node --version"; then
-    warn "Installed Node version ($(node --version)) is older than 20; AiSOC may misbehave."
+  if ! version_at_least node 22 "node --version"; then
+    warn "Installed Node version ($(node --version)) is older than 22; AiSOC may misbehave."
   else
     ok "node installed: $(node --version)"
   fi
@@ -748,8 +749,12 @@ ensure_env_file() {
 
 run_pnpm_install() {
   info "Installing JS workspace deps (pnpm install)..."
-  ( cd "$REPO_ROOT" && pnpm install --prefer-offline --no-frozen-lockfile ) \
-    || die "pnpm install failed."
+  # `--frozen-lockfile`, the same flag CI and the web image use. Without it a
+  # self-hoster's install is free to resolve a dependency set nobody tested,
+  # which is the one thing an installer must not do quietly.
+  ( cd "$REPO_ROOT" && pnpm install --prefer-offline --frozen-lockfile ) \
+    || die "pnpm install failed. If it reported a lockfile mismatch, your checkout's
+package.json and pnpm-lock.yaml disagree — re-clone or 'git checkout pnpm-lock.yaml'."
   ok "pnpm dependencies installed."
 }
 

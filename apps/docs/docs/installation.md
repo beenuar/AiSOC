@@ -55,7 +55,7 @@ target component is already installed at a sufficient version.
     the `docker` service, then adds the invoking user to the `docker`
     group with a one-shot `sg docker -c …` so you don't have to log
     out and back in for the same install run.
-3.  **Node.js 20 LTS** via the official NodeSource APT repo, the Fedora
+3.  **Node.js 22 LTS** via the official NodeSource APT repo, the Fedora
     NodeJS module, the relevant native package on Arch / openSUSE /
     Alpine, or `brew install node@20` on macOS.
 4.  **pnpm 8+** via `corepack enable && corepack prepare pnpm@latest`.
@@ -85,7 +85,7 @@ target component is already installed at a sufficient version.
 4.  **Docker Desktop** via `winget install --id Docker.DockerDesktop`.
     The script waits for the Docker Engine socket to come up before
     proceeding.
-5.  **Node.js 20 LTS** via `winget install --id OpenJS.NodeJS.LTS`.
+5.  **Node.js 22 LTS** via `winget install --id OpenJS.NodeJS.LTS`.
 6.  **pnpm 8+** via `corepack enable && corepack prepare pnpm@latest`.
 7.  **The AiSOC repo** — cloned to `$env:USERPROFILE\aisoc` (override
     with `-AisocDir 'C:\path\to\clone'`).

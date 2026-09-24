@@ -1,0 +1,311 @@
+{
+  "packages/aisoc-cli": {
+    "src/aisoc_cli/main.py": {
+      "import-not-found": 7,
+      "import-untyped": 2,
+      "untyped-decorator": 48
+    },
+    "tests/test_cli.py": {
+      "import-not-found": 2,
+      "import-untyped": 1,
+      "no-untyped-def": 8
+    },
+    "tests/test_ops_commands.py": {
+      "arg-type": 1,
+      "attr-defined": 15,
+      "import-not-found": 2,
+      "index": 7,
+      "no-untyped-def": 5,
+      "operator": 16,
+      "untyped-decorator": 2
+    },
+    "tests/test_packaging.py": {
+      "import-not-found": 1,
+      "untyped-decorator": 1
+    },
+    "tests/test_submit_command.py": {
+      "attr-defined": 1,
+      "import-not-found": 3,
+      "misc": 1,
+      "no-untyped-call": 1,
+      "no-untyped-def": 3,
+      "untyped-decorator": 1
+    }
+  },
+  "packages/plugin-sdk-py": {
+    "src/aisoc_plugin_sdk/action.py": {
+      "import-not-found": 1,
+      "misc": 2
+    },
+    "src/aisoc_plugin_sdk/client.py": {
+      "import-not-found": 1,
+      "no-any-return": 7
+    },
+    "src/aisoc_plugin_sdk/connector.py": {
+      "import-not-found": 1,
+      "misc": 1
+    },
+    "src/aisoc_plugin_sdk/decorators.py": {
+      "attr-defined": 1,
+      "no-any-return": 2,
+      "type-arg": 5,
+      "unused-ignore": 3
+    },
+    "src/aisoc_plugin_sdk/enricher.py": {
+      "import-not-found": 1,
+      "misc": 2
+    },
+    "src/aisoc_plugin_sdk/loader.py": {
+      "no-any-return": 1,
+      "unused-ignore": 1
+    },
+    "src/aisoc_plugin_sdk/plugin.py": {
+      "import-not-found": 1,
+      "misc": 3
+    },
+    "src/aisoc_plugin_sdk/registry.py": {
+      "import-not-found": 1
+    },
+    "tests/test_client.py": {
+      "import-not-found": 2,
+      "type-arg": 1,
+      "untyped-decorator": 6
+    },
+    "tests/test_hello_plugin_example.py": {
+      "attr-defined": 3,
+      "import-not-found": 1,
+      "untyped-decorator": 1
+    },
+    "tests/test_loader.py": {
+      "import-not-found": 1
+    },
+    "tests/test_sdk.py": {
+      "import-not-found": 1,
+      "untyped-decorator": 6
+    }
+  },
+  "packages/sdk-py": {
+    "src/aisoc_sdk/client.py": {
+      "import-not-found": 2,
+      "no-any-return": 20,
+      "unused-ignore": 1
+    },
+    "src/aisoc_sdk/models.py": {
+      "import-not-found": 1,
+      "misc": 13
+    },
+    "tests/test_client.py": {
+      "func-returns-value": 1,
+      "import-not-found": 2,
+      "no-untyped-def": 10,
+      "untyped-decorator": 8
+    }
+  },
+  "services/api": {
+    "app/api/v1/endpoints/business_context.py": {
+      "import-untyped": 1
+    },
+    "app/api/v1/endpoints/community.py": {
+      "import-untyped": 1
+    },
+    "app/api/v1/endpoints/detection_loop.py": {
+      "call-arg": 1
+    },
+    "app/api/v1/endpoints/hunts.py": {
+      "call-arg": 1
+    },
+    "app/api/v1/endpoints/identity_timeline.py": {
+      "assignment": 1
+    },
+    "app/api/v1/endpoints/knowledge_base.py": {
+      "call-arg": 1
+    },
+    "app/api/v1/endpoints/metrics.py": {
+      "return-value": 2
+    },
+    "app/api/v1/endpoints/phishing.py": {
+      "call-arg": 1
+    },
+    "app/api/v1/endpoints/plugins.py": {
+      "assignment": 8
+    },
+    "app/api/v1/endpoints/translation.py": {
+      "call-arg": 1
+    },
+    "app/auth/saml.py": {
+      "var-annotated": 1
+    },
+    "app/core/scheduler_lock.py": {
+      "func-returns-value": 1
+    },
+    "app/graphql/query.py": {
+      "call-arg": 117
+    },
+    "app/scripts/seed_demo.py": {
+      "no-redef": 1
+    },
+    "app/services/alert_explain.py": {
+      "arg-type": 1
+    },
+    "app/services/business_context/models.py": {
+      "import-untyped": 1
+    },
+    "app/services/detections/sigma_import.py": {
+      "import-untyped": 1
+    },
+    "app/services/effective_permissions/posture_loader.py": {
+      "return-value": 1
+    },
+    "app/services/event_warehouse/registry.py": {
+      "list-item": 2
+    },
+    "app/services/fixture_synth.py": {
+      "import-untyped": 1
+    },
+    "app/services/fleet_health.py": {
+      "arg-type": 22
+    },
+    "app/services/pipeline_transforms.py": {
+      "assignment": 1
+    },
+    "app/services/playbook_step_dispatch.py": {
+      "arg-type": 8,
+      "union-attr": 14
+    },
+    "app/services/plugin_manager.py": {
+      "import-untyped": 1
+    },
+    "app/services/rule_engine.py": {
+      "import-untyped": 1
+    },
+    "app/services/siem_writeback.py": {
+      "arg-type": 1,
+      "union-attr": 6
+    },
+    "app/services/sla.py": {
+      "arg-type": 1,
+      "assignment": 1,
+      "call-overload": 3,
+      "dict-item": 1,
+      "index": 1,
+      "no-redef": 1
+    },
+    "tests/api/v1/endpoints/test_alerts_detail_envelope.py": {
+      "func-returns-value": 1
+    },
+    "tests/api/v1/endpoints/test_detection_proposals_run_eval.py": {
+      "assignment": 1,
+      "attr-defined": 1
+    },
+    "tests/services/test_alert_rail.py": {
+      "arg-type": 28
+    },
+    "tests/services/test_narrative_projection.py": {
+      "arg-type": 29
+    },
+    "tests/test_alert_explain.py": {
+      "arg-type": 43,
+      "list-item": 2
+    },
+    "tests/test_alert_queue.py": {
+      "arg-type": 16
+    },
+    "tests/test_alert_writeback_auth.py": {
+      "arg-type": 2
+    },
+    "tests/test_alerts_tenant_isolation.py": {
+      "misc": 2
+    },
+    "tests/test_audit_export.py": {
+      "arg-type": 9
+    },
+    "tests/test_business_context.py": {
+      "arg-type": 1,
+      "misc": 1,
+      "union-attr": 3
+    },
+    "tests/test_cases_tenant_isolation.py": {
+      "misc": 1
+    },
+    "tests/test_compliance_phishing_kb_tenant_isolation.py": {
+      "assignment": 1,
+      "method-assign": 1,
+      "misc": 2,
+      "var-annotated": 1
+    },
+    "tests/test_credential_vault_envelope.py": {
+      "misc": 1
+    },
+    "tests/test_detection_loop_tenant_isolation.py": {
+      "misc": 1
+    },
+    "tests/test_effective_permissions_aws.py": {
+      "attr-defined": 1
+    },
+    "tests/test_email_approval_endpoint.py": {
+      "arg-type": 2
+    },
+    "tests/test_event_warehouse_providers.py": {
+      "union-attr": 7
+    },
+    "tests/test_event_warehouse_registry.py": {
+      "arg-type": 3
+    },
+    "tests/test_health_probes.py": {
+      "misc": 6,
+      "valid-type": 1
+    },
+    "tests/test_hunts_tenant_isolation.py": {
+      "misc": 1
+    },
+    "tests/test_llm_credentials_endpoint.py": {
+      "arg-type": 5
+    },
+    "tests/test_llm_credentials_tenant_isolation.py": {
+      "misc": 2
+    },
+    "tests/test_oauth_refresh_worker.py": {
+      "arg-type": 12
+    },
+    "tests/test_rule_tuning.py": {
+      "arg-type": 20,
+      "assignment": 1,
+      "union-attr": 4
+    },
+    "tests/test_saved_hunts_endpoint.py": {
+      "arg-type": 3
+    },
+    "tests/test_saved_views_endpoint.py": {
+      "arg-type": 2
+    },
+    "tests/test_seed_demo_confidence_synth.py": {
+      "arg-type": 10
+    },
+    "tests/test_siem_writeback.py": {
+      "union-attr": 5
+    },
+    "tests/test_tenant_deletion.py": {
+      "assignment": 1,
+      "attr-defined": 1
+    },
+    "tests/test_tenant_provision.py": {
+      "operator": 1
+    },
+    "tests/test_threat_intel_tenant_isolation.py": {
+      "misc": 3
+    }
+  },
+  "services/fusion": {
+    "tests/test_consumer_dlq.py": {
+      "arg-type": 1
+    },
+    "tests/test_derived_fields.py": {
+      "arg-type": 1
+    }
+  },
+  "services/osquery-tls": {
+    "app/services/pack_loader.py": {
+      "import-untyped": 1
+    }
+  }
+}

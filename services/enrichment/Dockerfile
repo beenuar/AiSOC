@@ -3,7 +3,10 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache git ca-certificates
 
-COPY go.mod go.sum* ./
+# Not `go.sum*`: the glob makes the checksum file optional, so if it ever went
+# missing this build would still succeed and `go mod download` would resolve
+# the module graph unverified.
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .

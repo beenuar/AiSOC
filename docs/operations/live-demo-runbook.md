@@ -9,7 +9,7 @@ AiSOC instance running on Fly.io, fronted by a Cloudflare Tunnel. It is
 **Always-on fallback:** open the repo in
 [GitHub Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1).
 The devcontainer at [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json)
-will bring up Node 20, Python 3.11, Go 1.22, Docker-in-Docker, and the
+will bring up Node 22, Python 3.11, Go 1.26, Docker-in-Docker, and the
 GitHub CLI for you. Then:
 
 ```bash
