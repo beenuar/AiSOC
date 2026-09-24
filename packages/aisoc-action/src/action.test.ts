@@ -66,11 +66,22 @@ describe("fetchAlerts", () => {
 describe("render", () => {
   const result = triageBatch([mapDependabot(DEPENDABOT), mapCodeScanning(CODE_SCANNING), mapSecretScanning(SECRET)]);
 
-  it("PR comment carries the idempotency marker, priority line, and badge", () => {
+  it("PR comment carries the idempotency marker and priority line", () => {
     const md = renderComment(result, ["Code scanning: skipped (not enabled)."]);
     expect(md).toContain(COMMENT_MARKER);
     expect(md).toContain("of 3");
-    expect(md).toContain("img.shields.io/endpoint");
+    expect(md).toContain("github.com/beenuar/AiSOC");
+  });
+
+  it("PR comment hotlinks no remote image", () => {
+    // The footer promises "no data leaves your CI". A hotlinked badge breaks
+    // that promise on every render: the reader's browser fetches it from a
+    // third party, which learns who is reading the comment and when. It also
+    // pointed at one specific deployment, so a self-hoster's CI advertised
+    // somebody else's install.
+    const md = renderComment(result, []);
+    expect(md).not.toMatch(/!\[[^\]]*\]\(https?:\/\//);
+    expect(md).not.toContain("img.shields.io");
   });
 
   it("posture grade rewards a clean queue and penalizes escalations", () => {
