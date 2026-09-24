@@ -145,12 +145,27 @@ too.
 recorded in `scripts/mypy_baseline.json` exactly as mypy reports them — no
 widened config, no excluded tree, and `strict = true` stays strict.
 
+Every tree being configured is not the same as every file being checked. 153
+Python files belong to no `pyproject.toml` — `scripts/`, `tests/`, `tools/`
+and `plugins/` — so the gate also runs a scope recorded under the key
+`(unmanaged)`, configured by `mypy-unmanaged.toml` at the repository root.
+That scope is **computed, not listed**: `git ls-files '*.py'` minus every
+manifest tree. Adding a script anywhere brings it into scope with no edit,
+and deleting a tree's manifest moves that tree's files into this scope rather
+than out of coverage.
+
+It is a scoped invocation rather than a root `pyproject.toml` because a root
+manifest carrying only `[tool.mypy]` makes `poetry check` answer *"The Poetry
+configuration is invalid"* from every directory that does not hold a manifest
+of its own — poetry searches upward. The header of `mypy-unmanaged.toml`
+records that and the two other measurements behind the choice.
+
 The baseline is only reproducible against a fixed environment: **mypy alone,
-no project dependencies installed, on Python 3.12**, which is what CI does.
-Re-record under the same conditions:
+no project dependencies installed, on Python 3.11** — the interpreter CI uses
+and the one every service image ships. Re-record under the same conditions:
 
 ```bash
-docker run --rm -v "$PWD":/w -w /w python:3.12-slim \
+docker run --rm -v "$PWD":/w -w /w python:3.11-slim \
   bash -c "pip install 'mypy>=1.10,<2' && python scripts/check_mypy_baseline.py --update"
 ```
 

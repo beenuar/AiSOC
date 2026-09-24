@@ -107,9 +107,20 @@ def referenced_datasource_uids() -> set[str]:
 def main(argv: list[str] | None = None) -> int:
     argparse.ArgumentParser(description=__doc__).parse_args(argv)
 
+    # These two branches used to disagree about the same thing. An empty
+    # dashboards directory failed; a *missing* one printed "nothing to check"
+    # and passed — so the larger loss was the one the gate forgave, and
+    # deleting the directory was enough to make it green. Both are now the
+    # same answer, because neither is distinguishable from "the walk broke".
     if not DASHBOARDS.is_dir():
-        print("grafana-dashboards: no dashboards directory; nothing to check")
-        return 0
+        print(
+            f"grafana-dashboards: no dashboards directory at {DASHBOARDS}. "
+            f"Nothing to check and nothing checked are the same word here, so this fails: "
+            f"the dashboards are the artefact the SLO alerts and the observability claims "
+            f"point at.",
+            file=sys.stderr,
+        )
+        return 1
 
     files = sorted(DASHBOARDS.glob("*.json"))
     if not files:

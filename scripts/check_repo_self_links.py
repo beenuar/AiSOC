@@ -86,14 +86,23 @@ def _is_ours(owner: str, repo: str) -> bool:
 def main() -> int:
     wrong_owner: list[tuple[Path, int, str]] = []
     missing_path: list[tuple[Path, int, str]] = []
+    unreadable: list[str] = []
+    links_examined = 0
 
-    for md in _markdown_files():
+    files = _markdown_files()
+    for md in files:
         try:
             lines = md.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
+            # Skipping it silently means a file nobody can read is a file
+            # nobody checks, reported as clean. This gate replaced a lychee
+            # run that accepted 403 and 429 as healthy; inheriting the same
+            # inability in a different costume is the thing to avoid.
+            unreadable.append(md.relative_to(REPO_ROOT).as_posix())
             continue
         for lineno, line in enumerate(lines, start=1):
             for m in LINK_RE.finditer(line):
+                links_examined += 1
                 owner, repo = m.group("owner"), m.group("repo")
                 if not _is_ours(owner, repo):
                     continue
@@ -112,6 +121,28 @@ def main() -> int:
                     continue
                 if not (REPO_ROOT / target).exists():
                     missing_path.append((rel, lineno, target))
+
+    # Say what was opened before saying it was clean. Zero markdown files and
+    # zero broken links produce the same "OK" from the same branch, and the
+    # eight wrong-org 404s that prompted this gate survived a link job that
+    # was reporting healthy for exactly that reason.
+    print(f"check_repo_self_links: {len(files)} markdown file(s), {links_examined} GitHub link(s) examined")
+    if not files or not links_examined:
+        print(
+            f"\ncheck_repo_self_links: FAIL — scanned {len(files)} file(s) and found "
+            f"{links_examined} link(s) to examine under {REPO_ROOT}. A clean result over "
+            f"nothing is not a clean result; check SEARCH_ROOTS and LINK_RE.",
+            file=sys.stderr,
+        )
+        return 1
+    if unreadable:
+        print(
+            f"\n{len(unreadable)} file(s) could not be decoded and were therefore not checked:",
+            file=sys.stderr,
+        )
+        for rel_path in unreadable:
+            print(f"  {rel_path}", file=sys.stderr)
+        return 1
 
     if not wrong_owner and not missing_path:
         print("check_repo_self_links: OK — every self-link resolves to a real path")

@@ -77,6 +77,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The 153 Python files that belong to no manifest tree are type-checked, and
+  five gates that reported OK over nothing now fail.** Giving all twenty trees
+  a `[tool.mypy]` table still left `scripts/`, `tests/`, `tools/` and
+  `plugins/` outside every config — which is to say the CI gates themselves
+  were the only Python in the repository nothing type-checked, while every
+  other claim here rests on them.
+
+  They are covered by a scoped invocation under a new root
+  `mypy-unmanaged.toml`, not by a root `pyproject.toml`. Three things were
+  measured rather than assumed: a root manifest carrying only `[tool.mypy]`
+  makes `poetry check` answer *"The Poetry configuration is invalid"* from
+  every directory without a manifest of its own, because poetry searches
+  upward; pytest gains a `configfile` where it had none; and
+  `check_dependency_pins.py`, `check_toolchain_pins.py` and
+  `security_audit.py` all pass with one present only because each is scoped to
+  `services/*` + `packages/*`, so they would miss it by accident of a glob and
+  fail closed on it the day any of them is made structural.
+
+  The scope is **computed, never listed** — `git ls-files '*.py'` minus every
+  manifest tree — so a script added anywhere is checked with no edit, and
+  deleting a tree's manifest moves its files into this scope rather than out
+  of coverage. Sixteen `plugins/*/plugin.py` files share one module name in
+  directories whose hyphens keep them from ever being packages, so the run is
+  split into the minimum number of invocations with no collision, derived
+  rather than configured. mypy's own `--linecount-report` must account for
+  every module asked of it before the run may report clean, and a finding
+  against a file outside the scope fails rather than being recorded.
+
+  Five gates were found reporting OK over a repository containing nothing, by
+  copying `scripts/` into an empty git repository and running all forty:
+  `validate_detections.py` printed a warning and exited 0 over an empty
+  detections corpus — the validator for the number the front page quotes,
+  certifying zero rules as valid; `check_grafana_dashboards.py` failed on an
+  empty dashboards directory and *passed* on a missing one, so the larger loss
+  was the one it forgave; `check_go_module_paths.py` reported "OK: 0 published
+  Go module path(s)"; `check_repo_self_links.py` reported every self-link
+  healthy over zero files, having replaced a lychee run that could not tell a
+  rate-limited 403 from a live link; and `audit_health_probes.py --check`
+  printed a table header and exited 0 over zero services. Each now fails and
+  says what it opened. `check_repo_self_links.py` also reported a file it
+  could not decode as checked, and now names it.
+
+  The ratchet in `scripts/check_mypy_baseline.py` gains a `file -> scope`
+  direction and goes **919 → 994**: +89 newly visible, −14 fixed. Of the 89,
+  20 are `import-untyped` against the deliberate no-dependency environment the
+  baseline is recorded in and the rest are annotation and narrowing findings.
+  A separate `--warn-unreachable` pass over the same scope reported 8
+  statements, all one shape: a defensive `isinstance` guard against untrusted
+  YAML or JSON that the parameter's own annotation declares impossible. None
+  is dead at runtime, so the annotations are what is wrong and the flag is
+  deliberately not enabled — recording those 8 would invite someone to delete
+  the guards to clear them.
+
 - **All twenty Python trees are type-checked, and the coverage is gated in both
   directions.** `#818` ran mypy for the first time, over the six trees that
   declared a `[tool.mypy]` table. Fourteen declared none, so the job named

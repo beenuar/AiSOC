@@ -365,8 +365,17 @@ def main() -> int:
 
     yaml_files = sorted(DETECTIONS_DIR.rglob("*.yaml"))
     if not yaml_files:
-        print("WARNING: No .yaml files found under detections/")
-        return 0
+        # This was a WARNING and an exit 0 — the validator for the corpus the
+        # product's headline number describes, certifying an empty corpus as
+        # valid. "No rules are broken" and "no rules were opened" are the same
+        # sentence here, and only one of them is good news.
+        print(
+            f"ERROR: no .yaml files found under {DETECTIONS_DIR}. Zero rules validated is "
+            f"not zero rules broken — either the corpus is gone or this is not the tree "
+            f"it was meant to read.",
+            file=sys.stderr,
+        )
+        return 1
 
     seen_ids: dict[str, Path] = {}
     total = 0

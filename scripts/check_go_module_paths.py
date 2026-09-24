@@ -20,10 +20,31 @@ and asserts the declared module path matches where the directory actually is.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+
+def _repo_root() -> Path:
+    """The repository, per git — not per this file's location.
+
+    Resolving two levels up from `__file__` means a copy of this script run
+    from anywhere else scans whatever happens to sit above it and prints a
+    confident OK about a tree it never opened.
+    """
+    out = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=Path(__file__).resolve().parent,
+    )
+    if out.returncode == 0 and out.stdout.strip():
+        return Path(out.stdout.strip()).resolve()
+    return Path(__file__).resolve().parent.parent
+
+
+ROOT = _repo_root()
 
 #: The canonical repository path, matching the GitHub org and repo casing.
 REPO_PATH = "github.com/beenuar/AiSOC"
@@ -66,6 +87,21 @@ def main() -> int:
                     "`go get` resolves the module path against the VCS path, and it is "
                     "case-sensitive, so this module is not installable."
                 )
+
+    # "Found nothing" and "opened nothing" print the same word otherwise. The
+    # published roots are a hand-written tuple, so a module moving out of
+    # `packages/` takes its coverage with it silently — and the failure this
+    # gate exists to catch is precisely one nobody in-tree can observe,
+    # because every in-repo consumer uses a `replace` directive.
+    if not checked:
+        print(
+            f"GO MODULE PATH GATE FAILED: found no go.mod under {', '.join(PUBLISHED_ROOTS)}/ "
+            f"in {ROOT}. Zero modules checked is not zero modules broken — either "
+            f"PUBLISHED_ROOTS no longer describes where the published SDKs live, or the "
+            f"walk is looking at the wrong tree.",
+            file=sys.stderr,
+        )
+        return 1
 
     if problems:
         print("GO MODULE PATH GATE FAILED:", file=sys.stderr)

@@ -259,6 +259,18 @@ jobs:
       # `[tool.mypy]`, and when a configured or recorded tree is no longer on
       # disk. Both directions, because the dominant failure shape here is a
       # check that compares A against B and never B against A.
+      #
+      # "Every tree is configured" still could not ask whether every *file* is
+      # in a tree, and 153 were not — `scripts/`, `tests/`, `tools/` and
+      # `plugins/`, which is to say the CI gates themselves were the only
+      # Python here nothing type-checked. They are covered by a scoped
+      # invocation under `mypy-unmanaged.toml` rather than by a repo-root
+      # manifest, which would make `poetry check` invalid from every directory
+      # without one of its own; that file records the measurements. The scope
+      # is computed as `git ls-files` minus the manifest trees, so a script
+      # added anywhere is checked with no edit, and mypy's own
+      # `--linecount-report` has to account for every module before the run is
+      # allowed to report clean.
       - name: The type-check this job is named after
         run: |
           python scripts/check_mypy_baseline.py --self-test
@@ -271,10 +283,10 @@ jobs:
       # replaces the exception being handled and no sibling handler can catch
       # it, so the one path whose job was to degrade gracefully was the only
       # path that raised. A type checker only sees this in a tree it checks;
-      # this scan covers every Python file in the repository, including the
-      # ~150 under scripts/, tests/, tools/ and plugins/ that belong to no
-      # tree, and reports how many receivers it could not classify rather than
-      # counting them as clean.
+      # this scan covers every Python file in the repository and reports how
+      # many receivers it could not classify rather than counting them as
+      # clean. It reached the files in no manifest tree before a type checker
+      # did, which is how that gap was found.
       - name: No stdlib logger is called with a structlog keyword
         run: |
           python scripts/check_logger_kwargs.py --self-test

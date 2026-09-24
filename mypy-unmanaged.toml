@@ -1,0 +1,51 @@
+# The type-checker configuration for Python files that belong to no
+# `pyproject.toml` tree — `scripts/`, `tests/`, `tools/`, `plugins/` today,
+# and anything added anywhere else tomorrow.
+#
+# #820 gave all twenty manifest trees a `[tool.mypy]` table, which left this
+# set as the only Python in the repository nothing type-checks. That set is
+# mostly `scripts/`, which is where the CI gates live: the code every other
+# claim in this repository is verified by was the least-verified code in it.
+#
+# Why this file and not a repo-root `pyproject.toml`, which is the obvious
+# route. Three things were measured, not assumed:
+#
+#   * `poetry check` run from the repository root against a root manifest
+#     carrying only `[tool.mypy]` answers "The Poetry configuration is
+#     invalid: Either [project.name] or [tool.poetry.name] is required in
+#     package mode." Poetry searches *upward* for a manifest, so that is the
+#     answer for every directory in the tree that does not hold one of its
+#     own.
+#   * pytest gains a `configfile` where it had none. `rootdir` is unchanged,
+#     but the file that governs test configuration becomes one whose subject
+#     is type checking.
+#   * `check_dependency_pins.py`, `check_toolchain_pins.py` and
+#     `security_audit.py` all pass with a root manifest present — and they
+#     pass because each is scoped to `services/*` + `packages/*`, so they
+#     miss it by accident of a glob rather than by design. #820 established
+#     that glob-scoped discovery is this repository's recurring defect. A
+#     root manifest would be a 21st Python tree that those gates cannot see
+#     today and would fail closed on the day any of them is made structural,
+#     which is the direction they should move.
+#
+# So the coverage is real and the manifest is not: `check_mypy_baseline.py`
+# computes the unmanaged set from `git ls-files` minus the manifest trees and
+# invokes mypy with this config over exactly that list. Adding a script
+# anywhere puts it in scope with no edit here; deleting a tree's manifest
+# moves its files into this scope rather than out of coverage.
+#
+# Strictness matches the ten services rather than inventing a third shape.
+# There is no `ignore_errors` and no per-module override: an exemption here
+# would be invisible, and the findings are on the ratchet in
+# `scripts/mypy_baseline.json` where they can be read.
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+# The scope is a flat list of files that import each other rarely and the
+# service trees not at all. Following an import out of the scope would report
+# findings against a file that its own tree already checks under its own
+# config — two answers for one file, and a baseline that double-counts.
+# `silent` keeps the types and drops the findings.
+follow_imports = "silent"

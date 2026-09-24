@@ -233,11 +233,14 @@ def scan(root: pathlib.Path) -> list[str]:
                     f"canUseDemoData() check in this file. Show an error or empty state instead."
                 )
 
-    for rel, number, name, gated in find_inline_records(root):
-        if gated or _allowlist_key(rel, name) is not None:
+    # A distinct name from the `rel: Path` above. `_allowlist_key` matches on
+    # a string suffix, and handing it a Path would make every allow-list entry
+    # miss — noisily, but for a reason nobody would look for here.
+    for record_path, number, name, gated in find_inline_records(root):
+        if gated or _allowlist_key(record_path, name) is not None:
             continue
         problems.append(
-            f"{rel}:{number}: `{name}` is a module-scope array of named entities with "
+            f"{record_path}:{number}: `{name}` is a module-scope array of named entities with "
             f"measurements attached, in a component with no demo gate. If it is a tenant's "
             f"state, read it from the API; if it is a sample, gate it with canUseDemoData()."
         )

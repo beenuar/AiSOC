@@ -10,7 +10,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 |---|---|---|---|---|
 | Offline sandbox demo runs with no key/network in < 5 s | README L38 | `readme-gates.yml :: sandbox-offline` (ubuntu+macos matrix) | GATED | - |
 | `pnpm aisoc:demo` boots the real stack | README L40, L45 | `compose-smoke.yml` (cold health) + `integration.yml :: spine` (Phase A3 — default `docker compose up` ships connectors + graph-at-ingest by default; asserts cold-boot → ingest → lake + detection engine → alert row with the spine test's measured raw-event→alert latency) | GATED | - |
-| 69 connectors | README L116, L168 | `ci.yml :: python-lint` (`generate_connector_count.py --check`) | GATED (count) | - |
+| 84 connectors | README L116, L168 | `ci.yml :: python-lint` (`generate_connector_count.py --check`) | GATED (count) | - |
 | Connectors: schema-driven config + vault-encrypted secrets | README L168 | `ci.yml` connectors matrix (`test_schemas.py` + `test_conformance.py` — secret-shaped fields must be `type=secret`); vault tests + `test_live_vendor_smoke.py` (Phase D3 — mock-server drives each connector's real HTTP client + normalize) | GATED | - |
 | Connectors: live Test connection | README L168 | `ci.yml` connectors matrix (`test_conformance.py` — every connector implements the async `test_connection` contract) + `connector_conformance.py --check` published matrix + `test_live_vendor_smoke.py` (Phase D3 — mock-server conformance: `test_connection()` + paginated `fetch_alerts()` HTTP path exercised against realistic vendor payloads) | GATED | - |
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: api tests` (`audit_hash`, audit immutability) | PARTIAL (write path gated; UI replay only in hermetic e2e) | Phase 3.2 |
