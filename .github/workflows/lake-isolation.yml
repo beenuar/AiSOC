@@ -1,0 +1,92 @@
+name: Lake tenant isolation
+
+# The ClickHouse lake holds every tenant's raw events in one table, so the
+# only thing standing between tenant A and tenant B is the `tenant_id`
+# predicate that `services/api/app/services/lake_sql.py` injects into
+# untrusted operator SQL before it reaches the warehouse. That rewriter is
+# built on sqlglot's AST, and sqlglot's AST is not a stable contract.
+#
+# It has already broken once in exactly the way that is hardest to notice.
+# sqlglot 27 moved the SELECT's FROM clause from `args["from"]` to
+# `args["from_"]`. The rewriter read the old key, found nothing, concluded
+# the statement was a constant projection with no tables, and returned it
+# unchanged — skipping the table allowlist, the ban on ClickHouse table
+# functions such as `url()`, and the tenant predicate — while reporting
+# success. `services/api/pyproject.toml` allowed `<31.0.0` at the time, so a
+# `poetry install` produced an API with no lake isolation at all. CI never
+# saw it because every workflow installed the narrow `>=23,<27` range.
+#
+# Two gates, both cheap, both addressing that specific failure:
+#
+#   1. `check_sqlglot_pin.py` — every install path must declare the same
+#      range, so two builds of one commit cannot disagree about the
+#      version of the parser that enforces isolation.
+#   2. The rewriter suite runs against the pinned range *and* against the
+#      next major. The second leg is forward-compatibility coverage: we
+#      ship the pinned range, but a future bump must fail loudly here
+#      rather than quietly downgrade isolation in production.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/api/app/services/lake_sql.py'
+      - 'services/api/tests/test_lake_sql*.py'
+      - 'services/api/pyproject.toml'
+      - 'services/api/Dockerfile'
+      - 'scripts/check_sqlglot_pin.py'
+      - '.github/workflows/lake-isolation.yml'
+  pull_request:
+    paths:
+      - 'services/api/app/services/lake_sql.py'
+      - 'services/api/tests/test_lake_sql*.py'
+      - 'services/api/pyproject.toml'
+      - 'services/api/Dockerfile'
+      - 'scripts/check_sqlglot_pin.py'
+      - '.github/workflows/lake-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lake-isolation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin-agreement:
+    name: sqlglot pin is identical everywhere
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python scripts/check_sqlglot_pin.py
+
+  rewriter:
+    name: rewriter (sqlglot ${{ matrix.sqlglot }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The range the service ships and CI installs everywhere else.
+          - sqlglot: '>=23,<27'
+            label: shipped
+          # The next major. Not shipped; proves a bump cannot silently
+          # turn the isolation guarantee off the way 27 did.
+          - sqlglot: '>=27,<31'
+            label: forward-compat
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install --quiet pytest "sqlglot${{ matrix.sqlglot }}"
+      - name: Record resolved version
+        run: python -c "import sqlglot; print('resolved sqlglot', sqlglot.__version__)"
+      - name: Rewriter + fail-closed suites
+        working-directory: services/api
+        run: python -m pytest tests/test_lake_sql.py tests/test_lake_sql_fail_closed.py -q

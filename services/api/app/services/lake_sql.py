@@ -109,6 +109,27 @@ class LakeSqlForbiddenError(LakeSqlError):
     """The SQL parsed but violated policy (non-SELECT, bad table, …)."""
 
 
+class LakeSqlIsolationError(LakeSqlError):
+    """The rewrite finished but could not be proven tenant-scoped.
+
+    Raised by the post-rewrite audit in :func:`rewrite_for_tenant` when the
+    rendered statement does not carry the tenant predicate for every real
+    table it touches. Callers must treat this as a refusal to execute, never
+    as a warning: the alternative is forwarding an unscoped query to a
+    warehouse that holds every tenant's events.
+
+    The audit exists because this module's guarantees depend on sqlglot's
+    AST shape, and that shape is not a stable contract. sqlglot moved the
+    ``SELECT``'s FROM clause from ``args["from"]`` to ``args["from_"]``,
+    which turned the table walk into a no-op: every single-table query was
+    classified as a constant projection, so it skipped the allowlist, the
+    table-function ban *and* the tenant predicate, and the rewriter returned
+    success. A guarantee that can be switched off by a dependency resolving
+    one minor version differently needs a check that does not share the
+    assumption it is checking.
+    """
+
+
 @dataclass(frozen=True)
 class RewriteResult:
     """Outcome of a successful rewrite.
@@ -158,6 +179,8 @@ def rewrite_for_tenant(
         The statement is forbidden DML/DDL, references multiple
         statements, touches a non-allowlisted table, or invokes a
         ClickHouse table function.
+    LakeSqlIsolationError
+        The rewrite produced SQL that could not be proven tenant-scoped.
     """
     effective_cap = _resolve_row_cap(row_cap)
 
@@ -223,6 +246,10 @@ def rewrite_for_tenant(
     _clamp_outer_limit(root, effective_cap)
 
     rewritten = tree.sql(dialect="clickhouse")
+
+    # ── Step 6: audit the result before handing it to ClickHouse ─────
+    _audit_tenant_scope(tree, rewritten, tenant_id, cte_aliases, referenced)
+
     return RewriteResult(
         sql=rewritten,
         row_cap=effective_cap,
@@ -346,9 +373,7 @@ def _direct_tables(select: exp.Select) -> list[exp.Table]:
     """
     out: list[exp.Table] = []
 
-    # sqlglot stores the FROM clause under args["from"]. Using the args
-    # dict key is the canonical way to access it regardless of version.
-    from_expr = select.args.get("from")
+    from_expr = _from_clause(select)
     if from_expr is not None:
         _collect_direct_tables(from_expr, out)
 
@@ -356,6 +381,25 @@ def _direct_tables(select: exp.Select) -> list[exp.Table]:
         _collect_direct_tables(join, out)
 
     return out
+
+
+def _from_clause(select: exp.Select) -> exp.Expression | None:
+    """Return this Select's FROM clause, whatever sqlglot is calling it.
+
+    The arg key is not a stable interface: sqlglot ≤ 26 stores the clause
+    under ``"from"`` and ≥ 27 under ``"from_"``. Reading one key and
+    treating a miss as "this SELECT has no FROM" is what silently disabled
+    the whole policy layer, so the node type is the authority here and the
+    key names are only a fast path.
+    """
+    for key in ("from", "from_"):
+        node = select.args.get(key)
+        if node is not None:
+            return node
+    for value in select.args.values():
+        if isinstance(value, exp.From):
+            return value
+    return None
 
 
 def _collect_direct_tables(node: exp.Expression, out: list[exp.Table]) -> None:
@@ -378,6 +422,93 @@ def _collect_direct_tables(node: exp.Expression, out: list[exp.Table]) -> None:
             for item in child:
                 if isinstance(item, exp.Expression):
                     _collect_direct_tables(item, out)
+
+
+def _where_clause(select: exp.Select) -> exp.Expression | None:
+    """Return this Select's WHERE clause, resolved by node type."""
+    node = select.args.get("where")
+    if node is not None:
+        return node
+    for value in select.args.values():
+        if isinstance(value, exp.Where):
+            return value
+    return None
+
+
+def _census_tables(tree: exp.Expression, cte_aliases: set[str]) -> tuple[set[str], bool]:
+    """Every real table the statement references, counted independently.
+
+    Deliberately does not reuse the FROM/JOIN walk. Its whole job is to
+    disagree with that walk when the walk goes blind, so sharing its
+    assumptions would make it decorative.
+    """
+    names: set[str] = set()
+    saw_function = False
+    for table in tree.find_all(exp.Table):
+        if _is_table_function(table):
+            saw_function = True
+            continue
+        if not table.name:
+            continue
+        if not table.db and table.name in cte_aliases:
+            continue
+        names.add(_qualified_name(table))
+    return names, saw_function
+
+
+def _audit_tenant_scope(
+    tree: exp.Expression,
+    rendered: str,
+    tenant_id: uuid.UUID,
+    cte_aliases: set[str],
+    referenced: set[str],
+) -> None:
+    """Refuse to return SQL whose tenant scoping cannot be demonstrated.
+
+    Three independent things have to hold, and each corresponds to a way
+    the rewrite above has actually been observed to fail open:
+
+    1. Every table in the statement was seen by the rewrite. A table the
+       walk never visited was never allowlist-checked and never given a
+       predicate.
+    2. The tenant literal survived into the rendered string, so a
+       ``where()`` call that quietly returned a copy cannot pass.
+    3. Every rendered SELECT that reads a real table carries the tenant in
+       its own WHERE, so a partially-scoped UNION cannot pass either.
+    """
+    census, saw_function = _census_tables(tree, cte_aliases)
+
+    if saw_function:
+        raise LakeSqlForbiddenError("ClickHouse table functions are not allowed in lake queries")
+
+    missed = census - referenced
+    if missed:
+        raise LakeSqlIsolationError(
+            "refusing to execute: table(s) " + ", ".join(sorted(missed)) + " were not tenant-scoped by the rewriter"
+        )
+
+    if not referenced:
+        # Constant projection, or a statement whose only relations are CTE
+        # aliases whose bodies were scoped on their own visit.
+        return
+
+    tid = str(tenant_id)
+    if tid not in rendered:
+        raise LakeSqlIsolationError("refusing to execute: the tenant predicate did not survive rendering")
+
+    try:
+        reparsed = sqlglot.parse_one(rendered, read="clickhouse")
+    except sqlglot.errors.ParseError as exc:  # pragma: no cover - we generated this SQL
+        raise LakeSqlIsolationError(f"refusing to execute: rewritten SQL no longer parses ({exc})") from exc
+
+    reparsed_ctes = {cte.alias_or_name for cte in reparsed.find_all(exp.CTE)}
+    for select in reparsed.find_all(exp.Select):
+        reads_real_table = any(t.name and not (not t.db and t.name in reparsed_ctes) for t in _direct_tables(select))
+        if not reads_real_table:
+            continue
+        where = _where_clause(select)
+        if where is None or tid not in where.sql(dialect="clickhouse"):
+            raise LakeSqlIsolationError("refusing to execute: a SELECT reading lake tables has no tenant predicate")
 
 
 def _is_table_function(table: exp.Table) -> bool:

@@ -40,10 +40,16 @@ clickhouse-driver = "^0.2.8"
 # sqlglot powers the tenant-lake SQL rewriter (Workstream 7). We use it to
 # parse user-supplied SELECTs, enforce a table allowlist, and inject the
 # mandatory `tenant_id = '<uuid>'` predicate into every relation (including
-# subqueries) before the statement is forwarded to ClickHouse. Pinned with
-# a wide range because sqlglot ships frequent dialect tweaks and we don't
-# want lockstep upgrades; the rewriter is exercised by unit tests.
-sqlglot = ">=23.0.0,<31.0.0"
+# subqueries) before the statement is forwarded to ClickHouse.
+#
+# The range must match the Dockerfile and every CI workflow exactly, and
+# `scripts/check_sqlglot_pin.py` fails the build if they drift. This is not
+# tidiness: sqlglot is the component that enforces tenant isolation on the
+# lake, so two builds of the same commit resolving different versions means
+# two different isolation guarantees. This line read `<31.0.0` while the
+# Dockerfile and CI read `<27`, and on 27+ the rewriter returned unscoped
+# SQL and reported success.
+sqlglot = ">=23,<27"
 boto3 = "^1.34.0"
 neo4j = ">=5.19,<7.0"
 pysigma = "^0.11.0"

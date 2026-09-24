@@ -31,3 +31,18 @@ See `stores.py::STORES`. Each store is one of:
   `services/api/tests/test_*_tenant_isolation.py`).
 - `container_gated` — live-container A-vs-B replay in `isolation-live.yml`
   (Neo4j, Redis, ClickHouse, Kafka).
+
+## The parser that enforces ClickHouse isolation is itself a dependency
+
+ClickHouse scoping is produced by `sqlglot` walking a parse tree, so the
+guarantee is only as stable as that tree's shape. It is not stable: sqlglot 27
+renamed the SELECT's FROM clause arg, the walk stopped finding tables, and the
+rewriter returned every single-table query unscoped *and* unfiltered by the
+allowlist while reporting success. Two gates in
+`.github/workflows/lake-isolation.yml` close that off — `check_sqlglot_pin.py`
+requires all seven install paths to declare one identical range, and the
+rewriter suites run against the shipped range and the next major. The rewriter
+also audits its own output now and raises `LakeSqlIsolationError` rather than
+returning SQL it cannot prove is scoped; `services/api/tests/test_lake_sql_fail_closed.py`
+blinds the table walk deliberately to assert that refusal on any sqlglot
+version.

