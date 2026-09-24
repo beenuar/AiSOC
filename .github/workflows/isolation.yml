@@ -30,6 +30,9 @@ on:
       - "scripts/check_route_tenant_scope.py"
       - "scripts/sync_vendored_tenant_scope.py"
       - ".github/workflows/isolation.yml"
+  # Matching isolation-live.yml, so a maintainer can run the isolation gate on
+  # demand rather than only when a path filter happens to match.
+  workflow_dispatch:
 
 permissions:
   contents: read
