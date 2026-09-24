@@ -155,6 +155,12 @@ FILE_LOCAL_RESOLVERS: dict[str, dict[str, str]] = {
     "services/api/app/api/v1/endpoints/alert_writeback.py": {
         "_resolve_caller": ("a session's tenant wins over the body's; a service caller must name one and gets no default"),
     },
+    "services/api/app/api/v1/endpoints/playbook_steps.py": {
+        "_resolve_caller": (
+            "same shape as alert_writeback: a session's tenant comes from the session, "
+            "so an authenticated user cannot drive a containment against another tenant's estate"
+        ),
+    },
 }
 
 #: Routes that *define* a tenant scope rather than read within one. Onboarding
