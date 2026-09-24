@@ -196,6 +196,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A SOC operations dashboard at `/dashboards/operations`.** `/dashboard`
+  answers what is happening in the estate; this answers whether the machine
+  that reports it is working. The distinction matters because every failure
+  mode of a detection pipeline makes it *quieter* — a connector stops polling,
+  a schema changes and events bounce, a token expires — and an alert-centric
+  view reports all three as good news.
+
+  Six panels, each backed by one endpoint and owning its own fetch, loading,
+  empty and error state: connector fleet staleness (`/health/fleet`), rejected
+  events by reason (`/health/dead-letters`), alert severity and disposition
+  (`/alerts/stats`), detection coverage counting only *enabled* rules
+  (`/detection/coverage`), agent runs/tokens/spend (`/costs/dashboard`), and
+  response actions paused for approval (`/approvals`). The first three had no
+  web client at all.
+
+  Fleet staleness is reported against each connector's own cadence — "3.2
+  intervals behind" rather than an absolute age, because a daily connector and
+  a five-minute connector are not late at the same wall-clock time. One dead
+  endpoint blanks one panel and names the failure; it does not take the page
+  down and does not substitute plausible figures.
+
 - **Federated SIEM search has a console surface.** `/api/v1/federated/backends`
   and `/api/v1/federated/search` have fanned one query out to Splunk, Microsoft
   Sentinel, Elastic and QRadar — in parallel, against each tenant's own

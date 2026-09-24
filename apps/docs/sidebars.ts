@@ -54,6 +54,7 @@ const sidebars: SidebarsConfig = {
         "console/rule-tuning",
         "console/investigation-rail",
         "console/federated-search",
+        "console/operations-dashboard",
         "console/public-replay",
       ],
     },
