@@ -361,17 +361,23 @@ export function findNodeForEntityParam(
 }
 
 export function AttackGraphView() {
-  const [selected, setSelected] = useState<GraphNode | null>(null);
   const searchParams = useSearchParams();
   const entityParam = searchParams?.get('entity') ?? null;
+
   /**
-   * `?entity=` is applied once per distinct parameter value.
+   * Selection is derived from `?entity=` until the analyst picks for
+   * themselves, then their choice wins.
    *
-   * Before this, the parameter was accepted by every caller that built one —
-   * the rail's entity chips, `HuntView`'s "Pivot to graph" — and read by
-   * nobody, so the pivot navigated here and dropped the entity on the floor.
+   * The wrapper object is what distinguishes "has not chosen yet" (`null`)
+   * from "explicitly dismissed the panel" (`{ node: null }`); collapsing
+   * those would make the deep-linked node reappear every time the 30-second
+   * graph refresh landed.
+   *
+   * Deriving rather than syncing in an effect also keeps the deep link
+   * working when the parameter is present on first render but the nodes
+   * arrive with the fetch, which is the normal case.
    */
-  const appliedEntity = useRef<string | null>(null);
+  const [override, setOverride] = useState<{ node: GraphNode | null } | null>(null);
 
   const graphState = useSWR<AttackGraph>(
     'attack-graph',
@@ -408,16 +414,12 @@ export function AttackGraphView() {
   const graph = graphState.data;
   const mitre = mitreState.data;
 
-  useEffect(() => {
-    if (!entityParam || appliedEntity.current === entityParam) return;
-    const nodes = graph?.nodes;
-    // Wait for the graph rather than giving up: the param arrives on first
-    // render and the nodes arrive with the fetch.
-    if (!nodes || nodes.length === 0) return;
-    appliedEntity.current = entityParam;
-    const match = findNodeForEntityParam(nodes, entityParam);
-    if (match) setSelected(match);
-  }, [entityParam, graph]);
+  const entityMatch = useMemo(
+    () => findNodeForEntityParam(graph?.nodes ?? [], entityParam),
+    [graph?.nodes, entityParam],
+  );
+  const selected = override ? override.node : entityMatch;
+  const setSelected = (node: GraphNode | null) => setOverride({ node });
 
   return (
     <div className="space-y-6">

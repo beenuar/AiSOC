@@ -155,6 +155,11 @@ const navSections: NavSection[] = [
         href: '/dashboards/soc-insights',
         icon: <ChartBarIcon />,
       },
+      {
+        label: 'SOC Operations',
+        href: '/dashboards/operations',
+        icon: <ChartBarIcon />,
+      },
     ],
   },
   {

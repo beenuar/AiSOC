@@ -1965,6 +1965,87 @@ export const metricsApi = {
   getSOC: () => request<SOCMetrics>('/api/v1/metrics/soc'),
 };
 
+// ─── Operational health: connector fleet, rejected events, alert posture ─────
+//
+// Three endpoints that existed server-side with no client. They answer the
+// question the alert-centric dashboards structurally cannot: whether the
+// absence of alerts means the estate is quiet or the pipeline stopped.
+
+/** How a connector is doing against *its own* configured poll cadence. */
+export type FleetHealthState = 'healthy' | 'degraded' | 'failed' | 'unproven' | 'disabled';
+
+export interface FleetConnectorHealth {
+  connector_id: string;
+  name: string;
+  connector_type: string;
+  state: FleetHealthState;
+  /** Operator-actionable wording from the server. Never bare "unhealthy". */
+  reason: string;
+  last_sync: string | null;
+  seconds_since_sync: number | null;
+  poll_interval_seconds: number;
+  /** How many poll cycles have been missed. Fractional. */
+  missed_intervals: number | null;
+  error_count: number;
+  events_ingested: number;
+  oauth_refresh_failures: number;
+  schema_drift_at: string | null;
+}
+
+export interface FleetHealth {
+  generated_at: string;
+  /** Worst enabled connector's state — deliberately not an average. */
+  state: FleetHealthState;
+  counts: Record<FleetHealthState, number>;
+  connectors: FleetConnectorHealth[];
+}
+
+export interface DeadLetterEntry {
+  id: string;
+  topic: string;
+  reason: string;
+  schema_version: string | null;
+  payload_excerpt: string | null;
+  source_event_id: string | null;
+  occurred_at: string | null;
+  acknowledged: boolean;
+}
+
+export interface DeadLetters {
+  window_hours: number;
+  total: number;
+  by_reason: Array<{ reason: string; count: number }>;
+  truncated: boolean;
+  dead_letters: DeadLetterEntry[];
+}
+
+export interface AlertStats {
+  total: number;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  new_last_24h: number;
+  critical_open: number;
+}
+
+export const operationsApi = {
+  /**
+   * Which connectors have quietly stopped working.
+   *
+   * Staleness is judged per connector against its own cadence, so a daily
+   * connector is not reported as failing eleven hours in.
+   */
+  fleetHealth: () => request<FleetHealth>('/api/v1/health/fleet'),
+
+  /** Events the pipeline refused, and why. */
+  deadLetters: (params: { hours?: number; limit?: number } = {}) =>
+    request<DeadLetters>('/api/v1/health/dead-letters', {
+      params: params as Record<string, string>,
+    }),
+
+  /** Severity / status distribution plus the two counters worth paging on. */
+  alertStats: () => request<AlertStats>('/api/v1/alerts/stats'),
+};
+
 // ─── Investigations ─────────────────────────────────────────────────────────
 
 export const investigationsApi = {
