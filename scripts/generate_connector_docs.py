@@ -120,11 +120,7 @@ def unescaped_jsx_tags(page: str) -> list[str]:
             continue
         if in_fence:
             continue
-        outside = "".join(
-            part
-            for part in re.split(r"(`{1,3}[^`]*`{1,3})", line)
-            if not part.startswith("`")
-        )
+        outside = "".join(part for part in re.split(r"(`{1,3}[^`]*`{1,3})", line) if not part.startswith("`"))
         for match in re.finditer(r"<([A-Za-z][\w.-]*)>", outside):
             # Real HTML that MDX accepts.
             if match.group(1).lower() in {"br", "hr", "img"}:
@@ -151,12 +147,7 @@ def _mdx_safe(text: str) -> str:
     """
     # Split on code spans (longest fences first) and escape only outside.
     parts = re.split(r"(`{1,3}[^`]*`{1,3})", text)
-    return "".join(
-        part
-        if part.startswith("`")
-        else re.sub(r"<([A-Za-z][\w.-]*)>", r"`<\1>`", part)
-        for part in parts
-    )
+    return "".join(part if part.startswith("`") else re.sub(r"<([A-Za-z][\w.-]*)>", r"`<\1>`", part) for part in parts)
 
 
 def _is_secret(field) -> bool:
@@ -241,7 +232,8 @@ def _field_rows(schema) -> list[str]:
             notes.append("one of: " + shown)
         rows.append(
             f"| `{field.name}` | {_mdx_safe(str(field.label or field.name))} "
-            f"| {field.type} | " f"{required} | {default} | {' · '.join(notes) or '—'} |"
+            f"| {field.type} | "
+            f"{required} | {default} | {' · '.join(notes) or '—'} |"
         )
     return rows
 
@@ -601,8 +593,7 @@ def main(argv: list[str] | None = None) -> int:
             for connector_id, tags in mdx_breaks:
                 print(f"  {connector_id}: {', '.join(tags[:4])}", file=sys.stderr)
             print(
-                "  Wrap them in backticks. Generated pages do this "
-                "automatically; a hand-written page has to.",
+                "  Wrap them in backticks. Generated pages do this " "automatically; a hand-written page has to.",
                 file=sys.stderr,
             )
         if missing or drifted or undocumented_fields or mdx_breaks or not sidebar_ok:

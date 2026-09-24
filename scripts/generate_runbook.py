@@ -43,14 +43,15 @@ LOG = logging.getLogger(__name__)
 # Runbook definitions
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RunbookSpec:
-    id: str                  # e.g. "RB-001"
-    slug: str                # e.g. "api-high-latency"
+    id: str  # e.g. "RB-001"
+    slug: str  # e.g. "api-high-latency"
     title: str
-    trigger: str             # human-readable trigger condition
-    service_filter: str      # service name to query traces for
-    operation_filter: str    # span operation / route filter (substring match)
+    trigger: str  # human-readable trigger condition
+    service_filter: str  # service name to query traces for
+    operation_filter: str  # span operation / route filter (substring match)
     impact: str
     escalation: str
     extra_steps: list[str] = field(default_factory=list)
@@ -154,6 +155,7 @@ RUNBOOK_SPECS: list[RunbookSpec] = [
 # ---------------------------------------------------------------------------
 # Trace fetching (Grafana Tempo HTTP API)
 # ---------------------------------------------------------------------------
+
 
 def _headers(bearer: str | None) -> dict[str, str]:
     h = {"Accept": "application/json"}
@@ -346,6 +348,7 @@ def render_runbook(
 # TOC updater
 # ---------------------------------------------------------------------------
 
+
 def update_toc(output_dir: Path) -> None:
     """Rewrite the runbook index table in docs/operations/multi-region.md."""
     runbooks = sorted(output_dir.glob("RB-*.md"))
@@ -372,7 +375,7 @@ def update_toc(output_dir: Path) -> None:
     marker_end = "\nTo regenerate all runbooks:"
     if marker_start in content and marker_end in content:
         before = content[: content.index(marker_start) + len(marker_start)]
-        after = content[content.index(marker_end):]
+        after = content[content.index(marker_end) :]
         new_content = before + "\n" + "\n".join(toc_lines) + "\n" + after
         multi_region_md.write_text(new_content)
         LOG.info("Updated TOC in %s", multi_region_md)
@@ -382,11 +385,14 @@ def update_toc(output_dir: Path) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--output", default="docs/operations/runbooks/", help="Output directory for runbook Markdown files.")
     p.add_argument("--lookback-hours", type=int, default=168, help="Hours of trace history to analyse (default: 168 = 1 week).")
-    p.add_argument("--otel-endpoint", default=os.getenv("OTEL_ENDPOINT", "http://localhost:3100"), help="Grafana Tempo / Jaeger HTTP endpoint.")
+    p.add_argument(
+        "--otel-endpoint", default=os.getenv("OTEL_ENDPOINT", "http://localhost:3100"), help="Grafana Tempo / Jaeger HTTP endpoint."
+    )
     p.add_argument("--bearer", default=os.getenv("OTEL_BEARER", ""), help="Bearer token for authenticated backends.")
     p.add_argument("--runbook", help="Generate only this runbook ID (e.g. RB-001). Omit to generate all.")
     p.add_argument("--update-toc", action="store_true", help="Refresh the runbook table in docs/operations/multi-region.md and exit.")

@@ -224,9 +224,7 @@ def main() -> int:
         if leg is None:
             problems.append(f"{MATRIX_WORKFLOW} has no matrix leg labelled `shipped`")
         elif normalise(leg.group("spec")) != agreed:
-            problems.append(
-                f"{MATRIX_WORKFLOW} tests the shipped rewriter against {leg.group('spec')}, but the declared pin is {agreed}"
-            )
+            problems.append(f"{MATRIX_WORKFLOW} tests the shipped rewriter against {leg.group('spec')}, but the declared pin is {agreed}")
 
     if problems:
         print("check_sqlglot_pin: FAIL")

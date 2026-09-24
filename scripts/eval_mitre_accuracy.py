@@ -11,6 +11,7 @@ Exit codes:
 
 This script is also the entrypoint for the p1-eval CI step.
 """
+
 from __future__ import annotations
 
 import argparse

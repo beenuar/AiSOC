@@ -659,9 +659,7 @@ def render_pack(id_lock: dict[str, str]) -> tuple[dict[Path, str], dict[str, int
             # Looked up, not computed from position. See ID_LOCK.
             rule_id = id_lock[f"{category}/{slug}"]
 
-            artifacts[cat_dir / f"{slug}.yaml"] = render_rule_yaml(
-                rule_id=rule_id, category=category, spec=spec
-            )
+            artifacts[cat_dir / f"{slug}.yaml"] = render_rule_yaml(rule_id=rule_id, category=category, spec=spec)
             artifacts[pos_dir / f"{slug}.json"] = json.dumps(spec["positive"], indent=2, sort_keys=True) + "\n"
             artifacts[neg_dir / f"{slug}.json"] = json.dumps(spec["negative"], indent=2, sort_keys=True) + "\n"
 

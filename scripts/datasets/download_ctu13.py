@@ -47,17 +47,13 @@ from urllib import request as urlrequest
 
 logger = logging.getLogger("download_ctu13")
 
-DEFAULT_MIRROR = (
-    "https://mcfp.felk.cvut.cz/publicDatasets/CTU-13-Dataset"
-)
+DEFAULT_MIRROR = "https://mcfp.felk.cvut.cz/publicDatasets/CTU-13-Dataset"
 
 # CTU-13 ships 13 scenarios. Filenames at the upstream mirror follow
 # the pattern ``{n}/capture{n}.binetflow``. SHA-256 entries are left
 # as ``None`` until a contributor pins them in a follow-up PR (per
 # the same convention used by download_cicids.py).
-SCENARIOS: dict[int, dict[str, object]] = {
-    n: {"sha256": None, "approx_bytes": 0} for n in range(1, 14)
-}
+SCENARIOS: dict[int, dict[str, object]] = {n: {"sha256": None, "approx_bytes": 0} for n in range(1, 14)}
 
 LICENSE_NOTICE = """\
 ============================================================

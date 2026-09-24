@@ -16,6 +16,7 @@ Stages:
 Usage:
   python3 scripts/inject_scenario.py [--api-url http://localhost:8000] [--delay 0.5]
 """
+
 from __future__ import annotations
 
 import argparse

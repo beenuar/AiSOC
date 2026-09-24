@@ -100,6 +100,14 @@ TENANT_HEADER = "X-AiSOC-Tenant-ID"
 #: 30s clock-skew leeway, matching the Node verifier and common JWT defaults.
 _CLOCK_SKEW_SECONDS = 30
 
+#: Refs that mean "the caller did not name a tenant" rather than naming one.
+#: Several request models default ``tenant_id`` to the string ``"default"``,
+#: which is a placeholder, not a tenant — migration 001 seeds the canonical
+#: tenant with that *slug* and the demo seed renames it, so the literal
+#: identifies nothing anywhere. Treating it as a request for a tenant called
+#: "default" would refuse every caller who simply left the field alone.
+PLACEHOLDER_TENANT_REFS = frozenset({"", "default", "none", "null"})
+
 
 class TenantScopeError(Exception):
     """A read was attempted without a resolved tenant scope.
@@ -152,6 +160,9 @@ def resolve_scoped_tenant(
     """
     if principal.is_empty:
         raise TenantScopeError("refusing to read with an empty tenant scope")
+
+    if isinstance(requested, str) and requested.strip().lower() in PLACEHOLDER_TENANT_REFS:
+        requested = None
 
     if requested is None:
         if len(principal.tenant_ids) != 1:

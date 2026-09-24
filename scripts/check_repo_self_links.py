@@ -118,10 +118,7 @@ def main() -> int:
         return 0
 
     if wrong_owner:
-        print(
-            f"\n{len(wrong_owner)} link(s) use a non-canonical owner "
-            f"(expected {CANONICAL_OWNER}/{CANONICAL_REPO}):"
-        )
+        print(f"\n{len(wrong_owner)} link(s) use a non-canonical owner " f"(expected {CANONICAL_OWNER}/{CANONICAL_REPO}):")
         for path, lineno, found in wrong_owner:
             print(f"  {path}:{lineno}  ->  {found}")
 

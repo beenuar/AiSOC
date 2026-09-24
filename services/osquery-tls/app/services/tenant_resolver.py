@@ -36,6 +36,7 @@ import logging
 import uuid
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("aisoc.osquery_tls.tenant")
@@ -54,7 +55,29 @@ async def resolve_tenant_uuid(db: AsyncSession, tenant_ref: str | None) -> uuid.
     Returns ``None`` when the ref names no tenant this deployment knows, or
     when the placeholder is ambiguous (several tenants, none canonical).
     Callers must treat ``None`` as a refusal, never as "any tenant".
+
+    This reads ``tenants``, which lives in the platform database this service
+    shares (``DATABASE_URL`` points at the same ``aisoc`` database as the API).
+    If that table is not reachable the answer is a refusal with a named
+    reason, not a guess and not a 500 — an operator who pointed this service
+    at a standalone database needs to be told that, and the alternative
+    (falling back to the ``"default"`` string) is the bug this module exists
+    to fix.
     """
+    try:
+        return await _resolve(db, tenant_ref)
+    except SQLAlchemyError as exc:
+        logger.warning(
+            "osquery_tls.tenant_table_unreachable ref=%r error=%s — "
+            "this service reads `tenants` from the shared platform database; "
+            "check DATABASE_URL points at it",
+            str(tenant_ref or "").replace("\r", "").replace("\n", " ")[:64],
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+        return None
+
+
+async def _resolve(db: AsyncSession, tenant_ref: str | None) -> uuid.UUID | None:
     ref = (tenant_ref or "").strip()
 
     # 1. An explicit UUID is trusted as-is — but only if it names a real

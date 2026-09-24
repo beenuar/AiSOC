@@ -29,15 +29,15 @@ async def test_distributed_read_empty(client):
 
 
 @pytest.mark.asyncio
-async def test_distributed_enqueue_and_read(client):
+async def test_distributed_enqueue_and_read(client, service_auth):
     host, node_key = await _enroll(client, "dist-read-2")
 
     # Enqueue via internal API
     enq = await client.post(
         "/api/v1/osquery/distributed/enqueue",
+        headers=service_auth,
         json={
             "host_identifier": host,
-            "tenant_id": "default",
             "query_text": "SELECT pid, name FROM processes;",
         },
     )
@@ -54,14 +54,14 @@ async def test_distributed_enqueue_and_read(client):
 
 
 @pytest.mark.asyncio
-async def test_distributed_write_and_status(client):
+async def test_distributed_write_and_status(client, service_auth):
     host, node_key = await _enroll(client, "dist-write-1")
 
     enq = await client.post(
         "/api/v1/osquery/distributed/enqueue",
+        headers=service_auth,
         json={
             "host_identifier": host,
-            "tenant_id": "default",
             "query_text": "SELECT * FROM users;",
         },
     )
@@ -89,12 +89,12 @@ async def test_distributed_write_and_status(client):
 
 
 @pytest.mark.asyncio
-async def test_distributed_enqueue_unknown_host(client):
+async def test_distributed_enqueue_unknown_host(client, service_auth):
     resp = await client.post(
         "/api/v1/osquery/distributed/enqueue",
+        headers=service_auth,
         json={
             "host_identifier": "nonexistent-host",
-            "tenant_id": "default",
             "query_text": "SELECT 1;",
         },
     )

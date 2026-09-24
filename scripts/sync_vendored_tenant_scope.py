@@ -33,6 +33,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FILE = REPO_ROOT / "services" / "fusion" / "app" / "security" / "tenant_scope.py"
 
+#: The test travels with the module. Each service runs the copy it ships
+#: rather than trusting that the one copy the cross-service isolation suite
+#: exercises stands in for the other five — which is exactly the assumption
+#: that lets a vendored fix land in one place and look like six.
+SOURCE_TEST = REPO_ROOT / "services" / "fusion" / "tests" / "test_tenant_scope.py"
+
 #: service directory name → the SERVICE_NAME literal its copy must carry.
 #: The token override is ``AISOC_<SERVICE_NAME>_SERVICE_TOKEN``.
 TARGETS: dict[str, str] = {
@@ -51,6 +57,10 @@ def _target_path(service: str) -> Path:
     return REPO_ROOT / "services" / service / "app" / "security" / "tenant_scope.py"
 
 
+def _target_test_path(service: str) -> Path:
+    return REPO_ROOT / "services" / service / "tests" / "test_tenant_scope.py"
+
+
 def _render(source: str, service_name: str) -> str:
     rendered, count = _SERVICE_NAME_RE.subn(f'SERVICE_NAME = "{service_name}"', source)
     if count != 1:
@@ -64,26 +74,32 @@ def _check() -> int:
         return 1
     source = SOURCE_FILE.read_text(encoding="utf-8")
 
+    test_source = SOURCE_TEST.read_text(encoding="utf-8") if SOURCE_TEST.is_file() else None
+    if test_source is None:
+        print(f"FAIL: source test missing: {SOURCE_TEST}", file=sys.stderr)
+        return 1
+
     failures = 0
     for service, service_name in sorted(TARGETS.items()):
-        path = _target_path(service)
-        if not path.is_file():
-            print(f"FAIL: vendored copy missing: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
-            failures += 1
-            continue
-        want = _render(source, service_name)
-        if path.read_text(encoding="utf-8") != want:
-            print(
-                f"FAIL: {path.relative_to(REPO_ROOT)} is out of sync with "
-                f"{SOURCE_FILE.relative_to(REPO_ROOT)}.\n"
-                "      Re-run: python scripts/sync_vendored_tenant_scope.py",
-                file=sys.stderr,
-            )
-            failures += 1
+        for path, want in (
+            (_target_path(service), _render(source, service_name)),
+            (_target_test_path(service), test_source),
+        ):
+            if not path.is_file():
+                print(f"FAIL: vendored copy missing: {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+                failures += 1
+                continue
+            if path.read_text(encoding="utf-8") != want:
+                print(
+                    f"FAIL: {path.relative_to(REPO_ROOT)} is out of sync with its source.\n"
+                    "      Re-run: python scripts/sync_vendored_tenant_scope.py",
+                    file=sys.stderr,
+                )
+                failures += 1
 
     if failures:
         return 1
-    print(f"OK: {len(TARGETS)} vendored tenant_scope.py copies match the source (differing only in SERVICE_NAME).")
+    print(f"OK: {len(TARGETS)} vendored tenant_scope.py copies (+ their tests) match the source (differing only in SERVICE_NAME).")
     return 0
 
 
@@ -93,6 +109,8 @@ def _sync() -> int:
         return 1
     source = SOURCE_FILE.read_text(encoding="utf-8")
 
+    test_source = SOURCE_TEST.read_text(encoding="utf-8")
+
     for service, service_name in sorted(TARGETS.items()):
         path = _target_path(service)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +119,12 @@ def _sync() -> int:
             init.write_text('"""Security helpers for this service."""\n', encoding="utf-8")
         path.write_text(_render(source, service_name), encoding="utf-8")
         print(f"  wrote {path.relative_to(REPO_ROOT)} (SERVICE_NAME={service_name})")
-    print(f"OK: synced {len(TARGETS)} copies from {SOURCE_FILE.relative_to(REPO_ROOT)}.")
+
+        test_path = _target_test_path(service)
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        test_path.write_text(test_source, encoding="utf-8")
+        print(f"  wrote {test_path.relative_to(REPO_ROOT)}")
+    print(f"OK: synced {len(TARGETS)} copies (+ tests) from {SOURCE_FILE.relative_to(REPO_ROOT)}.")
     return 0
 
 

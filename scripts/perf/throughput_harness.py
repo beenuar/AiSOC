@@ -56,9 +56,7 @@ def _synthetic_event(i: int) -> dict:
             "actor": {"user": {"name": f"user{i % 200}"}},
             "src_endpoint": {"ip": f"10.0.{i % 255}.{(i * 7) % 255}"},
             "file": {"fingerprints": [{"value": f"{i:064x}"}]},
-            "mitre_attck": [
-                {"technique_id": "T1003", "technique_name": "OS Credential Dumping", "tactic_names": ["Credential Access"]}
-            ],
+            "mitre_attck": [{"technique_id": "T1003", "technique_name": "OS Credential Dumping", "tactic_names": ["Credential Access"]}],
         },
     }
 

@@ -41,6 +41,7 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SERVICES_DIR = REPO_ROOT / "services"
 
+
 # Services that are Python FastAPI apps (excludes the Go ingest
 # service, the Node realtime service, and any service without an
 # ``app/main.py`` file).
@@ -95,8 +96,7 @@ def main() -> int:
     if args.check and drift:
         print(
             "\nFAIL: the following FastAPI services do not install the "
-            "Phase 2.6 /livez + /readyz probes from app._health:\n  - "
-            + "\n  - ".join(drift),
+            "Phase 2.6 /livez + /readyz probes from app._health:\n  - " + "\n  - ".join(drift),
             file=sys.stderr,
         )
         print(

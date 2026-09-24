@@ -22,6 +22,7 @@ Usage::
         --wet-block path/to/wet-block.json \\
         --benchmark-md apps/docs/docs/benchmark.md
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,11 +35,11 @@ from typing import Any
 # Family ordering must match what's in ``apps/docs/docs/benchmark.md``:
 # Aggregate row first, then the five family rows in this exact order.
 _FAMILY_ORDER: tuple[tuple[str, str], ...] = (
-    ("aggregate",   "Aggregate (all 200)"),
-    ("endpoint",    "Endpoint compromise"),
-    ("identity",    "Identity / OAuth phish"),
-    ("cloud",       "Cloud (AWS / Azure / GCP)"),
-    ("network",     "Network / WAF / DNS"),
+    ("aggregate", "Aggregate (all 200)"),
+    ("endpoint", "Endpoint compromise"),
+    ("identity", "Identity / OAuth phish"),
+    ("cloud", "Cloud (AWS / Azure / GCP)"),
+    ("network", "Network / WAF / DNS"),
     ("application", "Application / SaaS"),
 )
 
@@ -59,47 +60,29 @@ def _by_family(block: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _aggregate_latency_row(block: dict[str, Any]) -> str:
     lat = block["latency_seconds"]
-    return (
-        f"| Aggregate (all 200)        |  {lat['p50']:.2f} |  {lat['p95']:.2f} | "
-        f" {lat['p99']:.2f} | 200 |"
-    )
+    return f"| Aggregate (all 200)        |  {lat['p50']:.2f} |  {lat['p95']:.2f} | " f" {lat['p99']:.2f} | 200 |"
 
 
 def _family_latency_row(label: str, fam: dict[str, Any]) -> str:
-    return (
-        f"| {label:<26} |  {fam['latency_p50_s']:.2f} |  {fam['latency_p95_s']:.2f} | "
-        f" {fam['latency_p99_s']:.2f} | {fam['n']:>3} |"
-    )
+    return f"| {label:<26} |  {fam['latency_p50_s']:.2f} |  {fam['latency_p95_s']:.2f} | " f" {fam['latency_p99_s']:.2f} | {fam['n']:>3} |"
 
 
 def _aggregate_tokens_row(block: dict[str, Any]) -> str:
     tot = block["tokens"]["total"]
-    return (
-        f"| Aggregate (all 200)        | {tot['mean']:>5.0f} | {tot['median']:>6.0f} | "
-        f"{tot['p95']:>4.0f} | 200 |"
-    )
+    return f"| Aggregate (all 200)        | {tot['mean']:>5.0f} | {tot['median']:>6.0f} | " f"{tot['p95']:>4.0f} | 200 |"
 
 
 def _family_tokens_row(label: str, fam: dict[str, Any]) -> str:
-    return (
-        f"| {label:<26} | {fam['tokens_mean']:>5.0f} | {fam['tokens_median']:>6.0f} | "
-        f"{fam['tokens_p95']:>4.0f} | {fam['n']:>3} |"
-    )
+    return f"| {label:<26} | {fam['tokens_mean']:>5.0f} | {fam['tokens_median']:>6.0f} | " f"{fam['tokens_p95']:>4.0f} | {fam['n']:>3} |"
 
 
 def _aggregate_usd_row(block: dict[str, Any]) -> str:
     usd = block["usd"]
-    return (
-        f"| Aggregate (all 200)        | ${usd['mean']:.5f} | ${usd['median']:.5f} | "
-        f"${usd['p95']:.5f} | 200 |"
-    )
+    return f"| Aggregate (all 200)        | ${usd['mean']:.5f} | ${usd['median']:.5f} | " f"${usd['p95']:.5f} | 200 |"
 
 
 def _family_usd_row(label: str, fam: dict[str, Any]) -> str:
-    return (
-        f"| {label:<26} | ${fam['usd_mean']:.5f} | ${fam['usd_median']:.5f} | "
-        f"${fam['usd_p95']:.5f} | {fam['n']:>3} |"
-    )
+    return f"| {label:<26} | ${fam['usd_mean']:.5f} | ${fam['usd_median']:.5f} | " f"${fam['usd_p95']:.5f} | {fam['n']:>3} |"
 
 
 def _build_rows(
@@ -130,9 +113,15 @@ def _build_rows(
             # disappears from the corpus.
             placeholder = {
                 "n": 0,
-                "latency_p50_s": 0.0, "latency_p95_s": 0.0, "latency_p99_s": 0.0,
-                "tokens_mean": 0, "tokens_median": 0, "tokens_p95": 0,
-                "usd_mean": 0.0, "usd_median": 0.0, "usd_p95": 0.0,
+                "latency_p50_s": 0.0,
+                "latency_p95_s": 0.0,
+                "latency_p99_s": 0.0,
+                "tokens_mean": 0,
+                "tokens_median": 0,
+                "tokens_p95": 0,
+                "usd_mean": 0.0,
+                "usd_median": 0.0,
+                "usd_p95": 0.0,
             }
             fam = placeholder
         if kind == "latency":
@@ -146,8 +135,8 @@ def _build_rows(
 
 _HEADINGS_TO_KIND = {
     _TABLE_HEADINGS[0]: ("latency", "| Template family            | p50 (s) | p95 (s) | p99 (s) | n  |"),
-    _TABLE_HEADINGS[1]: ("tokens",  "| Template family            | mean | median | p95  | n  |"),
-    _TABLE_HEADINGS[2]: ("usd",     "| Template family            | mean ($) | median ($) | p95 ($) | n  |"),
+    _TABLE_HEADINGS[1]: ("tokens", "| Template family            | mean | median | p95  | n  |"),
+    _TABLE_HEADINGS[2]: ("usd", "| Template family            | mean ($) | median ($) | p95 ($) | n  |"),
 }
 
 # Match a row that starts with a known family label or "Aggregate" so
@@ -194,9 +183,11 @@ def _rewrite(md_text: str, block: dict[str, Any]) -> tuple[str, dict[str, int]]:
                 # ever rewrite the data rows so column widths in the
                 # source markdown stay author-controlled.
                 if j < len(lines):
-                    out.append(lines[j]); j += 1   # header row
+                    out.append(lines[j])
+                    j += 1  # header row
                 if j < len(lines):
-                    out.append(lines[j]); j += 1   # separator row
+                    out.append(lines[j])
+                    j += 1  # separator row
 
                 rows = _build_rows(block, kind=kind)
                 family_idx = 0
@@ -227,10 +218,7 @@ def _rewrite(md_text: str, block: dict[str, Any]) -> tuple[str, dict[str, int]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Substitute the wet-eval placeholder cells in benchmark.md "
-            "with the numbers from a wet-eval JSON block."
-        ),
+        description=("Substitute the wet-eval placeholder cells in benchmark.md " "with the numbers from a wet-eval JSON block."),
     )
     parser.add_argument(
         "--wet-block",
@@ -274,8 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         args.benchmark_md.write_text(new_text)
 
     if args.print_summary:
-        print(f"[wet-eval-md] mode={block.get('mode')} "
-              f"model={block.get('model')} incidents={block.get('incidents')}")
+        print(f"[wet-eval-md] mode={block.get('mode')} " f"model={block.get('model')} incidents={block.get('incidents')}")
         for heading, replaced in stats.items():
             print(f"  {heading}: {replaced} rows replaced")
 
