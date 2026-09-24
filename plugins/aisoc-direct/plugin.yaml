@@ -31,12 +31,12 @@ schema:
     - name: base_url
       label: TLS Endpoint URL
       description: >
-        Base URL of the AiSOC osquery TLS service, e.g.
-        https://osquery.tryaisoc.com.  Agents use this as their
+        Base URL of this deployment's AiSOC osquery TLS service, e.g.
+        https://osquery.example.com.  Agents use this as their
         --tls_hostname flag.
       type: string
       required: true
-      default: https://osquery.tryaisoc.com
+      default: http://localhost:8091
     - name: tenant_id
       label: Tenant ID
       description: >

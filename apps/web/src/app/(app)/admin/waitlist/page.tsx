@@ -178,9 +178,9 @@ export default function AdminWaitlistPage() {
           Managed waitlist
         </h1>
         <p className="mt-1 text-sm text-gray-400">
-          Triage incoming requests for <code className="rounded bg-white/[0.05] px-1">tryaisoc.com</code>{' '}
-          managed tenants. Promote an entry to mint the tenant, seed the
-          demo dataset, and generate the initial admin invite link.
+          Triage incoming requests for managed tenants on this deployment.
+          Promote an entry to mint the tenant, seed the demo dataset, and
+          generate the initial admin invite link.
         </p>
       </header>
 

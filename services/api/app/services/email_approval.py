@@ -262,6 +262,19 @@ class MailDeliveryClient(Protocol):
         pass
 
 
+def _default_from_addr(domain: str) -> str:
+    """Sender address when ``AISOC_APPROVAL_FROM_ADDR`` is unset.
+
+    Prefer the operator's own Mailgun sending domain: a From address on a
+    domain the deployment does not control fails SPF/DKIM and sends approval
+    mail that claims to come from someone else. With no domain configured we
+    fall back to the RFC 2606 reserved ``example.com``, which is visibly a
+    placeholder rather than a real party's address.
+    """
+    domain = (domain or "").strip().lstrip("@")
+    return f"approvals@{domain}" if domain else "approvals@example.com"
+
+
 class MailgunClient:
     """
     Minimal Mailgun client. Authenticates with the standard
@@ -282,7 +295,7 @@ class MailgunClient:
         self._api_key = api_key if api_key is not None else os.environ.get("MAILGUN_API_KEY", "")
         self._domain = domain if domain is not None else os.environ.get("MAILGUN_DOMAIN", "")
         self._base_url = base_url.rstrip("/")
-        self._from_addr = from_addr or os.environ.get("AISOC_APPROVAL_FROM_ADDR", "approvals@tryaisoc.com")
+        self._from_addr = from_addr or os.environ.get("AISOC_APPROVAL_FROM_ADDR", "") or _default_from_addr(self._domain)
         self._client = client or httpx.AsyncClient(timeout=10.0)
 
     async def send(

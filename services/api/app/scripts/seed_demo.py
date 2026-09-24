@@ -8,7 +8,7 @@ Run this from the host (the API container has the package on its PYTHONPATH):
 
 The seed is idempotent — running it twice produces the same dataset and never
 duplicates rows. Demo IDs are kept in sync with `app/api/v1/dev_auth.py` so the
-auth bypass and the seeded data agree on who "demo@tryaisoc.com" is.
+auth bypass and the seeded data agree on who "demo@example.com" is.
 
 Two modes:
 

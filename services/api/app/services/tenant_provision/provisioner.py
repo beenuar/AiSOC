@@ -62,6 +62,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import console_base_url
 from app.models.tenant import Tenant, User
 from app.models.waitlist import (
     WAITLIST_STATUS_ONBOARDED,
@@ -281,7 +282,7 @@ async def provision_from_waitlist(
     *,
     waitlist_entry_id: uuid.UUID,
     actor_email: str,
-    invite_base_url: str = "https://tryaisoc.com",
+    invite_base_url: str | None = None,
     seed_demo: bool = True,
     demo_seeder: DemoSeederCallable | None = None,
     templates: TenantTemplateBundle | None = None,
@@ -301,8 +302,11 @@ async def provision_from_waitlist(
     actor_email
         Operator email; recorded on the audit log line.
     invite_base_url
-        Base of the URL the operator will email out. Defaults to the
-        managed-instance host name.
+        Base of the URL the operator will email out. ``None`` resolves to
+        :func:`app.core.config.console_base_url` — this install's own console
+        origin. It used to carry its own hard-coded literal, which both
+        duplicated the caller's default (free to drift apart, the hard part to
+        notice) and emitted invite links into a different deployment.
     seed_demo
         Whether to call the demo seeder. Test harnesses pass
         ``False`` so the unit tests don't depend on the seed script.
@@ -317,6 +321,8 @@ async def provision_from_waitlist(
         Override for the slug-collision shard generator (used by
         tests).
     """
+    invite_base_url = (invite_base_url or "").strip() or console_base_url()
+
     entry = await _load_waitlist_entry(db, waitlist_entry_id)
     if entry.provisioned_tenant_id is not None:
         # Idempotent re-provision — return the existing tenant if it's

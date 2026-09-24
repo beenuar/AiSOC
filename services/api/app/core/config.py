@@ -200,22 +200,32 @@ class Settings(BaseSettings):
     # Public ingest base URL — surfaced in the wizard's "Reveal push URL"
     # response so operators get a copy-pasteable curl example. Empty
     # falls back to a relative path; production deployments should
-    # always set this (e.g. https://ingest.tryaisoc.com).
+    # always set this (e.g. https://ingest.example.com).
     INGEST_PUBLIC_URL: str = ""
 
     # Public base URL for the API service, used to build the OAuth
     # ``redirect_uri`` advertised to upstream identity providers. Must be
     # registered verbatim in each tenant's OAuth app. In production this
-    # is e.g. ``https://api.tryaisoc.com``; the callback path
+    # is e.g. ``https://api.example.com``; the callback path
     # ``/api/v1/oauth/callback`` is appended automatically. Empty
     # disables the hosted OAuth flow (start endpoint returns 503).
     OAUTH_PUBLIC_BASE_URL: str = ""
 
-    # Public base URL of the analyst console — used as the default
-    # ``return_to`` after a successful OAuth callback so the operator
-    # lands back on /onboarding with the verify-data-flowing screen
-    # already polling. Empty falls back to a relative path.
+    # Public base URL of the analyst console (e.g. https://soc.example.com) —
+    # used as the default ``return_to`` after a successful OAuth callback so
+    # the operator lands back on /onboarding with the verify-data-flowing
+    # screen already polling, and as the origin of published replay share
+    # links. Empty falls back to this install's own local console rather than
+    # to any particular deployment's hostname.
     CONSOLE_PUBLIC_BASE_URL: str = ""
+
+    # Deployment-neutral fallback for operator-facing absolute URLs
+    # (published replay links, tenant invite links) when
+    # ``CONSOLE_PUBLIC_BASE_URL`` is unset. Never hard-code a specific
+    # deployment's hostname here: a self-hosted install that emits share or
+    # invite links pointing at somebody else's console is a real leak, not a
+    # cosmetic one.
+    DEFAULT_CONSOLE_BASE_URL: str = "http://localhost:3000"
 
     # Workstream 5 (self-healing) — auto OAuth refresh worker. The
     # background loop runs inside the API process (``lifespan`` hook in
@@ -374,8 +384,6 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://tryaisoc.com",
-        "https://www.tryaisoc.com",
     ]
 
     # Observability
@@ -848,6 +856,19 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
 def is_production(env: str | None) -> bool:
     """True only for the literal ``production`` environment."""
     return (env or "").strip().lower() == "production"
+
+
+def console_base_url(s: Settings | None = None) -> str:
+    """Resolve the console origin used to build operator-facing absolute URLs.
+
+    Single source of truth for published-replay share links and tenant invite
+    links. Both used to carry their own hard-coded literal, which is how they
+    drifted apart *and* how a specific deployment's hostname ended up in links
+    handed to self-hosted operators. Routing both through here means a future
+    change can only move them together.
+    """
+    s = s or settings
+    return ((s.CONSOLE_PUBLIC_BASE_URL or "").strip() or s.DEFAULT_CONSOLE_BASE_URL).rstrip("/")
 
 
 class InsecureProductionDefaultsError(RuntimeError):

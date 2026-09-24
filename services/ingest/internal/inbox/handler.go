@@ -89,7 +89,7 @@ var (
 // ServeJSON handles POST /v1/inbox/{tenant_token}.
 //
 // This is the workhorse route — vendors paste in a webhook URL of
-// the form https://ingest.tryaisoc.com/v1/inbox/<token>, and whatever
+// the form https://ingest.example.com/v1/inbox/<token>, and whatever
 // JSON they send gets translated by the template the operator picked
 // at mint time.
 //

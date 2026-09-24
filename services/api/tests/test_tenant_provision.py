@@ -27,6 +27,7 @@ from typing import Any
 
 import pytest
 from app.api.v1.endpoints import tenant_provision as endpoint
+from app.core.config import console_base_url
 from app.models.tenant import Tenant, User
 from app.models.waitlist import (
     WAITLIST_STATUS_DECLINED,
@@ -78,7 +79,7 @@ def _admin_user(*, allow: bool = True) -> SimpleNamespace:
         user_id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
         role="tenant_admin",
-        email="admin@tryaisoc.com",
+        email="admin@example.com",
         has_permission_db=_check,
     )
 
@@ -299,7 +300,7 @@ class TestAdminInviteBuilder:
     def test_invite_url_contains_tenant_slug(self) -> None:
         invite = _build_admin_invite(
             tenant_slug="acme",
-            invite_base_url="https://tryaisoc.com",
+            invite_base_url="https://soc.example.com",
         )
         assert "acme" in invite.url
         assert "/invite/" in invite.url
@@ -308,7 +309,7 @@ class TestAdminInviteBuilder:
     def test_expires_after_one_week_by_default(self) -> None:
         invite = _build_admin_invite(
             tenant_slug="acme",
-            invite_base_url="https://tryaisoc.com",
+            invite_base_url="https://soc.example.com",
         )
         delta = invite.expires_at - datetime.now(UTC).replace(microsecond=0)
         assert delta.total_seconds() > 6 * 24 * 3600
@@ -317,10 +318,10 @@ class TestAdminInviteBuilder:
     def test_base_url_trailing_slash_normalized(self) -> None:
         invite = _build_admin_invite(
             tenant_slug="acme",
-            invite_base_url="https://tryaisoc.com///",
+            invite_base_url="https://soc.example.com///",
         )
-        assert "https://tryaisoc.com/invite/" in invite.url
-        assert "https://tryaisoc.com////invite/" not in invite.url
+        assert "https://soc.example.com/invite/" in invite.url
+        assert "https://soc.example.com////invite/" not in invite.url
 
     def test_zero_ttl_rejected(self) -> None:
         with pytest.raises(ValueError):
@@ -342,7 +343,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=False,
             )
         )
@@ -375,7 +376,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=False,
             )
         )
@@ -410,7 +411,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=False,
                 shard_factory=lambda: "abc123",
             )
@@ -443,7 +444,7 @@ class TestProvisionFromWaitlist:
                 provision_from_waitlist(
                     session,  # type: ignore[arg-type]
                     waitlist_entry_id=entry.id,
-                    actor_email="ops@tryaisoc.com",
+                    actor_email="ops@example.com",
                     seed_demo=False,
                     shard_factory=lambda: next(shards),
                 )
@@ -456,7 +457,7 @@ class TestProvisionFromWaitlist:
                 provision_from_waitlist(
                     session,  # type: ignore[arg-type]
                     waitlist_entry_id=uuid.uuid4(),
-                    actor_email="ops@tryaisoc.com",
+                    actor_email="ops@example.com",
                     seed_demo=False,
                 )
             )
@@ -470,7 +471,7 @@ class TestProvisionFromWaitlist:
                 provision_from_waitlist(
                     session,  # type: ignore[arg-type]
                     waitlist_entry_id=entry.id,
-                    actor_email="ops@tryaisoc.com",
+                    actor_email="ops@example.com",
                     seed_demo=False,
                 )
             )
@@ -514,7 +515,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=False,
             )
         )
@@ -540,7 +541,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=True,
                 demo_seeder=_stub_seeder,
             )
@@ -561,7 +562,7 @@ class TestProvisionFromWaitlist:
             provision_from_waitlist(
                 session,  # type: ignore[arg-type]
                 waitlist_entry_id=entry.id,
-                actor_email="ops@tryaisoc.com",
+                actor_email="ops@example.com",
                 seed_demo=True,
                 demo_seeder=_broken_seeder,
             )
@@ -592,7 +593,13 @@ class TestProvisionEndpoint:
         )
         assert response.tenant_slug == "acme-inc"
         assert response.admin_user.email == entry.email
-        assert response.admin_invite.url.startswith("https://tryaisoc.com/invite/")
+        # No invite_base_url on the request, so this exercises the *default*.
+        # It previously asserted a specific deployment's hostname, which meant
+        # the suite encoded the leak as the expected behaviour: every
+        # self-hosted install emailed invite links into somebody else's
+        # console and the tests agreed that was correct.
+        assert response.admin_invite.url.startswith(f"{console_base_url()}/invite/")
+        assert "tryaisoc.com" not in response.admin_invite.url
         assert response.aisoc_credential_key_fingerprint != ""
         assert session.commit_calls == 1
 
@@ -652,13 +659,13 @@ class TestProvisionEndpoint:
                 endpoint.TenantProvisionRequest(
                     waitlist_entry_id=entry.id,
                     seed_demo=False,
-                    invite_base_url="https://staging.tryaisoc.com",
+                    invite_base_url="https://staging.example.com",
                 ),
                 session,  # type: ignore[arg-type]
                 user,
             )
         )
-        assert response.admin_invite.url.startswith("https://staging.tryaisoc.com/invite/")
+        assert response.admin_invite.url.startswith("https://staging.example.com/invite/")
 
 
 class TestListTenantsEndpoint:

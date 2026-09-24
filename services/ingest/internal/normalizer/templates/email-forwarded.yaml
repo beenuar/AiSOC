@@ -6,7 +6,7 @@
 # the shape:
 #   {
 #     "from": "alerts@vendor.com",
-#     "to":   "tenant-abc@inbox.tryaisoc.com",
+#     "to":   "tenant-abc@inbox.example.com",
 #     "subject": "...",
 #     "text":   "...plain text body...",
 #     "html":   "...html body...",

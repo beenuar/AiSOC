@@ -26,7 +26,7 @@ iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
 ```
 
 When the script finishes, your default browser opens at
-`http://localhost:3000/cases/INC-RT-001?tab=ledger` with `demo@tryaisoc.com`
+`http://localhost:3000/cases/INC-RT-001?tab=ledger` with `demo@example.com`
 already auto-logged-in and a real LockBit 3.0 investigation mid-flight.
 
 ## What gets installed

@@ -7,7 +7,9 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * 1. ``screencast`` (Phase 4.3) — records the 90-second product demo
  *    against a deployed URL configured by ``AISOC_SCREENCAST_URL``.
- *    Default target is the public ``tryaisoc.com`` deployment.
+ *    Defaults to the local console, same as the ``screenshots`` project —
+ *    the two used to disagree, so an unset env var silently recorded
+ *    against a different deployment than the screenshots did.
  *
  * 2. ``visual`` (Phase 4.7) — Storybook-driven visual regression. The
  *    ``webServer`` block boots a static `http-server` over
@@ -84,7 +86,7 @@ export default defineConfig({
         ? "http://localhost:3100"
         : IS_SCREENSHOTS
           ? (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000")
-          : (process.env.AISOC_SCREENCAST_URL ?? "https://tryaisoc.com"),
+          : (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000"),
     trace: IS_JOURNEY ? "retain-on-failure" : "off",
     screenshot: IS_JOURNEY ? "only-on-failure" : "off",
     video: "off",

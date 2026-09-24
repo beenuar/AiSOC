@@ -204,7 +204,7 @@ ticked, then `wsl --update` and restart Docker Desktop.
 
 Visit
 [`http://localhost:3000/cases/INC-RT-001?tab=ledger`](http://localhost:3000/cases/INC-RT-001?tab=ledger)
-manually. Default credentials are pre-filled (`demo@tryaisoc.com`); the
+manually. Default credentials are pre-filled (`demo@example.com`); the
 investigation is already in flight on the **Ledger** tab.
 
 ### `aisoc:demo` is already running

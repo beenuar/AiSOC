@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * DemoAutoLogin — silent auto-login for the hosted demo at tryaisoc.com.
+ * DemoAutoLogin — silent auto-login for a public demo deployment.
  *
  * On the public demo we never want a visitor to land on `/cases` and see mock
  * rows because no JWT is in `localStorage`. This component runs once on mount
@@ -10,7 +10,7 @@
  *   1. `isDemoMode()` is true (NEXT_PUBLIC_DEMO_MODE=true), AND
  *   2. there's no existing access token,
  *
- * it logs in as the well-known demo user (`demo@tryaisoc.com` / `aisoc-demo` —
+ * it logs in as the well-known demo user (`demo@example.com` / `aisoc-demo` —
  * the same credentials displayed on `/login`) and then triggers a global SWR
  * revalidation so every `useSWR` hook on the page swaps its `fallbackData`
  * mocks for the freshly-fetched live data.
@@ -29,7 +29,7 @@ import { authApi } from '@/lib/api';
 import { isDemoMode } from '@/lib/demoMode';
 
 const DEMO_EMAIL =
-  process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL?.trim() || 'demo@tryaisoc.com';
+  process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL?.trim() || 'demo@example.com';
 const DEMO_PASSWORD =
   process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD?.trim() || 'aisoc-demo';
 

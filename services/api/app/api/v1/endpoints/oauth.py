@@ -274,7 +274,7 @@ def _resolve_redirect_uri() -> str:
             detail=(
                 "Hosted OAuth is not configured. Operator must set "
                 "OAUTH_PUBLIC_BASE_URL to the public URL of this API "
-                "service (e.g. https://api.tryaisoc.com)."
+                "service (e.g. https://api.example.com)."
             ),
         )
     return f"{base}/api/v1/oauth/callback"

@@ -28,9 +28,17 @@ from app.core.config import current_env_from_os, is_auth_bypass_env
 # Deterministic demo IDs — kept in sync with seed_demo.py
 DEMO_TENANT_ID: uuid.UUID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 DEMO_USER_ID: uuid.UUID = uuid.UUID("00000000-0000-0000-0000-000000000002")
-# Use a real TLD (not `.local`, which is reserved for mDNS and rejected by
-# pydantic ``EmailStr``). Deterministic, public-demo-only credentials.
-DEMO_USER_EMAIL: str = "demo@tryaisoc.com"
+# Deterministic, demo-only credentials. ``example.com`` is reserved by
+# RFC 2606 for exactly this: it is valid to ``pydantic.EmailStr`` (unlike
+# `.local`, which is reserved for mDNS and rejected), can never be registered
+# by anyone, and can never receive mail. A previous value used a real,
+# operator-owned domain, which published a well-known login paired with a
+# well-known password against a live domain and told self-hosters to type
+# somebody else's hostname to sign in to their own install.
+#
+# Changing this is safe to re-run: ``seed_demo._ensure_user`` reconciles on
+# ``DEMO_USER_ID`` (not on the address) and rewrites a stale email in place.
+DEMO_USER_EMAIL: str = "demo@example.com"
 DEMO_USER_PASSWORD: str = "aisoc-demo"
 DEMO_USER_ROLE: str = "admin"
 

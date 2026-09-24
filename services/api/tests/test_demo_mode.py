@@ -177,7 +177,7 @@ def test_auth_login_is_allowed(app: FastAPI) -> None:
 def test_waitlist_signup_is_allowed(app: FastAPI) -> None:
     """Managed-instance waitlist must accept signups on the public demo host.
 
-    ``/waitlist`` is the conversion funnel for tryaisoc.com. Demo-mode must
+    ``/waitlist`` is the managed-instance conversion funnel. Demo-mode must
     not 403 the POST — waitlist rows are not part of the shared demo SOC
     dataset, so allowing the write does not let visitors mutate the canned
     alerts/cases every other visitor sees.
@@ -203,7 +203,7 @@ def test_options_preflight_is_allowed(app: FastAPI) -> None:
     client = TestClient(app)
     r = client.options(
         "/api/v1/cases",
-        headers={"Origin": "https://tryaisoc.com", "Access-Control-Request-Method": "GET"},
+        headers={"Origin": "https://soc.example.com", "Access-Control-Request-Method": "GET"},
     )
     # FastAPI's TestClient + CORSMiddleware would normally answer this; without
     # CORSMiddleware it 405s, but the demo-mode middleware itself never blocks

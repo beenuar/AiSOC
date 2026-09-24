@@ -22,9 +22,12 @@ The allow-list is resolved from environment variables, in priority order:
   3. ``default`` argument   — service-supplied fallback, or
                               :data:`DEFAULT_CORS_ORIGINS` if not provided.
 
-The defaults cover local development (``localhost:3000`` / ``:3001`` and the
-``127.0.0.1`` aliases) and the production console at ``tryaisoc.com``. Anything
-beyond that should be set explicitly per deployment.
+The defaults cover local development only (``localhost:3000`` / ``:3001`` and
+the ``127.0.0.1`` aliases). Every deployed origin — including the maintainers'
+hosted console — is expected to set ``AISOC_CORS_ORIGINS`` explicitly. Shipping
+a specific deployment's public origin in the default allow-list would make every
+self-hosted install trust that third-party origin for credentialed cross-origin
+requests, which is not a decision an operator opted into.
 
 Production guard
 ----------------
@@ -51,8 +54,6 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
-    "https://tryaisoc.com",
-    "https://www.tryaisoc.com",
 )
 
 # Used when ``allow_credentials`` is True. The CORS spec refuses the response

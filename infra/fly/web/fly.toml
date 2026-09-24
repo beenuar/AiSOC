@@ -52,7 +52,7 @@ kill_timeout   = "5s"
     NEXT_PUBLIC_DEMO_MODE              = "true"
     NEXT_PUBLIC_DEMO_DEEPLINK          = "/cases/INC-RT-001?tab=ledger"
     NEXT_PUBLIC_DEMO_BANNER            = "Demo data resets daily at 00:00 UTC. All write actions are disabled."
-    NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL    = "demo@tryaisoc.com"
+    NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL    = "demo@example.com"
     NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD = "aisoc-demo"
     # Server-side proxy targets MUST be passed at build time, not just runtime.
     # next.config.js evaluates `process.env.API_URL` when the config module
@@ -89,7 +89,7 @@ kill_timeout   = "5s"
   # session as the read-only analyst the seeder provisions. Email + password
   # MUST stay in sync with services/api/app/scripts/seed_demo.py and
   # services/api/app/api/v1/dev_auth.py:DEMO_USER_EMAIL.
-  NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL    = "demo@tryaisoc.com"
+  NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL    = "demo@example.com"
   NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD = "aisoc-demo"
   # Server-side rewrite targets for next.config.js. Only some paths flow
   # through the Next proxy:

@@ -73,8 +73,10 @@ export function renderComment(result: TriageResult, notes: string[]): string {
   }
   lines.push(
     "",
-    "<sub>Triaged by the deterministic [AiSOC](https://github.com/beenuar/AiSOC) verdict engine — no LLM, no data leaves your CI. " +
-      "![AiSOC](https://img.shields.io/endpoint?url=https://tryaisoc.com/api/badge/triaged)</sub>",
+    // No remote badge image here on purpose: this line promises "no data
+    // leaves your CI", and a hotlinked badge makes every reader's browser
+    // call a third-party deployment to render the comment.
+    "<sub>Triaged by the deterministic [AiSOC](https://github.com/beenuar/AiSOC) verdict engine — no LLM, no data leaves your CI.</sub>",
   );
   return lines.join("\n");
 }

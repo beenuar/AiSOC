@@ -231,7 +231,7 @@ services:
       # sources DEMO_USER_EMAIL from app/api/v1/dev_auth.py and sets the
       # password to "aisoc-demo" via get_password_hash).
       - key: NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL
-        value: demo@tryaisoc.com
+        value: demo@example.com
       - key: NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD
         value: aisoc-demo
 
