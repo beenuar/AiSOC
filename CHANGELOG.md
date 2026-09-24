@@ -733,13 +733,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   old one and leaves the conflict in place. Both notes now show the tag, and
   `ports: !reset []` for removing a publishing entirely.
 
-- **The connector fleet badge called zero sources all sources.** With no
-  connectors configured, `/health/fleet` returns an empty list with every
-  count at zero and the badge read "All sources reporting" in green — on the
-  panel a reader consults to decide whether a quiet alert queue means quiet or
-  broken. It now reads "No sources configured", and states the count when
-  there are some.
-
 - **The agent recommended evidence acquisition the platform could not
   perform.** `capture_forensics` was an `ActionType` with no executor
   anywhere, and `services/agents/app/agents/investigation_agent.py` proposes
