@@ -78,9 +78,12 @@ jobs:
       # stubbed router would not prove anything about the shipped one — so
       # their module-level import chains have to resolve here. `aiokafka` and
       # `asyncpg` arrive through `app.workers.consumer` and the alert/DLQ
-      # sinks; `langchain-core` through `app.llm`, which the contextual and
-      # copilot routers import at module level. `sqlalchemy` + `aiosqlite` +
-      # `greenlet` back the seeded two-tenant by-id read. The heavier ML and
+      # sinks; `langchain-core` and `langchain-openai` through `app.llm` and
+      # `app.llm.factory`, which the contextual and copilot routers import at
+      # module level — they are 7 of the 37 routes this suite exists to cover,
+      # so skipping them when the import fails would quietly shrink the gate.
+      # `sqlalchemy` + `aiosqlite` + `greenlet` back the seeded two-tenant
+      # by-id read. The heavier ML and
       # ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
       # `clickhouse-driver` are all imported inside functions, so they stay
       # out of this job rather than adding minutes to it.
@@ -90,7 +93,7 @@ jobs:
           pytest pytest-asyncio httpx "fastapi>=0.117,<0.142" pydantic
           structlog "redis>=5,<6" "pydantic-settings>=2.1,<3"
           "aiokafka>=0.10,<0.15" "asyncpg>=0.29,<0.31" "cryptography>=46,<51"
-          "sqlalchemy>=2,<3" aiosqlite greenlet "langchain-core>=1.2.22,<2"
+          "sqlalchemy>=2,<3" aiosqlite greenlet "langchain-core>=1.2.22,<2" "langchain-openai>=0.2.0,<2"
 
       # Proves the gate can fail before trusting it to pass. Injects a route
       # taking a tenant with no auth, one taking a tenant with auth but no
