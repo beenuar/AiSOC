@@ -290,7 +290,7 @@ function broadcastToTenant(tenantId: string, message: { type: string } & Record<
   const payload = JSON.stringify(message);
   for (const client of tenantClients) {
     if (client.readyState !== 1 /* OPEN */) continue;
-    const subscribed: Channel = (client as any)._aisocChannel ?? 'all';
+    const subscribed: Channel = client._aisocChannel ?? 'all';
     if (subscribed === 'all' || allowed.includes(subscribed)) {
       client.send(payload);
     }
@@ -385,9 +385,17 @@ app.get('/sse', sseRateLimit, (req, res) => {
     res.write('event: heartbeat\ndata: {}\n\n');
   }, 30000);
 
-  // Register as SSE client via Redis pub/sub
+  // Register as SSE client via Redis pub/sub.
+  //
+  // `subscribe()` returns a promise, and its rejection was unhandled: Redis
+  // being briefly unreachable when a client opened an SSE stream raised an
+  // unhandled rejection, which Node terminates the process on. One
+  // subscriber's bad luck took down the fan-out for every connected tenant.
+  // Log it and leave the stream open on heartbeats instead.
   const sub = new Redis(REDIS_URL);
-  sub.subscribe(`aisoc:events:${tenantId}`);
+  sub.subscribe(`aisoc:events:${tenantId}`).catch((err: unknown) => {
+    log.error({ err, tenantId }, 'SSE: Redis subscribe failed; stream will carry heartbeats only');
+  });
   sub.on('message', (_channel: string, message: string) => {
     res.write(`data: ${message}\n\n`);
   });
@@ -454,7 +462,7 @@ async function startKafkaConsumer() {
                 url: `/responder/triage/${alertId}`,
                 tag: `alert-${alertId}`,
                 topic: 'p0_alert',
-                severity: severity as 'critical' | 'high',
+                severity,
                 alert_id: String(alertId),
               },
             )
@@ -562,10 +570,28 @@ const pushRateLimit = rateLimit({
   message: { error: 'Rate limit exceeded' },
 });
 
+// Express 4 does not await a handler, so a rejected promise from an `async`
+// one never reaches the error middleware — it surfaces as an unhandled
+// rejection, which Node terminates the process on. Five routes were
+// registered that way, including the two internal fan-out endpoints the API
+// and agents services call. A single failed `webpush` send or Redis write
+// would have taken the whole realtime service down and dropped every open
+// WebSocket with it.
+//
+// The wrapper hands the rejection to `next()`, which is the contract Express
+// error handling is built on.
+function asyncRoute(
+  handler: (req: express.Request, res: express.Response) => Promise<void>,
+): express.RequestHandler {
+  return (req, res, next) => {
+    handler(req, res).catch(next);
+  };
+}
+
 app.get('/v1/push/public-key', pushManager.publicKeyHandler);
-app.post('/v1/push/subscribe', pushRateLimit, pushManager.subscribeHandler);
-app.post('/v1/push/unsubscribe', pushRateLimit, pushManager.unsubscribeHandler);
-app.post('/v1/push/test', pushRateLimit, pushManager.testNotifyHandler);
+app.post('/v1/push/subscribe', pushRateLimit, asyncRoute(pushManager.subscribeHandler));
+app.post('/v1/push/unsubscribe', pushRateLimit, asyncRoute(pushManager.unsubscribeHandler));
+app.post('/v1/push/test', pushRateLimit, asyncRoute(pushManager.testNotifyHandler));
 
 // --- Internal broadcast endpoint (called by other services) ---
 // POST /internal/agent-event
@@ -586,11 +612,15 @@ function requireInternal(req: express.Request, res: express.Response): boolean {
 // Internal push fan-out used by the agents/api services to send a
 // notification to a tenant, user list, or topic. Same auth contract as
 // `internal/agent-event`.
-app.post('/internal/push', internalPushRateLimit, async (req, res) => {
-  if (!requireInternal(req, res)) return;
+app.post(
+  '/internal/push',
+  internalPushRateLimit,
+  asyncRoute(async (req, res) => {
+    if (!requireInternal(req, res)) return;
 
-  await pushManager.internalNotifyHandler(req, res);
-});
+    await pushManager.internalNotifyHandler(req, res);
+  }),
+);
 
 app.post('/internal/agent-event', internalEventRateLimit, (req, res) => {
   if (!requireInternal(req, res)) return;
@@ -698,10 +728,20 @@ app.get('/healthz', reportHealth);
 // OTEL_EXPORTER_OTLP_ENDPOINT is set.
 let shutdownTelemetry: Shutdown = async () => {};
 
-server.listen(PORT, '::', async () => {
+server.listen(PORT, '::', () => {
   log.info({ port: PORT, host: '::' }, 'AiSOC Real-time service started');
 
-  shutdownTelemetry = await setupTelemetry(log);
+  // The listen callback is declared to return void, so an `async` one hands
+  // Node a promise nobody awaits: a rejection here — an unreachable OTLP
+  // collector, say — ended the process rather than the tracing. Tracing is
+  // optional; serving is not.
+  void (async () => {
+    try {
+      shutdownTelemetry = await setupTelemetry(log);
+    } catch (err) {
+      log.warn({ err }, 'telemetry setup failed; continuing without tracing');
+    }
+  })();
 
   // Start the two Kafka consumers concurrently. Each is wrapped in its own
   // try/catch so a failure on the graph topic (e.g. it doesn't exist yet on

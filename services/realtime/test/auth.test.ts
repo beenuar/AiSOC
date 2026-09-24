@@ -108,7 +108,7 @@ test('accepts a ticket within the 30s clock-skew leeway', () => {
 
 test('rejects a ticket missing tenant_id', () => {
   const claims = validClaims();
-  delete (claims as Record<string, unknown>).tenant_id;
+  delete claims.tenant_id;
   assert.equal(verifyRealtimeTicket(mintTicket(claims), SECRET), null);
 });
 

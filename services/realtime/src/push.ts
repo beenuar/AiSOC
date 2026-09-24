@@ -147,7 +147,7 @@ export class PushManager {
         webpush.setVapidDetails(this.subject, this.publicKey, this.privateKey);
       } catch (err) {
         this.log.error({ err }, 'invalid VAPID configuration; push disabled');
-        this.enabled = false as unknown as boolean;
+        this.enabled = false;
       }
     } else {
       this.log.info(

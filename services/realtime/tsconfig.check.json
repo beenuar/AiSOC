@@ -1,0 +1,16 @@
+// Type-check config: the same compiler options as the build, over a wider set
+// of files.
+//
+// `tsconfig.json` includes only `src/**/*`, because `rootDir: src` decides the
+// shape of `dist`. That is right for the build and wrong for the check — it
+// left `test/auth.test.ts` type-checked by nothing. The tests assert the
+// service's authentication contract, so a signature drifting out from under
+// them is exactly the break worth catching.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "test/**/*"]
+}
