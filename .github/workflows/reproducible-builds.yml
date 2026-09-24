@@ -325,16 +325,19 @@ jobs:
       # different answer to what this commit installs.
       - run: pip install --quiet "poetry==2.4.1"
       - name: Install from the lock twice, into separate environments
+        # `poetry install`, the same command the twelve images run, rather
+        # than `poetry export | pip install`: export is a plugin in Poetry 2.x
+        # and is not present here, and a second install mechanism would prove
+        # a property about a path nothing uses.
         run: |
           set -euo pipefail
           svc='${{ matrix.service }}'
           cd "services/$svc"
           for attempt in first second; do
-            python -m venv "/tmp/$attempt"
-            POETRY_VIRTUALENVS_CREATE=false "/tmp/$attempt/bin/python" -m pip install --quiet --upgrade pip
-            poetry export --without-hashes --only main -o "/tmp/$attempt.txt"
-            "/tmp/$attempt/bin/pip" install --quiet -r "/tmp/$attempt.txt"
-            "/tmp/$attempt/bin/pip" freeze | sort > "/tmp/$attempt-freeze.txt"
+            POETRY_VIRTUALENVS_PATH="/tmp/venvs-$attempt" \
+              poetry install --only main --no-root --no-interaction
+            POETRY_VIRTUALENVS_PATH="/tmp/venvs-$attempt" \
+              poetry run pip freeze | sort > "/tmp/$attempt-freeze.txt"
           done
           echo "first:  $(wc -l < /tmp/first-freeze.txt) packages, sha256 $(sha256sum /tmp/first-freeze.txt | cut -d' ' -f1)"
           echo "second: $(wc -l < /tmp/second-freeze.txt) packages, sha256 $(sha256sum /tmp/second-freeze.txt | cut -d' ' -f1)"
