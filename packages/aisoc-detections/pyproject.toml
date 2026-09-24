@@ -55,3 +55,9 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Same shape as packages/sdk-py, plugin-sdk-py and aisoc-cli — the three
+# package trees that already declare one.
+[tool.mypy]
+strict = true
+python_version = "3.11"

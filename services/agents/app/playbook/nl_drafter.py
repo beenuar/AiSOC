@@ -551,7 +551,13 @@ def _llm_factory() -> Any | None:
     except Exception:
         return None
     try:
-        return make_chat_model()
+        # "nl" is the declared role for natural-language translation
+        # (``app.llm.model_pins``). This was a bare ``make_chat_model()``,
+        # and ``role`` is required — so the TypeError was caught below and
+        # the drafter reported "no chat model available" on every call,
+        # permanently. Every test monkeypatches ``_llm_factory``, so the one
+        # line that mattered was the one line nothing exercised.
+        return make_chat_model("nl")
     except Exception as exc:
         logger.info("nl_drafter: no chat model available (%s)", exc)
         return None
