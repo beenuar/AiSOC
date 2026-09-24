@@ -399,10 +399,10 @@ function ModelTable({ data }: { data: CostDashboard }) {
                     </span>
                   </td>
                   <td className="py-2.5 pr-4 text-right text-gray-400 tabular-nums">
-                    {m.imputed_public_cost_usd === null ? '—' : fmtUsd(m.imputed_public_cost_usd)}
+                    {!m.imputed_is_estimable ? '—' : fmtUsd(m.imputed_public_cost_usd)}
                     {m.unpriced_tokens > 0 && (
                       <span className="block text-[10px] text-gray-500">
-                        {m.imputed_public_cost_usd === null ? 'no published price' : `excludes ${fmtNumber(m.unpriced_tokens)} unpriced tokens`}
+                        {!m.imputed_is_estimable ? 'no published price' : `excludes ${fmtNumber(m.unpriced_tokens)} unpriced tokens`}
                       </span>
                     )}
                   </td>
@@ -486,7 +486,7 @@ function ByokPanel({ data }: { data: CostDashboard }) {
         <div>
           <p className="text-xs uppercase tracking-wide text-gray-400">BYOK savings</p>
           <p className="mt-1 text-lg font-semibold text-white">
-            {b.savings_usd === null
+            {!b.imputed_is_estimable
               ? 'Not estimable — no model in this window has a published list price'
               : b.is_byok_active
                 ? `~${fmtUsd(b.savings_usd)} saved by running your own model`
@@ -503,9 +503,9 @@ function ByokPanel({ data }: { data: CostDashboard }) {
         />
         <Stat
           label="Imputed list-price cost"
-          value={b.imputed_public_cost_usd === null ? '—' : `~${fmtUsd(b.imputed_public_cost_usd)}`}
+          value={!b.imputed_is_estimable ? '—' : `~${fmtUsd(b.imputed_public_cost_usd)}`}
           hint={
-            b.imputed_public_cost_usd === null
+            !b.imputed_is_estimable
               ? 'no published price for these models'
               : b.unpriced_tokens > 0
                 ? `estimate · excludes ${fmtNumber(b.unpriced_tokens)} unpriced tokens`
@@ -514,9 +514,9 @@ function ByokPanel({ data }: { data: CostDashboard }) {
         />
         <Stat
           label="Estimated savings"
-          value={b.savings_usd === null ? '—' : `~${fmtUsd(b.savings_usd)}`}
-          hint={b.savings_usd === null ? 'not estimable' : 'estimate'}
-          accent={b.is_byok_active && b.savings_usd !== null ? 'text-emerald-300' : 'text-gray-300'}
+          value={!b.imputed_is_estimable ? '—' : `~${fmtUsd(b.savings_usd)}`}
+          hint={!b.imputed_is_estimable ? 'not estimable' : 'estimate'}
+          accent={b.is_byok_active && b.imputed_is_estimable ? 'text-emerald-300' : 'text-gray-300'}
         />
       </dl>
       <p className="mt-4 text-xs text-gray-500">

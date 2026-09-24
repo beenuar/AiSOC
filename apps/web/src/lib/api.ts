@@ -2126,8 +2126,8 @@ export interface CostAggregateRow {
   estimated_call_count: number;
   unpriced_call_count: number;
   total_latency_ms: number;
-  /** ``null`` when nothing in the window was measured. */
-  avg_cost_per_run: number | null;
+  /** Read with ``measured_call_count``: zero there means this is not a mean. */
+  avg_cost_per_run: number;
   avg_latency_per_call_ms: number;
 }
 
@@ -5430,10 +5430,12 @@ export interface ModelBreakdown {
   estimated_call_count: number;
   unpriced_call_count: number;
   /**
-   * What this volume would have cost on the public list price, or ``null``
-   * when the model has no published price. Null is not zero.
+   * What this volume would have cost on the public list price. Read it with
+   * ``imputed_is_estimable``: false means the model has no published price
+   * and this is 0 because there is nothing to compute, not because it is free.
    */
-  imputed_public_cost_usd: number | null;
+  imputed_public_cost_usd: number;
+  imputed_is_estimable: boolean;
   /** Tokens the imputation had to skip, so partial coverage is visible. */
   unpriced_tokens: number;
   avg_latency_ms: number | null;
@@ -5465,19 +5467,21 @@ export interface ByokSavings {
   /** False when nothing in the window was measured, so 0 means "unknown". */
   recorded_is_measured: boolean;
   /**
-   * Re-priced using public list pricing (BYOK-neutral baseline), or ``null``
-   * when no model in the window has a published price. There is no default
-   * rate: applying one to a gateway alias is what produced savings figures
-   * for spend that never happened.
+   * Re-priced using public list pricing (BYOK-neutral baseline). There is no
+   * default rate: applying one to a gateway alias is what produced savings
+   * figures for spend that never happened.
    */
-  imputed_public_cost_usd: number | null;
+  imputed_public_cost_usd: number;
+  /** False => no model in the window has a published price; render "—". */
+  imputed_is_estimable: boolean;
   /** Tokens excluded from the imputation because nothing prices them. */
   unpriced_tokens: number;
   /**
    * Estimated savings vs hosted: equals imputed_public_cost on BYOK,
-   * ``max(imputed - recorded, 0)`` otherwise. ``null`` when not estimable.
+   * ``max(imputed - recorded, 0)`` otherwise. Meaningless unless
+   * ``imputed_is_estimable``.
    */
-  savings_usd: number | null;
+  savings_usd: number;
 }
 
 export interface CostDashboard {

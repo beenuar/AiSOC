@@ -317,8 +317,11 @@ def test_byok_savings_empty_rows() -> None:
     assert result.recorded_cost_usd == 0.0
     # Nothing to measure and nothing to price: both are unknown, not zero.
     assert result.recorded_is_measured is False
-    assert result.imputed_public_cost_usd is None
-    assert result.savings_usd is None
+    # 0.0 with the flag off, not None: nullable would break every generated
+    # SDK client for a fact the flag already carries (the MTTR precedent).
+    assert result.imputed_is_estimable is False
+    assert result.imputed_public_cost_usd == 0.0
+    assert result.savings_usd == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +376,8 @@ def test_build_dashboard_empty_inputs_is_well_formed() -> None:
     assert dashboard.action_counts == []
     # BYOK panel is always present so the UI doesn't have to special-case it.
     assert dashboard.byok_savings.is_byok_active is False
-    assert dashboard.byok_savings.savings_usd is None
+    assert dashboard.byok_savings.imputed_is_estimable is False
+    assert dashboard.byok_savings.savings_usd == 0.0
 
 
 def test_build_dashboard_end_to_end() -> None:

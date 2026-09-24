@@ -183,9 +183,14 @@ class ModelBreakdown(BaseModel):
     estimated_cost_usd: float = 0.0
     estimated_call_count: int = 0
     unpriced_call_count: int = 0
-    #: List-price re-pricing of this model's tokens, or ``None`` when the model
-    #: has no public list price. ``None`` is not zero: it means unknown.
-    imputed_public_cost_usd: float | None
+    #: List-price re-pricing of this model's tokens. ``0.0`` when nothing here
+    #: has a published price, which ``imputed_is_estimable`` distinguishes from
+    #: a genuine zero. Nullable would have been the obvious shape and is the
+    #: wrong one: it breaks every generated SDK client, and the precedent set
+    #: for MTTR is to keep the number and carry the thing that qualifies it.
+    imputed_public_cost_usd: float
+    #: False => the figure above is not an estimate of anything. Render "—".
+    imputed_is_estimable: bool = False
     #: Tokens excluded from the imputation because nothing prices them. Without
     #: this the imputed figure looks complete when it covers part of the window.
     unpriced_tokens: int = 0
@@ -226,10 +231,12 @@ class ByokSavings(BaseModel):
     computed (so the UI can show "if you switched to BYOK, you'd save
     ~X") but should be labelled "potential savings" in the UI.
 
-    ``imputed_public_cost_usd`` is ``None`` when no row in the window names a
-    model with a public list price. It used to be a number in that case, built
-    from a default rate applied to a gateway alias, and the BYOK panel
-    announced savings against it — an invented saving on invented spend.
+    ``imputed_is_estimable`` is False when no row in the window names a model
+    with a public list price, and then ``imputed_public_cost_usd`` and
+    ``savings_usd`` are ``0.0`` because there is nothing to compute, not
+    because the answer is zero. They used to be real-looking numbers in that
+    case, built from a default rate applied to a gateway alias, and the BYOK
+    panel announced savings against it — an invented saving on invented spend.
     ``unpriced_tokens`` says how much of the window the estimate omits.
     """
 
@@ -237,9 +244,10 @@ class ByokSavings(BaseModel):
     provider: str
     recorded_cost_usd: float
     recorded_is_measured: bool
-    imputed_public_cost_usd: float | None
+    imputed_public_cost_usd: float
+    imputed_is_estimable: bool = False
     unpriced_tokens: int = 0
-    savings_usd: float | None
+    savings_usd: float
 
 
 class CostHeadline(BaseModel):
@@ -452,7 +460,8 @@ def _model_breakdown(rows: list[CostRow]) -> list[ModelBreakdown]:
             estimated_cost_usd=round(agg["estimated"], 4),
             estimated_call_count=int(agg["estimated_calls"]),
             unpriced_call_count=int(agg["unpriced_calls"]),
-            imputed_public_cost_usd=(round(agg["imputed"], 4) if agg["imputed"] is not None else None),
+            imputed_public_cost_usd=round(agg["imputed"] or 0.0, 4),
+            imputed_is_estimable=agg["imputed"] is not None,
             unpriced_tokens=int(agg["unpriced_tokens"]),
             avg_latency_ms=(round(agg["latency_ms"] / agg["calls"], 2) if agg["calls"] else None),
         )
@@ -515,9 +524,9 @@ def _byok_savings(rows: list[CostRow], llm: LlmContext) -> ByokSavings:
     On BYOK the saving is the whole imputed hosted cost (the operator avoided
     paying a provider at all). On a hosted provider it is
     ``max(imputed - measured, 0)``, a "you'd save X if you self-hosted" hint.
-    Both are ``None`` when nothing in the window has a public list price,
-    because a saving computed over no priceable rows is not a small saving —
-    it is no answer.
+    Both read ``0.0`` with ``imputed_is_estimable`` False when nothing in the
+    window has a public list price, because a saving computed over no
+    priceable rows is not a small saving — it is no answer.
     """
     measured_rows = [r for r in rows if r.measured_call_count > 0]
     recorded = sum(r.measured_cost_usd for r in rows)
@@ -532,7 +541,7 @@ def _byok_savings(rows: list[CostRow], llm: LlmContext) -> ByokSavings:
             imputed = (imputed or 0.0) + row_imputed
 
     if imputed is None:
-        savings: float | None = None
+        savings = 0.0
     elif llm.is_local:
         savings = imputed
     else:
@@ -543,9 +552,10 @@ def _byok_savings(rows: list[CostRow], llm: LlmContext) -> ByokSavings:
         provider=llm.provider or "unknown",
         recorded_cost_usd=round(recorded, 4),
         recorded_is_measured=bool(measured_rows),
-        imputed_public_cost_usd=(round(imputed, 4) if imputed is not None else None),
+        imputed_public_cost_usd=round(imputed or 0.0, 4),
+        imputed_is_estimable=imputed is not None,
         unpriced_tokens=unpriced_tokens,
-        savings_usd=(round(savings, 4) if savings is not None else None),
+        savings_usd=round(savings, 4),
     )
 
 

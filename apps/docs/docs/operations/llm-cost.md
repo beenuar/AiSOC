@@ -101,8 +101,15 @@ shape everywhere:
 }
 ```
 
-The rule for any client: **read the count before the money.** If
-`measured_call_count` is `0`, `total_cost_usd` is not a total of anything.
+The rule for any client: **read the qualifier before the money.** If
+`measured_call_count` is `0`, `total_cost_usd` is not a total of anything; if
+`imputed_is_estimable` is `false`, `imputed_public_cost_usd` and `savings_usd`
+are `0` because there was nothing to compute, not because the answer is zero.
+
+Those qualifiers are booleans and counts rather than `null` numbers on
+purpose. Making the numbers nullable is the obvious shape and breaks every
+generated SDK client for a fact the qualifier already carries — the same
+choice the MTTR tiles made.
 
 Rows written before migration `063_cost_provenance.sql` have a zero
 `measured_call_count` and therefore read as not measured — which is the truth

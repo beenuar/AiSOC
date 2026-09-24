@@ -45,6 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing and is counted as unpriced; the BYOK savings panel reports
   "not estimable" rather than a saving computed from an invented rate.
 
+  **The wire is fully additive — no generated SDK client breaks.** The obvious
+  shape for "not knowable" is a nullable number, and four fields were written
+  that way first (`ByokSavings.imputed_public_cost_usd` / `savings_usd`,
+  `ModelBreakdown.imputed_public_cost_usd`, `CostAggregateRow.avg_cost_per_run`).
+  That is the wrong shape here for the same reason the MTTR pass rejected it:
+  it breaks every client for a fact a companion field already carries. Each
+  keeps its type and gains a qualifier — `imputed_is_estimable`, or the
+  existing `measured_call_count` — and the console reads the qualifier before
+  the number. `scripts/openapi_diff.py` reports no breaking change.
+
   What callers must change: `CostTracker.total_cost_usd` is replaced by
   `measured_cost_usd` (`float | None`) plus `measured_call_count`, mirrored by
   `estimated_cost_usd` / `estimated_call_count` / `unpriced_call_count`;

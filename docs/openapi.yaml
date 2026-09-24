@@ -16988,18 +16988,18 @@ components:
           type: boolean
           title: Recorded Is Measured
         imputed_public_cost_usd:
-          anyOf:
-          - type: number
-          - type: 'null'
+          type: number
           title: Imputed Public Cost Usd
+        imputed_is_estimable:
+          type: boolean
+          title: Imputed Is Estimable
+          default: false
         unpriced_tokens:
           type: integer
           title: Unpriced Tokens
           default: 0
         savings_usd:
-          anyOf:
-          - type: number
-          - type: 'null'
+          type: number
           title: Savings Usd
       type: object
       required:
@@ -17024,13 +17024,17 @@ components:
         ~X") but should be labelled "potential savings" in the UI.
 
 
-        ``imputed_public_cost_usd`` is ``None`` when no row in the window names a
+        ``imputed_is_estimable`` is False when no row in the window names a model
 
-        model with a public list price. It used to be a number in that case, built
+        with a public list price, and then ``imputed_public_cost_usd`` and
 
-        from a default rate applied to a gateway alias, and the BYOK panel
+        ``savings_usd`` are ``0.0`` because there is nothing to compute, not
 
-        announced savings against it — an invented saving on invented spend.
+        because the answer is zero. They used to be real-looking numbers in that
+
+        case, built from a default rate applied to a gateway alias, and the BYOK
+
+        panel announced savings against it — an invented saving on invented spend.
 
         ``unpriced_tokens`` says how much of the window the estimate omits.'
     CalibrationBucket:
@@ -17996,9 +18000,7 @@ components:
           type: integer
           title: Total Latency Ms
         avg_cost_per_run:
-          anyOf:
-          - type: number
-          - type: 'null'
+          type: number
           title: Avg Cost Per Run
         avg_latency_per_call_ms:
           type: number
@@ -22801,10 +22803,12 @@ components:
           title: Unpriced Call Count
           default: 0
         imputed_public_cost_usd:
-          anyOf:
-          - type: number
-          - type: 'null'
+          type: number
           title: Imputed Public Cost Usd
+        imputed_is_estimable:
+          type: boolean
+          title: Imputed Is Estimable
+          default: false
         unpriced_tokens:
           type: integer
           title: Unpriced Tokens

@@ -127,9 +127,12 @@ class CostAggregateRow(BaseModel):
     estimated_call_count: int = 0
     unpriced_call_count: int = 0
     total_latency_ms: int
-    #: ``None`` when nothing in the window was measured — a mean of an
-    #: unmeasured zero is not a cost per run, it is the absence of one.
-    avg_cost_per_run: float | None
+    #: A mean of an unmeasured zero is not a cost per run, it is the absence
+    #: of one. Read it with ``measured_call_count``: zero there means this is
+    #: not a mean of anything and the console must not render it as a cost.
+    #: Kept non-nullable on the MTTR precedent — making it optional breaks
+    #: every generated SDK client for a fact the count already carries.
+    avg_cost_per_run: float
     avg_latency_per_call_ms: float
 
 
@@ -295,9 +298,9 @@ def _aggregate_row(row: RowMapping) -> CostAggregateRow:
         estimated_call_count=int(row["estimated_call_count"] or 0),
         unpriced_call_count=int(row["unpriced_call_count"] or 0),
         total_latency_ms=latency,
-        # None, not 0.0, when nothing was measured: dividing an unmeasured
-        # zero by the run count publishes a confident "$0.0000 per run".
-        avg_cost_per_run=((cost / runs) if runs else 0.0) if measured_calls else None,
+        # 0.0 when nothing was measured, qualified by measured_call_count
+        # above — the console must not render it as a cost per run.
+        avg_cost_per_run=((cost / runs) if runs else 0.0) if measured_calls else 0.0,
         avg_latency_per_call_ms=(latency / calls) if calls else 0.0,
     )
 
