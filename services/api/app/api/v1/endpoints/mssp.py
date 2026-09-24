@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -15,6 +16,8 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
 from app.models.tenant import Tenant, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mssp", tags=["mssp"])
 
@@ -98,12 +101,52 @@ async def onboard_child_tenant(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
-    """Link an existing tenant as a child of the current MSSP tenant."""
+    """Link an existing tenant as a child, if that tenant invited the caller.
+
+    Adoption previously required nothing but an authenticated session and a
+    tenant UUID: the only check was a 409 when the target already had a
+    parent, so **every standalone tenant on the deployment was adoptable by
+    any user**, and adoption is what makes the child-scoped write routes below
+    accept you. That is the root of the escalation ``_require_own_child``
+    describes — closing those routes alone would not have helped, because an
+    attacker could simply adopt the victim first.
+
+    Consent is now required and comes from the child's own side: an admin of
+    the tenant being adopted sets ``settings["mssp_parent_invite"]`` to the
+    parent's UUID through ``PATCH /api/v1/tenants/me/settings``. The invite is
+    single-use — it is cleared here — so a stale value cannot re-adopt a
+    tenant that later left.
+    """
     child = await db.get(Tenant, child_id)
     if not child:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    if child.parent_tenant_id and child.parent_tenant_id != current_user.tenant_id:
-        raise HTTPException(status_code=409, detail="Tenant already has a parent")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    if child.id == current_user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A tenant cannot be its own parent")
+    if child.parent_tenant_id == current_user.tenant_id:
+        # Already ours — idempotent, and it must not consume a fresh invite.
+        return {"status": "ok", "child_id": str(child_id)}
+    if child.parent_tenant_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already has a parent")
+
+    child_settings = dict(child.settings or {})
+    invited = str(child_settings.get(_MSSP_INVITE_SETTING) or "")
+    if invited != str(current_user.tenant_id):
+        # Deliberately does not say whether an invite exists for someone else.
+        logger.warning(
+            "mssp.onboard.refused_without_invite parent=%s child=%s",
+            str(current_user.tenant_id).replace("\r", "").replace("\n", " ")[:64],
+            str(child_id).replace("\r", "").replace("\n", " ")[:64],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "That tenant has not invited you to manage it. An admin of the tenant must set "
+                f"settings.{_MSSP_INVITE_SETTING} to your tenant id first."
+            ),
+        )
+
+    child_settings.pop(_MSSP_INVITE_SETTING, None)
+    child.settings = child_settings  # type: ignore[assignment]
     child.parent_tenant_id = current_user.tenant_id  # type: ignore[assignment]
     child.mssp_role = "child"  # type: ignore[assignment]
     parent = await db.get(Tenant, current_user.tenant_id)
@@ -138,6 +181,7 @@ async def create_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MSSPTenantNote:
+    await _require_own_child(db, current_user, body.child_id)
     note = MSSPTenantNote(
         parent_id=current_user.tenant_id,
         child_id=body.child_id,
@@ -177,6 +221,7 @@ async def create_delegation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MSSPDelegation:
+    await _require_own_child(db, current_user, body.child_tenant_id)
     delegation = MSSPDelegation(
         parent_tenant_id=current_user.tenant_id,
         child_tenant_id=body.child_tenant_id,
@@ -351,9 +396,44 @@ class EffectiveRuleCountOut(BaseModel):
     excluded: int
 
 
-def _ensure_mssp_parent(current_user: User) -> None:
-    """Lightweight guard — a parent tenant is one that has (or can have) children."""
-    pass
+#: Key a child tenant's own admin sets in ``tenants.settings`` to consent to
+#: being managed, holding the UUID of the parent they are inviting.
+#:
+#: Consent lives in the child's settings rather than in a new table because
+#: ``PATCH /api/v1/tenants/me/settings`` already writes only the caller's own
+#: row and is gated on ``settings:write``. That makes the invite unforgeable by
+#: construction: the only principal who can name a parent is an admin of the
+#: tenant being adopted.
+_MSSP_INVITE_SETTING = "mssp_parent_invite"
+
+
+async def _require_own_child(
+    db: AsyncSession,
+    current_user: User,
+    child_id: uuid.UUID,
+) -> Tenant:
+    """Return ``child_id`` only if it is a child of the caller's tenant.
+
+    Raises 404 — not 403 — for both "no such tenant" and "not yours", so the
+    endpoint cannot be used to enumerate which tenant UUIDs exist.
+
+    This replaces ``_ensure_mssp_parent``, whose body was ``pass``. Four write
+    routes took a caller-supplied ``child_tenant_id`` and wrote it straight
+    onto a row. The one that mattered was ``create_rule_override``: an override
+    with ``action="exclude"`` is read back by
+    :func:`app.services.mssp_rule_resolver.resolve_effective_rules`, filtered on
+    ``child_tenant_id == <the victim's tenant>``, and pops the rule out of the
+    ruleset that `POST /rules/hunt` runs. Any authenticated user of any tenant
+    could therefore disable a named detection rule inside any other tenant, and
+    the victim's only symptom was a hunt that stopped matching.
+    """
+    child = await db.get(Tenant, child_id)
+    if child is None or child.parent_tenant_id != current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Child tenant not found",
+        )
+    return child
 
 
 @router.get("/rule-packs", response_model=list[RulePackOut])
@@ -362,7 +442,6 @@ async def list_rule_packs(
     current_user: User = Depends(get_current_user),
 ) -> list[MSSPRulePack]:
     """List all rule packs owned by the current parent tenant."""
-    _ensure_mssp_parent(current_user)
     result = await db.execute(
         select(MSSPRulePack).where(MSSPRulePack.parent_tenant_id == current_user.tenant_id).order_by(MSSPRulePack.created_at.desc())
     )
@@ -376,7 +455,6 @@ async def create_rule_pack(
     current_user: User = Depends(get_current_user),
 ) -> MSSPRulePack:
     """Create a new rule pack (parent tenant only)."""
-    _ensure_mssp_parent(current_user)
     pack = MSSPRulePack(
         parent_tenant_id=current_user.tenant_id,
         name=body.name,
@@ -486,6 +564,9 @@ async def assign_pack_to_child(
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Rule pack not found")
+    # Pack ownership was checked; the assignment target was not, so a pack the
+    # caller legitimately owns could be pushed into a tenant they do not.
+    await _require_own_child(db, current_user, body.child_tenant_id)
 
     assignment = MSSPRulePackAssignment(
         pack_id=pack_id,
@@ -505,9 +586,12 @@ async def create_rule_override(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MSSPRuleOverride:
-    _ensure_mssp_parent(current_user)
     if body.action not in ("exclude", "customize"):
         raise HTTPException(status_code=422, detail="action must be 'exclude' or 'customize'")
+    # The severe one. An "exclude" override is read back by the effective-rule
+    # resolver keyed on the *child's* tenant id and removes the rule from the
+    # ruleset `POST /rules/hunt` runs for them.
+    await _require_own_child(db, current_user, body.child_tenant_id)
     override = MSSPRuleOverride(
         parent_tenant_id=current_user.tenant_id,
         child_tenant_id=body.child_tenant_id,

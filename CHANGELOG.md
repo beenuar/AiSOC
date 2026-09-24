@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Any authenticated user could disable detection rules inside any other
+  tenant.** `_ensure_mssp_parent`, the guard on the MSSP write surface, had
+  `pass` for a body. Four routes took a caller-supplied child tenant id and
+  wrote it onto a row without checking whose child it was.
+
+  The consequential one was `POST /api/v1/mssp/overrides`. An override with
+  `action: "exclude"` is read back by `resolve_effective_rules`, filtered on
+  `child_tenant_id == <the reader's tenant>`, and the rule is popped out of the
+  set `POST /api/v1/rules/hunt` runs. So naming another tenant's id silently
+  deleted a named detection from their hunts, and the victim's only symptom was
+  a hunt that stopped matching. Reproduced against the previous commit: a
+  tenant's effective ruleset went from one critical cloud rule to zero on an
+  override written by an unrelated tenant.
+
+  Closing those four routes alone would not have been enough, because
+  `POST /api/v1/mssp/children/{id}/onboard` let anyone *become* the parent
+  first — its only check was a `409` when the target already had a parent, so
+  every standalone tenant on a deployment was adoptable by any authenticated
+  user. Adoption now requires the child to have invited that specific parent by
+  setting `settings.mssp_parent_invite` through `PATCH /api/v1/tenants/me/settings`,
+  which only ever writes the caller's own row and is gated on `settings:write`.
+  The invite is single-use. The child-scoped routes answer `404` rather than
+  `403` for a tenant that is not yours, so they cannot enumerate tenant UUIDs.
+
 ### Fixed
 
 - **Scheduled hunts ran against credentials that could not exist, so every one
