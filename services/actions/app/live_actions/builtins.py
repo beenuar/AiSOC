@@ -39,6 +39,7 @@ from uuid import uuid4
 
 import structlog
 
+from app.executors import siem
 from app.executors.base import BaseExecutor
 from app.executors.endpoint import (
     IsolateHostExecutor,
@@ -67,6 +68,7 @@ from app.executors.siem import (
     CreateNotableEventExecutor,
     SearchSIEMExecutor,
     SyncDetectionRuleExecutor,
+    UpdateAlertDispositionExecutor,
     UpdateWatcherExecutor,
 )
 from app.models.action import ActionRequest, ActionStatus, ActionType
@@ -386,9 +388,23 @@ class GenericBlockDomain(_LegacyExecutorAdapter):
 # vendor-specific credential keys so dry-run + discovery work correctly.
 
 
-_SPLUNK_KEYS = ("splunk_host", "splunk_token", "splunk_index")
-_ELASTIC_KEYS = ("elastic_host", "elastic_api_key", "elastic_index")
-_DEFENDER_IOC_KEYS = ("mde_tenant_id", "mde_client_id", "mde_client_secret")
+# The strip list MUST be the client factory's read set, not a hand-written
+# approximation of it. These used to be `("splunk_host", "splunk_token",
+# "splunk_index")` while `executors.siem._splunk_client` reads `splunk_url`
+# first and also accepts basic auth — so a dry run against a
+# connector-configured tenant stripped three keys the factory did not need,
+# left the ones it did, built a real client and called the customer's
+# production Splunk. Elastic was identical (`elastic_host` vs `elastic_url`).
+#
+# Importing the factories' own key tuples makes the two impossible to
+# disagree; `tests/test_dry_run_credential_strip.py` additionally re-derives
+# each read set from the factory source, so a factory that grows a key fails
+# the build rather than widening the dry-run hole.
+_SPLUNK_KEYS = siem.SPLUNK_CLIENT_PARAM_KEYS
+_ELASTIC_KEYS = siem.ELASTIC_CLIENT_PARAM_KEYS
+_SENTINEL_KEYS = siem.SENTINEL_CLIENT_PARAM_KEYS
+_QRADAR_KEYS = siem.QRADAR_CLIENT_PARAM_KEYS
+_DEFENDER_IOC_KEYS = siem.DEFENDER_CLIENT_PARAM_KEYS
 
 
 @apply_contract
@@ -454,6 +470,94 @@ class DefenderBlockIOC(_LegacyExecutorAdapter):
     requires_credentials = True
     _legacy_executor = BlockIOCExecutor()
     _legacy_action_type = ActionType.BLOCK_IOC
+    _credential_keys = _DEFENDER_IOC_KEYS
+
+
+# ---------------------------------------------------------------------------
+# Two-way SIEM loop — AiSOC's verdict back onto the source finding
+# ---------------------------------------------------------------------------
+#
+# One executor, four vendor arms, because what the verb *means* is identical
+# everywhere: a finding AiSOC dismissed should not be re-triaged by a human,
+# and one AiSOC confirmed should already be assigned. Registering a vendor per
+# arm is what lets the planner answer "can I write back to this tenant's SIEM"
+# without constructing a client to find out.
+#
+# Each adapter pins `alert_vendor` so a tenant with two SIEMs configured does
+# not have the vendor chosen by credential ordering — but the pin is checked
+# against the credentials before it is honoured (see `siem._ack_vendor`), so
+# pinning a vendor the tenant has not configured simulates rather than
+# pretending an arm ran.
+
+
+class _DispositionWriteback(_LegacyExecutorAdapter):
+    """Shared body for the disposition-writeback vendor arms.
+
+    Deliberately declares no ``capability``: an intermediate class that named
+    one without a ``vendor_id`` would be graded by the action-contract gate as
+    a half-declared executor. Each concrete arm below declares both.
+    """
+
+    requires_credentials = True
+    _legacy_executor = UpdateAlertDispositionExecutor()
+    _legacy_action_type = ActionType.UPDATE_ALERT_DISPOSITION
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        pinned = {**request.params, "alert_vendor": self.vendor_id}
+        return await super().execute(request.model_copy(update={"params": pinned}))
+
+    def _summarise(self, output: dict[str, Any], status: LiveActionStatus) -> str:
+        finding = output.get("finding_id") or ""
+        disposition = output.get("disposition") or "unknown"
+        verb = output.get("writeback_action") or "refuse"
+        if status == LiveActionStatus.FAILED:
+            return f"Failed to write {disposition} back to {self.vendor_id} finding {finding}".strip()
+        if not output.get("written"):
+            # Covers both the refusal and the no-credentials simulation. Saying
+            # "updated" for either is the exact dishonesty this verb must not
+            # commit: an unexecuted writeback reported as executed means an
+            # analyst trusts a queue that was never touched.
+            return f"No change to {self.vendor_id} finding {finding}: {output.get('reason') or 'not written'}".strip()
+        return f"Wrote {disposition} ({verb}) to {self.vendor_id} finding {finding}".strip()
+
+
+@apply_contract
+class SplunkUpdateAlertDisposition(_DispositionWriteback):
+    capability = "update_alert_disposition"
+    vendor_id = "splunk"
+    description = "Write an AiSOC verdict onto the Splunk ES notable that raised the alert."
+    _credential_keys = _SPLUNK_KEYS
+
+
+@apply_contract
+class ElasticUpdateAlertDisposition(_DispositionWriteback):
+    capability = "update_alert_disposition"
+    vendor_id = "elastic"
+    description = "Write an AiSOC verdict onto the Elastic Security signal that raised the alert."
+    _credential_keys = _ELASTIC_KEYS
+
+
+@apply_contract
+class SentinelUpdateAlertDisposition(_DispositionWriteback):
+    capability = "update_alert_disposition"
+    vendor_id = "sentinel"
+    description = "Write an AiSOC verdict onto the Microsoft Sentinel incident that raised the alert."
+    _credential_keys = _SENTINEL_KEYS
+
+
+@apply_contract
+class QRadarUpdateAlertDisposition(_DispositionWriteback):
+    capability = "update_alert_disposition"
+    vendor_id = "qradar"
+    description = "Write an AiSOC verdict onto the IBM QRadar offense that raised the alert."
+    _credential_keys = _QRADAR_KEYS
+
+
+@apply_contract
+class DefenderUpdateAlertDisposition(_DispositionWriteback):
+    capability = "update_alert_disposition"
+    vendor_id = "defender"
+    description = "Write an AiSOC verdict onto the Microsoft Defender alert that raised it."
     _credential_keys = _DEFENDER_IOC_KEYS
 
 
@@ -623,6 +727,12 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     SplunkSyncDetectionRule,
     ElasticUpdateWatcher,
     DefenderBlockIOC,
+    # Two-way SIEM loop
+    SplunkUpdateAlertDisposition,
+    ElasticUpdateAlertDisposition,
+    SentinelUpdateAlertDisposition,
+    QRadarUpdateAlertDisposition,
+    DefenderUpdateAlertDisposition,
     # Phase B2 — previously-unregistered vendors
     SentinelOneIsolateHost,
     EntraDisableUser,

@@ -136,6 +136,10 @@ class Capability(str, Enum):
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"
     UPDATE_WATCHER = "update_watcher"
+    # The return leg. Ingest carries a vendor finding id in as `external_id`;
+    # this verb carries AiSOC's verdict back out to the same finding, so a
+    # notable AiSOC dismissed is not re-triaged by a human in Splunk.
+    UPDATE_ALERT_DISPOSITION = "update_alert_disposition"
 
     # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     PUSH_CASE = "push_case"

@@ -53,8 +53,6 @@ const sidebars: SidebarsConfig = {
         "console/queue",
         "console/rule-tuning",
         "console/investigation-rail",
-        "console/federated-search",
-        "console/operations-dashboard",
         "console/public-replay",
       ],
     },
@@ -216,7 +214,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Integrations",
-      items: ["integrations/mcp", "integrations/misp-push", "integrations/github-action"],
+      items: ["integrations/mcp", "integrations/siem-writeback", "integrations/misp-push", "integrations/github-action"],
     },
     {
       type: "category",

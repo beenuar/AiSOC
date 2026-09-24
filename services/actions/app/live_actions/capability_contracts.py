@@ -376,6 +376,24 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reverse_capability="update_watcher",
         required_permission=_CONTAIN,
     ),
+    "update_alert_disposition": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        note=(
+            "Writes a verdict onto a finding in the customer's SIEM. Classified "
+            "the same as create_notable_event and push_status, which it is the "
+            "mirror image of: it changes a queue item, not an estate, and a "
+            "wrong one is re-opened from the vendor console in a click. "
+            "What bounds it is not the approval tier but the disposition "
+            "mapping — a confirmed true positive escalates and is never "
+            "closed, and a verdict outside the taxonomy is refused rather than "
+            "guessed (app/services/disposition_writeback.py). On top of that "
+            "the feature ships dry-run by default: AISOC_SIEM_WRITEBACK_EXECUTE "
+            "is off, so an operator opts in to the vendor call, not out of it."
+        ),
+    ),
     # ── Ticketing and notification ─────────────────────────────────────────
     "create_ticket": CapabilityContract(
         impact=ActionImpact.LOW,

@@ -29,6 +29,7 @@ from app.executors.siem import (
     SearchSIEMExecutor,
     SuppressAlertExecutor,
     SyncDetectionRuleExecutor,
+    UpdateAlertDispositionExecutor,
     UpdateWatcherExecutor,
 )
 from app.models.action import ActionType
@@ -58,6 +59,8 @@ EXECUTOR_REGISTRY = {
     # Phase 3.3 — alert lifecycle (Splunk ES / Elastic Security / MDE).
     ActionType.ACK_ALERT: AckAlertExecutor(),
     ActionType.SUPPRESS_ALERT: SuppressAlertExecutor(),
+    # Two-way loop: AiSOC's verdict back onto the source finding.
+    ActionType.UPDATE_ALERT_DISPOSITION: UpdateAlertDispositionExecutor(),
     # Notifications & orchestration
     ActionType.NOTIFY_SLACK: NotifySlackExecutor(),
     ActionType.CREATE_TICKET: CreateTicketExecutor(),

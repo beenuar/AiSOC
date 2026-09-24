@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 import asyncpg
 import structlog
@@ -70,7 +71,7 @@ INSERT INTO alerts (
     dedup_hash, confidence, confidence_label, confidence_rationale,
     narrative, anomaly_score, event_time,
     connector_id, connector_type, source_event_ids, ocsf_class_uid,
-    rule_id, rule_name
+    rule_id, rule_name, external_id
 )
 SELECT
     $1, $2, $3, $4, $5, 'new',
@@ -78,13 +79,55 @@ SELECT
     $11::text, $12, $13, $14::jsonb,
     $15, $16, COALESCE($17, NOW()),
     $18, $19, $20::jsonb, $21,
-    $22, $23
+    $22, $23, $24
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
 )
 ON CONFLICT (id) DO NOTHING
 RETURNING id
 """
+# The reconciliation row the two-way SIEM loop reads. Written here rather than
+# from the API because fusion is the only place that holds the alert id, the
+# connector instance and the vendor finding id at the same moment — asking the
+# API to rediscover the link later would mean re-deriving the vendor from a
+# string the promoter already parsed.
+#
+# `executed` is FALSE on insert and has no default in the schema: a link that
+# has never been written back must not read as one that has.
+_LINK_SQL = """
+INSERT INTO alert_source_links (
+    tenant_id, alert_id, vendor, external_id, connector_instance_id, executed
+) VALUES ($1, $2, $3, $4, $5, FALSE)
+ON CONFLICT (alert_id, vendor, external_id) DO NOTHING
+"""
+
+#: connector_type -> live-actions vendor id, for the SIEMs a disposition can
+#: be written back to. A connector absent from this map still produces alerts;
+#: it just has no return leg, which is the honest state for most sources.
+_WRITEBACK_VENDOR_BY_CONNECTOR: dict[str, str] = {
+    "splunk": "splunk",
+    "splunk_enterprise": "splunk",
+    "elastic": "elastic",
+    "elasticsearch": "elastic",
+    "elastic_security": "elastic",
+    "microsoft_sentinel": "sentinel",
+    "azure_sentinel": "sentinel",
+    "sentinel": "sentinel",
+    "qradar": "qradar",
+    "ibm_qradar": "qradar",
+    "defender": "defender",
+    "microsoft_defender": "defender",
+    "azure_defender": "defender",
+}
+
+
+def writeback_vendor(connector_type: str | None) -> str | None:
+    """The vendor id a disposition would be written back to, if any."""
+    if not connector_type:
+        return None
+    return _WRITEBACK_VENDOR_BY_CONNECTOR.get(connector_type.strip().lower())
+
+
 # Two idempotency guards, complementary (issue #568):
 #   * WHERE NOT EXISTS (tenant_id, dedup_hash) — content dedup; also protects
 #     legacy rows written before ids were deterministic (random id, same hash).
@@ -203,10 +246,12 @@ class AlertSink:
                     alert.ocsf_class_uid,
                     alert.rule_id,
                     alert.rule_name,
+                    alert.external_id,
                 )
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
                 return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
+            await self._link_source_finding(pool, alert, alert_id=row["id"])
             return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
         except asyncpg.ForeignKeyViolationError:
             # Unknown tenant — a mis-provisioned connector, not a pipeline bug.
@@ -216,3 +261,34 @@ class AlertSink:
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error("alert_sink.persist_failed", error=str(exc))
             return PersistResult(PersistOutcome.FAILED, None)
+
+    async def _link_source_finding(self, pool: asyncpg.Pool, alert: Any, *, alert_id: Any) -> None:
+        """Record which vendor finding produced this alert, when there is one.
+
+        Best-effort by design. A missing link costs a writeback; raising here
+        would cost the alert, and the alert is the thing that matters. Silent
+        skips are the common case (most sources are not a SIEM whose findings
+        AiSOC can write to), so they log at debug and a genuine failure at
+        warning.
+        """
+        vendor = writeback_vendor(alert.connector_type)
+        if not vendor or not alert.external_id:
+            logger.debug(
+                "alert_sink.no_source_link",
+                connector_type=alert.connector_type,
+                has_external_id=bool(alert.external_id),
+            )
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    _LINK_SQL,
+                    alert.tenant_id,
+                    alert_id,
+                    vendor,
+                    alert.external_id,
+                    alert.connector_id,
+                )
+            logger.info("alert_sink.source_linked", vendor=vendor, alert_id=str(alert_id))
+        except Exception as exc:  # noqa: BLE001 — never fail an alert over its link row
+            logger.warning("alert_sink.source_link_failed", vendor=vendor, error=str(exc))

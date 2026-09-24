@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     agents,
     airgap,
     alert_explain,
+    alert_writeback,
     alerts,
     api_keys,
     approvals,
@@ -88,6 +89,10 @@ api_router.include_router(alerts.router)
 # Structured AI explainer (POST /alerts/{id}/explain) — single-shot
 # JSON envelope counterpart to the agent service's NDJSON stream.
 api_router.include_router(alert_explain.router)
+# Two-way SIEM loop (POST /alerts/{id}/source-writeback) — AiSOC's verdict
+# written back onto the notable / signal / offense that raised the alert.
+# Dry-run by default; AISOC_SIEM_WRITEBACK_EXECUTE opts in to the vendor call.
+api_router.include_router(alert_writeback.router)
 api_router.include_router(cases.router)
 # Attack-chain timeline (T3.3 — v8.0 parallel team plan).
 # Backs apps/web/src/app/(app)/cases/[id]/attack-chain/page.tsx with a

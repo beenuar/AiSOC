@@ -751,6 +751,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/source-writeback:
+    post:
+      tags:
+      - alerts
+      summary: Write an AiSOC verdict back to the source finding
+      description: 'Project ``disposition`` onto every source finding behind this
+        alert.
+
+
+        The response distinguishes four things a caller could otherwise confuse:
+
+        ``mode`` (live / dry_run / disabled), ``executed`` (whether a vendor call
+
+        actually ran), each outcome''s ``status``, and the per-vendor ``detail``
+
+        explaining a refusal. A dry run reports ``executed: false`` and a detail
+
+        that begins ``DRY RUN``.'
+      operationId: write_back_api_v1_alerts__alert_id__source_writeback_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      - name: x-aisoc-service-token
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Aisoc-Service-Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceWritebackRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Write Back Api V1 Alerts  Alert Id  Source Writeback
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/source-links:
+    get:
+      tags:
+      - alerts
+      summary: Which vendor findings produced this alert
+      description: 'The reconciliation view: source findings and their last writeback.'
+      operationId: source_links_api_v1_alerts__alert_id__source_links_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourceLinkResponse'
+                title: Response Source Links Api V1 Alerts  Alert Id  Source Links
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases:
     get:
       tags:
@@ -25805,6 +25898,43 @@ components:
       - alerts_handled
       - escalations
       title: ShiftSummary
+    SourceLinkResponse:
+      properties:
+        vendor:
+          type: string
+          title: Vendor
+        external_id:
+          type: string
+          title: External Id
+        external_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Url
+        last_disposition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Disposition
+        last_writeback_action:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Writeback Action
+        last_writeback_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Writeback Status
+        executed:
+          type: boolean
+          title: Executed
+          default: false
+      type: object
+      required:
+      - vendor
+      - external_id
+      title: SourceLinkResponse
     SourceStat:
       properties:
         name:
@@ -25876,6 +26006,36 @@ components:
         \ message. Other backends may still have\n    succeeded.\n  * ``unsupported``\
         \ — connector type doesn't speak federated search\n    (kept for forward-compat;\
         \ today we pre-filter so this is rare)."
+    SourceWritebackRequest:
+      properties:
+        disposition:
+          type: string
+          title: Disposition
+          description: Canonical AiSOC disposition. Anything unrecognised is refused,
+            not guessed.
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+        rationale:
+          type: string
+          maxLength: 4000
+          title: Rationale
+          default: ''
+        tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Tenant Id
+      type: object
+      required:
+      - disposition
+      title: SourceWritebackRequest
+      description: What the caller believes about the alert.
     SubmissionResponse:
       properties:
         id:

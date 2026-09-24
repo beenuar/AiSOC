@@ -29,6 +29,14 @@ CONNECTOR_TO_VENDOR: dict[str, str] = {
     "aws_security_hub": "aws_security_groups",
     "aws_guardduty": "aws_security_groups",
     "azure_defender": "defender",
+    # The SIEM connectors publish longer ids than the live-action vendor ids.
+    # Without these aliases a tenant's Sentinel or QRadar credentials resolve
+    # to an empty map and the writeback silently simulates.
+    "microsoft_sentinel": "sentinel",
+    "azure_sentinel": "sentinel",
+    "ibm_qradar": "qradar",
+    "splunk_enterprise": "splunk",
+    "elasticsearch": "elastic",
 }
 
 # live vendor_id -> {connector auth_config field : executor param key}.
@@ -96,6 +104,25 @@ VENDOR_CREDENTIAL_MAP: dict[str, dict[str, str]] = {
         "username": "elastic_username",
         "password": "elastic_password",
         "kibana_url": "kibana_url",
+    },
+    "sentinel": {
+        # Sentinel addresses an incident by its full ARM path, so the
+        # workspace coordinates are credentials in the sense that matters
+        # here: without all six the client cannot be built at all.
+        "tenant_id": "sentinel_tenant_id",
+        "client_id": "sentinel_client_id",
+        "client_secret": "sentinel_client_secret",
+        "subscription_id": "sentinel_subscription_id",
+        "resource_group": "sentinel_resource_group",
+        "workspace_name": "sentinel_workspace_name",
+    },
+    "qradar": {
+        "base_url": "qradar_url",
+        "api_token": "qradar_token",
+        "ssl_verify": "qradar_verify_ssl",
+        # Deployment-specific and not guessable: QRadar refuses a close
+        # without one, and every console defines its own set.
+        "closing_reason_id": "qradar_closing_reason_id",
     },
     "jira": {
         "base_url": "jira_base_url",
