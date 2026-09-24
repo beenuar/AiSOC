@@ -71,7 +71,7 @@ export async function setupTelemetry(log: pino.Logger): Promise<Shutdown> {
   }
 
   try {
-    const [{ NodeSDK }, { OTLPTraceExporter }, { Resource }, api] =
+    const [{ NodeSDK }, { OTLPTraceExporter }, { resourceFromAttributes }, api] =
       await Promise.all([
         import('@opentelemetry/sdk-node'),
         import('@opentelemetry/exporter-trace-otlp-grpc'),
@@ -83,10 +83,13 @@ export async function setupTelemetry(log: pino.Logger): Promise<Shutdown> {
     );
 
     const sdk = new NodeSDK({
-      // `Resource` rather than the 2.x `resourceFromAttributes`: the
-      // pinned SDK line is 1.30, and reaching for the newer helper
-      // type-checks only against a version this service does not install.
-      resource: new Resource({
+      // `resourceFromAttributes`, not `new Resource`. The 2.x line removed
+      // the class constructor. This service was pinned to the 1.30 SDK until
+      // four advisories against core, sdk-node, propagator-jaeger and
+      // exporter-prometheus forced the move — and 0.217, the floor for
+      // sdk-node itself, still pulls a core below *its* floor, so 0.222 is
+      // the first version that clears all four.
+      resource: resourceFromAttributes({
         'service.name': process.env.OTEL_SERVICE_NAME || 'aisoc-realtime',
         'deployment.environment':
           process.env.AISOC_ENV || process.env.ENVIRONMENT || 'unknown',

@@ -32,13 +32,10 @@ import time
 from collections.abc import Iterable
 from typing import Any
 
-import structlog
 from langchain_core.messages import AIMessage
 
 from app.core.cost_telemetry import record_llm_call
 from app.llm.response_cache import ResponseCache
-
-logger = structlog.get_logger()
 
 # Wave 1 — content-addressed response cache in the LLM hot path. Identical
 # (model + prompt + input) calls are served from cache instead of paid for
