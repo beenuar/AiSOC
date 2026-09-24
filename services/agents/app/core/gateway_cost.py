@@ -58,6 +58,7 @@ down the LLM call it is measuring.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,7 +129,9 @@ def _as_float(value: str | None) -> float | None:
         return None
     # A negative cost is not a cost. Neither is NaN or an infinity, both of
     # which float() accepts and which would poison every sum downstream.
-    if parsed != parsed or parsed in (float("inf"), float("-inf")) or parsed < 0:
+    # `math.isfinite` covers both rather than the `x != x` NaN idiom, which
+    # reads as a self-comparison to a static analyser and to most people.
+    if not math.isfinite(parsed) or parsed < 0:
         return None
     return parsed
 

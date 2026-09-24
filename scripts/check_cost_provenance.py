@@ -356,13 +356,21 @@ def parse_pricing_table(text: str, rel: str, table_name: str) -> tuple[set[str],
 
         # A module constant holding a rate pair, named like a default.
         if isinstance(node, ast.AnnAssign | ast.Assign):
-            names = ([node.target.id] if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) else []) or [
-                t.id for t in getattr(node, "targets", []) if isinstance(t, ast.Name)
-            ]
+            assigned = node.value
+            if assigned is None or not _is_rate_tuple(assigned):
+                continue
+            names = _assigned_names(node)
             for name in names:
-                if "DEFAULT" in name.upper() and ("PRIC" in name.upper() or "RATE" in name.upper()) and _is_rate_tuple(node.value):
-                    defaults.append(f"{name} = {ast.unparse(node.value)}")
+                if "DEFAULT" in name.upper() and ("PRIC" in name.upper() or "RATE" in name.upper()):
+                    defaults.append(f"{name} = {ast.unparse(assigned)}")
     return keys, defaults
+
+
+def _assigned_names(node: ast.AnnAssign | ast.Assign) -> list[str]:
+    """Plain names this statement assigns to."""
+    if isinstance(node, ast.AnnAssign):
+        return [node.target.id] if isinstance(node.target, ast.Name) else []
+    return [t.id for t in node.targets if isinstance(t, ast.Name)]
 
 
 def _is_rate_tuple(node: ast.AST | None) -> bool:
@@ -383,13 +391,13 @@ def parse_headers_read(text: str, rel: str) -> set[str]:
     """
     tree = _parse_python(text, rel)
     for node in ast.walk(tree):
-        target = None
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            target = node.target.id
-        elif isinstance(node, ast.Assign):
-            target = next((t.id for t in node.targets if isinstance(t, ast.Name)), None)
-        if target == "COST_HEADERS" and isinstance(node.value, ast.Tuple):
-            return {e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
+        if not isinstance(node, ast.AnnAssign | ast.Assign):
+            continue
+        if "COST_HEADERS" not in _assigned_names(node):
+            continue
+        assigned = node.value
+        if isinstance(assigned, ast.Tuple):
+            return {e.value for e in assigned.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
     raise GateError(f"{rel}: COST_HEADERS tuple not found — cannot tell which headers are read")
 
 
