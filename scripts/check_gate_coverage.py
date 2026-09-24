@@ -420,7 +420,16 @@ def _command_text(step: dict) -> str:
 
 
 _NEEDS_OUTPUT = re.compile(r"needs\.([A-Za-z0-9_-]+)\.outputs")
-_SCRIPT_IN_JOB = re.compile(r"scripts/([\w.-]+\.py)")
+
+#: A script the job *runs*, not one it merely mentions. The interpreter prefix
+#: is what makes the difference: a job that computes which areas a diff touched
+#: lists `scripts/backup_crypt.py` as a path to match, and the previous
+#: spelling — the bare path, anywhere in the job's YAML — read that as the job
+#: graph asking an encryption utility for a verdict, inventorying it as a gate
+#: it is not. Same shape as the matcher that counted eleven services as
+#: CI-covered on the strength of a quoted path inside an `echo`: a path is not
+#: an invocation.
+_SCRIPT_IN_JOB = re.compile(r"(?:python3?(?:\.\d+)?|uv run|poetry run)\s+(?:-m\s+)?[\w./-]*?scripts/([\w.-]+\.py)")
 
 
 def _gating_jobs(doc: dict, workflow: str) -> dict[str, str]:

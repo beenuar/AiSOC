@@ -77,6 +77,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every test file in the tree is now executed by a workflow, and a gate
+  holds it that way in both directions.** 63 were executed by nothing at all:
+  56 of the 82 under `services/agents`, because that invocation was a
+  hand-maintained list of 26 file paths; five under the repository's own
+  `tests/`, which was reached only as nineteen single-file invocations spread
+  across eleven workflows; and both files under `scripts/tests/`, which no
+  workflow named. A file nothing runs reports nothing, which is
+  indistinguishable from a file that passed.
+
+  `scripts/check_test_discovery.py` derives the corpus from `git ls-files` and
+  models reach the way pytest collects — directory arguments, `--ignore`,
+  `conftest` `collect_ignore`, and `-m` marker deselection, since a file whose
+  every test is deselected runs nothing however plainly it is named. An
+  invocation naming a path that is not in the tree fails too. Quarantine is a
+  shrink-only list where every entry carries a reason and an entry that has
+  become reachable fails as stale, so "not run" can never again be silent.
+
+  Two blind spots in the gate's own parser were found by enumerating what it
+  **credited** rather than what it flagged. A step that `cd`s into a service
+  and then names `tests/` had its paths resolved against the repository root,
+  which simultaneously reported all 82 agents files unreached and credited the
+  root `tests/` tree with a package's invocation — the same defect in both
+  directions at once. And `-m` was first treated as "a filter, not a
+  collection rule", which would have credited a module in full under
+  `-m "not integration"` while nothing in it ran.
+
+  The invocations are directories now. `services/agents` runs `tests/`;
+  `tests/` and `scripts/tests/` run as directories in `python-test`, with
+  `tests/isolation/` left to `isolation.yml`, which owns its live stores.
+
+- **`--suite <name>` in `scripts/run_evals.py` ran every suite.** Its `--help`
+  said "runs that suite in isolation", the module docstring said "run a single
+  suite by name", and `args.suite` reached nothing but the wording of the
+  banner: the report dict called all eleven `_run_*` helpers inline. So
+  `--suite mitre_accuracy` took the full runtime, graded eleven gates, and
+  printed `PASS — mitre_accuracy green` — a verdict naming one suite and
+  decided by eleven, with `--ci` able to fail an operator's single-suite
+  bisection on an unrelated regression. The report now carries `suite_filter`
+  and only the requested suites are called; the registry is asserted against
+  `_SUITE_NAMES` so a name argparse accepts cannot be one no runner answers
+  to. A substrate-import failure also exits **3**, which is what this file's
+  own "Exit codes" block has always documented — it exited **2**, and 2 means
+  "MITRE accuracy regressed against the baseline", so a fresh clone missing a
+  dependency reported an accuracy regression, and the one actionable
+  instruction (`pip install -e services/agents`) was not in the message.
+  All three defects were pinned by tests in `scripts/tests/` that had been
+  failing for as long as they existed, in the tree no workflow ran.
+
 - **No gate may report OK over a repository with no content, and it is a CI
   gate now rather than a probe somebody happened to run once.** Copying
   `scripts/` into an empty git repository and running every wired check there
@@ -824,6 +872,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     word sat between the verb and the tool name.
 
 ### Changed
+
+- **`Backup → destroy → restore` and `docker compose up — full stack` report
+  a verdict on every pull request, so both can be required checks.** Both
+  workflows were path-filtered at the workflow level, and a workflow that does
+  not trigger reports no check at all — so a required check would never
+  arrive and the pull request would block forever. That is the only thing that
+  had been standing between the disaster-recovery path being tested and it
+  being tested and unable to regress; `docs/audit/CLAIM_TO_GATE_MATRIX.md`
+  already cited the DR job as the `GATED` evidence for backup encryption,
+  which makes a gate that might not run a liability rather than a control.
+
+  The condition moved from the trigger into the jobs. `integration.yml` gained
+  a `changes` job that reads the diff once; `spine`, `migrations` and
+  `upgrade` skip on it as before, while `backup-restore` always runs and
+  guards its expensive steps, so the check name is produced by the same single
+  job either way. `compose-smoke.yml`'s `smoke` job does the same inline. The
+  DR filter was also missing `scripts/backup_crypt.py` — where every byte of
+  the AES-256-GCM implementation lives — so a change to the encryption did not
+  run the gate that proves the encryption works.
+
+- **Compose smoke says which services it built and which it pulled.** It boots
+  published `:main` images unless a build context changed, so a green run
+  frequently never compiled the service under review — a required check that
+  can pass without exercising the change is the defect this whole effort is
+  about. The run now reports provenance per service, read off the images that
+  are actually running rather than predicted from the decision: a pulled image
+  carries a RepoDigest and a locally built one does not. It fails when a
+  build-context change was detected and nothing was built, and says plainly,
+  when nothing changed, that the run proves the published images still boot
+  together and does not exercise this pull request's source.
+
+  The build contexts themselves are now derived from `docker-compose.yml`
+  rather than listed in the workflow under a "keep this list in sync" comment.
+  A service added to compose and forgotten in that list would have had its
+  source changes pulled from the registry instead of built — the gate booting
+  a stale image and passing, inside the check that exists to catch exactly
+  that. The derived set matches the old list exactly today, so nothing about
+  today's behaviour changes.
+
+- **A permanent playbook-step failure is no longer retried as if transient.**
+  `dispatch_step` raises before any I/O when the run context has no tenant,
+  and the engine retried it with exponential backoff: 2s, 4s, then 8s, to
+  arrive at the message it already had on the first attempt. The cost is not
+  the fourteen seconds — it is that a permanent misconfiguration presents to
+  an operator mid-incident as flakiness, so their next move looks like "wait"
+  when it is "go and set the variable".
+
+  `BridgeUnavailable` stays the base class every caller catches, and the
+  permanent half is now `BridgeMisconfigured`, marked with a new
+  `PermanentStepFailure` that any handler can raise and the engine honours.
+  The line: **permanent** when the cause is this deployment's configuration or
+  a violation of the API's own contract — the enable switch, the service
+  token, the missing tenant, a non-retryable 4xx, a JSON body with no
+  `executed` field; **transient** when the cause is reachability — a transport
+  error, any 5xx, `408`/`425`/`429`, and a body that did not parse as JSON at
+  all, which is overwhelmingly an ingress error page rather than the API. A
+  failed step records `permanent` and `attempts`, so the run says why it was
+  tried once and not four times.
 
 - **The tenant-predicate gate can now tell a guard from a log line, and the
   ratchet shrank from 34 to 32.** It credited any query addressed by a key

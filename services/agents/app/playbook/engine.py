@@ -25,6 +25,7 @@ import httpx
 
 from . import action_bridge
 from .bounds import clamp_timeout
+from .errors import PermanentStepFailure
 from .models import Playbook, PlaybookStep, StepCondition, StepType
 from .ssrf_guard import SSRFError, validate_outbound_url
 
@@ -811,12 +812,33 @@ class PlaybookEngine:
                             break  # the handler answered; status is set above
                         except Exception as exc:  # noqa: BLE001
                             elapsed = time.perf_counter() - t0
-                            logger.error("Step %s attempt %d failed: %s", step.name, attempt, exc)
-                            if attempt <= step.retry_max:
+                            # A permanent failure will not become a different
+                            # failure by being asked again. Sleeping 2s, 4s
+                            # then 8s before repeating "this run has no
+                            # tenant" costs an operator fourteen seconds of an
+                            # incident and, worse, dresses a misconfiguration
+                            # up as flakiness — so they wait for it to settle
+                            # instead of going and fixing it.
+                            permanent = isinstance(exc, PermanentStepFailure)
+                            logger.error(
+                                "Step %s attempt %d failed (%s): %s",
+                                step.name,
+                                attempt,
+                                "permanent, not retried" if permanent else "retryable",
+                                exc,
+                            )
+                            if not permanent and attempt <= step.retry_max:
                                 await asyncio.sleep(min(2**attempt, 30))
                             else:
                                 step_status = StepStatus.FAILED
-                                result = {"error": str(exc), "_elapsed_ms": round(elapsed * 1000)}
+                                result = {
+                                    "error": str(exc),
+                                    # Says, in the run record, why there was
+                                    # one attempt and not four.
+                                    "permanent": permanent,
+                                    "attempts": attempt,
+                                    "_elapsed_ms": round(elapsed * 1000),
+                                }
                                 break
 
                 pr.step_results.append({"step_id": step.id, "name": step.name, "status": step_status, "result": result})

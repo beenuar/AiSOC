@@ -14,11 +14,16 @@ returns a dict is not a step that ran.
 
 from __future__ import annotations
 
+import ast
+import asyncio
+import pathlib
 from typing import Any
 
+import httpx
 import pytest
 from app.playbook import action_bridge
 from app.playbook.engine import RESPONSE_STEP_TYPES, PlaybookEngine, RunStatus, StepStatus
+from app.playbook.errors import PermanentStepFailure
 from app.playbook.models import Playbook, PlaybookStep, StepType
 
 pytestmark = pytest.mark.asyncio
@@ -26,6 +31,39 @@ pytestmark = pytest.mark.asyncio
 
 def _playbook(*steps: PlaybookStep) -> Playbook:
     return Playbook(id="pb-1", name="Containment", steps=list(steps))
+
+
+def _install_response(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    status_code: int = 200,
+    json_body: dict[str, Any] | None = None,
+    text: str | None = None,
+    raises: Exception | None = None,
+) -> None:
+    """Answer the bridge's one POST without a network.
+
+    Patches the transport rather than ``dispatch_step`` itself, because the
+    classification under test lives inside ``dispatch_step`` — stubbing the
+    function would test the stub.
+    """
+
+    class _Response:
+        def __init__(self) -> None:
+            self.status_code = status_code
+            self.text = text or ""
+
+        def json(self) -> Any:
+            if json_body is None:
+                raise ValueError("not JSON")
+            return json_body
+
+    async def _post(self: Any, *args: Any, **kwargs: Any) -> _Response:
+        if raises is not None:
+            raise raises
+        return _Response()
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", _post)
 
 
 class _Recorder:
@@ -250,3 +288,168 @@ class TestDryRunPreview:
         assert result["would_dispatch"] == "isolate_host"
         assert result["target"] == "ws-042"
         assert result["executed"] is False
+
+
+class TestAPermanentFailureIsNotRetried:
+    """A missing tenant will never arrive by waiting.
+
+    The engine retries a failed step with exponential backoff, which is right
+    for a bridge that was momentarily unreachable and wrong for a run whose
+    context has no tenant: `dispatch_step` refuses on the first line, before
+    any I/O, and the engine then slept 2s, 4s and 8s before failing with the
+    message it already had. Fourteen seconds of an incident spent proving
+    something that was decided immediately — and, worse, a permanent
+    misconfiguration presented to the operator as flakiness, so the next move
+    looks like "wait" when it is "go and set the variable".
+
+    These assert the property directly by recording the backoff sleeps, the
+    same way `test_a_missing_handler_is_not_retried` does. An earlier test in
+    this tree asserted a rounded wall-clock field instead and could not tell
+    the two paths apart.
+    """
+
+    @staticmethod
+    def _record_backoff(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+        slept: list[float] = []
+        real_sleep = asyncio.sleep
+
+        async def _recording_sleep(delay: float, *args: Any, **kwargs: Any) -> Any:
+            slept.append(delay)
+            return await real_sleep(0, *args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "sleep", _recording_sleep)
+        return slept
+
+    async def test_a_run_with_no_tenant_fails_on_the_first_attempt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        slept = self._record_backoff(monkeypatch)
+        pb = _playbook(PlaybookStep(id="s1", name="block", type=StepType.BLOCK_IP, retry_max=3))
+
+        run = await PlaybookEngine().run(pb, trigger_context={})
+
+        result = run.step_results[0]["result"]
+        assert run.step_results[0]["status"] == StepStatus.FAILED
+        assert result["attempts"] == 1, f"a permanent failure was attempted {result['attempts']} times"
+        assert result["permanent"] is True
+        assert not slept, f"a permanent failure was retried with {slept} of backoff; retry_max was 3"
+        assert "no tenant" in result["error"]
+
+    async def test_an_unreachable_bridge_is_still_retried(self, bridge, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The other direction. Classifying everything permanent would remove
+        the retry this loop exists for, which is the easy way to make the
+        assertion above pass while making the product worse."""
+        slept = self._record_backoff(monkeypatch)
+        bridge(raises=action_bridge.BridgeUnavailable("the action service could not be reached for 'block_ip': timeout"))
+        pb = _playbook(PlaybookStep(id="s1", name="block", type=StepType.BLOCK_IP, retry_max=3))
+
+        run = await PlaybookEngine().run(pb, {"tenant_id": "t-1"})
+
+        result = run.step_results[0]["result"]
+        assert run.step_results[0]["status"] == StepStatus.FAILED
+        assert result["permanent"] is False
+        assert slept == [2, 4, 8], f"a transient failure should back off 2/4/8s, got {slept}"
+        assert result["attempts"] == 4
+
+
+class TestWhichBridgeFailuresArePermanent:
+    """The classification itself, at the point it is decided.
+
+    Retrying a permanent failure wastes an operator's time; calling a
+    transient one permanent throws away a recovery that would have worked. So
+    both directions are pinned rather than only the one that motivated the
+    change.
+    """
+
+    async def test_configuration_refusals_are_permanent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Read from the process environment and the run context, neither of
+        which changes while a step sleeps between attempts."""
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "tok")
+
+        monkeypatch.setenv("AISOC_PLAYBOOK_ACTIONS_ENABLED", "0")
+        with pytest.raises(action_bridge.BridgeMisconfigured, match="disabled"):
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+
+        monkeypatch.setenv("AISOC_PLAYBOOK_ACTIONS_ENABLED", "1")
+        with pytest.raises(action_bridge.BridgeMisconfigured, match="no tenant"):
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="")
+
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "")
+        with pytest.raises(action_bridge.BridgeMisconfigured, match="AISOC_AGENTS_SERVICE_TOKEN"):
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+
+    @pytest.mark.parametrize(
+        ("status", "permanent"),
+        [
+            (400, True),
+            (401, True),
+            (403, True),
+            (404, True),
+            (422, True),
+            (408, False),
+            (425, False),
+            (429, False),
+            (500, False),
+            (502, False),
+            (503, False),
+        ],
+    )
+    async def test_a_refusal_is_permanent_and_an_outage_is_not(self, monkeypatch: pytest.MonkeyPatch, status: int, permanent: bool) -> None:
+        """4xx means the API understood and declined, so asking again gets the
+        same answer. 5xx is a server failing to serve a request it accepted,
+        and 408/425/429 are a server explicitly asking to be asked again."""
+        monkeypatch.setenv("AISOC_PLAYBOOK_ACTIONS_ENABLED", "1")
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "tok")
+        _install_response(monkeypatch, status_code=status, json_body={"executed": False})
+
+        with pytest.raises(action_bridge.BridgeUnavailable) as caught:
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+
+        assert isinstance(caught.value, PermanentStepFailure) is permanent
+
+    async def test_a_contract_violation_is_permanent_but_an_unparseable_body_is_not(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A body that parsed as JSON came from something speaking the API's
+        own contract, so getting the contract wrong is a defect and not
+        weather. A body that did not parse at all is almost always an ingress
+        or proxy error page served in place of the API, and those clear."""
+        monkeypatch.setenv("AISOC_PLAYBOOK_ACTIONS_ENABLED", "1")
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "tok")
+
+        _install_response(monkeypatch, status_code=200, json_body={"status": "ok"})
+        with pytest.raises(action_bridge.BridgeMisconfigured, match="no 'executed' field"):
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+
+        _install_response(monkeypatch, status_code=200, text="<html>502 Bad Gateway</html>")
+        with pytest.raises(action_bridge.BridgeUnavailable) as caught:
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+        assert not isinstance(caught.value, PermanentStepFailure)
+
+    async def test_an_unreachable_host_is_transient(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AISOC_PLAYBOOK_ACTIONS_ENABLED", "1")
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "tok")
+        _install_response(monkeypatch, raises=httpx.ConnectError("connection refused"))
+
+        with pytest.raises(action_bridge.BridgeUnavailable) as caught:
+            await action_bridge.dispatch_step(capability="block_ip", tenant_id="t-1")
+
+        assert not isinstance(caught.value, PermanentStepFailure)
+
+
+async def test_every_bridge_refusal_is_classified_one_way_or_the_other() -> None:
+    """Both directions, structurally: a raise site added tomorrow must choose.
+
+    Reading the raises out of the syntax tree rather than listing them here
+    means a sixth refusal cannot default into "retry it" because nobody
+    remembered this file. `BridgeUnavailable` is still the base every caller
+    catches, so the check is that a raise names one of the two concrete
+    decisions and never the abstract base by accident.
+    """
+    source = pathlib.Path(action_bridge.__file__).read_text(encoding="utf-8")
+    raised = {
+        node.exc.func.id
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name)
+    }
+
+    assert raised, "no raise sites found — this test would pass over a file it could not read"
+    assert raised <= {"BridgeUnavailable", "BridgeMisconfigured"}, f"unclassified bridge failure: {raised}"
+    assert "BridgeMisconfigured" in raised, "the permanent half must still be reachable"
+    assert issubclass(action_bridge.BridgeMisconfigured, action_bridge.BridgeUnavailable), "callers catch the base; it must stay the base"

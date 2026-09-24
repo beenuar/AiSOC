@@ -31,34 +31,23 @@ name: Integration
 # `:main` — those surfaces are gated by compose-smoke.yml with its own
 # rebuild-on-change detection.
 
+# Deliberately NOT path-filtered at the workflow level.
+#
+# It was, and that is what kept `Backup → destroy → restore` from being a
+# required check: a workflow that does not trigger reports nothing, and a
+# required check that never reports blocks the pull request forever. That gate
+# is the only thing proving the documented disaster-recovery path works, and
+# `docs/audit/CLAIM_TO_GATE_MATRIX.md` already cites it as the GATED evidence
+# for backup encryption — a row marked GATED whose gate is neither required
+# nor guaranteed to run makes that file a liability rather than a control.
+#
+# The condition moved into the jobs. `changes` computes it once; the three
+# expensive jobs skip on it, and `backup-restore` always runs and reports a
+# verdict under the same name whether or not it had work to do.
 on:
   pull_request:
-    paths:
-      - 'services/ingest/**'
-      - 'services/fusion/**'
-      - 'services/realtime/**'
-      - 'services/api/migrations/**'
-      - 'services/api/app/scripts/run_migrations.py'
-      - 'services/ueba/alembic/**'
-      - 'docker-compose.yml'
-      - 'scripts/integration/**'
-      - 'scripts/backup.sh'
-      - 'scripts/restore.sh'
-      - '.github/workflows/integration.yml'
   push:
     branches: [main]
-    paths:
-      - 'services/ingest/**'
-      - 'services/fusion/**'
-      - 'services/realtime/**'
-      - 'services/api/migrations/**'
-      - 'services/api/app/scripts/run_migrations.py'
-      - 'services/ueba/alembic/**'
-      - 'docker-compose.yml'
-      - 'scripts/integration/**'
-      - 'scripts/backup.sh'
-      - 'scripts/restore.sh'
-      - '.github/workflows/integration.yml'
   workflow_dispatch:
 
 concurrency:
@@ -69,9 +58,94 @@ permissions:
   contents: read
 
 jobs:
+  # ── What this pull request touches ─────────────────────────────────────────
+  # One diff, read by every job below, so the four of them cannot disagree
+  # about what changed. Fail-open throughout: with no base to diff against,
+  # every area reads as touched, because a gate that quietly declines to run
+  # is indistinguishable from one that passed.
+  changes:
+    name: What this change touches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      spine: ${{ steps.areas.outputs.spine }}
+      migrations: ${{ steps.areas.outputs.migrations }}
+      backup: ${{ steps.areas.outputs.backup }}
+      upgrade: ${{ steps.areas.outputs.upgrade }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the areas touched
+        id: areas
+        run: |
+          set -euo pipefail
+
+          spine_paths='services/ingest/ services/fusion/ services/realtime/ docker-compose.yml scripts/integration/ .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py scripts/check_runtime_db_role.py .github/workflows/integration.yml'
+          # backup_crypt.py was missing from the old filter, and it is where
+          # every byte of the AES-256-GCM implementation lives — so a change
+          # to the encryption itself did not run the gate that proves the
+          # encryption works.
+          backup_paths='scripts/backup.sh scripts/restore.sh scripts/backup_crypt.py .github/workflows/integration.yml'
+          upgrade_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py .github/workflows/integration.yml'
+
+          base_ref=""
+          if [ -n "${{ github.base_ref }}" ]; then
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+            base_ref="origin/${{ github.base_ref }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            base_ref="${{ github.event.before }}"
+          fi
+
+          emit_all_true() {
+            for area in spine migrations backup upgrade; do
+              echo "${area}=true" >> "$GITHUB_OUTPUT"
+            done
+          }
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual dispatch: running every area"
+            emit_all_true
+            exit 0
+          fi
+          if [ -z "${base_ref}" ]; then
+            echo "no diff base; running every area"
+            emit_all_true
+            exit 0
+          fi
+
+          diff_status=0
+          changed=$(git diff --name-only "${base_ref}"...HEAD) || diff_status=$?
+          if [ "${diff_status}" -ne 0 ]; then
+            echo "git diff vs ${base_ref} failed (exit ${diff_status}); running every area"
+            emit_all_true
+            exit 0
+          fi
+          echo "${changed}" > /tmp/changed.txt
+          echo "files changed vs ${base_ref}: $(wc -l < /tmp/changed.txt)"
+
+          decide() {
+            local area="$1"; shift
+            local hit=false
+            for prefix in $@; do
+              if grep -q "^${prefix}" /tmp/changed.txt; then hit=true; break; fi
+            done
+            echo "  ${area}: ${hit}"
+            echo "${area}=${hit}" >> "$GITHUB_OUTPUT"
+          }
+          decide spine       "${spine_paths}"
+          decide migrations  "${migration_paths}"
+          decide backup      "${backup_paths}"
+          decide upgrade     "${upgrade_paths}"
+
   # ── The spine, end to end ──────────────────────────────────────────────────
   spine:
     name: Event spine (real containers)
+    # Not a required check, so a job-level skip is fine here: nothing is waiting on it to report.
+    needs: changes
+    if: needs.changes.outputs.spine == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -260,6 +334,8 @@ jobs:
   # ── Migration correctness ──────────────────────────────────────────────────
   migrations:
     name: Migrations (fresh apply, idempotent re-run, alembic round-trip)
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -450,9 +526,18 @@ jobs:
           echo "all four chains applied to one database"
 
   # ── Disaster recovery: an untested backup is not a backup ─────────────────
+  #
+  # Unlike the three jobs above, this one has no job-level `if`. It runs on
+  # every pull request and reports under the same check name whether or not it
+  # had work to do, because it is meant to be a *required* check and a
+  # required check that never reports blocks the pull request forever. The
+  # condition is on the steps instead, so the expensive half — a Postgres, an
+  # S3 endpoint, a full dump-and-restore — is skipped when the diff touches
+  # none of it, and the verdict still arrives.
   backup-restore:
     name: Backup → destroy → restore (Postgres via S3)
     runs-on: ubuntu-latest
+    needs: changes
     timeout-minutes: 15
     services:
       postgres:
@@ -482,8 +567,22 @@ jobs:
       BACKUP_ENCRYPTION_KEY: 2b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Nothing under the disaster-recovery path changed
+        if: needs.changes.outputs.backup != 'true'
+        run: |
+          {
+            echo "## Disaster-recovery gate — not exercised"
+            echo ""
+            echo "This pull request changes none of \`scripts/backup.sh\`,"
+            echo "\`scripts/restore.sh\`, \`scripts/backup_crypt.py\` or this workflow,"
+            echo "so the seed → backup → destroy → restore cycle was not run."
+            echo ""
+            echo "The job still reports, under the same check name, because a"
+            echo "required check that never reports blocks the pull request forever."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install tooling (awscli + postgres client)
+        if: needs.changes.outputs.backup == 'true'
         run: |
           pip install --quiet awscli "cryptography>=46,<51"
           sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
@@ -505,6 +604,7 @@ jobs:
       # independently of CI itself, and it is not subject to Docker Hub's
       # anonymous pull limits. Pinned to the v1.8.0 multi-arch index digest.
       - name: Start the S3 endpoint (versitygw)
+        if: needs.changes.outputs.backup == 'true'
         run: |
           set -euo pipefail
           # The posix backend chdirs into its root, so the directory has to
@@ -521,6 +621,7 @@ jobs:
       # burn its retries and fail with a connection error that says nothing
       # about why. Fail here instead, with the container's own logs.
       - name: Wait for the S3 endpoint
+        if: needs.changes.outputs.backup == 'true'
         run: |
           set -uo pipefail
           for i in $(seq 1 30); do
@@ -541,9 +642,11 @@ jobs:
           exit 1
 
       - name: Create bucket
+        if: needs.changes.outputs.backup == 'true'
         run: aws s3 mb "${BACKUP_S3_BUCKET}"
 
       - name: Seed data
+        if: needs.changes.outputs.backup == 'true'
         run: |
           PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc <<'SQL'
           CREATE TABLE dr_probe (id SERIAL PRIMARY KEY, payload TEXT NOT NULL);
@@ -555,6 +658,7 @@ jobs:
           [ "${COUNT}" = "500" ]
 
       - name: Backup (scripts/backup.sh)
+        if: needs.changes.outputs.backup == 'true'
         run: ./scripts/backup.sh --component postgres
 
       # The restore assertion below proves the dump round-trips. It cannot
@@ -562,6 +666,7 @@ jobs:
       # bucket, which is the property the encryption exists for — and which
       # architecture.md claimed for months while backup.sh shipped plaintext.
       - name: Assert the uploaded artifact is encrypted and manifested
+        if: needs.changes.outputs.backup == 'true'
         run: |
           set -euo pipefail
           KEY=$(aws s3 ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/" \
@@ -606,6 +711,7 @@ jobs:
           "
 
       - name: Destroy all data
+        if: needs.changes.outputs.backup == 'true'
         run: |
           PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc \
             -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
@@ -615,6 +721,7 @@ jobs:
           [ "${COUNT}" = "0" ]
 
       - name: Restore (scripts/restore.sh) and measure RTO
+        if: needs.changes.outputs.backup == 'true'
         run: |
           set -euo pipefail
           START=$(date +%s)
@@ -624,6 +731,7 @@ jobs:
           echo "measured restore time: ${RTO}s"
 
       - name: Assert full data integrity
+        if: needs.changes.outputs.backup == 'true'
         run: |
           COUNT=$(PGPASSWORD=aisoc_ci_secret psql -h localhost -U aisoc -d aisoc -tAc "SELECT count(*) FROM dr_probe")
           echo "rows after restore: ${COUNT}"
@@ -633,6 +741,7 @@ jobs:
       # backup must refuse to restore rather than produce a partial database,
       # which is the failure that gets discovered during an incident.
       - name: Assert a tampered backup is refused
+        if: needs.changes.outputs.backup == 'true'
         run: |
           set -uo pipefail
           KEY=$(aws s3 ls "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/postgres/" \
@@ -656,6 +765,7 @@ jobs:
           echo "tampered backup correctly refused"
 
       - name: Publish DR summary
+        if: needs.changes.outputs.backup == 'true'
         run: |
           {
             echo "## Disaster-recovery gate"
@@ -683,6 +793,8 @@ jobs:
   #     on a pre-existing, populated schema (not a fresh apply in disguise).
   upgrade:
     name: Upgrade (${{ matrix.from_ref }} → HEAD, data survives)
+    needs: changes
+    if: needs.changes.outputs.upgrade == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

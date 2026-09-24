@@ -233,3 +233,36 @@ def test_generated_connector_types_is_inventoried(inventory) -> None:
 
 def test_self_test_passes() -> None:
     assert cgc.self_test(REPO_ROOT) == 0
+
+
+def test_a_script_named_as_a_diff_path_is_not_a_job_asking_it_for_a_verdict() -> None:
+    """`gates-a-workflow` must mean the job *runs* it, not that it says its name.
+
+    `integration.yml`'s `changes` job publishes outputs the other jobs branch
+    on, and lists `scripts/backup_crypt.py` among the paths whose modification
+    should run the disaster-recovery gate. The matcher looked for the bare
+    path anywhere in the job's YAML, so an encryption utility was inventoried
+    as a gate on the strength of appearing in a filter — the same shape as the
+    matcher that counted eleven services as CI-covered because a path sat
+    inside a quoted `echo`.
+    """
+    job = {
+        "outputs": {"backup": "${{ steps.areas.outputs.backup }}"},
+        "steps": [{"run": "backup_paths='scripts/backup.sh scripts/backup_crypt.py'\ngrep -q \"$p\" /tmp/changed.txt"}],
+    }
+    doc = {"jobs": {"changes": job, "dr": {"if": "needs.changes.outputs.backup == 'true'"}}}
+
+    assert cgc._gating_jobs(doc, "integration.yml") == {}
+
+
+def test_a_job_that_runs_a_script_and_publishes_an_output_still_counts() -> None:
+    """The other direction: `wet_eval_check.py` has no intrinsic signal at all
+    and is inventoried only through the job graph, so tightening the matcher
+    must not drop it."""
+    job = {
+        "outputs": {"run": "${{ steps.pre.outputs.run }}"},
+        "steps": [{"run": "python3 scripts/wet_eval_check.py --status-out /tmp/preflight.json"}],
+    }
+    doc = {"jobs": {"preflight": job, "eval": {"if": "needs.preflight.outputs.run == 'true'"}}}
+
+    assert cgc._gating_jobs(doc, "wet-eval.yml") == {"wet_eval_check.py": "wet-eval.yml:preflight"}
