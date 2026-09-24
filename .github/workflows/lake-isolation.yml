@@ -9,7 +9,7 @@ name: Lake tenant isolation
 # It has already broken once in exactly the way that is hardest to notice.
 # sqlglot 27 moved the SELECT's FROM clause from `args["from"]` to
 # `args["from_"]`. The rewriter read the old key, found nothing, concluded
-    10|# the statement was a constant projection with no tables, and returned it
+# the statement was a constant projection with no tables, and returned it
 # unchanged — skipping the table allowlist, the ban on ClickHouse table
 # functions such as `url()`, and the tenant predicate — while reporting
 # success. `services/api/pyproject.toml` allowed `<31.0.0` at the time, so a
@@ -19,7 +19,7 @@ name: Lake tenant isolation
 # Two gates, both cheap, both addressing that specific failure:
 #
 #   1. `check_sqlglot_pin.py` — every install path must declare the same
-    20|#      range, so two builds of one commit cannot disagree about the
+#      range, so two builds of one commit cannot disagree about the
 #      version of the parser that enforces isolation.
 #   2. The rewriter suite runs against the pinned range *and* against the
 #      next major. The second leg is forward-compatibility coverage: we
@@ -29,7 +29,7 @@ name: Lake tenant isolation
 on:
   push:
     branches: [main]
-    30|    paths:
+    paths:
       - 'services/api/app/services/lake_sql.py'
       - 'services/api/tests/test_lake_sql*.py'
       - 'services/api/pyproject.toml'
@@ -39,7 +39,7 @@ on:
   pull_request:
     paths:
       - 'services/api/app/services/lake_sql.py'
-    40|      - 'services/api/tests/test_lake_sql*.py'
+      - 'services/api/tests/test_lake_sql*.py'
       - 'services/api/pyproject.toml'
       - 'services/api/Dockerfile'
       - 'scripts/check_sqlglot_pin.py'
@@ -49,7 +49,7 @@ on:
 permissions:
   contents: read
 
-    50|concurrency:
+concurrency:
   group: lake-isolation-${{ github.ref }}
   cancel-in-progress: true
 
@@ -58,8 +58,8 @@ jobs:
     name: sqlglot pin is identical everywhere
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-    60|      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - run: python scripts/check_sqlglot_pin.py
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-    70|      matrix:
+      matrix:
         include:
           # The range the service ships and CI installs everywhere else.
           - sqlglot: '>=23,<27'
@@ -79,8 +79,8 @@ jobs:
           - sqlglot: '>=27,<31'
             label: forward-compat
     steps:
-    80|      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - name: Install
@@ -89,4 +89,4 @@ jobs:
         run: python -c "import sqlglot; print('resolved sqlglot', sqlglot.__version__)"
       - name: Rewriter + fail-closed suites
         working-directory: services/api
-    90|        run: python -m pytest tests/test_lake_sql.py tests/test_lake_sql_fail_closed.py -q
+        run: python -m pytest tests/test_lake_sql.py tests/test_lake_sql_fail_closed.py -q
