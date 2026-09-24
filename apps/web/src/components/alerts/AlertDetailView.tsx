@@ -88,7 +88,9 @@ const MOCK_ALERT: Alert = {
   createdAt: '2026-05-06T11:00:00Z',
   updatedAt: '2026-05-06T11:30:00Z',
   confidenceLabel: 'high',
-  confidenceScore: 0.86,
+  // Canonical 0-100 scale, as `normalizeAlert` emits. This mock held `0.86`,
+  // which is why the view's `* 100` looked correct in every test that used it.
+  confidenceScore: 86,
   confidenceRationale: [
     {
       factor: 'severity',
@@ -180,7 +182,12 @@ function IOCBadge({ type, value, malicious }: { type: string; value: string; mal
 
 function ConfidenceChip({ label, score }: { label: ConfidenceLabel; score?: number }) {
   const cfg = CONFIDENCE_CONFIG[label];
-  const pct = typeof score === 'number' ? Math.round(score * 100) : null;
+  // `score` is already the canonical 0-100 integer (see `normalizeAlert`).
+  // This multiplied it by 100 and printed a real confidence of 21 as "2100%",
+  // which the Investigation Rail was rendering correctly as "21/100" on the
+  // same page. Rendered as `N/100` rather than a percentage because the value
+  // is not a probability that the verdict is correct.
+  const points = typeof score === 'number' ? Math.round(score) : null;
   return (
     <span
       className={clsx(
@@ -191,25 +198,38 @@ function ConfidenceChip({ label, score }: { label: ConfidenceLabel; score?: numb
     >
       <span className={clsx('w-2 h-2 rounded-full', cfg.dot)} />
       {cfg.label}
-      {pct !== null && <span className="opacity-70 font-mono">· {pct}%</span>}
+      {points !== null && (
+        <span className="opacity-70 font-mono">{`· ${points}/100`}</span>
+      )}
     </span>
   );
 }
 
+/** `+0.20` / `−0.30`, never `+-0.30`. Matches the narrative builder's glyphs. */
+function signedContribution(contribution: number): string {
+  const sign = contribution < 0 ? '\u2212' : '+';
+  return `${sign}${Math.abs(contribution).toFixed(2)}`;
+}
+
 function ConfidenceFactorBar({ factor }: { factor: ConfidenceFactor }) {
-  const pct = Math.max(0, Math.min(1, factor.contribution / Math.max(factor.weight, 0.001)));
-  const widthPct = Math.round(pct * 100);
+  // A factor can push the score down as well as up. The magnitude drives the
+  // bar width and the sign drives its colour, so a negative factor reads as
+  // "this argued against the verdict" rather than as an empty bar: clamping
+  // the signed ratio to [0, 1] rendered every negative factor at zero width.
+  const magnitude = Math.min(1, Math.abs(factor.contribution) / Math.max(factor.weight, 0.001));
+  const widthPct = Math.round(magnitude * 100);
+  const negative = factor.contribution < 0;
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <span className="text-sm text-gray-200">{factor.label}</span>
         <span className="text-xs font-mono text-gray-500 shrink-0">
-          +{factor.contribution.toFixed(2)} / {factor.weight.toFixed(2)}
+          {`${signedContribution(factor.contribution)} / ${factor.weight.toFixed(2)}`}
         </span>
       </div>
       <div className="h-1.5 bg-gray-800 rounded overflow-hidden">
         <div
-          className="h-full bg-emerald-500/70"
+          className={clsx('h-full', negative ? 'bg-red-500/70' : 'bg-emerald-500/70')}
           style={{ width: `${widthPct}%` }}
           aria-hidden="true"
         />
@@ -245,7 +265,7 @@ function ConfidenceExplainability({
               <span className="text-sm font-semibold text-gray-100">{cfg.label}</span>
               {typeof score === 'number' && (
                 <span className="text-xs font-mono text-gray-500">
-                  score {score.toFixed(2)} ({Math.round(score * 100)}%)
+                  {`score ${Math.round(score)}/100`}
                 </span>
               )}
             </div>

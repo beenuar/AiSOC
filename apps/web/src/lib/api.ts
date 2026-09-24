@@ -653,6 +653,12 @@ export interface Alert {
   updatedAt: string;
   resolvedAt?: string;
   confidenceLabel?: ConfidenceLabel;
+  /**
+   * Fusion detection confidence as an integer 0-100, normalised by
+   * `normalizeAlert` regardless of which key and scale the payload used.
+   * Render it as `N/100` — it is not a probability that the verdict is
+   * correct, and it is independent of severity.
+   */
   confidenceScore?: number;
   confidenceRationale?: ConfidenceFactor[];
   ledgerRunId?: string;
@@ -750,6 +756,28 @@ function normalizeAlert(raw: unknown): Alert {
         weight: Number(f.weight ?? 0),
       }))
     : undefined;
+
+  // Confidence arrives on two keys at two different scales, and this field
+  // used to accept whichever showed up first: the API surfaces `confidence`
+  // as an integer 0-100, while fusion's `confidence_score` is the raw
+  // [0.0, 1.0] float the band was derived from. One field carrying two
+  // scales meant every consumer had to guess, and they guessed differently —
+  // `AlertDetailView` multiplied by 100 and rendered a real confidence of 21
+  // as "2100%", while `AttackStory` rendered the same value as "21/100".
+  // Both passed their tests because each mock used the scale its own view
+  // assumed.
+  //
+  // Normalised here, once, to the canonical 0-100 integer. The scale is
+  // decided by the *key*, never by the magnitude: a genuine confidence of 1
+  // is indistinguishable from a raw score of 1.0 by value alone.
+  const canonicalConfidence = pickNum('confidence', 'confidence');
+  const rawConfidenceScore = pickNum('confidence_score', 'confidenceScore');
+  const confidenceScore =
+    canonicalConfidence !== undefined
+      ? canonicalConfidence
+      : rawConfidenceScore !== undefined
+        ? Math.round(rawConfidenceScore * 100)
+        : undefined;
 
   // ── Investigation Rail envelope (W6) ────────────────────────────────────
   // `alert_rail.RelatedEntity` serialises as `{group, kind, value, label,
@@ -858,9 +886,7 @@ function normalizeAlert(raw: unknown): Alert {
     confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as
       | ConfidenceLabel
       | undefined,
-    confidenceScore:
-      pickNum('confidence_score', 'confidenceScore') ??
-      pickNum('confidence', 'confidence'),
+    confidenceScore,
     confidenceRationale,
     ledgerRunId: pickStr('ledger_run_id', 'ledgerRunId'),
     disposition: (r.disposition ?? null) as Alert['disposition'],
@@ -1210,6 +1236,12 @@ export interface EntityRiskStats {
  */
 const FUSION_PATH = '/api/v1/fusion';
 
+// These three routes take the tenant as a *query parameter* as well as the
+// `X-Tenant-Id` header, so the two have to agree or the queue reports on a
+// different tenant than the rest of the console. They read the module-scope
+// env constant, which is fixed at build time and therefore ignores both the
+// logged-in user and the tenant switcher; `getActiveTenantId()` is the same
+// resolution `request()` uses for the header.
 export const entityRiskApi = {
   /** Top-N entities by current decayed risk score. */
   queue: (params: {
@@ -1219,7 +1251,7 @@ export const entityRiskApi = {
   } = {}) =>
     request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
       params: {
-        tenant_id: params.tenantId ?? TENANT_ID,
+        tenant_id: params.tenantId ?? getActiveTenantId(),
         limit: params.limit ?? 25,
         promoted_only: params.promotedOnly ? 'true' : undefined,
       },
@@ -1228,7 +1260,7 @@ export const entityRiskApi = {
   /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
   stats: (tenantId?: string) =>
     request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
-      params: { tenant_id: tenantId ?? TENANT_ID },
+      params: { tenant_id: tenantId ?? getActiveTenantId() },
     }),
 
   /** Full risk record for a single entity (drawer detail). */
@@ -1236,7 +1268,7 @@ export const entityRiskApi = {
     const pathType = entityType === 'ip' ? 'src_ip' : entityType;
     return request<EntityRiskRecord>(
       `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
-      { params: { tenant_id: tenantId ?? TENANT_ID } },
+      { params: { tenant_id: tenantId ?? getActiveTenantId() } },
     );
   },
 };
@@ -1934,7 +1966,10 @@ export interface DashboardMetrics {
     low: number;
     info?: number;
     resolvedToday: number;
+    /** Mean time to resolve, in **hours**, from closed cases. */
     mttr: number;
+    /** Cases the mean was taken over. Zero means unmeasured, not zero hours. */
+    mttr_sample_count?: number;
   };
   cases: {
     open: number;
@@ -2022,6 +2057,14 @@ export interface SOCKpis {
   cases_opened_7d: number;
   cases_closed_7d: number;
   analyst_overrides_7d: number;
+  /**
+   * How many rows each mean above was averaged over. Zero means the figure is
+   * unmeasured rather than zero — render "not measured", not "0.0 hrs".
+   * Optional so the console still works against an API that predates them.
+   */
+  mttd_sample_count?: number;
+  mttr_sample_count?: number;
+  mttc_sample_count?: number;
 }
 
 export interface AttackHeatmapCell {

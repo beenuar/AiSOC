@@ -388,6 +388,38 @@ describe('honest empty states', () => {
     expect(screen.getByText(/No alerts recorded/i)).toBeTruthy();
   });
 
+  it('claims no fleet is reporting when there is no fleet', async () => {
+    // The badge rendered whenever the endpoint answered, and with zero
+    // connectors `failed + degraded` is zero — so it printed a green "All
+    // sources reporting" directly above "No connectors configured". Zero
+    // sources reporting is not the same statement as all of them reporting,
+    // and green is the part an operator scans for.
+    fleetHealth.mockResolvedValue({ ...FLEET, connectors: [], counts: {} });
+    renderDashboard();
+
+    expect(await screen.findByText(/No connectors configured/i)).toBeTruthy();
+    expect(screen.queryByText(/All sources reporting/i)).toBeNull();
+    expect(screen.queryByText(/sources reporting/i)).toBeNull();
+  });
+
+  it('counts the fleet it is vouching for when every connector is healthy', async () => {
+    const healthy = FLEET.connectors.map((c) => ({
+      ...c,
+      state: 'healthy' as const,
+      last_sync: new Date().toISOString(),
+      missed_intervals: 0,
+      seconds_since_sync: 30,
+    }));
+    fleetHealth.mockResolvedValue({
+      ...FLEET,
+      connectors: healthy,
+      counts: { healthy: healthy.length },
+    });
+    renderDashboard();
+
+    expect(await screen.findByText(`All ${healthy.length} sources reporting`)).toBeTruthy();
+  });
+
   it('says nothing is waiting rather than rendering an empty list', async () => {
     listApprovals.mockResolvedValue({ ...APPROVALS, items: [], total: 0 });
     renderDashboard();

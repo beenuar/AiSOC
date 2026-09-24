@@ -84,7 +84,10 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
     mitreAttack: i % 3 === 0 ? [{ tactic: 'Execution', technique: 'PowerShell', techniqueId: 'T1059.001' }] : [],
     riskScore: ((i * 37 + 13) % 100),
     confidenceLabel: conf,
-    confidenceScore: Number(confScore.toFixed(2)),
+    // Canonical 0-100 scale, matching what `normalizeAlert` emits for a real
+    // alert. Sample data on a different scale than the real payload is how the
+    // `2100%` render passed review.
+    confidenceScore: Math.round(confScore * 100),
   };
 });
 

@@ -210,6 +210,107 @@ describe('SOCMetricsDashboard — no fabricated data outside demo mode', () => {
   });
 });
 
+describe('a mean over no samples is unmeasured, not zero', () => {
+  /**
+   * A live acceptance pass read MTTD/MTTR/MTTC as "0.0 hrs" on a tenant that
+   * had resolved nothing: the averages were over zero rows and
+   * `float(None or 0.0)` published that as a confident number. Zero hours to
+   * respond is the best possible score, so a tenant that had done nothing
+   * topped the league table. The API now reports each mean with the count of
+   * rows it averaged.
+   *
+   * The paired `renders the figure when there are samples` case is what stops
+   * the fix becoming "blank the tiles": both directions have to hold.
+   */
+  const KPIS = {
+    mttd_hours: 0.0,
+    mttr_hours: 0.0,
+    mttc_hours: 0.0,
+    false_positive_rate: 0,
+    escalation_rate: 0,
+    alert_volume_7d: 1,
+    cases_opened_7d: 2,
+    cases_closed_7d: 0,
+    analyst_overrides_7d: 0,
+  };
+
+  it('says so on every tile whose window contains no closures', () => {
+    swrData.set('soc-metrics', {
+      kpis: { ...KPIS, mttd_sample_count: 0, mttr_sample_count: 0, mttc_sample_count: 0 },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    expect(screen.getAllByText(/not measured/i).length).toBe(3);
+    expect(screen.queryByText('0.0')).toBeNull();
+  });
+
+  it('renders the figure, and what it was averaged over, once there are samples', () => {
+    swrData.set('soc-metrics', {
+      kpis: { ...KPIS, mttr_hours: 1.5, mttr_sample_count: 2, cases_closed_7d: 2, mttd_sample_count: 0, mttc_sample_count: 0 },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    expect(screen.getByText('1.5')).toBeTruthy();
+    expect(screen.getByText(/mean of 2 over 30d/i)).toBeTruthy();
+  });
+
+  it('keeps rendering means for an API build that sends no counts', () => {
+    // Back-compatibility: the counts are additive, and blanking every tile
+    // against an older API would be a worse regression than the bug.
+    swrData.set('soc-metrics', {
+      kpis: { ...KPIS, mttd_hours: 1.2, mttr_hours: 3.4, mttc_hours: 5.6 },
+      attack_heatmap: [],
+      calibration_curve: [],
+    });
+
+    render(<SOCMetricsDashboard />);
+
+    expect(screen.getByText('3.4')).toBeTruthy();
+    expect(screen.queryByText(/not measured/i)).toBeNull();
+  });
+
+  it('does not label an hours figure as minutes on the operations strip', () => {
+    // `alerts.mttr` is hours and the tile rendered it with an `m` suffix, so
+    // a 1.5-hour MTTR would have read "1.5m" had it ever been non-zero.
+    swrData.set('dashboard-metrics', {
+      alerts: { total: 1, new: 1, critical: 0, high: 0, medium: 1, low: 0, resolvedToday: 0, mttr: 1.5, mttr_sample_count: 2 },
+      cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
+      sources: [],
+      topMitre: [],
+      alertsTrend: [],
+      threatsBySource: [],
+    });
+
+    render(<DashboardView />);
+
+    expect(screen.getByText('1.5h')).toBeTruthy();
+    expect(screen.queryByText('1.5m')).toBeNull();
+  });
+
+  it('reports the operations strip MTTR as unmeasured when no case has closed', () => {
+    swrData.set('dashboard-metrics', {
+      alerts: { total: 1, new: 1, critical: 0, high: 0, medium: 1, low: 0, resolvedToday: 0, mttr: 0, mttr_sample_count: 0 },
+      cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
+      sources: [],
+      topMitre: [],
+      alertsTrend: [],
+      threatsBySource: [],
+    });
+
+    render(<DashboardView />);
+
+    expect(screen.getByText(/not measured · no cases closed/i)).toBeTruthy();
+    expect(screen.queryByText('0m')).toBeNull();
+    expect(screen.queryByText('0.0h')).toBeNull();
+  });
+});
+
 describe('demo mode still populates the dashboards', () => {
   it('renders the sample connector inventory when the build is the hosted demo', () => {
     // The gate must not have become "never show sample data anywhere" — the

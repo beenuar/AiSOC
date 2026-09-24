@@ -15213,6 +15213,10 @@ components:
         mttr:
           type: number
           title: Mttr
+        mttr_sample_count:
+          type: integer
+          title: Mttr Sample Count
+          default: 0
       type: object
       required:
       - total
@@ -25963,6 +25967,18 @@ components:
         analyst_overrides_7d:
           type: integer
           title: Analyst Overrides 7D
+        mttd_sample_count:
+          type: integer
+          title: Mttd Sample Count
+          default: 0
+        mttr_sample_count:
+          type: integer
+          title: Mttr Sample Count
+          default: 0
+        mttc_sample_count:
+          type: integer
+          title: Mttc Sample Count
+          default: 0
       type: object
       required:
       - mttd_hours
