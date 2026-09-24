@@ -27,13 +27,19 @@ it on alone.
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import httpx
-import structlog
 
-logger = structlog.get_logger()
+#: Stdlib logging rather than structlog, matching `engine.py`. The playbook
+#: package states "zero external dependencies beyond httpx + stdlib" in its
+#: own docstring and it is load-bearing: `scripts/validate_playbooks.py` and
+#: the schema-parity gate import the package with only jsonschema, pydantic
+#: and httpx installed, so a structlog import here fails the pack validator
+#: rather than the module that added it.
+logger = logging.getLogger("aisoc.playbook.action_bridge")
 
 _API_URL = os.getenv("API_SERVICE_URL", os.getenv("API_URL", "http://api:8000"))
 _TIMEOUT_S = float(os.getenv("AISOC_PLAYBOOK_ACTION_TIMEOUT_S", "45"))
@@ -139,12 +145,12 @@ async def dispatch_step(
         raise BridgeUnavailable(f"the API returned a report with no 'executed' field for '{capability}'")
 
     logger.info(
-        "playbook_action.dispatched",
-        capability=capability,
-        status=report.get("status"),
-        # Echoed verbatim: if this is False no vendor was touched, whatever
-        # the HTTP status said.
-        executed=bool(report.get("executed")),
-        playbook_step_id=playbook_step_id,
+        # `executed` is echoed verbatim: if it is False no vendor was
+        # touched, whatever the HTTP status said.
+        "playbook_action.dispatched capability=%s status=%s executed=%s step=%s",
+        capability,
+        report.get("status"),
+        bool(report.get("executed")),
+        playbook_step_id,
     )
     return report

@@ -1099,7 +1099,7 @@ jobs:
         # pydantic + httpx let the parity check import the real engine rather
         # than parse it; a parser can disagree with the handler table that is
         # actually built at import time.
-        run: pip install jsonschema pydantic httpx pytest structlog
+        run: pip install jsonschema pydantic httpx pytest
       - name: Lint playbook files
         run: python3 scripts/lint_playbooks.py
       - name: Schema/engine parity (both directions, with self-test)

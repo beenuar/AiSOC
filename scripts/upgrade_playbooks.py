@@ -189,7 +189,8 @@ def _validate(schema: Any, doc: dict[str, Any]) -> list[str]:
     if jsonschema is None:
         return ["jsonschema is not installed, so the upgraded playbook could not be checked — install it before writing"]
     validator = jsonschema.Draft7Validator(schema)
-    return [f"{'.'.join(str(p) for p in e.path) or '(root)'}: {e.message}" for e in sorted(validator.iter_errors(doc), key=lambda e: list(e.path))]
+    errors = sorted(validator.iter_errors(doc), key=lambda e: list(e.path))
+    return [f"{'.'.join(str(p) for p in e.path) or '(root)'}: {e.message}" for e in errors]
 
 
 def _targets(root: Path, directory: str | None) -> list[Path]:

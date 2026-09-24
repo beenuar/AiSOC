@@ -4616,6 +4616,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playbook-steps/dispatch:
+    post:
+      tags:
+      - playbooks
+      summary: Run one playbook step through governed action dispatch
+      description: 'Dispatch one step and report what actually happened.
+
+
+        Never raises for an action-level outcome. A blocked action, an approval
+
+        queue, a missing integration and a vendor failure are all 200 with
+
+        ``executed: false`` and a status naming which one it was, so the engine
+
+        has a single shape to read. ``HTTPException`` is reserved for callers
+
+        this route will not serve at all.'
+      operationId: dispatch_playbook_step_api_v1_playbook_steps_dispatch_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: x-aisoc-service-token
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Aisoc-Service-Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepDispatchRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Dispatch Playbook Step Api V1 Playbook Steps Dispatch
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/plugins:
     get:
       tags:
@@ -26702,6 +26753,60 @@ components:
       - disposition
       title: SourceWritebackRequest
       description: What the caller believes about the alert.
+    StepDispatchRequest:
+      properties:
+        capability:
+          type: string
+          title: Capability
+          description: Response verb, e.g. 'isolate_host'. Must be a registered capability.
+        target:
+          type: string
+          maxLength: 512
+          title: Target
+          description: Host, user, address or id the verb acts on.
+          default: ''
+        params:
+          additionalProperties: true
+          type: object
+          title: Params
+        vendor_id:
+          type: string
+          maxLength: 64
+          title: Vendor Id
+          description: Pin a vendor. Honoured only if the tenant has it configured.
+          default: ''
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+        dry_run:
+          type: boolean
+          title: Dry Run
+          default: true
+        playbook_run_id:
+          type: string
+          maxLength: 64
+          title: Playbook Run Id
+          default: ''
+        playbook_step_id:
+          type: string
+          maxLength: 64
+          title: Playbook Step Id
+          default: ''
+        tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Tenant Id
+      type: object
+      required:
+      - capability
+      title: StepDispatchRequest
+      description: One playbook step, expressed as the verb it names.
     SubmissionResponse:
       properties:
         id:
