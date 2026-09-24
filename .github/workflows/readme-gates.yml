@@ -28,6 +28,7 @@ on:
       - 'packages/aisoc-sandbox/**'
       - 'apps/web/public/demo/**'
       - 'scripts/readme_gates.py'
+      - 'scripts/check_published_packages.py'
       - 'tests/test_readme_figures_gate.py'
       - 'docs/detections/truth-table.md'
       - 'docs/audit/CLAIM_TO_GATE_MATRIX.md'
@@ -39,6 +40,7 @@ on:
       - 'packages/aisoc-sandbox/**'
       - 'apps/web/public/demo/**'
       - 'scripts/readme_gates.py'
+      - 'scripts/check_published_packages.py'
       - 'tests/test_readme_figures_gate.py'
       - 'docs/detections/truth-table.md'
       - 'docs/audit/CLAIM_TO_GATE_MATRIX.md'
@@ -122,6 +124,39 @@ jobs:
           python3 -m pip install pytest
           cd packages/aisoc-sandbox
           PYTHONPATH=src python3 -m pytest tests/ -q
+
+  # The README states a fact — "Ready, unpublished" — rather than a date,
+  # because the blocker is registry credentials and a milestone cannot be
+  # scheduled by writing a version number. A fact goes stale in the direction
+  # a promise cannot: the moment somebody adds an NPM_TOKEN the claim becomes
+  # false, and nothing here would have noticed.
+  #
+  # `published-onramp` below is the other half. It arms when a package appears
+  # and hard-fails if the advertised command then breaks; this one hard-fails
+  # if a package appears and the README still says nothing is published. Both
+  # directions, and both on the same daily clock, because either can change
+  # without anyone touching the repo.
+  #
+  # The script shipped with v9.0, RELEASES.md cited it as the reason the claim
+  # cannot go stale, and no workflow ran it.
+  published-claim:
+    name: README · publishing claim matches the registries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # `--require-network` on a hosted runner: the script skips when a
+      # registry is unreachable so a contributor on a plane is not told the
+      # README is wrong, but a runner that cannot reach npm has not checked
+      # anything and must say so rather than report a clean result.
+      - name: README publishing claim vs npm + PyPI
+        run: python3 scripts/check_published_packages.py --require-network
 
   # The `static` gate above proves the README does not *reference* a package
   # that fails to resolve. It cannot prove the advertised command actually

@@ -56,9 +56,86 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ──────────────────────────────────────────────
+  # Preflight is its own job so the run below can be *skipped* rather than
+  # silently succeeding.
+  #
+  # This used to be step 1 of a single job, and every step after it was
+  # `if: should_run == 'True'`. With no funded key those steps skipped, the
+  # notice step succeeded, and the job reported **success** — eight
+  # consecutive green weekly runs on `main` in which nothing was evaluated.
+  # A green check that means "I did not run" is worse than a red one: it is
+  # the only signal a reader gets, and it says the opposite of the truth.
+  #
+  # A job gated on `needs.preflight.outputs.should_run` shows as *Skipped* in
+  # the checks list and the Actions run summary, which is visibly distinct
+  # from success at a glance. Failing outright was the alternative and is
+  # wrong here: a fork has no way to configure the secret, and a weekly red
+  # cross nobody can clear trains people to ignore the page. The staleness of
+  # the published numbers is gated separately and does fail closed — see
+  # `scripts/check_scoreboard.py`, which refuses a scoreboard older than 45
+  # days regardless of why the refresh did not happen.
+  # ──────────────────────────────────────────────
+  preflight:
+    name: Wet eval — preflight (live secrets configured?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.preflight.outputs.should_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Preflight — verify wet-eval secrets
+        id: preflight
+        env:
+          WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
+          AISOC_BENCH_BOT_TOKEN: ${{ secrets.AISOC_BENCH_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wet-eval
+          python3 scripts/wet_eval_check.py \
+            --status-out /tmp/wet-eval/preflight.json
+          should_run=$(python3 -c "import json,sys; print(json.load(open('/tmp/wet-eval/preflight.json'))['should_run'])")
+          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
+          echo "Preflight: should_run=${should_run}"
+
+      # The notice has to say what did *not* happen, loudly enough that
+      # somebody reading the run summary learns the benchmark is not being
+      # refreshed. It lands in the job summary, not only the log.
+      - name: Record that the live run is not happening
+        if: steps.preflight.outputs.should_run != 'True'
+        run: |
+          set -euo pipefail
+          cat /tmp/wet-eval/preflight.json
+          {
+            echo "## Wet eval did NOT run"
+            echo
+            echo "No live LLM secret is configured for this repository, so the"
+            echo "200-incident corpus was **not** dispatched through the agent and"
+            echo "the published benchmark numbers were **not** refreshed this week."
+            echo
+            echo "The \`wet-eval\` job below is reported as *skipped* rather than"
+            echo "passing, because a green check here would mean the benchmark ran."
+            echo
+            echo "Configure \`WET_EVAL_OPENAI_KEY\` to arm it — see"
+            echo "\`apps/docs/docs/operations/secrets.md\`."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "::warning title=Wet eval not run::No live LLM secret configured; the weekly benchmark was not refreshed."
+
   wet-eval:
     name: Wet eval — weekly LLM benchmark
     runs-on: ubuntu-latest
+    needs: preflight
+    # Skipped, not succeeded, when there is nothing to run.
+    if: needs.preflight.outputs.should_run == 'True'
     permissions:
       contents: write
       pull-requests: write
@@ -77,34 +154,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      # ──────────────────────────────────────────────
-      # Step 1 — preflight gate. Always exits 0; the JSON status file
-      # tells subsequent steps whether to dispatch the live eval. On
-      # forks where `WET_EVAL_OPENAI_KEY` was never configured, the
-      # workflow short-circuits here cleanly instead of crashing on
-      # an `OPENAI_API_KEY not set` import error inside the agent.
-      # ──────────────────────────────────────────────
-      - name: Preflight — verify wet-eval secrets
-        id: preflight
+      - name: Recreate the preflight status file
         env:
           WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
           AISOC_BENCH_BOT_TOKEN: ${{ secrets.AISOC_BENCH_BOT_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/wet-eval
-          python3 scripts/wet_eval_check.py \
-            --status-out /tmp/wet-eval/preflight.json
-          # Surface `should_run` as a step output so subsequent steps
-          # can `if:` on it without re-parsing the JSON.
-          should_run=$(python3 -c "import json,sys; print(json.load(open('/tmp/wet-eval/preflight.json'))['should_run'])")
-          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
-          echo "Preflight: should_run=${should_run}"
-
-      - name: Skip notice (no live secrets configured)
-        if: steps.preflight.outputs.should_run != 'True'
-        run: |
-          echo "::notice title=Wet eval skipped::No live LLM secret configured for this repo. See apps/docs/docs/operations/secrets.md for setup."
-          echo "Preflight status:" && cat /tmp/wet-eval/preflight.json
+          python3 scripts/wet_eval_check.py --status-out /tmp/wet-eval/preflight.json
 
       # ──────────────────────────────────────────────
       # Step 2 — install dependencies.
@@ -115,7 +172,6 @@ jobs:
       # frozen agent surface.
       # ──────────────────────────────────────────────
       - name: Install agent dependencies
-        if: steps.preflight.outputs.should_run == 'True'
         run: |
           set -euo pipefail
           pip install --quiet \
@@ -137,7 +193,6 @@ jobs:
       # re-parse the full report.
       # ──────────────────────────────────────────────
       - name: Run wet eval
-        if: steps.preflight.outputs.should_run == 'True'
         env:
           WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
           # The agent's default LLM resolver reads OPENAI_API_KEY. We
@@ -170,7 +225,6 @@ jobs:
       # rather than two that can drift.
       # ──────────────────────────────────────────────
       - name: Run model matrix
-        if: steps.preflight.outputs.should_run == 'True'
         env:
           WET_EVAL_OPENAI_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
           OPENAI_API_KEY: ${{ secrets.WET_EVAL_OPENAI_KEY }}
@@ -191,7 +245,6 @@ jobs:
       # silent without this gate.
       # ──────────────────────────────────────────────
       - name: Rewrite benchmark.md tables
-        if: steps.preflight.outputs.should_run == 'True'
         run: |
           set -euo pipefail
           python3 scripts/wet_eval_update_benchmark.py \
@@ -209,7 +262,6 @@ jobs:
       # historical runs.
       # ──────────────────────────────────────────────
       - name: Open PR with refreshed wet-eval numbers
-        if: steps.preflight.outputs.should_run == 'True'
         env:
           GH_TOKEN: ${{ secrets.AISOC_BENCH_BOT_TOKEN }}
           RUN_DATE: ${{ github.event.schedule && '' || '' }}
@@ -259,7 +311,7 @@ jobs:
       # the PR.
       # ──────────────────────────────────────────────
       - name: Upload wet-eval artifact
-        if: always() && steps.preflight.outputs.should_run == 'True'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wet-eval-report

@@ -269,6 +269,14 @@ jobs:
       # locally if this check fails.
       - name: Verify vendored narrative builder is in sync
         run: python scripts/sync_vendored_narrative.py --check
+      # The fifth vendored mirror, and the only one that had no gate. The
+      # redactor strips internal IPs, emails, paths and secret-shaped strings
+      # before untrusted text reaches a prompt; a copy that silently drifts
+      # from the canonical source redacts a different set on one side of the
+      # wire than the other, which is indistinguishable from working until
+      # something leaks. The script existed and passed; nothing ran it.
+      - name: Verify vendored redactor is in sync
+        run: python scripts/sync_vendored_redactor.py --check
       # Phase 1.1 — the registry at
       # `services/connectors/app/connectors/__init__.py` is the single source
       # of truth for the "N connectors" claim. The check verifies that:
@@ -542,6 +550,34 @@ jobs:
         # not prose: an investigation that summarises the alert reads exactly
         # like one that pivoted five times.
         run: python3 scripts/check_investigation_depth.py
+
+      - name: Every check in the tree is reachable from a workflow
+        # The gate on the gates. A conformance script with no workflow cannot
+        # fail, which is indistinguishable from no gate at all — while its
+        # presence in scripts/ advertises coverage to anyone reading. Three
+        # shipped that way and were found only by tracing the call graph by
+        # hand. This resolves the graph mechanically instead: workflows, make
+        # recipes they invoke, test suites they collect, and scripts those
+        # reach. The inverse direction too — a workflow step naming a
+        # scripts/ path that no longer exists cannot do what it says.
+        #
+        # Self-test first, on the same tree, so a resolver that quietly starts
+        # returning "reached" for everything fails here rather than printing OK.
+        run: |
+          python -m pip install --quiet pyyaml
+          python3 scripts/check_gate_coverage.py --self-test
+          python3 scripts/check_gate_coverage.py --list
+
+      - name: Gate store migration runners and their call sites
+        # Neo4j, ClickHouse and Qdrant hold schema that code depends on, and
+        # all three create-if-absent — so a schema change lands on a fresh
+        # deployment and silently does not land on an existing one. This
+        # asserts each store has a runner, that something on the startup path
+        # actually calls it, and that migration ids stay ordered and unique.
+        # The second half is the point: a runner nobody invokes is the same
+        # defect with better test coverage. The script shipped with the
+        # runners and no workflow ever ran it.
+        run: python3 scripts/check_store_migrations.py
 
       - name: Gate the public benchmark scoreboard (Phase E1)
         # Ties apps/docs/static/data/scoreboard.json to a real deterministic

@@ -445,7 +445,20 @@ def gate_readme_figures() -> list[GateFailure]:
     counts = _matrix_counts()
     if counts is not None:
         gated, partial = counts
-        sources: list[tuple[str, str]] = [("README", readme)]
+        # The matrix's own Summary block is checked first, and it is the one
+        # this gate used to skip. Every prose restatement elsewhere was
+        # compared against the rows while the document doing the claiming was
+        # not — so the summary read "GATED: 108" against 109 counted rows and
+        # every check in the repository passed. The file even carries a
+        # counting note about this exact failure; it recurred because the gate
+        # written afterwards pointed outward only.
+        sources: list[tuple[str, str]] = [
+            (
+                str(CLAIM_MATRIX.relative_to(REPO_ROOT)) if CLAIM_MATRIX.is_relative_to(REPO_ROOT) else CLAIM_MATRIX.name,
+                _read(CLAIM_MATRIX),
+            ),
+            ("README", readme),
+        ]
         for path in FIGURE_DOCS:
             if not path.exists():
                 continue
@@ -468,6 +481,21 @@ def gate_readme_figures() -> list[GateFailure]:
                             f"{gated} GATED / {partial} PARTIAL.",
                         )
                     )
+            # The bullet-list form the matrix's Summary uses. The inline
+            # pattern above needs both figures on one line and silently
+            # matched nothing here, which is how the stale count survived.
+            for label_word, expected in (("GATED", gated), ("PARTIAL", partial)):
+                for m in re.finditer(rf"^[-*]\s+`?{label_word}`?:\s*(\d+)", text, re.MULTILINE):
+                    if int(m.group(1)) != expected:
+                        failures.append(
+                            GateFailure(
+                                "readme-figures",
+                                f"{label} summarises {label_word}: {m.group(1)}; "
+                                f"docs/audit/CLAIM_TO_GATE_MATRIX.md has {expected} "
+                                f"{label_word} rows. Recompute with "
+                                f"scripts/check_claim_gate_matrix.py rather than editing the number.",
+                            )
+                        )
 
     return failures
 

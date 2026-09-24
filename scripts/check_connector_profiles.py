@@ -82,26 +82,17 @@ PUSH_ONLY_PROFILES: dict[str, str] = {
 LEGACY_PROFILE_KEYS = {"crowdstrike_falcon", "okta_system_log", "splunk_enterprise"}
 
 # packages/types' ConnectorType union is a third name space, and it predates
-# the connectors registry. These members name no connector the service
-# declares and no profile: they are the console's older vocabulary
-# (``google_chronicle`` for ``chronicle``, ``ibm_qradar`` for ``qradar``) plus
-# four generic transports that were never connectors at all. They are recorded
-# rather than fixed here because the union is shared with the console.
+# the connectors registry. Ten members named no connector the service declares
+# and no profile: the console's older vocabulary (``google_chronicle`` for
+# ``chronicle``, ``ibm_qradar`` for ``qradar``) plus four generic transports
+# that were never connectors at all.
 #
-# This is a ratchet: it may shrink, never grow. A new unresolvable union member
-# fails the gate.
-KNOWN_UNION_ONLY_TYPES = {
-    "custom_webhook",
-    "google_chronicle",
-    "http_pull",
-    "ibm_qradar",
-    "kafka",
-    "palo_alto_cortex",
-    "slack",
-    "syslog",
-    "teams",
-    "vectra_ai",
-}
+# All ten are now closed. Six fold onto their declared connector through
+# ``connectorTypeCanonical``; four denoted nothing the platform ingests and
+# were removed from the union. This stays as an empty ratchet rather than being
+# deleted, because the drift it recorded is the kind that comes back: it may
+# shrink, never grow, and a new unresolvable union member fails the gate.
+KNOWN_UNION_ONLY_TYPES: set[str] = set()
 
 TS_TYPES_REL = Path("packages/types/src/connector.ts")
 
@@ -115,6 +106,11 @@ REQUIRED_GO_TESTS = (
     "TestGenericProfileResolvesIdentityFields",
     "TestDeclaredConnectorIdResolvesToVendorProfile",
     "TestIdentityAliasResolutionIsDeterministic",
+    # The canonical fold is arithmetic on this side; these prove the two
+    # spellings actually produce one event, and that the fold cannot be used
+    # to smuggle an unknown type past strict mode.
+    "TestConsoleVocabularyNormalizesAsTheDeclaredConnector",
+    "TestConsoleVocabularyIsAcceptedInStrictModeOnlyWhenItResolves",
 )
 
 _GO_BLOCK = "var {name} = map[string]{vtype}{{"
@@ -166,6 +162,20 @@ def parse_type_aliases(src: str) -> dict[str, str]:
     if "var connectorTypeAliases = map[string]string{" not in src:
         return {}
     block = _go_block(src, "var connectorTypeAliases = map[string]string{")
+    return dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block))
+
+
+def parse_canonical_types(src: str) -> dict[str, str]:
+    """alternate spelling -> the connector id services/connectors declares.
+
+    The opposite direction from ``connectorTypeAliases``: that one carries a
+    declared id up to a longer-named profile, this one folds a longer console
+    name down onto the declared id. Absent is reported, not raised, for the
+    same reason.
+    """
+    if "var connectorTypeCanonical = map[string]string{" not in src:
+        return {}
+    block = _go_block(src, "var connectorTypeCanonical = map[string]string{")
     return dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block))
 
 
@@ -274,18 +284,20 @@ def parse_union_types(path: Path) -> set[str]:
 def evaluate(
     profile_keys: set[str],
     type_aliases: dict[str, str],
+    canonical_types: dict[str, str],
     identity: dict[str, list[str]],
     connectors: dict[str, bool],
     doc_examples: dict[str, list[str]],
     go_tests: set[str],
     template_names: set[str],
     union_types: set[str],
+    union_only_ratchet: set[str],
 ) -> list[tuple[str, str]]:
     failures: list[tuple[str, str]] = []
     declared = set(connectors)
-    # A name is resolvable if it is a declared connector, a profile key, or an
-    # alias that leads to one.
-    resolvable = declared | profile_keys | set(type_aliases)
+    # A name is resolvable if it is a declared connector, a profile key, an
+    # alias that leads to one, or an alternate spelling folded onto one.
+    resolvable = declared | profile_keys | set(type_aliases) | set(canonical_types)
 
     # GO -> PY. Every profile key must name something real.
     for key in sorted(profile_keys):
@@ -319,6 +331,34 @@ def evaluate(
         if source in profile_keys:
             failures.append(("alias-shadowed", f"alias {source!r} is shadowed by its own profile entry and never fires"))
 
+    # GO -> PY. The canonical fold must land on a connector that exists, and
+    # must not be reachable by two mechanisms at once — a name in both maps
+    # means one of them is dead code that a reader will still trust.
+    for source, target in sorted(canonical_types.items()):
+        if target not in declared:
+            failures.append(
+                (
+                    "canonical-target-undeclared",
+                    f"{source!r} folds onto {target!r}, which no connector declares: " "the alternate spelling still resolves to nothing",
+                )
+            )
+        if source in declared:
+            failures.append(
+                (
+                    "canonical-source-declared",
+                    f"{source!r} is itself a declared connector id; folding it onto {target!r} "
+                    "would route a real connector's events to a different source",
+                )
+            )
+        if source in profile_keys:
+            failures.append(("canonical-shadowed", f"{source!r} has its own profile entry, so the fold onto {target!r} never fires"))
+        if source in type_aliases:
+            failures.append(
+                ("canonical-double-mapped", f"{source!r} is in both connectorTypeAliases and connectorTypeCanonical; one is dead")
+            )
+        if target in canonical_types:
+            failures.append(("canonical-chained", f"{source!r} folds onto {target!r}, which itself folds onto {canonical_types[target]!r}"))
+
     # PY -> GO. Every declared connector must survive strict mode.
     for connector_id, canonical in sorted(connectors.items()):
         if connector_id in profile_keys or connector_id in type_aliases or canonical:
@@ -334,9 +374,9 @@ def evaluate(
     # TS -> *. The console's union is the third name space, and drift here is
     # how `splunk_enterprise` came to exist on one side only. The ratchet may
     # shrink; a new unresolvable member fails.
-    for name in sorted(union_types - resolvable - KNOWN_UNION_ONLY_TYPES):
+    for name in sorted(union_types - resolvable - union_only_ratchet):
         failures.append(("union-type-unresolvable", f"ConnectorType union member {name!r} names no connector, profile or alias"))
-    for name in sorted(KNOWN_UNION_ONLY_TYPES & resolvable):
+    for name in sorted(union_only_ratchet & resolvable):
         failures.append(
             (
                 "union-ratchet-stale",
@@ -394,12 +434,17 @@ def load(root: Path) -> dict:
     data = {
         "profile_keys": parse_profile_keys(src),
         "type_aliases": parse_type_aliases(src),
+        "canonical_types": parse_canonical_types(src),
         "identity": parse_identity_destinations(src),
         "connectors": parse_connectors(connectors_dir),
         "doc_examples": parse_doc_examples(root),
         "go_tests": set(re.findall(r"^func (Test\w+)\(", normalizer_test.read_text(encoding="utf-8"), re.MULTILINE)),
         "template_names": {p.name for p in templates_dir.glob("*.yaml")},
         "union_types": parse_union_types(ts_types),
+        # Carried as an input rather than read from the module global so the
+        # self-test can prove the ratchet rule still bites now that it is
+        # empty. An empty ratchet is the goal, not an excuse to stop checking.
+        "union_only_ratchet": set(KNOWN_UNION_ONLY_TYPES),
     }
     # An empty parse means the format moved, not that the tree is clean.
     for name in ("profile_keys", "connectors", "identity", "go_tests", "template_names", "union_types"):
@@ -439,6 +484,9 @@ def main(argv: list[str] | None = None) -> int:
                     "declared_connectors": len(declared),
                     "profile_keys": sorted(data["profile_keys"]),
                     "type_aliases": data["type_aliases"],
+                    "canonical_types": data["canonical_types"],
+                    "union_types": sorted(data["union_types"]),
+                    "union_only_ratchet": sorted(KNOWN_UNION_ONLY_TYPES),
                     "with_profile": with_profile,
                     "canonical_envelope_only": canonical_only,
                     "generic_fallback_only": generic_only,
@@ -453,10 +501,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # Name the tree and the inputs before the verdict.
     print(f"repo root        {root}")
-    print(f"normalizer       {NORMALIZER_REL}  ({len(data['profile_keys'])} profiles, {len(data['type_aliases'])} type aliases)")
+    print(
+        f"normalizer       {NORMALIZER_REL}  ({len(data['profile_keys'])} profiles, "
+        f"{len(data['type_aliases'])} type aliases, {len(data['canonical_types'])} canonical folds)"
+    )
     print(f"connectors       {CONNECTORS_REL}  ({len(declared)} declared connector ids)")
     print(f"templates        {TEMPLATES_REL}  ({len(data['template_names'])} webhook templates)")
-    print(f"console types    {TS_TYPES_REL}  ({len(data['union_types'])} ConnectorType union members)")
+    print(
+        f"console types    {TS_TYPES_REL}  ({len(data['union_types'])} ConnectorType union members, "
+        f"{len(KNOWN_UNION_ONLY_TYPES)} on the unresolvable ratchet)"
+    )
     occurrences = sum(len(v) for v in data["doc_examples"].values())
     print(f"doc examples     {len(data['doc_examples'])} distinct connector_type values across {occurrences} occurrences")
     print()
@@ -558,9 +612,29 @@ def self_test(root: Path) -> int:
             mutate(union_types=lambda s: s.add("acme_console_only")),
         ),
         (
+            "GO -> PY: a canonical fold onto a connector nobody declares",
+            "canonical-target-undeclared",
+            mutate(canonical_types=lambda d: d.update({"ibm_qradar": "qradar_nonexistent"})),
+        ),
+        (
+            "GO -> PY: a canonical fold whose source is itself a real connector",
+            "canonical-source-declared",
+            mutate(canonical_types=lambda d: d.update({"qualys": "qradar"})),
+        ),
+        (
+            "GO -> PY: a name carried by both alias maps, so one is dead code",
+            "canonical-double-mapped",
+            mutate(canonical_types=lambda d: d.update({"okta": "chronicle"})),
+        ),
+        (
+            "GO -> PY: a fold onto a name that itself folds somewhere else",
+            "canonical-chained",
+            mutate(canonical_types=lambda d: d.update({"legacy_slack": "slack"})),
+        ),
+        (
             "TS -> *: the union ratchet left stale after a name starts resolving",
             "union-ratchet-stale",
-            mutate(connectors=lambda d: d.update({"vectra_ai": True})),
+            mutate(union_only_ratchet=lambda s: s.add("qualys")),
         ),
         (
             "GO -> PY: the last route to a legacy profile key disappears",
