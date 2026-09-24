@@ -320,6 +320,20 @@ class Settings(BaseSettings):
     # this default mirrors the compose default so ``aisoc serve`` works on a
     # fresh clone with zero configuration.
     DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc_dev_secret@localhost:5432/aisoc"  # type: ignore[assignment]
+
+    # The role that applies the migration chain, which is *not* the role that
+    # serves requests. ``DATABASE_URL`` points at `aisoc_app`, which holds DML
+    # only and is subject to row-level security; DDL needs the table owner.
+    #
+    # Falls back to ``DATABASE_URL`` when unset, so a deployment that has not
+    # split the roles yet behaves exactly as it did before. Where they are
+    # split and this is left unset, the migration run fails on the first
+    # ``CREATE TABLE`` with "permission denied for schema public" — a loud
+    # failure at deploy time, which is the right place for it.
+    DATABASE_MIGRATION_URL: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_MIGRATION_URL", "AISOC_DATABASE_MIGRATION_URL"),
+    )
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     # Recycle pooled connections before managed Postgres idle-closes them.

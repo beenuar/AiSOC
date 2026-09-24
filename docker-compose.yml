@@ -26,6 +26,24 @@
 # `ports: !reset []` to stop publishing a service on the host entirely.
 #
 # Rotate the password while you're there.
+#
+# TWO DATABASE ROLES
+# ------------------
+# `aisoc`     owner / migrations. Superuser, because POSTGRES_USER is what the
+#             postgres image makes it. Applies the migration chain. NO SERVICE
+#             CONNECTS AS THIS ROLE.
+# `aisoc_app` runtime. SELECT / INSERT / UPDATE / DELETE and nothing else, and
+#             row-level security applies to it. Every service's DATABASE_URL.
+#
+# Until this split, every service ran as `aisoc`, and a superuser ignores RLS
+# policies even under FORCE ROW LEVEL SECURITY — so all 92 policies in the
+# schema filtered nothing. See services/api/migrations/061_runtime_app_role.sql.
+#
+# Every service below runs as the scoped role. Nothing needs a cross-tenant
+# role: the policies are `tenant_id = current_tenant_id() OR current_tenant_id()
+# IS NULL`, so ingest, fusion, the retention purge and the schedulers — none of
+# which bind a tenant — keep seeing every tenant's rows. The per-service
+# reasoning is tabulated in apps/docs/docs/operations/security.md.
 ###############################################################################
 
 networks:
@@ -51,14 +69,30 @@ services:
     image: postgres:16-alpine
     container_name: aisoc-postgres
     environment:
+      # The OWNER / migration role. Superuser, because that is what the
+      # postgres image makes POSTGRES_USER, and it is what applies the chain.
+      # No service connects as this role — see the DATABASE_URL entries below.
       POSTGRES_DB: aisoc
       POSTGRES_USER: aisoc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisoc_dev_secret}
+      # The RUNTIME role's credential. `zz_runtime_role_password.sh` applies it
+      # on first boot, after 061_runtime_app_role.sql has created the role with
+      # DML-only grants. Rotate it the same way you rotate POSTGRES_PASSWORD;
+      # the two are deliberately different values because they are different
+      # privilege levels.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./services/api/migrations:/docker-entrypoint-initdb.d:ro
+      # The init hooks: 10_ applies the migration chain, 20_ gives the runtime
+      # role its password. They live in one directory because Docker cannot
+      # create a mountpoint inside a bind mount — binding a single file into a
+      # bound `/docker-entrypoint-initdb.d` fails the container at startup.
+      # Only runs when the data directory is empty; an upgrade in place is
+      # covered by app.scripts.run_migrations instead.
+      - ./infra/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./services/api/migrations:/aisoc/migrations:ro
     networks:
       - aisoc
     healthcheck:
@@ -253,7 +287,16 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Two roles, on purpose. DATABASE_URL is the runtime role: DML only, and
+      # row-level security applies to it. DATABASE_MIGRATION_URL is the owner,
+      # used by `app.scripts.run_migrations` for DDL and nothing else. Running
+      # the service as the owner is what made all 92 RLS policies inert, since
+      # a superuser ignores them even under FORCE ROW LEVEL SECURITY.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the migration runner to (re)apply the runtime role's password
+      # on an existing data volume, where the postgres init hook never fires.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
@@ -321,7 +364,7 @@ services:
       # from your SIEM" path was unreachable on every local and CI stack.
       # This is a pgx DSN and is deliberately distinct from the SQLAlchemy
       # DATABASE_URL the Python services use.
-      DATABASE_DSN: postgres://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc?sslmode=disable
+      DATABASE_DSN: postgres://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc?sslmode=disable
       LOG_LEVEL: info
       JWT_SECRET: dev_secret_key_change_in_production
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
@@ -386,7 +429,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/3
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # The ClickHouse event lake is a `full`-profile capability: it backs
       # /lake/sql and the hunt surface, not alerting. CORE runs without it and
       # the writer disables itself.
@@ -423,7 +466,7 @@ services:
     ports:
       - "127.0.0.1:8001:8084"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
       CORE_API_URL: http://api:8000
       # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
@@ -512,7 +555,7 @@ services:
     profiles:
       - osquery
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
       # The ingest service is registered as `ingest-worker` in this compose
       # file; the previous `http://ingest:8080` would not resolve via DNS.
@@ -543,7 +586,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/5
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       CORE_API_URL: http://api:8000
       # Must match AISOC_ACTIONS_SERVICE_TOKEN on the api and slack-bot
       # services. Unset in dev, where AISOC_DEV_MODE relaxes the check;
@@ -577,7 +620,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/6
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       CORE_API_URL: http://api:8000
       CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
       CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
@@ -652,7 +695,7 @@ services:
     ports:
       - "127.0.0.1:8007:8004"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/8
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
@@ -684,7 +727,7 @@ services:
     ports:
       - "127.0.0.1:8008:8005"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/9
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CORE_API_URL: http://api:8000
@@ -713,7 +756,7 @@ services:
     ports:
       - "127.0.0.1:8006:8006"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/10
       CORE_API_URL: http://api:8000
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json

@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.clickhouse import execute_lake_query
+from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.services.retention import _clamp, build_lake_purge_sql, resolve_policy
 
@@ -113,13 +114,19 @@ def build_alert_count_sql(days: int) -> tuple[str, dict[str, int]]:
 async def _load_policies(db: AsyncSession) -> list[tuple[uuid.UUID, dict[str, int]]]:
     """Tenants with an explicit retention policy row.
 
-    Read with row security off: the worker is cross-tenant by nature, and the
-    per-tenant predicate is applied explicitly in each statement below rather
-    than being inherited from a session GUC. Relying on RLS here would mean the
-    purge silently no-ops when the GUC is unset, which is precisely the failure
-    class this worker exists to remove.
+    The worker is cross-tenant by nature, and the per-tenant predicate is
+    applied explicitly in each statement below rather than being inherited
+    from a session GUC.
+
+    This used to open with ``SET LOCAL row_security = off``. Under the runtime
+    role (``migrations/061_runtime_app_role.sql``) that raises rather than
+    relaxing anything, because Postgres refuses the query instead of ignoring
+    the policy for a role the policy applies to. The cross-tenant read now
+    rests on the ``OR current_tenant_id() IS NULL`` arm every policy carries,
+    and the precondition that makes that arm apply is asserted instead of
+    assumed.
     """
-    await db.execute(text("SET LOCAL row_security = off"))
+    await assert_cross_tenant_session(db, "retention purge policy load")
     rows = await db.execute(
         text("SELECT tenant_id, raw_events_days, alerts_days, audit_days " "FROM retention_policies ORDER BY tenant_id")
     )

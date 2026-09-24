@@ -18,20 +18,21 @@ makes such a test mean anything:
    step exists to prevent.
 3. Assert the tenant-A-scoped read returns A's row and never B's.
 
-Read as the *non-superuser the policies are written for*
---------------------------------------------------------
+Read as the role the deployment actually ships
+----------------------------------------------
 A superuser, or any role with BYPASSRLS, ignores policies even under FORCE ROW
-LEVEL SECURITY. ``docker-compose.yml`` and the CI service containers both run
-every service as ``POSTGRES_USER=aisoc``, which the postgres image creates as a
-superuser — so in the shipped configuration **every policy in this database is
-bypassed**. ``test_superuser_bypasses_rls_which_is_why_the_probe_role_exists``
-pins that as a measured fact rather than a caveat in a comment, so nobody reads
-the green ticks below as "tenant isolation is on in production".
+LEVEL SECURITY. Until ``061_runtime_app_role.sql`` every service ran as
+``POSTGRES_USER=aisoc``, which the postgres image creates as a superuser, so
+every policy in this database was bypassed — and this suite compensated by
+building its own ``NOSUPERUSER NOBYPASSRLS`` role to read as. That made the
+green ticks below a statement about a role nothing ran as.
 
-The rest of this suite therefore connects as a purpose-made role with neither
-SUPERUSER nor BYPASSRLS. That is the configuration the policies are written
-for, and the one ``apps/docs/docs/operations/security.md`` tells operators to
-deploy.
+So the role under test is now ``DATABASE_URL``: whatever the deployment
+connects as. ``DATABASE_MIGRATION_URL`` (the owner) is used only for seeding,
+which needs DDL-adjacent privileges the runtime role deliberately lacks.
+``test_the_shipped_role_does_not_bypass_rls`` asserts the distinction is real
+before anything else is measured, so a deployment that collapses the two roles
+fails here rather than passing vacuously.
 
 Skips when no database answers, so a local ``pytest tests/isolation`` stays
 green — but **cannot** skip where it is supposed to run. ``integration.yml``
@@ -55,7 +56,17 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS = REPO_ROOT / "services" / "api" / "migrations"
 
+#: The role the deployment connects as — the one whose behaviour this file is
+#: about. Not a role the test invents.
 DSN = os.environ.get("DATABASE_URL", "")
+
+#: The owner. Seeding needs ``SET session_replication_role = replica`` so a
+#: foreign key does not force a full object graph per table, and that is
+#: superuser-only; the runtime role must not have it. Falls back to ``DSN`` so
+#: a single-role deployment still runs — and then fails loudly on
+#: :func:`test_the_shipped_role_does_not_bypass_rls`, which is the point.
+ADMIN_DSN = os.environ.get("DATABASE_MIGRATION_URL", "").strip() or DSN
+
 REQUIRED = os.environ.get("POSTGRES_RLS_ISOLATION_REQUIRED", "").strip() not in ("", "0", "false")
 
 #: Applied to every test. ``pytest.mark.asyncio`` is attached per-test instead
@@ -69,12 +80,6 @@ pytestmark = pytest.mark.skipif(
 # Fixed ids so a failure names something greppable.
 TENANT_A = uuid.UUID("0c000000-0000-0000-0000-00000000000a")
 TENANT_B = uuid.UUID("0c000000-0000-0000-0000-00000000000b")
-
-#: A role with neither SUPERUSER nor BYPASSRLS. Created by the fixture rather
-#: than reusing ``aisoc_app`` from 002_rls.sql, whose password is a literal
-#: ``changeme`` that no deployment should keep and no test should depend on.
-PROBE_ROLE = "aisoc_rls_probe"
-PROBE_PASSWORD = "rls-probe-not-a-deployment-credential"
 
 #: Excluded from RLS on purpose; see the header of 060_rls_coverage.sql.
 #: ``users`` must resolve a principal before any tenant exists, and
@@ -93,6 +98,16 @@ def _asyncpg_dsn(url: str) -> str:
         if url.startswith(prefix):
             return "postgresql://" + url[len(prefix) :]
     return url
+
+
+def _redact(dsn: str) -> str:
+    """A DSN safe to put in a failure message: role and host, never the password."""
+    return re.sub(r"//([^:/@]*)(:[^@]*)?@", r"//\1:***@", dsn)
+
+
+def _role_of(dsn: str) -> str:
+    match = re.search(r"//([^:/@]+)", dsn)
+    return match.group(1) if match else "?"
 
 
 #: Quoted literals inside a CHECK constraint, e.g.
@@ -252,37 +267,47 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
     await conn.execute(f'INSERT INTO public."{table}" ({", ".join(names)}) VALUES ({", ".join(values)})')  # noqa: S608
 
 
-async def _make_probe_role() -> str:
-    """A DSN for a role with neither SUPERUSER nor BYPASSRLS."""
+async def _connect_admin():
+    """Owner connection, used for seeding only."""
+    asyncpg = pytest.importorskip("asyncpg")
+    if not ADMIN_DSN:
+        pytest.skip("neither DATABASE_MIGRATION_URL nor DATABASE_URL is set")
+    dsn = _asyncpg_dsn(ADMIN_DSN)
+    try:
+        return await asyncpg.connect(dsn)
+    except Exception as exc:  # noqa: BLE001
+        # Both branches raise, but `pytest.fail`/`skip` are not annotated
+        # NoReturn, so without the explicit raise the function reads as one
+        # that sometimes returns None (`py/mixed-returns`).
+        if REQUIRED:
+            pytest.fail(f"POSTGRES_RLS_ISOLATION_REQUIRED is set but no database answered at {_redact(dsn)}: {exc}")
+        pytest.skip(f"no Postgres at {_redact(dsn)}: {exc}")
+        raise
+
+
+async def _runtime_dsn() -> str:
+    """The deployment's own DSN, checked to be usable before anything is read.
+
+    A connect failure here is the finding, not a reason to skip: the point of
+    this suite is that the shipped credential works *and* is constrained, and
+    "the role could not log in" is how a half-applied role split presents.
+    """
     asyncpg = pytest.importorskip("asyncpg")
     if not DSN:
         pytest.skip("DATABASE_URL not set")
-    admin_dsn = _asyncpg_dsn(DSN)
+    dsn = _asyncpg_dsn(DSN)
     try:
-        admin = await asyncpg.connect(admin_dsn)
+        conn = await asyncpg.connect(dsn)
     except Exception as exc:  # noqa: BLE001
         if REQUIRED:
-            pytest.fail(f"POSTGRES_RLS_ISOLATION_REQUIRED is set but no database answered at {admin_dsn!r}: {exc}")
-        pytest.skip(f"no Postgres at {admin_dsn!r}: {exc}")
-    try:
-        await admin.execute(
-            f"""
-            DO $$ BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{PROBE_ROLE}') THEN
-                    CREATE ROLE {PROBE_ROLE} LOGIN PASSWORD '{PROBE_PASSWORD}';
-                END IF;
-            END $$;
-            """
-        )
-        # NOSUPERUSER / NOBYPASSRLS are the whole point of this role.
-        await admin.execute(f"ALTER ROLE {PROBE_ROLE} WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '{PROBE_PASSWORD}'")
-        await admin.execute(f"GRANT USAGE ON SCHEMA public TO {PROBE_ROLE}")
-        await admin.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {PROBE_ROLE}")
-        await admin.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {PROBE_ROLE}")
-    finally:
-        await admin.close()
-
-    return re.sub(r"//[^@]*@", f"//{PROBE_ROLE}:{PROBE_PASSWORD}@", _asyncpg_dsn(DSN), count=1)
+            pytest.fail(
+                f"the deployment's own DATABASE_URL ({_redact(dsn)}) could not connect: {exc}. "
+                "061_runtime_app_role.sql creates aisoc_app without a password; the deployment "
+                "supplies one through AISOC_APP_DB_PASSWORD."
+            )
+        pytest.skip(f"DATABASE_URL unusable ({_redact(dsn)}): {exc}")
+    await conn.close()
+    return dsn
 
 
 #: Populated once by :func:`_seeded`. A module-scoped *async* fixture binds
@@ -296,13 +321,12 @@ async def _seeded() -> dict:
 
     Seeding runs as the owner with replication-role ``replica`` so foreign keys
     do not force a full object graph per table. The *reads* under test all run
-    as the probe role, which is what the policies are written for.
+    as the deployment's own role, which is what the policies are written for.
     """
     if _STATE:
         return dict(_STATE)
-    probe_dsn = await _make_probe_role()
-    asyncpg = pytest.importorskip("asyncpg")
-    admin = await asyncpg.connect(_asyncpg_dsn(DSN))
+    runtime_dsn = await _runtime_dsn()
+    admin = await _connect_admin()
     enum_labels: dict[str, list[str]] = {}
     seeded_tables: list[str] = []
     unseedable: dict[str, str] = {}
@@ -336,7 +360,7 @@ async def _seeded() -> dict:
     finally:
         await admin.close()
 
-    _STATE.update({"tables": tables, "seeded": seeded_tables, "unseedable": unseedable, "probe_dsn": probe_dsn})
+    _STATE.update({"tables": tables, "seeded": seeded_tables, "unseedable": unseedable, "runtime_dsn": runtime_dsn})
     return dict(_STATE)
 
 
@@ -346,31 +370,88 @@ async def _seeded() -> dict:
 
 
 @pytest.mark.asyncio
-async def test_superuser_bypasses_rls_which_is_why_the_probe_role_exists() -> None:
-    """The role the services actually connect as ignores every policy here.
+async def test_the_shipped_role_does_not_bypass_rls() -> None:
+    """Every other result in this file is conditional on this one.
 
-    Not a caveat in a docstring — a measurement. ``docker-compose.yml`` runs
-    every service as ``POSTGRES_USER=aisoc``, and the postgres image creates
-    that role as a superuser. If this test ever *fails* because the connecting
-    role stopped bypassing RLS, that is good news and the deployment docs
-        should say so.
+    A superuser, or any role with BYPASSRLS, ignores policies even under FORCE
+    ROW LEVEL SECURITY, and an owner can simply turn FORCE off. So before any
+    isolation is measured, establish that the role the deployment connects as
+    holds none of the three.
+
+    This assertion is the inverse of the one it replaces. That one measured
+    the shipped role *bypassing* RLS and pinned it as a fact, because it did;
+    061_runtime_app_role.sql is what made the inverse true.
     """
-    await _seeded()
+    seeded = await _seeded()
     asyncpg = pytest.importorskip("asyncpg")
-    admin = await asyncpg.connect(_asyncpg_dsn(DSN))
+    conn = await asyncpg.connect(seeded["runtime_dsn"])
     try:
-        is_super = await admin.fetchval("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
-        if not is_super:
-            pytest.skip(f"connected as {DSN.split('//')[-1].split(':')[0]!r}, which does not bypass RLS — policies are live")
-        async with admin.transaction():
-            await admin.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
-            both = await admin.fetchval("SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B)
-        assert both == 2, (
-            f"expected the bypassing role to see both tenants' alerts, saw {both} — "
-            "if this dropped to 1 the connection role changed and the docs are now understating the guarantee"
+        row = await conn.fetchrow(
+            "SELECT current_user AS role, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+        )
+        owned = await conn.fetchval(
+            """
+            SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public' AND c.relkind IN ('r','v','m','p')
+               AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+            """
         )
     finally:
+        await conn.close()
+
+    problems = []
+    if row["rolsuper"]:
+        problems.append("SUPERUSER")
+    if row["rolbypassrls"]:
+        problems.append("BYPASSRLS")
+    if owned:
+        problems.append(f"owns {owned} object(s) in public, so it can ALTER TABLE … NO FORCE ROW LEVEL SECURITY")
+    assert not problems, (
+        f"DATABASE_URL connects as {row['role']!r}, which holds {', '.join(problems)}. "
+        "Every policy in this database is then decoration and the assertions below prove nothing. "
+        "Point DATABASE_URL at the runtime role and DATABASE_MIGRATION_URL at the owner — see "
+        "services/api/migrations/061_runtime_app_role.sql."
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_owner_still_bypasses_which_is_why_they_are_two_roles() -> None:
+    """The other half of the split, asserted so it cannot silently merge.
+
+    If ``DATABASE_MIGRATION_URL`` ever ends up pointing at the runtime role,
+    migrations fail at the first ``CREATE TABLE`` — loudly, and at deploy
+    time. The reverse, both variables pointing at the owner, is the state this
+    whole change exists to end and is *silent*. So measure the contrast
+    directly: the same read, as each role, must differ.
+    """
+    seeded = await _seeded()
+    asyncpg = pytest.importorskip("asyncpg")
+    admin = await _connect_admin()
+    try:
+        async with admin.transaction():
+            await admin.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
+            owner_sees = await admin.fetchval(
+                "SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B
+            )
+    finally:
         await admin.close()
+
+    runtime = await asyncpg.connect(seeded["runtime_dsn"])
+    try:
+        async with runtime.transaction():
+            await runtime.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
+            runtime_sees = await runtime.fetchval(
+                "SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B
+            )
+    finally:
+        await runtime.close()
+
+    assert runtime_sees == 1, f"the runtime role bound to tenant A saw {runtime_sees} of the 2 seeded alerts, not 1"
+    assert owner_sees == 2, (
+        f"the owner bound to tenant A saw {owner_sees}, not both. That is not a leak — it means "
+        f"DATABASE_MIGRATION_URL ({_role_of(ADMIN_DSN)}) is not the owner, and the migration chain "
+        "will fail the next time it needs DDL."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -399,14 +480,14 @@ async def test_scoped_read_as_A_never_returns_B() -> None:
     """The property, table by table, as a non-bypassing role."""
     seeded = await _seeded()
     asyncpg = pytest.importorskip("asyncpg")
-    probe = await asyncpg.connect(seeded["probe_dsn"])
+    runtime = await asyncpg.connect(seeded["runtime_dsn"])
     leaked: list[str] = []
     vacuous: list[str] = []
     checked = 0
     try:
         for table in seeded["seeded"]:
             # (2) Unscoped: both tenants' rows are really there.
-            unscoped = await probe.fetchval(
+            unscoped = await runtime.fetchval(
                 f'SELECT count(*) FROM public."{table}" WHERE tenant_id::text = ANY($1::text[])',  # noqa: S608
                 [str(TENANT_A), str(TENANT_B)],
             )
@@ -415,13 +496,13 @@ async def test_scoped_read_as_A_never_returns_B() -> None:
                 continue
 
             # (3) Scoped to A: A's row, never B's.
-            async with probe.transaction():
-                await probe.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
-                seen_a = await probe.fetchval(
+            async with runtime.transaction():
+                await runtime.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
+                seen_a = await runtime.fetchval(
                     f'SELECT count(*) FROM public."{table}" WHERE tenant_id::text = $1',  # noqa: S608
                     str(TENANT_A),
                 )
-                seen_b = await probe.fetchval(
+                seen_b = await runtime.fetchval(
                     f'SELECT count(*) FROM public."{table}" WHERE tenant_id::text = $1',  # noqa: S608
                     str(TENANT_B),
                 )
@@ -431,7 +512,7 @@ async def test_scoped_read_as_A_never_returns_B() -> None:
                 leaked.append(f"{table}: tenant A could not see its own row ({seen_a}), so the policy is over-tight")
             checked += 1
     finally:
-        await probe.close()
+        await runtime.close()
 
     assert not vacuous, "seeded rows were not visible even unscoped, so the scoped assertions prove nothing: " + "; ".join(vacuous)
     assert not leaked, "; ".join(leaked)
@@ -449,16 +530,16 @@ async def test_a_session_with_no_tenant_context_still_sees_everything() -> None:
     """
     seeded = await _seeded()
     asyncpg = pytest.importorskip("asyncpg")
-    probe = await asyncpg.connect(seeded["probe_dsn"])
+    runtime = await asyncpg.connect(seeded["runtime_dsn"])
     try:
         for table in seeded["seeded"][:20]:
-            both = await probe.fetchval(
+            both = await runtime.fetchval(
                 f'SELECT count(*) FROM public."{table}" WHERE tenant_id::text = ANY($1::text[])',  # noqa: S608
                 [str(TENANT_A), str(TENANT_B)],
             )
             assert both == 2, f"{table}: a worker connection with no tenant context saw {both} of 2 rows, not both"
     finally:
-        await probe.close()
+        await runtime.close()
 
 
 @pytest.mark.asyncio
@@ -471,8 +552,7 @@ async def test_no_policy_reads_a_session_variable_nothing_sets() -> None:
     ``unrecognized configuration parameter``. Both are invisible while a
     superuser bypasses them.
     """
-    asyncpg = pytest.importorskip("asyncpg")
-    admin = await asyncpg.connect(_asyncpg_dsn(DSN))
+    admin = await _connect_admin()
     try:
         rows = await admin.fetch("SELECT tablename, policyname, qual FROM pg_policies WHERE schemaname = 'public'")
     finally:
@@ -503,8 +583,7 @@ async def test_every_tenant_table_is_protected_or_named() -> None:
     two documented exclusions. Reverse: an exclusion that no longer describes
     an unprotected table fails too, so the list cannot outlive its reason.
     """
-    asyncpg = pytest.importorskip("asyncpg")
-    admin = await asyncpg.connect(_asyncpg_dsn(DSN))
+    admin = await _connect_admin()
     try:
         unprotected = {
             r["t"]
@@ -582,7 +661,11 @@ async def test_attack_path_relational_fallback_refuses_another_tenants_case() ->
         sys.path.insert(0, str(api_root))
     from app.api.v1.endpoints.graph import _attack_path_from_relational  # noqa: PLC0415
 
-    sa_url = DSN if DSN.startswith("postgresql+") else "postgresql+asyncpg://" + _asyncpg_dsn(DSN).split("://", 1)[1]
+    # Owner connection: this replay needs `SET session_replication_role = replica`,
+    # which is superuser-only and which the runtime role must not have.
+    sa_url = (
+        ADMIN_DSN if ADMIN_DSN.startswith("postgresql+") else "postgresql+asyncpg://" + _asyncpg_dsn(ADMIN_DSN).split("://", 1)[1]
+    )
     engine = sqlalchemy_asyncio.create_async_engine(sa_url)
     case_a = uuid.uuid4()
     case_b = uuid.uuid4()

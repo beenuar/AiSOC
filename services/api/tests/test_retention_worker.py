@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 import pytest
+from app.db.cross_tenant import CrossTenantPreconditionError
 from app.services.retention import build_alert_purge_sql, build_lake_purge_sql
 from app.workers import retention_purge
 from app.workers.retention_purge import (
@@ -47,11 +48,26 @@ class FakeScalarResult:
 class FakeSession:
     """Records every statement so tenant scoping can be asserted, not assumed."""
 
-    def __init__(self, policies: list[dict[str, Any]], alert_counts: dict[str, int]) -> None:
+    def __init__(
+        self,
+        policies: list[dict[str, Any]],
+        alert_counts: dict[str, int],
+        bound_tenant: str | None = None,
+    ) -> None:
         self._policies = policies
         self._alert_counts = alert_counts
+        #: What ``current_setting('app.current_tenant_id', true)`` answers.
+        #: ``None`` is the cross-tenant case the worker requires.
+        self._bound_tenant = bound_tenant
         self.statements: list[tuple[str, dict[str, Any]]] = []
         self.committed = False
+
+    async def scalar(self, stmt: Any, params: dict[str, Any] | None = None) -> Any:
+        sql = str(stmt)
+        self.statements.append((sql, dict(params or {})))
+        if "app.current_tenant_id" in sql:
+            return self._bound_tenant
+        return None
 
     async def execute(self, stmt: Any, params: dict[str, Any] | None = None) -> Any:
         sql = str(stmt)
@@ -234,13 +250,38 @@ class TestResilience:
         assert run.tenants[1].lake_rows == 2
 
 
-async def test_row_security_is_disabled_before_enumerating_tenants(
+async def test_cross_tenant_precondition_is_checked_before_enumerating_tenants(
     lake_calls: list[Any],
 ) -> None:
-    """Without this the worker reads zero policies and purges nothing, quietly."""
+    """Without this the worker reads zero policies and purges nothing, quietly.
+
+    The check used to be ``SET LOCAL row_security = off``, which only worked
+    because the deployment connected as a superuser — and which *raises* for
+    the runtime role introduced in ``migrations/061_runtime_app_role.sql``.
+    The cross-tenant read now rests on the ``OR current_tenant_id() IS NULL``
+    arm, so what has to be asserted is that no tenant was bound.
+    """
     db = FakeSession([_policy(TENANT_A)], {})
     await run_once(db=db, dry_run=True)
-    assert "SET LOCAL row_security = off" in db.statements[0][0]
+    assert "app.current_tenant_id" in db.statements[0][0]
+    assert not any("row_security" in sql for sql, _ in db.statements), (
+        "SET LOCAL row_security = off raises for a role the policies apply to; " "the worker must not reintroduce it"
+    )
+
+
+async def test_a_sweep_on_a_tenant_bound_session_refuses_rather_than_purging_one_tenant(
+    lake_calls: list[Any],
+) -> None:
+    """The one way this worker can go quiet, made loud.
+
+    A bound session sees a single tenant, so the sweep would purge that
+    tenant's rows under whatever policy it happened to load and report
+    success. That is worse than not running.
+    """
+    db = FakeSession([_policy(TENANT_A)], {}, bound_tenant=str(TENANT_A))
+    with pytest.raises(CrossTenantPreconditionError):
+        await run_once(db=db, dry_run=True)
+    assert not db.deletes(), "the sweep must refuse before issuing any delete"
 
 
 async def test_audit_is_not_purged(lake_calls: list[Any]) -> None:

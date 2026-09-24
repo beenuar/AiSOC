@@ -77,9 +77,13 @@ services:
     image: postgres:16-alpine
     container_name: aisoc-demo-postgres
     environment:
+      # Owner / migration role. No service connects as this one.
       POSTGRES_DB: aisoc
       POSTGRES_USER: aisoc
       POSTGRES_PASSWORD: aisoc_dev_secret
+      # Runtime role credential, applied by the init hook below once
+      # 061_runtime_app_role.sql has created the role and its grants.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
     # Host port is overridable so `pnpm aisoc:demo` can fall forward to the
     # next free port when a local Postgres is already bound to 5432. The
     # container port stays at 5432; only the publish side changes.
@@ -87,6 +91,13 @@ services:
       - "127.0.0.1:${AISOC_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_demo_data:/var/lib/postgresql/data
+      # The demo used to leave the whole schema to the API's startup migration
+      # run. It now applies the chain at init for the same reason the root
+      # stack does: the runtime role's grants come from 061, and they have to
+      # exist before the first service authenticates. `depends_on:
+      # service_healthy` then makes the ordering a guarantee rather than a race.
+      - ../postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ../../services/api/migrations:/aisoc/migrations:ro
     networks:
       - aisoc-demo
     healthcheck:
@@ -178,7 +189,10 @@ services:
     ports:
       - "127.0.0.1:${AISOC_API_PORT:-8000}:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # DDL runs as the owner; the service itself does not hold it.
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SECRET_KEY: dev_secret_key_change_in_production
@@ -222,7 +236,7 @@ services:
     ports:
       - "127.0.0.1:${AISOC_AGENTS_PORT:-8001}:8084"
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/4
       CORE_API_URL: http://api:8000
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -285,7 +299,7 @@ services:
       api:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@postgres:5432/aisoc
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:redis_dev_secret@redis:6379/0
       SECRET_KEY: dev_secret_key_change_in_production
       ENV: development

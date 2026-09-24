@@ -38,11 +38,21 @@ class FakeScalar:
 
 
 class FakeSession:
-    def __init__(self, counts: dict[str, int] | None = None) -> None:
+    def __init__(self, counts: dict[str, int] | None = None, bound_tenant: str | None = None) -> None:
         self.counts = counts if counts is not None else dict.fromkeys(DISCOVERED, 2)
+        #: What ``current_setting('app.current_tenant_id', true)`` answers.
+        #: ``None`` is the cross-tenant case the purge requires.
+        self._bound_tenant = bound_tenant
         self.statements: list[str] = []
         self.committed = False
         self.rolled_back = False
+
+    async def scalar(self, stmt: Any, params: dict[str, Any] | None = None) -> Any:
+        sql = " ".join(str(stmt).split())
+        self.statements.append(sql)
+        if "app.current_tenant_id" in sql:
+            return self._bound_tenant
+        return None
 
     async def execute(self, stmt: Any, params: dict[str, Any] | None = None) -> Any:
         sql = " ".join(str(stmt).split())
@@ -238,3 +248,21 @@ def test_report_serialises_every_store() -> None:
     assert payload["complete"] is False
     assert payload["total_rows"] == 10
     assert {s["store"] for s in payload["stores"]} == {"postgres", "neo4j"}
+
+
+async def test_a_purge_on_a_tenant_bound_session_refuses_rather_than_deleting_a_fraction() -> None:
+    """The one way this can go quiet, made loud.
+
+    The purge is cross-tenant by construction and used to open with
+    ``SET LOCAL row_security = off``, which only worked because the deployment
+    connected as a superuser. Under the runtime role
+    (``migrations/061_runtime_app_role.sql``) that statement raises, so the
+    read now rests on the ``OR current_tenant_id() IS NULL`` arm — and a
+    session that *did* bind a tenant would delete some of that tenant's rows
+    and report the deletion complete. For an operation whose output is a
+    compliance claim, that is the worst available outcome.
+    """
+    db = FakeSession(bound_tenant=str(TENANT))
+    result = await tenant_deletion.purge_postgres(db, TENANT, dry_run=False)
+    assert result.error and "CrossTenantPreconditionError" in result.error
+    assert not db.deletes(), "the purge must refuse before issuing any delete"

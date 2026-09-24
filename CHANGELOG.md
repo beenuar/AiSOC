@@ -920,6 +920,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The services no longer connect to Postgres as a superuser, so the 92
+  row-level-security policies added below now actually filter.** The previous
+  entry closed the coverage gap and measured, in the same breath, that none of
+  it did anything: `docker-compose.yml`, the CI service containers, the Helm
+  chart and the Terraform environment all ran every service as
+  `POSTGRES_USER=aisoc`, which the postgres image creates as a **superuser**,
+  and a superuser ignores policies *even under* `FORCE ROW LEVEL SECURITY` —
+  FORCE binds the table owner, not a superuser. Sixty-one new policies bought
+  nothing operationally.
+
+  `061_runtime_app_role.sql` splits the credential in two. `aisoc` owns the
+  schema and applies migrations; `aisoc_app` is what every service connects
+  as, holding `USAGE` on `public`, `SELECT / INSERT / UPDATE / DELETE` on
+  tables and views, `USAGE, SELECT` on sequences and `EXECUTE` on functions —
+  no `CREATE`, no `TRUNCATE` (`002_rls.sql` had granted `ALL`, which let one
+  statement delete every tenant's rows without a policy seeing a `WHERE`
+  clause), and ownership of nothing. Measured on `postgres:16` with two alerts
+  seeded one per tenant and the session bound to tenant A, reading `alerts`
+  with **no tenant predicate at all**: the old role saw 2, the new role sees
+  1, and an insert for tenant B is refused by the policy.
+
+  Things this turned up along the way, each of which would have survived the
+  role switch and quietly undone it:
+
+  - **Two views read around every policy underneath them.** A view executes as
+    its *owner* unless declared `security_invoker`, and both views here are
+    owned by the role that ran the chain. Bound to tenant A,
+    `mssp_tenant_latest_metrics` returned 2 rows before and 1 after.
+  - **`SET LOCAL row_security = off` stops being a no-op and becomes a
+    crash.** For a role the policies apply to, Postgres refuses the query
+    rather than ignoring the policy. The retention purge, the hunt scheduler's
+    sweep and tenant deletion all used it; all three now rely on the
+    `OR current_tenant_id() IS NULL` arm and call `assert_cross_tenant_session()`
+    first, which raises if a tenant *is* bound — a sweep that sees one tenant
+    and reports success is worse than one that fails.
+  - **`CREATE TABLE IF NOT EXISTS` still needs `CREATE` on the schema when the
+    table already exists**, because Postgres checks the ACL before the
+    existence test. Two stores in `services/agents` opened their pool that way
+    and swallowed the failure into `logger.debug`, so the agents service would
+    have silently recorded no cost telemetry and no institutional memory at
+    all. Both tables are already in the migration chain; the bootstrap now
+    probes first and reports at `error` if it genuinely has to create one.
+
+  Deployment surfaces updated: `docker-compose.yml`, the demo compose stack,
+  `integration.yml`, the Helm chart's `values.yaml`, the Terraform environment
+  (which now generates the runtime role's password rather than reusing the RDS
+  master user) and `.env.example`. `infra/postgres/initdb/zz_runtime_role_password.sh`
+  sets the credential on a fresh volume before the container reports healthy;
+  `app.scripts.run_migrations` applies it on every run, which covers an
+  upgrade in place. **Operators on a managed Postgres must act**: apply the
+  chain as the owner with `AISOC_APP_DB_PASSWORD` set, then point
+  `DATABASE_URL` at `aisoc_app` and `DATABASE_MIGRATION_URL` at the owner.
+  `002_rls.sql` created `aisoc_app` with the literal password `changeme`; 061
+  does not clear it (that would break an operator who had already set a real
+  one), so rotate it if none of the automatic paths applies to you.
+
+  Two new gates, both with a self-test that runs before the scan and both
+  failing over an empty or absent tree. `scripts/check_runtime_db_role.py`
+  fails if a runtime DSN connects as the role that surface provisions as the
+  database superuser — structurally, by reading `POSTGRES_USER` /
+  `db_username` out of the tree rather than matching a name — and in
+  `--dsn` mode reads `pg_roles` and `pg_class` directly, catching
+  `rolsuper`, `rolbypassrls`, ownership, a view without `security_invoker`,
+  and a role still accepting `changeme`. `scripts/check_rls_policy_shape.py`
+  fails if a policy is written without the fail-open arm, replaying the chain
+  in order so a definition a later migration repaired is not reported. Both
+  run in `isolation.yml`; the live half runs in `integration.yml`.
+
+  `tests/isolation/test_postgres_rls.py` now reads as `DATABASE_URL` — the
+  role the deployment ships — instead of a `NOSUPERUSER NOBYPASSRLS` role it
+  constructed for itself, so its 80-table two-tenant replay covers what ships.
+  `test_superuser_bypasses_rls_which_is_why_the_probe_role_exists` is replaced
+  by its inverse.
+
 - **Row-level security covered 31 of 95 tenant-scoped tables; it now covers 92,
   and the seven policies that already existed but could never work are
   repaired.** On the other 64 tables the query predicate was the only thing

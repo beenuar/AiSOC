@@ -121,6 +121,23 @@ module "rds" {
   allowed_security_groups = [module.eks.node_security_group_id]
 }
 
+# ─── The runtime database role ────────────────────────────────────────────────
+#
+# RDS creates one master user, and handing it to every service is what left the
+# schema's 92 row-level-security policies filtering nothing: a superuser
+# ignores them even under FORCE ROW LEVEL SECURITY. Services connect as the
+# DML-only role that `services/api/migrations/061_runtime_app_role.sql` creates;
+# the master user is kept for migrations.
+#
+# The password is generated here rather than written down anywhere. Feed it to
+# the job that applies the migration chain as AISOC_APP_DB_PASSWORD — that run
+# is what gives the role a login — and read it back with
+# `terraform output -raw db_app_password`.
+resource "random_password" "db_app" {
+  length  = 32
+  special = false
+}
+
 module "elasticache" {
   source = "./modules/elasticache"
 
@@ -157,8 +174,9 @@ module "osquery_tls" {
 
   replicas = var.osquery_tls_replicas
 
-  enroll_secret   = var.osquery_tls_enroll_secret
-  database_url    = "postgresql+asyncpg://${var.db_username}:${module.rds.db_password}@${module.rds.endpoint}/aisoc"
+  enroll_secret = var.osquery_tls_enroll_secret
+  # The runtime role, not the RDS master user. See random_password.db_app above.
+  database_url    = "postgresql+asyncpg://${var.db_app_username}:${random_password.db_app.result}@${module.rds.endpoint}/aisoc"
   ingest_base_url = "http://aisoc-ingest.aisoc.svc.cluster.local:8080"
 
   autoscaling = {
@@ -203,6 +221,19 @@ output "kafka_bootstrap_servers" {
 output "vpc_id" {
   description = "VPC ID"
   value       = module.vpc.vpc_id
+}
+
+output "db_app_password" {
+  description = "Password for the DML-only runtime role. Supply as AISOC_APP_DB_PASSWORD to the migration job."
+  value       = random_password.db_app.result
+  sensitive   = true
+}
+
+output "database_migration_url" {
+  # aisoc-db-role: owner — the migration chain needs DDL; the runtime role has none
+  description = "DSN for DATABASE_MIGRATION_URL. The RDS master user, used for DDL only."
+  value       = "postgresql+asyncpg://${var.db_username}:${module.rds.db_password}@${module.rds.endpoint}/aisoc"
+  sensitive   = true
 }
 
 output "osquery_tls_internal_url" {

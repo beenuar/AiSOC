@@ -27,11 +27,13 @@ somebody reading this file will see them:
   ledger / hunt store / LLM resolver, and the per-hunt rebind in the hunt
   scheduler. Every other connection — ingest, fusion, the workers — leaves it
   unset, and the policies then fail open by design.
-* The role the services connect as (``POSTGRES_USER=aisoc`` in compose and CI)
-  is a superuser, and a superuser bypasses RLS even under FORCE ROW LEVEL
-  SECURITY. Measured in ``tests/isolation/test_postgres_rls.py``: with two
-  alerts seeded one per tenant and the context bound to tenant A, that role
-  sees both.
+* The role the services connect as used to be a superuser, and a superuser
+  bypasses RLS even under FORCE ROW LEVEL SECURITY, so the second layer was
+  not there at all. ``061_runtime_app_role.sql`` moved every deployment
+  surface onto a DML-only role and ``scripts/check_runtime_db_role.py`` keeps
+  it there, so that caveat is retired — but it applies again the moment an
+  operator points ``DATABASE_URL`` at the owner, which is why the credit below
+  is still counted separately rather than folded into the total.
 
 So on most reads a missing predicate is still a leak rather than a
 defence-in-depth gap, and this gate is still the control that matters.
@@ -56,8 +58,11 @@ Structural signals only, because a naming convention is exactly what drifts:
   a policy. Four ratchet entries described this mechanism instead of a defect.
   Re-checking them found the mechanism did not work: the agents service set
   ``app.tenant_id`` while every policy reads ``app.current_tenant_id``. The
-  rule credits the fixed form and counts it separately in the output, because
-  the credit lapses on a deployment whose role bypasses RLS.
+  rule credits the fixed form and counts it separately in the output. Until
+  061_runtime_app_role.sql that credit lapsed on every shipped deployment,
+  because the connecting role bypassed RLS outright; it now holds by default
+  and lapses only on a deployment that has pointed DATABASE_URL back at the
+  owner — which ``scripts/check_runtime_db_role.py`` fails on.
 
 Anything else is a finding, and must be on the ratchet with a reason.
 
@@ -986,7 +991,10 @@ class ScanResult:
     #: Statements credited because the connection carries an RLS context.
     #: Reported on every run rather than folded silently into "scoped": the
     #: credit holds only where the deployment connects as a role that does not
-    #: bypass RLS, and today's default role does.
+    #: bypass RLS. That was false of every shipped surface until
+    #: 061_runtime_app_role.sql and is true of all of them now, which is a
+    #: property of the deployment rather than of this tree — so it stays a
+    #: separate number instead of being folded into "scoped".
     rls_scoped: int
 
     def __iter__(self):
@@ -1046,7 +1054,7 @@ def _print_inventory(findings: list[Finding], inv: Inventory, files: int, statem
     print(f"  tenant-scoped tables     : {len(inv.tables)}")
     print(f"  of those, RLS-covered    : {len(inv.tables & inv.rls_tables)}  (the rest have query-layer scoping only)")
     print(f"  statements examined      : {statements}")
-    print(f"  scoped by RLS context    : {rls_scoped}  (conditional: the default connection role bypasses RLS)")
+    print(f"  scoped by RLS context    : {rls_scoped}  (holds where DATABASE_URL is the DML-only runtime role, which is now the default)")
     print()
     services = sorted({f.service for f in findings})
     print(f"{'service':<16}{'findings':>10}{'ratcheted':>11}{'open':>7}{'no-RLS':>8}")
@@ -1408,7 +1416,8 @@ def main(argv: list[str] | None = None) -> int:
     if result.rls_scoped:
         print(
             f"  {result.rls_scoped} statement(s) are scoped by an RLS context on the connection rather than by a "
-            "predicate; that credit holds only where the deployment connects as a role without BYPASSRLS."
+            "predicate; that credit holds where DATABASE_URL is a role without SUPERUSER or BYPASSRLS, which "
+            "every deployment surface now ships and scripts/check_runtime_db_role.py keeps true."
         )
 
     if len(RATCHET) > MAX_RATCHET:
