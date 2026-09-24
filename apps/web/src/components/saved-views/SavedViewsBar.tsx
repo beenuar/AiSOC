@@ -23,7 +23,7 @@
  *     views) and would deserve its own controller.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
@@ -82,34 +82,62 @@ export function SavedViewsBar<TFilters extends object>({
     revalidateOnFocus: false,
   });
 
-  // Track which preset is currently "active" so the chip can light up. We
-  // identify by id rather than deep-comparing filters (which would be
-  // brittle once columns join the picture).
-  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  // Which preset is lit up. Identified by id rather than by deep-comparing
+  // filters, which would be brittle once columns join the picture.
+  //
+  // Derived, not stored: until the analyst picks something the highlight
+  // follows the default view, so loading it needs no state write at all. The
+  // wrapper object distinguishes "has not picked yet" (`null`) from "picked
+  // nothing", which is the state a delete leaves behind — collapsing the two
+  // would re-light the default chip the moment its row was removed.
+  const [picked, setPicked] = useState<{ id: string | null } | null>(null);
+  const defaultViewId = isLoading ? null : (views.find((v) => v.is_default)?.id ?? null);
+  const activeViewId = picked ? picked.id : defaultViewId;
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSaveDialogOpen, setSaveDialogOpen] = useState(false);
   const [renamingViewId, setRenamingViewId] = useState<string | null>(null);
 
-  // Auto-apply the default view on first load. We use a ref-flag instead of
-  // a useEffect dependency on ``views`` because we only ever want to fire
-  // once per mount; subsequent SWR revalidations shouldn't re-clobber the
-  // analyst's current filters.
-  const [defaultApplied, setDefaultApplied] = useState(false);
-  if (!defaultApplied && !isLoading && views.length > 0) {
+  // Keep the latest callbacks reachable from the effect below without putting
+  // them in its dependency list. Callers pass inline arrows, so a new identity
+  // arrives on every parent render; depending on them would re-run the effect
+  // constantly and reading a stale one would apply the wrong page's filters.
+  const onApplyRef = useRef(onApply);
+  const onDefaultLoadedRef = useRef(onDefaultLoaded);
+  useEffect(() => {
+    onApplyRef.current = onApply;
+    onDefaultLoadedRef.current = onDefaultLoaded;
+  });
+
+  // Hand the default view's filters to the page, once per mount.
+  //
+  // This ran in the render body until it was found to call `onApply` — which
+  // for every real caller is a setState on the page component — while this
+  // component was still rendering. React refuses that ("Cannot update a
+  // component while rendering a different component") and makes no promise
+  // about processing the parent's update, so the filters an analyst expected
+  // restored were not reliably applied. The ref-flag the old comment described
+  // did not exist; it was `useState`, with no effect anywhere.
+  //
+  // Notifying the page is the only thing left here, because the chip highlight
+  // is derived above. A ref for the flag so it cannot itself trigger a render,
+  // and so later SWR revalidations do not re-clobber filters the analyst has
+  // since changed.
+  const defaultAppliedRef = useRef(false);
+  useEffect(() => {
+    if (defaultAppliedRef.current || isLoading || views.length === 0) return;
+    defaultAppliedRef.current = true;
+
     const def = views.find((v) => v.is_default);
-    if (def) {
-      setDefaultApplied(true);
-      setActiveViewId(def.id);
-      onApply(def.filters as TFilters);
-      onDefaultLoaded?.(def);
-    } else {
-      setDefaultApplied(true);
-    }
-  }
+    if (!def) return;
+
+    onApplyRef.current(def.filters as TFilters);
+    onDefaultLoadedRef.current?.(def);
+  }, [views, isLoading]);
 
   const apply = useCallback(
     (view: SavedView) => {
-      setActiveViewId(view.id);
+      setPicked({ id: view.id });
       setOpenMenuId(null);
       onApply(view.filters as TFilters);
     },
@@ -126,7 +154,7 @@ export function SavedViewsBar<TFilters extends object>({
           is_default: makeDefault,
         });
         await mutate();
-        setActiveViewId(created.id);
+        setPicked({ id: created.id });
         toast.success(`Saved view "${created.name}"`);
         setSaveDialogOpen(false);
       } catch (err) {
@@ -184,7 +212,7 @@ export function SavedViewsBar<TFilters extends object>({
           filters: filters as Record<string, unknown>,
         });
         await mutate();
-        setActiveViewId(view.id);
+        setPicked({ id: view.id });
         toast.success(`Updated "${view.name}"`);
         setOpenMenuId(null);
       } catch (err) {
@@ -201,7 +229,7 @@ export function SavedViewsBar<TFilters extends object>({
       try {
         await savedViewsApi.delete(view.id);
         await mutate();
-        if (activeViewId === view.id) setActiveViewId(null);
+        if (activeViewId === view.id) setPicked({ id: null });
         setOpenMenuId(null);
         toast.success(`Deleted "${view.name}"`);
       } catch (err) {

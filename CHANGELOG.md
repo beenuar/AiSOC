@@ -225,6 +225,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both the shipped range and the next major so a future bump fails loudly
   instead of quietly downgrading isolation.
 
+- **Every entity chip in the Investigation Rail was a 404.**
+  `alert_rail.py` built its pivots as `/attack-graph?entity=…` and there has
+  never been an `attack-graph` route, so host, user, asset, IP and domain chips
+  all failed before the query parameter mattered. The rail's own docstring
+  described the working behaviour ("the same `?entity=` query the
+  AttackGraphView already parses"), and `pivot.ts` states as fact that the rail
+  emits `/graph?entity=…`; the code agreed with neither. Pivots now target
+  `/graph`, which reads the parameter and selects the node.
+
+  The existing test pinned all six strings under a docstring claiming the pin
+  "prevents an accidental rename". It cannot — it compares the producer against
+  a copy of itself, which is how a route that never existed stayed asserted.
+  `services/api/tests/test_pivot_routes_resolve.py` derives the route table
+  from `apps/web/src/app` and checks it against what `build_related_entities`
+  actually returns, so the comparison now runs in the direction that drifts.
+
+  The same test caught a second defect in the producer: values went into the
+  URL unencoded, so an asset named `Finance & Legal #2` pivoted to
+  `Finance & Legal` and looked like it had worked. Values are now encoded the
+  way `pivot.ts` encodes them.
+
+- **Six funnel metrics were published as zero whatever the database held.**
+  `_funnel_window` merges `_triage_quality`'s output into the dict it returns,
+  but the `FunnelMetrics(...)` call never named `triaged_alerts`,
+  `abstentions`, `abstention_rate`, `ungrounded_demotions`,
+  `mean_groundedness` or `scored_verdicts`, so all six fell back to their
+  field defaults on every response. A published zero is a stronger claim than
+  silence: it reads as "this tenant never abstained, and nothing was ever
+  demoted for being ungrounded". The existing test asserted the six names were
+  present in `model_fields`, which they were — declaring a field and forwarding
+  it are different things. The replacement drives the endpoint and fails for
+  any field the window computes and the response drops, including ones added
+  later.
+
+- **The Live Feed labelled an empty panel "Demo".** The seeded events were
+  gated behind `canUseDemoData()` in an earlier pass but `statusToLabel` was
+  not, so outside the hosted demo the panel rendered nothing at all under a
+  "Demo" pill whose tooltip read "showing demo data" — asserting the presence
+  of sample data that had just been correctly withheld. The pill now describes
+  what is on screen (`Live`, `Connected`, `Connecting…`, `Reconnecting…`,
+  `Offline`) and can only say `Demo` when seeded events are actually rendered,
+  and the idle panel carries an empty state naming what would fill it.
+
+- **The welcome banner quoted counts it had no source for and linked to a case
+  most deployments do not have.** It advertised "26 vendors" against a registry
+  of 84 and "25 named runbooks" with nothing holding either to the tree. The
+  connector figure now comes from `CONNECTOR_COUNT`, which is generated from
+  the connector registry and held to it by `scripts/generate_connector_count.py
+  --check`; the playbook figure is gone rather than guessed, because no
+  equivalent source exists. Its second call to action linked to
+  `/cases/INC-RT-001`, which exists only after the demo seed has run, so on
+  every other deployment the banner's own CTA was a dead link — that tip is now
+  gated on demo mode, takes its href from `demoDeeplink()` and says on its face
+  that it is sample data.
+
+- **`SavedViewsBar` updated its parent while rendering.** The auto-apply of a
+  default saved view ran in the render body and called `onApply`, which for
+  every caller is a setState on the page component. React rejects that outright
+  and makes no promise about processing the update, so the filters an analyst
+  expected restored were not reliably applied. The comment described a ref-flag
+  that did not exist; it was `useState` with no effect anywhere. The chip
+  highlight is now derived rather than stored, and the one genuine side effect
+  — handing the filters to the page — happens in an effect. The existing
+  "exactly once" test could not catch this because its `onApply` was a bare
+  spy that set no state; the new test uses a real parent.
+
 - **The alerts list was empty on every deployment, under a row count that was
   real.** `AlertListResponse` returns the rows under `items`; the web client
   read `raw.alerts`, which is never present, so `Array.isArray(undefined)` was

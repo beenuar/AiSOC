@@ -3,15 +3,33 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import clsx from 'clsx';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
+import { demoDeeplink, isDemoMode } from '@/lib/demoMode';
 
 /**
  * Empty-state coaching banner shown after the "Skip & explore" CTA on the
  * onboarding root page (WS-A2). Triggered by `?welcome=1`.
  *
- * The banner explains the three highest-leverage next steps an operator can
- * take from a cold dashboard, then self-clears the querystring so a refresh
- * doesn't re-trigger it. We deliberately keep this lightweight — WS-F5 owns
- * the deep empty-state polish for every list view.
+ * The banner explains the highest-leverage next steps an operator can take
+ * from a cold dashboard, then self-clears the querystring so a refresh doesn't
+ * re-trigger it. We deliberately keep this lightweight — WS-F5 owns the deep
+ * empty-state polish for every list view.
+ *
+ * Two things the copy is not allowed to do, both of which it did.
+ *
+ * It claimed "26 vendors" and "25 named runbooks". The first was wrong by a
+ * factor of three; the second happened to be right and had no mechanism to
+ * stay that way. The connector figure now comes from `CONNECTOR_COUNT`, which
+ * is generated from the connector registry and held to it by
+ * `scripts/generate_connector_count.py --check` in CI, so it cannot drift. The
+ * playbook figure has no such source, so the number is gone rather than
+ * guessed — the tip reads fine without it.
+ *
+ * And it linked to `/cases/INC-RT-001`, a case that only exists once the demo
+ * seed has run. On any other deployment the banner's own CTA was a 404, so the
+ * whole tip is now gated on demo mode and takes its href from `demoDeeplink()`
+ * rather than hard-coding the seeded id.
  */
 export function DashboardWelcome() {
   const router = useRouter();
@@ -35,6 +53,29 @@ export function DashboardWelcome() {
   };
 
   if (!open) return null;
+
+  const tips: TipContent[] = [
+    {
+      title: 'Connect a source',
+      body: `Pick from ${CONNECTOR_COUNT} vendors. EDR + cloud + IAM gives the agent enough signal to start triaging.`,
+      cta: { label: 'Open the connector gallery →', href: '/onboarding' },
+    },
+    // Seeded data, and a link that only resolves once it has been seeded.
+    ...(isDemoMode()
+      ? [
+          {
+            title: 'Open the sample investigation',
+            body: 'Sample data, not tenant data: an in-flight ransomware case seeded for this demo.',
+            cta: { label: 'Open the sample case →', href: demoDeeplink() },
+          },
+        ]
+      : []),
+    {
+      title: 'Browse playbooks',
+      body: 'Named runbooks for ransomware, BEC, account takeover, cloud takeover, and more.',
+      cta: { label: 'Open the playbook gallery →', href: '/playbooks' },
+    },
+  ];
 
   return (
     <section
@@ -64,41 +105,22 @@ export function DashboardWelcome() {
         </button>
       </div>
 
-      <ul className="mt-4 grid gap-3 sm:grid-cols-3">
-        <Tip
-          step="1"
-          title="Connect a source"
-          body="Pick from 26 vendors. EDR + cloud + IAM gives the agent enough signal to start triaging."
-          cta={{ label: 'Open the connector gallery →', href: '/onboarding' }}
-        />
-        <Tip
-          step="2"
-          title="Or load the demo seed"
-          body="Run pnpm seed:demo and refresh. You'll get an in-flight LockBit case to investigate."
-          cta={{ label: 'Open a sample case →', href: '/cases/INC-RT-001?tab=ledger' }}
-        />
-        <Tip
-          step="3"
-          title="Browse playbooks"
-          body="25 named runbooks for ransomware, BEC, account takeover, cloud-TO, and more."
-          cta={{ label: 'Open the playbook gallery →', href: '/playbooks' }}
-        />
+      <ul className={clsx('mt-4 grid gap-3', tips.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+        {tips.map((tip, i) => (
+          <Tip key={tip.title} step={String(i + 1)} {...tip} />
+        ))}
       </ul>
     </section>
   );
 }
 
-function Tip({
-  step,
-  title,
-  body,
-  cta,
-}: {
-  step: string;
+interface TipContent {
   title: string;
   body: string;
   cta: { label: string; href: string };
-}) {
+}
+
+function Tip({ step, title, body, cta }: TipContent & { step: string }) {
   return (
     <li className="rounded-lg border border-surface-border bg-surface-card/60 p-4">
       <div className="flex items-center gap-2">

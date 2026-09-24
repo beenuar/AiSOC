@@ -36,6 +36,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -182,6 +183,23 @@ class _EntityBucket:
         self.entities.append(RelatedEntity(group=group, kind=kind, value=v, label=label, pivot=pivot))
 
 
+def _graph_pivot(kind: str, value: str) -> str:
+    """Deep-link into the entity graph with the node pre-selected.
+
+    The route is ``/graph`` — ``apps/web/src/app/(app)/graph/page.tsx``. There
+    has never been an ``/attack-graph`` route, so the earlier prefix 404'd
+    before the query string mattered; ``tests/test_pivot_routes_resolve.py``
+    now checks this against the routes the console actually defines.
+
+    The value is encoded exactly as the federated-search helper encodes it
+    (``apps/web/src/components/federated/pivot.ts``), because an asset named
+    ``Finance & Legal`` otherwise truncates at the ampersand and pivots to a
+    different entity while looking like it worked. ``AttackGraphView`` splits
+    on the first colon after Next has decoded the parameter.
+    """
+    return f"/graph?entity={quote(f'{kind}:{value}', safe='')}"
+
+
 def build_related_entities(alert: Alert) -> list[RelatedEntity]:
     """Produce the rail's Related Entities list from an ``Alert`` row.
 
@@ -203,21 +221,21 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="principal",
             kind="host",
             value=host,
-            pivot=f"/attack-graph?entity=host:{host}",
+            pivot=_graph_pivot("host", host),
         )
     for user in _dedup_strs(alert.affected_users or ()):
         bucket.add(
             group="principal",
             kind="user",
             value=user,
-            pivot=f"/attack-graph?entity=user:{user}",
+            pivot=_graph_pivot("user", user),
         )
     for asset in _dedup_strs(alert.affected_assets or ()):
         bucket.add(
             group="principal",
             kind="asset",
             value=asset,
-            pivot=f"/attack-graph?entity=asset:{asset}",
+            pivot=_graph_pivot("asset", asset),
         )
 
     # ── Network ─────────────────────────────────────────────────────────
@@ -226,7 +244,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="network",
             kind="ip",
             value=ip,
-            pivot=f"/attack-graph?entity=ip:{ip}",
+            pivot=_graph_pivot("ip", ip),
         )
     dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip"))
     if dst_ip:
@@ -235,7 +253,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             kind="ip",
             value=dst_ip,
             label="destination",
-            pivot=f"/attack-graph?entity=ip:{dst_ip}",
+            pivot=_graph_pivot("ip", dst_ip),
         )
     domain = _from_blob(raw_event, ("domain", "target_domain", "host_domain"))
     if domain:
@@ -243,7 +261,7 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
             group="network",
             kind="domain",
             value=domain,
-            pivot=f"/attack-graph?entity=domain:{domain}",
+            pivot=_graph_pivot("domain", domain),
         )
     url = _from_blob(raw_event, ("url", "request_url", "uri"))
     if url:
