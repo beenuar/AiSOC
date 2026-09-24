@@ -575,11 +575,17 @@ jobs:
           # the 0.3.x line has no patch there, so the pin had to move before
           # the alert could close. The deterministic eval suites are the
           # re-grade — MITRE accuracy is unchanged at 97.0%.
+          # markdown is a declared dependency of this service (pyproject:
+          # markdown = "^3.5") and the report renderer's HTML branch needs it.
+          # test_router_report.py was in neither the install list nor the file
+          # list below, so two of its assertions failed on every developer
+          # machine and CI never ran them either way.
           pip install --quiet pytest pytest-asyncio respx \
             'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
-            jsonschema
+            jsonschema 'markdown>=3.5,<4'
           cd services/agents
           python3 -m pytest \
+            tests/test_router_report.py \
             tests/test_mitre_accuracy.py \
             tests/test_alert_reduction.py \
             tests/test_investigation_completeness.py \

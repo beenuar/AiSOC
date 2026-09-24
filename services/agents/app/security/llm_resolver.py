@@ -235,8 +235,12 @@ async def _resolve_tenant_uuid(conn: asyncpg.Connection, tenant_ref: str) -> uui
 
 
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
-    """Set the RLS GUC so policies on ``tenant_llm_credentials`` admit us."""
-    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
+    """Set the RLS GUC so policies on ``tenant_llm_credentials`` admit us.
+
+    ``app.current_tenant_id`` is the variable that table's policy reads; this
+    said ``app.tenant_id`` until 2026-09. See ``app/investigator/ledger.py``.
+    """
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(tenant_id))
 
 
 async def _fetch_tenant_credential(pool: asyncpg.Pool, tenant_ref: str) -> dict[str, Any] | None:

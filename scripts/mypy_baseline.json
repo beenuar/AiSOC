@@ -604,6 +604,9 @@
     },
     "alembic/versions/0001_initial_honeytoken_tables.py": {
       "attr-defined": 1
+    },
+    "alembic/versions/0002_tenant_rls.py": {
+      "attr-defined": 1
     }
   },
   "services/mesh": {},
@@ -620,6 +623,9 @@
       "attr-defined": 1
     },
     "alembic/versions/0002_detection_drift_snapshots.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0003_tenant_rls.py": {
       "attr-defined": 1
     },
     "app/services/atomic_loader.py": {
@@ -649,6 +655,9 @@
       "attr-defined": 1
     },
     "alembic/versions/0001_initial_ueba_tables.py": {
+      "attr-defined": 1
+    },
+    "alembic/versions/0002_tenant_rls.py": {
       "attr-defined": 1
     }
   }

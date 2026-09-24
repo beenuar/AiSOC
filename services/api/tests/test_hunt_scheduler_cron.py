@@ -14,7 +14,7 @@ landed yet.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -74,12 +74,29 @@ class TestNextFireAt:
     """The helper used by ``_is_due`` to step a single tick forward."""
 
     def test_basic_hourly(self) -> None:
-        next_at = hunt_scheduler._next_fire_at(
-            "0 * * * *",
-            after=datetime(2026, 5, 15, 12, 30, tzinfo=UTC),
-        )
+        """Both branches, each against the contract it actually has.
+
+        This asserted the croniter answer unconditionally while sitting
+        outside the ``_CRONITER_AVAILABLE`` guard one class up, so it failed
+        — not skipped, failed — in any environment without the dependency.
+        It is not an environmental failure: the fallback has a defined
+        behaviour and nothing was checking it, so the fix is to assert the
+        right thing on each path rather than to skip one of them.
+
+        croniter aligns to the cron expression, giving the top of the next
+        hour. The fallback is an interval stepper, not a parser, so it
+        advances one cadence from ``after`` and lands at :30. A hunt on the
+        fallback path therefore drifts off the hour — which is the documented
+        cost of running without croniter, and is now visible here.
+        """
+        after = datetime(2026, 5, 15, 12, 30, tzinfo=UTC)
+        next_at = hunt_scheduler._next_fire_at("0 * * * *", after=after)
         assert next_at is not None
-        assert next_at == datetime(2026, 5, 15, 13, 0, tzinfo=UTC)
+
+        if hunt_scheduler._CRONITER_AVAILABLE:
+            assert next_at == datetime(2026, 5, 15, 13, 0, tzinfo=UTC)
+        else:
+            assert next_at == after + timedelta(seconds=3600)
 
     def test_invalid_schedule_returns_none(self) -> None:
         assert hunt_scheduler._next_fire_at("not a schedule", after=datetime.now(UTC)) is None

@@ -71,7 +71,13 @@ async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.
 
 
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
-    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
+    """Bind this connection to one tenant for the enclosing transaction.
+
+    ``app.current_tenant_id`` is the variable every policy in this schema
+    reads; this said ``app.tenant_id`` until 2026-09, so the scope was never
+    applied. See the note in ``app/investigator/ledger.py``.
+    """
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(tenant_id))
 
 
 # ---------------------------------------------------------------------------
