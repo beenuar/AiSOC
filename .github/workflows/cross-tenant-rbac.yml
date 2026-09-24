@@ -79,13 +79,13 @@ jobs:
       # pull in pydantic, sqlalchemy, structlog, jose, …) without us
       # having to maintain a parallel pin list here.
       API_DEPS: >-
-        fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-        structlog PyJWT cryptography "passlib[bcrypt]" tenacity pyyaml
+        "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+        structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
         prometheus-client "opentelemetry-sdk" "opentelemetry-api"
         "opentelemetry-exporter-otlp-proto-grpc"
         "opentelemetry-instrumentation-fastapi"
         "strawberry-graphql[fastapi]"
-        neo4j redis celery httpx aiofiles email-validator PyJWT
+        neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
         "sqlglot>=23,<27" aiosqlite
         pytest pytest-asyncio
 

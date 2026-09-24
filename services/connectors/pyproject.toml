@@ -7,7 +7,10 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = ">=0.109,<0.142"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.142"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 httpx = "^0.26.0"
 pydantic = "^2.5.0"
@@ -25,9 +28,13 @@ asyncpg = "^0.29.0"
 # Cryptography is required to decrypt the auth_config blob written by the
 # API service's CredentialVault. We share AISOC_CREDENTIAL_KEY across both
 # services via the deployment's secret store.
-# Floor raised to 44.0.1 to clear CVE-2024-12797 (and later 42.x advisories);
-# matches the resolved 48.x line used by the api/actions services.
-cryptography = ">=44.0.1,<51"
+# One range across every service that touches the vault: the Fernet /
+# MultiFernet token format is a contract between the writer (api) and the
+# readers (connectors, agents, osquery-tls), and they share one
+# AISOC_CREDENTIAL_KEY. The floor is 46 rather than the 44.0.1 that cleared
+# CVE-2024-12797 because agents already required 46 and CI was installing
+# `>=41,<46` — a range disjoint from what the image shipped.
+cryptography = ">=46,<51"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.

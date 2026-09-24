@@ -78,7 +78,7 @@ jobs:
         working-directory: services/agents
         run: |
           set -euo pipefail
-          python -m pip install --quiet --upgrade pip poetry
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
           poetry config virtualenvs.create false
           poetry install --no-root --no-interaction
 

@@ -6,30 +6,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-COPY pyproject.toml .
+RUN pip install --no-cache-dir poetry==2.4.1 \
+    && poetry config virtualenvs.create false
 
-# Install runtime deps explicitly. We deliberately don't `pip install .`
-# because the hatchling backend would need the package source, but we
-# don't COPY app/ until later (so this layer caches across source edits).
-# numpy/scipy install from manylinux wheels on python:3.11-slim, no
-# build-essential required. Keep this list in lockstep with
-# pyproject.toml [project.dependencies].
-RUN pip install --no-cache-dir \
-    "fastapi>=0.110.0" \
-    "uvicorn[standard]>=0.29.0" \
-    "sqlalchemy[asyncio]>=2.0.0" \
-    "asyncpg>=0.29.0" \
-    "alembic>=1.13.0" \
-    "pydantic>=2.0.0" \
-    "pydantic-settings>=2.0.0" \
-    "aiokafka>=0.10.0" \
-    "numpy>=1.26.0" \
-    "scipy>=1.12.0" \
-    "httpx>=0.27.0" \
-    "structlog>=24.1,<27.0" \
-    "opentelemetry-sdk>=1.24.0" \
-    "opentelemetry-exporter-otlp>=1.24.0" \
-    "opentelemetry-instrumentation-fastapi>=0.45b0"
+COPY pyproject.toml poetry.lock ./
+
+# Dependencies come from poetry.lock, so two builds of this commit install
+# byte-identical versions. This layer deliberately copies only the manifest
+# and the lock, so it still caches across source edits — the reason the
+# hand-written `pip install` list it replaces existed at all. That list was a
+# second copy of pyproject.toml maintained by a comment asking for lockstep,
+# and every one of the four had drifted from the manifest it mirrored.
+RUN poetry install --no-interaction --no-ansi --only main --no-root
 
 COPY alembic.ini .
 COPY alembic/ alembic/

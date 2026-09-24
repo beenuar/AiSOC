@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "AiSOC UEBA — User & Entity Behaviour Analytics microservice"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.110.0",
+    # Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+    # "204 must not have a response body" assert at import. One range for
+    # every service — see services/api/pyproject.toml for the measurement.
+    "fastapi>=0.117,<0.142",
     "uvicorn[standard]>=0.29.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "asyncpg>=0.29.0",

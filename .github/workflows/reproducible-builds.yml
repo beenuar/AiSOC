@@ -1,0 +1,191 @@
+name: Reproducible builds
+
+# A commit that does not build the same way twice is a commit nobody has
+# actually tested. This workflow makes that property checkable.
+#
+# The failure it exists to prevent, measured on this repository:
+#
+#   `services/api` declared `fastapi = ">=0.111,<0.142"` with no committed
+#   lock, so `poetry install` re-resolved on every build. Its Dockerfile also
+#   carried a pip fallback pinning `fastapi>=0.111,<0.112`, and six workflows
+#   installed fastapi with no bound at all. Every release from 0.111.0 to
+#   0.116.2 refuses to import `app/api/v1/endpoints/community.py`. On
+#   2026-09-24 a transient `poetry install` failure in the golden-pipeline job
+#   triggered the fallback, the image shipped 0.111.1, and the API container
+#   died at import — pointing the traceback at a file byte-identical to main.
+#   The same job passed on re-run with no code change.
+#
+# Four jobs, each proving a different half of "reproducible":
+#
+#   pin-agreement  — no two install paths for one package may disagree.
+#   lock-freshness — every lock still matches the manifest it was made from,
+#                    so `poetry install` cannot be pushed back into resolving.
+#   fastapi-range  — the service imports on both ends of the range it declares,
+#                    so the bound is a tested claim rather than a guess.
+#   twice          — two `--no-cache` builds of this commit install the same
+#                    versions. This is the only job that proves the property
+#                    directly; the other three explain why it holds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reproducible-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pin-agreement:
+    name: No two install paths disagree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      # The gate first: it names every file it scanned and every critical
+      # package it compared, so the log shows what was checked rather than
+      # only that something passed.
+      - name: Every install path for a package agrees with every other
+        run: python scripts/check_dependency_pins.py --verbose
+      # Then the proof that the gate is not vacuous. `--self-test` builds
+      # throwaway trees, injects drift in each direction separately, and
+      # fails if any injection goes undetected — including the reverse
+      # directions, which is where one-directional gates in this repository
+      # have let drift through before.
+      - name: The gate detects injected drift in every direction
+        run: python scripts/check_dependency_pins.py --self-test
+      - name: Gate unit tests
+        run: |
+          pip install --quiet 'pytest>=7.4,<9'
+          python -m pytest tests/test_dependency_pin_gate.py -v --tb=short
+
+  lock-freshness:
+    name: Every lock still matches its manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      # Pinned to the version the Dockerfiles install. A different resolver is
+      # a different answer to "what does this commit install", which is the
+      # question this workflow exists to make deterministic.
+      - run: pip install --quiet "poetry==2.4.1"
+      # `poetry check --lock` is poetry's own staleness check rather than a
+      # re-implementation of it. The images get the same guarantee from
+      # `poetry install`, which refuses a lock that no longer matches; this
+      # job surfaces it on the PR instead of at image build time.
+      - name: poetry check --lock, every Python service
+        run: |
+          set -euo pipefail
+          failed=0
+          checked=0
+          for manifest in services/*/pyproject.toml; do
+            service="$(dirname "$manifest")"
+            if [ ! -f "$service/poetry.lock" ]; then
+              echo "::error::$service has no poetry.lock — its image resolves dependencies afresh on every build"
+              failed=1
+              continue
+            fi
+            checked=$((checked + 1))
+            if poetry -C "$service" check --lock; then
+              echo "  ok  $service"
+            else
+              echo "::error::$service: poetry.lock does not match pyproject.toml — run 'poetry -C $service lock'"
+              failed=1
+            fi
+          done
+          echo "checked $checked lock(s)"
+          [ "$checked" -ge 13 ] || { echo "::error::only $checked services checked; expected at least 13"; exit 1; }
+          exit "$failed"
+
+  fastapi-range:
+    name: API imports on fastapi ${{ matrix.fastapi }} (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest release the manifests permit. Below this the service
+          # cannot be imported at all, so the floor is the claim under test.
+          - fastapi: '0.117.0'
+            label: floor
+          # Whatever the ceiling currently admits, which is what the locks
+          # resolve. Both ends run so the declared range is a tested range
+          # rather than an assumption about the middle.
+          - fastapi: '0.141.1'
+            label: shipped
+    env:
+      API_DEPS: >-
+        "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+        structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
+        prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+        "opentelemetry-exporter-otlp-proto-grpc"
+        "opentelemetry-instrumentation-fastapi"
+        "strawberry-graphql[fastapi]"
+        neo4j redis celery httpx aiofiles email-validator
+        "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
+        pytest pytest-asyncio
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install with fastapi pinned to ${{ matrix.fastapi }}
+        run: pip install --quiet ${{ env.API_DEPS }} "fastapi==${{ matrix.fastapi }}"
+      - name: Confirm the pin took
+        run: python -c "import fastapi; assert fastapi.__version__ == '${{ matrix.fastapi }}', fastapi.__version__"
+      # The real entrypoint, not a stub. The 2026-09-24 failure was an import
+      # error, and pytest never loads `app.main`, so only a boot test sees it.
+      - name: Boot-test the API service
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: python -c "from app.main import app; print('boot ok on fastapi ${{ matrix.fastapi }}')"
+      - name: The 204 floor tests
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: python -m pytest tests/test_fastapi_floor.py -v --tb=short
+
+  twice:
+    name: Two builds of this commit install the same versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # `api` is the service the flake hit and the largest dependency tree in
+      # the tree, so it is the one worth paying for. The property is the same
+      # for every service: they all install from a committed lock.
+      - name: Build the api image twice, from scratch each time
+        run: |
+          set -euo pipefail
+          docker build --no-cache -t aisoc-api:first  -f services/api/Dockerfile services/api
+          docker build --no-cache -t aisoc-api:second -f services/api/Dockerfile services/api
+      - name: The two images must contain identical versions
+        run: |
+          set -euo pipefail
+          docker run --rm aisoc-api:first  pip freeze | sort > first.txt
+          docker run --rm aisoc-api:second pip freeze | sort > second.txt
+          echo "first build:  $(wc -l < first.txt) packages, sha256 $(sha256sum first.txt | cut -d' ' -f1)"
+          echo "second build: $(wc -l < second.txt) packages, sha256 $(sha256sum second.txt | cut -d' ' -f1)"
+          if ! diff -u first.txt second.txt; then
+            echo "::error::two builds of the same commit resolved different versions"
+            exit 1
+          fi
+          # A diff of nothing is also what you get from two empty files.
+          [ "$(wc -l < first.txt)" -ge 50 ] || { echo "::error::pip freeze returned almost nothing"; exit 1; }
+          grep -q '^fastapi==' first.txt || { echo "::error::fastapi absent from the image"; exit 1; }
+          echo "identical: $(wc -l < first.txt) packages, byte-for-byte"

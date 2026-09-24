@@ -7,7 +7,10 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = ">=0.109,<0.142"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.142"
 uvicorn = {extras = ["standard"], version = ">=0.27,<0.54"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
@@ -18,7 +21,7 @@ structlog = ">=24.1,<27.0"
 httpx = ">=0.27,<0.29"
 aiokafka = ">=0.10,<0.15"
 python-dateutil = "^2.8.2"
-cryptography = ">=42,<51"
+cryptography = ">=46,<51"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.

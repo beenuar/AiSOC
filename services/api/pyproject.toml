@@ -4,11 +4,25 @@ version = "0.1.0"
 description = "AiSOC Core API Service — Open-source AI Security Operations Center"
 authors = ["Beenu Arora <beenu@cyble.com>"]
 license = "MIT"
-readme = "README.md"
+# No `readme` key: these services are installed with `--no-root` and are not
+# published as packages. The key used to name a README.md that has never
+# existed in this tree, which made `poetry check` fail on a manifest error
+# and hid whether the lock was fresh.
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = ">=0.111,<0.142"
+# Floored at 0.117 because below it this service cannot be imported at all.
+# Under `from __future__ import annotations` a `-> None` handler reaches
+# FastAPI as the string "None", which ForwardRef resolution turns into
+# `NoneType` — truthy — so FastAPI concludes the route declares a response
+# body and trips `assert is_body_allowed_for_status_code(204)`. 0.117.0
+# treats the resolved `NoneType` as "no body" again. Measured, not inferred:
+# every release from 0.111.0 to 0.116.2 raises at import on
+# `api/v1/endpoints/community.py`, 0.117.0 and later do not.
+# `tests/test_fastapi_floor.py` re-derives the boundary from the installed
+# version, so a Dependabot bump that lowers the floor fails rather than
+# producing an image that dies on startup.
+fastapi = ">=0.117,<0.142"
 uvicorn = { version = ">=0.29,<0.54", extras = ["standard"] }
 # EmailStr (used in auth/passkeys/tenants endpoints) requires the optional
 # email-validator package, which is only pulled in via the "email" extra.
@@ -26,8 +40,10 @@ httpx = ">=0.27,<0.29"
 # CVE-2024-23342 (Minerva timing attack on P-256) with no patched release
 # upstream — the maintainers state python-ecdsa offers no side-channel
 # resistance and will not fix it. Nothing here needed jose's JWE/JWS surface.
-PyJWT = "^2.8.0"
-cryptography = ">=42,<51"  # Direct dep for credential vault Fernet
+PyJWT = ">=2.8,<3"
+# Direct dep for credential vault Fernet. One range across every service
+# that reads or writes a vault token — see services/connectors/pyproject.toml.
+cryptography = ">=46,<51"
 bcrypt = ">=4.1.2,<6.0.0"  # Used directly by app.core.security (passlib is no longer compatible with bcrypt >= 4)
 python-multipart = ">=0.0.9,<0.0.33"
 tenacity = ">=8.3,<10.0"
@@ -74,8 +90,12 @@ pytest = ">=9.0.3,<10.0"
 pytest-asyncio = ">=1.0,<2.0"
 pytest-cov = ">=5,<8"
 httpx = ">=0.27,<0.29"
-ruff = ">=0.4.4,<0.17.0"
-mypy = ">=1.10,<3.0"
+# One range everywhere: `ruff format --check services/` is a hard gate and
+# ruff's formatter output changes between minors, so a contributor whose
+# manifest permits a newer ruff reformats the tree and reds their own PR.
+# Moving this range means reformatting the tree, which is its own change.
+ruff = ">=0.4.4,<0.5"
+mypy = ">=1.10,<2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -87,9 +87,12 @@ RUN set -eux; \
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # ─── Python toolchain (uv + ruff) ───────────────────────────────────────────
-# `uv` is the canonical Python package manager for AiSOC services. Installing
-# it at image-build time means a fresh codespace can run `uv sync` against
-# `services/api/uv.lock` immediately, with no further network round-trips.
+# `ruff` is pinned to the range CI enforces. An unpinned ruff in the
+# devcontainer formats differently from `ruff format --check services/`,
+# so a contributor's first commit fails a gate they cannot reproduce.
+# `uv` is kept for ad-hoc use; the services install from `poetry.lock`
+# (there is no `uv.lock` in this tree, and the note that claimed one
+# sent people to a file that has never existed).
 #
 # We install via `pip` (with `--break-system-packages` to opt out of PEP 668)
 # rather than `pipx` so the binaries land in `/usr/local/bin` where they are
@@ -98,7 +101,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 # The previous pipx approach installed to `/root/.local/bin/`, which is
 # unreadable by `node` (uid 1000) and broke the cold-start KPI probe.
 RUN python3.11 -m pip install --break-system-packages --no-cache-dir \
-        uv ruff
+        uv "ruff>=0.4.4,<0.5"
 
 # ─── pnpm via corepack ──────────────────────────────────────────────────────
 RUN corepack enable \

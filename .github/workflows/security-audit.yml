@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install pip-audit poetry poetry-plugin-export
+          python -m pip install pip-audit "poetry==2.4.1" poetry-plugin-export
           go install golang.org/x/vuln/cmd/govulncheck@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 

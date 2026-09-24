@@ -6,39 +6,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry==1.8.2 \
+RUN pip install --no-cache-dir poetry==2.4.1 \
     && poetry config virtualenvs.create false
 
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml poetry.lock ./
 
-# Run poetry without swallowing errors. Falls back to a complete pip
-# install mirroring pyproject.toml so a transient registry timeout
-# doesn't fail the whole image build. Keep the fallback list in lockstep
-# with services/threatintel/pyproject.toml.
-RUN set -eux; \
-    if poetry install --no-interaction --no-ansi --only main; then \
-        echo "[threatintel] poetry install succeeded"; \
-    else \
-        echo "[threatintel] poetry install failed; using pip fallback"; \
-        pip install --no-cache-dir \
-            "fastapi>=0.109,<0.110" \
-            "uvicorn[standard]>=0.27,<0.28" \
-            "pydantic>=2.5,<3" \
-            "pydantic-settings>=2.1,<3" \
-            "httpx>=0.26,<0.27" \
-            "redis[hiredis]>=5.0.1,<6" \
-            "taxii2-client>=2.3,<3" \
-            "stix2>=3.0.1,<4" \
-            "apscheduler>=3.10.4,<4" \
-            "opensearch-py[async]>=2.7,<3" \
-            "qdrant-client[fastembed]>=1.9,<2" \
-            "neo4j>=5.19,<6" \
-            "structlog>=24.1,<25" \
-            "prometheus-client>=0.19,<0.20" \
-            "python-dateutil>=2.8.2,<3" \
-            "aiokafka>=0.10,<0.11" \
-            "mmh3>=4.1,<5" ; \
-    fi
+# Dependencies come from poetry.lock and nowhere else, so two builds of this
+# commit install byte-identical versions. `poetry install` refuses a lock that
+# no longer matches pyproject.toml ("changed significantly since poetry.lock
+# was last generated"), so editing the manifest without re-locking is a build
+# error rather than a silent re-resolution nobody reviewed. The matching
+# `poetry check --lock` runs in CI, where the README the check wants is on
+# disk; this layer has only the two files it installs from.
+#
+# There is deliberately no pip fallback here. The one this replaced carried its
+# own copy of the dependency list, drifted from pyproject.toml, and pinned
+# versions no test ever ran. When a transient poetry failure triggered it on
+# 2026-09-24 the api image shipped FastAPI 0.111.1 and died at import. A build
+# that fails is recoverable; an image that boots on untested versions is not.
+RUN poetry install --no-interaction --no-ansi --only main --no-root
 
 COPY app ./app
 

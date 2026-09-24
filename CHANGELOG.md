@@ -120,6 +120,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     vendored mirrors with no drift gate. A redactor copy that drifts strips a
     different set on one side of the wire than the other.
 
+- **`scripts/check_dependency_pins.py` — fails when any two install paths for
+  one package disagree.** A package is installed from more than one place: a
+  manifest, a lock, a Dockerfile, and whichever workflows pip-install a
+  service's dependencies to run a test. Nothing compared them, so CI could
+  test one version while the image shipped another. It scans 99 install paths
+  and names every one of them, and it runs in six directions rather than one,
+  because the recurring failure here is a gate that compares A to B and never
+  B to A:
+
+  - a package the manifest declares, installed at a different version by the
+    image;
+  - a package the image installs that no manifest declares;
+  - two ranges written for the same package anywhere in the tree;
+  - a lock resolving something outside the range everyone agreed on;
+  - a critical package installed with no version bound at all;
+  - a file that declares one and was never scanned — **and, separately, a
+    file that was scanned but whose declaration the parser could not read.**
+
+  That last direction found a real bug in the gate on its first run: the
+  manifest parser read only runtime dependencies, so `ruff` — which lives
+  only in dev groups — was reported as agreeing across seven files, none of
+  which had actually been read for it. It also caught `integration.yml`,
+  which installs the whole API dependency set through a folded `run: >-`
+  scalar that a line-by-line reader skips while still counting the file as
+  scanned.
+
+  `--self-test` builds throwaway trees, injects drift in each of those
+  directions separately, and fails if any injection goes undetected. It also
+  asserts the gate refuses a directory that is not the repository, rather
+  than printing a confident OK about a tree it never opened.
+
+- **`.github/workflows/reproducible-builds.yml`.** Four jobs: the pin gate
+  and its self-test; `poetry check --lock` across all thirteen Python
+  services; the API imported on both ends of the declared FastAPI range; and
+  two `--no-cache` builds of the same commit compared package by package.
+
+- **`scripts/check_sqlglot_pin.py` now checks the lock, not just the ranges.**
+  `services/api/Dockerfile` left the list of files declaring sqlglot when its
+  pip fallback was removed. The lock took its place — but a lock states a
+  resolved version rather than a range, so it is checked differently: the
+  version it resolved must fall inside the agreed range. Comparing the ranges
+  only to each other would have left the gate agreeing about a bound that
+  nothing installs.
+
 - **`scripts/check_connector_profiles.py` — a connector-type drift gate that
   reads in both directions.** Nothing compared the profile keys in
   `services/ingest/internal/normalizer/normalizer.go` against the identifiers
@@ -503,6 +547,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setup-node` hard-fails when the cache path matches nothing. Every other
   workflow in the repo already pointed at the root lockfile; being
   `workflow_dispatch`-only meant no scheduled run ever exercised it.
+
+- **The same commit did not build the same way twice, and one of the ways it
+  could build did not start.** `One real event through the real pipeline`
+  failed and then passed on re-run with no code change. The API container had
+  died at import with `AssertionError: Status code 204 must not have a
+  response body` from `app/api/v1/endpoints/community.py:183` — a file
+  byte-identical to `main`, on a branch that touched nothing under
+  `services/api`.
+
+  Measured, from the failed run's own log: `poetry install` hit a transient
+  error, the Dockerfile's pip fallback took over, and it pinned
+  `fastapi>=0.111,<0.112` and installed 0.111.1. In the same build `fusion`'s
+  poetry install succeeded and took 0.141.1. One commit, two resolvers, two
+  answers.
+
+  `community.py` has `from __future__ import annotations`, so its `-> None`
+  return annotation reaches FastAPI as the string `"None"`. FastAPI resolves
+  it through `ForwardRef` to `NoneType` — truthy — rather than the falsy
+  `None` singleton it gets without PEP 563, concludes the route returns a
+  body, and asserts that a 204 does not. **Every release from 0.111.0 through
+  0.116.2 raises; 0.117.0 and later do not.** The declared range was
+  `>=0.111,<0.142`, so 29 of the 120 releases it permitted could not import
+  the service at all, and the fallback pinned squarely inside that band. The
+  earlier triage read the shape as innocent because it was checked without
+  PEP 563 active, which is the one condition that makes it fail.
+
+  The fix is determinism rather than a widened assertion:
+
+  - **All thirteen Python services install from a committed `poetry.lock`.**
+    Three had one; ten now do. Two `--no-cache` builds of one commit produce
+    an identical `pip freeze` (129 packages, same SHA-256), and a new
+    `Reproducible builds / twice` job asserts it on every change.
+  - **The pip fallbacks are gone** from all eight Dockerfiles that had one.
+    Each carried its own copy of the dependency list under a comment asking
+    for lockstep, and each had drifted. A build that fails is recoverable; an
+    image that boots on versions nothing tested is not.
+  - **Four services that hand-listed their dependencies in the Dockerfile**
+    (`honeytokens`, `purple-team`, `ueba`, `mesh`) now install from a lock
+    too. All four had drifted from the manifest they mirrored — `mesh` shipped
+    `cryptography<50` against a manifest reading `<51`.
+  - **The FastAPI floor is 0.117** in all thirteen manifests and every
+    workflow. `services/api/tests/test_fastapi_floor.py` pins the boundary and
+    fails on 0.116.2 with the original error; a matrix leg imports the service
+    at both ends of the declared range.
+
+- **CI installed `cryptography>=41,<46` for services whose manifests required
+  `>=46,<51`** — two ranges with no overlap, so the version CI tested could
+  never be the version the image shipped. `connectors` and `osquery-tls` also
+  floored at `44.0.1` for CVE-2024-12797 while CI was free to install `41`.
+  One range, `>=46,<51`, now covers every manifest, Dockerfile and workflow,
+  including `packages/aisoc-cli`, whose Ed25519 plugin signatures the API
+  verifies. `PyJWT` was unbounded in eight workflow install paths and is now
+  `>=2.8,<3` everywhere; `poetry` itself was 1.7.1 in five images, 1.8.2 in
+  three and unpinned in two workflows, and is now `2.4.1` everywhere.
+
+- **`ruff` was declared six different ways while `ruff format --check` gated
+  on one of them.** `services/api` permitted `<0.17.0`, `fusion` `^0.2.0`,
+  the published packages `>=0.3`, and the devcontainer installed it unpinned —
+  while CI enforces `>=0.4.4,<0.5`. A contributor installing their own service's
+  dev group got a ruff that reformats the tree and reds their PR with no
+  dependency change in the diff. All fourteen declarations now read
+  `>=0.4.4,<0.5`. The devcontainer also told contributors to `uv sync` against
+  `services/api/uv.lock`, which has never existed in this tree.
 
 - **An event ingested under a connector type with no profile became an alert
   with no host, no user and no source IP.** `_canonicalAliases` in

@@ -294,13 +294,13 @@ jobs:
       - name: Install API dependencies
         run: >-
           pip install --quiet
-          fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-          structlog PyJWT cryptography "passlib[bcrypt]" tenacity pyyaml
+          "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+          structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
           prometheus-client "opentelemetry-sdk" "opentelemetry-api"
           "opentelemetry-exporter-otlp-proto-grpc"
           "opentelemetry-instrumentation-fastapi"
           "strawberry-graphql[fastapi]"
-          neo4j redis celery httpx aiofiles email-validator PyJWT
+          neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
           "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
 
       - name: Apply full migration chain on fresh Postgres (strict)
@@ -398,7 +398,7 @@ jobs:
 
       - name: Install tooling (awscli + postgres client)
         run: |
-          pip install --quiet awscli cryptography
+          pip install --quiet awscli "cryptography>=46,<51"
           sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
 
       # MinIO needs a `server /data` command, which the GitHub `services:`
@@ -604,13 +604,13 @@ jobs:
       - name: Install API dependencies
         run: >-
           pip install --quiet
-          fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-          structlog PyJWT cryptography "passlib[bcrypt]" tenacity pyyaml
+          "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+          structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
           prometheus-client "opentelemetry-sdk" "opentelemetry-api"
           "opentelemetry-exporter-otlp-proto-grpc"
           "opentelemetry-instrumentation-fastapi"
           "strawberry-graphql[fastapi]"
-          neo4j redis celery httpx aiofiles email-validator PyJWT
+          neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
           "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
 
       - name: Record HEAD sha
