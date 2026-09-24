@@ -544,6 +544,74 @@ class TestNothingToScanIsNotACleanScan:
         assert report.unscanned, "no pnpm-lock.yaml must be a coverage gap"
         assert exit_code_for(report) == 1
 
+    def test_pnpm_audits_every_install_root_not_only_the_repo_root(self, monkeypatch, tmp_path: Path):
+        """A second install root must be audited, and its findings must name it.
+
+        ``apps/mobile`` keeps its own ``pnpm-workspace.yaml`` so its installs
+        stop rewriting the root lock. Auditing only the repo root therefore
+        never reached it, and this arm reported a clean workspace while two
+        high-severity advisories stood open there.
+        """
+        (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n")
+        nested = tmp_path / "apps" / "mobile"
+        nested.mkdir(parents=True)
+        (nested / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n")
+
+        monkeypatch.setattr(
+            security_audit,
+            "pnpm_install_roots",
+            lambda root: [".", "apps/mobile"],
+        )
+
+        audited: list[Path] = []
+
+        def fake_at(root: Path, label: str, ignores):
+            audited.append(root)
+            report = Report()
+            if label.endswith("apps/mobile"):
+                report.findings.append(
+                    Finding(
+                        tool="pnpm",
+                        severity="high",
+                        vuln_id="GHSA-5p2g-fcmc-qvqq",
+                        package="image-size",
+                        location=label,
+                        title="denial of service",
+                    )
+                )
+            return report
+
+        monkeypatch.setattr(security_audit, "run_pnpm_audit_at", fake_at)
+
+        report = run_pnpm_audit(tmp_path, [])
+
+        assert audited == [tmp_path, tmp_path / "apps/mobile"], "both install roots must be audited"
+        assert len(report.findings) == 1
+        assert report.findings[0].location == "pnpm workspace apps/mobile", (
+            "a finding must name the install root it came from, not a generic 'pnpm workspace'"
+        )
+        assert exit_code_for(report) == 1
+
+    def test_pnpm_install_roots_are_read_from_the_tree(self, tmp_path: Path):
+        """Discovery is structural, so a new install root needs no edit here."""
+        import subprocess
+
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n")
+        nested = tmp_path / "apps" / "mobile"
+        nested.mkdir(parents=True)
+        (nested / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n")
+        subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+
+        assert security_audit.pnpm_install_roots(tmp_path) == [".", "apps/mobile"]
+
+    def test_pnpm_refuses_a_tree_with_no_install_root_at_all(self, tmp_path: Path):
+        """Zero install roots is not zero workspaces vulnerable."""
+        report = run_pnpm_audit(tmp_path, [])
+
+        assert report.unscanned, "a tree with no lockfile anywhere must be a coverage gap"
+        assert exit_code_for(report) == 1
+
     def test_python_refuses_a_tree_with_no_manifests(self, tmp_path: Path):
         report = run_pip_audit(tmp_path, [])
 
