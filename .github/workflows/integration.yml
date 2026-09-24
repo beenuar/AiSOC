@@ -325,6 +325,16 @@ jobs:
           [ "${FILES}" = "${ROWS}" ] \
             || { echo "::error::tracked migrations (${ROWS}) != migration files (${FILES})"; exit 1; }
 
+      # The MSSP portfolio surface reads across tenants on purpose, so
+      # "does it stay inside its portfolio" cannot be answered by a mocked
+      # session. This is the only job with a real database and the full
+      # migration chain already applied, which makes it the honest home for
+      # the replay: it seeds two organisations plus an unmanaged tenant and
+      # asserts an aggregate as one operator never returns the others.
+      - name: Cross-tenant MSSP portfolio isolation (live Postgres)
+        working-directory: services/api
+        run: pip install --quiet pytest pytest-asyncio && python -m pytest tests/test_mssp_portfolio_isolation.py -v --tb=short
+
       # The UEBA package layout (app/ dir) isn't wheel-buildable; alembic's
       # env.py only needs `app.models.ueba` importable, so run in-place with
       # PYTHONPATH instead of pip-installing the service.

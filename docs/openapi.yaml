@@ -9433,19 +9433,127 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mssp/portfolio:
+    get:
+      tags:
+      - mssp
+      summary: Get Portfolio
+      description: 'Managed portfolio: per-tenant posture plus derived totals.
+
+
+        Every figure is counted from that tenant''s own rows. A portfolio with no
+
+        tenants returns zeros and an empty list.'
+      operationId: get_portfolio_api_v1_mssp_portfolio_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+              format: uuid
+          - type: 'null'
+          description: Restrict to these tenants; ignored if outside the portfolio.
+          title: Tenant Id
+        description: Restrict to these tenants; ignored if outside the portfolio.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mssp/portfolio/alerts:
+    get:
+      tags:
+      - mssp
+      summary: List Portfolio Alerts
+      description: Open alerts across the portfolio, newest first.
+      operationId: list_portfolio_alerts_api_v1_mssp_portfolio_alerts_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: critical | high | medium | low | info
+          title: Severity
+        description: critical | high | medium | low | info
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: include_synthetic
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Include seeded demo rows, labelled as such.
+          default: false
+          title: Include Synthetic
+        description: Include seeded demo rows, labelled as such.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: tenant_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: string
+              format: uuid
+          - type: 'null'
+          title: Tenant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortfolioAlertOut'
+                title: Response List Portfolio Alerts Api V1 Mssp Portfolio Alerts
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/mssp/overview:
     get:
       tags:
       - mssp
       summary: Mssp Overview
-      description: 'Cross-tenant KPI summary for the MSSP parent dashboard.
-
-
-        Not yet implemented against real data. Returns zeros outside demo mode
-
-        rather than the sample figures, because a dashboard reading 23.4 minutes
-
-        MTTR that nobody measured is worse than one reading nothing.'
+      description: Portfolio totals for the operator dashboard.
       operationId: mssp_overview_api_v1_mssp_overview_get
       responses:
         '200':
@@ -9453,7 +9561,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MSSPKpiOverview'
+                $ref: '#/components/schemas/PortfolioSummaryOut'
       security:
       - HTTPBearer: []
   /api/v1/mssp/tenants:
@@ -9461,12 +9569,7 @@ paths:
       tags:
       - mssp
       summary: List Managed Tenants
-      description: 'List managed tenants with health scores for the parent dashboard.
-
-
-        Empty outside demo mode. `GET /api/v1/mssp/children` is the route backed
-
-        by real rows.'
+      description: Managed tenants with their measured posture.
       operationId: list_managed_tenants_api_v1_mssp_tenants_get
       responses:
         '200':
@@ -9475,7 +9578,7 @@ paths:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/ManagedTenantRow'
+                  $ref: '#/components/schemas/PortfolioTenantOut'
                 type: array
                 title: Response List Managed Tenants Api V1 Mssp Tenants Get
       security:
@@ -9485,8 +9588,7 @@ paths:
       tags:
       - mssp
       summary: List Cross Tenant Incidents
-      description: Critical incidents across all managed tenants. Empty outside demo
-        mode.
+      description: Open alerts across the portfolio.
       operationId: list_cross_tenant_incidents_api_v1_mssp_incidents_get
       security:
       - HTTPBearer: []
@@ -9498,9 +9600,18 @@ paths:
           anyOf:
           - type: string
           - type: 'null'
-          description: 'Filter: high | medium | low'
+          description: critical | high | medium | low | info
           title: Severity
-        description: 'Filter: high | medium | low'
+        description: critical | high | medium | low | info
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
       responses:
         '200':
           description: Successful Response
@@ -9509,9 +9620,228 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CrossTenantIncident'
+                  $ref: '#/components/schemas/PortfolioAlertOut'
                 title: Response List Cross Tenant Incidents Api V1 Mssp Incidents
                   Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mssp/organizations:
+    post:
+      tags:
+      - mssp
+      summary: Create Organization
+      description: 'Create an operator organisation around the caller''s own tenant.
+
+
+        The creator becomes its owner. Available to any authenticated user
+
+        because there is no organisation to be a member of yet — the
+
+        home tenant is taken from the caller''s session rather than the body, so
+
+        nobody can found an organisation on top of somebody else''s tenant.'
+      operationId: create_organization_api_v1_mssp_organizations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/mssp/organizations/current:
+    get:
+      tags:
+      - mssp
+      summary: Get Current Organization
+      operationId: get_current_organization_api_v1_mssp_organizations_current_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOut'
+      security:
+      - HTTPBearer: []
+  /api/v1/mssp/organizations/current/tenants:
+    post:
+      tags:
+      - mssp
+      summary: Add Tenants To Portfolio
+      description: 'Bring tenants under management.
+
+
+        A tenant already managed by another organisation is rejected rather than
+
+        reassigned: `organization_tenants` carries a unique constraint on
+
+        `tenant_id` precisely so a customer cannot end up in two portfolios, and
+
+        silently moving one would be a cross-tenant transfer performed by
+
+        whoever asked last.'
+      operationId: add_tenants_to_portfolio_api_v1_mssp_organizations_current_tenants_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantGrant'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Add Tenants To Portfolio Api V1 Mssp Organizations
+                  Current Tenants Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/mssp/organizations/current/tenants/{tenant_id}:
+    delete:
+      tags:
+      - mssp
+      summary: Remove Tenant From Portfolio
+      description: 'Release a tenant from management.
+
+
+        Deletes the portfolio link only. The tenant and all of its data survive
+
+        as a standalone tenant — offboarding a customer from a provider is not
+
+        the same request as erasing them, and conflating the two would make this
+
+        button destructive in a way its label does not say.'
+      operationId: remove_tenant_from_portfolio_api_v1_mssp_organizations_current_tenants__tenant_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Tenant Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/mssp/organizations/current/members:
+    get:
+      tags:
+      - mssp
+      summary: List Members
+      operationId: list_members_api_v1_mssp_organizations_current_members_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MemberOut'
+                type: array
+                title: Response List Members Api V1 Mssp Organizations Current Members
+                  Get
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - mssp
+      summary: Upsert Member
+      operationId: upsert_member_api_v1_mssp_organizations_current_members_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberUpsert'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/mssp/organizations/current/members/{user_id}/tenants:
+    put:
+      tags:
+      - mssp
+      summary: Set Member Tenant Grants
+      description: 'Replace which portfolio tenants one member may reach.
+
+
+        Tenants outside the portfolio are refused here *and* would be refused by
+
+        the database: `organization_member_tenants` has a composite foreign key
+
+        onto `organization_tenants`, so a grant cannot name a tenant the
+
+        organisation does not manage even if this check were removed.'
+      operationId: set_member_tenant_grants_api_v1_mssp_organizations_current_members__user_id__tenants_put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantGrant'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberOut'
         '422':
           description: Validation Error
           content:
@@ -17137,6 +17467,27 @@ components:
       - medianConfidence
       - lowConfidence
       title: ConfidenceSummary
+    ConnectorHealthOut:
+      properties:
+        total:
+          type: integer
+          title: Total
+        healthy:
+          type: integer
+          title: Healthy
+        stale:
+          type: integer
+          title: Stale
+        error:
+          type: integer
+          title: Error
+      type: object
+      required:
+      - total
+      - healthy
+      - stale
+      - error
+      title: ConnectorHealthOut
     ConnectorHealthSummary:
       properties:
         total:
@@ -18160,40 +18511,6 @@ components:
       required:
       - items
       title: CredentialsListResponse
-    CrossTenantIncident:
-      properties:
-        incident_id:
-          type: string
-          title: Incident Id
-        tenant_name:
-          type: string
-          title: Tenant Name
-        title:
-          type: string
-          title: Title
-        severity:
-          type: string
-          title: Severity
-        status:
-          type: string
-          title: Status
-        created_at:
-          type: string
-          title: Created At
-        assignee:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Assignee
-      type: object
-      required:
-      - incident_id
-      - tenant_name
-      - title
-      - severity
-      - status
-      - created_at
-      title: CrossTenantIncident
     CspmScanRequest:
       properties:
         resources:
@@ -21429,6 +21746,46 @@ components:
         the first event to land. Keeping the shape minimal avoids paying
 
         the full ``ConnectorResponse`` cost on every poll tick.'
+    LimitHeadroomOut:
+      properties:
+        key:
+          type: string
+          title: Key
+        label:
+          type: string
+          title: Label
+        used:
+          type: integer
+          title: Used
+        limit:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Limit
+        remaining:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Remaining
+        pct_used:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pct Used
+        state:
+          type: string
+          title: State
+          description: unlimited | ok | warning | exhausted
+      type: object
+      required:
+      - key
+      - label
+      - used
+      - limit
+      - remaining
+      - pct_used
+      - state
+      title: LimitHeadroomOut
     ListResponse:
       properties:
         rules:
@@ -21584,80 +21941,6 @@ components:
       - email
       - password
       title: LoginRequest
-    MSSPKpiOverview:
-      properties:
-        total_tenants:
-          type: integer
-          title: Total Tenants
-        total_open_alerts:
-          type: integer
-          title: Total Open Alerts
-        total_critical_incidents:
-          type: integer
-          title: Total Critical Incidents
-        avg_health_score:
-          type: number
-          title: Avg Health Score
-        avg_mttr_minutes:
-          type: number
-          title: Avg Mttr Minutes
-        sla_breach_count:
-          type: integer
-          title: Sla Breach Count
-        connectors_online:
-          type: integer
-          title: Connectors Online
-        connectors_degraded:
-          type: integer
-          title: Connectors Degraded
-      type: object
-      required:
-      - total_tenants
-      - total_open_alerts
-      - total_critical_incidents
-      - avg_health_score
-      - avg_mttr_minutes
-      - sla_breach_count
-      - connectors_online
-      - connectors_degraded
-      title: MSSPKpiOverview
-    ManagedTenantRow:
-      properties:
-        tenant_id:
-          type: string
-          title: Tenant Id
-        name:
-          type: string
-          title: Name
-        health_score:
-          type: number
-          title: Health Score
-        open_alerts:
-          type: integer
-          title: Open Alerts
-        critical_alerts:
-          type: integer
-          title: Critical Alerts
-        sla_breaches:
-          type: integer
-          title: Sla Breaches
-        connector_status:
-          type: string
-          title: Connector Status
-        last_event_at:
-          type: string
-          title: Last Event At
-      type: object
-      required:
-      - tenant_id
-      - name
-      - health_score
-      - open_alerts
-      - critical_alerts
-      - sla_breaches
-      - connector_status
-      - last_event_at
-      title: ManagedTenantRow
     MarketplaceItemSummary:
       properties:
         id:
@@ -21797,6 +22080,45 @@ components:
       - changed_at
       - created_at
       title: MaturityOut
+    MemberOut:
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        email:
+          type: string
+          title: Email
+        org_role:
+          type: string
+          title: Org Role
+        granted_tenants:
+          items:
+            type: string
+            format: uuid
+          type: array
+          title: Granted Tenants
+      type: object
+      required:
+      - user_id
+      - email
+      - org_role
+      - granted_tenants
+      title: MemberOut
+    MemberUpsert:
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        org_role:
+          type: string
+          title: Org Role
+          default: viewer
+      type: object
+      required:
+      - user_id
+      title: MemberUpsert
     MetricsOut:
       properties:
         tenant_id:
@@ -22898,6 +23220,62 @@ components:
       required:
       - status
       title: OnCallUpdateRequest
+    OrganizationCreate:
+      properties:
+        slug:
+          type: string
+          maxLength: 64
+          minLength: 2
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          title: Slug
+        name:
+          type: string
+          maxLength: 255
+          minLength: 1
+          title: Name
+        kind:
+          type: string
+          pattern: ^(mssp|enterprise)$
+          title: Kind
+          default: mssp
+      type: object
+      required:
+      - slug
+      - name
+      title: OrganizationCreate
+    OrganizationOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        slug:
+          type: string
+          title: Slug
+        name:
+          type: string
+          title: Name
+        kind:
+          type: string
+          title: Kind
+        home_tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Home Tenant Id
+        is_active:
+          type: boolean
+          title: Is Active
+      type: object
+      required:
+      - id
+      - slug
+      - name
+      - kind
+      - home_tenant_id
+      - is_active
+      title: OrganizationOut
     OverrideEntryModel:
       properties:
         key:
@@ -23336,6 +23714,262 @@ components:
       - loaded_at
       - error
       title: PluginOut
+    PortfolioAlertOut:
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+          title: Alert Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        tenant_name:
+          type: string
+          title: Tenant Name
+        title:
+          type: string
+          title: Title
+        severity:
+          type: string
+          title: Severity
+        status:
+          type: string
+          title: Status
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        event_time:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Time
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        is_synthetic:
+          type: boolean
+          title: Is Synthetic
+      type: object
+      required:
+      - alert_id
+      - tenant_id
+      - tenant_name
+      - title
+      - severity
+      - status
+      - category
+      - created_at
+      - event_time
+      - case_id
+      - is_synthetic
+      title: PortfolioAlertOut
+    PortfolioOut:
+      properties:
+        org_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Org Id
+        org_slug:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Org Slug
+        org_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Org Name
+        org_role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Org Role
+        portfolio_wide:
+          type: boolean
+          title: Portfolio Wide
+          description: True when the caller's role reaches the whole portfolio rather
+            than a set of explicit tenant grants.
+        scoped_tenants:
+          type: integer
+          title: Scoped Tenants
+        summary:
+          $ref: '#/components/schemas/PortfolioSummaryOut'
+        tenants:
+          items:
+            $ref: '#/components/schemas/PortfolioTenantOut'
+          type: array
+          title: Tenants
+      type: object
+      required:
+      - org_id
+      - org_slug
+      - org_name
+      - org_role
+      - portfolio_wide
+      - scoped_tenants
+      - summary
+      - tenants
+      title: PortfolioOut
+    PortfolioSummaryOut:
+      properties:
+        tenants:
+          type: integer
+          title: Tenants
+        tenants_active:
+          type: integer
+          title: Tenants Active
+        open_alerts:
+          type: integer
+          title: Open Alerts
+        critical_alerts:
+          type: integer
+          title: Critical Alerts
+        high_alerts:
+          type: integer
+          title: High Alerts
+        untriaged_alerts:
+          type: integer
+          title: Untriaged Alerts
+        synthetic_alerts:
+          type: integer
+          title: Synthetic Alerts
+        open_cases:
+          type: integer
+          title: Open Cases
+        sla_breached_cases:
+          type: integer
+          title: Sla Breached Cases
+        connectors_total:
+          type: integer
+          title: Connectors Total
+        connectors_healthy:
+          type: integer
+          title: Connectors Healthy
+        connectors_stale:
+          type: integer
+          title: Connectors Stale
+        connectors_error:
+          type: integer
+          title: Connectors Error
+        tenants_with_exhausted_limits:
+          type: integer
+          title: Tenants With Exhausted Limits
+        tenants_with_limit_warnings:
+          type: integer
+          title: Tenants With Limit Warnings
+        tenants_without_connectors:
+          type: integer
+          title: Tenants Without Connectors
+      type: object
+      required:
+      - tenants
+      - tenants_active
+      - open_alerts
+      - critical_alerts
+      - high_alerts
+      - untriaged_alerts
+      - synthetic_alerts
+      - open_cases
+      - sla_breached_cases
+      - connectors_total
+      - connectors_healthy
+      - connectors_stale
+      - connectors_error
+      - tenants_with_exhausted_limits
+      - tenants_with_limit_warnings
+      - tenants_without_connectors
+      title: PortfolioSummaryOut
+    PortfolioTenantOut:
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        relationship:
+          type: string
+          title: Relationship
+        is_active:
+          type: boolean
+          title: Is Active
+        open_alerts:
+          type: integer
+          title: Open Alerts
+        critical_alerts:
+          type: integer
+          title: Critical Alerts
+        high_alerts:
+          type: integer
+          title: High Alerts
+        untriaged_alerts:
+          type: integer
+          title: Untriaged Alerts
+        synthetic_alerts:
+          type: integer
+          title: Synthetic Alerts
+          description: Seeded demo rows, counted apart from the figures above.
+        open_cases:
+          type: integer
+          title: Open Cases
+        sla_breached_cases:
+          type: integer
+          title: Sla Breached Cases
+        connectors:
+          $ref: '#/components/schemas/ConnectorHealthOut'
+        last_event_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Event At
+        limits:
+          items:
+            $ref: '#/components/schemas/LimitHeadroomOut'
+          type: array
+          title: Limits
+        limits_exhausted:
+          type: integer
+          title: Limits Exhausted
+        limits_warning:
+          type: integer
+          title: Limits Warning
+      type: object
+      required:
+      - tenant_id
+      - name
+      - slug
+      - relationship
+      - is_active
+      - open_alerts
+      - critical_alerts
+      - high_alerts
+      - untriaged_alerts
+      - synthetic_alerts
+      - open_cases
+      - sla_breached_cases
+      - connectors
+      - last_event_at
+      - limits
+      - limits_exhausted
+      - limits_warning
+      title: PortfolioTenantOut
     PostureSummary:
       properties:
         total:
@@ -26475,6 +27109,18 @@ components:
         the only thing standing between "preview the erase" and "erase", and this
 
         endpoint has no undo.'
+    TenantGrant:
+      properties:
+        tenant_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          title: Tenant Ids
+      type: object
+      required:
+      - tenant_ids
+      title: TenantGrant
     TenantHeaderResponse:
       properties:
         id:

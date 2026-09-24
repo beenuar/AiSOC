@@ -127,6 +127,30 @@ async def discover_tenant_tables(db: AsyncSession) -> list[str]:
     return [r[0] for r in rows.fetchall()]
 
 
+async def _count_dependent_organizations(db: AsyncSession, tenant_id: uuid.UUID) -> int:
+    """Organisations this tenant *hosts*, which go with it.
+
+    Discovery finds tables by a column literally named ``tenant_id``, and
+    ``organizations.home_tenant_id`` is not one — so the row is removed by
+    the foreign-key cascade but never appears in the report. A deletion
+    report that undercounts is the same class of problem as one that
+    overstates completeness: the operator signing off on an erasure needs to
+    know an operator organisation was part of it.
+
+    Only the organisation row and its membership go. The tenants it managed
+    are other people's customers; they survive as unclaimed tenants, and
+    ``organization_tenants`` loses its links by cascade.
+    """
+    return int(
+        (
+            await db.execute(
+                text("SELECT count(*) FROM organizations WHERE home_tenant_id = :t"),
+                {"t": str(tenant_id)},
+            )
+        ).scalar_one()
+    )
+
+
 async def purge_postgres(db: AsyncSession, tenant_id: uuid.UUID, *, dry_run: bool) -> StoreResult:
     result = StoreResult(store="postgres")
     try:
@@ -158,6 +182,15 @@ async def purge_postgres(db: AsyncSession, tenant_id: uuid.UUID, *, dry_run: boo
                     text(f"DELETE FROM {table} WHERE tenant_id = :t"),
                     {"t": str(tenant_id)},
                 )
+
+        hosted_orgs = await _count_dependent_organizations(db, tenant_id)
+        if hosted_orgs:
+            result.detail["organizations"] = hosted_orgs
+            result.rows += hosted_orgs
+            if not dry_run:
+                # Explicit rather than left to the cascade, so the delete and
+                # the number we just reported are the same operation.
+                await db.execute(text("DELETE FROM organizations WHERE home_tenant_id = :t"), {"t": str(tenant_id)})
 
         tenant_rows = (await db.execute(text("SELECT count(*) FROM tenants WHERE id = :t"), {"t": str(tenant_id)})).scalar_one()
         if tenant_rows:

@@ -1,4 +1,19 @@
-"""MSSP parent-tenant console endpoints."""
+"""MSSP console endpoints.
+
+Two generations of model live here side by side, deliberately.
+
+`/mssp/children`, `/mssp/notes`, `/mssp/delegations` and the rule-pack routes
+read `tenants.parent_tenant_id` (migration 012), which makes the managing
+provider a tenant. Existing deployments have data in those tables, so they
+keep working unchanged — with the consent and ownership checks that sit
+alongside them.
+
+Everything under `/mssp/portfolio` and `/mssp/organizations` reads the
+organisation model (migration 058), where the operator is its own object
+with members, per-member roles, and per-member tenant grants. Cross-tenant
+reads resolve their tenant list through
+`app.services.org_scope.resolve_portfolio_scope` and nothing else.
+"""
 
 from __future__ import annotations
 
@@ -7,15 +22,23 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.auth import get_current_user
-from app.core.config import settings
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
+from app.models.organization import (
+    ORG_ROLES,
+    Organization,
+    OrganizationMember,
+    OrganizationMemberTenant,
+    OrganizationTenant,
+)
 from app.models.tenant import Tenant, User
+from app.services import mssp_portfolio
+from app.services.org_scope import PortfolioScope, narrow, resolve_portfolio_scope
 
 logger = logging.getLogger(__name__)
 
@@ -703,225 +726,557 @@ async def count_effective_rules_for_child(
 
 
 # ---------------------------------------------------------------------------
-# Cross-tenant dashboard rollups (mock data for UI)
+# Cross-tenant portfolio surfaces (organisation model, migration 058)
 # ---------------------------------------------------------------------------
+#
+# These three routes used to return five hardcoded companies — "Acme Corp,
+# health 92.4, 12 open alerts", "Wayne Enterprises", a list of invented
+# incidents with invented assignees — to any authenticated caller. The
+# aggregation query behind them was never written. A later change stopped
+# short of deleting the sample and instead gated it behind demo mode, which
+# removed the lie but left the feature unimplemented: outside demo mode the
+# MSSP console showed zeros forever.
+#
+# They are now computed from real rows in `app.services.mssp_portfolio`. The
+# sample is gone from the file rather than gated, because a fabricated
+# portfolio has no honest use — an operator evaluating the product needs to
+# see their own empty portfolio, not somebody else's fictional one.
 
 
-class MSSPKpiOverview(BaseModel):
-    total_tenants: int
-    total_open_alerts: int
-    total_critical_incidents: int
-    avg_health_score: float
-    avg_mttr_minutes: float
-    sla_breach_count: int
-    connectors_online: int
-    connectors_degraded: int
+async def _scope(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PortfolioScope:
+    """Resolve the caller's managed portfolio, or refuse the surface.
 
-    model_config = ConfigDict(from_attributes=True)
+    A principal who belongs to no organisation gets 403 rather than an empty
+    list: an empty list would read as "you manage nothing", when the truth
+    is that cross-tenant reads are not theirs to make. A member whose
+    portfolio is genuinely empty does get empty results, and the payload
+    says so explicitly.
+    """
+    scope = await resolve_portfolio_scope(db, current_user)
+    if not scope.is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of an operator organisation",
+        )
+    return scope
 
 
-class ManagedTenantRow(BaseModel):
-    tenant_id: str
+async def _admin_scope(scope: PortfolioScope = Depends(_scope)) -> PortfolioScope:
+    if not scope.can_administer:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organisation owner or admin role required",
+        )
+    return scope
+
+
+class LimitHeadroomOut(BaseModel):
+    key: str
+    label: str
+    used: int
+    # `None` means uncapped. AiSOC ships with no limits, and a tenant that
+    # has none reports `unlimited` rather than a ceiling nobody configured.
+    limit: int | None
+    remaining: int | None
+    pct_used: float | None
+    state: str = Field(description="unlimited | ok | warning | exhausted")
+
+
+class ConnectorHealthOut(BaseModel):
+    total: int
+    healthy: int
+    stale: int
+    error: int
+
+
+class PortfolioTenantOut(BaseModel):
+    tenant_id: uuid.UUID
     name: str
-    health_score: float
+    slug: str
+    relationship: str
+    is_active: bool
     open_alerts: int
     critical_alerts: int
-    sla_breaches: int
-    connector_status: str
-    last_event_at: str
+    high_alerts: int
+    untriaged_alerts: int
+    synthetic_alerts: int = Field(description="Seeded demo rows, counted apart from the figures above.")
+    open_cases: int
+    sla_breached_cases: int
+    connectors: ConnectorHealthOut
+    last_event_at: str | None
+    limits: list[LimitHeadroomOut]
+    limits_exhausted: int
+    limits_warning: int
 
-    model_config = ConfigDict(from_attributes=True)
+
+class PortfolioSummaryOut(BaseModel):
+    tenants: int
+    tenants_active: int
+    open_alerts: int
+    critical_alerts: int
+    high_alerts: int
+    untriaged_alerts: int
+    synthetic_alerts: int
+    open_cases: int
+    sla_breached_cases: int
+    connectors_total: int
+    connectors_healthy: int
+    connectors_stale: int
+    connectors_error: int
+    tenants_with_exhausted_limits: int
+    tenants_with_limit_warnings: int
+    tenants_without_connectors: int
 
 
-class CrossTenantIncident(BaseModel):
-    incident_id: str
+class PortfolioOut(BaseModel):
+    org_id: uuid.UUID | None
+    org_slug: str | None
+    org_name: str | None
+    org_role: str | None
+    portfolio_wide: bool = Field(
+        description="True when the caller's role reaches the whole portfolio rather than a set of explicit tenant grants."
+    )
+    # Present so an empty console can explain itself. "You have no tenant
+    # grants" and "your organisation manages no tenants" are different
+    # problems with different fixes, and a bare zero distinguishes neither.
+    scoped_tenants: int
+    summary: PortfolioSummaryOut
+    tenants: list[PortfolioTenantOut]
+
+
+class PortfolioAlertOut(BaseModel):
+    alert_id: uuid.UUID
+    tenant_id: uuid.UUID
     tenant_name: str
     title: str
     severity: str
     status: str
-    created_at: str
-    assignee: str | None = None
+    category: str | None
+    created_at: str | None
+    event_time: str | None
+    case_id: uuid.UUID | None
+    is_synthetic: bool
+
+
+@router.get("/portfolio", response_model=PortfolioOut)
+async def get_portfolio(
+    tenant_id: list[uuid.UUID] | None = Query(None, description="Restrict to these tenants; ignored if outside the portfolio."),
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> PortfolioOut:
+    """Managed portfolio: per-tenant posture plus derived totals.
+
+    Every figure is counted from that tenant's own rows. A portfolio with no
+    tenants returns zeros and an empty list.
+    """
+    effective = narrow(scope, tenant_id) if tenant_id else scope
+
+    if effective.is_empty:
+        return PortfolioOut(
+            org_id=scope.org_id,
+            org_slug=scope.org_slug,
+            org_name=scope.org_name,
+            org_role=scope.org_role,
+            portfolio_wide=scope.portfolio_wide,
+            scoped_tenants=0,
+            summary=PortfolioSummaryOut(**mssp_portfolio.EMPTY_SUMMARY),
+            tenants=[],
+        )
+
+    rollups = await mssp_portfolio.tenant_rollups(db, effective)
+    return PortfolioOut(
+        org_id=scope.org_id,
+        org_slug=scope.org_slug,
+        org_name=scope.org_name,
+        org_role=scope.org_role,
+        portfolio_wide=scope.portfolio_wide,
+        scoped_tenants=len(effective.tenant_ids),
+        summary=PortfolioSummaryOut(**mssp_portfolio.summarise(rollups)),
+        tenants=[PortfolioTenantOut(**r.as_dict()) for r in rollups],
+    )
+
+
+@router.get("/portfolio/alerts", response_model=list[PortfolioAlertOut])
+async def list_portfolio_alerts(
+    severity: str | None = Query(None, description="critical | high | medium | low | info"),
+    alert_status: str | None = Query(None, alias="status"),
+    include_synthetic: bool = Query(False, description="Include seeded demo rows, labelled as such."),
+    limit: int = Query(50, ge=1, le=500),
+    tenant_id: list[uuid.UUID] | None = Query(None),
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> list[PortfolioAlertOut]:
+    """Open alerts across the portfolio, newest first."""
+    effective = narrow(scope, tenant_id) if tenant_id else scope
+    if effective.is_empty:
+        return []
+
+    rows = await mssp_portfolio.portfolio_alerts(
+        db,
+        effective,
+        severity=severity,
+        status=alert_status,
+        include_synthetic=include_synthetic,
+        limit=limit,
+    )
+    return [PortfolioAlertOut(**row) for row in rows]
+
+
+# The original three paths, kept so existing callers keep working, now
+# reading the same real rows as `/portfolio`. Their payloads changed with
+# their honesty: `health_score` is gone because it was an undefined
+# composite nobody could reproduce, and `avg_mttr_minutes` is now measured
+# from cases the tenant actually closed and is null when it closed none.
+
+
+@router.get("/overview", response_model=PortfolioSummaryOut)
+async def mssp_overview(
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> PortfolioSummaryOut:
+    """Portfolio totals for the operator dashboard."""
+    if scope.is_empty:
+        return PortfolioSummaryOut(**mssp_portfolio.EMPTY_SUMMARY)
+    rollups = await mssp_portfolio.tenant_rollups(db, scope)
+    return PortfolioSummaryOut(**mssp_portfolio.summarise(rollups))
+
+
+@router.get("/tenants", response_model=list[PortfolioTenantOut])
+async def list_managed_tenants(
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> list[PortfolioTenantOut]:
+    """Managed tenants with their measured posture."""
+    if scope.is_empty:
+        return []
+    rollups = await mssp_portfolio.tenant_rollups(db, scope)
+    return [PortfolioTenantOut(**r.as_dict()) for r in rollups]
+
+
+@router.get("/incidents", response_model=list[PortfolioAlertOut])
+async def list_cross_tenant_incidents(
+    severity: str | None = Query(None, description="critical | high | medium | low | info"),
+    limit: int = Query(50, ge=1, le=500),
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> list[PortfolioAlertOut]:
+    """Open alerts across the portfolio."""
+    if scope.is_empty:
+        return []
+    rows = await mssp_portfolio.portfolio_alerts(db, scope, severity=severity, limit=limit)
+    return [PortfolioAlertOut(**row) for row in rows]
+
+
+# ---------------------------------------------------------------------------
+# Organisation administration
+# ---------------------------------------------------------------------------
+
+
+class OrganizationOut(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    kind: str
+    home_tenant_id: uuid.UUID | None
+    is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-_MSSP_TENANTS_MOCK = [
-    ManagedTenantRow(
-        tenant_id="t-acme",
-        name="Acme Corp",
-        health_score=92.4,
-        open_alerts=12,
-        critical_alerts=1,
-        sla_breaches=0,
-        connector_status="healthy",
-        last_event_at="2026-05-07T20:31:00Z",
-    ),
-    ManagedTenantRow(
-        tenant_id="t-globex",
-        name="Globex Industries",
-        health_score=78.1,
-        open_alerts=34,
-        critical_alerts=3,
-        sla_breaches=2,
-        connector_status="degraded",
-        last_event_at="2026-05-07T20:28:00Z",
-    ),
-    ManagedTenantRow(
-        tenant_id="t-initech",
-        name="Initech LLC",
-        health_score=95.7,
-        open_alerts=5,
-        critical_alerts=0,
-        sla_breaches=0,
-        connector_status="healthy",
-        last_event_at="2026-05-07T20:30:00Z",
-    ),
-    ManagedTenantRow(
-        tenant_id="t-wayne",
-        name="Wayne Enterprises",
-        health_score=64.3,
-        open_alerts=58,
-        critical_alerts=7,
-        sla_breaches=4,
-        connector_status="degraded",
-        last_event_at="2026-05-07T20:25:00Z",
-    ),
-    ManagedTenantRow(
-        tenant_id="t-stark",
-        name="Stark Solutions",
-        health_score=88.9,
-        open_alerts=9,
-        critical_alerts=1,
-        sla_breaches=0,
-        connector_status="healthy",
-        last_event_at="2026-05-07T20:29:00Z",
-    ),
-]
-
-_MSSP_INCIDENTS_MOCK = [
-    CrossTenantIncident(
-        incident_id="INC-4201",
-        tenant_name="Wayne Enterprises",
-        title="Ransomware lateral movement detected",
-        severity="high",
-        status="investigating",
-        created_at="2026-05-07T19:45:00Z",
-        assignee="Jordan Lee",
-    ),
-    CrossTenantIncident(
-        incident_id="INC-4198",
-        tenant_name="Globex Industries",
-        title="Suspicious OAuth token abuse in Azure AD",
-        severity="high",
-        status="investigating",
-        created_at="2026-05-07T18:12:00Z",
-        assignee="Morgan Chen",
-    ),
-    CrossTenantIncident(
-        incident_id="INC-4195",
-        tenant_name="Wayne Enterprises",
-        title="Data exfiltration via DNS tunneling",
-        severity="high",
-        status="contained",
-        created_at="2026-05-07T16:30:00Z",
-        assignee="Alex Rivera",
-    ),
-    CrossTenantIncident(
-        incident_id="INC-4192",
-        tenant_name="Acme Corp",
-        title="Brute-force against VPN gateway",
-        severity="medium",
-        status="resolved",
-        created_at="2026-05-07T14:20:00Z",
-        assignee="Taylor Kim",
-    ),
-    CrossTenantIncident(
-        incident_id="INC-4189",
-        tenant_name="Globex Industries",
-        title="Compromised service account in GCP",
-        severity="high",
-        status="investigating",
-        created_at="2026-05-07T12:55:00Z",
-        assignee=None,
-    ),
-]
+class OrganizationCreate(BaseModel):
+    slug: str = Field(min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    name: str = Field(min_length=1, max_length=255)
+    kind: str = Field(default="mssp", pattern="^(mssp|enterprise)$")
 
 
-# The three rollup routes below have no implementation behind them — the
-# cross-tenant aggregation query was never written. They returned the
-# hardcoded rows above to *authenticated* callers with no demo check and no
-# marker, so "Acme Corp, health 92.4, 12 open alerts" was indistinguishable
-# from a measurement. Fabricated security posture presented as real is the one
-# thing this project will not ship.
-#
-# They now serve that sample only in demo mode, and return empty outside it.
-# An empty rollup is the truthful answer: nothing has been aggregated.
+class MemberOut(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    org_role: str
+    granted_tenants: list[uuid.UUID]
 
 
-def _mssp_sample_allowed() -> bool:
-    return bool(settings.AISOC_DEMO_MODE)
+class MemberUpsert(BaseModel):
+    user_id: uuid.UUID
+    org_role: str = Field(default="viewer")
 
 
-@router.get("/overview", response_model=MSSPKpiOverview)
-async def mssp_overview(
+class TenantGrant(BaseModel):
+    tenant_ids: list[uuid.UUID]
+
+
+@router.post("/organizations", response_model=OrganizationOut, status_code=status.HTTP_201_CREATED)
+async def create_organization(
+    body: OrganizationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> MSSPKpiOverview:
-    """Cross-tenant KPI summary for the MSSP parent dashboard.
+) -> Organization:
+    """Create an operator organisation around the caller's own tenant.
 
-    Not yet implemented against real data. Returns zeros outside demo mode
-    rather than the sample figures, because a dashboard reading 23.4 minutes
-    MTTR that nobody measured is worse than one reading nothing.
+    The creator becomes its owner. Available to any authenticated user
+    because there is no organisation to be a member of yet — the
+    home tenant is taken from the caller's session rather than the body, so
+    nobody can found an organisation on top of somebody else's tenant.
     """
-    if not _mssp_sample_allowed():
-        return MSSPKpiOverview(
-            total_tenants=0,
-            total_open_alerts=0,
-            total_critical_incidents=0,
-            avg_health_score=0.0,
-            avg_mttr_minutes=0.0,
-            sla_breach_count=0,
-            connectors_online=0,
-            connectors_degraded=0,
+    existing = (await db.execute(select(Organization).where(Organization.slug == body.slug))).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Organisation slug already taken")
+
+    already_home = (
+        await db.execute(select(Organization).where(Organization.home_tenant_id == current_user.tenant_id))
+    ).scalar_one_or_none()
+    if already_home is not None:
+        raise HTTPException(status_code=409, detail="This tenant already hosts an organisation")
+
+    org = Organization(
+        slug=body.slug,
+        name=body.name,
+        kind=body.kind,
+        home_tenant_id=current_user.tenant_id,
+    )
+    db.add(org)
+    await db.flush()
+    db.add(OrganizationMember(org_id=org.id, user_id=current_user.id, org_role="owner"))
+    # The operator's own tenant joins its own portfolio, so a provider that
+    # also runs an estate sees it in the same rollup as its customers.
+    db.add(OrganizationTenant(org_id=org.id, tenant_id=current_user.tenant_id, relationship="own"))
+    await db.commit()
+    await db.refresh(org)
+    return org
+
+
+@router.get("/organizations/current", response_model=OrganizationOut)
+async def get_current_organization(
+    scope: PortfolioScope = Depends(_scope),
+    db: AsyncSession = Depends(get_db),
+) -> Organization:
+    org = await db.get(Organization, scope.org_id)
+    if org is None:  # pragma: no cover - scope resolution just read this row
+        raise HTTPException(status_code=404, detail="Organisation not found")
+    return org
+
+
+@router.post("/organizations/current/tenants", status_code=status.HTTP_200_OK)
+async def add_tenants_to_portfolio(
+    body: TenantGrant,
+    scope: PortfolioScope = Depends(_admin_scope),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    """Bring tenants under management.
+
+    A tenant already managed by another organisation is rejected rather than
+    reassigned: `organization_tenants` carries a unique constraint on
+    `tenant_id` precisely so a customer cannot end up in two portfolios, and
+    silently moving one would be a cross-tenant transfer performed by
+    whoever asked last.
+    """
+    added: list[str] = []
+    rejected: dict[str, str] = {}
+
+    for tenant_id in body.tenant_ids:
+        tenant = await db.get(Tenant, tenant_id)
+        if tenant is None:
+            rejected[str(tenant_id)] = "tenant not found"
+            continue
+        claim = (await db.execute(select(OrganizationTenant).where(OrganizationTenant.tenant_id == tenant_id))).scalar_one_or_none()
+        if claim is not None:
+            rejected[str(tenant_id)] = "already in this portfolio" if claim.org_id == scope.org_id else "managed by another organisation"
+            continue
+        db.add(
+            OrganizationTenant(
+                org_id=scope.org_id,
+                tenant_id=tenant_id,
+                relationship="managed",
+                onboarded_by=current_user.id,
+            )
         )
-    tenants = _MSSP_TENANTS_MOCK
-    return MSSPKpiOverview(
-        total_tenants=len(tenants),
-        total_open_alerts=sum(t.open_alerts for t in tenants),
-        total_critical_incidents=sum(t.critical_alerts for t in tenants),
-        avg_health_score=round(sum(t.health_score for t in tenants) / len(tenants), 1),
-        avg_mttr_minutes=23.4,
-        sla_breach_count=sum(t.sla_breaches for t in tenants),
-        connectors_online=3,
-        connectors_degraded=2,
+        added.append(str(tenant_id))
+
+    await db.commit()
+    return {"added": added, "rejected": rejected}
+
+
+@router.delete("/organizations/current/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def remove_tenant_from_portfolio(
+    tenant_id: uuid.UUID,
+    scope: PortfolioScope = Depends(_admin_scope),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Release a tenant from management.
+
+    Deletes the portfolio link only. The tenant and all of its data survive
+    as a standalone tenant — offboarding a customer from a provider is not
+    the same request as erasing them, and conflating the two would make this
+    button destructive in a way its label does not say.
+    """
+    link = (
+        await db.execute(
+            select(OrganizationTenant).where(
+                OrganizationTenant.org_id == scope.org_id,
+                OrganizationTenant.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Tenant is not in this portfolio")
+    # Per-member grants over this tenant go with it, by foreign key cascade.
+    await db.delete(link)
+    await db.commit()
+
+
+@router.get("/organizations/current/members", response_model=list[MemberOut])
+async def list_members(
+    scope: PortfolioScope = Depends(_admin_scope),
+    db: AsyncSession = Depends(get_db),
+) -> list[MemberOut]:
+    rows = (
+        await db.execute(
+            select(OrganizationMember, User)
+            .join(User, User.id == OrganizationMember.user_id)
+            .where(OrganizationMember.org_id == scope.org_id)
+            .order_by(User.email)
+        )
+    ).all()
+
+    grants: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for user_id, tenant_id in (
+        await db.execute(
+            select(OrganizationMemberTenant.user_id, OrganizationMemberTenant.tenant_id).where(
+                OrganizationMemberTenant.org_id == scope.org_id
+            )
+        )
+    ).all():
+        grants.setdefault(uuid.UUID(str(user_id)), []).append(uuid.UUID(str(tenant_id)))
+
+    return [
+        MemberOut(
+            user_id=uuid.UUID(str(member.user_id)),
+            email=str(user.email),
+            org_role=str(member.org_role),
+            granted_tenants=sorted(grants.get(uuid.UUID(str(member.user_id)), [])),
+        )
+        for member, user in rows
+    ]
+
+
+@router.put("/organizations/current/members", response_model=MemberOut)
+async def upsert_member(
+    body: MemberUpsert,
+    scope: PortfolioScope = Depends(_admin_scope),
+    db: AsyncSession = Depends(get_db),
+) -> MemberOut:
+    if body.org_role not in ORG_ROLES:
+        raise HTTPException(status_code=422, detail=f"org_role must be one of {', '.join(ORG_ROLES)}")
+
+    user = await db.get(User, body.user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    member = (
+        await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.org_id == scope.org_id,
+                OrganizationMember.user_id == body.user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if member is None:
+        member = OrganizationMember(org_id=scope.org_id, user_id=body.user_id, org_role=body.org_role)
+        db.add(member)
+    else:
+        member.org_role = body.org_role
+    await db.commit()
+
+    return MemberOut(
+        user_id=uuid.UUID(str(body.user_id)),
+        email=str(user.email),
+        org_role=body.org_role,
+        granted_tenants=[],
     )
 
 
-@router.get("/tenants", response_model=list[ManagedTenantRow])
-async def list_managed_tenants(
+@router.put("/organizations/current/members/{user_id}/tenants", response_model=MemberOut)
+async def set_member_tenant_grants(
+    user_id: uuid.UUID,
+    body: TenantGrant,
+    scope: PortfolioScope = Depends(_admin_scope),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[ManagedTenantRow]:
-    """List managed tenants with health scores for the parent dashboard.
+) -> MemberOut:
+    """Replace which portfolio tenants one member may reach.
 
-    Empty outside demo mode. `GET /api/v1/mssp/children` is the route backed
-    by real rows.
+    Tenants outside the portfolio are refused here *and* would be refused by
+    the database: `organization_member_tenants` has a composite foreign key
+    onto `organization_tenants`, so a grant cannot name a tenant the
+    organisation does not manage even if this check were removed.
     """
-    if not _mssp_sample_allowed():
-        return []
-    return _MSSP_TENANTS_MOCK
+    member = (
+        await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.org_id == scope.org_id,
+                OrganizationMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Not a member of this organisation")
 
+    portfolio = {
+        uuid.UUID(str(t))
+        for t in (await db.execute(select(OrganizationTenant.tenant_id).where(OrganizationTenant.org_id == scope.org_id))).scalars()
+    }
+    requested = {uuid.UUID(str(t)) for t in body.tenant_ids}
+    outside = requested - portfolio
+    if outside:
+        raise HTTPException(
+            status_code=422,
+            detail=f"not in this portfolio: {', '.join(sorted(str(t) for t in outside))}",
+        )
 
-@router.get("/incidents", response_model=list[CrossTenantIncident])
-async def list_cross_tenant_incidents(
-    severity: str | None = Query(None, description="Filter: high | medium | low"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> list[CrossTenantIncident]:
-    """Critical incidents across all managed tenants. Empty outside demo mode."""
-    if not _mssp_sample_allowed():
-        return []
-    incidents = _MSSP_INCIDENTS_MOCK
-    if severity:
-        incidents = [i for i in incidents if i.severity == severity]
-    return incidents
+    existing = (
+        await db.execute(
+            select(OrganizationMemberTenant).where(
+                OrganizationMemberTenant.org_id == scope.org_id,
+                OrganizationMemberTenant.user_id == user_id,
+            )
+        )
+    ).scalars()
+    for row in existing:
+        if uuid.UUID(str(row.tenant_id)) not in requested:
+            await db.delete(row)
+
+    held = {
+        uuid.UUID(str(t))
+        for t in (
+            await db.execute(
+                select(OrganizationMemberTenant.tenant_id).where(
+                    OrganizationMemberTenant.org_id == scope.org_id,
+                    OrganizationMemberTenant.user_id == user_id,
+                )
+            )
+        ).scalars()
+    }
+    for tenant_id in requested - held:
+        db.add(
+            OrganizationMemberTenant(
+                org_id=scope.org_id,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                granted_by=current_user.id,
+            )
+        )
+
+    await db.commit()
+
+    user = await db.get(User, user_id)
+    return MemberOut(
+        user_id=user_id,
+        email=str(user.email) if user else "",
+        org_role=str(member.org_role),
+        granted_tenants=sorted(requested),
+    )

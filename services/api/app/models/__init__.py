@@ -28,6 +28,12 @@ from app.models.mssp import (
     MSSPTenantNote,
 )
 from app.models.oauth import OAuthAppCredential, OAuthState
+from app.models.organization import (
+    Organization,
+    OrganizationMember,
+    OrganizationMemberTenant,
+    OrganizationTenant,
+)
 from app.models.posture import PostureDriftEvent, PostureFinding, PostureScanRun
 from app.models.published_replay import PublishedReplay
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
@@ -76,6 +82,10 @@ __all__ = [
     "MSSPTenantMetrics",
     "MSSPTenantNote",
     "OAuthAppCredential",
+    "Organization",
+    "OrganizationMember",
+    "OrganizationMemberTenant",
+    "OrganizationTenant",
     "OAuthState",
     "TenantInboxToken",
     "TenantLlmCredential",
