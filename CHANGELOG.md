@@ -196,6 +196,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Federated SIEM search has a console surface.** `/api/v1/federated/backends`
+  and `/api/v1/federated/search` have fanned one query out to Splunk, Microsoft
+  Sentinel, Elastic and QRadar — in parallel, against each tenant's own
+  vault-encrypted credentials — for some time. `apps/web` had no client for
+  either, so the capability was reachable only from the SDK. `/federated-search`
+  now exposes it: pick which connected SIEMs to query, describe the search once
+  in free text plus optional `field operator value` filters, and read the merged
+  rows.
+
+  The design constraint the page is built around is the endpoint's per-source
+  isolation. It deliberately never fails the whole call because one backend is
+  slow, 401s or 5xxs; it returns a verdict per backend instead. A UI that
+  renders only the merged rows discards that, and the analyst cannot tell
+  "Sentinel has nothing" from "Sentinel did not answer" — opposite conclusions
+  mid-incident. So the per-backend strip renders above the rows, always, with
+  each backend's own row count, latency and error message. A backend that
+  failed shows no row count, because "0 rows" beside a timeout reads as
+  "nothing matched". An empty result set is labelled "No matching events" when
+  a backend answered and matched nothing, and "No backend returned results"
+  when every backend failed.
+
+  Recognised entities in a row deep-link to `/graph?entity=<type>:<value>`.
+  Recognition is a fixed per-vendor field-name list rather than a heuristic:
+  `src_ip`, `source.ip` and `SourceIP` all resolve to the same IP pivot, while
+  `zip`, `recipient` and `description` resolve to none.
+
+- **`/graph` honours `?entity=` and selects the node it names.** Three callers
+  already built that URL — the Investigation Rail's entity chips, `HuntView`'s
+  "Pivot to graph" button, and now federated search — and nothing read it, so
+  every pivot navigated to the graph and dropped the entity, leaving the
+  analyst to find the node by eye. Both the typed form (`host:WIN-DC01`) and
+  the bare form `HuntView` emits are accepted, matching on node id then label.
+
 - **The Splunk warehouse driver executes.** It previously raised
   `HuntNotConfigured("provider scaffolded but live SPL execution not yet
   shipped")` on every call, so the SPL every hunt was translated into was

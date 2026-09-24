@@ -184,6 +184,11 @@ const navSections: NavSection[] = [
         icon: <SearchIcon />,
       },
       {
+        label: 'Federated Search',
+        href: '/federated-search',
+        icon: <SearchIcon />,
+      },
+      {
         label: 'Explore',
         href: '/explore',
         icon: <SearchIcon />,

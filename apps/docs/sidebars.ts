@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
         "console/queue",
         "console/rule-tuning",
         "console/investigation-rail",
+        "console/federated-search",
         "console/public-replay",
       ],
     },

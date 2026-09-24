@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import cytoscape, {
   type Core,
@@ -331,8 +332,46 @@ function MitreHeatmap({ coverage }: { coverage: MitreCoverage }) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 
+/**
+ * Match `?entity=` against a loaded node.
+ *
+ * Accepts both the `host:WIN-DC01` form the Investigation Rail and federated
+ * search emit, and a bare `WIN-DC01`, because `HuntView`'s existing pivot
+ * sends the bare value. The type half is used as a hint rather than a
+ * requirement: an operator who pastes `ip:10.0.0.7` should still land on the
+ * node if the graph happens to label it differently.
+ */
+export function findNodeForEntityParam(
+  nodes: readonly GraphNode[],
+  entity: string | null,
+): GraphNode | null {
+  if (!entity) return null;
+  const raw = entity.trim();
+  if (raw === '') return null;
+
+  const sep = raw.indexOf(':');
+  const value = (sep > 0 ? raw.slice(sep + 1) : raw).trim().toLowerCase();
+  if (value === '') return null;
+
+  return (
+    nodes.find((n) => n.id.toLowerCase() === value) ??
+    nodes.find((n) => n.label.toLowerCase() === value) ??
+    null
+  );
+}
+
 export function AttackGraphView() {
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const searchParams = useSearchParams();
+  const entityParam = searchParams?.get('entity') ?? null;
+  /**
+   * `?entity=` is applied once per distinct parameter value.
+   *
+   * Before this, the parameter was accepted by every caller that built one —
+   * the rail's entity chips, `HuntView`'s "Pivot to graph" — and read by
+   * nobody, so the pivot navigated here and dropped the entity on the floor.
+   */
+  const appliedEntity = useRef<string | null>(null);
 
   const graphState = useSWR<AttackGraph>(
     'attack-graph',
@@ -368,6 +407,17 @@ export function AttackGraphView() {
 
   const graph = graphState.data;
   const mitre = mitreState.data;
+
+  useEffect(() => {
+    if (!entityParam || appliedEntity.current === entityParam) return;
+    const nodes = graph?.nodes;
+    // Wait for the graph rather than giving up: the param arrives on first
+    // render and the nodes arrive with the fetch.
+    if (!nodes || nodes.length === 0) return;
+    appliedEntity.current = entityParam;
+    const match = findNodeForEntityParam(nodes, entityParam);
+    if (match) setSelected(match);
+  }, [entityParam, graph]);
 
   return (
     <div className="space-y-6">
