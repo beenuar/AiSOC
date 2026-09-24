@@ -752,14 +752,30 @@ function normalizeAlert(raw: unknown): Alert {
     : undefined;
 
   // ── Investigation Rail envelope (W6) ────────────────────────────────────
+  // `alert_rail.RelatedEntity` serialises as `{group, kind, value, label,
+  // pivot}`. This mapper read `e.type` and `e.pivot_path`, which the API has
+  // never sent, and passed `e.kind` ("host") into the client's `kind`, which
+  // is the rail *column* ("principal"). All three were wrong in the same
+  // direction: `pivotPath` was always null so no chip was ever a link, `type`
+  // was always empty, and `ENTITY_KIND_CONFIG[kind]` missed on every row — so
+  // the section rendered its header with a count and no chips beneath it. The
+  // `/graph?entity=…` route fix and its URL encoding were therefore
+  // unreachable from the console on every deployment.
+  //
+  // `group`/`kind` are read first and the old spellings kept as fallbacks, so
+  // a console pointed at an older API still renders.
   const relatedRaw = r.related_entities ?? r.relatedEntities;
   const relatedEntities = Array.isArray(relatedRaw)
     ? (relatedRaw as Array<Record<string, unknown>>).map((e) => ({
-        kind: (e.kind ?? 'principal') as RelatedEntity['kind'],
-        type: String(e.type ?? ''),
+        kind: (e.group ?? e.kind ?? 'principal') as RelatedEntity['kind'],
+        // `type` prefers its own spelling so a legacy `{kind: 'principal',
+        // type: 'host'}` payload still reports the concrete type, and falls
+        // back to `kind` for the current `{group, kind}` shape.
+        type: String(e.type ?? e.kind ?? ''),
         value: String(e.value ?? ''),
         label: (e.label as string | null | undefined) ?? null,
         pivotPath:
+          (e.pivot as string | null | undefined) ??
           (e.pivot_path as string | null | undefined) ??
           (e.pivotPath as string | null | undefined) ??
           null,

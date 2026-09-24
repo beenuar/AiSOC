@@ -11,10 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.posture import PostureFinding, PostureScanRun
-from app.models.tenant import User
 from app.services.compliance_mapping import evidence_for_cspm_finding
 from app.services.cspm import scan_resources, summarize
 from app.services.destinations import (
@@ -105,7 +105,7 @@ async def list_findings(
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[PostureFinding]:
     q = select(PostureFinding).where(PostureFinding.tenant_id == current_user.tenant_id)
     if cloud_provider:
@@ -125,7 +125,7 @@ async def list_findings(
 async def ingest_finding(
     body: FindingCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureFinding:
     finding = PostureFinding(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(finding)
@@ -138,7 +138,7 @@ async def ingest_finding(
 async def get_finding(
     finding_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureFinding:
     f = await db.get(PostureFinding, finding_id)
     if not f or f.tenant_id != current_user.tenant_id:
@@ -151,14 +151,14 @@ async def suppress_finding(
     finding_id: uuid.UUID,
     body: SuppressRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureFinding:
     f = await db.get(PostureFinding, finding_id)
     if not f or f.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Finding not found")
     f.status = "suppressed"  # type: ignore[assignment]
     f.suppressed_at = datetime.now(UTC)  # type: ignore[assignment]
-    f.suppressed_by = current_user.id  # type: ignore[assignment]
+    f.suppressed_by = current_user.user_id  # type: ignore[assignment]
     f.suppress_reason = body.reason  # type: ignore[assignment]
     await db.commit()
     await db.refresh(f)
@@ -169,7 +169,7 @@ async def suppress_finding(
 async def resolve_finding(
     finding_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureFinding:
     f = await db.get(PostureFinding, finding_id)
     if not f or f.tenant_id != current_user.tenant_id:
@@ -185,7 +185,7 @@ async def resolve_finding(
 async def get_summary(
     cloud_provider: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureSummary:
     q = select(PostureFinding).where(PostureFinding.tenant_id == current_user.tenant_id)
     if cloud_provider:
@@ -215,7 +215,7 @@ async def list_scans(
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[PostureScanRun]:
     result = await db.execute(
         select(PostureScanRun)
@@ -246,7 +246,7 @@ class CspmScanResponse(BaseModel):
 @router.post("/scan", response_model=CspmScanResponse)
 async def cspm_scan(
     body: CspmScanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> CspmScanResponse:
     """Agentless CSPM MVP (W6.2): evaluate a cloud-resource snapshot against the
     misconfiguration checks, returning findings + a severity summary + the
@@ -269,7 +269,7 @@ class DestinationPreviewRequest(BaseModel):
 @router.post("/destinations/preview")
 async def destination_preview(
     body: DestinationPreviewRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Preview the exact payload a destination would send (W6.3) — no send."""
     if body.kind == "opsgenie":

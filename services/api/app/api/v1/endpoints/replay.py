@@ -200,7 +200,7 @@ async def publish_replay(
         case_id=run.case_id,
         title=title,
         snapshot=result.snapshot,
-        published_by=current_user.id,
+        published_by=current_user.user_id,
     )
     db.add(row)
     await db.commit()

@@ -45,7 +45,6 @@ from app.models.organization import (
     OrganizationMemberTenant,
     OrganizationTenant,
 )
-from app.models.tenant import User
 
 logger = logging.getLogger("aisoc.org_scope")
 
@@ -104,21 +103,30 @@ class PortfolioScope:
 EMPTY_SCOPE = PortfolioScope()
 
 
-async def resolve_portfolio_scope(db: AsyncSession, user: User) -> PortfolioScope:
-    """Resolve ``user``'s managed portfolio.
+async def resolve_portfolio_scope(db: AsyncSession, user_id: uuid.UUID) -> PortfolioScope:
+    """Resolve the portfolio managed by the principal ``user_id``.
 
     Returns :data:`EMPTY_SCOPE` for a principal who belongs to no
     organisation. Returns a member scope with an empty ``tenant_ids`` for a
     member who has been granted nothing — which is a different situation
     (they are an operator, they just cannot see anything yet) and the API
     distinguishes the two.
+
+    Takes the id rather than a principal object on purpose. This function
+    previously accepted ``user: User`` and read ``user.id``, while its only
+    production caller passes the authenticated ``CurrentUser``, which carries
+    its identifier as ``user_id`` and has no ``id`` at all — so every
+    ``/mssp/portfolio`` request raised ``AttributeError`` and returned 500,
+    including the non-member case the route means to answer with 403. The
+    service tests passed throughout because they handed it an ORM ``User``,
+    which does have ``.id``. An identifier cannot be the wrong shape.
     """
     membership = (
         await db.execute(
             select(OrganizationMember, Organization)
             .join(Organization, Organization.id == OrganizationMember.org_id)
             .where(
-                OrganizationMember.user_id == user.id,
+                OrganizationMember.user_id == user_id,
                 Organization.is_active.is_(True),
             )
             .order_by(Organization.created_at)
@@ -126,7 +134,7 @@ async def resolve_portfolio_scope(db: AsyncSession, user: User) -> PortfolioScop
     ).first()
 
     if membership is None:
-        logger.debug("org_scope.not_a_member user=%s", user.id)
+        logger.debug("org_scope.not_a_member user=%s", user_id)
         return EMPTY_SCOPE
 
     member, org = membership
@@ -143,7 +151,7 @@ async def resolve_portfolio_scope(db: AsyncSession, user: User) -> PortfolioScop
             await db.execute(
                 select(OrganizationMemberTenant.tenant_id).where(
                     OrganizationMemberTenant.org_id == org.id,
-                    OrganizationMemberTenant.user_id == user.id,
+                    OrganizationMemberTenant.user_id == user_id,
                 )
             )
         ).scalars()
@@ -160,7 +168,7 @@ async def resolve_portfolio_scope(db: AsyncSession, user: User) -> PortfolioScop
         # exact confusion a `debug`-level skip caused for tenant resolution.
         logger.warning(
             "org_scope.empty_portfolio user=%s org=%s role=%s portfolio_size=%d",
-            user.id,
+            user_id,
             org.id,
             role,
             len(portfolio),

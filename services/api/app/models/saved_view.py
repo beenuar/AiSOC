@@ -17,7 +17,7 @@ validation for a per-user preference store.
 Tenant isolation is enforced via Row-Level Security in
 ``services/api/migrations/037_saved_views.sql``. User isolation is
 enforced in the API layer (every query is scoped
-``WHERE user_id = current_user.id``).
+``WHERE user_id = current_user.user_id``).
 """
 
 from __future__ import annotations

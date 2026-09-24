@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
@@ -111,7 +112,7 @@ class MetricsOut(BaseModel):
 @router.get("/children", response_model=list[ChildTenantOut])
 async def list_child_tenants(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[Tenant]:
     """Return all child tenants of the current parent tenant."""
     result = await db.execute(select(Tenant).where(Tenant.parent_tenant_id == current_user.tenant_id))
@@ -122,7 +123,7 @@ async def list_child_tenants(
 async def onboard_child_tenant(
     child_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, str]:
     """Link an existing tenant as a child, if that tenant invited the caller.
 
@@ -188,7 +189,7 @@ async def onboard_child_tenant(
 async def list_notes(
     child_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[MSSPTenantNote]:
     q = select(MSSPTenantNote).where(MSSPTenantNote.parent_id == current_user.tenant_id)
     if child_id:
@@ -202,14 +203,14 @@ async def list_notes(
 async def create_note(
     body: TenantNoteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPTenantNote:
     await _require_own_child(db, current_user, body.child_id)
     note = MSSPTenantNote(
         parent_id=current_user.tenant_id,
         child_id=body.child_id,
         body=body.body,
-        author_id=current_user.id,
+        author_id=current_user.user_id,
     )
     db.add(note)
     await db.commit()
@@ -225,7 +226,7 @@ async def create_note(
 @router.get("/delegations", response_model=list[DelegationOut])
 async def list_delegations(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[MSSPDelegation]:
     result = await db.execute(
         select(MSSPDelegation)
@@ -242,14 +243,14 @@ async def list_delegations(
 async def create_delegation(
     body: DelegationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPDelegation:
     await _require_own_child(db, current_user, body.child_tenant_id)
     delegation = MSSPDelegation(
         parent_tenant_id=current_user.tenant_id,
         child_tenant_id=body.child_tenant_id,
         granted_role=body.granted_role,
-        granted_by_user=current_user.id,
+        granted_by_user=current_user.user_id,
         expires_at=body.expires_at,
     )
     db.add(delegation)
@@ -262,7 +263,7 @@ async def create_delegation(
 async def revoke_delegation(
     delegation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     delegation = await db.get(MSSPDelegation, delegation_id)
     if not delegation or delegation.parent_tenant_id != current_user.tenant_id:
@@ -279,7 +280,7 @@ async def revoke_delegation(
 @router.get("/metrics", response_model=list[MetricsOut])
 async def list_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[MSSPTenantMetrics]:
     """Return the latest metrics snapshot for every child tenant."""
     # Get child tenant ids
@@ -432,7 +433,7 @@ _MSSP_INVITE_SETTING = "mssp_parent_invite"
 
 async def _require_own_child(
     db: AsyncSession,
-    current_user: User,
+    current_user: CurrentUser,
     child_id: uuid.UUID,
 ) -> Tenant:
     """Return ``child_id`` only if it is a child of the caller's tenant.
@@ -462,7 +463,7 @@ async def _require_own_child(
 @router.get("/rule-packs", response_model=list[RulePackOut])
 async def list_rule_packs(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[MSSPRulePack]:
     """List all rule packs owned by the current parent tenant."""
     result = await db.execute(
@@ -475,7 +476,7 @@ async def list_rule_packs(
 async def create_rule_pack(
     body: RulePackCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPRulePack:
     """Create a new rule pack (parent tenant only)."""
     pack = MSSPRulePack(
@@ -484,7 +485,7 @@ async def create_rule_pack(
         description=body.description,
         category=body.category,
         is_default=body.is_default,
-        created_by_user=current_user.id,
+        created_by_user=current_user.user_id,
     )
     db.add(pack)
     await db.commit()
@@ -496,7 +497,7 @@ async def create_rule_pack(
 async def get_rule_pack(
     pack_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPRulePack:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -509,7 +510,7 @@ async def update_rule_pack(
     pack_id: uuid.UUID,
     body: RulePackUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPRulePack:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -531,7 +532,7 @@ async def update_rule_pack(
 async def delete_rule_pack(
     pack_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -545,7 +546,7 @@ async def add_rule_to_pack(
     pack_id: uuid.UUID,
     body: RulePackRuleAdd,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, str]:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -566,7 +567,7 @@ async def remove_rule_from_pack(
     pack_id: uuid.UUID,
     rule_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -582,7 +583,7 @@ async def assign_pack_to_child(
     pack_id: uuid.UUID,
     body: PackAssignmentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPRulePackAssignment:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -607,7 +608,7 @@ async def assign_pack_to_child(
 async def create_rule_override(
     body: RuleOverrideCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MSSPRuleOverride:
     if body.action not in ("exclude", "customize"):
         raise HTTPException(status_code=422, detail="action must be 'exclude' or 'customize'")
@@ -623,7 +624,7 @@ async def create_rule_override(
         note=body.note,
         severity_override=body.severity_override,
         parameter_overrides=body.parameter_overrides,
-        created_by_user=current_user.id,
+        created_by_user=current_user.user_id,
     )
     db.add(override)
     await db.commit()
@@ -635,7 +636,7 @@ async def create_rule_override(
 async def list_overrides(
     child_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[MSSPRuleOverride]:
     q = select(MSSPRuleOverride).where(
         MSSPRuleOverride.child_tenant_id.in_(select(Tenant.id).where(Tenant.parent_tenant_id == current_user.tenant_id))
@@ -650,7 +651,7 @@ async def list_overrides(
 async def delete_override(
     override_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     override = await db.get(MSSPRuleOverride, override_id)
     if not override:
@@ -671,7 +672,7 @@ async def delete_override(
 async def list_effective_rules_for_child(
     child_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     category: str | None = Query(None),
     rule_language: str | None = Query(None),
 ) -> list[EffectiveRuleOut]:
@@ -714,7 +715,7 @@ async def list_effective_rules_for_child(
 async def count_effective_rules_for_child(
     child_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> EffectiveRuleCountOut:
     """Return source-breakdown counts for a child tenant's effective ruleset."""
     child = await db.get(Tenant, child_id)
@@ -745,9 +746,13 @@ async def count_effective_rules_for_child(
 
 async def _scope(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PortfolioScope:
     """Resolve the caller's managed portfolio, or refuse the surface.
+
+    Annotated with the type `get_current_user` actually returns. The rest of
+    this module still says `User`, which is why nothing caught the id being
+    read off the wrong attribute here.
 
     A principal who belongs to no organisation gets 403 rather than an empty
     list: an empty list would read as "you manage nothing", when the truth
@@ -755,7 +760,7 @@ async def _scope(
     portfolio is genuinely empty does get empty results, and the payload
     says so explicitly.
     """
-    scope = await resolve_portfolio_scope(db, current_user)
+    scope = await resolve_portfolio_scope(db, current_user.user_id)
     if not scope.is_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1018,7 +1023,7 @@ class TenantGrant(BaseModel):
 async def create_organization(
     body: OrganizationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> Organization:
     """Create an operator organisation around the caller's own tenant.
 
@@ -1045,7 +1050,7 @@ async def create_organization(
     )
     db.add(org)
     await db.flush()
-    db.add(OrganizationMember(org_id=org.id, user_id=current_user.id, org_role="owner"))
+    db.add(OrganizationMember(org_id=org.id, user_id=current_user.user_id, org_role="owner"))
     # The operator's own tenant joins its own portfolio, so a provider that
     # also runs an estate sees it in the same rollup as its customers.
     db.add(OrganizationTenant(org_id=org.id, tenant_id=current_user.tenant_id, relationship="own"))
@@ -1070,7 +1075,7 @@ async def add_tenants_to_portfolio(
     body: TenantGrant,
     scope: PortfolioScope = Depends(_admin_scope),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, object]:
     """Bring tenants under management.
 
@@ -1097,7 +1102,7 @@ async def add_tenants_to_portfolio(
                 org_id=scope.org_id,
                 tenant_id=tenant_id,
                 relationship="managed",
-                onboarded_by=current_user.id,
+                onboarded_by=current_user.user_id,
             )
         )
         added.append(str(tenant_id))
@@ -1212,7 +1217,7 @@ async def set_member_tenant_grants(
     body: TenantGrant,
     scope: PortfolioScope = Depends(_admin_scope),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> MemberOut:
     """Replace which portfolio tenants one member may reach.
 
@@ -1273,7 +1278,7 @@ async def set_member_tenant_grants(
                 org_id=scope.org_id,
                 user_id=user_id,
                 tenant_id=tenant_id,
-                granted_by=current_user.id,
+                granted_by=current_user.user_id,
             )
         )
 

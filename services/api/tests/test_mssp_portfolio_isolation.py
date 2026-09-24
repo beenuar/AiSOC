@@ -217,12 +217,6 @@ def _owner_scope() -> PortfolioScope:
     )
 
 
-async def _user(session, user_id: uuid.UUID):
-    from app.models.tenant import User
-
-    return await session.get(User, user_id)
-
-
 # ---------------------------------------------------------------------------
 # Step 2 of the shape: the outsiders really exist
 # ---------------------------------------------------------------------------
@@ -276,7 +270,7 @@ async def test_connector_health_counts_only_portfolio_connectors(db) -> None:
 
 
 async def test_an_operator_sees_only_the_tenants_granted_to_them(db) -> None:
-    scope = await resolve_portfolio_scope(db, await _user(db, OPERATOR_P))
+    scope = await resolve_portfolio_scope(db, OPERATOR_P)
 
     assert scope.is_member
     assert scope.portfolio_wide is False
@@ -293,7 +287,7 @@ async def test_a_member_with_no_grants_resolves_to_empty_not_everything(db) -> N
     accounts must see nothing. If "no grants" ever degraded into "no
     filter", every new hire would get the entire book of business.
     """
-    scope = await resolve_portfolio_scope(db, await _user(db, NEWCOMER_P))
+    scope = await resolve_portfolio_scope(db, NEWCOMER_P)
 
     assert scope.is_member, "should still be recognised as a member"
     assert scope.tenant_ids == frozenset()
@@ -303,14 +297,14 @@ async def test_a_member_with_no_grants_resolves_to_empty_not_everything(db) -> N
 
 
 async def test_a_non_member_resolves_to_no_organisation_at_all(db) -> None:
-    scope = await resolve_portfolio_scope(db, await _user(db, STRANGER))
+    scope = await resolve_portfolio_scope(db, STRANGER)
 
     assert scope.is_member is False
     assert scope.tenant_ids == frozenset()
 
 
 async def test_an_owner_of_one_organisation_cannot_reach_another(db) -> None:
-    owner = await resolve_portfolio_scope(db, await _user(db, OWNER_P))
+    owner = await resolve_portfolio_scope(db, OWNER_P)
 
     assert owner.org_id == ORG_P
     assert TENANT_C not in owner.tenant_ids, "Provider Q's customer is in Provider P's scope"
@@ -479,7 +473,7 @@ async def test_releasing_a_tenant_revokes_every_grant_over_it(db) -> None:
 
     # And the operator's resolved scope collapses to empty rather than
     # silently keeping the account they no longer manage.
-    scope = await resolve_portfolio_scope(db, await _user(db, OPERATOR_P))
+    scope = await resolve_portfolio_scope(db, OPERATOR_P)
     assert scope.tenant_ids == frozenset()
 
 

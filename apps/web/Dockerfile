@@ -58,12 +58,21 @@ ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 #   - NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL/_PASSWORD: credentials DemoAutoLogin uses on
 #     first paint so visitors land already authenticated and can roam
 #
-# Defaults match the canonical hosted demo so a no-arg `docker build` of the web
-# image (e.g. CI's publish-images.yml) ships a demo-ready bundle. Production
-# customers override NEXT_PUBLIC_DEMO_MODE="" at build time to suppress all
-# demo affordances. The api/agents/realtime images are unaffected — demo gating
-# in those services is runtime via AISOC_DEMO_MODE, not build-time.
-ARG NEXT_PUBLIC_DEMO_MODE="true"
+# `NEXT_PUBLIC_DEMO_MODE` defaults to **off**, so a no-arg `docker build`
+# produces a self-host bundle rather than a demo one. It used to default to
+# "true", which meant a self-hoster's console announced "Demo data resets
+# daily at 00:00 UTC. All write actions are disabled." over their own real
+# ingested alerts, disabled every write control, and offered them a
+# "Self-host AiSOC" link inside their own self-hosted install. Next inlines
+# `NEXT_PUBLIC_*` at build time, so there is no runtime escape from a bundle
+# built this way — the operator has to rebuild the image.
+#
+# Every path that genuinely wants the demo sets the flag explicitly
+# (`publish-images.yml`, `release.yml`, `infra/fly/web/fly.toml`,
+# `infra/compose/docker-compose.demo.yml`), so the safe default costs those
+# nothing. The api/agents/realtime images are unaffected — demo gating in
+# those services is runtime via AISOC_DEMO_MODE, not build-time.
+ARG NEXT_PUBLIC_DEMO_MODE=""
 ARG NEXT_PUBLIC_DEMO_DEEPLINK="/cases/INC-RT-001?tab=ledger"
 ARG NEXT_PUBLIC_DEMO_BANNER="Demo data resets daily at 00:00 UTC. All write actions are disabled."
 ARG NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL="demo@tryaisoc.com"

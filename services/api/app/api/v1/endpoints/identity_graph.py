@@ -11,10 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.identity_graph import AlertIdentityLink, IdentityEdge, IdentityNode
-from app.models.tenant import User
 
 router = APIRouter(prefix="/identity-graph", tags=["identity-graph"])
 
@@ -91,7 +91,7 @@ async def list_nodes(
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[IdentityNode]:
     q = select(IdentityNode).where(IdentityNode.tenant_id == current_user.tenant_id)
     if node_type:
@@ -109,7 +109,7 @@ async def list_nodes(
 async def create_node(
     body: NodeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> IdentityNode:
     node = IdentityNode(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(node)
@@ -122,7 +122,7 @@ async def create_node(
 async def get_node(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> IdentityNode:
     node = await db.get(IdentityNode, node_id)
     if not node or node.tenant_id != current_user.tenant_id:
@@ -134,7 +134,7 @@ async def get_node(
 async def get_node_edges(
     node_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[IdentityEdge]:
     node = await db.get(IdentityNode, node_id)
     if not node or node.tenant_id != current_user.tenant_id:
@@ -159,7 +159,7 @@ async def list_edges(
     limit: int = Query(100, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[IdentityEdge]:
     q = select(IdentityEdge).where(IdentityEdge.tenant_id == current_user.tenant_id)
     if edge_type:
@@ -173,7 +173,7 @@ async def list_edges(
 async def create_edge(
     body: EdgeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> IdentityEdge:
     edge = IdentityEdge(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(edge)
@@ -191,7 +191,7 @@ async def create_edge(
 async def link_alert_to_identity(
     body: AlertLinkCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> AlertIdentityLink:
     link = AlertIdentityLink(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(link)
@@ -204,7 +204,7 @@ async def link_alert_to_identity(
 async def get_alert_identity_links(
     alert_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[AlertIdentityLink]:
     result = await db.execute(
         select(AlertIdentityLink).where(
