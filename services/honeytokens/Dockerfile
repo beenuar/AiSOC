@@ -25,4 +25,17 @@ COPY app/ app/
 
 EXPOSE 8005
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]
+# The chain runs on the way up, then this process is replaced by the server.
+#
+# Nothing invoked these four alembic chains. This was a bare `uvicorn` line, so
+# the documented quickstart booted the service against an empty schema with
+# none of its row-level-security policies installed, and every command in that
+# sequence reported success. `app/_migrate.py` applies the chain as the owner
+# credential, verifies it reached head, and refuses to start the server if it
+# did not.
+#
+# `sh -c` because an exec-form CMD cannot run two things. Neither shell nor
+# wrapper stays in the process tree: `sh -c` with a single command execs it,
+# and `_migrate` hands over with `os.execvp`, so uvicorn ends up as PID 1 and
+# receives SIGTERM directly rather than through a parent that would swallow it.
+CMD ["sh", "-c", "python -m app._migrate -- uvicorn app.main:app --host 0.0.0.0 --port 8005"]

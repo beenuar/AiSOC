@@ -7,7 +7,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app._health import install_health_routes
+from app._health import install_health_routes, register_subscription
 from app.api.contextual import router as contextual_router
 from app.api.copilot import router as copilot_router
 from app.api.explain import router as explain_router
@@ -30,6 +30,18 @@ from app.workers.business_context import is_enabled as business_context_enabled
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, worker_enabled
 
 logger = structlog.get_logger()
+
+
+def _log_triage_worker_exit(task: asyncio.Task) -> None:
+    """Report the auto-triage worker's exit instead of losing it in the task."""
+    if task.cancelled():
+        logger.info("auto_triage_worker.cancelled")
+        return
+    exc = task.exception()
+    if exc is None:
+        logger.error("auto_triage_worker.exited", detail="consume loop returned; fused alerts are no longer triaged")
+        return
+    logger.error("auto_triage_worker.died", error=str(exc), error_type=type(exc).__name__, exc_info=exc)
 
 
 @asynccontextmanager
@@ -100,7 +112,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 business_context=applier,
             )
             app.state.triage_worker = triage_worker
-            app.state.triage_worker_task = asyncio.create_task(triage_worker.start())
+            task = asyncio.create_task(triage_worker.start())
+            # Same pair as fusion and ueba: retrieve the task's outcome so a
+            # dead worker is in the log, and make readiness depend on the
+            # subscription rather than on this block having run. Without the
+            # probe, /readyz answered 200 for a worker whose loop had exited —
+            # and nothing auto-triages a fused alert after that.
+            task.add_done_callback(_log_triage_worker_exit)
+            app.state.triage_worker_task = task
+            register_subscription(app, triage_worker.topic, lambda: triage_worker.attached)
             logger.info("auto_triage_worker.enabled")
         except Exception as exc:  # noqa: BLE001 — never block API startup
             logger.warning("auto_triage_worker.start_failed", error=str(exc))

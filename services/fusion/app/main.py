@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 
-from app._health import install_health_routes
+from app._health import install_health_routes, register_subscription
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
@@ -24,6 +24,23 @@ from app.services.lake_writer import LakeWriter
 from app.services.ueba_signal import UebaSignalCache
 from app.services.windowed_detection import WindowedDetectionEngine
 from app.workers.consumer import FusionWorker
+
+
+def _log_worker_exit(task: asyncio.Task) -> None:
+    """Say why the consume loop stopped, whatever the reason.
+
+    A worker that ends cleanly is as much of a problem as one that raises:
+    either way nothing is consuming ``raw_events`` any more, and both used to
+    be silent.
+    """
+    if task.cancelled():
+        logger.info("fusion.worker_cancelled")
+        return
+    exc = task.exception()
+    if exc is None:
+        logger.error("fusion.worker_exited", detail="consume loop returned; the subscription is gone")
+        return
+    logger.error("fusion.worker_died", error=str(exc), error_type=type(exc).__name__, exc_info=exc)
 
 
 @asynccontextmanager
@@ -114,8 +131,16 @@ async def lifespan(app: FastAPI):
     )
     set_worker(worker)
 
-    # Start Kafka worker as a background task
+    # Start Kafka worker as a background task.
+    #
+    # The done-callback is what makes a dead worker findable. The task is held
+    # on app.state, so it is never garbage-collected and asyncio never emits
+    # its "Task exception was never retrieved" warning — without this, a
+    # consume loop that died took the reason with it. The matching readiness
+    # probe below is what stops /readyz answering 200 afterwards.
     worker_task = asyncio.create_task(worker.start())
+    worker_task.add_done_callback(_log_worker_exit)
+    register_subscription(app, "alerts+raw_events", lambda: worker.attached)
     app.state.worker_task = worker_task
     app.state.redis = redis_client
 

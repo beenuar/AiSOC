@@ -27,7 +27,7 @@ def _welford_update(
     feature: str,
     value: float,
 ) -> dict[str, dict[str, float]]:
-    """Update incremental mean/variance for *feature* with new *value*.
+    """Return *stats* with *feature* advanced by one observation of *value*.
 
     Uses Welford's online algorithm:
       n  ← n + 1
@@ -36,11 +36,32 @@ def _welford_update(
       δ2 ← x - mean
       M2 ← M2 + δ·δ2
       variance = M2 / (n−1) for n > 1
-    """
-    if feature not in stats:
-        stats[feature] = {"mean": 0.0, "M2": 0.0, "count": 0}
 
-    s = stats[feature]
+    Returns new dictionaries and mutates neither *stats* nor the per-feature
+    dictionaries inside it. That is not a style preference — it is the
+    difference between a baseline that accumulates and one that does not.
+
+    This used to edit ``stats[feature]`` in place. Its caller passed a
+    *shallow* copy of ``EntityBaseline.feature_stats``, so the per-feature
+    dictionary being edited was the very object SQLAlchemy had loaded from
+    the column. By the time the caller assigned the result back, the loaded
+    value and the new value were equal, and SQLAlchemy decides whether to
+    include a column in an ``UPDATE`` by comparing exactly those two — a
+    ``JSON``/``JSONB`` column has no change tracking of its own unless it is
+    wrapped in ``MutableDict``. So the statement went out without the column.
+
+    Measured on a live stack: 36 events for one entity, every one processed
+    without error, and the stored baseline stayed at ``count: 1`` with the
+    first event's mean while ``window_end`` — an ordinary timestamp column,
+    with a value that genuinely differed — advanced on every one. No entity
+    could ever reach ``min_baseline_samples``, so ``compute_z_score``
+    returned ``None`` for every feature of every event, so no anomaly was
+    ever scored. The service logged ``features_unscoreable`` 36 times, which
+    reads as "this entity is too quiet to score" rather than as a bug.
+    """
+    current = stats.get(feature)
+    s: dict[str, float] = dict(current) if current else {"mean": 0.0, "M2": 0.0, "count": 0}
+
     s["count"] += 1
     n = s["count"]
     delta = value - s["mean"]
@@ -52,7 +73,7 @@ def _welford_update(
     variance = s["M2"] / (n - 1) if n > 1 else 0.0
     s["std"] = math.sqrt(variance)
 
-    return stats
+    return {**stats, feature: s}
 
 
 def compute_z_score(
@@ -145,7 +166,10 @@ class BaselineService:
     ) -> EntityBaseline:
         """Incrementally update the baseline with new feature observations."""
         baseline = await self.get_or_create(tenant_id, entity_type, entity_id)
-        stats = dict(baseline.feature_stats)  # copy so SQLAlchemy detects mutation
+        # A shallow copy is enough only because ``_welford_update`` replaces
+        # the per-feature dictionary rather than editing it; see its docstring
+        # for what happens when it does not.
+        stats = dict(baseline.feature_stats)
 
         for feature, value in features.items():
             stats = _welford_update(stats, feature, value)

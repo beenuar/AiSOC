@@ -414,9 +414,89 @@ const kafka = new Kafka({
   retry: { retries: 5 },
 });
 
+// --- Subscription state, reported on /health ---
+//
+// `/health` returned a hardcoded `status: 'healthy'` with a client count and
+// nothing about Kafka, so a realtime service whose consumers had never
+// connected was indistinguishable from one fanning out every alert. The two
+// consumers below register here and `reportHealth` answers 503 while either
+// is detached — the same contract the Python services answer on /readyz.
+type SubscriptionState = {
+  attached: boolean;
+  lastError?: string;
+  attempts: number;
+};
+const subscriptions = new Map<string, SubscriptionState>();
+
+// Bounded backoff, capped. A detached consumer is retried because the usual
+// cause is a broker or topic that is not there *yet*, which a retry fixes;
+// the cap stops a permanently-broken cluster becoming a busy loop, and the
+// state above stops a permanent failure being silent while it retries.
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+
+/**
+ * Keep `start` running, and record whether it is.
+ *
+ * The previous code called each starter inside a try/catch that logged
+ * "Kafka consumer failed to start (will retry)" and then returned. Nothing
+ * retried. The message described behaviour the code did not have, which is
+ * worse than no message: it tells a reader the gap is already handled.
+ */
+function superviseConsumer(
+  name: string,
+  start: (onCrash: (err: unknown) => void) => Promise<void>,
+): void {
+  subscriptions.set(name, { attached: false, attempts: 0 });
+
+  const run = async (): Promise<void> => {
+    const state = subscriptions.get(name)!;
+    for (;;) {
+      state.attempts += 1;
+      try {
+        let crashed = false;
+        await start((err: unknown) => {
+          // kafkajs surfaces a dead consumer loop through its CRASH event,
+          // not by rejecting the promise `run()` returned — so without this
+          // hook a consumer that died after a successful start stayed
+          // recorded as attached for the life of the process.
+          if (crashed) return;
+          crashed = true;
+          state.attached = false;
+          state.lastError = err instanceof Error ? err.message : String(err);
+          log.error({ err, name }, 'Kafka consumer crashed; reconnecting');
+        });
+        state.attached = true;
+        state.lastError = undefined;
+        log.info({ name, attempts: state.attempts }, 'Kafka consumer attached');
+        // Wait for a crash rather than returning: this function owns the
+        // retry, so it has to still be here when the consumer stops.
+        while (!crashed) {
+          await new Promise((resolve) => setTimeout(resolve, 5_000));
+        }
+      } catch (err) {
+        state.attached = false;
+        state.lastError = err instanceof Error ? err.message : String(err);
+        const delay = Math.min(
+          RETRY_BASE_MS * 2 ** Math.min(state.attempts - 1, 5),
+          RETRY_MAX_MS,
+        );
+        log.warn(
+          { err, name, attempts: state.attempts, retryInMs: delay },
+          'Kafka consumer not attached; retrying',
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  };
+
+  void run();
+}
+
 // --- Kafka consumer: bridge fused alerts to WebSocket clients ---
-async function startKafkaConsumer() {
+async function startKafkaConsumer(onCrash: (err: unknown) => void) {
   const consumer = kafka.consumer({ groupId: 'aisoc-realtime-ws' });
+  consumer.on(consumer.events.CRASH, (event) => onCrash(event.payload.error));
 
   await consumer.connect();
   await consumer.subscribe({ topic: KAFKA_TOPIC_FUSED, fromBeginning: false });
@@ -486,13 +566,14 @@ async function startKafkaConsumer() {
 // versa. A failure to start (Kafka unreachable, topic missing, etc.) is
 // logged and surfaced via the outer retry wrapper; it does NOT crash the
 // process, because the alert fan-out path is the higher-priority surface.
-async function startGraphUpdateConsumer() {
+async function startGraphUpdateConsumer(onCrash: (err: unknown) => void) {
   if (!KAFKA_TOPIC_GRAPH_UPDATES) {
     log.info('Graph update consumer disabled (empty KAFKA_TOPIC_GRAPH_UPDATES)');
     return;
   }
 
   const consumer = kafka.consumer({ groupId: 'aisoc-realtime-graph' });
+  consumer.on(consumer.events.CRASH, (event) => onCrash(event.payload.error));
 
   await consumer.connect();
   await consumer.subscribe({
@@ -708,10 +789,22 @@ app.post('/internal/agent-event', internalEventRateLimit, (req, res) => {
 // Expose both `/health` (canonical) and `/healthz` (k8s + frontend default) so
 // callers don't have to guess.
 const reportHealth = (_req: express.Request, res: express.Response) => {
-  res.json({
-    status: 'healthy',
+  const detached = [...subscriptions.entries()]
+    .filter(([, state]) => !state.attached)
+    .map(([name]) => name);
+
+  res.status(detached.length > 0 ? 503 : 200).json({
+    status: detached.length > 0 ? 'degraded' : 'healthy',
     service: 'aisoc-realtime',
     clients: wss.clients.size,
+    // Reported whether or not anything is wrong, so a healthy answer says
+    // which subscriptions were checked rather than only that none failed.
+    subscriptions: [...subscriptions.entries()].map(([name, state]) => ({
+      topic: name,
+      attached: state.attached,
+      attempts: state.attempts,
+      ...(state.lastError ? { last_error: state.lastError } : {}),
+    })),
   });
 };
 app.get('/health', reportHealth);
@@ -743,30 +836,19 @@ server.listen(PORT, '::', () => {
     }
   })();
 
-  // Start the two Kafka consumers concurrently. Each is wrapped in its own
-  // try/catch so a failure on the graph topic (e.g. it doesn't exist yet on
-  // a brand-new cluster) does NOT block the higher-priority fused-alerts
-  // fan-out. We deliberately fire them in parallel rather than awaiting
-  // sequentially so the HTTP/WS listener is fully up before either Kafka
-  // round-trip completes.
-  void (async () => {
-    try {
-      await startKafkaConsumer();
-    } catch (err) {
-      log.warn({ err }, 'Kafka consumer failed to start (will retry)');
-    }
-  })();
+  // Start the two Kafka consumers under their own supervisors, so a failure
+  // on the graph topic (e.g. it doesn't exist yet on a brand-new cluster)
+  // does NOT block the higher-priority fused-alerts fan-out, and neither one
+  // stays silently detached. Fired rather than awaited so the HTTP/WS
+  // listener is fully up before either Kafka round-trip completes.
+  superviseConsumer(KAFKA_TOPIC_FUSED, startKafkaConsumer);
 
-  void (async () => {
-    try {
-      await startGraphUpdateConsumer();
-    } catch (err) {
-      // T1.4 fan-out is best-effort: if the graph topic isn't available the
-      // alerts/cases/agents/insights channels still work, the graph panel
-      // just won't light up in real time.
-      log.warn({ err }, 'Graph update consumer failed to start (will retry)');
-    }
-  })();
+  // Only supervised when it is configured. An empty KAFKA_TOPIC_GRAPH_UPDATES
+  // turns this fan-out off deliberately, and reporting a switched-off consumer
+  // as detached would make /health red for a supported configuration.
+  if (KAFKA_TOPIC_GRAPH_UPDATES) {
+    superviseConsumer(KAFKA_TOPIC_GRAPH_UPDATES, startGraphUpdateConsumer);
+  }
 });
 
 // Flush spans on the way out. Without this the exporter drops the spans

@@ -161,6 +161,41 @@ Two things changed alongside, both of which an operator can observe:
   deployment is adopted automatically on the next `alembic upgrade`: the
   recorded version is copied into the per-chain table when, and only when,
   that chain's own tables are already present.
+
+##### Who runs the chain
+
+Nothing did. All four container commands were a plain `uvicorn`, so on the
+documented quickstart these services booted against empty schemas with none
+of their policies installed, and every command in that sequence reported
+success. The only documented invocation was a manual step, in a page whose
+"start the stack" step did not start three of the four services.
+
+Each image now runs `python -m app._migrate` before its server. That module:
+
+- resolves the owner DSN by the precedence in the table above — it runs
+  `alembic` as a subprocess so `env.py` stays the single answer to *which
+  credential*, rather than a second copy of the rule here;
+- takes a shared transaction-scoped advisory lock inside the upgrade
+  (`MIGRATION_LOCK_KEY` in each `env.py`), so four chains starting at once
+  against one database queue instead of deadlocking on catalog locks;
+- reads the applied revision back and compares it to head. `alembic upgrade
+  head` exits 0 when it applies **nothing**, which is exactly what happened
+  when the chains shared a version table — so an exit code is not evidence,
+  and the module refuses to start the server unless the version table
+  actually holds head;
+- provides no way to skip. A service that cannot reach head does not serve.
+
+`AISOC_APP_DB_PASSWORD` is passed to all four for the same reason the API
+gets it: the postgres init hook fires only on an empty data directory, so an
+existing volume never reaches it and the runtime role would have no
+credential to authenticate with.
+
+Two CI gates keep this true:
+`scripts/check_service_migration_bootstrap.py` asserts every service with an
+`alembic.ini` ships the module, keeps it identical to the others, invokes it
+from its `CMD`, and carries both an owner DSN and a healthcheck;
+`scripts/check_orm_migration_parity.py` asserts no model declares a column
+its migrations do not create.
 | `AISOC_APP_DB_PASSWORD` | `aisoc_app_dev_secret` in compose; unset elsewhere | Password applied to the runtime role, by the postgres init hook on a fresh volume and by the migration runner on every run. Unset leaves the role's credential alone. |
 | `DATABASE_POOL_SIZE` | `20` | SQLAlchemy pool size |
 | `DATABASE_MAX_OVERFLOW` | `10` | SQLAlchemy max overflow |

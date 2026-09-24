@@ -124,17 +124,34 @@ SECRET_KEY=change-me-in-production-at-least-32-chars
 
 ### 2. Start the full stack
 
+Most of the services below are behind a compose profile, so a bare
+`docker compose up -d` starts neither UEBA nor Honeytokens nor Purple Team.
+Name the profiles you want:
+
 ```bash
-docker compose up -d
-docker compose ps
+docker compose --profile full --profile extras up -d
+docker compose --profile full --profile extras ps
 ```
 
-**What this gives you about AI.** `docker compose up -d` starts the CORE
+That starts:
+
+| Profile | Services |
+| --- | --- |
+| *(default)* | **PostgreSQL** (5432) · **Redis** (6379) · **Kafka** (9092) · **litellm** (4000, LLM gateway) · **api** (8000, FastAPI core) · **agents** (8001, LangGraph) · **realtime** (8086, Node.js + VAPID Web Push) · **web** (3000) · **fusion** (8003) · **ingest** (8081, Go) |
+| `full` | **ClickHouse** · **OpenSearch** · **Neo4j** · **Qdrant** · **kafka-ui** (8080) · **actions** (8002) · **threatintel** (8005) · **ueba** (8007) · **enrichment** (8080, Go) · **connectors** (8003) |
+| `extras` | **honeytokens** (8008) · **purple-team** (8006) |
+| `osquery` | **osquery-tls** (8091) |
+
+`make up` and `make up-full` are the supported spellings for the first two
+rows and additionally wait for every container to report healthy, which a
+bare `docker compose up -d` does not.
+
+**What this gives you about AI.** Every command above starts the CORE
 profile, which includes the `litellm` LLM gateway. AiSOC asks for logical task
 aliases (`aisoc-triage`, `aisoc-investigation`, …) and the gateway is the only
 thing that resolves them, so it has to be running for AI triage to happen at
-all — it was a `full`-profile service until 2026-09, which meant this exact
-command could not do AI triage even with the key you just set
+all — it was a `full`-profile service until 2026-09, which meant the default
+install could not do AI triage even with the key you just set
 ([ADR-0006](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0006-llm-gateway-in-core.md)).
 
 - **With a provider key** in `.env`: alerts are triaged by the AI, and the
@@ -148,32 +165,48 @@ Path A above needs no gateway: the demo compose pins every role to a concrete
 provider model, and a concrete pin goes straight to the provider rather than
 through the gateway.
 
-This starts the full set of services:
+### 3. Database migrations — nothing to run
 
-- **PostgreSQL** (5432) · **Redis** (6379) · **Kafka** (9092)
-- **ClickHouse** · **OpenSearch** · **Neo4j** · **Qdrant**
-- **api** (8000, FastAPI core) · **agents** (8001, LangGraph) ·
-  **realtime** (8086, Node.js + VAPID Web Push) · **web** (3000)
-- **fusion** (8003) · **actions** (8002) · **threatintel** (8005) ·
-  **ueba** (8007) · **honeytokens** (8008) · **purple-team** (8006) ·
-  **ingest** (8081, Go) · **enrichment** (8080, Go) · **mcp** (TypeScript)
+Every schema is applied by the stack itself; there is no manual migration
+step, and there is nothing to remember to run in the right order.
 
-### 3. Run database migrations
+- **api** applies its raw-SQL chain
+  (`services/api/migrations/*.sql`) from
+  [`app.scripts.run_migrations`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/scripts/run_migrations.py)
+  during startup. It has no `alembic.ini` and never did, so
+  `docker compose exec api alembic upgrade head` — which earlier revisions of
+  this page told you to run — fails with `No 'script_location' key found`.
+- **ueba**, **honeytokens**, **purple-team** and **osquery-tls** own their
+  schemas through alembic. Each container runs
+  [`app/_migrate.py`](https://github.com/beenuar/AiSOC/blob/main/services/ueba/app/_migrate.py)
+  before its server: it applies the chain, reads the applied revision back,
+  and refuses to start the service unless it matches head. Re-running is
+  free — a database already at head applies nothing.
 
-```bash
-docker compose exec api alembic upgrade head
-docker compose exec ueba alembic upgrade head
-docker compose exec honeytokens alembic upgrade head
-docker compose exec purple-team alembic upgrade head
-```
-
-Each of those four runs as the **owner**, not as the role the service serves
+Those four apply their chain as the **owner**, not as the role they serve
 requests with: `docker-compose.yml` sets `DATABASE_MIGRATION_URL` alongside
-`DATABASE_URL` for all four, and their `alembic/env.py` prefers it. The
-runtime role holds no `CREATE` on schema public, by design — that is what
-stops it turning row-level security off — so a chain applied as the runtime
+`DATABASE_URL` for each, and their `env.py` prefers it. The runtime role
+holds no `CREATE` on schema public, by design — that is what stops it
+turning row-level security off — so a chain applied as the runtime
 credential fails on the first `CREATE TABLE`. See
 [Env vars → the four services that manage their own schema](deployment/env-vars#the-four-services-that-manage-their-own-schema).
+
+To confirm the schemas landed, ask the database rather than the logs. Each
+chain records its revision in its **own** version table, because four chains
+numbering their revisions `0001`, `0002`, … against one database previously
+shared `alembic_version` and the second chain to run believed it was already
+done:
+
+```bash
+docker compose exec postgres psql -U aisoc -d aisoc -c \
+  "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'alembic_version%' ORDER BY 1"
+```
+
+Four rows — `alembic_version_honeytokens`, `alembic_version_osquery_tls`,
+`alembic_version_purple_team`, `alembic_version_ueba` — means all four ran.
+A service whose chain did not reach head does not serve at all: its
+container exits and `docker compose ps` shows it unhealthy rather than
+running.
 
 The `api` migrations include
 [`008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql)

@@ -64,19 +64,39 @@ def discover_fastapi_services() -> list[str]:
     return out
 
 
-def audit_service(svc: str) -> tuple[bool, bool, bool]:
-    """Return ``(has_module, imports_helper, wires_routes)``.
+#: The copy every other one is compared against. Arbitrary but fixed: what
+#: matters is that there is one answer to "which is right" rather than
+#: thirteen files that each look plausible on their own.
+REFERENCE_SERVICE = "api"
+
+
+def audit_service(svc: str, reference: bytes | None) -> tuple[bool, bool, bool, bool]:
+    """Return ``(has_module, imports_helper, wires_routes, in_sync)``.
 
     * ``has_module``    — ``services/<svc>/app/_health.py`` exists.
     * ``imports_helper``— ``app/main.py`` imports ``install_health_routes``.
     * ``wires_routes``  — ``app/main.py`` calls ``install_health_routes``.
+    * ``in_sync``       — that copy is byte-identical to the reference one.
+
+    ``in_sync`` is checked because the module's own docstring claims the
+    thirteen copies are kept in sync and nothing verified it. They happened
+    to be identical, so the claim was true by luck: any change landing in one
+    tree would have left the other twelve serving the older contract, and a
+    probe that answers differently per service is worse than one that is
+    wrong everywhere — it makes a fleet-wide readiness answer unreadable.
+    The docstring also pointed at ``scripts/sync_health_module.py``, which
+    does not exist in this tree.
     """
     base = SERVICES_DIR / svc / "app"
-    has_module = (base / "_health.py").is_file()
+    module = base / "_health.py"
+    has_module = module.is_file()
     main_text = (base / "main.py").read_text(encoding="utf-8")
     imports_helper = "from app._health import install_health_routes" in main_text
     wires_routes = "install_health_routes(app" in main_text
-    return has_module, imports_helper, wires_routes
+    # Unknown rather than false when there is nothing to compare against, so a
+    # missing reference is reported as the missing module it is.
+    in_sync = True if reference is None or not has_module else module.read_bytes() == reference
+    return has_module, imports_helper, wires_routes, in_sync
 
 
 def main() -> int:
@@ -101,19 +121,35 @@ def main() -> int:
         )
         return 1
 
-    print(f"{'service':<18} {'_health.py':<11} {'import':<7} {'wire':<5}")
-    print(f"{'-' * 18} {'-' * 11} {'-' * 7} {'-' * 5}")
+    reference_path = SERVICES_DIR / REFERENCE_SERVICE / "app" / "_health.py"
+    reference = reference_path.read_bytes() if reference_path.is_file() else None
+    if reference is None:
+        print(
+            f"health-probes: reference module {reference_path} is missing, so the " f"copies have nothing to be in sync with.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"{'service':<18} {'_health.py':<11} {'import':<7} {'wire':<5} {'in-sync':<7}")
+    print(f"{'-' * 18} {'-' * 11} {'-' * 7} {'-' * 5} {'-' * 7}")
     drift: list[str] = []
+    out_of_sync: list[str] = []
     for svc in services:
-        has_mod, has_import, has_wire = audit_service(svc)
+        has_mod, has_import, has_wire, in_sync = audit_service(svc, reference)
         marker_mod = "yes" if has_mod else "NO"
         marker_import = "yes" if has_import else "NO"
         marker_wire = "yes" if has_wire else "NO"
-        print(f"{svc:<18} {marker_mod:<11} {marker_import:<7} {marker_wire:<5}")
+        marker_sync = "yes" if in_sync else "NO"
+        print(f"{svc:<18} {marker_mod:<11} {marker_import:<7} {marker_wire:<5} {marker_sync:<7}")
         if not (has_mod and has_import and has_wire):
             drift.append(svc)
+        if not in_sync:
+            out_of_sync.append(svc)
 
-    if args.check and drift:
+    if not args.check:
+        return 0
+
+    if drift:
         print(
             "\nFAIL: the following FastAPI services do not install the "
             "Phase 2.6 /livez + /readyz probes from app._health:\n  - " + "\n  - ".join(drift),
@@ -125,8 +161,20 @@ def main() -> int:
             "app, service_name='aisoc-<svc>') in app/main.py.",
             file=sys.stderr,
         )
-        return 1
-    return 0
+    if out_of_sync:
+        print(
+            f"\nFAIL: these copies of app/_health.py differ from "
+            f"services/{REFERENCE_SERVICE}/app/_health.py:\n  - " + "\n  - ".join(out_of_sync),
+            file=sys.stderr,
+        )
+        print(
+            f"\nFix: cp services/{REFERENCE_SERVICE}/app/_health.py "
+            f"services/<svc>/app/_health.py for each one above. The probes are a "
+            f"contract the whole fleet answers; one tree answering an older "
+            f"version of it cannot be read off a dashboard.",
+            file=sys.stderr,
+        )
+    return 1 if (drift or out_of_sync) else 0
 
 
 if __name__ == "__main__":

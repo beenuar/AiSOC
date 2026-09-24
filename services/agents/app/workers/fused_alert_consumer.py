@@ -241,6 +241,7 @@ class FusedAlertTriageWorker:
         self._consumer: Any | None = None
         self._producer: Any | None = None  # lazily created for the DLQ
         self._running = False
+        self._attached = False
         # Phase B4 — environment-specific noise reduction applied post-fusion →
         # pre-triage. None = disabled (no rules file / flag off).
         self._business_context = business_context
@@ -260,6 +261,7 @@ class FusedAlertTriageWorker:
         )
         await self._consumer.start()
         self._running = True
+        self._attached = True
         logger.info("auto_triage_worker.started", topic=self._topic, group=self._group_id)
         try:
             async for msg in self._consumer:
@@ -269,12 +271,33 @@ class FusedAlertTriageWorker:
                 # or after the poison alert is dead-lettered — so a crash between
                 # inference and persistence replays the alert instead of losing
                 # it, and offsets advance only on durable completion (issue #571).
-                await self._process_with_retry(msg.value)
+                #
+                # ``_process_with_retry`` catches and dead-letters rather than
+                # raising, which is the reason this loop survives a poison
+                # alert. The guard is here as well because that is a property
+                # of another method: the loop must not depend on a callee
+                # staying total, which is exactly how the ueba consumer came
+                # to have no ``except`` on its only handler.
+                try:
+                    await self._process_with_retry(msg.value)
+                except Exception as exc:  # noqa: BLE001 — one alert must not end the subscription
+                    _METRICS["errors"] += 1
+                    logger.error(
+                        "auto_triage_worker.handler_escaped",
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                        partition=getattr(msg, "partition", None),
+                        offset=getattr(msg, "offset", None),
+                        exc_info=True,
+                    )
                 try:
                     await self._consumer.commit()
                 except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
                     logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
         finally:
+            # Cleared before the teardown await, which can itself raise on a
+            # broker that has gone away.
+            self._attached = False
             await self._consumer.stop()
 
     async def _process_with_retry(self, message: Any) -> bool:
@@ -349,8 +372,19 @@ class FusedAlertTriageWorker:
         except Exception as exc:  # noqa: BLE001 — never wedge the loop on a DLQ failure
             logger.error("auto_triage_worker.dlq_send_failed", alert_id=alert_id, error=str(exc))
 
+    @property
+    def topic(self) -> str:
+        """The topic this worker subscribes to (names its readiness probe)."""
+        return self._topic
+
+    @property
+    def attached(self) -> bool:
+        """Whether the consume loop is currently iterating the subscription."""
+        return self._attached
+
     async def stop(self) -> None:
         self._running = False
+        self._attached = False
         if self._consumer is not None:
             await self._consumer.stop()
             self._consumer = None

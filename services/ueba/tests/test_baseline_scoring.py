@@ -15,6 +15,7 @@ raise an anomaly.
 
 from __future__ import annotations
 
+import json
 import math
 
 import pytest
@@ -190,6 +191,72 @@ class TestUnscoreableFeatures:
 
     def test_returns_empty_when_every_feature_scored(self):
         assert _unscoreable_features({"a": {"z_score": 1.5}}) == []
+
+
+class TestWelfordDoesNotMutateItsInput:
+    """The property that decides whether a baseline accumulates at all.
+
+    ``_welford_update`` is correct arithmetic either way, which is why the
+    existing tests above passed while no entity in any deployment ever got
+    past one observation. The caller hands it a shallow copy of the JSONB
+    column SQLAlchemy loaded; editing the per-feature dictionary in place
+    therefore edited the loaded value too, so the new value compared equal to
+    the old one and SQLAlchemy left the column out of the ``UPDATE``
+    entirely — a ``JSON`` column has no change tracking unless it is wrapped
+    in ``MutableDict``.
+
+    These assert the shape of the return value rather than the numbers, so
+    they fail if anyone reintroduces in-place editing even if the statistics
+    stay right.
+    """
+
+    def test_leaves_the_dict_it_was_given_untouched(self):
+        original = {"f": {"mean": 10.0, "M2": 0.0, "count": 1, "std": 0.0}}
+        before = json.dumps(original, sort_keys=True)
+
+        _welford_update(original, "f", 20.0)
+
+        assert json.dumps(original, sort_keys=True) == before
+
+    def test_returns_a_distinct_per_feature_dict(self):
+        # Identity, not equality: a returned dict that *is* the loaded one is
+        # exactly what made the change invisible to the flush.
+        original = {"f": {"mean": 10.0, "M2": 0.0, "count": 1, "std": 0.0}}
+
+        updated = _welford_update(original, "f", 20.0)
+
+        assert updated is not original
+        assert updated["f"] is not original["f"]
+
+    def test_a_shallow_copy_of_the_previous_value_still_differs(self):
+        """The caller's exact pattern, asserted end to end.
+
+        ``BaselineService.update`` does ``dict(baseline.feature_stats)`` and
+        assigns the result back. If the two compare equal, the column is not
+        written and the baseline is frozen at its first observation.
+        """
+        loaded = {"f": {"mean": 10.0, "M2": 0.0, "count": 1, "std": 0.0}}
+
+        new_value = _welford_update(dict(loaded), "f", 20.0)
+
+        assert new_value != loaded
+        assert new_value["f"]["count"] == 2
+
+    def test_accumulates_across_repeated_round_trips(self):
+        """Thirty observations must produce a baseline of thirty.
+
+        ``min_baseline_samples`` defaults to 30, so an updater that does not
+        accumulate makes ``compute_z_score`` return ``None`` forever and no
+        anomaly is ever scored. Measured on a live stack before the fix: 36
+        events, ``count: 1``.
+        """
+        stored: dict[str, dict[str, float]] = {}
+        for value in range(30):
+            # Round-tripped through JSON each time, as a JSONB column does.
+            stored = json.loads(json.dumps(_welford_update(dict(stored), "f", float(value))))
+
+        assert stored["f"]["count"] == 30
+        assert stored["f"]["std"] > 0
 
 
 class TestRiskLevel:
