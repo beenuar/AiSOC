@@ -16,47 +16,27 @@ name: Compose Smoke
 # rebuild from source — useful when validating Dockerfile changes that have
 # not yet been published.
 
+# Deliberately NOT path-filtered at the workflow level.
+#
+# It used to be. A workflow that does not trigger reports no check, and a
+# required check that never reports blocks a pull request forever — so this
+# gate could not be required while the filter lived up here, which is the
+# single thing standing between "the first-run experience is tested" and "the
+# first-run experience is tested and cannot regress".
+#
+# The condition moved into the job instead. `smoke` runs on every pull
+# request, decides for itself whether anything under a build context changed,
+# and reports success under the same name either way. The name is what branch
+# protection matches on, and there is only one job producing it, so the two
+# cases cannot drift apart.
 on:
   pull_request:
     branches: [main, develop]
-    paths:
-      # Compose surface itself.
-      - 'docker-compose.yml'
-      - 'infra/compose/docker-compose.demo.yml'
-      - '.env.example'
-      - '.github/workflows/compose-smoke.yml'
-      # Any source under a service build context — Dockerfile changes alone
-      # are not enough, because a stale GHCR image will silently mask source
-      # bugs introduced under services/<svc>/. The detect step below decides
-      # whether to rebuild or pull.
-      - 'services/**'
-      - 'apps/web/**'
-      # The web image's build context is the repo root; these are the things
-      # its Dockerfile actually copies into the build.
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'turbo.json'
-      - 'tsconfig.base.json'
-      - 'package.json'
   push:
     branches:
       - main
       - 'release/**'
       - 'hotfix/**'
-    paths:
-      - 'docker-compose.yml'
-      - 'infra/compose/docker-compose.demo.yml'
-      - '.env.example'
-      - '.github/workflows/compose-smoke.yml'
-      - 'services/**'
-      - 'apps/web/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'turbo.json'
-      - 'tsconfig.base.json'
-      - 'package.json'
   workflow_dispatch:
     inputs:
       force_build:
@@ -98,7 +78,87 @@ jobs:
           # this runner and the only safe option.
           fetch-depth: 0
 
+      # The workflow-level path filter used to answer this, at the cost of the
+      # job not reporting at all when it said no. Now the job answers it and
+      # reports either way.
+      - name: Is any of this PR's diff under the compose surface?
+        id: relevant
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual dispatch: always run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Same set the workflow-level `paths:` filter carried, in one place
+          # now rather than duplicated across the two triggers it had.
+          paths=(
+            'docker-compose.yml'
+            'infra/compose/docker-compose.demo.yml'
+            '.env.example'
+            '.github/workflows/compose-smoke.yml'
+            'services/'
+            'apps/web/'
+            'packages/'
+            'pnpm-lock.yaml'
+            'pnpm-workspace.yaml'
+            'turbo.json'
+            'tsconfig.base.json'
+            'package.json'
+          )
+
+          base_ref=""
+          if [ -n "${{ github.base_ref }}" ]; then
+            git fetch --no-tags --depth=50 origin "${{ github.base_ref }}" || true
+            base_ref="origin/${{ github.base_ref }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            base_ref="${{ github.event.before }}"
+          fi
+
+          # Fail-open, matching the rebuild decision below: with no base to
+          # diff against, run the gate rather than skip it. A gate that
+          # declines to run looks identical to one that passed.
+          if [ -z "${base_ref}" ]; then
+            echo "no diff base; running"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          diff_status=0
+          changed=$(git diff --name-only "${base_ref}"...HEAD -- "${paths[@]}") || diff_status=$?
+          if [ "${diff_status}" -ne 0 ]; then
+            echo "git diff vs ${base_ref} failed (exit ${diff_status}); running"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${changed}" ]; then
+            echo "compose surface touched:"
+            printf '  %s\n' ${changed}
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing under the compose surface changed vs ${base_ref}"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Nothing to smoke — reporting a verdict anyway
+        if: steps.relevant.outputs.run != 'true'
+        run: |
+          {
+            echo "## Compose smoke — not exercised"
+            echo ""
+            echo "This pull request changes nothing under the compose surface"
+            echo "(\`docker-compose.yml\`, \`services/\`, \`apps/web/\`, \`packages/\`,"
+            echo "the lockfiles, or this workflow), so the stack was not booted."
+            echo ""
+            echo "The job still reports, under the same check name, because a"
+            echo "required check that never reports blocks the pull request"
+            echo "forever."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Show runner capacity
+        if: steps.relevant.outputs.run == 'true'
         run: |
           echo "## Runner snapshot" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -110,6 +170,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Seed environment file
+        if: steps.relevant.outputs.run == 'true'
         run: |
           cp .env.example .env
           # Override the image tag so smoke runs always pull a known-good
@@ -122,10 +183,12 @@ jobs:
           echo "Resolved AISOC_VERSION=${AISOC_VERSION}"
 
       - name: Validate compose file
+        if: steps.relevant.outputs.run == 'true'
         run: docker compose config --quiet
 
       - name: Detect build-context changes
         id: dockerfile_changes
+        if: steps.relevant.outputs.run == 'true'
         run: |
           # The published GHCR image becomes stale the moment ANY file inside
           # a service's build context changes — not only the Dockerfile. A PR
@@ -155,34 +218,65 @@ jobs:
             exit 0
           fi
 
-          # Build paths mirror docker-compose.yml `build.context` entries.
-          # Keep this list in sync when adding/removing built services. The
-          # web image's context is the repo root but only a subset of the
-          # tree is COPY'd in — listing those entries explicitly avoids
-          # false-positive rebuilds on every PR.
-          paths=(
-            'services/api/'
-            'services/ingest/'
-            'services/enrichment/'
-            'services/fusion/'
-            'services/agents/'
-            'services/osquery-tls/'
-            'services/actions/'
-            'services/connectors/'
-            'services/threatintel/'
-            'services/ueba/'
-            'services/honeytokens/'
-            'services/purple-team/'
-            'services/realtime/'
-            'services/slack-bot/'
-            'apps/web/'
-            'packages/'
-            'pnpm-lock.yaml'
-            'pnpm-workspace.yaml'
-            'turbo.json'
-            'tsconfig.base.json'
-            'package.json'
+          # Build paths come from docker-compose.yml, not from a list kept
+          # here. They used to be a list, with "keep this in sync when
+          # adding/removing built services" written above it — and a service
+          # added to compose but not to the list would have had its source
+          # changes silently pulled from GHCR instead of built, so the gate
+          # would boot a stale image and pass without ever running the code
+          # under review. That is the exact shape this check exists to catch,
+          # sitting inside the check.
+          #
+          # The web image's context is the repository root, so it is expanded
+          # to the subset its Dockerfile actually copies; taking the root
+          # literally would rebuild everything on every PR.
+          python3 - <<'PYDETECT' > /tmp/build-contexts.txt
+          import pathlib
+          import yaml
+
+          doc = yaml.safe_load(pathlib.Path("docker-compose.yml").read_text()) or {}
+          services = doc.get("services") or {}
+          if not services:
+              raise SystemExit("docker-compose.yml declares no services; the parser is wrong, not the tree")
+
+          # What the repo-root build context (the web image) actually copies.
+          ROOT_CONTEXT_SUBSET = (
+              "apps/web/",
+              "packages/",
+              "pnpm-lock.yaml",
+              "pnpm-workspace.yaml",
+              "turbo.json",
+              "tsconfig.base.json",
+              "package.json",
           )
+
+          out: list[str] = []
+          for spec in services.values():
+              build = spec.get("build")
+              if not build:
+                  continue
+              context = build if isinstance(build, str) else build.get("context", "")
+              context = str(context).strip().lstrip("./")
+              if not context or context == ".":
+                  out.extend(ROOT_CONTEXT_SUBSET)
+              else:
+                  out.append(context.rstrip("/") + "/")
+          if not out:
+              raise SystemExit("no build contexts found in docker-compose.yml")
+          for entry in sorted(set(out)):
+              print(entry)
+          PYDETECT
+
+          paths=()
+          while IFS= read -r entry; do
+            [ -n "${entry}" ] && paths+=("${entry}")
+          done < /tmp/build-contexts.txt
+          if [ "${#paths[@]}" -eq 0 ]; then
+            echo "::error::derived no build contexts from docker-compose.yml; refusing to decide"
+            exit 1
+          fi
+          echo "build contexts derived from docker-compose.yml (${#paths[@]}):"
+          printf '  %s\n' "${paths[@]}"
 
           # Fail-open: if `git diff` errors (shallow clone, missing merge
           # base, etc.) we rebuild rather than risk pulling a stale image
@@ -208,7 +302,7 @@ jobs:
           fi
 
       - name: Pre-pull published images
-        if: steps.dockerfile_changes.outputs.rebuild != 'true'
+        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild != 'true'
         run: |
           # Best-effort pull. We don't fail the build here — services that
           # don't yet publish will fall through to the local build step
@@ -216,15 +310,102 @@ jobs:
           docker compose pull --ignore-pull-failures --quiet || true
 
       - name: Boot stack (pull-by-default)
-        if: steps.dockerfile_changes.outputs.rebuild != 'true'
+        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild != 'true'
         run: docker compose up -d --quiet-pull
 
       - name: Boot stack (force rebuild)
-        if: steps.dockerfile_changes.outputs.rebuild == 'true'
+        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild == 'true'
         run: docker compose up -d --build
+
+      # "Green" has meant two very different things here and the log did not
+      # distinguish them: a run that built the changed service from this PR's
+      # source, and a run that pulled `:main` and never compiled a line of it.
+      # A required check that can pass without exercising the changed service
+      # is the defect this whole effort is about, so the run now says which it
+      # did, per service, and refuses when the two disagree.
+      #
+      # Read off the images that are actually running, not predicted from the
+      # decision above: a pulled image carries a RepoDigest and a locally
+      # built one does not, so this reports what happened rather than what was
+      # intended.
+      - name: Which services were built, and which were pulled
+        id: provenance
+        if: steps.relevant.outputs.run == 'true'
+        run: |
+          set -uo pipefail
+          python3 - <<'PYPROV' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          import yaml
+
+          compose = yaml.safe_load(pathlib.Path("docker-compose.yml").read_text()) or {}
+          buildable = {name for name, spec in (compose.get("services") or {}).items() if spec.get("build")}
+
+          listed = subprocess.run(
+              ["docker", "compose", "ps", "--format", "json"],
+              capture_output=True, text=True, check=False,
+          )
+          rows = []
+          for line in listed.stdout.splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  parsed = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              rows.extend(parsed if isinstance(parsed, list) else [parsed])
+          if not rows:
+              print("::error::`docker compose ps` listed no containers; this run exercised nothing")
+              sys.exit(1)
+
+          def provenance(image: str) -> str:
+              """A pulled image has a RepoDigest; a locally built one does not."""
+              out = subprocess.run(
+                  ["docker", "image", "inspect", image, "--format", "{{len .RepoDigests}}"],
+                  capture_output=True, text=True, check=False,
+              )
+              if out.returncode != 0:
+                  return "unknown"
+              return "pulled" if out.stdout.strip() not in {"0", ""} else "built"
+
+          built, pulled, unknown = [], [], []
+          print("## What this run actually exercised\n")
+          print("| service | image | from |")
+          print("|---|---|---|")
+          for row in sorted(rows, key=lambda r: r.get("Service", "")):
+              service = row.get("Service", "?")
+              image = row.get("Image", "?")
+              if service not in buildable:
+                  continue
+              where = provenance(image)
+              {"built": built, "pulled": pulled}.get(where, unknown).append(service)
+              print(f"| `{service}` | `{image}` | **{where}** |")
+
+          print()
+          print(f"**{len(built)} built from this PR's source**: {', '.join(built) or 'none'}  ")
+          print(f"**{len(pulled)} pulled from the registry**: {', '.join(pulled) or 'none'}  ")
+          if unknown:
+              print(f"**{len(unknown)} could not be determined**: {', '.join(unknown)}  ")
+
+          rebuild = "${{ steps.dockerfile_changes.outputs.rebuild }}" == "true"
+          if rebuild and not built:
+              print()
+              print("::error::a build-context change was detected and nothing was built from source; "
+                    "this run booted published images and did not exercise the change under review")
+              sys.exit(1)
+          if not rebuild and pulled:
+              print()
+              print("> No build context changed, so the stack was pulled. This run proves the "
+                    "published images still boot together; it does not exercise this PR's source.")
+          PYPROV
 
       - name: Wait for stack to converge
         id: converge
+        if: steps.relevant.outputs.run == 'true'
         run: |
           set -u
           deadline=$(( $(date +%s) + HEALTH_BUDGET_SECONDS ))
@@ -275,7 +456,7 @@ jobs:
           exit 1
 
       - name: Record success summary
-        if: success()
+        if: success() && steps.relevant.outputs.run == 'true'
         run: |
           {
             echo "## Smoke result"
@@ -291,7 +472,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture forensics on failure
-        if: failure()
+        if: failure() && steps.relevant.outputs.run == 'true'
         run: |
           echo "## Compose state"
           docker compose ps || true
@@ -306,5 +487,5 @@ jobs:
           free -h || true
 
       - name: Teardown
-        if: always()
+        if: always() && steps.relevant.outputs.run == 'true'
         run: docker compose down -v --remove-orphans

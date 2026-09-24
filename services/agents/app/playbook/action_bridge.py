@@ -33,6 +33,14 @@ from typing import Any
 
 import httpx
 
+from .errors import PermanentStepFailure
+
+#: HTTP statuses in the 4xx range that ask to be retried rather than refusing.
+#: Everything else a server says in that range means it understood the request
+#: and will not serve it, so a second identical request gets a second identical
+#: answer.
+_RETRYABLE_CLIENT_STATUSES = frozenset({408, 425, 429})
+
 #: Stdlib logging rather than structlog, matching `engine.py`. The playbook
 #: package states "zero external dependencies beyond httpx + stdlib" in its
 #: own docstring and it is load-bearing: `scripts/validate_playbooks.py` and
@@ -77,6 +85,24 @@ class BridgeUnavailable(RuntimeError):
     Raised rather than returned so a caller cannot forget to check: the
     engine's handler turns it into a failed step, and a failed step halts the
     run under the default policy.
+
+    Still the base class every caller catches, so nothing downstream had to
+    learn a second name. What changed is that the permanent half of it is now
+    a subclass the engine can recognise — see ``BridgeMisconfigured``.
+    """
+
+
+class BridgeMisconfigured(BridgeUnavailable, PermanentStepFailure):
+    """Dispatch is impossible for this run, and waiting will not help.
+
+    Three of these are process configuration — the enable switch, the service
+    token, the tenant on the run context — and none of them changes between a
+    step's first attempt and its fourth. The other two are the API answering
+    in a way that breaks its own contract, which it will do again.
+
+    Retrying these burned fourteen seconds per step and, worse, made a
+    permanent misconfiguration read as an intermittent network problem during
+    an incident.
     """
 
 
@@ -99,18 +125,21 @@ async def dispatch_step(
     integration configured" and "previewed", which are the three answers an
     author most needs.
     """
+    # The three configuration refusals below are read from the process
+    # environment and the run context, neither of which changes while a step
+    # is sleeping between attempts.
     if not actions_enabled():
-        raise BridgeUnavailable(
+        raise BridgeMisconfigured(
             f"playbook action dispatch is disabled (AISOC_PLAYBOOK_ACTIONS_ENABLED=0), so '{capability}' was not attempted"
         )
     if not tenant_id:
         # The API refuses a service call with no tenant, and guessing one
         # here would be a cross-tenant action.
-        raise BridgeUnavailable(f"'{capability}' has no tenant in the run context, and a response action cannot be run without one")
+        raise BridgeMisconfigured(f"'{capability}' has no tenant in the run context, and a response action cannot be run without one")
 
     token = _service_token()
     if not token:
-        raise BridgeUnavailable(
+        raise BridgeMisconfigured(
             f"'{capability}' was not dispatched: AISOC_AGENTS_SERVICE_TOKEN is unset, so the API's service path is closed"
         )
 
@@ -132,17 +161,33 @@ async def dispatch_step(
         async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
             response = await client.post(url, json=payload, headers={"X-AiSOC-Service-Token": token})
     except httpx.HTTPError as exc:
+        # Connection refused, DNS failure, read timeout. The request did not
+        # arrive; the next one might. This is the case the retry loop is for.
         raise BridgeUnavailable(f"the action service could not be reached for '{capability}': {exc}") from exc
 
     if response.status_code >= 400:
-        raise BridgeUnavailable(f"the API refused '{capability}' with HTTP {response.status_code}")
+        # 5xx is the server failing to serve a request it accepted, and 408 /
+        # 425 / 429 are a server explicitly asking to be asked again. Every
+        # other 4xx means it understood and refused — authentication, an
+        # unknown capability, a malformed payload — and refusing again is the
+        # only thing a second identical request can achieve.
+        detail = f"the API refused '{capability}' with HTTP {response.status_code}"
+        if response.status_code >= 500 or response.status_code in _RETRYABLE_CLIENT_STATUSES:
+            raise BridgeUnavailable(detail)
+        raise BridgeMisconfigured(detail)
 
     try:
         report = response.json()
     except ValueError as exc:
+        # Transient. A JSON endpoint that answers 2xx with a non-JSON body is
+        # almost always an intermediary — an ingress or proxy error page
+        # served in place of the API — and those clear. Below is the opposite
+        # case and is treated as such: a body that parsed as JSON came from
+        # something speaking the API's own contract, so getting the contract
+        # wrong is a defect, not weather.
         raise BridgeUnavailable(f"the API returned a non-JSON body for '{capability}'") from exc
     if not isinstance(report, dict) or "executed" not in report:
-        raise BridgeUnavailable(f"the API returned a report with no 'executed' field for '{capability}'")
+        raise BridgeMisconfigured(f"the API returned a report with no 'executed' field for '{capability}'")
 
     logger.info(
         # `executed` is echoed verbatim: if it is False no vendor was

@@ -936,13 +936,20 @@ def main() -> None:
         # Substrate suites need pydantic / langchain etc. If they're not
         # installed we can still emit the telemetry block — surface the
         # original ImportError so operators know what to fix.
+        #
+        # Exit 3, which is what this file's own "Exit codes" block has always
+        # said a substrate-import failure returns. It exited 2, and 2 means
+        # "MITRE accuracy regressed against the baseline" — so a fresh clone
+        # missing a dependency reported an accuracy regression, and the one
+        # actionable instruction (install the deps) was not in the message.
         msg = (
-            "Substrate-suite imports failed (likely missing agent dev deps "
-            f"such as pydantic): {_SUBSTRATE_IMPORT_ERROR!r}. "
-            "Pass --telemetry-only to emit just the T2.4 token/USD/latency block."
+            "ERROR: substrate-suite imports failed (likely missing agent dev deps "
+            f"such as pydantic): {_SUBSTRATE_IMPORT_ERROR!r}.\n"
+            "  Fix:  pip install -e services/agents\n"
+            "  Or:   pass --telemetry-only to emit just the T2.4 token/USD/latency block."
         )
         print(msg, file=sys.stderr)
-        sys.exit(2)
+        sys.exit(3)
 
     keep_records = not args.no_telemetry_records
     per_investigation = _build_per_investigation_block(
@@ -959,22 +966,40 @@ def main() -> None:
         }
         summary["all_passed"] = True  # telemetry-only never gates substrate
     else:
+        # Only the requested suites are *called*. The previous form built this
+        # dict with all eleven calls inline, so `--suite mitre_accuracy` ran
+        # every suite, took the full runtime, and then printed
+        # "PASS — mitre_accuracy green" — a verdict naming one suite and
+        # decided by eleven. `--ci` would fail a single-suite run on an
+        # unrelated regression, which is the opposite of what an operator
+        # bisecting to one gate is asking for. `args.suite` reached nothing
+        # but the banner wording.
+        runners = {
+            "mitre_accuracy": _run_mitre,
+            "alert_reduction": _run_alert_reduction,
+            "investigation_completeness": _run_completeness,
+            "response_quality": _run_response_quality,
+            "hunt_corpus": _run_hunt_corpus,
+            "adversary_eval": _run_adversary,
+            "confidence_calibration": _run_confidence_calibration,
+            "memory_recall": _run_memory_recall,
+            "override_accuracy": _run_override_accuracy,
+            "playbook_completion_rate": _run_playbook_completion,
+            "detection_fp_rate": _run_detection_fp_rate,
+        }
+        # The registry and the name list are the same set, asserted rather than
+        # assumed: argparse accepts a name from `_SUITE_NAMES`, so one missing
+        # here would be a KeyError at the moment somebody bisects a regression.
+        if set(runners) != set(_SUITE_NAMES):
+            raise AssertionError(f"suite registry and _SUITE_NAMES disagree: {set(runners) ^ set(_SUITE_NAMES)}")
+        selected = _SUITE_NAMES if args.suite == "all" else (args.suite,)
         summary = {
             "generated_at": datetime.now(UTC).isoformat(),
             "dataset": "synthetic_incidents.json (200 cases, deterministic)",
-            "suites": {
-                "mitre_accuracy": _run_mitre(),
-                "alert_reduction": _run_alert_reduction(),
-                "investigation_completeness": _run_completeness(),
-                "response_quality": _run_response_quality(),
-                "hunt_corpus": _run_hunt_corpus(),
-                "adversary_eval": _run_adversary(),
-                "confidence_calibration": _run_confidence_calibration(),
-                "memory_recall": _run_memory_recall(),
-                "override_accuracy": _run_override_accuracy(),
-                "playbook_completion_rate": _run_playbook_completion(),
-                "detection_fp_rate": _run_detection_fp_rate(),
-            },
+            # Which suites this report describes. Without it a single-suite
+            # report is indistinguishable from a full one that lost ten suites.
+            "suite_filter": args.suite,
+            "suites": {name: runners[name]() for name in selected},
             "telemetry": _summarise_telemetry(),
             "per_investigation": per_investigation,
         }

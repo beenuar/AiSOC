@@ -557,16 +557,20 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: python -m pytest tests/ -v --tb=short
-      # This list is hand-maintained, which is the same "a matrix is a list
-      # somebody has to remember to add to" shape called out for the Go
-      # modules further down — and it has the same consequence. 62 of the 82
-      # test files under services/agents/tests are named by no workflow at
-      # all. `test_playbook_engine_correctness.py` was one of them, and it
-      # carried a test that spent fourteen seconds doing the precise thing its
-      # name said must not happen while reporting green, because nothing ever
-      # ran it to notice. The playbook and per-tenant business-context files
-      # are added below; the rest of the gap is real and is not closed here.
-      - name: Run agents unit tests (Pillar-1 eval suites + audit helpers + fusion client)
+      # This used to be a hand-maintained list of 26 file paths, which is the
+      # same "a matrix is a list somebody has to remember to add to" shape
+      # called out for the Go modules further down, and it had the same
+      # consequence: 56 of the 82 test files under services/agents/tests were
+      # named by no workflow at all. `test_playbook_engine_correctness.py` was
+      # one of them, and it carried a test that spent fourteen seconds doing
+      # the precise thing its name said must not happen while reporting green,
+      # because nothing ever ran it to notice.
+      #
+      # It is the directory now. Adding a test file to a directory CI already
+      # runs is free; adding one beside a list is silently free of signal.
+      # `scripts/check_test_discovery.py` holds it that way in both
+      # directions.
+      - name: Run agents unit tests (whole suite — discovered, not listed)
         # `test_audit_helpers.py` imports `app.investigator.state` directly
         # (it stubs out the package __init__ to avoid pulling in LangGraph),
         # so it only needs stdlib + pydantic — already installed via API_DEPS.
@@ -593,34 +597,25 @@ jobs:
             'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
             jsonschema 'markdown>=3.5,<4'
           cd services/agents
-          python3 -m pytest \
-            tests/test_router_report.py \
-            tests/test_mitre_accuracy.py \
-            tests/test_alert_reduction.py \
-            tests/test_investigation_completeness.py \
-            tests/test_response_quality.py \
-            tests/test_audit_helpers.py \
-            tests/test_fusion_client.py \
-            tests/test_prompt_sanitizer.py \
-            tests/test_prompt_envelope.py \
-            tests/test_privacy_redactor.py \
-            tests/test_cost_governor.py \
-            tests/test_bundle_incident_context.py \
-            tests/test_deep_investigation.py \
-            tests/adversarial/ \
-            tests/test_model_router.py \
-            tests/test_llm_ops.py \
-            tests/test_fused_alert_worker.py \
-            tests/test_business_context_hotpath.py \
-            tests/test_business_context_per_tenant.py \
-            tests/test_playbook_engine_correctness.py \
-            tests/test_playbook_action_bridge.py \
-            tests/test_playbook_bounds.py \
-            tests/test_playbook_models_bounds.py \
-            tests/test_playbook_ssrf_guard.py \
-            tests/test_swarm.py \
-            tests/test_swarm_vs_single.py \
-            -v --tb=short
+          python3 -m pytest tests/ -v --tb=short -rs
+
+      # The repository's own gate suites — `tests/` and `scripts/tests/`.
+      # `tests/` was reached only as nineteen single-file invocations spread
+      # across eleven workflows, which is the agents defect again with the
+      # list kept somewhere else: five files were named by nothing, and
+      # `scripts/tests/` by nothing at all. Three tests in
+      # `scripts/tests/test_run_evals_cli.py` had been failing for as long as
+      # they existed, pinning a `--suite` contract the runner had stopped
+      # honouring.
+      #
+      # `tests/isolation/` is excluded because isolation.yml owns it: it needs
+      # qdrant-client and live stores this job does not have. That is an
+      # exclusion of a directory another workflow runs, not a list of files —
+      # and check_test_discovery.py fails the build if isolation.yml ever
+      # stops reaching it, so the exclusion cannot quietly become a hole.
+      - name: Run the repository's own gate suites (tests/ + scripts/tests/)
+        run: python3 -m pytest tests/ scripts/tests/ --ignore=tests/isolation -v --tb=short -rs
+
       - name: Toolchain versions must agree
         # Six go.mod files declared five different Go versions while the Go
         # matrix installed a sixth, so one module could not be built by the
@@ -695,6 +690,28 @@ jobs:
           python3 scripts/check_gate_coverage.py --self-test
           python3 scripts/check_gate_coverage.py --list
           python3 -m pytest tests/test_gate_coverage_classifier.py -q
+
+      - name: Every test file is reached by its own tree's invocation
+        # The gate on the suites. A test file no workflow collects reports
+        # nothing and reads exactly like one that passed — 63 were in that
+        # state, 56 of them under services/agents, because the invocation was
+        # a hand-maintained list of file paths rather than a directory.
+        #
+        # Structural, and in both directions: the corpus is `git ls-files`, so
+        # a service added tomorrow is scanned with no edit here, and an
+        # invocation naming a path that no longer exists fails too. It models
+        # what pytest actually collects — directory arguments, `--ignore`,
+        # `conftest` collect_ignore, and `-m` marker deselection, because a
+        # file whose every test is deselected runs nothing however plainly it
+        # is named.
+        #
+        # Self-test first, on the same tree, so a resolver that quietly starts
+        # returning "reached" for everything fails here rather than printing OK.
+        run: |
+          python -m pip install --quiet pyyaml pytest
+          python3 scripts/check_test_discovery.py --self-test
+          python3 scripts/check_test_discovery.py --list
+          python3 -m pytest tests/test_test_discovery_gate.py -q
 
       - name: No check may report OK over a repository with no content
         # The gate on the gates, the other axis. Reachability says a check can
