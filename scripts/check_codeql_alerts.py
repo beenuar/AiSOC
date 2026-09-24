@@ -635,7 +635,7 @@ def self_test(root: Path) -> int:
 
     cases: list[tuple[str, str, dict[str, Any]]] = [
         (
-            "a `note`-severity alert — the exact severity of #893/#896, which a " "severity-filtered gate would pass",
+            "a `note`-severity alert — #893/#896's severity, which a filtered gate would pass",
             "open-alert",
             mutate(
                 open_alerts=[

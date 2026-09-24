@@ -37,6 +37,33 @@ _SCRIPT = _REPO / "scripts" / "check_codeql_alerts.py"
 _GATE_WORKFLOW = _REPO / ".github" / "workflows" / "codeql-alert-gate.yml"
 _VALIDATE_PLAYBOOKS = _REPO / "scripts" / "validate_playbooks.py"
 
+# Run in a subprocess, because the property under test is what happens at
+# import time and a module imported once in this process would not show it.
+_IMPORT_AND_REPORT_TRIGGERS = """
+import sys
+sys.path.insert(0, 'scripts')
+import validate_playbooks
+print(sorted(validate_playbooks.SUPPORTED_TRIGGERS))
+"""
+
+# Simulates the broken environment: `app.playbook.models` cannot be imported.
+_IMPORT_WITH_MODELS_BLOCKED = """
+import sys
+
+class Blocker:
+    def find_spec(self, name, path=None, target=None):
+        if name.startswith('app.playbook'):
+            raise ImportError('blocked for the test')
+        return None
+
+sys.meta_path.insert(0, Blocker())
+sys.path.insert(0, 'scripts')
+try:
+    import validate_playbooks
+except Exception as exc:
+    print('CAUGHT', type(exc).__name__)
+"""
+
 
 def _load_gate():
     spec = importlib.util.spec_from_file_location("check_codeql_alerts", _SCRIPT)
@@ -286,11 +313,7 @@ def test_importing_validate_playbooks_is_silent_and_does_not_exit() -> None:
     `except Exception` could not catch it.
     """
     result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import sys; sys.path.insert(0, 'scripts'); import validate_playbooks; " "print(sorted(validate_playbooks.SUPPORTED_TRIGGERS))",
-        ],
+        [sys.executable, "-c", _IMPORT_AND_REPORT_TRIGGERS],
         cwd=_REPO,
         capture_output=True,
         text=True,
@@ -303,24 +326,8 @@ def test_importing_validate_playbooks_is_silent_and_does_not_exit() -> None:
 
 def test_broken_model_import_is_catchable_by_the_parity_gate() -> None:
     """It must raise ImportError, which `except Exception` catches."""
-    program = (
-        "import sys\n"
-        "class Blocker:\n"
-        "    def find_module(self, name, path=None):\n"
-        "        return None\n"
-        "    def find_spec(self, name, path=None, target=None):\n"
-        "        if name.startswith('app.playbook'):\n"
-        "            raise ImportError('blocked for the test')\n"
-        "        return None\n"
-        "sys.meta_path.insert(0, Blocker())\n"
-        "sys.path.insert(0, 'scripts')\n"
-        "try:\n"
-        "    import validate_playbooks\n"
-        "except Exception as exc:\n"
-        "    print('CAUGHT', type(exc).__name__)\n"
-    )
     result = subprocess.run(
-        [sys.executable, "-c", program],
+        [sys.executable, "-c", _IMPORT_WITH_MODELS_BLOCKED],
         cwd=_REPO,
         capture_output=True,
         text=True,
