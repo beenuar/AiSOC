@@ -136,6 +136,11 @@ names = ["Torq", "Tines", "Wazuh"]
 reason = "The console's connector_type vocabulary, generated from the connector registry by scripts/generate_connector_types.py. Each name here is a connector id the platform ingests under; removing one would make the type reject events from a connector that ships."
 
 [[allow]]
+paths = ["services/api/app/data/connector_catalog_fallback.json"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "The connector catalog bundled into the API image, generated from the connector registry by scripts/generate_connector_catalog_fallback.py. It is each connector's own schema() verbatim — the vendor name, the field labels and the setup help text the wizard renders — so these are the same first-party integration references the connector modules carry. This file previously held a hand-refreshed 26-connector subset that happened to exclude them."
+
+[[allow]]
 paths = ["apps/docs/sidebars.ts"]
 names = ["Torq", "Tines", "Wazuh"]
 reason = "Docs navigation entries pointing at the per-connector setup guides."

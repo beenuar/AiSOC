@@ -1,852 +1,3565 @@
 [
   {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "abnormal_security",
+    "connector_name": "Abnormal Security",
+    "description": "Abnormal Security behavioural-AI email threat events. Polls /v1/threats and /v1/cases for BEC, credential phishing, account takeover, and invoice-fraud detections.",
+    "docs_url": "/docs/connectors/abnormal_security",
+    "fields": [
+      {
+        "default": "https://api.abnormalplatform.com",
+        "label": "API base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Abnormal Console \u2192 Settings \u2192 Integrations \u2192 API \u2192 Generate token.",
+        "label": "API token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit"
+    ],
+    "category": "ai",
+    "connector_id": "ai_gateway",
+    "connector_name": "AI Gateway / MCP Runtime",
+    "description": "Pull request logs from an LLM gateway or MCP server (LiteLLM, Portkey, Helicone, or an in-house proxy) to see which agents call which tools and models, on whose behalf. Covers every app behind the gateway without instrumenting each one. For apps you control, the aisoc-ai-sdk push path is lower friction.",
+    "docs_url": "/docs/connectors/ai_gateway",
+    "fields": [
+      {
+        "label": "Gateway base URL",
+        "name": "base_url",
+        "placeholder": "https://llm-gateway.internal",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Gateway API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Any model outside this list raises an unapproved_model finding. Leave blank to disable the check rather than flag everything.",
+        "label": "Approved models (comma-separated)",
+        "name": "approved_models",
+        "placeholder": "gpt-4o, claude-sonnet-4, llama-3.3-70b",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": true,
+        "help_text": "Disable only for an internal gateway using a private CA.",
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "auditd",
+    "connector_name": "Linux Auditd",
+    "description": "Linux Audit (``auditd``) log connector. Tails ``/var/log/audit/audit.log`` forward from a saved byte cursor, reassembles multi-record events (SYSCALL + EXECVE + PATH + \u2026) into flat documents, and feeds the same execve / file-watch / kernel-module primitives that detections/endpoint/linux-*.yaml rules pivot on. Ship the AiSOC ``audit.rules`` profile (profiles/auditd/aisoc.rules) for full coverage; rules with ``aisoc_*`` keys auto-bucket into AiSOC's severity tiers.",
+    "docs_url": "/docs/connectors/auditd",
+    "fields": [
+      {
+        "help_text": "Human-readable label for the host being monitored. Surfaced on every normalised event so detections and investigations can filter to a single fleet member without relying on the kernel's reported hostname.",
+        "label": "Host label",
+        "name": "host_label",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": "/var/log/audit/audit.log",
+        "help_text": "Absolute path to ``audit.log`` inside the AiSOC connector pod. Mount the host's ``/var/log/audit`` directory read-only into the pod, or run the connector on the same host as the auditd daemon.",
+        "label": "Audit log path",
+        "name": "audit_log_path",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Optional override for where AiSOC stores its byte-position cursor. Defaults to ``<audit_log_path>.aisoc-cursor``. Use a writeable path \u2014 the connector pod needs to update this on every successful poll.",
+        "label": "Cursor file path",
+        "name": "cursor_path",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pivot_user",
+      "read_audit_trail"
+    ],
+    "category": "iam",
+    "connector_id": "auth0",
+    "connector_name": "Auth0",
+    "description": "Auth0 tenant logs. Pulls login events, MFA events, and admin actions via the Management API.",
+    "docs_url": "/docs/connectors/auth0",
+    "fields": [
+      {
+        "label": "Auth0 Domain",
+        "name": "domain",
+        "placeholder": "yourcorp.us.auth0.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "M2M Client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "M2M Client Secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://AUTH0_DOMAIN/authorize",
+      "scopes": [
+        "read:logs",
+        "read:logs_users"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://AUTH0_DOMAIN/oauth/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "aws_cloudtrail",
+    "connector_name": "AWS CloudTrail",
+    "description": "AWS CloudTrail audit events. Polls a curated allow-list of high-signal management events (IAM grants, trail tampering, public-S3 changes, KMS key destruction, cross-account sharing) so detections fire without drowning in read-only noise.",
+    "docs_url": "/docs/connectors/aws-cloudtrail",
+    "fields": [
+      {
+        "default": "us-east-1",
+        "label": "AWS Region",
+        "name": "region",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Leave blank to use the runtime IAM role / instance profile.",
+        "label": "Access Key ID",
+        "name": "access_key",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required only when supplying a static access key above.",
+        "label": "Secret Access Key",
+        "name": "secret_key",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "default": "",
+        "help_text": "Override the default curated event list. Leave blank to use AiSOC's curated list, or set to '*' to pull every CloudTrail event in the window (high volume \u2014 not recommended).",
+        "label": "Event allow-list (comma-separated)",
+        "name": "event_names",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "aws_guardduty",
+    "connector_name": "AWS GuardDuty",
+    "description": "AWS GuardDuty findings. Pulls native GuardDuty alerts (threat detection across VPC flow logs, DNS logs, CloudTrail, EKS, S3, RDS, Lambda) directly without requiring Security Hub aggregation.",
+    "docs_url": "/docs/connectors/aws-guardduty",
+    "fields": [
+      {
+        "default": "us-east-1",
+        "label": "AWS Region",
+        "name": "region",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Leave blank to use the runtime IAM role / instance profile.",
+        "label": "Access Key ID",
+        "name": "access_key",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required only when supplying a static access key above.",
+        "label": "Secret Access Key",
+        "name": "secret_key",
+        "required": false,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "block_ip",
+      "allow_ip"
+    ],
+    "category": "cloud",
     "connector_id": "aws_security_hub",
     "connector_name": "AWS Security Hub",
-    "category": "cloud",
     "description": "AWS Security Hub findings (GuardDuty, Inspector, Macie, third-party).",
+    "docs_url": "/docs/connectors/aws-security-hub",
     "fields": [
       {
-        "name": "region",
-        "type": "string",
+        "default": "us-east-1",
         "label": "AWS Region",
+        "name": "region",
         "required": true,
-        "default": "us-east-1"
+        "type": "string"
       },
       {
-        "name": "access_key",
-        "type": "string",
+        "help_text": "Leave blank to use the runtime IAM role / instance profile.",
         "label": "Access Key ID",
+        "name": "access_key",
         "required": false,
-        "help_text": "Leave blank to use the runtime IAM role / instance profile."
+        "type": "string"
       },
       {
-        "name": "secret_key",
-        "type": "secret",
+        "help_text": "Required only when supplying a static access key above.",
         "label": "Secret Access Key",
+        "name": "secret_key",
         "required": false,
-        "help_text": "Required only when supplying a static access key above."
+        "type": "secret"
       }
-    ],
-    "docs_url": "/docs/connectors/aws-security-hub"
+    ]
   },
   {
+    "capabilities": [
+      "pull_logs",
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "aws_vpc_flow",
+    "connector_name": "AWS VPC Flow Logs",
+    "description": "AWS VPC Flow Logs streamed from CloudWatch Logs. Defaults to surfacing rejected flows only so the ingest pipeline gets the actionable network-deny signal without drowning in steady-state ACCEPT noise.",
+    "docs_url": "/docs/connectors/aws-vpc-flow",
+    "fields": [
+      {
+        "default": "us-east-1",
+        "label": "AWS Region",
+        "name": "region",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The CloudWatch Logs log group your VPC Flow Logs publish to (e.g. ``/aws/vpc/flowlogs``). Configure flow logs to publish to CloudWatch Logs in the VPC console first if you haven't.",
+        "label": "CloudWatch Logs log group",
+        "name": "log_group_name",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": "?REJECT",
+        "help_text": "CloudWatch Logs filter pattern applied server-side. Default ``?REJECT`` surfaces blocked flows only. Set to empty string to ingest every flow record (high volume warning).",
+        "label": "CloudWatch Logs filter pattern",
+        "name": "filter_pattern",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": "v2",
+        "help_text": "AiSOC parses v2 (the AWS default 14-field layout) natively. For v5 custom layouts the raw record passes through on raw_event so detection content can match on the JSON.",
+        "label": "Flow log version (v2 or v5)",
+        "name": "flow_log_version",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Leave blank to use the runtime IAM role / instance profile.",
+        "label": "Access Key ID",
+        "name": "access_key",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required only when supplying a static access key above.",
+        "label": "Secret Access Key",
+        "name": "secret_key",
+        "required": false,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "cloud",
     "connector_id": "azure_activity",
     "connector_name": "Azure Activity Logs",
-    "category": "cloud",
     "description": "Azure subscription Activity Log \u2014 every control-plane operation (resource CRUD, RBAC changes, policy changes). Requires Reader role on the subscription.",
+    "docs_url": "/docs/connectors/azure-activity",
     "fields": [
       {
-        "name": "tenant_id",
-        "type": "string",
         "label": "Tenant ID",
-        "required": true
-      },
-      {
-        "name": "client_id",
-        "type": "string",
-        "label": "Application (Client) ID",
-        "required": true
-      },
-      {
-        "name": "client_secret",
-        "type": "secret",
-        "label": "Client Secret",
-        "required": true
-      },
-      {
-        "name": "subscription_id",
-        "type": "string",
-        "label": "Subscription ID",
+        "name": "tenant_id",
         "required": true,
-        "placeholder": "00000000-0000-0000-0000-000000000000"
+        "type": "string"
+      },
+      {
+        "label": "Application (Client) ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Client Secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Subscription ID",
+        "name": "subscription_id",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "required": true,
+        "type": "string"
       }
     ],
-    "docs_url": "/docs/connectors/azure-activity",
     "oauth": {
-      "supported_in_hosted": true,
       "authorize_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
       "scopes": [
         "https://management.azure.com/user_impersonation"
-      ]
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "isolate_host",
+      "unisolate_host",
+      "block_ioc",
+      "run_av_scan"
+    ],
+    "category": "edr",
     "connector_id": "azure_defender",
     "connector_name": "Microsoft Defender",
-    "category": "edr",
     "description": "Microsoft 365 Defender unified alerts feed (Defender for Cloud, Endpoint, Identity, Office 365, Cloud Apps) via Microsoft Graph. Requires SecurityAlert.Read.All.",
+    "docs_url": "/docs/connectors/azure-defender",
     "fields": [
       {
-        "name": "tenant_id",
-        "type": "string",
         "label": "Tenant ID",
-        "required": true
+        "name": "tenant_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_id",
-        "type": "string",
         "label": "Application (Client) ID",
-        "required": true
+        "name": "client_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_secret",
-        "type": "secret",
         "label": "Client Secret",
-        "required": true
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/azure-defender",
     "oauth": {
-      "supported_in_hosted": true,
       "authorize_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
       "scopes": [
         "https://graph.microsoft.com/SecurityAlert.Read.All"
-      ]
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
   },
   {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts"
+    ],
+    "category": "iam",
     "connector_id": "azure_entra",
     "connector_name": "Microsoft Entra ID",
-    "category": "iam",
     "description": "Microsoft Entra ID (Azure AD) directory audits and risky sign-ins via Microsoft Graph. Requires AuditLog.Read.All and Directory.Read.All application permissions.",
+    "docs_url": "/docs/connectors/azure-entra",
     "fields": [
       {
-        "name": "tenant_id",
-        "type": "string",
         "label": "Tenant ID",
+        "name": "tenant_id",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
         "required": true,
-        "placeholder": "00000000-0000-0000-0000-000000000000"
+        "type": "string"
       },
       {
-        "name": "client_id",
-        "type": "string",
         "label": "Application (Client) ID",
-        "required": true
+        "name": "client_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_secret",
-        "type": "secret",
         "label": "Client Secret",
-        "required": true
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/azure-entra",
     "oauth": {
-      "supported_in_hosted": true,
       "authorize_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
       "scopes": [
         "https://graph.microsoft.com/AuditLog.Read.All",
         "https://graph.microsoft.com/Directory.Read.All"
-      ]
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
   },
   {
-    "connector_id": "cloudflare",
-    "connector_name": "Cloudflare",
+    "capabilities": [
+      "pull_audit",
+      "pivot_user",
+      "read_audit_trail"
+    ],
     "category": "saas",
-    "description": "Cloudflare account audit logs (zone changes, API token grants, member adds, WAF/firewall edits) via the v4 API. Requires an API token scoped to Account: Audit Logs: Read.",
+    "connector_id": "box",
+    "connector_name": "Box",
+    "description": "Box admin audit events: file shares / downloads / deletes, collaborator changes, login activity, policy edits, and Shield anomaly alerts.",
+    "docs_url": "/docs/connectors/box",
     "fields": [
       {
-        "name": "account_id",
-        "type": "string",
-        "label": "Account ID",
+        "help_text": "OAuth 2.0 access token from a Box JWT app with the 'Manage enterprise properties' scope. Refresh externally; this connector does not mint new tokens.",
+        "label": "Box access token",
+        "name": "access_token",
         "required": true,
-        "placeholder": "abc123def456...",
-        "help_text": "Found in the Cloudflare dashboard under any zone's Overview, lower-right pane (\"Account ID\")."
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "pivot_host",
+      "isolate_host",
+      "quarantine_file",
+      "block_hash"
+    ],
+    "category": "edr",
+    "connector_id": "carbon_black",
+    "connector_name": "VMware Carbon Black Cloud",
+    "description": "VMware Carbon Black Cloud (formerly Carbon Black Defense). Pulls alerts and audit log entries via API key authentication. Supports host isolation and hash banning via agent capabilities.",
+    "docs_url": "/docs/connectors/carbon-black",
+    "fields": [
+      {
+        "help_text": "CBC region your tenant is hosted in. The wrong region returns 401 rather than 404, so this can't be auto-detected.",
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "US East (defense.conferdeploy.net)",
+            "value": "us_east"
+          },
+          {
+            "label": "US West",
+            "value": "us_west"
+          },
+          {
+            "label": "Europe (defense-eu)",
+            "value": "eu"
+          },
+          {
+            "label": "United Kingdom (defense-uk)",
+            "value": "uk"
+          },
+          {
+            "label": "Australia (defense-au)",
+            "value": "au"
+          },
+          {
+            "label": "APAC (defense-apjp)",
+            "value": "apac"
+          }
+        ],
+        "required": true,
+        "type": "select"
       },
       {
-        "name": "api_token",
-        "type": "secret",
-        "label": "API Token",
+        "help_text": "Found in CBC console under Settings \u2192 API Access \u2192 API Keys (the column labeled 'Org Key').",
+        "label": "Org Key",
+        "name": "org_key",
+        "placeholder": "ABCD1234",
         "required": true,
-        "help_text": "Account-scoped API token with the Audit Logs: Read permission. Avoid using the legacy Global API Key."
+        "type": "string"
+      },
+      {
+        "help_text": "The 'API ID' half of the credential pair.",
+        "label": "API ID",
+        "name": "api_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The long secret half of the credential pair.",
+        "label": "API Secret Key",
+        "name": "api_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user",
+      "pivot_ip"
+    ],
+    "category": "siem",
+    "connector_id": "chronicle",
+    "connector_name": "Google Chronicle",
+    "description": "Google Chronicle SecOps SIEM. Pulls detections and supports UDM searches. Auth is via a Google Cloud service account JSON key with chronicle.* roles.",
+    "docs_url": "/docs/connectors/chronicle",
+    "fields": [
+      {
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "United States (us)",
+            "value": "us"
+          },
+          {
+            "label": "Europe (europe)",
+            "value": "europe"
+          },
+          {
+            "label": "Asia Southeast 1 (asia-southeast1)",
+            "value": "asia-southeast1"
+          },
+          {
+            "label": "Asia Northeast 1 (asia-northeast1)",
+            "value": "asia-northeast1"
+          },
+          {
+            "label": "Australia Southeast 1",
+            "value": "australia-southeast1"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "GCP Project ID",
+        "name": "project_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "UUID of your Chronicle tenant.",
+        "label": "Chronicle Customer ID",
+        "name": "customer_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Paste the entire service-account JSON key.",
+        "label": "Service Account JSON",
+        "name": "service_account_json",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_domain",
+      "pivot_ip",
+      "enrich_domain"
+    ],
+    "category": "network",
+    "connector_id": "cisco_umbrella",
+    "connector_name": "Cisco Umbrella",
+    "description": "Cisco Umbrella DNS + secure web gateway activity. Surfaces blocked domains, malware verdicts, and proxy events.",
+    "docs_url": "/docs/connectors/cisco_umbrella",
+    "fields": [
+      {
+        "label": "Umbrella Management API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Umbrella Management API Secret",
+        "name": "api_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Optional. If omitted, the token's default org is used.",
+        "label": "Organization ID",
+        "name": "org_id",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "saas",
+    "connector_id": "cloudflare",
+    "connector_name": "Cloudflare",
+    "description": "Cloudflare account audit logs (zone changes, API token grants, member adds, WAF/firewall edits) via the v4 API. Requires an API token scoped to Account: Audit Logs: Read.",
+    "docs_url": "/docs/connectors/cloudflare",
+    "fields": [
+      {
+        "help_text": "Found in the Cloudflare dashboard under any zone's Overview, lower-right pane (\"Account ID\").",
+        "label": "Account ID",
+        "name": "account_id",
+        "placeholder": "abc123def456...",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Account-scoped API token with the Audit Logs: Read permission. Avoid using the legacy Global API Key.",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/cloudflare",
     "oauth": {
       "supported_in_hosted": false
     }
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "network",
+    "connector_id": "cloudflare_zt",
+    "connector_name": "Cloudflare WAF + Zero Trust",
+    "description": "Cloudflare data-plane events: WAF / firewall decisions (per-zone) and Zero Trust Access audit log (per-account). Auth is an account-scoped API token with Zone:Firewall Services:Read and Account:Access Audit Logs:Read.",
+    "docs_url": "/docs/connectors/cloudflare_zt",
+    "fields": [
+      {
+        "help_text": "Pick which stream this instance pulls. Run two instances side-by-side for full coverage.",
+        "label": "Event stream",
+        "name": "mode",
+        "options": [
+          {
+            "label": "WAF / firewall events",
+            "value": "waf"
+          },
+          {
+            "label": "Zero Trust Access audit",
+            "value": "access"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "Cloudflare account ID, found in the dashboard right pane.",
+        "label": "Account ID",
+        "name": "account_id",
+        "placeholder": "abc123def456",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Required when mode=waf. Leave empty for Access mode.",
+        "label": "Zone ID (WAF mode only)",
+        "name": "zone_id",
+        "placeholder": "zone-uuid",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Account-scoped token with Zone:Firewall Services:Read (WAF) AND Account:Access Audit Logs:Read (Zero Trust).",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "confluence_audit",
+    "connector_name": "Confluence Audit",
+    "description": "Atlassian Confluence audit trail. Pulls page, space, and permission audit events via the Confluence Cloud REST API. Requires an Atlassian Cloud API token; the calling user needs site-admin access to read the full audit log.",
+    "docs_url": "/docs/connectors/confluence-audit",
+    "fields": [
+      {
+        "label": "Confluence site URL",
+        "name": "site_url",
+        "placeholder": "https://yourorg.atlassian.net",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Account email",
+        "name": "email",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generate at https://id.atlassian.com/manage-profile/security/api-tokens",
+        "label": "API token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://auth.atlassian.com/authorize",
+      "scopes": [
+        "read:audit-log:confluence",
+        "read:user:confluence",
+        "offline_access"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://auth.atlassian.com/oauth/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "isolate_host",
+      "unisolate_host"
+    ],
+    "category": "edr",
     "connector_id": "cortex_xdr",
     "connector_name": "Cortex XDR",
-    "category": "edr",
     "description": "Palo Alto Cortex XDR incidents via the public REST API.",
+    "docs_url": "/docs/connectors/cortex-xdr",
     "fields": [
       {
-        "name": "api_key_id",
-        "type": "string",
         "label": "API Key ID",
-        "required": true
-      },
-      {
-        "name": "api_key",
-        "type": "secret",
-        "label": "API Key",
-        "required": true
-      },
-      {
-        "name": "fqdn",
-        "type": "string",
-        "label": "FQDN",
+        "name": "api_key_id",
         "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Fully qualified domain name of your Cortex XDR tenant.",
+        "label": "FQDN",
+        "name": "fqdn",
         "placeholder": "api-example.xdr.us.paloaltonetworks.com",
-        "help_text": "Fully qualified domain name of your Cortex XDR tenant."
+        "required": true,
+        "type": "string"
       }
-    ],
-    "docs_url": "/docs/connectors/cortex-xdr"
+    ]
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user",
+      "isolate_host"
+    ],
+    "category": "siem",
+    "connector_id": "cortex_xsiam",
+    "connector_name": "Cortex XSIAM",
+    "description": "Palo Alto Networks Cortex XSIAM \u2014 pulls correlated incidents and supports XQL queries over the platform's data lake. Endpoint isolation is exposed as an agent action.",
+    "docs_url": "/docs/connectors/cortex-xsiam",
+    "fields": [
+      {
+        "help_text": "Found in the XSIAM console under Settings \u2192 API Keys.",
+        "label": "Tenant FQDN",
+        "name": "tenant_fqdn",
+        "placeholder": "api-yourtenant.xdr.us.paloaltonetworks.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Key ID",
+        "name": "api_key_id",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "isolate_host",
+      "unisolate_host",
+      "kill_process",
+      "quarantine_file",
+      "run_script"
+    ],
+    "category": "edr",
     "connector_id": "crowdstrike",
     "connector_name": "CrowdStrike Falcon",
-    "category": "edr",
     "description": "CrowdStrike Falcon detections via the Falcon REST API.",
+    "docs_url": "/docs/connectors/crowdstrike",
     "fields": [
       {
-        "name": "client_id",
-        "type": "string",
         "label": "Client ID",
-        "required": true
+        "name": "client_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_secret",
-        "type": "secret",
         "label": "Client Secret",
-        "required": true
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
       },
       {
-        "name": "base_url",
-        "type": "string",
-        "label": "Base URL",
-        "required": false,
         "default": "https://api.crowdstrike.com",
-        "help_text": "Override only if your tenant lives in a non-US cloud (e.g. api.eu-1.crowdstrike.com)."
+        "help_text": "Override only if your tenant lives in a non-US cloud (e.g. api.eu-1.crowdstrike.com).",
+        "label": "Base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
       }
-    ],
-    "docs_url": "/docs/connectors/crowdstrike"
+    ]
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_host",
+      "pivot_ip"
+    ],
+    "category": "ndr",
+    "connector_id": "darktrace",
+    "connector_name": "Darktrace",
+    "description": "Darktrace NDR model breaches as alerts (Threat Visualizer API).",
+    "docs_url": "/docs/connectors/darktrace",
+    "fields": [
+      {
+        "label": "Appliance URL",
+        "name": "base_url",
+        "placeholder": "https://darktrace.example.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Public Token",
+        "name": "public_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Private Token",
+        "name": "private_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "help_text": "Disable only for self-signed certificates on a private appliance.",
+        "label": "Verify SSL certificate",
+        "name": "ssl_verify",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_logs",
+      "pull_alerts",
+      "query_logs",
+      "pivot_host"
+    ],
+    "category": "siem",
+    "connector_id": "datadog",
+    "connector_name": "Datadog (Logs + APM)",
+    "description": "Datadog observability events: log search across the logs platform AND APM monitor / event-stream entries. For Cloud SIEM Security Signals use the ``datadog_cloud_siem`` connector.",
+    "docs_url": "/docs/connectors/datadog",
+    "fields": [
+      {
+        "label": "Datadog site",
+        "name": "site",
+        "options": [
+          {
+            "label": "US1 (datadoghq.com)",
+            "value": "us1"
+          },
+          {
+            "label": "US3 (us3.datadoghq.com)",
+            "value": "us3"
+          },
+          {
+            "label": "US5 (us5.datadoghq.com)",
+            "value": "us5"
+          },
+          {
+            "label": "EU1 (datadoghq.eu)",
+            "value": "eu1"
+          },
+          {
+            "label": "AP1 (ap1.datadoghq.com)",
+            "value": "ap1"
+          },
+          {
+            "label": "US1-FED (ddog-gov.com)",
+            "value": "us1-fed"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Stream",
+        "name": "mode",
+        "options": [
+          {
+            "label": "Logs Search API",
+            "value": "logs"
+          },
+          {
+            "label": "Events / APM monitors",
+            "value": "events"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "default": "status:error OR status:critical",
+        "help_text": "Logs Search query (logs mode) or tag filter (events mode, e.g. 'priority:all').",
+        "label": "Filter query",
+        "name": "query",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Application Key",
+        "name": "application_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user",
+      "pivot_ip"
+    ],
+    "category": "siem",
+    "connector_id": "datadog_cloud_siem",
+    "connector_name": "Datadog Cloud SIEM",
+    "description": "Datadog Cloud SIEM. Pulls Security Signals and supports log search across the Datadog logs platform.",
+    "docs_url": "/docs/connectors/datadog-cloud-siem",
+    "fields": [
+      {
+        "label": "Datadog site",
+        "name": "site",
+        "options": [
+          {
+            "label": "US1 (datadoghq.com)",
+            "value": "us1"
+          },
+          {
+            "label": "US3 (us3.datadoghq.com)",
+            "value": "us3"
+          },
+          {
+            "label": "US5 (us5.datadoghq.com)",
+            "value": "us5"
+          },
+          {
+            "label": "EU1 (datadoghq.eu)",
+            "value": "eu1"
+          },
+          {
+            "label": "AP1 (ap1.datadoghq.com)",
+            "value": "ap1"
+          },
+          {
+            "label": "US1-FED (ddog-gov.com)",
+            "value": "us1-fed"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Application Key",
+        "name": "application_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs"
+    ],
+    "category": "siem",
+    "connector_id": "devo",
+    "connector_name": "Devo",
+    "description": "Pull triggered alerts from the Devo Alerting API. Devo alert severity (1-5 or named) maps to the five-tier ladder. Auth is a Devo standalone API token.",
+    "docs_url": "/docs/connectors/devo",
+    "fields": [
+      {
+        "label": "Alerting API URL",
+        "name": "api_url",
+        "placeholder": "https://api-us.devo.com/alerts",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Standalone API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pivot_user",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "dropbox",
+    "connector_name": "Dropbox Business",
+    "description": "Dropbox Business team event log: sharing, sign-in, member role changes, OAuth-app authorisations, policy edits.",
+    "docs_url": "/docs/connectors/dropbox",
+    "fields": [
+      {
+        "help_text": "OAuth 2.0 token for a Dropbox Business app with the ``team_data.governance.read`` and ``events.read`` scopes.",
+        "label": "Team admin token",
+        "name": "team_admin_token",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "iam",
     "connector_id": "duo_security",
     "connector_name": "Duo Security",
-    "category": "iam",
     "description": "Duo Security authentication logs via the Admin API (HMAC-SHA1 signed).",
+    "docs_url": "/docs/connectors/duo-security",
     "fields": [
       {
-        "name": "integration_key",
-        "type": "string",
         "label": "Integration Key",
-        "required": true
-      },
-      {
-        "name": "secret_key",
-        "type": "secret",
-        "label": "Secret Key",
-        "required": true
-      },
-      {
-        "name": "api_hostname",
-        "type": "string",
-        "label": "API Hostname",
+        "name": "integration_key",
         "required": true,
-        "placeholder": "api-XXXXXXXX.duosecurity.com"
+        "type": "string"
+      },
+      {
+        "label": "Secret Key",
+        "name": "secret_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "API Hostname",
+        "name": "api_hostname",
+        "placeholder": "api-XXXXXXXX.duosecurity.com",
+        "required": true,
+        "type": "string"
       }
-    ],
-    "docs_url": "/docs/connectors/duo-security"
+    ]
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "search_siem",
+      "sync_detection_rule",
+      "update_watcher"
+    ],
+    "category": "siem",
     "connector_id": "elastic",
     "connector_name": "Elastic SIEM",
-    "category": "siem",
     "description": "Elastic Security via the ES|QL search API. Federated-search ready.",
+    "docs_url": "/docs/connectors/elastic",
     "fields": [
       {
-        "name": "base_url",
-        "type": "string",
+        "help_text": "Cluster endpoint, not Kibana.",
         "label": "Elasticsearch URL",
-        "required": true,
+        "name": "base_url",
         "placeholder": "https://elastic.example.com:9200",
-        "help_text": "Cluster endpoint, not Kibana."
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "api_key",
-        "type": "secret",
         "label": "API Key",
-        "required": false
+        "name": "api_key",
+        "required": false,
+        "type": "secret"
       },
       {
-        "name": "username",
-        "type": "string",
         "label": "Username",
-        "required": false
+        "name": "username",
+        "required": false,
+        "type": "string"
       },
       {
-        "name": "password",
-        "type": "secret",
         "label": "Password",
-        "required": false
+        "name": "password",
+        "required": false,
+        "type": "secret"
       },
       {
-        "name": "index",
-        "type": "string",
+        "default": "logs-*",
         "label": "Default Index Pattern",
+        "name": "index",
         "required": false,
-        "default": "logs-*"
+        "type": "string"
       },
       {
-        "name": "ssl_verify",
-        "type": "boolean",
-        "label": "Verify SSL certificate",
-        "required": false,
         "default": true,
-        "help_text": "Disable only for self-signed certificates in private deployments."
+        "help_text": "Disable only for self-signed certificates in private deployments.",
+        "label": "Verify SSL certificate",
+        "name": "ssl_verify",
+        "required": false,
+        "type": "boolean"
       }
-    ],
-    "docs_url": "/docs/connectors/elastic"
+    ]
   },
   {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "saas",
+    "connector_id": "email_inbox",
+    "connector_name": "Email Inbox (IMAP)",
+    "description": "Poll a mailbox over IMAP and ingest each forwarded alert email as an event. Pairs with the /v1/inbox/email webhook for environments that cannot push directly.",
+    "docs_url": "/docs/connectors/email-inbox",
+    "fields": [
+      {
+        "label": "IMAP host",
+        "name": "host",
+        "placeholder": "imap.gmail.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": 993,
+        "help_text": "Defaults to 993 (IMAPS).",
+        "label": "IMAP port",
+        "name": "port",
+        "required": false,
+        "type": "number"
+      },
+      {
+        "label": "Username",
+        "name": "username",
+        "placeholder": "aisoc-alerts@example.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Use an app-specific password for Gmail / Outlook. Never your primary account password.",
+        "label": "Password / App Password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "INBOX",
+        "label": "Mailbox / folder",
+        "name": "mailbox",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": 50,
+        "help_text": "Cap how many unread messages we pull per poll. Older unread messages will still arrive \u2014 they'll just take more polls to drain.",
+        "label": "Max messages per poll",
+        "name": "max_messages",
+        "required": false,
+        "type": "number"
+      },
+      {
+        "default": true,
+        "label": "Use SSL (IMAPS)",
+        "name": "use_ssl",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user"
+    ],
+    "category": "siem",
+    "connector_id": "exabeam",
+    "connector_name": "Exabeam",
+    "description": "Pull notable, risk-scored user sessions from Exabeam Advanced Analytics / Fusion SIEM. Session riskScore maps to the five-tier severity ladder. Auth is an API key + secret.",
+    "docs_url": "/docs/connectors/exabeam",
+    "fields": [
+      {
+        "label": "Cluster URL",
+        "name": "base_url",
+        "placeholder": "https://cluster.exabeam.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Key ID",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "API Secret",
+        "name": "api_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_logs"
+    ],
+    "category": "siem",
+    "connector_id": "falco",
+    "connector_name": "Falco",
+    "description": "Falco runtime security events for Linux and Kubernetes. Receives JSON rule hits over HTTP, either from falcosidekick or from Falco's built-in HTTP output plugin. Optionally validates a shared-secret header on each delivery.",
+    "docs_url": "/docs/connectors/falco",
+    "fields": [
+      {
+        "default": "/v1/webhooks/falco",
+        "help_text": "Path on the AiSOC ingest service where Falco / falcosidekick should POST events.",
+        "label": "Webhook path",
+        "name": "webhook_path",
+        "placeholder": "/v1/webhooks/falco",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "If set, each incoming request must include the matching value in the X-Falco-Secret header.",
+        "label": "Shared secret (optional)",
+        "name": "shared_secret",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "default": "DEBUG",
+        "help_text": "Drop events whose Falco priority is below this threshold. Defaults to DEBUG so nothing is filtered server-side.",
+        "label": "Minimum priority",
+        "name": "minimum_priority",
+        "options": [
+          {
+            "label": "DEBUG (everything)",
+            "value": "DEBUG"
+          },
+          {
+            "label": "INFORMATIONAL",
+            "value": "INFORMATIONAL"
+          },
+          {
+            "label": "NOTICE",
+            "value": "NOTICE"
+          },
+          {
+            "label": "WARNING",
+            "value": "WARNING"
+          },
+          {
+            "label": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "label": "CRITICAL",
+            "value": "CRITICAL"
+          },
+          {
+            "label": "ALERT",
+            "value": "ALERT"
+          },
+          {
+            "label": "EMERGENCY",
+            "value": "EMERGENCY"
+          }
+        ],
+        "required": false,
+        "type": "select"
+      }
+    ],
+    "oauth": {
+      "supported_in_hosted": false
+    }
+  },
+  {
+    "capabilities": [
+      "pull_logs",
+      "query_logs",
+      "query_processes",
+      "pivot_host"
+    ],
+    "category": "edr",
+    "connector_id": "fleetdm",
+    "connector_name": "FleetDM",
+    "description": "FleetDM \u2014 osquery fleet manager. Pulls host posture and saved-query results from the Fleet REST API.",
+    "docs_url": "/docs/connectors/fleetdm",
+    "fields": [
+      {
+        "help_text": "Base URL of the Fleet server (no trailing slash). The /api prefix is added automatically.",
+        "label": "Fleet Server URL",
+        "name": "base_url",
+        "placeholder": "https://fleet.example.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Long-lived token issued from the Fleet UI under Settings -> Users -> [user] -> Get API token.",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Optional Fleet Team ID to scope queries to. Leave empty to span all teams.",
+        "label": "Team ID",
+        "name": "team_id",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS Certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "cloud",
     "connector_id": "gcp_cloud_audit",
     "connector_name": "GCP Cloud Audit Logs",
-    "category": "cloud",
     "description": "Google Cloud Audit Logs (Admin Activity, Data Access, System Event) via Cloud Logging. Requires a service account with roles/logging.viewer (and roles/logging.privateLogViewer for Data Access logs).",
+    "docs_url": "/docs/connectors/gcp-cloud-audit",
     "fields": [
       {
-        "name": "project_id",
-        "type": "string",
+        "help_text": "The GCP project to read audit logs from. Use a log-sink aggregator project if you've consolidated.",
         "label": "Project ID",
-        "required": true,
+        "name": "project_id",
         "placeholder": "my-prod-project",
-        "help_text": "The GCP project to read audit logs from. Use a log-sink aggregator project if you've consolidated."
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "service_account_json",
-        "type": "secret",
+        "help_text": "Paste the full JSON key file. It will be encrypted at rest by the credential vault.",
         "label": "Service account JSON key",
+        "name": "service_account_json",
         "required": true,
-        "help_text": "Paste the full JSON key file. It will be encrypted at rest by the credential vault."
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/gcp-cloud-audit",
     "oauth": {
-      "supported_in_hosted": false,
-      "token_url": "https://oauth2.googleapis.com/token",
       "scopes": [
         "https://www.googleapis.com/auth/logging.read"
-      ]
+      ],
+      "supported_in_hosted": false,
+      "token_url": "https://oauth2.googleapis.com/token"
     }
   },
   {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
     "connector_id": "gcp_scc",
     "connector_name": "GCP Security Command Center",
-    "category": "cloud",
     "description": "Google Cloud Security Command Center findings. Requires a service account with roles/securitycenter.findingsViewer at the organization or folder level.",
+    "docs_url": "/docs/connectors/gcp-scc",
     "fields": [
       {
-        "name": "organization_id",
-        "type": "string",
+        "help_text": "Numeric GCP organization ID. SCC is org-scoped; the service account must have findingsViewer at this level (or on a parent folder/source).",
         "label": "Organization ID",
-        "required": true,
+        "name": "organization_id",
         "placeholder": "1234567890",
-        "help_text": "Numeric GCP organization ID. SCC is org-scoped; the service account must have findingsViewer at this level (or on a parent folder/source)."
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "service_account_json",
-        "type": "secret",
+        "help_text": "Paste the full JSON key file. It will be encrypted at rest by the credential vault.",
         "label": "Service account JSON key",
+        "name": "service_account_json",
         "required": true,
-        "help_text": "Paste the full JSON key file. It will be encrypted at rest by the credential vault."
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/gcp-scc",
     "oauth": {
-      "supported_in_hosted": false,
-      "token_url": "https://oauth2.googleapis.com/token",
       "scopes": [
         "https://www.googleapis.com/auth/cloud-platform"
-      ]
+      ],
+      "supported_in_hosted": false,
+      "token_url": "https://oauth2.googleapis.com/token"
     }
   },
   {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts"
+    ],
+    "category": "vcs",
     "connector_id": "github",
     "connector_name": "GitHub",
-    "category": "vcs",
     "description": "GitHub organization audit log and Code Scanning alerts. Requires a token with read:audit_log and security_events scopes (fine-grained PAT or GitHub App installation token).",
+    "docs_url": "/docs/connectors/github",
     "fields": [
       {
-        "name": "organization",
-        "type": "string",
         "label": "Organization slug",
+        "name": "organization",
+        "placeholder": "my-org",
         "required": true,
-        "placeholder": "my-org"
+        "type": "string"
       },
       {
-        "name": "token",
-        "type": "secret",
+        "help_text": "Fine-grained PAT recommended. Required scopes: read:audit_log, security_events. For GitHub App auth, paste a fresh installation token.",
         "label": "Personal Access Token or App Installation Token",
+        "name": "token",
         "required": true,
-        "help_text": "Fine-grained PAT recommended. Required scopes: read:audit_log, security_events. For GitHub App auth, paste a fresh installation token."
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/github",
     "oauth": {
-      "supported_in_hosted": false,
       "authorize_url": "https://github.com/login/oauth/authorize",
-      "token_url": "https://github.com/login/oauth/access_token",
       "scopes": [
         "read:audit_log",
-        "security_events"
-      ]
+        "security_events",
+        "repo"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://github.com/login/oauth/access_token"
     }
   },
   {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts"
+    ],
+    "category": "vcs",
+    "connector_id": "gitlab",
+    "connector_name": "GitLab",
+    "description": "GitLab group audit events and security vulnerability findings. Requires a Personal Access Token with the 'api' scope; the authenticating user must own the group. Self-managed GitLab works too \u2014 set gitlab_url to your instance base URL.",
+    "docs_url": "/docs/connectors/gitlab",
+    "fields": [
+      {
+        "help_text": "Leave default for gitlab.com. For self-managed installations, paste the URL operators use to reach the web UI (no trailing slash).",
+        "label": "GitLab base URL",
+        "name": "gitlab_url",
+        "placeholder": "https://gitlab.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Group path or numeric ID",
+        "name": "group",
+        "placeholder": "my-org or 1234567",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "PAT with the 'api' scope. The authenticating user must be a group Owner to read audit events. Security findings require Ultimate.",
+        "label": "Personal Access Token (scope: api)",
+        "name": "token",
+        "required": true,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://gitlab.com/oauth/authorize",
+      "scopes": [
+        "api",
+        "read_api"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://gitlab.com/oauth/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "saas",
     "connector_id": "google_workspace",
     "connector_name": "Google Workspace",
-    "category": "saas",
     "description": "Google Workspace audit logs (login, admin, drive, token, mobile) via the Admin SDK Reports API. Requires a service account with domain-wide delegation and an admin email to impersonate.",
+    "docs_url": "/docs/connectors/google-workspace",
     "fields": [
       {
-        "name": "admin_email",
-        "type": "string",
+        "help_text": "The Google Workspace super-admin to impersonate via domain-wide delegation. The service account's client_id must be authorized in the Admin Console with the admin.reports.audit.readonly scope.",
         "label": "Super-admin email",
-        "required": true,
+        "name": "admin_email",
         "placeholder": "audit-bot@example.com",
-        "help_text": "The Google Workspace super-admin to impersonate via domain-wide delegation. The service account's client_id must be authorized in the Admin Console with the admin.reports.audit.readonly scope."
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "service_account_json",
-        "type": "secret",
+        "help_text": "Paste the full JSON key file. Encrypted at rest by the credential vault.",
         "label": "Service account JSON key",
+        "name": "service_account_json",
         "required": true,
-        "help_text": "Paste the full JSON key file. Encrypted at rest by the credential vault."
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/google-workspace",
     "oauth": {
-      "supported_in_hosted": false,
-      "token_url": "https://oauth2.googleapis.com/token",
       "scopes": [
         "https://www.googleapis.com/auth/admin.reports.audit.readonly"
-      ]
+      ],
+      "supported_in_hosted": false,
+      "token_url": "https://oauth2.googleapis.com/token"
     }
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "enrich_ioc"
+    ],
+    "category": "saas",
+    "connector_id": "greynoise",
+    "connector_name": "GreyNoise",
+    "description": "GreyNoise threat intelligence \u2014 malicious IP observations (GNQL) as alerts.",
+    "docs_url": "/docs/connectors/greynoise",
+    "fields": [
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "classification:malicious last_seen:1d",
+        "help_text": "GreyNoise Query Language filter used to pull observations.",
+        "label": "GNQL query",
+        "name": "query",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_ip",
+      "block_ip"
+    ],
+    "category": "network",
+    "connector_id": "imperva",
+    "connector_name": "Imperva Cloud WAF",
+    "description": "Imperva Cloud WAF (Incapsula) security events / blocked attacks as alerts.",
+    "docs_url": "/docs/connectors/imperva",
+    "fields": [
+      {
+        "label": "API ID",
+        "name": "api_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Optional. Limit to one protected site.",
+        "label": "Site ID",
+        "name": "site_id",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "push_case",
+      "push_status"
+    ],
+    "category": "saas",
     "connector_id": "jira",
     "connector_name": "Jira",
-    "category": "saas",
     "description": "Jira Cloud issues via the REST API v3.",
+    "docs_url": "/docs/connectors/jira",
     "fields": [
       {
-        "name": "base_url",
-        "type": "string",
         "label": "Jira Base URL",
+        "name": "base_url",
+        "placeholder": "https://yourorg.atlassian.net",
         "required": true,
-        "placeholder": "https://yourorg.atlassian.net"
+        "type": "string"
       },
       {
-        "name": "email",
-        "type": "string",
         "label": "Email",
-        "required": true
+        "name": "email",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "api_token",
-        "type": "secret",
         "label": "API Token",
-        "required": true
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/jira"
+    "oauth": {
+      "authorize_url": "https://auth.atlassian.com/authorize",
+      "scopes": [
+        "read:jira-work",
+        "read:jira-user",
+        "write:jira-work",
+        "manage:jira-webhook",
+        "offline_access"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://auth.atlassian.com/oauth/token"
+    }
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user"
+    ],
+    "category": "iam",
+    "connector_id": "jumpcloud",
+    "connector_name": "JumpCloud",
+    "description": "JumpCloud Directory Insights \u2014 authentication and admin events as alerts.",
+    "docs_url": "/docs/connectors/jumpcloud",
+    "fields": [
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "kubernetes_audit",
+    "connector_name": "Kubernetes Audit Logs",
+    "description": "Kubernetes apiserver audit logs. Supports two delivery modes: webhook (apiserver pushes events to AiSOC's inbox) and file_tail (AiSOC tails a local audit log file forward from a byte cursor). Powers cluster-level detections under detections/cloud/kubernetes-*.yaml.",
+    "docs_url": "/docs/connectors/kubernetes-audit",
+    "fields": [
+      {
+        "default": "webhook",
+        "help_text": "Webhook is the right choice for managed clusters (EKS/GKE/AKS). File tail is the right choice for self-hosted clusters where you can mount the audit log path into the AiSOC connector pod.",
+        "label": "Delivery mode",
+        "name": "mode",
+        "options": [
+          {
+            "label": "Webhook (apiserver pushes)",
+            "value": "webhook"
+          },
+          {
+            "label": "File tail (read local audit log)",
+            "value": "file_tail"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "Human-readable cluster name. Surfaced on every normalised event so detections and investigations can filter to a single cluster.",
+        "label": "Cluster name",
+        "name": "cluster_name",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Bound inbox token created with the ``k8s-audit`` template attached. Configure your apiserver AuditSink / --audit-webhook-config-file to POST to ``/v1/inbox/<this-token>``.",
+        "label": "Inbox token (webhook mode only)",
+        "name": "inbox_token",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "default": "/var/log/kubernetes/audit/audit.log",
+        "help_text": "Absolute path to the apiserver audit log file inside the connector pod. Mount it read-only from the host or from a persistent volume the apiserver writes to.",
+        "label": "Audit log path (file_tail mode only)",
+        "name": "audit_log_path",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Optional override for where AiSOC stores its byte-position cursor. Defaults to ``<audit_log_path>.aisoc-cursor``. Use a writeable path \u2014 the connector pod needs to update this on every successful poll.",
+        "label": "Cursor file path (file_tail mode only)",
+        "name": "cursor_path",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_ip",
+      "enrich_vuln"
+    ],
+    "category": "cloud",
+    "connector_id": "lacework",
+    "connector_name": "Lacework",
+    "description": "Lacework cloud security platform. Pulls alerts (events) and supports compliance / configuration query.",
+    "docs_url": "/docs/connectors/lacework",
+    "fields": [
+      {
+        "help_text": "First label of your Lacework console URL: https://<account>.lacework.net",
+        "label": "Account subdomain",
+        "name": "account",
+        "placeholder": "yourcorp",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Subaccount (optional)",
+        "name": "subaccount",
+        "placeholder": "prod",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Access Key ID",
+        "name": "key_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Secret Key",
+        "name": "secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "llm_usage",
+    "connector_name": "AI / LLM Usage Audit",
+    "description": "Pull organization audit logs from OpenAI or Anthropic \u2014 API key creation, role grants, logging/MFA changes, project deletes. Pairs with the llm-* detection rules. Auth is an admin/audit-scoped API key.",
+    "docs_url": "/docs/connectors/llm_usage",
+    "fields": [
+      {
+        "label": "Provider",
+        "name": "provider",
+        "options": [
+          {
+            "label": "OpenAI",
+            "value": "openai"
+          },
+          {
+            "label": "Anthropic",
+            "value": "anthropic"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Admin / Audit API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "saas",
     "connector_id": "m365_audit",
     "connector_name": "Microsoft 365 Audit",
-    "category": "saas",
     "description": "Microsoft 365 unified audit log (Azure AD, Exchange, SharePoint/OneDrive, Teams, Power BI) via the Office 365 Management Activity API. Requires ActivityFeed.Read on an Azure AD app registration.",
+    "docs_url": "/docs/connectors/m365-audit",
     "fields": [
       {
-        "name": "tenant_id",
-        "type": "string",
         "label": "Tenant ID",
+        "name": "tenant_id",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
         "required": true,
-        "placeholder": "00000000-0000-0000-0000-000000000000"
+        "type": "string"
       },
       {
-        "name": "client_id",
-        "type": "string",
         "label": "Application (Client) ID",
-        "required": true
+        "name": "client_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_secret",
-        "type": "secret",
         "label": "Client Secret",
-        "required": true
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/m365-audit",
     "oauth": {
-      "supported_in_hosted": true,
       "authorize_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
       "scopes": [
         "https://manage.office.com/ActivityFeed.Read"
-      ]
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs"
+    ],
+    "category": "siem",
     "connector_id": "microsoft_sentinel",
     "connector_name": "Microsoft Sentinel",
-    "category": "siem",
     "description": "Microsoft Sentinel incidents via the Azure Security Insights REST API.",
+    "docs_url": "/docs/connectors/microsoft-sentinel",
     "fields": [
       {
-        "name": "tenant_id",
-        "type": "string",
         "label": "Tenant ID",
-        "required": true
+        "name": "tenant_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_id",
-        "type": "string",
         "label": "Client ID",
-        "required": true
+        "name": "client_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "client_secret",
-        "type": "secret",
         "label": "Client Secret",
-        "required": true
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
       },
       {
-        "name": "subscription_id",
-        "type": "string",
         "label": "Subscription ID",
-        "required": true
+        "name": "subscription_id",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "resource_group",
-        "type": "string",
         "label": "Resource Group",
-        "required": true
+        "name": "resource_group",
+        "required": true,
+        "type": "string"
       },
       {
-        "name": "workspace",
-        "type": "string",
         "label": "Workspace Name",
-        "required": true
+        "name": "workspace",
+        "required": true,
+        "type": "string"
       }
-    ],
-    "docs_url": "/docs/connectors/microsoft-sentinel"
+    ]
   },
   {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "pivot_user",
+      "enrich_domain"
+    ],
+    "category": "saas",
+    "connector_id": "mimecast",
+    "connector_name": "Mimecast",
+    "description": "Mimecast Email Security 2.0 API. Pulls held messages, SIEM events, and URL protect verdicts as alerts.",
+    "docs_url": "/docs/connectors/mimecast",
+    "fields": [
+      {
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "United States",
+            "value": "us"
+          },
+          {
+            "label": "Europe",
+            "value": "eu"
+          },
+          {
+            "label": "Germany",
+            "value": "de"
+          },
+          {
+            "label": "Australia",
+            "value": "au"
+          },
+          {
+            "label": "South Africa",
+            "value": "za"
+          },
+          {
+            "label": "United Kingdom",
+            "value": "uk"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Client Secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user",
+      "pivot_ip"
+    ],
+    "category": "network",
+    "connector_id": "netskope",
+    "connector_name": "Netskope",
+    "description": "Pull DLP / malware / anomaly / policy alerts from the Netskope REST API v2. Alert severity maps to the five-tier ladder; malware and DLP alerts are floored at high. Auth is a Netskope API v2 token.",
+    "docs_url": "/docs/connectors/netskope",
+    "fields": [
+      {
+        "label": "Tenant URL",
+        "name": "tenant_url",
+        "placeholder": "https://tenant.goskope.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API v2 Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "read_audit_trail",
+      "pivot_user"
+    ],
+    "category": "cloud",
+    "connector_id": "oci",
+    "connector_name": "Oracle Cloud Infrastructure",
+    "description": "Oracle Cloud Infrastructure audit events. Polls the OCI audit service per region using request-signed API calls (tenancy + user OCID + RSA key).",
+    "docs_url": "/docs/connectors/oci",
+    "fields": [
+      {
+        "label": "Tenancy OCID",
+        "name": "tenancy_ocid",
+        "placeholder": "ocid1.tenancy.oc1..",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "User OCID",
+        "name": "user_ocid",
+        "placeholder": "ocid1.user.oc1..",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Root compartment OCID",
+        "name": "compartment_ocid",
+        "placeholder": "ocid1.compartment.oc1..",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API key fingerprint",
+        "name": "fingerprint",
+        "placeholder": "aa:bb:cc:..",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "PEM-encoded RSA private key paired with the fingerprint above.",
+        "label": "API private key (PEM)",
+        "name": "private_key_pem",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "US East (Ashburn)",
+            "value": "us-ashburn-1"
+          },
+          {
+            "label": "US West (Phoenix)",
+            "value": "us-phoenix-1"
+          },
+          {
+            "label": "Germany Central (Frankfurt)",
+            "value": "eu-frankfurt-1"
+          },
+          {
+            "label": "Netherlands NW (Amsterdam)",
+            "value": "eu-amsterdam-1"
+          },
+          {
+            "label": "UK South (London)",
+            "value": "uk-london-1"
+          },
+          {
+            "label": "Japan East (Tokyo)",
+            "value": "ap-tokyo-1"
+          },
+          {
+            "label": "India West (Mumbai)",
+            "value": "ap-mumbai-1"
+          },
+          {
+            "label": "Australia East (Sydney)",
+            "value": "ap-sydney-1"
+          },
+          {
+            "label": "Canada Southeast (Toronto)",
+            "value": "ca-toronto-1"
+          },
+          {
+            "label": "Saudi Arabia West (Jeddah)",
+            "value": "me-jeddah-1"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "disable_user",
+      "reset_password",
+      "suspend_session",
+      "force_mfa",
+      "revoke_session"
+    ],
+    "category": "iam",
     "connector_id": "okta",
     "connector_name": "Okta Identity",
-    "category": "iam",
     "description": "Okta system log events (auth, MFA, account locks, blocked requests).",
+    "docs_url": "/docs/connectors/okta",
     "fields": [
       {
-        "name": "domain",
-        "type": "string",
         "label": "Okta Domain",
+        "name": "domain",
+        "placeholder": "https://yourorg.okta.com",
         "required": true,
-        "placeholder": "https://yourorg.okta.com"
+        "type": "string"
       },
       {
-        "name": "api_token",
-        "type": "secret",
         "label": "API Token",
-        "required": true
-      }
-    ],
-    "docs_url": "/docs/connectors/okta"
-  },
-  {
-    "connector_id": "onepassword",
-    "connector_name": "1Password Events",
-    "category": "iam",
-    "description": "1Password sign-in attempts via the Events Reporting API.",
-    "fields": [
-      {
         "name": "api_token",
-        "type": "secret",
-        "label": "API Token (Bearer)",
-        "required": true
-      },
-      {
-        "name": "base_url",
-        "type": "string",
-        "label": "Events API Base URL",
-        "required": false,
-        "default": "https://events.1password.com",
-        "help_text": "Override only for 1Password Business accounts on a non-default region."
-      }
-    ],
-    "docs_url": "/docs/connectors/onepassword"
-  },
-  {
-    "connector_id": "proofpoint",
-    "connector_name": "Proofpoint TAP",
-    "category": "saas",
-    "description": "Proofpoint Targeted Attack Protection \u2014 blocked messages via the SIEM API.",
-    "fields": [
-      {
-        "name": "service_principal",
-        "type": "string",
-        "label": "Service Principal",
-        "required": true
-      },
-      {
-        "name": "service_secret",
-        "type": "secret",
-        "label": "Service Secret",
-        "required": true
-      }
-    ],
-    "docs_url": "/docs/connectors/proofpoint"
-  },
-  {
-    "connector_id": "sentinelone",
-    "connector_name": "SentinelOne",
-    "category": "edr",
-    "description": "SentinelOne threat detections via the Management Console API.",
-    "fields": [
-      {
-        "name": "api_token",
-        "type": "secret",
-        "label": "API Token",
-        "required": true
-      },
-      {
-        "name": "base_url",
-        "type": "string",
-        "label": "Base URL",
         "required": true,
-        "placeholder": "https://usea1-partners.sentinelone.net"
-      },
-      {
-        "name": "site_id",
-        "type": "string",
-        "label": "Site ID",
-        "required": false,
-        "help_text": "Optional. Limits results to a single site."
+        "type": "secret"
       }
     ],
-    "docs_url": "/docs/connectors/sentinelone"
-  },
-  {
-    "connector_id": "servicenow",
-    "connector_name": "ServiceNow",
-    "category": "saas",
-    "description": "ServiceNow incidents via the Table API.",
-    "fields": [
-      {
-        "name": "instance_url",
-        "type": "string",
-        "label": "Instance URL",
-        "required": true,
-        "placeholder": "https://yourinstance.service-now.com"
-      },
-      {
-        "name": "username",
-        "type": "string",
-        "label": "Username",
-        "required": true
-      },
-      {
-        "name": "password",
-        "type": "secret",
-        "label": "Password",
-        "required": true
-      }
-    ],
-    "docs_url": "/docs/connectors/servicenow"
-  },
-  {
-    "connector_id": "snyk",
-    "connector_name": "Snyk",
-    "category": "vcs",
-    "description": "Snyk vulnerability issues via the REST API.",
-    "fields": [
-      {
-        "name": "api_token",
-        "type": "secret",
-        "label": "API Token",
-        "required": true
-      },
-      {
-        "name": "org_id",
-        "type": "string",
-        "label": "Organization ID",
-        "required": true,
-        "help_text": "Snyk organization UUID (Settings \u2192 General \u2192 Organization ID)."
-      },
-      {
-        "name": "base_url",
-        "type": "string",
-        "label": "Base URL",
-        "required": false,
-        "default": "https://api.snyk.io",
-        "help_text": "Override for Snyk Enterprise on-prem or EU tenants."
-      }
-    ],
-    "docs_url": "/docs/connectors/snyk"
-  },
-  {
-    "connector_id": "splunk",
-    "connector_name": "Splunk SIEM",
-    "category": "siem",
-    "description": "Splunk Enterprise / Cloud notable events via the REST API.",
-    "fields": [
-      {
-        "name": "base_url",
-        "type": "string",
-        "label": "Splunk URL",
-        "required": true,
-        "placeholder": "https://splunk.example.com:8089",
-        "help_text": "Management port (default 8089), not the web UI port."
-      },
-      {
-        "name": "token",
-        "type": "secret",
-        "label": "HEC / API Token",
-        "required": true
-      },
-      {
-        "name": "saved_search",
-        "type": "string",
-        "label": "Saved Search Name",
-        "required": false,
-        "default": "AiSOC_Alerts"
-      },
-      {
-        "name": "ssl_verify",
-        "type": "boolean",
-        "label": "Verify SSL certificate",
-        "required": false,
-        "default": true,
-        "help_text": "Disable only for self-signed certificates in private deployments."
-      }
-    ],
-    "docs_url": "/docs/connectors/splunk"
-  },
-  {
-    "connector_id": "tailscale",
-    "connector_name": "Tailscale",
-    "category": "network",
-    "description": "Tailscale zero-trust network audit logs. Captures every ACL change, device approval / removal, key rotation, user role change, and admin configuration mutation in your tailnet.",
-    "fields": [
-      {
-        "name": "tailnet",
-        "type": "string",
-        "label": "Tailnet",
-        "required": true,
-        "placeholder": "example.com or -",
-        "help_text": "Your tailnet name (the organisation slug shown in the Tailscale admin console, e.g. 'example.com'). Use '-' to use the default tailnet associated with the API key / OAuth token."
-      },
-      {
-        "name": "api_key",
-        "type": "secret",
-        "label": "API Key (optional if using OAuth)",
-        "required": false,
-        "help_text": "Tailscale API key (starts with 'tskey-api-'). Use either this *or* the OAuth client credentials below \u2014 not both."
-      },
-      {
-        "name": "client_id",
-        "type": "string",
-        "label": "OAuth Client ID (optional)",
-        "required": false,
-        "help_text": "OAuth 2.0 client ID from the Tailscale admin console. Required scope: 'audit:read'."
-      },
-      {
-        "name": "client_secret",
-        "type": "secret",
-        "label": "OAuth Client Secret (optional)",
-        "required": false,
-        "help_text": "OAuth 2.0 client secret. Only needed when using client-credential flow instead of an API key."
-      }
-    ],
-    "docs_url": "/docs/connectors/tailscale",
     "oauth": {
-      "supported_in_hosted": false,
-      "authorize_url": "https://login.tailscale.com/admin/settings/oauth",
-      "token_url": "https://api.tailscale.com/api/v2/oauth/token",
+      "authorize_url": "{domain}/oauth2/v1/authorize",
       "scopes": [
-        "audit:read"
-      ]
+        "okta.logs.read",
+        "okta.users.read",
+        "okta.groups.read",
+        "offline_access"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "{domain}/oauth2/v1/token"
     }
   },
   {
-    "connector_id": "wiz",
-    "connector_name": "Wiz",
-    "category": "cloud",
-    "description": "Wiz cloud security issues via the GraphQL API.",
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "iam",
+    "connector_id": "onepassword",
+    "connector_name": "1Password Events",
+    "description": "1Password sign-in attempts via the Events Reporting API.",
+    "docs_url": "/docs/connectors/onepassword",
     "fields": [
       {
-        "name": "client_id",
-        "type": "string",
-        "label": "Client ID",
-        "required": true
-      },
-      {
-        "name": "client_secret",
-        "type": "secret",
-        "label": "Client Secret",
-        "required": true
-      },
-      {
-        "name": "api_endpoint_url",
-        "type": "string",
-        "label": "API Endpoint URL",
+        "label": "API Token (Bearer)",
+        "name": "api_token",
         "required": true,
-        "placeholder": "https://api.us20.app.wiz.io/graphql",
-        "help_text": "Your tenant's GraphQL API endpoint."
+        "type": "secret"
       },
       {
-        "name": "auth_url",
-        "type": "string",
-        "label": "Auth URL",
+        "default": "https://events.1password.com",
+        "help_text": "Override only for 1Password Business accounts on a non-default region.",
+        "label": "Events API Base URL",
+        "name": "base_url",
         "required": false,
-        "default": "https://auth.app.wiz.io/oauth/token",
-        "help_text": "OAuth2 token endpoint. Override only for gov-cloud tenants."
+        "type": "string"
       }
-    ],
-    "docs_url": "/docs/connectors/wiz"
+    ]
   },
   {
-    "connector_id": "zscaler",
-    "connector_name": "Zscaler Internet Access",
-    "category": "network",
-    "description": "Zscaler Internet Access web security logs via the ZIA API.",
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "opsgenie",
+    "connector_name": "Opsgenie",
+    "description": "Opsgenie on-call platform. Pulls alerts and tenant audit log events (API key issuance, role changes, integration edits) via the REST API. Choose the region matching your Opsgenie account.",
+    "docs_url": "/docs/connectors/opsgenie",
     "fields": [
       {
-        "name": "api_key",
-        "type": "secret",
         "label": "API Key",
-        "required": true
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
       },
       {
-        "name": "cloud",
-        "type": "string",
-        "label": "ZIA Cloud",
-        "required": false,
-        "default": "zscloud.net",
-        "help_text": "ZIA cloud domain (e.g. zscloud.net, zscaler.net)."
-      },
-      {
-        "name": "username",
-        "type": "string",
-        "label": "Admin Username",
-        "required": true
-      },
-      {
-        "name": "password",
-        "type": "secret",
-        "label": "Admin Password",
-        "required": true
+        "default": "us",
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "US (api.opsgenie.com)",
+            "value": "us"
+          },
+          {
+            "label": "EU (api.eu.opsgenie.com)",
+            "value": "eu"
+          }
+        ],
+        "required": true,
+        "type": "select"
       }
     ],
-    "docs_url": "/docs/connectors/zscaler"
+    "oauth": {
+      "supported_in_hosted": false
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "orca",
+    "connector_name": "Orca Security",
+    "description": "Orca Security CNAPP. Pulls open alerts across workload, container, cloud configuration, identity, and data risk surfaces from the unified /api/alerts REST endpoint.",
+    "docs_url": "/docs/connectors/orca",
+    "fields": [
+      {
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "https://api.orcasecurity.io",
+        "help_text": "Override only if your tenant lives on a region-specific Orca endpoint. The default works for the standard commercial cloud.",
+        "label": "API URL",
+        "name": "api_url",
+        "placeholder": "https://api.orcasecurity.io",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_logs",
+      "query_logs",
+      "query_processes",
+      "pivot_host"
+    ],
+    "category": "edr",
+    "connector_id": "osctrl",
+    "connector_name": "osctrl",
+    "description": "osctrl \u2014 open-source osquery fleet manager. Pulls query results and node telemetry from the osctrl admin API.",
+    "docs_url": "/docs/connectors/osctrl",
+    "fields": [
+      {
+        "help_text": "Base URL of the osctrl admin server (no trailing slash). Use https in production.",
+        "label": "osctrl Admin URL",
+        "name": "base_url",
+        "placeholder": "https://osctrl.example.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Long-lived admin token issued from the osctrl UI under Manage Users -> generate token.",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "prod",
+        "help_text": "osctrl environment to scope queries to (e.g. 'prod', 'corp'). Required for distributed queries.",
+        "label": "Environment Name",
+        "name": "environment",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS Certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "pagerduty",
+    "connector_name": "PagerDuty",
+    "description": "PagerDuty on-call platform. Pulls incident lifecycle events and tenant audit records (role changes, integration edits, API key issuance) via the REST API. Requires a read-only REST API key.",
+    "docs_url": "/docs/connectors/pagerduty",
+    "fields": [
+      {
+        "help_text": "Generate under Integrations \u2192 API Access Keys. Read-only access is sufficient.",
+        "label": "REST API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Your acme.pagerduty.com subdomain. Used to build clickable links in normalised events; not required for ingestion.",
+        "label": "Subdomain (optional)",
+        "name": "subdomain",
+        "placeholder": "acme",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://app.pagerduty.com/oauth/authorize",
+      "scopes": [
+        "read"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://identity.pagerduty.com/oauth/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "prisma_cloud",
+    "connector_name": "Prisma Cloud",
+    "description": "Prisma Cloud cloud security platform. Pulls open alerts across CSPM, CWPP, CIEM, and DSPM surfaces via the v1 REST API.",
+    "docs_url": "/docs/connectors/prisma-cloud",
+    "fields": [
+      {
+        "help_text": "Region-specific base URL of the Prisma Cloud REST API. See Prisma Cloud \u2192 System \u2192 API Endpoints for the value for your tenant (e.g. ``api2.eu``, ``api.gov``).",
+        "label": "API URL",
+        "name": "api_url",
+        "placeholder": "https://api.prismacloud.io",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Access Key ID",
+        "name": "access_key_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Secret Key",
+        "name": "secret_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Tenant-specific Compute (Twistlock) API base URL. Leave blank \u2014 v7.1.0 only consumes the unified ``/alert`` endpoint.",
+        "label": "Compute API URL (optional)",
+        "name": "compute_url",
+        "placeholder": "https://us-east1.cloud.twistlock.com/<tenant-id>",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "saas",
+    "connector_id": "proofpoint",
+    "connector_name": "Proofpoint TAP",
+    "description": "Proofpoint Targeted Attack Protection \u2014 blocked messages via the SIEM API.",
+    "docs_url": "/docs/connectors/proofpoint",
+    "fields": [
+      {
+        "label": "Service Principal",
+        "name": "service_principal",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Service Secret",
+        "name": "service_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs"
+    ],
+    "category": "siem",
+    "connector_id": "qradar",
+    "connector_name": "IBM QRadar",
+    "description": "Pull open offenses from IBM QRadar via the REST API (/api/siem/offenses). Offense magnitude (1-10) maps to the five-tier severity ladder. Auth is a QRadar SEC token.",
+    "docs_url": "/docs/connectors/qradar",
+    "fields": [
+      {
+        "label": "Console URL",
+        "name": "console_url",
+        "placeholder": "https://qradar.example.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "QRadar authorized-service SEC token.",
+        "label": "SEC Token",
+        "name": "sec_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "help_text": "Disable only for consoles using an internal/self-signed CA.",
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "enrich_vuln",
+      "enrich_asset"
+    ],
+    "category": "cloud",
+    "connector_id": "qualys",
+    "connector_name": "Qualys VMDR",
+    "description": "Qualys Vulnerability Management (VMDR) host detections as alerts.",
+    "docs_url": "/docs/connectors/qualys",
+    "fields": [
+      {
+        "label": "API URL",
+        "name": "base_url",
+        "placeholder": "https://qualysapi.qg2.apps.qualys.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Username",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user"
+    ],
+    "category": "siem",
+    "connector_id": "rapid7_insightidr",
+    "connector_name": "Rapid7 InsightIDR",
+    "description": "Rapid7 InsightIDR cloud SIEM/XDR. Pulls investigations and supports log search across collected sources.",
+    "docs_url": "/docs/connectors/rapid7-insightidr",
+    "fields": [
+      {
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "United States (us)",
+            "value": "us"
+          },
+          {
+            "label": "United States 2 (us2)",
+            "value": "us2"
+          },
+          {
+            "label": "United States 3 (us3)",
+            "value": "us3"
+          },
+          {
+            "label": "Europe (eu)",
+            "value": "eu"
+          },
+          {
+            "label": "Canada (ca)",
+            "value": "ca"
+          },
+          {
+            "label": "Australia (au)",
+            "value": "au"
+          },
+          {
+            "label": "Asia Pacific (ap)",
+            "value": "ap"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Insight API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "query_logs",
+      "pivot_user",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "salesforce",
+    "connector_name": "Salesforce",
+    "description": "Salesforce Event Monitoring + Setup Audit Trail. Pulls EventLogFile entries (logins, API usage, report exports) and SetupAuditTrail (admin config changes).",
+    "docs_url": "/docs/connectors/salesforce",
+    "fields": [
+      {
+        "label": "My Domain URL",
+        "name": "instance_url",
+        "placeholder": "https://yourcorp.my.salesforce.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Connected App Consumer Key",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Connected App Consumer Secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Provided automatically when you connect via OAuth.",
+        "label": "Refresh Token",
+        "name": "refresh_token",
+        "required": false,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://login.salesforce.com/services/oauth2/authorize",
+      "scopes": [
+        "api",
+        "refresh_token",
+        "offline_access"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://login.salesforce.com/services/oauth2/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user"
+    ],
+    "category": "siem",
+    "connector_id": "securonix",
+    "connector_name": "Securonix",
+    "description": "Pull incidents from Securonix Next-Gen SIEM / UEBA. Incident priority (Low/Medium/High/Critical) maps directly to the five-tier severity ladder. Auth is a tenant API token.",
+    "docs_url": "/docs/connectors/securonix",
+    "fields": [
+      {
+        "label": "Tenant URL",
+        "name": "tenant_url",
+        "placeholder": "https://tenant.securonix.net/Snypr",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "isolate_host",
+      "unisolate_host",
+      "quarantine_file"
+    ],
+    "category": "edr",
+    "connector_id": "sentinelone",
+    "connector_name": "SentinelOne",
+    "description": "SentinelOne threat detections via the Management Console API.",
+    "docs_url": "/docs/connectors/sentinelone",
+    "fields": [
+      {
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "label": "Base URL",
+        "name": "base_url",
+        "placeholder": "https://usea1-partners.sentinelone.net",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Optional. Limits results to a single site.",
+        "label": "Site ID",
+        "name": "site_id",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "push_case",
+      "push_status"
+    ],
+    "category": "saas",
+    "connector_id": "servicenow",
+    "connector_name": "ServiceNow",
+    "description": "ServiceNow incidents via the Table API.",
+    "docs_url": "/docs/connectors/servicenow",
+    "fields": [
+      {
+        "label": "Instance URL",
+        "name": "instance_url",
+        "placeholder": "https://yourinstance.service-now.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Username",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pivot_user",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "slack_audit",
+    "connector_name": "Slack Audit Logs",
+    "description": "Slack Enterprise Grid Audit Logs. Pulls workspace and org-level audit events (logins, channel changes, file shares, app installs). Requires the auditlogs:read scope on an Org-level Slack app.",
+    "docs_url": "/docs/connectors/slack-audit",
+    "fields": [
+      {
+        "help_text": "OrgLevel OAuth bot token with the auditlogs:read scope, issued from a Slack Enterprise Grid app.",
+        "label": "Org-level access token",
+        "name": "access_token",
+        "required": true,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://slack.com/oauth/v2/authorize",
+      "scopes": [
+        "auditlogs:read"
+      ],
+      "supported_in_hosted": true,
+      "token_url": "https://slack.com/api/oauth.v2.access"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "query_logs",
+      "read_audit_trail",
+      "pivot_user"
+    ],
+    "category": "saas",
+    "connector_id": "snowflake",
+    "connector_name": "Snowflake Audit",
+    "description": "Snowflake account_usage audit. Polls login_history and query_history for authentication failures, role grants, and data-exfil-shaped query patterns via the SQL API with key-pair JWT authentication.",
+    "docs_url": "/docs/connectors/snowflake",
+    "fields": [
+      {
+        "help_text": "Account locator from your Snowflake URL.",
+        "label": "Account locator",
+        "name": "account",
+        "placeholder": "abc12345.us-east-1",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Snowflake user the JWT identifies.",
+        "label": "Service user",
+        "name": "user",
+        "placeholder": "AISOC_SVC",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Role",
+        "name": "role",
+        "placeholder": "ACCOUNTADMIN",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Warehouse",
+        "name": "warehouse",
+        "placeholder": "AUDIT_WH",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "PKCS#8 PEM-encoded RSA private key paired with the public key registered on the service user. Encrypted at rest by CredentialVault.",
+        "label": "RSA private key (PKCS#8 PEM)",
+        "name": "private_key_pem",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "vcs",
+    "connector_id": "snyk",
+    "connector_name": "Snyk",
+    "description": "Snyk vulnerability issues via the REST API.",
+    "docs_url": "/docs/connectors/snyk",
+    "fields": [
+      {
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Snyk organization UUID (Settings \u2192 General \u2192 Organization ID).",
+        "label": "Organization ID",
+        "name": "org_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": "https://api.snyk.io",
+        "help_text": "Override for Snyk Enterprise on-prem or EU tenants.",
+        "label": "Base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "search_siem",
+      "create_notable_event"
+    ],
+    "category": "siem",
+    "connector_id": "splunk",
+    "connector_name": "Splunk SIEM",
+    "description": "Splunk Enterprise / Cloud notable events via the REST API.",
+    "docs_url": "/docs/connectors/splunk",
+    "fields": [
+      {
+        "help_text": "Management port (default 8089), not the web UI port.",
+        "label": "Splunk URL",
+        "name": "base_url",
+        "placeholder": "https://splunk.example.com:8089",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "HEC / API Token",
+        "name": "token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "AiSOC_Alerts",
+        "help_text": "Dispatched via the saved-search endpoint. Leave blank to search index=notable.",
+        "label": "Saved Search Name",
+        "name": "saved_search",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": 500,
+        "help_text": "Number of results fetched per page. Polling pages through all results \u2014 there is no 100-event cap.",
+        "label": "Results page size",
+        "name": "page_size",
+        "required": false,
+        "type": "number"
+      },
+      {
+        "default": true,
+        "help_text": "Disable only for self-signed certificates in private deployments.",
+        "label": "Verify SSL certificate",
+        "name": "ssl_verify",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_user",
+      "quarantine_file"
+    ],
+    "category": "saas",
+    "connector_id": "sublime_security",
+    "connector_name": "Sublime Security",
+    "description": "Sublime Security inbound-email detections. Polls /v1/messages for malicious + suspicious verdicts and links them to the originating mailbox + sender.",
+    "docs_url": "/docs/connectors/sublime_security",
+    "fields": [
+      {
+        "default": "https://api.platform.sublimesecurity.com",
+        "help_text": "Override only for self-hosted / regional Sublime tenants.",
+        "label": "API base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Sublime \u2192 Settings \u2192 API \u2192 Create token.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user"
+    ],
+    "category": "siem",
+    "connector_id": "sumo_logic",
+    "connector_name": "Sumo Logic Cloud SIEM",
+    "description": "Sumo Logic Cloud SIEM Enterprise (CSE). Pulls insights and signals, and supports log search jobs across the platform.",
+    "docs_url": "/docs/connectors/sumo-logic",
+    "fields": [
+      {
+        "label": "Deployment",
+        "name": "deployment",
+        "options": [
+          {
+            "label": "United States (us1)",
+            "value": "us1"
+          },
+          {
+            "label": "United States 2 (us2)",
+            "value": "us2"
+          },
+          {
+            "label": "Europe (eu)",
+            "value": "eu"
+          },
+          {
+            "label": "Australia (au)",
+            "value": "au"
+          },
+          {
+            "label": "Germany (de)",
+            "value": "de"
+          },
+          {
+            "label": "Japan (jp)",
+            "value": "jp"
+          },
+          {
+            "label": "Canada (ca)",
+            "value": "ca"
+          },
+          {
+            "label": "India (in)",
+            "value": "in"
+          },
+          {
+            "label": "Sumo Logic FedRAMP (fed)",
+            "value": "fed"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Access ID",
+        "name": "access_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Access Key",
+        "name": "access_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_logs",
+      "pivot_host",
+      "read_audit_trail"
+    ],
+    "category": "siem",
+    "connector_id": "sysdig",
+    "connector_name": "Sysdig Secure",
+    "description": "Sysdig Secure runtime / cloud detection events. Polls the Secure Events API for Falco-style policy hits across Kubernetes workloads and cloud accounts.",
+    "docs_url": "/docs/connectors/sysdig",
+    "fields": [
+      {
+        "label": "Sysdig region",
+        "name": "region",
+        "options": [
+          {
+            "label": "US-East (secure.sysdig.com)",
+            "value": "us1"
+          },
+          {
+            "label": "US-West (us2.app.sysdig.com)",
+            "value": "us2"
+          },
+          {
+            "label": "US3 (app.us3.sysdig.com)",
+            "value": "us3"
+          },
+          {
+            "label": "US4 (app.us4.sysdig.com)",
+            "value": "us4"
+          },
+          {
+            "label": "EU-Frankfurt (eu1.app.sysdig.com)",
+            "value": "eu1"
+          },
+          {
+            "label": "Australia (app.au1.sysdig.com)",
+            "value": "au1"
+          },
+          {
+            "label": "Middle East (app.me2.sysdig.com)",
+            "value": "me2"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "Sysdig Secure API token. Settings \u2192 API \u2192 Tokens. Needs read access to Secure Events.",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_logs"
+    ],
+    "category": "network",
+    "connector_id": "syslog_cef",
+    "connector_name": "Syslog / CEF",
+    "description": "Generic listener for appliances that speak syslog + ArcSight CEF. A syslog receiver writes messages to a spool endpoint; this connector parses the CEF header + extension and maps CEF severity (0-10) to the five-tier ladder. Non-CEF lines are ingested at info.",
+    "docs_url": "/docs/connectors/syslog_cef",
+    "fields": [
+      {
+        "label": "Spool URL",
+        "name": "spool_url",
+        "placeholder": "https://syslog-receiver.internal/spool",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Spool token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit"
+    ],
+    "category": "network",
+    "connector_id": "tailscale",
+    "connector_name": "Tailscale",
+    "description": "Tailscale zero-trust network audit logs. Captures every ACL change, device approval / removal, key rotation, user role change, and admin configuration mutation in your tailnet.",
+    "docs_url": "/docs/connectors/tailscale",
+    "fields": [
+      {
+        "help_text": "Your tailnet name (the organisation slug shown in the Tailscale admin console, e.g. 'example.com'). Use '-' to use the default tailnet associated with the API key / OAuth token.",
+        "label": "Tailnet",
+        "name": "tailnet",
+        "placeholder": "example.com or -",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Tailscale API key (starts with 'tskey-api-'). Use either this *or* the OAuth client credentials below \u2014 not both.",
+        "label": "API Key (optional if using OAuth)",
+        "name": "api_key",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "OAuth 2.0 client ID from the Tailscale admin console. Required scope: 'audit:read'.",
+        "label": "OAuth Client ID (optional)",
+        "name": "client_id",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "OAuth 2.0 client secret. Only needed when using client-credential flow instead of an API key.",
+        "label": "OAuth Client Secret (optional)",
+        "name": "client_secret",
+        "required": false,
+        "type": "secret"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://login.tailscale.com/admin/settings/oauth",
+      "scopes": [
+        "audit:read"
+      ],
+      "supported_in_hosted": false,
+      "token_url": "https://api.tailscale.com/api/v2/oauth/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_host",
+      "pivot_ip",
+      "enrich_vuln",
+      "enrich_asset"
+    ],
+    "category": "cloud",
+    "connector_id": "tenable_io",
+    "connector_name": "Tenable.io",
+    "description": "Tenable.io / Tenable Vulnerability Management. Pulls vulnerability findings as alerts and exposes asset and vulnerability enrichment for the agent.",
+    "docs_url": "/docs/connectors/tenable-io",
+    "fields": [
+      {
+        "label": "Access Key",
+        "name": "access_key",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Secret Key",
+        "name": "secret_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "tines",
+    "connector_name": "Tines",
+    "description": "Tines automation platform. Pulls story / agent audit events and case lifecycle events via the Tines REST API. Requires a personal access token with at least read-only scope on the target tenant.",
+    "docs_url": "/docs/connectors/tines",
+    "fields": [
+      {
+        "help_text": "Your Tines tenant URL, including scheme. For self-hosted deployments use the full HTTPS URL of the Rails app.",
+        "label": "Tines tenant URL",
+        "name": "base_url",
+        "placeholder": "https://acme.tines.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generate under Profile \u2192 Personal Access Tokens. Read-only scope is sufficient; the connector never writes back to Tines.",
+        "label": "Personal Access Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Scope event ingestion to a single Team. Leave blank to ingest across all teams the token can see.",
+        "label": "Team ID (optional)",
+        "name": "team_id",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "oauth": {
+      "supported_in_hosted": false
+    }
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_alerts",
+      "read_audit_trail"
+    ],
+    "category": "saas",
+    "connector_id": "torq",
+    "connector_name": "Torq",
+    "description": "Torq automation platform. Streams workflow execution outcomes and tenant audit events (workflow edits, credential changes, role assignments). Requires an API key pair (key_id + secret) issued under Settings \u2192 API Keys.",
+    "docs_url": "/docs/connectors/torq",
+    "fields": [
+      {
+        "label": "API Key ID",
+        "name": "key_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API Key Secret",
+        "name": "key_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "https://api.torq.io/public/v1",
+        "help_text": "Override only for regional or self-hosted Torq deployments. Leave blank for the SaaS default.",
+        "label": "API Base URL (advanced)",
+        "name": "base_url",
+        "placeholder": "https://api.torq.io/public/v1",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "oauth": {
+      "supported_in_hosted": false
+    }
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "pivot_host",
+      "pivot_user"
+    ],
+    "category": "siem",
+    "connector_id": "trellix_helix",
+    "connector_name": "Trellix Helix",
+    "description": "Trellix Helix (formerly FireEye Helix) XDR \u2014 alerts feed plus MQL search over raw events. Customer ID is the slug shown in your Helix console URL after /helix/id/.",
+    "docs_url": "/docs/connectors/trellix-helix",
+    "fields": [
+      {
+        "default": "https://apps.fireeye.com",
+        "help_text": "Most tenants use the default. EU customers may use a regional FQDN.",
+        "label": "Helix base URL",
+        "name": "base_url",
+        "placeholder": "https://apps.fireeye.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The slug between '/helix/id/' and '/' in your Helix console URL. Lowercase alphanumeric.",
+        "label": "Customer ID",
+        "name": "customer_id",
+        "placeholder": "abcd1234",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generated under Configure \u2192 Authentication \u2192 API Keys.",
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_audit",
+      "pivot_host",
+      "isolate_host",
+      "unisolate_host"
+    ],
+    "category": "edr",
+    "connector_id": "trend_vision_one",
+    "connector_name": "Trend Vision One",
+    "description": "Trend Micro Vision One XDR. Pulls Workbench alerts and OAT (Observed Attack Technique) detections. Supports endpoint isolation as an agent capability.",
+    "docs_url": "/docs/connectors/trend-vision-one",
+    "fields": [
+      {
+        "help_text": "Vision One has region-specific hostnames; using the wrong one returns 401.",
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "United States",
+            "value": "us"
+          },
+          {
+            "label": "Europe",
+            "value": "eu"
+          },
+          {
+            "label": "India",
+            "value": "in"
+          },
+          {
+            "label": "Japan",
+            "value": "jp"
+          },
+          {
+            "label": "Singapore",
+            "value": "sg"
+          },
+          {
+            "label": "Australia",
+            "value": "au"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "Bearer token issued from Vision One console: Administration \u2192 API Keys.",
+        "label": "API Token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "read_audit_trail"
+    ],
+    "category": "iam",
+    "connector_id": "vault",
+    "connector_name": "HashiCorp Vault Audit",
+    "description": "HashiCorp Vault audit-device events. Vault audit logs are pushed by a sidecar tailing the file/socket device into the connectors service buffer; this connector drains the buffer per poll. test_connection verifies the cluster health and token policy via the Vault REST API.",
+    "docs_url": "/docs/connectors/vault",
+    "fields": [
+      {
+        "help_text": "Cluster URL used by test_connection. Can be left blank to skip the live probe.",
+        "label": "Vault address",
+        "name": "vault_addr",
+        "placeholder": "https://vault.example.com:8200",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Token with sys/audit list / sys/health read. Used only by test_connection \u2014 events flow via the audit-device sidecar, not through this token.",
+        "label": "Vault token (audit-list policy)",
+        "name": "vault_token",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "Optional. Sent as X-Vault-Namespace.",
+        "label": "Vault Enterprise namespace",
+        "name": "namespace",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": "5000",
+        "label": "Max buffered audit lines",
+        "name": "buffer_size",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "query_logs",
+      "search_siem",
+      "pivot_host"
+    ],
+    "category": "siem",
+    "connector_id": "wazuh",
+    "connector_name": "Wazuh",
+    "description": "Wazuh \u2014 open-source XDR/SIEM. Pulls alerts from the Wazuh indexer (OpenSearch-compatible) and maps the 0-15 rule level onto the AiSOC severity ladder.",
+    "docs_url": "/docs/connectors/wazuh",
+    "fields": [
+      {
+        "help_text": "Base URL of the Wazuh indexer (NOT the dashboard or manager). Default port is 9200.",
+        "label": "Wazuh Indexer URL",
+        "name": "indexer_url",
+        "placeholder": "https://wazuh.example.com:9200",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Indexer user with read access to wazuh-alerts-*. Create a dedicated read-only role in production.",
+        "label": "Indexer Username",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Indexer Password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "wazuh-alerts-*",
+        "help_text": "Override only if you have re-templated the default Wazuh index naming.",
+        "label": "Alert Index Pattern",
+        "name": "index_pattern",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "default": 7,
+        "help_text": "Drop alerts with rule.level below this value at ingest. Default 7 keeps low-signal noise out of the lake; lower to 3 for full audit coverage.",
+        "label": "Minimum Rule Level",
+        "name": "min_rule_level",
+        "required": false,
+        "type": "number"
+      },
+      {
+        "default": true,
+        "help_text": "Disable only for self-signed lab clusters. Production deployments must install the CA chain.",
+        "label": "Verify TLS Certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pull_logs",
+      "pivot_host"
+    ],
+    "category": "edr",
+    "connector_id": "windows_event",
+    "connector_name": "Windows Event / Sysmon",
+    "description": "Pull Windows Security + Sysmon events from a Windows Event Forwarding (WEF) collector's JSON spool endpoint. Severity is derived from channel + Event ID (log clears, service installs, process injection floored appropriately).",
+    "docs_url": "/docs/connectors/windows_event",
+    "fields": [
+      {
+        "label": "Collector spool URL",
+        "name": "collector_url",
+        "placeholder": "https://wef-collector.internal/spool",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Spool token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "cloud",
+    "connector_id": "wiz",
+    "connector_name": "Wiz",
+    "description": "Wiz cloud security issues via the GraphQL API.",
+    "docs_url": "/docs/connectors/wiz",
+    "fields": [
+      {
+        "label": "Client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Client Secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Your tenant's GraphQL API endpoint.",
+        "label": "API Endpoint URL",
+        "name": "api_endpoint_url",
+        "placeholder": "https://api.us20.app.wiz.io/graphql",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": "https://auth.app.wiz.io/oauth/token",
+        "help_text": "OAuth2 token endpoint. Override only for gov-cloud tenants.",
+        "label": "Auth URL",
+        "name": "auth_url",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts",
+      "pivot_ip"
+    ],
+    "category": "ndr",
+    "connector_id": "zeek_suricata",
+    "connector_name": "Zeek / Suricata NDR",
+    "description": "Pull network-detection events from a Zeek (notice.log) or Suricata (eve.json alert) sensor's JSON spool. Suricata alert severity (1=highest) and Zeek notice types map to the five-tier ladder.",
+    "docs_url": "/docs/connectors/zeek_suricata",
+    "fields": [
+      {
+        "label": "Sensor engine",
+        "name": "engine",
+        "options": [
+          {
+            "label": "Suricata (eve.json)",
+            "value": "suricata"
+          },
+          {
+            "label": "Zeek (notice.log)",
+            "value": "zeek"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "Spool URL",
+        "name": "spool_url",
+        "placeholder": "https://ndr-sensor.internal/spool",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Spool token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "label": "Verify TLS certificate",
+        "name": "verify_tls",
+        "required": false,
+        "type": "boolean"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "network",
+    "connector_id": "zscaler",
+    "connector_name": "Zscaler Internet Access",
+    "description": "Zscaler Internet Access web security logs via the ZIA API.",
+    "docs_url": "/docs/connectors/zscaler",
+    "fields": [
+      {
+        "label": "API Key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "zscloud.net",
+        "help_text": "ZIA cloud domain (e.g. zscloud.net, zscaler.net).",
+        "label": "ZIA Cloud",
+        "name": "cloud",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Admin Username",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Admin Password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      }
+    ]
   }
 ]

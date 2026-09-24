@@ -3957,6 +3957,63 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/graph:
+    get:
+      tags:
+      - graph
+      summary: Tenant-level entity graph for the Attack Graph console
+      description: "The caller's own entity graph, bounded for one canvas render.\n\
+        \nScoping is the whole of this endpoint's security surface. Every node of\n\
+        every traversed path must satisfy the tenant predicate — not just the\nnode\
+        \ the walk started from — and a node with no ``tenant_id`` is not\nreadable,\
+        \ because an untagged node that *were* readable would bridge two\ntenants\
+        \ through any entity they happen to share. The narrow exemption is\nthe global\
+        \ MITRE labels, which belong to no tenant by design.\n\nTwo failure modes\
+        \ that must not look alike:\n\n``empty``\n    200 with no nodes. The tenant\
+        \ really has no graph yet — nothing has\n    been ingested, or nothing ingested\
+        \ produced entities. The console\n    renders its empty state.\n``unavailable``\n\
+        \    503. The graph backend could not be reached, so we do not know what\n\
+        \    the tenant has. This deliberately does *not* degrade to an empty\n  \
+        \  graph the way ``/graph/mitre-coverage`` does: an empty attack graph\n \
+        \   reads as \"no attack relationships exist in your estate\", which is a\n\
+        \    security claim, and making it on evidence we never retrieved is the\n\
+        \    failure this codebase keeps finding. The console's error state names\n\
+        \    the endpoint and the status, which is the honest answer."
+      operationId: get_graph_overview_api_v1_graph_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 6
+          minimum: 1
+          default: 3
+          title: Depth
+      - name: entity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 256
+          - type: 'null'
+          title: Entity
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphOverviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/graph/attack-path/{case_id}:
     get:
       tags:
@@ -20502,6 +20559,41 @@ components:
       - id
       - label
       title: GraphNode
+    GraphOverviewResponse:
+      properties:
+        nodes:
+          items:
+            $ref: '#/components/schemas/OverviewNode'
+          type: array
+          title: Nodes
+        edges:
+          items:
+            $ref: '#/components/schemas/OverviewEdge'
+          type: array
+          title: Edges
+        generatedAt:
+          type: string
+          title: Generatedat
+        truncated:
+          type: boolean
+          title: Truncated
+          default: false
+      type: object
+      required:
+      - nodes
+      - edges
+      - generatedAt
+      title: GraphOverviewResponse
+      description: 'The tenant''s entity graph, bounded for one canvas render.
+
+
+        ``truncated`` is part of the contract rather than a diagnostic. A graph
+
+        cut at the node ceiling and a graph that is genuinely this size render
+
+        identically, and a viewer who cannot tell them apart reads a partial
+
+        picture as the whole estate.'
     HTTPValidationError:
       properties:
         detail:
@@ -23440,6 +23532,62 @@ components:
       - benign_corrections
       - escalate_corrections
       title: OverrideSummaryResponse
+    OverviewEdge:
+      properties:
+        id:
+          type: string
+          title: Id
+        source:
+          type: string
+          title: Source
+        target:
+          type: string
+          title: Target
+        label:
+          type: string
+          title: Label
+        attributes:
+          additionalProperties: true
+          type: object
+          title: Attributes
+      type: object
+      required:
+      - id
+      - source
+      - target
+      - label
+      title: OverviewEdge
+    OverviewNode:
+      properties:
+        id:
+          type: string
+          title: Id
+        label:
+          type: string
+          title: Label
+        kind:
+          type: string
+          title: Kind
+        riskScore:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Riskscore
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        attributes:
+          additionalProperties: true
+          type: object
+          title: Attributes
+      type: object
+      required:
+      - id
+      - label
+      - kind
+      title: OverviewNode
     PackAssignmentCreate:
       properties:
         child_tenant_id:
