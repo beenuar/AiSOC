@@ -19,6 +19,7 @@ import useSWR from 'swr';
 import { metricsApi, type DashboardMetrics } from '@/lib/api';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { LiveFeedPanel } from './LiveFeedPanel';
 import { SOCMetricsDashboard } from './SOCMetricsDashboard';
@@ -27,6 +28,8 @@ import { FunnelKpiBar } from './FunnelKpiBar';
 import { EfficiencyReport } from './EfficiencyReport';
 import { PipelineHealth } from './PipelineHealth';
 import { demoFallback } from '@/lib/demoFallback';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 const RechartsArea = dynamic(
   () => import('recharts').then((m) => {
@@ -206,6 +209,55 @@ function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProp
   );
 }
 
+// ─── Honest data-absent panel ─────────────────────────────────────────────────
+
+/**
+ * What a panel shows when it has no numbers to show.
+ *
+ * Two distinct situations, deliberately rendered differently, because
+ * conflating them is how "the estate is quiet" and "the API is down" became
+ * indistinguishable on this dashboard:
+ *
+ *   - `error` set   → the request failed. Say so, name the failure, offer a
+ *                     retry that actually re-issues the request.
+ *   - `error` unset → the request succeeded and the tenant genuinely has no
+ *                     data for this panel. Say *that*, and point at the thing
+ *                     that would produce some.
+ */
+function PanelUnavailable({
+  error,
+  onRetry,
+  emptyTitle,
+  emptyDescription,
+  action,
+}: {
+  error?: unknown;
+  onRetry?: () => void;
+  emptyTitle: string;
+  emptyDescription: string;
+  action?: ReactNode;
+}) {
+  if (error) {
+    return (
+      <ErrorState
+        title="Could not load this panel"
+        description="The metrics API did not respond. Nothing is rendered here rather than a placeholder number."
+        error={error}
+        onRetry={onRetry}
+        className="px-4 py-6"
+      />
+    );
+  }
+  return (
+    <EmptyState
+      title={emptyTitle}
+      description={emptyDescription}
+      action={action}
+      className="px-4 py-6"
+    />
+  );
+}
+
 // ─── Chart tooltip ────────────────────────────────────────────────────────────
 
 function CustomTooltip({ active, payload, label }: any) {
@@ -374,7 +426,7 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { data: rawMetrics, error: metricsError } = useSWR(
+  const { data: rawMetrics, error: metricsError, mutate: mutateMetrics } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     {
@@ -388,6 +440,10 @@ export function DashboardView() {
     }
   );
 
+  const retryMetrics = useCallback(() => {
+    void mutateMetrics();
+  }, [mutateMetrics]);
+
   const metricsErrorMessage =
     metricsError instanceof Error
       ? metricsError.message
@@ -395,46 +451,47 @@ export function DashboardView() {
         ? String(metricsError)
         : null;
 
-  // Hybrid: prefer real API fields when present, fall back to mock for missing
-  // sections (e.g. /metrics/dashboard currently returns alertsTrend: [] and no
-  // threatsBySource yet, so the charts would render empty without this merge).
+  // `MOCK_METRICS` reaches this component through exactly one door: the
+  // `demoFallback` above, which returns `undefined` outside the hosted demo.
+  //
+  // It used to reach it through a second door as well — a per-section merge
+  // that substituted the mock whenever the API omitted a section, plus a
+  // blanket `: MOCK_METRICS` when the call failed. That published a fabricated
+  // connector inventory ("CrowdStrike EDR · 412 events"), a fabricated MITRE
+  // tactic ranking, and a fabricated 24h volume curve as tenant state on any
+  // self-hosted install whose API was reachable but whose lake was empty.
+  // Sections the API does not populate now render an honest empty state.
   const apiData = rawMetrics as Partial<DashboardMetrics> | undefined;
-  const hasRealAlerts = !!apiData && typeof apiData.alerts?.total === 'number';
-  const metrics: DashboardMetrics = hasRealAlerts
-    ? {
-        alerts: apiData!.alerts as DashboardMetrics['alerts'],
-        cases: apiData!.cases ?? MOCK_METRICS.cases,
-        sources:
-          Array.isArray(apiData!.sources) && apiData!.sources!.length
-            ? apiData!.sources!
-            : MOCK_METRICS.sources,
-        topMitre:
-          Array.isArray(apiData!.topMitre) && apiData!.topMitre!.length
-            ? apiData!.topMitre!
-            : MOCK_METRICS.topMitre,
-        alertsTrend:
-          Array.isArray(apiData!.alertsTrend) && apiData!.alertsTrend!.length
-            ? apiData!.alertsTrend!
-            : MOCK_METRICS.alertsTrend,
-        threatsBySource:
-          Array.isArray(apiData!.threatsBySource) && apiData!.threatsBySource!.length
-            ? apiData!.threatsBySource!
-            : MOCK_METRICS.threatsBySource,
-      }
-    : MOCK_METRICS;
+  const metrics: DashboardMetrics | null =
+    apiData && typeof apiData.alerts?.total === 'number'
+      ? {
+          alerts: apiData.alerts,
+          cases: apiData.cases ?? { open: 0, inProgress: 0, resolvedThisWeek: 0 },
+          sources: apiData.sources ?? [],
+          topMitre: apiData.topMitre ?? [],
+          alertsTrend: apiData.alertsTrend ?? [],
+          threatsBySource: apiData.threatsBySource ?? [],
+        }
+      : null;
 
-  const trendData = metrics.alertsTrend.map((d) => ({
+  const sources = metrics?.sources ?? [];
+  const topMitre = metrics?.topMitre ?? [];
+  const activeSourceCount = sources.filter((s) => s.status === 'active').length;
+
+  const trendData = (metrics?.alertsTrend ?? []).map((d) => ({
     time: format(new Date(d.timestamp), 'HH:mm'),
     count: d.count,
   }));
 
-  const SEVERITY_CHART_DATA = [
-    { name: 'Critical', value: metrics.alerts.critical, color: '#ef4444' },
-    { name: 'High', value: metrics.alerts.high, color: '#f97316' },
-    { name: 'Medium', value: metrics.alerts.medium, color: '#eab308' },
-    { name: 'Low', value: metrics.alerts.low, color: '#3b82f6' },
-    { name: 'Info', value: metrics.alerts.info ?? 0, color: '#64748b' },
-  ];
+  const SEVERITY_CHART_DATA = metrics
+    ? [
+        { name: 'Critical', value: metrics.alerts.critical, color: '#ef4444' },
+        { name: 'High', value: metrics.alerts.high, color: '#f97316' },
+        { name: 'Medium', value: metrics.alerts.medium, color: '#eab308' },
+        { name: 'Low', value: metrics.alerts.low, color: '#3b82f6' },
+        { name: 'Info', value: metrics.alerts.info ?? 0, color: '#64748b' },
+      ]
+    : [];
 
   // WS-F3: drag-and-drop widget reordering
   const { order, dragState, handleDragStart, handleDragOver, handleDrop } = useDashboardLayout();
@@ -464,45 +521,56 @@ export function DashboardView() {
             <h2 className="text-xl font-semibold text-gray-100">Security Operations Center</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               Entity-risk alerting, confidence-scored triage, and{' '}
-              {metrics.sources.filter((s) => s.status === 'active').length} connected sources
+              {metrics ? activeSourceCount : '—'}
+              {' '}connected sources
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <MetricCard
-            label="Active Alerts"
-            value={metrics.alerts.total}
-            sub={`${metrics.alerts.new} new today`}
-            color="blue"
-            trend={{ value: 12, label: 'vs yesterday' }}
+        {metrics ? (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            {/* No `trend` props here. The three that used to sit on these cards
+                were literals (+12% / -3% / -8%), not deltas the API returns —
+                /metrics/dashboard has no period-over-period comparison. The
+                funnel strip above does publish real deltas. */}
+            <MetricCard
+              label="Active Alerts"
+              value={metrics.alerts.total}
+              sub={`${metrics.alerts.new} new today`}
+              color="blue"
+            />
+            <MetricCard
+              label="Critical"
+              value={metrics.alerts.critical}
+              sub="Require immediate action"
+              color="red"
+            />
+            <MetricCard
+              label="Open Cases"
+              value={metrics.cases.open}
+              sub={`${metrics.cases.inProgress} in progress`}
+              color="orange"
+            />
+            <MetricCard
+              label="MTTR"
+              value={`${metrics.alerts.mttr}m`}
+              sub="Mean time to resolve"
+              color="green"
+            />
+            <MetricCard
+              label="Connected Sources"
+              value={activeSourceCount}
+              sub="EDR, SIEM, Cloud, IAM, SaaS"
+              color="purple"
+            />
+          </div>
+        ) : (
+          <PanelUnavailable
+            error={metricsError}
+            onRetry={retryMetrics}
+            emptyTitle="No dashboard metrics yet"
+            emptyDescription="Connect a data source to start populating alert, case and MTTR counters."
           />
-          <MetricCard
-            label="Critical"
-            value={metrics.alerts.critical}
-            sub="Require immediate action"
-            color="red"
-            trend={{ value: -3, label: 'vs yesterday' }}
-          />
-          <MetricCard
-            label="Open Cases"
-            value={metrics.cases.open}
-            sub={`${metrics.cases.inProgress} in progress`}
-            color="orange"
-          />
-          <MetricCard
-            label="MTTR"
-            value={`${metrics.alerts.mttr}m`}
-            sub="Mean time to resolve"
-            color="green"
-            trend={{ value: -8, label: 'vs last week' }}
-          />
-          <MetricCard
-            label="Connected Sources"
-            value={metrics.sources.filter(s => s.status === 'active').length}
-            sub="EDR, SIEM, Cloud, IAM, SaaS"
-            color="purple"
-          />
-        </div>
+        )}
       </div>
     ),
 
@@ -513,22 +581,42 @@ export function DashboardView() {
             <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
             <span className="text-xs text-gray-500">Last 24 hours</span>
           </div>
-          <RechartsArea data={trendData} />
+          {trendData.length > 0 ? (
+            <RechartsArea data={trendData} />
+          ) : (
+            <PanelUnavailable
+              error={metricsError}
+              onRetry={retryMetrics}
+              emptyTitle="No alerts in the last 24 hours"
+              emptyDescription="The volume curve plots hourly alert counts once alerts start arriving."
+            />
+          )}
         </div>
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Severity Breakdown</h3>
-          <RechartsPie data={SEVERITY_CHART_DATA} />
-          <div className="space-y-1.5 mt-2">
-            {SEVERITY_CHART_DATA.map((d) => (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                  <span className="text-gray-400">{d.name}</span>
-                </div>
-                <span className="text-gray-300 font-medium">{d.value}</span>
+          {metrics ? (
+            <>
+              <RechartsPie data={SEVERITY_CHART_DATA} />
+              <div className="space-y-1.5 mt-2">
+                {SEVERITY_CHART_DATA.map((d) => (
+                  <div key={d.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
+                      <span className="text-gray-400">{d.name}</span>
+                    </div>
+                    <span className="text-gray-300 font-medium">{d.value}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <PanelUnavailable
+              error={metricsError}
+              onRetry={retryMetrics}
+              emptyTitle="No severity data"
+              emptyDescription="Severity counts appear once the API returns alert metrics."
+            />
+          )}
         </div>
       </div>
     ),
@@ -537,13 +625,38 @@ export function DashboardView() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Top MITRE ATT&CK Tactics</h3>
-          <RechartsBar data={metrics.topMitre} />
+          {topMitre.length > 0 ? (
+            <RechartsBar data={topMitre} />
+          ) : (
+            <PanelUnavailable
+              error={metricsError}
+              onRetry={retryMetrics}
+              emptyTitle="No technique coverage yet"
+              emptyDescription="Tactics rank by alert count once detections start firing."
+            />
+          )}
         </div>
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Connected Sources</h3>
+          {sources.length === 0 ? (
+            <PanelUnavailable
+              error={metricsError}
+              onRetry={retryMetrics}
+              emptyTitle="No sources connected"
+              emptyDescription="Connect a data source and its event volume appears here."
+              action={
+                <Link
+                  href="/connectors"
+                  className="text-xs text-blue-400 underline underline-offset-2 hover:text-blue-300"
+                >
+                  Go to connectors
+                </Link>
+              }
+            />
+          ) : (
           <div className="space-y-3">
-            {metrics.sources.map((src) => {
-              const maxCount = Math.max(...metrics.sources.map(s => s.count));
+            {sources.map((src) => {
+              const maxCount = Math.max(...sources.map(s => s.count), 1);
               const pct = Math.round((src.count / maxCount) * 100);
               return (
                 <div key={src.name}>
@@ -564,6 +677,7 @@ export function DashboardView() {
               );
             })}
           </div>
+          )}
         </div>
         <LiveFeedPanel />
       </div>
@@ -594,8 +708,8 @@ export function DashboardView() {
               {metricsErrorMessage}
             </p>
             <p className="mt-1 text-xs text-red-300/60">
-              Showing baseline mock data while SWR retries every 4s. Refresh the
-              page if it persists.
+              Panels below are blank rather than showing placeholder figures.
+              Retrying every 4s.
             </p>
           </div>
         )}
