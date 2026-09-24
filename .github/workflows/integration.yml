@@ -17,9 +17,9 @@ name: Integration
 #                      fresh Postgres 16, is idempotent on re-run (strict
 #                      mode), and the UEBA alembic chain round-trips
 #                      upgrade → downgrade → upgrade.
-#   backup-restore   — scripts/backup.sh + restore.sh against Postgres 16 +
-#                      MinIO: seed → backup → destroy → restore → assert
-#                      full data integrity. Publishes measured RTO. An
+#   backup-restore   — scripts/backup.sh + restore.sh against Postgres 16 and
+#                      a real S3 endpoint: seed → backup → destroy → restore →
+#                      assert full data integrity. Publishes measured RTO. An
 #                      untested backup is not a backup.
 #   upgrade          — install a prior release's migration set, seed data,
 #                      then upgrade to HEAD and migrate: assert the seeded
@@ -383,7 +383,7 @@ jobs:
 
   # ── Disaster recovery: an untested backup is not a backup ─────────────────
   backup-restore:
-    name: Backup → destroy → restore (Postgres via MinIO)
+    name: Backup → destroy → restore (Postgres via S3)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -419,25 +419,60 @@ jobs:
           pip install --quiet awscli "cryptography>=46,<51"
           sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
 
-      # MinIO needs a `server /data` command, which the GitHub `services:`
-      # block cannot pass — run it as a plain container instead.
+      # The S3 endpoint is a fixture: what this job tests is backup.sh and
+      # restore.sh, not the object store. It still has to be a real S3 server,
+      # because the scripts drive it through the aws CLI (s3 cp/ls/rm and
+      # s3api head-object) and a stub would not exercise that path.
       #
-      # Pulled from quay.io, not Docker Hub: the `minio/minio` Docker Hub
-      # repository was withdrawn upstream and now 404s, which broke this step
-      # with `docker run` exit 125. Pinned by digest for the same
-      # RELEASE.2024-12-18T13-15-44Z build this job has always used.
-      - name: Start MinIO
+      # This step has now lost MinIO twice to hosting decisions, not to bugs:
+      # `minio/minio` on Docker Hub was withdrawn (the whole repository 404s),
+      # and the quay.io mirror it was moved to — pinned by digest — now answers
+      # 401 UNAUTHORIZED for every tag and for that digest. A third MinIO
+      # coordinate would be the same bet a third time.
+      #
+      # versitygw is Versity's Apache-2.0 S3 gateway, published to GHCR. GHCR
+      # is the registry this workflow's own images live in and is operated by
+      # the platform the job already runs on, so it cannot be withdrawn
+      # independently of CI itself, and it is not subject to Docker Hub's
+      # anonymous pull limits. Pinned to the v1.8.0 multi-arch index digest.
+      - name: Start the S3 endpoint (versitygw)
         run: |
-          docker run -d --name minio -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3 \
-            server /data
+          set -euo pipefail
+          # The posix backend chdirs into its root, so the directory has to
+          # exist before the server starts; a named volume creates it.
+          docker volume create aisoc-dr-s3 >/dev/null
+          docker run -d --name s3 -p 9000:7070 -v aisoc-dr-s3:/data \
+            -e ROOT_ACCESS_KEY="${AWS_ACCESS_KEY_ID}" \
+            -e ROOT_SECRET_KEY="${AWS_SECRET_ACCESS_KEY}" \
+            ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 \
+            --port 0.0.0.0:7070 posix /data
+
+      # `docker run -d` succeeding only means the container was created. If the
+      # server exits (bad flag, missing data dir) the bucket loop below would
+      # burn its retries and fail with a connection error that says nothing
+      # about why. Fail here instead, with the container's own logs.
+      - name: Wait for the S3 endpoint
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null "${AWS_ENDPOINT_URL}" 2>/dev/null \
+               || [ "$(curl -s -o /dev/null -w '%{http_code}' "${AWS_ENDPOINT_URL}")" != "000" ]; then
+              echo "S3 endpoint ready after ${i}s"
+              exit 0
+            fi
+            if [ -z "$(docker ps -q -f name=s3 -f status=running)" ]; then
+              echo "::error::the S3 endpoint container exited before becoming ready"
+              docker logs s3 2>&1 | tail -30
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::the S3 endpoint did not become ready within 30s"
+          docker logs s3 2>&1 | tail -30
+          exit 1
 
       - name: Create bucket
-        run: |
-          for i in $(seq 1 12); do
-            aws s3 mb "${BACKUP_S3_BUCKET}" && break || sleep 5
-          done
+        run: aws s3 mb "${BACKUP_S3_BUCKET}"
 
       - name: Seed data
         run: |

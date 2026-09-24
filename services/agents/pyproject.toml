@@ -81,6 +81,7 @@ asyncio_mode = "auto"
 # Postgres). Unit-only CI runs ``pytest -m "not integration"``.
 markers = [
     "integration: mark a test as requiring external infrastructure (Kafka, Neo4j, Postgres). Run with `pytest -m integration`.",
+    "touches_database: the test drives a real database client against a DSN it sets itself (typically an unreachable one, to prove a fail-soft path). Exempt from the no-ambient-database guard in tests/conftest.py; it needs no infrastructure, so it is not `integration`.",
 ]
 
 # Same shape as services/api and services/osquery-tls rather than a third

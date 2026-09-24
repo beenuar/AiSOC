@@ -557,6 +557,15 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: python -m pytest tests/ -v --tb=short
+      # This list is hand-maintained, which is the same "a matrix is a list
+      # somebody has to remember to add to" shape called out for the Go
+      # modules further down — and it has the same consequence. 62 of the 82
+      # test files under services/agents/tests are named by no workflow at
+      # all. `test_playbook_engine_correctness.py` was one of them, and it
+      # carried a test that spent fourteen seconds doing the precise thing its
+      # name said must not happen while reporting green, because nothing ever
+      # ran it to notice. The playbook and per-tenant business-context files
+      # are added below; the rest of the gap is real and is not closed here.
       - name: Run agents unit tests (Pillar-1 eval suites + audit helpers + fusion client)
         # `test_audit_helpers.py` imports `app.investigator.state` directly
         # (it stubs out the package __init__ to avoid pulling in LangGraph),
@@ -603,6 +612,12 @@ jobs:
             tests/test_llm_ops.py \
             tests/test_fused_alert_worker.py \
             tests/test_business_context_hotpath.py \
+            tests/test_business_context_per_tenant.py \
+            tests/test_playbook_engine_correctness.py \
+            tests/test_playbook_action_bridge.py \
+            tests/test_playbook_bounds.py \
+            tests/test_playbook_models_bounds.py \
+            tests/test_playbook_ssrf_guard.py \
             tests/test_swarm.py \
             tests/test_swarm_vs_single.py \
             -v --tb=short
@@ -990,7 +1005,7 @@ jobs:
   #   installs the committed resolution rather than a fresh one, and so this
   #   job fails if the lock and the manifest ever disagree.
   #
-  #   Node 22 matches the Dockerfile's `FROM node:22-alpine`. The manifest
+        #   Node 22 matches the Dockerfile's `FROM node:22-alpine`. The manifest
   #   declared `@types/node: ^20` against that runtime: types only, so
   #   nothing broke at runtime, but the compiler was checking this code
   #   against a different standard library from the one it executes on.
