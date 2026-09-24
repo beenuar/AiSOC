@@ -16984,21 +16984,33 @@ components:
         recorded_cost_usd:
           type: number
           title: Recorded Cost Usd
+        recorded_is_measured:
+          type: boolean
+          title: Recorded Is Measured
         imputed_public_cost_usd:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Imputed Public Cost Usd
+        unpriced_tokens:
+          type: integer
+          title: Unpriced Tokens
+          default: 0
         savings_usd:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Savings Usd
       type: object
       required:
       - is_byok_active
       - provider
       - recorded_cost_usd
+      - recorded_is_measured
       - imputed_public_cost_usd
       - savings_usd
       title: ByokSavings
-      description: 'Imputed savings vs hosted pricing.
+      description: 'Imputed savings vs hosted pricing — an estimate, labelled everywhere.
 
 
         ``is_byok_active`` is True when the live LLM provider (per
@@ -17009,7 +17021,18 @@ components:
 
         computed (so the UI can show "if you switched to BYOK, you''d save
 
-        ~X") but should be labelled "potential savings" in the UI.'
+        ~X") but should be labelled "potential savings" in the UI.
+
+
+        ``imputed_public_cost_usd`` is ``None`` when no row in the window names a
+
+        model with a public list price. It used to be a number in that case, built
+
+        from a default rate applied to a gateway alias, and the BYOK panel
+
+        announced savings against it — an invented saving on invented spend.
+
+        ``unpriced_tokens`` says how much of the window the estimate omits.'
     CalibrationBucket:
       properties:
         predicted_lower:
@@ -17953,11 +17976,29 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         total_latency_ms:
           type: integer
           title: Total Latency Ms
         avg_cost_per_run:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Avg Cost Per Run
         avg_latency_per_call_ms:
           type: number
@@ -17984,6 +18025,22 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         total_tokens:
           type: integer
           title: Total Tokens
@@ -17997,7 +18054,14 @@ components:
       - total_tokens
       - call_count
       title: CostBucket
-      description: LLM spend bucketed by day.
+      description: 'LLM spend bucketed by day.
+
+
+        ``total_cost_usd`` is measured cost. ``measured_call_count`` says how much
+
+        of the day''s traffic that covers, so a bar of height zero can be read as
+
+        "a free day" or "an unmeasured day" rather than silently as the first.'
     CostDashboard:
       properties:
         tenant_id:
@@ -18043,6 +18107,22 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         total_tokens:
           type: integer
           title: Total Tokens
@@ -18065,6 +18145,14 @@ components:
       - total_runs
       - avg_cost_per_run_usd
       title: CostHeadline
+      description: 'Window totals, each with the count of calls it was computed over.
+
+
+        ``total_cost_usd`` is **measured** spend. When ``measured_call_count`` is
+
+        zero it is not a total of anything and the console must render "not
+
+        measured" — the same contract the MTTR tiles use.'
     CoverageCell:
       properties:
         techniqueId:
@@ -22676,6 +22764,11 @@ components:
         model:
           type: string
           title: Model
+        resolved_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolved Model
         runs:
           type: integer
           title: Runs
@@ -22691,9 +22784,31 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
-        imputed_public_cost_usd:
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
           type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
+        imputed_public_cost_usd:
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Imputed Public Cost Usd
+        unpriced_tokens:
+          type: integer
+          title: Unpriced Tokens
+          default: 0
         avg_latency_ms:
           anyOf:
           - type: number
@@ -22716,6 +22831,11 @@ components:
         model:
           type: string
           title: Model
+        resolved_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolved Model
         total_prompt_tokens:
           type: integer
           title: Total Prompt Tokens
@@ -22725,6 +22845,22 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         total_latency_ms:
           type: integer
           title: Total Latency Ms
@@ -25763,6 +25899,22 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         started_at:
           type: string
           format: date-time
@@ -26004,6 +26156,22 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
+        unpriced_call_count:
+          type: integer
+          title: Unpriced Call Count
+          default: 0
         started_at:
           type: string
           format: date-time
@@ -28144,6 +28312,18 @@ components:
         total_cost_usd:
           type: number
           title: Total Cost Usd
+        measured_call_count:
+          type: integer
+          title: Measured Call Count
+          default: 0
+        estimated_cost_usd:
+          type: number
+          title: Estimated Cost Usd
+          default: 0.0
+        estimated_call_count:
+          type: integer
+          title: Estimated Call Count
+          default: 0
         total_tokens:
           type: integer
           title: Total Tokens
