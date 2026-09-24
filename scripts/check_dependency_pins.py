@@ -43,6 +43,14 @@ direction separately and asserts this file reports it:
                       too rather than trusted
   unbounded           a path naming a critical package with no version bound
                       permits every version, including the broken ones
+  manifest -> install an install path that drops an extra the manifest
+                      declares installs a smaller dependency set than was
+                      asked for, so CI tests different software than ships
+  source -> manifest  code importing the module an extra enables, in a service
+                      that does not declare the extra, resolves only while an
+                      upstream accident keeps supplying it
+  extra -> lock       an extra exists to install a package; a lock that
+                      resolved without it makes the declaration decoration
   coverage            a file that declares a critical package and is not in
                       the scanned set fails, so adding an install path without
                       telling this gate is itself an error
@@ -108,6 +116,47 @@ CRITICAL: dict[str, str] = {
         "Two resolvers are two answers to 'what does this commit install', "
         "and the security audit exports with one while the images install "
         "with another"
+    ),
+}
+
+# ── Extras are part of a dependency's identity ───────────────────────────────
+#
+# `sqlalchemy` and `sqlalchemy[asyncio]` are two different dependency sets, and
+# a gate comparing only version ranges calls them the same thing. That is how
+# `main` went red: the wave-1 service-test job installed a bare, unbounded
+# `sqlalchemy` while `services/purple-team/pyproject.toml` declared
+# `sqlalchemy[asyncio]`, and nothing compared the two. It passed anyway for
+# months, because SQLAlchemy 2.0.x *also* required `greenlet` outside the extra
+# whenever `platform_machine` matched — which it does on `ubuntu-latest`. So the
+# extra was load-bearing and undeclared at the same time. 2.1.0 removed that
+# clause, the unbounded install re-resolved onto it, and every import of
+# `sqlalchemy.ext.asyncio` began failing at collection.
+#
+# The durable lesson is not about one package: an extra whose absence stays
+# invisible until an upstream release changes its mind is exactly the drift
+# this file exists to catch, so extras are now compared like ranges are.
+@dataclass(frozen=True)
+class Extra:
+    """An extra that must be declared wherever the code needs what it pulls."""
+
+    extra: str  # the extra's name, e.g. `asyncio`
+    provides: str  # the package whose installation is the point, e.g. `greenlet`
+    module: str  # the import that cannot resolve without `provides`
+    reason: str
+
+
+EXTRAS: dict[str, Extra] = {
+    "sqlalchemy": Extra(
+        extra="asyncio",
+        provides="greenlet",
+        module="sqlalchemy.ext.asyncio",
+        reason=(
+            "`sqlalchemy.ext.asyncio` raises at import without `greenlet`, and from "
+            "SQLAlchemy 2.1.0 the `asyncio` extra is the only thing that installs it. "
+            "Before 2.1.0 a bare `sqlalchemy` pulled it on any `platform_machine` in "
+            "SQLAlchemy's list, so an install path could depend on the extra without "
+            "naming it and never find out"
+        ),
     ),
 }
 
@@ -239,6 +288,10 @@ class Declaration:
     kind: str  # manifest | image | ci | lock
     service: str | None
     raw: str
+    # Extras requested at this install path. Empty is a real answer rather than
+    # a missing one: `sqlalchemy` and `sqlalchemy[asyncio]` install different
+    # sets, so the distinction has to survive parsing to be comparable at all.
+    extras: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -360,11 +413,21 @@ def _folded_dep_blocks(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def _requirement(token: str) -> tuple[str, str] | None:
+def _extras(names: list[str] | str | None) -> frozenset[str]:
+    """`[asyncio]`, `[bcrypt,argon2]` or `["asyncio"]` -> the set of extra names."""
+    parts = names if isinstance(names, list) else (names or "").strip("[]").split(",")
+    return frozenset(part.strip().strip("\"'").lower() for part in parts if part.strip())
+
+
+def _requirement(token: str) -> tuple[str, frozenset[str], str] | None:
     match = _REQUIREMENT.match(token)
     if not match:
         return None
-    return canonical(match.group("name")), (match.group("spec") or "").strip(",")
+    return (
+        canonical(match.group("name")),
+        _extras(match.group("extras")),
+        (match.group("spec") or "").strip(","),
+    )
 
 
 def parse_manifest(path: Path, rel: str, service: str | None) -> list[Declaration]:
@@ -382,11 +445,19 @@ def parse_manifest(path: Path, rel: str, service: str | None) -> list[Declaratio
         for name, spec in deps.items():
             if name == "python":
                 continue
+            # Poetry writes extras in a table — `sqlalchemy = { version =
+            # "^2.0.0", extras = ["asyncio"] }` — so reading `version` alone
+            # drops them. Both declaration styles are in this tree, and both
+            # have to produce the same comparable shape or the comparison is
+            # between a parsed extra and a parser that cannot see one.
+            extras: frozenset[str] = frozenset()
+            raw = f"{name} = {spec!r}"
             if isinstance(spec, dict):
+                extras = _extras(spec.get("extras", []))
                 spec = spec.get("version", "")
             if not isinstance(spec, str):
                 continue
-            found.append(Declaration(canonical(name), spec.strip(), rel, "manifest", service, f"{name} = {spec!r}"))
+            found.append(Declaration(canonical(name), spec.strip(), rel, "manifest", service, raw, extras))
 
     project = data.get("project", {})
     requirements = list(project.get("dependencies", []) or [])
@@ -395,7 +466,7 @@ def parse_manifest(path: Path, rel: str, service: str | None) -> list[Declaratio
     for requirement in requirements:
         parsed = _requirement(requirement.strip())
         if parsed:
-            found.append(Declaration(parsed[0], parsed[1], rel, "manifest", service, requirement))
+            found.append(Declaration(parsed[0], parsed[2], rel, "manifest", service, requirement, parsed[1]))
     return found
 
 
@@ -418,7 +489,7 @@ def parse_shell(path: Path, rel: str, kind: str, service: str | None) -> list[De
     for token, raw in tokens:
         parsed = _requirement(token)
         if parsed:
-            found.append(Declaration(parsed[0], parsed[1], rel, kind, service, raw))
+            found.append(Declaration(parsed[0], parsed[2], rel, kind, service, raw, parsed[1]))
     return found
 
 
@@ -531,6 +602,98 @@ def check_agreement(data: Scan) -> list[str]:
             problems.append(
                 f"`{package}` is pinned {len(ranges)} different ways: {detail}. Why it matters: {reason}"
             )
+    return problems
+
+
+def _services_reaching(root: Path, module: str) -> set[str]:
+    """Services whose Python source imports `module`.
+
+    Read out of the source rather than inferred from the manifest on purpose:
+    the manifest is the thing being checked here, so consulting it would make
+    the comparison circular and it would agree with itself forever.
+    """
+    reaching: set[str] = set()
+    services = root / "services"
+    for service in sorted(services.glob("*/")) if services.is_dir() else []:
+        if not (service / "pyproject.toml").exists():
+            continue
+        for source in service.rglob("*.py"):
+            if any(part in _SOURCE_SKIP for part in source.parts):
+                continue
+            try:
+                if module in source.read_text(encoding="utf-8", errors="ignore"):
+                    reaching.add(service.name)
+                    break
+            except OSError:
+                continue
+    return reaching
+
+
+_SOURCE_SKIP = {".venv", "venv", "node_modules", "__pycache__", ".mypy_cache"}
+
+
+def check_extras(root: Path, data: Scan) -> list[str]:
+    """An extra is a dependency set, so it has to agree the way a range does.
+
+    Three directions, because the one this repository keeps rediscovering is
+    whichever direction nobody pointed the gate at:
+
+      manifest -> install path  a manifest declaring `pkg[extra]` while a
+                                workflow or image installs bare `pkg` means CI
+                                runs against less software than ships. This is
+                                the wave-1 `sqlalchemy` break exactly.
+      source -> manifest        code importing the module the extra enables,
+                                in a service whose manifest does not declare
+                                that extra, works only while some upstream
+                                accident keeps installing it anyway.
+      extra -> lock             an extra exists to pull a package; if the lock
+                                the image installs from does not contain it,
+                                the declaration is decoration. "The extra is
+                                declared and the library is absent" is a
+                                sentence this gate should be able to say.
+    """
+    problems: list[str] = []
+    for package, rule in sorted(EXTRAS.items()):
+        declarations = data.by_package(package)
+        manifests = [d for d in declarations if d.kind == "manifest"]
+        declared_by = {d.service for d in manifests if rule.extra in d.extras and d.service}
+
+        # manifest -> install path
+        if declared_by:
+            where = ", ".join(f"services/{s}/pyproject.toml" for s in sorted(declared_by))
+            for declaration in declarations:
+                if declaration.kind not in {"ci", "image"} or rule.extra in declaration.extras:
+                    continue
+                problems.append(
+                    f"{declaration.path} installs `{package}` without the `[{rule.extra}]` "
+                    f"extra that {where} declares — write `{package}[{rule.extra}]`. "
+                    f"Why it matters: {rule.reason} (manifest -> install path)"
+                )
+
+        # source -> manifest
+        for service in sorted(_services_reaching(root, rule.module)):
+            if service in declared_by:
+                continue
+            if not any(d.service == service for d in manifests):
+                continue  # this service does not declare the package at all
+            problems.append(
+                f"services/{service} imports `{rule.module}` but "
+                f"services/{service}/pyproject.toml declares `{package}` without the "
+                f"`[{rule.extra}]` extra. Why it matters: {rule.reason} (source -> manifest)"
+            )
+
+        # extra -> lock
+        locked = {d.service for d in data.by_package(rule.provides) if d.kind == "lock"}
+        for service in sorted(declared_by):
+            if not any(d.service == service and d.kind == "lock" for d in declarations):
+                continue  # no lock for this service to compare against
+            if service not in locked:
+                problems.append(
+                    f"services/{service}/pyproject.toml declares `{package}[{rule.extra}]` but "
+                    f"services/{service}/poetry.lock resolved no `{rule.provides}` — the extra "
+                    f"is declared and the library it exists to install is absent. "
+                    f"Why it matters: {rule.reason} (extra -> lock)"
+                )
     return problems
 
 
@@ -685,6 +848,7 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
     problems = (
         check_service_internal(data)
         + check_agreement(data)
+        + check_extras(root, data)
         + check_locks_satisfy(data)
         + check_matrix_brackets(root, data)
         + check_parser_coverage(root, data)
@@ -711,6 +875,16 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
             f"  {package}: {len(found)} declarations across {len({d.path for d in found})} files"
             f" — range {', '.join(ranges) or 'none'}"
             + (f", locked {', '.join(locked)}" if locked else "")
+        )
+    for package, rule in sorted(EXTRAS.items()):
+        found = data.by_package(package)
+        if not found:
+            continue
+        with_extra = {d.path for d in found if rule.extra in d.extras}
+        without = {d.path for d in found if d.kind in {"ci", "image", "manifest"} and rule.extra not in d.extras}
+        print(
+            f"  {package}[{rule.extra}]: declared by {len(with_extra)} paths, "
+            f"{len(without)} name `{package}` without it"
         )
     if verbose:
         for rel in data.files:
@@ -819,6 +993,43 @@ def self_test() -> int:
         path = root / "services" / "demo" / "pyproject.toml"
         path.write_text(path.read_text() + '\n[tool.uv]\ndev-dependencies = ["sqlglot>=27,<31"]\n', encoding="utf-8")
 
+    def _sqlalchemy_state(root: Path, *, extra: bool, greenlet: bool, ci_extra: bool) -> None:
+        """Put the fixture into a `sqlalchemy` state so one direction can be aimed at.
+
+        The clean fixture names no `sqlalchemy` at all, so each injection below
+        supplies exactly the three files one direction compares and leaves the
+        other two directions satisfied — otherwise a case could pass on a
+        finding it was not testing.
+        """
+        manifest = root / "services" / "demo" / "pyproject.toml"
+        declaration = 'sqlalchemy = { version = ">=2,<3", extras = ["asyncio"] }\n' if extra else 'sqlalchemy = ">=2,<3"\n'
+        manifest.write_text(manifest.read_text() + declaration, encoding="utf-8")
+
+        lock = root / "services" / "demo" / "poetry.lock"
+        entries = '\n[[package]]\nname = "sqlalchemy"\nversion = "2.0.54"\n'
+        if greenlet:
+            entries += '\n[[package]]\nname = "greenlet"\nversion = "3.5.6"\n'
+        lock.write_text(lock.read_text() + entries, encoding="utf-8")
+
+        workflow = root / ".github" / "workflows" / "ci.yml"
+        token = '"sqlalchemy[asyncio]>=2,<3"' if ci_extra else '"sqlalchemy>=2,<3"'
+        workflow.write_text(workflow.read_text() + f"      - run: pip install {token}\n", encoding="utf-8")
+
+    def drift_extra_dropped_by_an_install_path(root: Path) -> None:
+        """The wave-1 break: the manifest declares the extra and the workflow does not."""
+        _sqlalchemy_state(root, extra=True, greenlet=True, ci_extra=False)
+
+    def drift_source_reaches_the_module_without_the_extra(root: Path) -> None:
+        """Code imports `sqlalchemy.ext.asyncio` while the manifest declares bare `sqlalchemy`."""
+        _sqlalchemy_state(root, extra=False, greenlet=True, ci_extra=False)
+        app = root / "services" / "demo" / "app"
+        app.mkdir(parents=True, exist_ok=True)
+        (app / "db.py").write_text("from sqlalchemy.ext.asyncio import create_async_engine\n", encoding="utf-8")
+
+    def drift_extra_declared_but_nothing_resolved_it(root: Path) -> None:
+        """The extra is declared and the library it exists to install is absent."""
+        _sqlalchemy_state(root, extra=True, greenlet=False, ci_extra=True)
+
     def drift_matrix_off_the_boundary(root: Path) -> None:
         (root / ".github" / "workflows" / "reproducible-builds.yml").write_text(
             "name: Reproducible builds\njobs:\n  fastapi-range:\n    strategy:\n      matrix:\n"
@@ -837,6 +1048,13 @@ def self_test() -> int:
         ("drift inside a folded run block", drift_inside_a_folded_run_block, "pinned 2 different ways"),
         ("declaration in a syntax the parser skips", drift_into_a_syntax_the_parser_skips, "parser extracted nothing"),
         ("matrix leg off the declared boundary", drift_matrix_off_the_boundary, "tests the floor at fastapi"),
+        ("extra dropped by an install path", drift_extra_dropped_by_an_install_path, "manifest -> install path"),
+        (
+            "source reaches the module without the extra",
+            drift_source_reaches_the_module_without_the_extra,
+            "source -> manifest",
+        ),
+        ("extra declared but nothing resolved it", drift_extra_declared_but_nothing_resolved_it, "extra -> lock"),
     ]
 
     failures: list[str] = []
