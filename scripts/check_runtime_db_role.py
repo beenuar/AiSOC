@@ -87,6 +87,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import re
 import sys
@@ -123,7 +124,17 @@ SURFACE_GLOBS: tuple[str, ...] = (
 
 #: Environment variable names whose value is a DSN the *migration/DDL* path
 #: uses. These are the ones that are *supposed* to be the owner.
-MIGRATION_VARS = frozenset({"DATABASE_MIGRATION_URL", "AISOC_DATABASE_MIGRATION_URL"})
+#:
+#: A suffix rather than a set of names. The set held two spellings and the four
+#: services that manage their own alembic chain each need a third
+#: (``UEBA_DATABASE_MIGRATION_URL`` and friends), so a set would have to grow
+#: by one entry per service — a list pretending to be a rule. Anything ending
+#: in ``DATABASE_MIGRATION_URL`` is a migration DSN whatever prefixes it.
+MIGRATION_VAR_SUFFIX = "DATABASE_MIGRATION_URL"
+
+
+def is_migration_var(name: str) -> bool:
+    return name.upper().endswith(MIGRATION_VAR_SUFFIX)
 
 #: Some DSNs must be the owner and cannot say so in their variable name, because
 #: the tool reading them chose the name: alembic and the SQL runner both read
@@ -199,6 +210,14 @@ class Inspected:
     ignored_dsns: list[tuple[str, str, str]] = field(default_factory=list)
     #: DSNs the surface declared as the owner's on purpose, with the reason.
     exempted: list[tuple[str, str, str, str]] = field(default_factory=list)
+    #: Alembic chains found, and the credentials each environment names.
+    entrypoints: list[EntryPoint] = field(default_factory=list)
+    #: (surface, service, service_dir, var) pairs whose variable the service
+    #: was shown to be able to read.
+    readable_bindings: list[ServiceBinding] = field(default_factory=list)
+    #: Services carrying a DSN whose build context is not in this tree, so
+    #: there is no source to ask. Recorded, not credited.
+    unmapped_bindings: list[tuple[str, str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +366,7 @@ def classify(surface: str, text: str, inspected: Inspected, known_superusers: se
 
     for dsn in usable:
         var, role = dsn.var, _canonical_role(dsn.role)
-        is_migration = var.upper() in MIGRATION_VARS or dsn.owner_reason is not None
+        is_migration = is_migration_var(var) or dsn.owner_reason is not None
         bucket = inspected.migration_dsns if is_migration else inspected.runtime_dsns
         bucket.append((surface, var, role))
         if dsn.owner_reason is not None:
@@ -384,6 +403,282 @@ def classify(surface: str, text: str, inspected: Inspected, known_superusers: se
             )
 
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Where the DDL comes from: the alembic chains
+# ---------------------------------------------------------------------------
+# The scan above reads deployment surfaces, and a deployment surface only says
+# which DSN is handed to a service. It cannot say which of them the service
+# uses to apply DDL — and four services in this tree (honeytokens, osquery-tls,
+# purple-team, ueba) manage their own schema through alembic and, until this
+# gate learned to look, read the *runtime* variable to do it. Their migration
+# and runtime credentials were therefore the same one, so an operator pointing
+# them at the owner lost row-level security on twelve tables with nothing to
+# object.
+#
+# Discovery is by alembic's own convention rather than by a list of four paths:
+# an alembic chain is configured by an ``alembic.ini`` whose ``script_location``
+# names the directory holding ``env.py``. Add a fifth chain and it is picked up
+# by being an alembic chain.
+
+#: Variable names an environment file may read for a DSN. Matched on shape, not
+#: against a vocabulary, because every service spells its own prefix.
+_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_DSN_VAR_HINT = ("DATABASE", "_DSN", "POSTGRES")
+
+_SCRIPT_LOCATION_RE = re.compile(r"^\s*script_location\s*=\s*(?P<loc>\S+)", re.M)
+
+
+@dataclass
+class EntryPoint:
+    """One alembic chain and the credentials its environment names."""
+
+    ini: str
+    env_py: str | None
+    migration_vars: list[str]
+    runtime_vars: list[str]
+
+
+def _env_var_literals(source: str) -> list[str]:
+    """Environment-variable-shaped string literals in a Python source file.
+
+    Deliberately loose, and loose in the direction that produces *findings*
+    rather than suppressing them: this is used to ask whether an environment
+    names a migration credential at all, and the failure that actually
+    happened was naming none.
+
+    What it cannot prove is that the file *reads* what it names — that needs
+    the file to run. ``.github/workflows/integration.yml`` closes that half
+    behaviourally: it applies each chain with only the migration variable in
+    the environment, so an ``env.py`` naming one it never reads fails there.
+    """
+    out: list[str] = []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return out
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            value = node.value
+            if _ENV_NAME_RE.match(value) and any(hint in value for hint in _DSN_VAR_HINT) and value not in out:
+                out.append(value)
+    return out
+
+
+def collect_entrypoints(root: Path) -> list[EntryPoint]:
+    points: list[EntryPoint] = []
+    for ini in sorted(root.rglob("alembic.ini")):
+        rel = ini.relative_to(root).as_posix()
+        if any(part in rel for part in ("node_modules/", "plans/", ".venv/")):
+            continue
+        location = _SCRIPT_LOCATION_RE.search(ini.read_text(encoding="utf-8", errors="ignore"))
+        env_py = (ini.parent / location.group("loc") / "env.py") if location else None
+        if env_py is None or not env_py.is_file():
+            points.append(EntryPoint(ini=rel, env_py=None, migration_vars=[], runtime_vars=[]))
+            continue
+        names = _env_var_literals(env_py.read_text(encoding="utf-8", errors="ignore"))
+        points.append(
+            EntryPoint(
+                ini=rel,
+                env_py=env_py.relative_to(root).as_posix(),
+                migration_vars=[n for n in names if is_migration_var(n)],
+                runtime_vars=[n for n in names if not is_migration_var(n)],
+            )
+        )
+    return points
+
+
+def classify_entrypoints(points: list[EntryPoint], configured: set[str]) -> list[Finding]:
+    """Both directions over the chains that apply DDL.
+
+    ``configured`` is every variable name any deployment surface assigns, so
+    the reverse direction can tell a real split from one that exists only in
+    the code.
+    """
+    findings: list[Finding] = []
+    for point in points:
+        if point.env_py is None:
+            findings.append(
+                Finding(
+                    point.ini,
+                    "declares an alembic chain whose script_location has no env.py the gate could read, "
+                    "so nothing can be said about which credential applies this chain",
+                )
+            )
+            continue
+        if not (point.migration_vars or point.runtime_vars):
+            findings.append(
+                Finding(
+                    point.env_py,
+                    "is an alembic environment from which no database variable could be read — the gate "
+                    "cannot vouch for it. Silence from a scanner and compliance look identical.",
+                )
+            )
+            continue
+        if not point.migration_vars:
+            findings.append(
+                Finding(
+                    point.env_py,
+                    f"applies DDL as {', '.join(point.runtime_vars)}, which is what the service connects as. "
+                    f"Read a *DATABASE_MIGRATION_URL first: the runtime role deliberately holds no CREATE, and "
+                    "an operator who points this at the owner instead loses row-level security on every table "
+                    "this chain owns.",
+                )
+            )
+            continue
+        if not any(name in configured for name in point.migration_vars):
+            findings.append(
+                Finding(
+                    point.env_py,
+                    f"names {', '.join(point.migration_vars)} and no deployment surface sets any of them, so "
+                    "every operator gets the runtime-credential fallback. The split exists in the code and "
+                    "not in the deployment.",
+                )
+            )
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# A DSN handed to a service that cannot read it
+# ---------------------------------------------------------------------------
+# The reverse of everything above, and the shape that hid three of these four
+# services from this gate entirely. ``docker-compose.yml`` set
+# ``DATABASE_URL=aisoc_app`` on honeytokens, purple-team and osquery-tls and
+# the gate credited all three — but each declares ``env_prefix`` in its
+# pydantic settings, so the variable it actually reads is
+# ``HONEYTOKEN_DATABASE_URL``. The compose entry was inert: the services fell
+# back to a default naming the *owner*, and the role switch reached none of
+# them. Found by enumerating what the gate credited rather than what it flagged.
+
+_COMPOSE_SERVICE_RE = re.compile(r"^  (?P<name>[a-z0-9][\w.-]*):\s*$")
+_BUILD_CONTEXT_RE = re.compile(r"context:\s*[.\s/]*services/(?P<dir>[\w.-]+)\s*$")
+#: A whole quoted token that is exactly an identifier. Backticks are in the
+#: set for Go raw strings and JS template literals; for Python the AST is used
+#: instead, because reStructuredText prose is full of ``DATABASE_URL`` and a
+#: docstring mentioning a variable is not a service reading it — that single
+#: over-credit hid one of the three inert DSNs behind a comment.
+_LITERAL_RE = re.compile(r"""["'`]([A-Za-z_][A-Za-z0-9_]*)["'`]""")
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+#: Never consulted when asking what a service can read. A test that sets a
+#: variable is not the program reading it — ``services/osquery-tls`` has
+#: ``os.environ.setdefault("DATABASE_URL", …)`` in its conftest and reads the
+#: name nowhere else, which is precisely the case this direction exists for.
+_NOT_THE_PROGRAM = ("/tests/", "/test_", "/node_modules/", "/.venv/")
+
+_SOURCE_SUFFIXES = frozenset({".py", ".go", ".ts", ".js", ".mjs"})
+
+
+@dataclass
+class ServiceBinding:
+    surface: str
+    service: str
+    service_dir: str
+    var: str
+
+
+def readable_env_names(service_dir: Path) -> set[str]:
+    """Environment names this service's own source can resolve.
+
+    Two sources, because one alone misses a whole language or a whole
+    framework:
+
+    * every quoted identifier in its source — which covers ``os.environ.get``,
+      Go's ``getEnv("DATABASE_DSN", "")``, ``process.env["X"]`` and pydantic's
+      ``AliasChoices`` without needing a parser per language;
+    * for each ``BaseSettings`` class, ``env_prefix`` + field name, because
+      that name appears nowhere in the source at all. Omitting this half is
+      what made the check report every service as fine.
+    """
+    names: set[str] = set()
+    for path in service_dir.rglob("*"):
+        if not path.is_file() or path.suffix not in _SOURCE_SUFFIXES:
+            continue
+        posix = path.as_posix()
+        if any(fragment in posix for fragment in _NOT_THE_PROGRAM):
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        names |= {m.group(1) for m in re.finditer(r"process\.env\.([A-Za-z_]\w*)", text)}
+        if path.suffix != ".py":
+            names |= set(_LITERAL_RE.findall(text))
+            continue
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            names |= set(_LITERAL_RE.findall(text))
+            continue
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+            and getattr(node, "body", None)
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        names |= {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+            and _IDENTIFIER_RE.match(node.value)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = {b.id if isinstance(b, ast.Name) else getattr(b, "attr", "") for b in node.bases}
+            if "BaseSettings" not in bases:
+                continue
+            prefix = ""
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign) and any(getattr(t, "id", "") == "model_config" for t in stmt.targets):
+                    for kw in getattr(stmt.value, "keywords", []):
+                        if kw.arg == "env_prefix" and isinstance(kw.value, ast.Constant):
+                            prefix = str(kw.value.value)
+            for stmt in node.body:
+                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                    names.add(f"{prefix}{stmt.target.id}")
+    return {name.upper() for name in names}
+
+
+def collect_service_bindings(surface: str, text: str) -> tuple[list[ServiceBinding], list[str]]:
+    """DSN variables a compose surface sets on a service it builds from this tree.
+
+    Returns ``(bindings, unmapped)``; ``unmapped`` names services carrying a
+    DSN whose build context is not a directory under ``services/``, which the
+    caller records rather than credits.
+    """
+    bindings: list[ServiceBinding] = []
+    unmapped: list[str] = []
+    contexts: dict[str, str] = {}
+    service: str | None = None
+    for line in text.splitlines():
+        match = _COMPOSE_SERVICE_RE.match(line)
+        if match:
+            service = match.group("name")
+            continue
+        ctx = _BUILD_CONTEXT_RE.search(line)
+        if ctx and service:
+            contexts[service] = ctx.group("dir")
+
+    service = None
+    for raw in text.splitlines():
+        match = _COMPOSE_SERVICE_RE.match(raw)
+        if match:
+            service = match.group("name")
+            continue
+        if service is None or not _SCHEME_HINT_RE.search(raw):
+            continue
+        assign = _ASSIGN_RE.match(_expand_default(raw))
+        if assign is None or assign.group("key") in {"context", "image", "value"}:
+            continue
+        if service not in contexts:
+            unmapped.append(f"{service}: {assign.group('key')}")
+            continue
+        bindings.append(ServiceBinding(surface, service, contexts[service], assign.group("key")))
+    return bindings, unmapped
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +865,9 @@ def self_test() -> list[str]:
             expected = "accept" if should_pass else "reject"
             failures.append(f"{label}: classifier {verdict}, expected it to {expected}")
 
+    failures.extend(_self_test_entrypoints())
+    failures.extend(_self_test_readable_names())
+
     # The empty-input rule, asserted rather than assumed: a run that inspected
     # nothing must not be able to report OK.
     if not _empty_input_findings(Inspected()):
@@ -577,6 +875,127 @@ def self_test() -> list[str]:
     populated = Inspected(surfaces=["x"], runtime_dsns=[("x", "DATABASE_URL", "r")])
     if _empty_input_findings(populated):
         failures.append("a populated scan was reported as empty — the empty-input rule is over-tight")
+    if not _empty_entrypoint_findings(Inspected(surfaces=["x"])):
+        failures.append("a scan that found no alembic chain produced no finding — that direction can go quiet unnoticed")
+    if _empty_entrypoint_findings(Inspected(entrypoints=[EntryPoint("a.ini", "env.py", ["X_DATABASE_MIGRATION_URL"], [])])):
+        failures.append("a scan that found a chain was reported as empty — the chain empty-input rule is over-tight")
+    return failures
+
+
+#: ``(label, entry point, variables the deployment sets, should pass)``.
+_ENTRYPOINT_FIXTURES: tuple[tuple[str, EntryPoint, set[str], bool], ...] = (
+    (
+        "a chain reading a migration credential the deployment sets",
+        EntryPoint("svc/alembic.ini", "svc/alembic/env.py", ["SVC_DATABASE_MIGRATION_URL"], ["DATABASE_URL"]),
+        {"SVC_DATABASE_MIGRATION_URL", "DATABASE_URL"},
+        True,
+    ),
+    (
+        "a chain applying DDL as the runtime credential — the state all four were in",
+        EntryPoint("svc/alembic.ini", "svc/alembic/env.py", [], ["DATABASE_URL", "SVC_DATABASE_URL"]),
+        {"DATABASE_URL"},
+        False,
+    ),
+    (
+        "a split that exists in the code and in no deployment surface",
+        EntryPoint("svc/alembic.ini", "svc/alembic/env.py", ["SVC_DATABASE_MIGRATION_URL"], ["DATABASE_URL"]),
+        {"DATABASE_URL"},
+        False,
+    ),
+    (
+        "an alembic.ini whose env.py the gate could not read is a blind spot, not a pass",
+        EntryPoint("svc/alembic.ini", None, [], []),
+        {"DATABASE_URL"},
+        False,
+    ),
+    (
+        "an env.py naming no database variable at all is a blind spot too",
+        EntryPoint("svc/alembic.ini", "svc/alembic/env.py", [], []),
+        {"DATABASE_URL"},
+        False,
+    ),
+    (
+        "the unprefixed spelling counts — the rule is the suffix, not a vocabulary",
+        EntryPoint("svc/alembic.ini", "svc/alembic/env.py", ["DATABASE_MIGRATION_URL"], ["DATABASE_URL"]),
+        {"DATABASE_MIGRATION_URL"},
+        True,
+    ),
+)
+
+
+def _self_test_entrypoints() -> list[str]:
+    failures: list[str] = []
+    for label, point, configured, should_pass in _ENTRYPOINT_FIXTURES:
+        found = classify_entrypoints([point], configured)
+        if (not found) is not should_pass:
+            verdict = "accepted" if not found else f"rejected ({found[0].detail[:70]}…)"
+            failures.append(f"entry point — {label}: {verdict}, expected it to {'accept' if should_pass else 'reject'}")
+
+    # And the literal reader, which is what turns a file into an EntryPoint.
+    source = (
+        'MIGRATION_URL_VARS = ("SVC_DATABASE_MIGRATION_URL", "DATABASE_MIGRATION_URL")\n'
+        'X = os.environ.get("DATABASE_URL")\n'
+        'Y = "not an env name"\n'
+    )
+    names = _env_var_literals(source)
+    if names != ["SVC_DATABASE_MIGRATION_URL", "DATABASE_MIGRATION_URL", "DATABASE_URL"]:
+        failures.append(f"the env-name reader returned {names}, which is not what that source names")
+    return failures
+
+
+def _self_test_readable_names() -> list[str]:
+    """A pydantic ``env_prefix`` makes the readable name appear nowhere in the source.
+
+    This is the assertion that would have failed before the prefix half was
+    added, while the gate reported every service as fine.
+    """
+    import tempfile  # noqa: PLC0415 — self-test only
+
+    failures: list[str] = []
+    prefixed = (
+        "from pydantic_settings import BaseSettings, SettingsConfigDict\n"
+        "class Settings(BaseSettings):\n"
+        '    model_config = SettingsConfigDict(env_prefix="SVC_")\n'
+        '    database_url: str = "postgresql://a:b@c/d"\n'
+    )
+    with tempfile.TemporaryDirectory(prefix="db-role-readable-") as tmp:
+        svc = Path(tmp) / "svc" / "app"
+        svc.mkdir(parents=True)
+        (svc / "config.py").write_text(prefixed, encoding="utf-8")
+        (svc / "conftest_like").mkdir()
+        tests = Path(tmp) / "svc" / "tests"
+        tests.mkdir()
+        (tests / "conftest.py").write_text('os.environ.setdefault("DATABASE_URL", "x")\n', encoding="utf-8")
+        names = readable_env_names(Path(tmp) / "svc")
+    if "SVC_DATABASE_URL" not in names:
+        failures.append("env_prefix + field did not yield SVC_DATABASE_URL, so a prefixed service reads as unreachable")
+    if "DATABASE_URL" in names:
+        failures.append("a name only a test file mentions was credited; a conftest setting a variable is not the program reading it")
+
+    # Both directions: a service that genuinely reads the unprefixed name.
+    unprefixed = 'import os\nDSN = os.environ.get("DATABASE_URL", "")\n'
+    with tempfile.TemporaryDirectory(prefix="db-role-readable-") as tmp:
+        svc = Path(tmp) / "svc" / "app"
+        svc.mkdir(parents=True)
+        (svc / "db.py").write_text(unprefixed, encoding="utf-8")
+        names = readable_env_names(Path(tmp) / "svc")
+    if "DATABASE_URL" not in names:
+        failures.append("a direct os.environ.get('DATABASE_URL') was not credited, which would be a false finding")
+
+    # And the compose side: the binding has to be attributed to the right service.
+    compose = (
+        "services:\n"
+        "  api:\n"
+        "    build:\n"
+        "      context: ./services/api\n"
+        "    environment:\n"
+        "      DATABASE_URL: postgresql+asyncpg://r:p@postgres:5432/aisoc\n"
+        "  postgres:\n"
+        "    image: postgres:16\n"
+    )
+    bindings, unmapped = collect_service_bindings("docker-compose.yml", compose)
+    if [(b.service, b.service_dir, b.var) for b in bindings] != [("api", "api", "DATABASE_URL")] or unmapped:
+        failures.append(f"compose binding parse returned {[(b.service, b.service_dir, b.var) for b in bindings]}, unmapped={unmapped}")
     return failures
 
 
@@ -602,6 +1021,26 @@ def _empty_input_findings(inspected: Inspected) -> list[Finding]:
             )
         )
     return out
+
+
+def _empty_entrypoint_findings(inspected: Inspected) -> list[Finding]:
+    """The same rule, for the direction that reads the alembic chains.
+
+    Kept separate from the surface rule so a run that found surfaces and no
+    chains still fails. Folding the two into one condition is how a direction
+    goes quiet without anybody noticing: the gate would print OK on the
+    strength of the half that still worked.
+    """
+    if inspected.entrypoints:
+        return []
+    return [
+        Finding(
+            "<root>",
+            "no alembic.ini was found, so the question of which credential applies each chain was "
+            "never put. Four services in this tree manage their own schema; a scan that finds none "
+            "has stopped looking rather than found nothing to look at.",
+        )
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -772,7 +1211,39 @@ def main(argv: list[str] | None = None) -> int:
     for rel, text in surfaces:
         findings.extend(classify(rel, text, inspected, known))
 
+    # Which credential applies each chain, and whether the deployment sets it.
+    configured: set[str] = set()
+    for _rel, text in surfaces:
+        for line in text.splitlines():
+            assign = _ASSIGN_RE.match(line)
+            if assign:
+                configured.add(assign.group("key").upper())
+    inspected.entrypoints = collect_entrypoints(root)
+    findings.extend(classify_entrypoints(inspected.entrypoints, configured))
+
+    # And the reverse: a DSN handed to a service that cannot read the name.
+    readable_cache: dict[str, set[str]] = {}
+    for rel, text in surfaces:
+        bindings, unmapped = collect_service_bindings(rel, text)
+        inspected.unmapped_bindings.extend((rel, item) for item in unmapped)
+        for binding in bindings:
+            if binding.service_dir not in readable_cache:
+                readable_cache[binding.service_dir] = readable_env_names(root / "services" / binding.service_dir)
+            if binding.var.upper() in readable_cache[binding.service_dir]:
+                inspected.readable_bindings.append(binding)
+                continue
+            findings.append(
+                Finding(
+                    rel,
+                    f"sets {binding.var} on {binding.service}, and services/{binding.service_dir} reads no such "
+                    "variable — so the DSN is inert and the service falls back to whatever its own default names. "
+                    "A role switch that never reaches the service is the bypass wearing a compliant-looking "
+                    "deployment surface.",
+                )
+            )
+
     findings.extend(_empty_input_findings(inspected))
+    findings.extend(_empty_entrypoint_findings(inspected))
 
     print(f"check_runtime_db_role: scanned {len(inspected.surfaces)} deployment surfaces under {root}")
     print(f"  roles this deployment provisions as privileged: {sorted(known) or '<none found>'}")
@@ -791,6 +1262,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {len(inspected.ignored_dsns)} DSN(s) in surfaces that declare no superuser, so nothing to compare against:")
         for surface, var, role in inspected.ignored_dsns:
             print(f"    {surface}: {var} as {role!r}")
+
+    print(f"  {len(inspected.entrypoints)} alembic chain(s), and the credential each applies DDL as:")
+    for point in inspected.entrypoints:
+        applies = ", ".join(point.migration_vars) if point.migration_vars else f"<runtime: {', '.join(point.runtime_vars) or 'none'}>"
+        print(f"    {point.env_py or point.ini}: {applies}")
+    print(f"  {len(inspected.readable_bindings)} DSN variable(s) confirmed readable by the service they are set on:")
+    for binding in inspected.readable_bindings:
+        print(f"    {binding.surface}: {binding.var} on {binding.service} → services/{binding.service_dir}")
+    if inspected.unmapped_bindings:
+        print(f"  {len(inspected.unmapped_bindings)} DSN(s) on services built outside this tree, so there is no source to ask:")
+        for surface, item in inspected.unmapped_bindings:
+            print(f"    {surface}: {item}")
 
     if args.dsn:
         findings.extend(asyncio.run(_live_findings(args.dsn, args.owner_dsn)))

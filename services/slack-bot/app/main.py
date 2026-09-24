@@ -261,10 +261,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     timer_store = None
     dsn = os.getenv("DATABASE_URL", "").strip()
     if dsn:
-        try:
-            from app.services.timer_store import PostgresTimerStore  # noqa: PLC0415
+        from app.services.timer_store import MissingApprovalTimersTable, PostgresTimerStore  # noqa: PLC0415
 
-            timer_store = await PostgresTimerStore.create(dsn)
+        try:
+            timer_store = await PostgresTimerStore.create(dsn, get_settings().AISOC_DEFAULT_TENANT_ID)
+        except MissingApprovalTimersTable as exc:
+            # Distinguished from a transient database problem and logged at
+            # error: the deployment asked for durable approval timers, they
+            # are not durable, and the remedy is a migration rather than a
+            # retry. Still non-fatal — the in-memory fallback is the pre-B3
+            # behaviour, not a broken bot.
+            logger.error("approval_timer_store.schema_missing", error=str(exc))
+            timer_store = None
         except Exception as exc:  # noqa: BLE001 — durable store is best-effort
             logger.warning("approval_timer_store.init_failed", error=str(exc))
             timer_store = None

@@ -1324,12 +1324,65 @@ def _self_test() -> int:
 
     failures += _self_test_stale_ratchet()
     failures += _self_test_ratchet_ceiling()
+    failures += _self_test_empty_corpus()
 
     if failures:
         print(f"\nself-test FAILED: {failures} case(s) did not behave as specified", file=sys.stderr)
         return 1
-    print("\nself-test passed: drift detected in both directions, ten controls clear, and a stale ratchet entry is dropped.")
+    print(
+        "\nself-test passed: drift detected in both directions, ten controls clear, a stale ratchet "
+        "entry is dropped, and each of the three ways the corpus can empty is refused."
+    )
     return 0
+
+
+#: ``(label, what to put in the scratch tree)``. Each leaves ``services/`` in
+#: place and empties one of the three things the gate counts.
+_EMPTY_CORPUS_CASES: tuple[tuple[str, dict[str, str], str | None], ...] = (
+    ("no Python at all under services/", {}, None),
+    ("Python but no tenant-scoped table anywhere", {"r.py": "VALUE = 1\n"}, None),
+    (
+        "a tenant-scoped table declared and no statement touching one",
+        {"r.py": "VALUE = 1\n"},
+        "CREATE TABLE IF NOT EXISTS widgets (\n    id UUID PRIMARY KEY,\n    tenant_id UUID NOT NULL\n);",
+    ),
+)
+
+
+def _self_test_empty_corpus() -> int:
+    """Each of the three ways this scan can end up with nothing must refuse.
+
+    Not one case: the gate counts files, tables and statements, and any of
+    them reaching zero means a different part of it stopped working. A single
+    ``if not findings`` would have covered none of them — zero findings is
+    what a clean tree looks like.
+
+    The controls at the end are as important as the cases: an over-tight
+    floor that fires on the real repository would be "fixed" by deleting it.
+    """
+    global REPO_ROOT, SERVICES_DIR  # noqa: PLW0603 - the scanned root is module state
+    original_root, original_services = REPO_ROOT, SERVICES_DIR
+    failures = 0
+    for label, sources, migration in _EMPTY_CORPUS_CASES:
+        with tempfile.TemporaryDirectory(prefix="predicates_empty_") as tmp:
+            root = Path(tmp)
+            (root / "services" / "probe" / "app").mkdir(parents=True)
+            for name, src in sources.items():
+                (root / "services" / "probe" / "app" / name).write_text(src, encoding="utf-8")
+            if migration is not None:
+                (root / "services" / "probe" / "migrations").mkdir(parents=True)
+                (root / "services" / "probe" / "migrations" / "001.sql").write_text(migration, encoding="utf-8")
+            REPO_ROOT, SERVICES_DIR = root, root / "services"
+            try:
+                status = main([])
+            finally:
+                REPO_ROOT, SERVICES_DIR = original_root, original_services
+        if status != 0:
+            print(f"  [PASS] empty corpus — {label}: exits {status} rather than reporting it clean")
+        else:
+            print(f"  [FAIL] empty corpus — {label}: reported OK having judged nothing")
+            failures += 1
+    return failures
 
 
 def _self_test_stale_ratchet() -> int:
@@ -1396,6 +1449,49 @@ def main(argv: list[str] | None = None) -> int:
     result = scan()
     findings, inv, files, statements = result.findings, result.inventory, result.files, result.statements
 
+    # Name what was scanned, before any output mode. A gate that prints OK
+    # without saying what it opened cannot be told apart from one that opened
+    # nothing.
+    print(
+        f"check_tenant_query_predicates: scanned {files} files under {SERVICES_DIR}; "
+        f"{statements} statements touch {len(inv.tables)} tenant-scoped tables "
+        f"({len(inv.tables) - len(inv.tables & inv.rls_tables)} of them with no RLS policy)"
+    )
+
+    # And refuse when any of the three things it counts is zero. This gate did
+    # not exit 0 over an empty tree before, but only because every ratchet
+    # entry went stale at once and that check happens to run first — a true
+    # statement about the wrong thing, and one that disappears the moment the
+    # ratchet is emptied. The floor has to be the corpus.
+    #
+    # Three conditions rather than one, because they are three different
+    # losses and rolling them together would let the interesting one hide
+    # behind the obvious one. The middle is the dangerous case: the inventory
+    # is derived from migration DDL and model classes, so a changed glob or a
+    # renamed base class empties it silently while the walk still opens
+    # hundreds of files and the gate still prints OK.
+    #
+    # Ahead of `--inventory` as well as the default, because CI runs the
+    # inventory as its own step and the coverage figures it prints are quoted
+    # elsewhere; all-zero and green is the worst of both.
+    for count, detail in (
+        (files, f"no Python file was read under {SERVICES_DIR} — the walk found nothing to scan"),
+        (
+            len(inv.tables),
+            "no tenant-scoped table was discovered. The inventory comes from migration DDL and mapped "
+            "models; zero of them means the schema globs or the model detection stopped matching, and "
+            "every statement below would be judged against an empty set",
+        ),
+        (
+            statements,
+            f"{files} files were read and not one statement touched a tenant-scoped table. Found nothing "
+            "and scanned nothing print the same word",
+        ),
+    ):
+        if count == 0:
+            print(f"\nFAIL: {detail}.", file=sys.stderr)
+            return 2
+
     if args.json:
         print(json.dumps([asdict(f) for f in findings], indent=2))
         return 0
@@ -1405,14 +1501,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     unratcheted, stale = partition(findings)
-
-    # Name what was scanned. A gate that prints OK without saying what it
-    # opened cannot be told apart from one that opened nothing.
-    print(
-        f"check_tenant_query_predicates: scanned {files} files under {SERVICES_DIR}; "
-        f"{statements} statements touch {len(inv.tables)} tenant-scoped tables "
-        f"({len(inv.tables) - len(inv.tables & inv.rls_tables)} of them with no RLS policy)"
-    )
     if result.rls_scoped:
         print(
             f"  {result.rls_scoped} statement(s) are scoped by an RLS context on the connection rather than by a "

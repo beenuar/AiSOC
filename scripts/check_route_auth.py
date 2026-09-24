@@ -68,12 +68,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # One parser, two questions. A second route scanner would drift from this one
 # the first time either learned something the other did not — which is how the
 # `ExecuteUser` alias came to be reported as an unauthenticated playbook-run.
-from check_route_tenant_scope import (  # noqa: E402
-    REPO_ROOT,
-    SERVICES_DIR,
-    Route,
-    collect_routes,
-)
+#
+# Imported as a module rather than by name on purpose. `REPO_ROOT` and
+# `SERVICES_DIR` are module state that the shared empty-corpus self-test
+# rebinds to a scratch tree; a from-import would copy the originals at import
+# time, so this gate would go on scanning the real checkout while believing it
+# was pointed at an empty one — a self-test that proves nothing, which is the
+# shape this whole exercise is about.
+import check_route_tenant_scope as route_scan  # noqa: E402
 
 #: Public by design at the service level. ``mesh`` federates between
 #: independent deployments over Ed25519 signatures and k-anonymity: peers
@@ -209,16 +211,16 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
 }
 
 
-def _module_exempt(route: Route) -> str | None:
+def _module_exempt(route: route_scan.Route) -> str | None:
     for suffix, reason in PUBLIC_MODULES.items():
         if route.path.endswith(suffix):
             return reason
     return None
 
 
-def classify(routes: list[Route]) -> tuple[list[Route], list[str]]:
+def classify(routes: list[route_scan.Route]) -> tuple[list[route_scan.Route], list[str]]:
     """Return (unexplained unauthenticated routes, stale exemption keys)."""
-    unexplained: list[Route] = []
+    unexplained: list[route_scan.Route] = []
     matched: set[str] = set()
 
     for route in routes:
@@ -245,7 +247,7 @@ def classify(routes: list[Route]) -> tuple[list[Route], list[str]]:
     return unexplained, stale
 
 
-def _verifier_in_module(route: Route, verifier: str) -> bool:
+def _verifier_in_module(route: route_scan.Route, verifier: str) -> bool:
     """Whether the handler's module references the verifier.
 
     Some in-band checks live one call frame away — Bolt's
@@ -255,23 +257,23 @@ def _verifier_in_module(route: Route, verifier: str) -> bool:
     is the looser test, so it is used as a fallback: the point is that
     deleting the verification entirely still trips the gate.
     """
-    path = REPO_ROOT / route.path
+    path = route_scan.REPO_ROOT / route.path
     if not path.is_file():
         return False
     return verifier in path.read_text(encoding="utf-8", errors="ignore")
 
 
-def _print_inventory(routes: list[Route]) -> None:
-    print(f"Route authentication inventory — scanned {SERVICES_DIR}")
+def _print_inventory(routes: list[route_scan.Route]) -> None:
+    print(f"Route authentication inventory — scanned {route_scan.SERVICES_DIR}")
     print(f"{'service':<14}{'routes':>8}{'authed':>8}{'public':>8}{'in-band':>9}{'open':>6}   reason for the public ones")
     print("-" * 104)
     total = [0, 0, 0, 0, 0]
     for svc in sorted({r.service for r in routes}):
         rows = [r for r in routes if r.service == svc]
         authed = [r for r in rows if r.has_auth]
-        public: list[Route] = []
-        inband: list[Route] = []
-        open_: list[Route] = []
+        public: list[route_scan.Route] = []
+        inband: list[route_scan.Route] = []
+        open_: list[route_scan.Route] = []
         for r in rows:
             if r.has_auth:
                 continue
@@ -352,7 +354,7 @@ def _self_test() -> int:
             target = root / "services" / "probe" / "app"
             target.mkdir(parents=True, exist_ok=True)
             (target / "routes.py").write_text(source, encoding="utf-8")
-            routes = collect_routes(root=root)
+            routes = route_scan.collect_routes(root=root)
             open_, _stale = classify(routes)
             ok = len(open_) == want and len(routes) > 0
             if not ok:
@@ -360,6 +362,16 @@ def _self_test() -> int:
             print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {len(open_)} open, want {want} (scanned {len(routes)} routes)")
 
     failures += _self_test_stale_exemption()
+
+    # A scan that found no routes must not report on them. This gate did not
+    # exit 0 over an empty tree before, but only because the stale-exemption
+    # ratchet fired first: every entry in the two tables stopped matching, so
+    # the failure said "51 exemptions no longer describe an unauthenticated
+    # route" — a true statement about the wrong thing, and one that goes away
+    # the moment somebody empties the tables. The floor has to be the corpus
+    # itself.
+    failures += route_scan.self_test_empty_corpus("empty corpus", lambda: main([]))
+
     if failures:
         print(f"\nself-test FAILED: {failures} case(s) did not behave as specified", file=sys.stderr)
         return 1
@@ -378,7 +390,7 @@ def _self_test_stale_exemption() -> int:
     A claim nobody re-tests is indistinguishable from a comment.
     """
     failures = 0
-    routes = collect_routes()
+    routes = route_scan.collect_routes()
     by_key = {f"{r.path}::{r.function}": r for r in routes}
 
     for key, (verifier, _reason) in IN_BAND_CREDENTIAL_ROUTES.items():
@@ -387,7 +399,7 @@ def _self_test_stale_exemption() -> int:
             print(f"  [FAIL] in-band exemption names a route that does not exist: {key}")
             failures += 1
             continue
-        path = REPO_ROOT / route.path
+        path = route_scan.REPO_ROOT / route.path
         source = path.read_text(encoding="utf-8", errors="ignore")
         if verifier not in source:
             print(f"  [FAIL] in-band exemption for {route.function}() names {verifier}(), which {route.path} never mentions")
@@ -422,17 +434,32 @@ def main(argv: list[str] | None = None) -> int:
     if args.self_test:
         return _self_test()
 
-    if not SERVICES_DIR.is_dir():
-        print(f"ERROR: no services/ directory under {REPO_ROOT} — refusing to report a result for a tree I did not open.", file=sys.stderr)
+    if not route_scan.SERVICES_DIR.is_dir():
+        print(
+            f"ERROR: no services/ directory under {route_scan.REPO_ROOT} — refusing to report a result for a tree I did not open.",
+            file=sys.stderr,
+        )
         return 2
 
-    routes = collect_routes()
+    routes = route_scan.collect_routes()
+
+    # Before any output mode, and before the exemption ratchet: zero routes is
+    # not zero open routes. Shared with check_route_tenant_scope, which owns
+    # the collector — one corpus, one floor. Ahead of `--inventory` too,
+    # because CI runs it as its own step and a green step printing `TOTAL 0`
+    # is the same defect one level out.
+    refusal = route_scan.empty_corpus_refusal(routes, route_scan.SERVICES_DIR)
+    if refusal is not None:
+        print(f"check_route_auth: scanned 0 routes under {route_scan.SERVICES_DIR}")
+        print(f"\nFAIL: {refusal}", file=sys.stderr)
+        return 2
+
     unexplained, stale = classify(routes)
 
     files = len({r.path for r in routes})
     authed = sum(1 for r in routes if r.has_auth)
     print(
-        f"check_route_auth: scanned {len(routes)} routes across {files} files under {SERVICES_DIR}; "
+        f"check_route_auth: scanned {len(routes)} routes across {files} files under {route_scan.SERVICES_DIR}; "
         f"{authed} authenticated, {len(routes) - authed} public "
         f"({len(PUBLIC_ROUTES)} named routes, {len(IN_BAND_CREDENTIAL_ROUTES)} verified in-band, "
         f"{len(PUBLIC_MODULES)} probe module, {len(EXEMPT_SERVICES)} exempt service)"
