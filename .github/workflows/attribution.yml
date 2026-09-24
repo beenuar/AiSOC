@@ -15,7 +15,15 @@ name: Attribution
 # skips is indistinguishable from a gate that passes.
 
 on:
+  # `edited` matters because the body is half of what this gate reads. Without
+  # it the default types (opened, synchronize, reopened) mean a body edited to
+  # add an attribution footer after the last push is never re-checked — and a
+  # body corrected after a failure cannot be revalidated, because re-running a
+  # `pull_request` job replays the original event payload rather than fetching
+  # the current body. That is how this gate first caught a footer the tooling
+  # appends at PR-creation time: the only way to clear it was another push.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
