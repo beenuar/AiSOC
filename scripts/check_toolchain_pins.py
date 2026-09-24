@@ -331,6 +331,8 @@ class Scan:
     ci_dirs: dict[str, tuple[str, str]] = field(default_factory=dict)
     # service name -> (context, dockerfile), from the publish matrix.
     published: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # Manifests declaring [tool.mypy] without a `python_version`.
+    untargeted_mypy: list[str] = field(default_factory=list)
 
     def by_runtime(self, runtime: str) -> list[Pin]:
         return [p for p in self.pins if p.runtime == runtime]
@@ -966,6 +968,11 @@ def scan(root: Path) -> Scan:
         if isinstance(declared, str):
             result.pins.append(Pin("python", re.sub(r"^[^\d]*", "", declared), rel, "floor", f"python {declared}"))
         _parse_python_targets(raw, rel, result)
+        # A tree that asks to be type-checked and does not say against which
+        # Python gets the interpreter mypy happens to run on.
+        mypy_config = data.get("tool", {}).get("mypy")
+        if isinstance(mypy_config, dict) and "python_version" not in mypy_config:
+            result.untargeted_mypy.append(rel)
 
     # `ruff.toml` at the root configures every tree that has no local table.
     ruff_config = root / "ruff.toml"
@@ -1122,6 +1129,17 @@ def check_python_tooling_target(data: Scan) -> list[str]:
             f"images ship Python {version}, which no ruff `target-version` or mypy "
             f"`python_version` names ({', '.join(sorted(declared))}) — the static tools were "
             f"left behind by a Dockerfile bump (ship -> target)"
+        )
+    # A declared-but-untargeted tree is the same defect with nothing to
+    # compare: five of the six trees declaring [tool.mypy] pin 3.11 and one
+    # did not, so its share of the recorded baseline followed whatever
+    # interpreter CI ran and a workflow change could red the ratchet without
+    # touching the code.
+    for path in sorted(data.untargeted_mypy):
+        problems.append(
+            f"{path} declares [tool.mypy] with no `python_version`, so it is checked against "
+            f"whichever interpreter the job happens to run — pin it to the shipped "
+            f"{', '.join(sorted(shipped))} (target -> ship)"
         )
     return problems
 
@@ -1799,6 +1817,11 @@ def self_test() -> int:
         path = root / "services" / "py-svc" / "pyproject.toml"
         path.write_text(path.read_text().replace('python_version = "3.11"', 'python_version = "3.10"'), encoding="utf-8")
 
+    def drift_mypy_without_a_target(root: Path) -> None:
+        """A tree asking to be type-checked without saying against which Python."""
+        path = root / "services" / "py-svc" / "pyproject.toml"
+        path.write_text(path.read_text().replace('python_version = "3.11"', "strict = true"), encoding="utf-8")
+
     def drift_no_gofmt_at_all(root: Path) -> None:
         """The measured bug: `go vet` and `go build`, and no formatting check."""
         path = root / ".github" / "workflows" / "ci.yml"
@@ -1923,6 +1946,7 @@ def self_test() -> int:
         ("python: image ahead of CI", drift_python_image_ahead_of_ci, "`python` is pinned 2 different ways"),
         ("ruff targets another interpreter", drift_ruff_target, "target -> ship"),
         ("mypy targets another interpreter", drift_mypy_target, "target -> ship"),
+        ("mypy declared with no target at all", drift_mypy_without_a_target, "no `python_version`"),
         ("no gofmt anywhere", drift_no_gofmt_at_all, "module -> format"),
         ("gofmt scoped off the modules", drift_gofmt_scoped_off_the_modules, "format -> module"),
         ("gofmt -l that cannot fail", drift_gofmt_that_cannot_fail, "can only ever pass"),

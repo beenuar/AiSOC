@@ -164,4 +164,11 @@ class HttpResourceConfigFetcher:
                 logger.info("posture_loader.fetch_non_200", connector_id=connector_id, status=resp.status_code)
                 return {}
             body = resp.json()
-        return body.get("config") if isinstance(body, dict) else {}
+        # `body.get("config")` is None when a 200 response carries no
+        # `config` key, and this is declared to return a dict — so the
+        # caller got None where it expected something to iterate. The
+        # non-200 branch above already returns `{}` for "nothing to load";
+        # a 200 with nothing in it means the same thing and must not be
+        # spelled differently.
+        config = body.get("config") if isinstance(body, dict) else None
+        return config if isinstance(config, dict) else {}

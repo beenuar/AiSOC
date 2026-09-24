@@ -497,8 +497,13 @@ def _interpret(link: AlertSourceLink, body: dict[str, Any], *, dry_run: bool) ->
     a SIMULATED status, a refusal and a dry run all produce ``written=False``,
     and none of them may be reported as a write that happened.
     """
-    result = body.get("result") if isinstance(body.get("result"), dict) else {}
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
+    # Fetched once and then tested; the `x.get(k) if isinstance(x.get(k),
+    # dict)` form calls `get` twice, so the guard inspects a different call's
+    # result from the one that is used.
+    raw_result = body.get("result")
+    result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
+    raw_details = result.get("details")
+    details: dict[str, Any] = raw_details if isinstance(raw_details, dict) else {}
     status = str(result.get("status") or "")
     written = bool(details.get("written"))
     action = str(details.get("writeback_action") or "refuse")

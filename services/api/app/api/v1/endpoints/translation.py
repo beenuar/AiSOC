@@ -142,7 +142,14 @@ async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
         )
         return json.loads(body["choices"][0]["message"]["content"])
     except LLMContractViolation as exc:
-        logger.warning("translation.llm_contract_violation", reason=exc.reason)
+        # %-style, not a `reason=` keyword: `logger` here is
+        # `logging.getLogger`, not structlog, and the stdlib Logger rejects
+        # unknown keywords with a TypeError. An exception raised inside an
+        # `except` block is not caught by a sibling handler, so the
+        # `except Exception` below never saw it and the TypeError escaped —
+        # the one path whose whole job is to degrade gracefully was the one
+        # that raised.
+        logger.warning("translation.llm_contract_violation reason=%s", exc.reason)
         return None
     except Exception:
         return None

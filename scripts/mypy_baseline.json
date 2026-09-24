@@ -108,29 +108,14 @@
     "app/api/v1/endpoints/community.py": {
       "import-untyped": 1
     },
-    "app/api/v1/endpoints/detection_loop.py": {
-      "call-arg": 1
-    },
-    "app/api/v1/endpoints/hunts.py": {
-      "call-arg": 1
-    },
     "app/api/v1/endpoints/identity_timeline.py": {
       "assignment": 1
-    },
-    "app/api/v1/endpoints/knowledge_base.py": {
-      "call-arg": 1
     },
     "app/api/v1/endpoints/metrics.py": {
       "return-value": 2
     },
-    "app/api/v1/endpoints/phishing.py": {
-      "call-arg": 1
-    },
     "app/api/v1/endpoints/plugins.py": {
       "assignment": 8
-    },
-    "app/api/v1/endpoints/translation.py": {
-      "call-arg": 1
     },
     "app/auth/saml.py": {
       "var-annotated": 1
@@ -153,9 +138,6 @@
     "app/services/detections/sigma_import.py": {
       "import-untyped": 1
     },
-    "app/services/effective_permissions/posture_loader.py": {
-      "return-value": 1
-    },
     "app/services/event_warehouse/registry.py": {
       "list-item": 2
     },
@@ -169,8 +151,7 @@
       "assignment": 1
     },
     "app/services/playbook_step_dispatch.py": {
-      "arg-type": 8,
-      "union-attr": 14
+      "arg-type": 8
     },
     "app/services/plugin_manager.py": {
       "import-untyped": 1
@@ -179,16 +160,7 @@
       "import-untyped": 1
     },
     "app/services/siem_writeback.py": {
-      "arg-type": 1,
-      "union-attr": 6
-    },
-    "app/services/sla.py": {
-      "arg-type": 1,
-      "assignment": 1,
-      "call-overload": 3,
-      "dict-item": 1,
-      "index": 1,
-      "no-redef": 1
+      "arg-type": 1
     },
     "tests/api/v1/endpoints/test_alerts_detail_envelope.py": {
       "func-returns-value": 1

@@ -136,7 +136,8 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
         )
         return str(body["choices"][0]["message"]["content"]).strip()
     except LLMContractViolation as exc:
-        logger.warning("knowledge_base.llm_contract_violation", reason=exc.reason)
+        # %-style: stdlib Logger, not structlog. See translation.py.
+        logger.warning("knowledge_base.llm_contract_violation reason=%s", exc.reason)
         return None
     except Exception:
         return None
