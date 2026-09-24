@@ -234,6 +234,24 @@ jobs:
         run: ruff check services/
       - name: Ruff format check (all services)
         run: ruff format --check services/
+      # This job has been called "Lint & Type-check" since it was written, and
+      # until now it installed mypy and never ran it. Six manifests declare a
+      # `[tool.mypy]` table and three set `strict = true`, so the config asked
+      # for a check that had never once executed.
+      #
+      # The findings are real and there are 690 of them. They are recorded in
+      # `scripts/mypy_baseline.json` exactly as mypy reports them and the gate
+      # fails when any grows — no `ignore_errors`, no widened config, no tree
+      # excluded. Nothing installs the services' dependencies here on purpose:
+      # mypy's answer depends on what is importable, so the baseline is only
+      # reproducible against a fixed environment, and "mypy alone on 3.12" is
+      # that environment. Re-record with
+      # `python scripts/check_mypy_baseline.py --update` under the same
+      # conditions.
+      - name: The type-check this job is named after
+        run: |
+          python scripts/check_mypy_baseline.py --self-test
+          python scripts/check_mypy_baseline.py
       # The aisoc-api Docker image is built with `services/api` as its build
       # context, so anything under `services/agents` is *not* shipped in the
       # container. The natural-language query translator is consumed by both
@@ -893,7 +911,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26'
-          cache-dependency-path: services/${{ matrix.service }}/go.sum
+          # `demo-producer` is standard-library only and has no go.sum, so the
+          # glob resolves to the two legs that do have one instead of failing
+          # the third back to an uncached build with only a warning.
+          cache-dependency-path: services/${{ matrix.service }}/go.sum*
       - name: Build
         run: |
           cd services/${{ matrix.service }}
@@ -908,31 +929,42 @@ jobs:
           go test ./... -count=1
 
   # ──────────────────────────────────────────────
-  # Go SDK (`packages/plugin-sdk-go`)
-  #   Lives outside `services/` so the matrix above doesn't pick it up.
-  #   Has `client_test.go`, `loader_test.go`, `registry_test.go` already —
-  #   they were never gated. Build + vet + test, no soft-fails.
+  # Go SDKs (`packages/plugin-sdk-go`, `packages/sdk-go`)
+  #   Live outside `services/` so the matrix above doesn't pick them up.
+  #   `plugin-sdk-go` has `client_test.go`, `loader_test.go`,
+  #   `registry_test.go`; `sdk-go` had no job at all and so was never
+  #   compiled by CI — `scripts/check_toolchain_pins.py` now fails on a Go
+  #   module no workflow builds.
+  #
+  #   No `cache-dependency-path`: both modules are standard-library only and
+  #   have no `go.sum`. Pointing setup-go at a file that does not exist makes
+  #   it log `Restore cache failed: Some specified paths were not resolved` as
+  #   a *warning* and carry on, so the job kept passing with the cache
+  #   permanently off — a green tick over a step that never happened.
   # ──────────────────────────────────────────────
   sdk-go-test:
-    name: SDK — Go (build, vet, test)
+    name: SDK — Go ${{ matrix.module }} (build, vet, test)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [plugin-sdk-go, sdk-go]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26'
-          cache-dependency-path: packages/plugin-sdk-go/go.sum
       - name: Build
         run: |
-          cd packages/plugin-sdk-go
+          cd packages/${{ matrix.module }}
           go build ./...
       - name: Vet
         run: |
-          cd packages/plugin-sdk-go
+          cd packages/${{ matrix.module }}
           go vet ./...
       - name: Test
         run: |
-          cd packages/plugin-sdk-go
+          cd packages/${{ matrix.module }}
           go test ./... -count=1
 
   # ──────────────────────────────────────────────

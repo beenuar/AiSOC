@@ -14,7 +14,7 @@ The image is published at
 [`ghcr.io/beenuar/aisoc-devcontainer:latest`](https://github.com/beenuar/AiSOC/pkgs/container/aisoc-devcontainer)
 on every push to `main`. It carries:
 
-- Node 20 + `pnpm@8.15.1` via `corepack`
+- Node 22 + `pnpm@8.15.1` via `corepack`
 - Python 3.11 + [`uv`](https://github.com/astral-sh/uv) + `ruff`
 - Go 1.22
 - Docker CE 20.x (`docker.io`) + Compose v2 plugin

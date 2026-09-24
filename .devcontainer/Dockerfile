@@ -9,7 +9,7 @@
 # drops first-boot from ~5 minutes to ~30 seconds.
 #
 # Layers, top to bottom:
-#   1. Base: javascript-node bookworm — Node 20 + pnpm-friendly debian
+#   1. Base: javascript-node bookworm — Node 22 + pnpm-friendly debian
 #   2. System packages: docker.io, python3.11 + uv, go, gh
 #   3. Workspace bootstrap: corepack-prepare pnpm, prime turbo/eslint caches
 #
@@ -20,7 +20,10 @@
 # `.github/workflows/devcontainer-coldstart.yml` asserts the boot KPI.
 ###############################################################################
 
-FROM mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm
+# Node 22, matching every workflow and both Node images. On 20 a contributor's
+# container ran a different runtime from the one CI tests and the one the web
+# image ships, and Node 20 left security support in April 2026.
+FROM mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
 
 ARG TARGETARCH
 

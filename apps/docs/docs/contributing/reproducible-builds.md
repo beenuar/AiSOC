@@ -4,13 +4,21 @@ sidebar_position: 3
 
 # Reproducible builds
 
-Every Python service installs from a committed `poetry.lock`. Two builds of one
-commit install byte-identical versions, and nothing re-resolves at image build
-time.
+Every Python service installs from a committed `poetry.lock`, every Go module
+from a committed `go.sum`, and every Node install from `pnpm-lock.yaml` or
+`package-lock.json`. Two builds of one commit install byte-identical versions,
+and nothing re-resolves at image build time.
 
 If you change a dependency, **re-lock in the same commit**. That is the whole
 contributor-facing rule; the rest of this page explains what enforces it and
 why it exists.
+
+Two gates, one property:
+
+| Gate | Asks |
+|---|---|
+| `scripts/check_dependency_pins.py` | do all install paths agree on each **package** version |
+| `scripts/check_toolchain_pins.py` | do all paths agree on each **runtime** version, and is every install **locked** |
 
 ## Changing a dependency
 
@@ -64,6 +72,90 @@ than a preference:
 
 Every other dependency may differ per service. They are separate images and
 nothing crosses between them, so forcing agreement there would be noise.
+
+## Go and Node
+
+Same property, different ecosystems, and one extra failure mode: a Node
+install can simply decline to use the lockfile sitting next to it.
+
+```bash
+python scripts/check_toolchain_pins.py --verbose   # every path it scanned and every version it compared
+python scripts/check_toolchain_pins.py --self-test # proves it still detects injected drift
+```
+
+**Every Node install must be locked.** `pnpm install` needs
+`--frozen-lockfile`; `npm install` should be `npm ci`. An image that installs
+Node dependencies must also **copy the lockfile into its build context** — the
+two go together, because `npm ci` without the lockfile in context fails and
+`npm install` without it silently re-resolves. `apps/mobile` is the one
+declared exemption: it sits outside the root workspace with a lockfile of its
+own, so a root refresh must not red it.
+
+**Every Go module must have its checksums.** Copy `go.sum` unconditionally,
+never as `go.sum*` — the glob makes the checksum file optional, so deleting it
+downgrades the build to an unverified resolve without failing anything. Every
+`go.mod` must also be compiled by some workflow; `packages/sdk-go` was not, and
+so was never built by CI at all.
+
+**esbuild overrides stay scoped.** `package.json` pins `vite>esbuild` and
+`tsup>esbuild` per parent rather than workspace-wide, because Next bundles its
+own esbuild and a workspace-wide override replaces it — which breaks
+Turbopack's font import map. That scoping means a `vite` bump can pull a
+different esbuild with no esbuild line in the diff, so the gate also pins the
+**resolved** set in `EXPECTED_ESBUILD`. Moving it is a deliberate edit, not a
+side effect.
+
+## One toolchain version, everywhere
+
+A workflow compiling with a different Go or Node version than the Dockerfile
+ships is the package problem one level up: CI proves something about software
+the image does not contain.
+
+| Runtime | Version | Declared in |
+|---|---|---|
+| Go | 1.26 | every `go.mod` directive, every `setup-go`, every `FROM golang:` |
+| Node | 22 | every `setup-node`, both Node images, the devcontainer, `install.sh` |
+| pnpm | 8.15.1 | `packageManager`, `apps/web/Dockerfile`, `install.sh` |
+| Python | 3.11 in every service image | every `FROM python:`, every manifest floor |
+
+The gate compares these in both directions — a version an image ships that no
+workflow exercises, *and* a version a workflow uses that no image ships —
+because CI versions get bumped and Dockerfiles get forgotten, and a
+one-directional check misses exactly that.
+
+`pnpm/action-setup` is `v6.0.9` everywhere except `e2e.yml` and
+`visual-regression.yml`, which stay on v4 for a measured reason recorded in
+`PNPM_ACTION_EXEMPT`: they run inside the Playwright container, which ships a
+global pnpm 11.x, and under v6 pnpm self-switches down to the `packageManager`
+pin in a way that leaves `@tailwindcss/oxide`'s native binding unlinked.
+
+**Python is the weaker case, and it is recorded rather than closed.** The
+service manifests declare `python = "^3.11"`, which permits 3.12, so the 24
+workflows running 3.12 violate nothing written down — but every image ships
+3.11, so what CI exercises is not what production runs. Closing it means
+moving 24 workflows or re-locking 13 manifests. Until then the set is listed
+in `PYTHON_INTERPRETER_SPLIT` and may not grow: a workflow that joins it
+without being listed fails, and a listed workflow that no longer differs fails
+too.
+
+## Type checking
+
+`scripts/check_mypy_baseline.py` runs mypy over every tree that declares a
+`[tool.mypy]` table and fails when any finding grows. The findings are
+recorded in `scripts/mypy_baseline.json` exactly as mypy reports them — no
+widened config, no excluded tree, and `strict = true` stays strict.
+
+The baseline is only reproducible against a fixed environment: **mypy alone,
+no project dependencies installed, on Python 3.12**, which is what CI does.
+Re-record under the same conditions:
+
+```bash
+docker run --rm -v "$PWD":/w -w /w python:3.12-slim \
+  bash -c "pip install 'mypy>=1.10,<2' && python scripts/check_mypy_baseline.py --update"
+```
+
+Fixing a finding requires re-recording too, so the freed headroom cannot
+silently absorb the next one.
 
 ## Why this exists
 

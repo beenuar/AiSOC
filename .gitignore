@@ -131,3 +131,11 @@ services/api/marketplace/
 # `-current.yaml` file is a runtime artefact that varies by environment.
 schemas/graph-schema-current.yaml
 
+
+# Compiled Go binaries. `services/demo-producer/demo-producer` was committed as
+# a 6.9 MB macOS arm64 executable in a repository whose Dockerfile builds a
+# GOOS=linux one — nothing consumed it, nothing rebuilt it, and running the
+# documented `go build ./...` silently overwrote it and dirtied the tree.
+/services/demo-producer/demo-producer
+/services/enrichment/enrichment
+/services/ingest/ingest

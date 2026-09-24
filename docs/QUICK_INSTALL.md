@@ -4,7 +4,7 @@ AiSOC ships with two one-click bootstrap installers. They take a freshly-imaged
 machine to a running AiSOC dashboard in your browser, with **zero assumed
 prerequisites**, in a single command.
 
-If you already have Docker, Node 20, pnpm 8+, and git installed, you don't need
+If you already have Docker, Node 22, pnpm 8+, and git installed, you don't need
 these scripts — just run `pnpm aisoc:demo` from a clone. These installers exist
 for the case where you don't (or you're handing the repo to someone who
 doesn't).
@@ -38,7 +38,7 @@ needs, and only if they are missing or too old:
 | ---------------------- | --------------------------------- | ---------------------- | -------------------------------- |
 | `git`                  | distro package manager            | `winget Git.Git`       | clone the repo                   |
 | Docker Engine + Compose v2 | distro package manager (Linux), `brew install --cask docker` (macOS) | `winget Docker.DockerDesktop` (+ WSL2) | run the AiSOC stack |
-| Node.js 20 LTS         | NodeSource (Linux), `brew` (macOS) | `winget OpenJS.NodeJS.LTS` | drive `pnpm aisoc:demo` |
+| Node.js 22 LTS         | NodeSource (Linux), `brew` (macOS) | `winget OpenJS.NodeJS.LTS` | drive `pnpm aisoc:demo` |
 | pnpm 8+                | `corepack enable` + `corepack prepare pnpm@latest` | same                  | install Node deps                |
 
 **It does not install:** Python, Go, Rust, Postgres, Redis, Kafka,

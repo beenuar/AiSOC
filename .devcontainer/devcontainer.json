@@ -42,8 +42,8 @@
       "label": "Docs site"
     }
   },
-  "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so `--frozen-lockfile=false` here is fast (≤ 30 s on a green Codespace).",
-  "onCreateCommand": "pnpm install --frozen-lockfile=false",
+  "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so this is fast (<= 30 s on a green Codespace). `--frozen-lockfile` matches CI and the web image: a contributor's first install must produce the dependency set CI tested, or their first green run is a different build from everyone else's. It read `--frozen-lockfile=false`, which a substring test for the flag reads as enabling the very thing it disables.",
+  "onCreateCommand": "pnpm install --frozen-lockfile",
   "//postStartCommand": "Starts dockerd. Runs on every container start rather than only at create, so a Codespace stop/resume comes back with a working daemon — `onCreateCommand` would leave the second boot without one.",
   "postStartCommand": "bash .devcontainer/start-docker.sh",
   "postAttachCommand": "echo '\\n>>> AiSOC dev container is ready.\\n>>> To run the demo, open a terminal and run:\\n>>>     pnpm aisoc:demo --no-open\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n>>> Or, no-Docker:  pip install -e packages/aisoc-sandbox && aisoc-sandbox demo\\n'",

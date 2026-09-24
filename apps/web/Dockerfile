@@ -1,9 +1,13 @@
 # AiSOC Web Frontend Dockerfile
 # Multi-stage build for production. Build context = monorepo root.
 
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm@8
+# Pinned to the exact version `package.json`'s `packageManager` field declares
+# and `install.sh` installs. `pnpm@8` floats across the 8.x line, so the image
+# could resolve the lockfile with a different pnpm than CI — two resolvers,
+# two answers to what this commit installs.
+RUN npm install -g pnpm@8.15.1
 
 # ─── Builder ──────────────────────────────────────────────────────────────────
 # Single-stage install + build keeps pnpm's symlinked workspace layout
@@ -13,7 +17,9 @@ FROM base AS builder
 WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml ./
-COPY pnpm-lock.yaml* ./
+# Not `pnpm-lock.yaml*`: the glob makes the lockfile optional, so a build with
+# no lockfile in context would succeed and resolve its own dependency tree.
+COPY pnpm-lock.yaml ./
 COPY turbo.json ./
 COPY tsconfig.base.json ./
 COPY VERSION ./
@@ -93,7 +99,14 @@ ENV NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=${NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD}
 
 # Use pnpm's default symlinked node_modules — same layout as local dev,
 # so tsup/tsc bin shims resolve correctly inside each workspace package.
-RUN pnpm install --no-frozen-lockfile
+#
+# `--frozen-lockfile`, matching every workflow that installs this workspace.
+# It was `--no-frozen-lockfile`, which made the production web image the one
+# install path in the repository free to resolve its own answer: the bundle
+# users are served could be built from a dependency set no CI job had ever
+# installed. If this now fails, the lockfile is stale — run `pnpm install` and
+# commit the result rather than relaxing the flag.
+RUN pnpm install --frozen-lockfile
 
 # Build workspace packages then the Next.js app. @aisoc/report-card must be
 # built here too — the /tools/coverage page imports it, and without its dist the

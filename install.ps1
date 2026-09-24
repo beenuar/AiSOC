@@ -12,7 +12,7 @@
         3. Installs (idempotently) the four prerequisites AiSOC needs:
              - Git
              - Docker Desktop (which bundles Docker Engine + Compose v2)
-             - Node.js 20 LTS
+             - Node.js 22 LTS
              - pnpm 8+ (via corepack)
            All installs go through winget, the official Windows package
            manager. We never download random installers from the internet.
@@ -502,7 +502,7 @@ function Test-DockerDaemon {
     exit 2
 }
 
-# ─── Step 3: Node.js 20 LTS ───────────────────────────────────────────────
+# ─── Step 3: Node.js 22 LTS ───────────────────────────────────────────────
 
 function Install-Node {
     $major = Get-CommandMajorVersion -Name 'node'
@@ -513,7 +513,7 @@ function Install-Node {
         Write-Ok "node already installed: $((& node --version))"
         return
     }
-    Install-WingetPackage -Id 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js 20 LTS'
+    Install-WingetPackage -Id 'OpenJS.NodeJS.LTS' -DisplayName 'Node.js 22 LTS'
     if (-not (Test-CommandExists node)) {
         Stop-WithError "node was installed via winget but isn't on PATH. Open a new PowerShell window and re-run this script."
     }
