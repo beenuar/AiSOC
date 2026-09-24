@@ -29,7 +29,7 @@
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.0",
     "cmdk": "^1.1.1",
-    "cytoscape": "^3.34.0",
+    "cytoscape": "^3.34.3",
     "cytoscape-fcose": "^2.2.0",
     "date-fns": "^4.4.0",
     "framer-motion": "^12.43.0",
