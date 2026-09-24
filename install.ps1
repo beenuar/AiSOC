@@ -731,7 +731,7 @@ function Write-SuccessBanner {
     Write-Host ''
     Write-Host '  Web console:    http://localhost:3000'
     Write-Host '  Showcase case:  http://localhost:3000/cases/INC-RT-001?tab=ledger'
-    Write-Host '  API + Swagger:  http://localhost:8000/docs'
+    Write-Host '  API + Swagger:  http://localhost:8000/api/docs'
     Write-Host '  Realtime WS:    ws://localhost:8086'
     Write-Host ''
     Write-Host "Useful commands (run from $RepoRoot):" -ForegroundColor DarkGray

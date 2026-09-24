@@ -643,6 +643,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `retry_max` at 5 against a model allowing 25 — and is now generated from
   `StepType` and `bounds.py`.
 
+- **A new user who followed only the README could not log in.** `make up`
+  worked, `make smoke` passed 8/8, and then authentication was impossible for
+  three independent reasons at once. The only account was `admin@aisoc.local`,
+  and `LoginRequest.email` is a pydantic `EmailStr`, which rejects RFC 6761
+  special-use domains — so the address returned `HTTP 422 "value is not a
+  valid email address: The part after the @-sign is a special-use or reserved
+  name"` *before the password was ever compared*. The bcrypt hash migration
+  001 seeded matched neither the `changeme` that four documentation pages
+  published nor the `admin` its own inline comment claimed; checked with this
+  service's `verify_password`, every candidate returned `False`, so it
+  corresponded to no known secret. And nothing existed to create a user with.
+  `make demo` repaired it incidentally by writing a valid address, which left
+  the demo path working and the path for running AiSOC on your own data
+  broken.
+
+  The first administrator is now created by the deployment rather than
+  committed to the repository. `services/api/app/scripts/bootstrap_admin.py`
+  creates `admin@aisoc.internal`, generates a password, and prints it once —
+  it is stored nowhere. `make up` calls it, so the documented quick start ends
+  with a credential on screen; `make bootstrap` runs it on its own and
+  `make bootstrap ARGS=--reset-password` mints a new one. It is idempotent: a
+  second run reports the existing account and changes nothing, which is what
+  makes it safe for `make up` to call unconditionally. The address is
+  validated with the same library the login route uses, so an address that
+  cannot sign in is refused here with an explanation instead of becoming an
+  account that fails at a login form with a schema error.
+
+  Migration 001 no longer seeds a user at all, and `059` deactivates the
+  orphaned row on databases that already ran it. A gate
+  (`tests/test_first_run_gate.py`) now asserts that no migration ships a
+  password hash and that every login example in the documentation uses an
+  address the API accepts — the four pages were each self-consistent with the
+  broken seed, which is why reading them found nothing.
+  `golden-pipeline.yml` runs `make bootstrap` against the live stack and
+  authenticates with the credential it printed, so the quick start's last step
+  is covered by the same job that covers its first.
+
+- **The published `aisoc-web:latest` image shipped demo mode baked on**, and
+  it is the image `docker-compose.yml` pulls for `make up`. Next inlines
+  `NEXT_PUBLIC_*` at build time, so there was no runtime escape: a
+  self-hoster's console announced "Demo data resets daily at 00:00 UTC. All
+  write actions are disabled." over their own real alerts, disabled every
+  write control, and offered a "Self-host AiSOC" link inside an already
+  self-hosted install. The only remedy was to rebuild the image.
+
+  The demo is now its own build under its own tag. `latest`, `main` and
+  `vX.Y.Z` are the product with demo mode off; `demo` and `vX.Y.Z-demo` carry
+  the demo bundle, and `infra/compose/docker-compose.demo.yml` pulls those.
+  Nothing has to choose between a working demo and a usable self-host image.
+
+  Demo credentials are also no longer compiled into a non-demo bundle at all.
+  `apps/web/Dockerfile` defaulted the autologin address and password to real
+  values, and `login/page.tsx` and `DemoAutoLogin.tsx` each declared them as
+  module-level literals — gating the *render* on `isDemoMode()` hid the panel
+  but left the strings in every chunk the project ships. All three now read
+  them from the build environment, and only the demo build supplies them.
+
+- **`make up` printed an API docs URL that 404s.** The README was corrected on
+  its own; the tooling was not, so `make up`, `install.sh`, `install.ps1`,
+  `scripts/lab.sh` and three documentation pages went on telling every new
+  user to open `http://localhost:8000/docs` while the app mounts `/api/docs`.
+  `test_readme_api_docs_url.py` now walks the tool output as well as the
+  README.
+
+- **The README never told anyone to create `.env`.** `make doctor` correctly
+  reported it missing and printed the fix; the quick start it was meant to
+  support skipped the step. It is now the second line of the quick start.
+
+- **`make doctor` reported a port held by a foreign process as held by us.**
+  The check was `docker compose ps -q <service>`, which lists containers in
+  any state — so a Postgres that exited *because* the port was taken still
+  counted, and the doctor printed "port 5432 in use by aisoc postgres" while
+  an unrelated process had it. The two remedies are opposites. It now asks
+  which host port our own container actually publishes, names the container or
+  process that holds the port otherwise, and reports a service already
+  remapped to a different port as fine rather than as a conflict.
+
+- **`make up` hit port conflicts with no explanation.** `docker compose up`
+  reports `port is already allocated` against whichever container lost the
+  race, after a minute of unrelated output and without naming what holds it.
+  `make up` now runs the port check first (`doctor.sh --ports-only`) and stops
+  before starting anything.
+
+- **The compose security note recommended a remedy that does nothing.** Both
+  compose files told operators to change a host binding with a
+  `docker-compose.override.yml`. Compose *appends* sequences when it merges,
+  so an override without `!override` publishes the new binding alongside the
+  old one and leaves the conflict in place. Both notes now show the tag, and
+  `ports: !reset []` for removing a publishing entirely.
+
 - **The agent recommended evidence acquisition the platform could not
   perform.** `capture_forensics` was an `ActionType` with no executor
   anywhere, and `services/agents/app/agents/investigation_agent.py` proposes

@@ -7,21 +7,24 @@
 # check must probe the thing it names: "the container is running" is not
 # evidence that the service works, and this script does not report it as such.
 #
-#   ./scripts/doctor.sh            # diagnose the default (CORE) profile
-#   ./scripts/doctor.sh --full     # also check the full-profile stores
-#   ./scripts/doctor.sh --quiet    # only print problems
+#   ./scripts/doctor.sh              # diagnose the default (CORE) profile
+#   ./scripts/doctor.sh --full       # also check the full-profile stores
+#   ./scripts/doctor.sh --quiet      # only print problems
+#   ./scripts/doctor.sh --ports-only # just the port check (what `make up` runs first)
 #
 # Exit code is 0 only when every required check passes.
 set -uo pipefail
 
 PROFILE_FULL=0
 QUIET=0
+PORTS_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --full)  PROFILE_FULL=1 ;;
     --quiet) QUIET=1 ;;
+    --ports-only) PORTS_ONLY=1 ;;
     -h|--help)
-      sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -80,7 +83,10 @@ else
   pass "docker compose v2 available"
 fi
 
-if docker info >/dev/null 2>&1; then
+# Skipped under --ports-only: `make up` runs that mode as a pre-flight, and the
+# disk probe starts a container. Advisories about free space do not belong in
+# the path between typing `make up` and the stack starting.
+if [ "$PORTS_ONLY" = "0" ] && docker info >/dev/null 2>&1; then
   # Disk exhaustion inside the Docker VM corrupts Kafka's log dir and the
   # broker then reports healthy while refusing every request. That exact
   # failure cost hours, so it is checked before anything else.
@@ -112,19 +118,70 @@ port_busy() {
   elif have ss;   then ss -ltn 2>/dev/null | grep -q ":$1 "
   else return 1; fi
 }
-# Only flags a port held by something that is NOT our own stack.
-for spec in "5432 postgres" "6379 redis" "9092 kafka" "8000 api" "8081 ingest-worker" "3000 web"; do
-  port="${spec%% *}"; owner="${spec##* }"
-  if port_busy "$port"; then
-    if [ -n "$COMPOSE" ] && svc_running "$owner"; then
-      pass "port $port in use by aisoc $owner"
-    else
-      fail "port $port is held by another process (needed by $owner)" "lsof -nP -iTCP:$port -sTCP:LISTEN   # then stop it, or change the host port in docker-compose.yml"
+
+# Names whatever is holding a port. "Something else has it" is only actionable
+# if the operator can tell what, so this reports a container name when Docker
+# published the port and the listening process otherwise.
+port_holder() {
+  _ph_port="$1"
+  if have docker; then
+    _ph_name="$(docker ps --filter "publish=${_ph_port}" --format '{{.Names}}' 2>/dev/null | head -n1)"
+    [ -n "${_ph_name:-}" ] && { printf 'container %s' "$_ph_name"; return 0; }
+  fi
+  if have lsof; then
+    _ph_pid="$(lsof -nP -iTCP:"${_ph_port}" -sTCP:LISTEN -t 2>/dev/null | head -n1)"
+    if [ -n "${_ph_pid:-}" ]; then
+      _ph_cmd="$(ps -o comm= -p "${_ph_pid}" 2>/dev/null | sed 's#.*/##')"
+      printf '%s (pid %s)' "${_ph_cmd:-unknown process}" "${_ph_pid}"
+      return 0
     fi
+  fi
+  printf 'an unidentified process'
+}
+
+# Prints the host port this deployment's own container publishes for a
+# service, or nothing.
+#
+# The old test was `docker compose ps -q <svc>`, which answers a different
+# question: it lists containers in *any* state. A postgres that exited because
+# the port was already taken still counted, so the port was reported as ours
+# while a foreign process held it — a green tick on the one line that needed to
+# be red, and the two remedies are opposites (leave it alone, versus stop the
+# other process). Observed against a live stack: an ssh tunnel held 5432, this
+# deployment's postgres was published on 55432, and the doctor said
+# "port 5432 in use by aisoc postgres".
+svc_published_port() {
+  [ -n "$COMPOSE" ] || return 1
+  _sp_mapped="$($COMPOSE port "$1" "$2" 2>/dev/null | tail -n1)"
+  [ -n "${_sp_mapped:-}" ] || return 1
+  printf '%s' "${_sp_mapped##*:}"
+}
+
+# host-port service container-port
+for spec in "5432 postgres 5432" "6379 redis 6379" "9092 kafka 9092" \
+            "8000 api 8000" "8081 ingest-worker 8080" "3000 web 3000"; do
+  # shellcheck disable=SC2086 # deliberate word splitting of a fixed 3-field spec
+  set -- $spec; port="$1"; owner="$2"; cport="$3"
+  ours="$(svc_published_port "$owner" "$cport" || true)"
+
+  if [ "${ours:-}" = "$port" ]; then
+    pass "port $port in use by aisoc $owner"
+  elif [ -n "${ours:-}" ]; then
+    # Already remapped. The canonical port being busy is then irrelevant, and
+    # failing on it would send the operator to fix something that is working.
+    pass "aisoc $owner is published on $ours (not the default $port)"
+  elif port_busy "$port"; then
+    fail "port $port is held by $(port_holder "$port") — aisoc $owner needs it" \
+         "stop it, or change the host port in docker-compose.yml. A docker-compose.override.yml must use 'ports: !override' — a plain override appends and leaves $port published."
   else
     [ "$QUIET" = "1" ] || printf '%s·%s port %s free\n' "$D" "$X" "$port"
   fi
 done
+
+if [ "$PORTS_ONLY" = "1" ]; then
+  [ "$FAILURES" -eq 0 ] && exit 0
+  exit 1
+fi
 
 [ -z "$COMPOSE" ] && { printf '\n%sCannot check services without docker compose.%s\n' "$R" "$X"; exit 1; }
 

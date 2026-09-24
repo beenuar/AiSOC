@@ -358,6 +358,16 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest
           python3 -m pytest tests/test_support_bundle.py -q
+      # A clean install has to end with an account somebody can sign into.
+      # It did not: `make up` and `make smoke` both passed and login was
+      # impossible, because the seeded address was a reserved domain the
+      # login route rejects with a 422, its password hash matched nothing
+      # documented, and the published console image was a demo build. Every
+      # one of those lived between two files that never mention each other.
+      - name: First-run credentials and image tags
+        run: |
+          python3 -m pip install --quiet pytest pyyaml email-validator
+          python3 -m pytest tests/test_first_run_gate.py -q
       # Phase 8 — a production prompt cannot change without a version bump +
       # lock regeneration (the signal that must trigger an eval re-grade).
       - name: Verify prompt lock is current (Phase 8)

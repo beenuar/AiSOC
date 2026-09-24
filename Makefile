@@ -24,7 +24,8 @@ PROFILE ?=
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 
 .PHONY: help install up up-full down restart status doctor smoke demo logs clean \
-        test test-unit test-integration test-e2e stats papers papers-install demo-script
+        bootstrap test test-unit test-integration test-e2e stats papers \
+        papers-install demo-script
 
 help:
 	@echo ""
@@ -32,6 +33,7 @@ help:
 	@echo "    make install        Install prerequisites, configure, start, and verify"
 	@echo "    make up             Start the CORE stack (postgres, kafka, ingest, fusion, api, web)"
 	@echo "    make up-full        Start CORE plus lake, graph, vector, search and enrichment"
+	@echo "    make bootstrap      Create the first administrator and print its password once"
 	@echo "    make smoke          Push one real event through the pipeline and check it becomes an alert"
 	@echo "    make doctor         Diagnose the deployment and say what to fix"
 	@echo ""
@@ -54,16 +56,40 @@ help:
 install:
 	./install.sh
 
-up:
+# The port check runs before compose, not after it fails. `docker compose up`
+# reports a conflict as `Bind for 127.0.0.1:5432 failed: port is already
+# allocated` against whichever container lost the race, which names neither the
+# process holding the port nor what to do about it. Half the stack is running
+# by then, so the error also arrives after a minute of unrelated output.
+up: _ports
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "Waiting for services to become healthy…"
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
 	@echo "  Console:  http://localhost:3000"
-	@echo "  API:      http://localhost:8000/docs"
+	@echo "  API:      http://localhost:8000/api/docs"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
+	@$(MAKE) --no-print-directory bootstrap
+
+# Creates the first administrator and prints the password once. Idempotent: a
+# second run reports the existing account and changes nothing, which is why
+# `up` can call it unconditionally.
+#
+# Failure here is reported but does not fail `up`. The stack is genuinely
+# running at this point, and a `make up` that exits non-zero over an account
+# the operator can create with one more command would be the wrong signal —
+# but it must say so, because silence would leave them at a login form with no
+# credential and no explanation.
+# `make bootstrap ARGS=--reset-password` replaces the password of an account
+# that already exists, which is the answer to "the terminal scrolled away".
+bootstrap:
+	@$(COMPOSE) run --rm -T api python -m app.scripts.bootstrap_admin $(ARGS) || { \
+	  echo ""; \
+	  echo "Could not create the administrator — the stack is up, but you cannot sign in yet."; \
+	  echo "Run 'make doctor' to find out why, then 'make bootstrap' again."; \
+	}
 
 # The lake and graph writers target stores that exist only in `full`, so the
 # flags travel with the profile. In CORE they default off rather than
@@ -72,6 +98,19 @@ up-full:
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait
 	@echo "Full profile up. Prove the pipeline works: make smoke"
+
+# Names a port conflict before compose hits it. Silent when every port is
+# either free or already held by this deployment's own containers — re-running
+# `make up` on a running stack must not be reported as a conflict with itself.
+_ports:
+	@./scripts/doctor.sh --ports-only || { \
+	  echo ""; \
+	  echo "Not starting: the ports above are taken by something else."; \
+	  echo "Stop that process, or edit the host port in docker-compose.yml."; \
+	  echo "(A docker-compose.override.yml needs 'ports: !override' — a plain"; \
+	  echo " override appends, leaving the conflicting binding in place.)"; \
+	  exit 1; \
+	}
 
 # Waits on the services that declare a healthcheck. Silent on success.
 _wait:

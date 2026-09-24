@@ -112,7 +112,7 @@ AiSOC/
 
 ## API surface
 
-The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml). Endpoint groups are summarised in [Architecture](../architecture.md#api-surface) and the interactive view is at `http://localhost:8000/docs` (Swagger) or `/redoc` (ReDoc) when you run the local stack.
+The full OpenAPI 3.1 spec lives at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml). Endpoint groups are summarised in [Architecture](../architecture.md#api-surface) and the interactive view is at `http://localhost:8000/api/docs` (Swagger) or `/api/redoc` (ReDoc) when you run the local stack.
 
 ## Next stops
 

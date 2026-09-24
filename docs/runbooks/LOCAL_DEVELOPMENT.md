@@ -125,7 +125,7 @@ poetry run python -m app.scripts.run_migrations   # apply DB migrations (forward
 poetry run uvicorn app.main:app --reload --port 8000
 ```
 
-Browse `http://localhost:8000/docs`.
+Browse `http://localhost:8000/api/docs`.
 
 ### 4.2 Fusion (`services/fusion`)
 
@@ -201,10 +201,12 @@ Browse `http://localhost:3000`.
 ## 5. Smoke-test path (≈ 5 minutes)
 
 ```bash
-# 1. Get a token
+# 1. Get a token. AISOC_ADMIN_PASSWORD is the password `make bootstrap` printed
+#    — there is no default credential; each deployment generates its own.
 TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login \
   -H 'content-type: application/json' \
-  -d '{"email":"admin@aisoc.local","password":"changeme"}' | jq -r .access_token)
+  -d "{\"email\":\"admin@aisoc.internal\",\"password\":\"$AISOC_ADMIN_PASSWORD\"}" \
+  | jq -r .access_token)
 
 # 2. Send a synthetic event into Kafka
 docker exec -i aisoc-kafka kafka-console-producer \

@@ -18,11 +18,14 @@ AiSOC exposes a fully documented OpenAPI 3.1 REST API.
 
 ### JWT Bearer (User)
 
+Use the administrator `make bootstrap` created. There are no default
+credentials — the password is generated per deployment and printed once.
+
 ```bash
 # Obtain a token
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@aisoc.local","password":"changeme"}'
+  -d '{"email":"admin@aisoc.internal","password":"<the password make up printed>"}'
 
 # Use the token
 curl http://localhost:8000/api/v1/cases \
@@ -42,9 +45,9 @@ API keys are created via `POST /api/v1/api-keys` and can be scoped to specific p
 
 When running locally, interactive Swagger UI is available at:
 
-- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
-- **OpenAPI JSON**: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
+- **Swagger UI**: [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+- **ReDoc**: [http://localhost:8000/api/redoc](http://localhost:8000/api/redoc)
+- **OpenAPI JSON**: [http://localhost:8000/api/openapi.json](http://localhost:8000/api/openapi.json)
 
 The full spec is also committed at [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml).
 
