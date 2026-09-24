@@ -109,6 +109,36 @@ tenant's own rows, and two consequences are worth stating plainly:
   excluded from the headline figures, so a demo install reads "0 real, 15
   synthetic" rather than reporting fixtures as a customer's posture.
 
+## The console view
+
+`/mssp` reads `GET /api/v1/mssp/portfolio` and
+`GET /api/v1/mssp/portfolio/alerts` and shows nothing it did not receive.
+There is no sample-data fallback: it has four states and each one tells you
+which it is.
+
+| State | What you see |
+| --- | --- |
+| Loading | "Loading portfolio…" and no figures at all |
+| Not an operator (`403`) | "You do not manage any tenants", with how to be added |
+| Portfolio API failed | The failure and its message, with a retry |
+| Empty portfolio | Whether *the organisation* manages none, or *you* were granted none |
+
+The two empty cases are distinguished by `portfolio_wide` and
+`scoped_tenants` from the payload, because the fixes differ: one needs a
+tenant to accept an invitation, the other needs an owner to grant you access.
+
+The alert feed has its own states, so a failure there does not claim the
+whole portfolio is down.
+
+Columns are per-tenant open alerts, criticals, untriaged, open cases, cases
+past SLA, MTTR, connector health and last event time — every one counted
+from the tenant's own rows. An unmeasured MTTR renders as `—`, never `0`.
+
+There is **no revenue, risk-score or analyst-allocation column**. The view
+used to carry all three against six hardcoded companies. None of them has a
+source anywhere in the product, so they are gone rather than nulled: a
+column of blanks still implies the measurement exists.
+
 ## Limits and headroom
 
 A provider's most expensive failure is a quiet one. A tenant that hits a cap

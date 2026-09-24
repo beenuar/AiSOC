@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { clsx } from 'clsx';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 interface Analyst {
   id: string;
@@ -32,7 +33,7 @@ const BADGE_COLORS: Record<string, { bg: string; text: string; border: string }>
   'Newcomer Rising':  { bg: 'bg-rose-500/15',   text: 'text-rose-300',   border: 'border-rose-500/30' },
 };
 
-const ANALYSTS: Analyst[] = [
+const SAMPLE_ANALYSTS: Analyst[] = [
   { id: 'sc', name: 'Sarah Chen',     initials: 'SC', avatarColor: 'bg-violet-500', casesClosed: 47, avgResolutionMin: 18, accuracy: 96.2, score: 945, badges: ['MITRE Master', 'Speed Demon'] },
   { id: 'mr', name: 'Marcus Rivera',  initials: 'MR', avatarColor: 'bg-sky-500',    casesClosed: 42, avgResolutionMin: 22, accuracy: 94.8, score: 892, badges: ['Zero FP', 'Night Owl'] },
   { id: 'ap', name: 'Aisha Patel',    initials: 'AP', avatarColor: 'bg-emerald-500',casesClosed: 39, avgResolutionMin: 15, accuracy: 97.1, score: 878, badges: ['Precision Strike', 'MITRE Master'] },
@@ -41,7 +42,7 @@ const ANALYSTS: Analyst[] = [
   { id: 'dk', name: 'David Kim',      initials: 'DK', avatarColor: 'bg-orange-500', casesClosed: 28, avgResolutionMin: 28, accuracy: 89.7, score: 721, badges: ['Newcomer Rising'] },
 ];
 
-const ACHIEVEMENTS: Achievement[] = [
+const SAMPLE_ACHIEVEMENTS: Achievement[] = [
   { text: 'Sarah Chen earned MITRE Master badge',            timeAgo: '2 hours ago', icon: 'badge' },
   { text: 'Marcus Rivera achieved Zero FP streak (30 days)', timeAgo: '5 hours ago', icon: 'streak' },
   { text: 'Team closed 50 cases this week — new record!',    timeAgo: '1 day ago',   icon: 'record' },
@@ -90,12 +91,20 @@ export function TeamAnalyticsView() {
   const [sortBy, setSortBy] = useState<SortKey>('score');
   const [search, setSearch] = useState('');
 
-  const totalCases = ANALYSTS.reduce((s, a) => s + a.casesClosed, 0);
-  const avgResolution = Math.round(ANALYSTS.reduce((s, a) => s + a.avgResolutionMin, 0) / ANALYSTS.length);
-  const teamAccuracy = (ANALYSTS.reduce((s, a) => s + a.accuracy, 0) / ANALYSTS.length).toFixed(1);
-  const totalBadges = ANALYSTS.reduce((s, a) => s + a.badges.length, 0);
+  // Nothing in the platform measures per-analyst performance: there is no
+  // route, no table and no column behind any of the figures below. Until one
+  // exists this view has a shape and no source, so the sample is confined to
+  // the hosted demo and everyone else gets told the truth.
+  const analysts = canUseDemoData() ? SAMPLE_ANALYSTS : [];
+  const achievements = canUseDemoData() ? SAMPLE_ACHIEVEMENTS : [];
+  const hasData = analysts.length > 0;
 
-  const sorted = [...ANALYSTS]
+  const totalCases = analysts.reduce((s, a) => s + a.casesClosed, 0);
+  const avgResolution = hasData ? Math.round(analysts.reduce((s, a) => s + a.avgResolutionMin, 0) / analysts.length) : null;
+  const teamAccuracy = hasData ? (analysts.reduce((s, a) => s + a.accuracy, 0) / analysts.length).toFixed(1) : null;
+  const totalBadges = analysts.reduce((s, a) => s + a.badges.length, 0);
+
+  const sorted = [...analysts]
     .filter((a) => !search.trim() || a.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       switch (sortBy) {
@@ -123,10 +132,10 @@ export function TeamAnalyticsView() {
       {/* Aggregate stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Cases Closed This Month', value: totalCases.toString(), accent: 'text-emerald-400' },
-          { label: 'Avg Resolution Time',     value: `${avgResolution} min`,     accent: 'text-sky-400' },
-          { label: 'Team Accuracy Rate',       value: `${teamAccuracy}%`,         accent: 'text-violet-400' },
-          { label: 'Total Badges Earned',      value: totalBadges.toString(),      accent: 'text-amber-400' },
+          { label: 'Cases Closed This Month', value: hasData ? totalCases.toString() : '—', accent: 'text-emerald-400' },
+          { label: 'Avg Resolution Time',     value: avgResolution === null ? '—' : `${avgResolution} min`, accent: 'text-sky-400' },
+          { label: 'Team Accuracy Rate',       value: teamAccuracy === null ? '—' : `${teamAccuracy}%`,      accent: 'text-violet-400' },
+          { label: 'Total Badges Earned',      value: hasData ? totalBadges.toString() : '—', accent: 'text-amber-400' },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{stat.label}</p>
@@ -165,7 +174,13 @@ export function TeamAnalyticsView() {
           </div>
         </div>
 
-        {sorted.length === 0 ? (
+        {!hasData ? (
+          <EmptyState
+            icon={EmptyStateIcons.search}
+            title="No analyst performance data"
+            description="AiSOC does not yet measure per-analyst cases closed, resolution time or accuracy, so there is nothing to rank. This view is a placeholder for that measurement rather than a report of it."
+          />
+        ) : sorted.length === 0 ? (
           <EmptyState
             icon={EmptyStateIcons.search}
             title="No analysts match your search"
@@ -263,8 +278,11 @@ export function TeamAnalyticsView() {
       {/* Team Highlights */}
       <div className="rounded-xl border border-gray-800/60 bg-gray-900/40 p-5 space-y-4">
         <h2 className="text-lg font-semibold text-white">Team Highlights</h2>
+        {achievements.length === 0 ? (
+          <p className="text-sm text-gray-500">No team milestones are recorded yet.</p>
+        ) : (
         <div className="space-y-3">
-          {ACHIEVEMENTS.map((ach, i) => (
+          {achievements.map((ach, i) => (
             <div
               key={i}
               className="flex items-start gap-3 rounded-lg border border-gray-800/40 bg-black/20 p-3.5"
@@ -279,6 +297,7 @@ export function TeamAnalyticsView() {
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   );

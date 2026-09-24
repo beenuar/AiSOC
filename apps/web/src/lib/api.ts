@@ -429,9 +429,124 @@ export const tenantsApi = {
   },
 };
 
+// The managed-portfolio read surface. Every figure below is counted from the
+// tenant's own rows by `services/api/app/services/mssp_portfolio.py`; there is
+// no revenue, risk-score or analyst-allocation data anywhere in this product,
+// so the console does not have columns for them.
+
+export interface PortfolioConnectorHealth {
+  total: number;
+  healthy: number;
+  stale: number;
+  error: number;
+}
+
+export interface PortfolioLimitHeadroom {
+  key: string;
+  label: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  pct_used: number | null;
+  /** unlimited | ok | warning | exhausted */
+  state: string;
+}
+
+export interface PortfolioTenant {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  relationship: string;
+  is_active: boolean;
+  open_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  untriaged_alerts: number;
+  /** Seeded demo rows, counted apart from the figures above. */
+  synthetic_alerts: number;
+  open_cases: number;
+  sla_breached_cases: number;
+  /** Null when this tenant closed no cases in the trailing window. */
+  mttr_minutes: number | null;
+  connectors: PortfolioConnectorHealth;
+  last_event_at: string | null;
+  limits: PortfolioLimitHeadroom[];
+  limits_exhausted: number;
+  limits_warning: number;
+}
+
+export interface PortfolioSummary {
+  tenants: number;
+  tenants_active: number;
+  open_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  untriaged_alerts: number;
+  synthetic_alerts: number;
+  open_cases: number;
+  sla_breached_cases: number;
+  mttr_minutes: number | null;
+  connectors_total: number;
+  connectors_healthy: number;
+  connectors_stale: number;
+  connectors_error: number;
+  tenants_with_exhausted_limits: number;
+  tenants_with_limit_warnings: number;
+  tenants_without_connectors: number;
+}
+
+export interface Portfolio {
+  org_id: string | null;
+  org_slug: string | null;
+  org_name: string | null;
+  org_role: string | null;
+  /** True when the caller's role reaches the whole portfolio rather than explicit grants. */
+  portfolio_wide: boolean;
+  /**
+   * How many tenants the caller is scoped to. Distinguishes "your organisation
+   * manages none" from "you were granted none" — different problems, and a bare
+   * zero row count tells them apart for nobody.
+   */
+  scoped_tenants: number;
+  summary: PortfolioSummary;
+  tenants: PortfolioTenant[];
+}
+
+export interface PortfolioAlert {
+  alert_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  title: string;
+  severity: string;
+  status: string;
+  category: string | null;
+  created_at: string | null;
+  event_time: string | null;
+  case_id: string | null;
+  is_synthetic: boolean;
+}
+
 export const msspApi = {
   async listChildren(): Promise<ChildTenant[]> {
     return request<ChildTenant[]>('/api/v1/mssp/children');
+  },
+
+  /**
+   * Managed portfolio: per-tenant posture plus derived totals.
+   *
+   * Throws `ApiError` with status 403 when the caller belongs to no operator
+   * organisation. That is not an error state in the console — cross-tenant
+   * reads simply are not theirs to make — so callers should branch on it.
+   */
+  async getPortfolio(): Promise<Portfolio> {
+    return request<Portfolio>('/api/v1/mssp/portfolio');
+  },
+
+  /** Open alerts across the portfolio. Excludes seeded demo rows by default. */
+  async listPortfolioAlerts(params: { severity?: string; limit?: number } = {}): Promise<PortfolioAlert[]> {
+    return request<PortfolioAlert[]>('/api/v1/mssp/portfolio/alerts', {
+      params: { severity: params.severity, limit: params.limit ?? 25 },
+    });
   },
 };
 
