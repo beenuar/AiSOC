@@ -2,7 +2,10 @@
 
 Tier 1.4 (SOC metrics dashboard) — exposes:
   * MTTD (mean time to detect): alert.created_at → alert.first_seen_at
-  * MTTR (mean time to respond): alert.created_at → alert.resolved_at
+  * MTTR (mean time to respond): case.created_at → case.closed_at, sharing its
+    window and expression with the MSSP portfolio via
+    ``app.services.resolution_time`` so the two surfaces cannot quote
+    different MTTRs for the same tenant
   * MTTC (mean time to contain): alert.created_at → alert.resolved_at for
     alerts with disposition='true_positive' (proxy for confirmed-contained)
   * False-positive rate (FPR): disposition='false_positive' / total resolved
@@ -34,6 +37,11 @@ from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 from app.models.remediation import RemediationGateLog
+from app.services.resolution_time import (
+    MTTR_WINDOW,
+    tenant_case_mttr_minutes,
+    tenant_cases_closed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +56,14 @@ class AlertMetrics(BaseModel):
     medium: int
     low: int
     resolvedToday: int
+    # Mean time to resolve in **hours**, from the same closed cases and the
+    # same window as `/metrics/soc`'s `mttr_hours` and the MSSP portfolio's
+    # `mttr_minutes`. It used to average `alerts.resolved_at`, so the
+    # dashboard's own two MTTR tiles read from different tables; and the
+    # console rendered this hours value with an `m` suffix, so a 1.5-hour
+    # MTTR would have displayed as "1.5m" had it ever been non-zero.
     mttr: float
+    mttr_sample_count: int = 0
 
 
 class CaseMetrics(BaseModel):
@@ -240,16 +255,11 @@ async def get_dashboard_metrics(
         )
     )
 
-    # MTTR for the dashboard tile: average resolved-alert duration over last 7d
-    mttr_dashboard_q = await db.scalar(
-        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.resolved_at.isnot(None),
-                Alert.created_at >= week_start,
-            )
-        )
-    )
+    # MTTR for the dashboard tile — the shared definition, so this tile and the
+    # SOC Performance panel below it cannot report different numbers.
+    mttr_dashboard_minutes = await tenant_case_mttr_minutes(db, tenant_id)
+    mttr_dashboard_q = (mttr_dashboard_minutes / 60.0) if mttr_dashboard_minutes is not None else 0.0
+    mttr_dashboard_samples = await tenant_cases_closed(db, tenant_id, now - MTTR_WINDOW)
 
     alert_metrics = AlertMetrics(
         total=total_q or 0,
@@ -260,6 +270,7 @@ async def get_dashboard_metrics(
         low=low_q or 0,
         resolvedToday=resolved_today_q or 0,
         mttr=round(float(mttr_dashboard_q or 0.0), 2),
+        mttr_sample_count=mttr_dashboard_samples,
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
@@ -383,6 +394,18 @@ class SOCKpis(BaseModel):
     cases_opened_7d: int
     cases_closed_7d: int
     analyst_overrides_7d: int
+    # How many rows each mean was averaged over.
+    #
+    # An average over zero rows is not zero, it is unmeasured, and these three
+    # tiles could not tell the difference: `float(None or 0.0)` published "we
+    # respond in 0.0 hours" for a tenant that had resolved nothing. Rather
+    # than make the means nullable — a breaking response change for every
+    # existing client — the sample count travels alongside so the console can
+    # render "not measured" when it is zero. Additive and back-compatible: a
+    # client that ignores these fields sees exactly what it saw before.
+    mttd_sample_count: int = 0
+    mttr_sample_count: int = 0
+    mttc_sample_count: int = 0
 
 
 class AttackHeatmapCell(BaseModel):
@@ -429,44 +452,40 @@ async def get_soc_metrics(
     week_start = now - timedelta(days=7)
 
     # ── MTTD ──────────────────────────────────────────────────────────────────
-    # Mean time from alert creation to first analyst view (first_seen_at).
-    mttd_q = await db.scalar(
-        select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.first_seen_at.isnot(None),
-                Alert.created_at >= week_start,
-            )
-        )
+    # Mean time from alert creation to first analyst view (first_seen_at). This
+    # one genuinely is an alert property — detection latency has nothing to do
+    # with cases — so it stays on the alerts table.
+    mttd_filters = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.first_seen_at.isnot(None),
+        Alert.created_at >= week_start,
     )
+    mttd_q = await db.scalar(select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)).where(mttd_filters))
+    mttd_samples = int(await db.scalar(select(func.count()).where(mttd_filters)) or 0)
     mttd_hours = float(mttd_q or 0.0)
 
     # ── MTTR ──────────────────────────────────────────────────────────────────
-    # Mean time from alert creation to resolved_at, for any resolved alert.
-    mttr_q = await db.scalar(
-        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.resolved_at.isnot(None),
-                Alert.created_at >= week_start,
-            )
-        )
-    )
-    mttr_hours = float(mttr_q or 0.0)
+    # Mean time from case open to case close, over the shared window — the same
+    # rows and the same expression the MSSP portfolio reports, so the two
+    # surfaces cannot quote different MTTRs for one tenant again. This tile
+    # used to average `alerts.resolved_at - alerts.created_at`, which measures
+    # a different lifecycle on a different table; see `resolution_time` for
+    # why that read 0.0 while the portfolio read 1.5h from the same estate.
+    mttr_minutes = await tenant_case_mttr_minutes(db, tenant_id)
+    mttr_hours = (mttr_minutes / 60.0) if mttr_minutes is not None else 0.0
+    mttr_samples = await tenant_cases_closed(db, tenant_id, now - MTTR_WINDOW)
 
     # ── MTTC (Mean Time to Contain) ───────────────────────────────────────────
     # For confirmed true-positive alerts only — proxy for "incident contained".
     # Uses resolved_at since we don't track a separate contained_at.
-    mttc_q = await db.scalar(
-        select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(
-            and_(
-                Alert.tenant_id == tenant_id,
-                Alert.resolved_at.isnot(None),
-                Alert.disposition == "true_positive",
-                Alert.created_at >= week_start,
-            )
-        )
+    mttc_filters = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.resolved_at.isnot(None),
+        Alert.disposition == "true_positive",
+        Alert.created_at >= week_start,
     )
+    mttc_q = await db.scalar(select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(mttc_filters))
+    mttc_samples = int(await db.scalar(select(func.count()).where(mttc_filters)) or 0)
     mttc_hours = float(mttc_q or 0.0)
 
     # ── FPR ───────────────────────────────────────────────────────────────────
@@ -528,18 +547,12 @@ async def get_soc_metrics(
     # ── Volume / case counts ──────────────────────────────────────────────────
     alert_vol = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start))) or 0
     cases_opened = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.created_at >= week_start))) or 0
-    cases_closed = (
-        await db.scalar(
-            select(func.count()).where(
-                and_(
-                    Case.tenant_id == tenant_id,
-                    Case.status == "resolved",
-                    Case.updated_at >= week_start,
-                )
-            )
-        )
-        or 0
-    )
+    # Counted on `closed_at`, not on `status = 'resolved' AND updated_at`.
+    # `resolved` is an intermediate state and `closed` is the terminal one, so
+    # the old filter reported 0 for a tenant that had closed two cases; and
+    # `updated_at` moves whenever anyone edits the case, which is not when it
+    # was finished.
+    cases_closed = await tenant_cases_closed(db, tenant_id, week_start)
 
     # ── Analyst overrides (7d) ────────────────────────────────────────────────
     # Any alert with a disposition set in the last 7 days = analyst weighed in.
@@ -566,6 +579,9 @@ async def get_soc_metrics(
         cases_opened_7d=cases_opened,
         cases_closed_7d=cases_closed,
         analyst_overrides_7d=overrides_q,
+        mttd_sample_count=mttd_samples,
+        mttr_sample_count=mttr_samples,
+        mttc_sample_count=mttc_samples,
     )
 
     # ── ATT&CK heatmap ────────────────────────────────────────────────────────

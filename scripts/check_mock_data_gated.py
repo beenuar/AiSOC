@@ -144,13 +144,14 @@ DEMO_GATE = re.compile(r"demoFallback|canUseDemoData|isDemoMode")
 #: Checked in *both* directions — `--check-allowlist` fails when an entry no
 #: longer matches anything, so a stale exemption is removed rather than
 #: accumulating as cover for whatever is written next under that name.
-ALLOWED_ILLUSTRATIVE: dict[tuple[str, str], str] = {
-    (
-        "components/landing/MitreStrip.tsx",
-        "TACTICS",
-    ): "Public landing page, not tenant state. The visible copy already tells the reader "
-    "'the tiles below are illustrative; numbers depend on which detection packs you enable'.",
-}
+#: Empty on purpose. The one entry this held excused `MitreStrip.tsx`, whose
+#: twelve ATT&CK tactic tiles carried unsourced coverage counts behind a caveat
+#: in the body copy. The component was imported nowhere and rendered on no
+#: route, so the caveat was the only thing standing between those numbers and a
+#: reader — and it would have stopped standing there the moment someone mounted
+#: the section. Deleting the component was the fix; improving its disclaimer
+#: would have left the numbers in the tree for the next person to inherit.
+ALLOWED_ILLUSTRATIVE: dict[tuple[str, str], str] = {}
 
 
 def _array_body(lines: list[str], start: int) -> str:

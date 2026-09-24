@@ -16,6 +16,7 @@ import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import {
+  ApiError,
   entityRiskApi,
   type AlertSeverity,
   type EntityRiskRecord,
@@ -107,6 +108,42 @@ const MOCK_ENTITY_STATS: EntityRiskStats = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * What actually went wrong, in words an operator can act on.
+ *
+ * This panel used to print "Fusion service unreachable" for every failure.
+ * The failure in production was a 422: the console was sending the tenant
+ * *slug* to a route that declares `tenant_id: UUID`. Fusion was healthy
+ * throughout, so the banner sent whoever read it to go and debug a service
+ * that was working — which is worse than no diagnosis, because it is
+ * confidently wrong and it costs an hour.
+ *
+ * Anything that is not a recognised status stays vague on purpose rather
+ * than guessing a subsystem.
+ */
+export function describeQueueFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 0) {
+      return 'Cannot reach the API from this browser. The entity queue is unknown, not empty.';
+    }
+    if (error.status === 422) {
+      return 'The API rejected this request as malformed, so this is a console bug rather than an outage. The entity queue is unknown, not empty.';
+    }
+    if (error.status === 401 || error.status === 403) {
+      return 'Not authorised to read the entity-risk queue. The queue is unknown, not empty.';
+    }
+    if (error.status === 404) {
+      return 'This deployment does not expose the entity-risk queue. Risk-Based Alerting needs the fusion service.';
+    }
+    if (error.status >= 500) {
+      return `The fusion service returned ${error.status}. The entity queue is unknown, not empty.`;
+    }
+    return `The entity-risk queue request failed with HTTP ${error.status}. The queue is unknown, not empty.`;
+  }
+  const detail = error instanceof Error ? error.message : String(error ?? 'unknown error');
+  return `Could not load the entity-risk queue: ${detail}. The queue is unknown, not empty.`;
+}
+
 function bandFor(score: number, threshold: number): {
   label: string;
   text: string;
@@ -153,12 +190,23 @@ function RatioStat({
   alertCount,
   incidentCount,
 }: {
-  alertCount: number;
-  incidentCount: number;
+  alertCount: number | undefined;
+  incidentCount: number | undefined;
 }) {
-  // Alert-to-incident ratio is the published 2026 KPI bar (≥ 50:1). We always
-  // surface it here because it's the single number that measures whether RBA
-  // is actually delivering — collapsing N alerts into 1 entity-incident.
+  // Alert-to-incident ratio is the published 2026 KPI bar (≥ 50:1) — the
+  // single number that measures whether RBA is delivering, i.e. collapsing N
+  // alerts into 1 entity-incident. It is derived from the two counts beside
+  // it, so when those are unknown this has to be unknown too: it read "13.0:1"
+  // off sample data while the queue below it was disclosed as unavailable.
+  if (alertCount === undefined || incidentCount === undefined) {
+    return (
+      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
+        <p className="text-xs text-gray-500">Alert → Incident</p>
+        <p className="text-2xl font-bold mt-1 text-gray-600">—</p>
+        <p className="text-[10px] text-gray-600 mt-0.5">not measured</p>
+      </div>
+    );
+  }
   const ratio =
     incidentCount > 0
       ? alertCount / incidentCount
@@ -473,45 +521,89 @@ export function EntityRiskQueue() {
       fallbackData: demoFallback({ tenant_id: 'demo', entities: MOCK_ENTITIES, threshold: 80 }),
     },
   );
-  const { data: stats } = useSWR<EntityRiskStats>(
+  const { data: stats, error: statsError } = useSWR<EntityRiskStats>(
     'entity-risk-stats',
     () => entityRiskApi.stats(),
     { refreshInterval: 30000, fallbackData: demoFallback(MOCK_ENTITY_STATS) },
   );
 
-  const entities = queue?.entities ?? [];
+  // A failed request means "unknown", and every number on this panel is
+  // derived from one of the two requests. The four cards used to sit above the
+  // disclosure and read off sample data — "Contributing alerts 26",
+  // "Alert → Incident 13.0:1" — while the banner immediately below them said
+  // the rows were unavailable. Whatever the banner discloses has to cover the
+  // headline numbers too, or the disclosure is decorative.
+  const failure = queueError ?? statsError;
+  const entities: EntityRiskRecord[] = queueError ? [] : (queue?.entities ?? []);
+  const countsUnknown = !!statsError || !!queueError;
   // Fall back to the queue's threshold (from the engine config) when the
   // stats endpoint is still loading — keeps the score bars stable.
   const threshold = stats?.threshold ?? queue?.threshold ?? 80;
-  const promotedCount = stats?.promoted ?? entities.filter((e) => e.promoted).length;
-  const total = stats?.total ?? entities.length;
-  const alertCount = stats?.alert_count ?? entities.reduce((sum, e) => sum + e.alert_count, 0);
+  const promotedCount = countsUnknown
+    ? undefined
+    : (stats?.promoted ?? entities.filter((e) => e.promoted).length);
+  const total = countsUnknown ? undefined : (stats?.total ?? entities.length);
+  const alertCount = countsUnknown
+    ? undefined
+    : (stats?.alert_count ?? entities.reduce((sum, e) => sum + e.alert_count, 0));
 
   return (
     <div className="space-y-4">
+      {failure && (
+        <div
+          role="status"
+          className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200"
+        >
+          <span className="font-semibold">Entity-risk queue unavailable:</span>{' '}
+          {describeQueueFailure(failure)} No entity or alert counts are shown
+          below.
+        </div>
+      )}
+
       {/* Stats strip — anchored on the 2026 KPI bar */}
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Active entities</p>
-          <p className="text-2xl font-bold mt-1 text-gray-200">{total}</p>
+          <p
+            className={clsx(
+              'text-2xl font-bold mt-1',
+              total === undefined ? 'text-gray-600' : 'text-gray-200',
+            )}
+          >
+            {total ?? '—'}
+          </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
-            threshold {Math.round(threshold)} pts
+            {total === undefined
+              ? 'not measured'
+              : `threshold ${Math.round(threshold)} pts`}
           </p>
         </div>
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Promoted</p>
-          <p className="text-2xl font-bold mt-1 text-red-400">
-            {promotedCount}
+          <p
+            className={clsx(
+              'text-2xl font-bold mt-1',
+              promotedCount === undefined ? 'text-gray-600' : 'text-red-400',
+            )}
+          >
+            {promotedCount ?? '—'}
           </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
-            entity-incidents
+            {promotedCount === undefined ? 'not measured' : 'entity-incidents'}
           </p>
         </div>
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
           <p className="text-xs text-gray-500">Contributing alerts</p>
-          <p className="text-2xl font-bold mt-1 text-gray-200">{alertCount}</p>
+          <p
+            className={clsx(
+              'text-2xl font-bold mt-1',
+              alertCount === undefined ? 'text-gray-600' : 'text-gray-200',
+            )}
+          >
+            {alertCount ?? '—'}
+          </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
-            current decay window
+            {alertCount === undefined ? 'not measured' : 'current decay window'}
           </p>
         </div>
         <RatioStat alertCount={alertCount} incidentCount={promotedCount} />
@@ -548,12 +640,6 @@ export function EntityRiskQueue() {
         </span>
       </div>
 
-      {queueError && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          Fusion service unreachable — showing demo entity queue so you can explore Risk-Based Alerting.
-        </div>
-      )}
-
       {/* Queue */}
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl overflow-hidden">
         <div className="flex items-center px-4 py-2 border-b border-gray-800/60 bg-gray-900/80 gap-4">
@@ -562,7 +648,17 @@ export function EntityRiskQueue() {
           <span className="text-xs text-gray-500 w-20 text-center">BAND</span>
         </div>
 
-        {queueLoading && entities.length === 0 ? (
+        {queueError ? (
+          <div className="flex flex-col items-center justify-center h-32 text-gray-500 gap-1 px-4 text-center">
+            <p className="text-sm text-amber-200/80">
+              The entity queue could not be loaded.
+            </p>
+            <p className="text-[11px] text-gray-600">
+              Treat this as unknown rather than as an empty queue — see the
+              message above.
+            </p>
+          </div>
+        ) : queueLoading && entities.length === 0 ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           </div>

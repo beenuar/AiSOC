@@ -46,6 +46,7 @@ import {
 } from '@/lib/api';
 import { AttackStory } from './AttackStory';
 import { ExplainDrawer } from './ExplainDrawer';
+import { NarrativeMarkdown } from './NarrativeMarkdown';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 // ─── Visual config ───────────────────────────────────────────────────────────
@@ -351,15 +352,15 @@ function SectionHeader({ title, count }: { title: string; count?: number }) {
 
 function NarrativeSection({ narrative }: { narrative: string | null }) {
   if (!narrative || !narrative.trim()) return null;
-  // Markdown-light: we preserve newlines so the deterministic
-  // paragraph + bullet structure produced by `narrative.build_narrative`
-  // renders without us pulling in a full Markdown engine.
+  // `build_narrative` emits a markdown-light dialect. Preserving newlines in a
+  // `whitespace-pre-wrap` paragraph preserved the *markup* too, so the rail
+  // showed analysts "**Medium** alert: … on **Finance & Legal #2**". The
+  // renderer covers that dialect and escapes everything, which matters because
+  // the narrative embeds attacker-influenceable entity names.
   return (
     <section className="px-4 py-4 border-b border-gray-800/40">
       <SectionHeader title="Narrative" />
-      <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
-        {narrative}
-      </p>
+      <NarrativeMarkdown source={narrative} />
     </section>
   );
 }
