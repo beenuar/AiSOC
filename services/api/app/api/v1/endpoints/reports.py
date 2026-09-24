@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.report import ReportArtefact, ReportTemplate
-from app.models.tenant import User
 from app.services.digest_html import render_digest_html
 from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 from app.services.executive_digest import ExecutiveDigest, build_weekly_digest
@@ -89,7 +89,7 @@ class GenerateRequest(BaseModel):
 @router.get("/templates", response_model=list[TemplateOut])
 async def list_templates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[ReportTemplate]:
     result = await db.execute(
         select(ReportTemplate).where(ReportTemplate.tenant_id == current_user.tenant_id).order_by(ReportTemplate.name)
@@ -101,12 +101,12 @@ async def list_templates(
 async def create_template(
     body: TemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ReportTemplate:
     template = ReportTemplate(
         **body.model_dump(),
         tenant_id=current_user.tenant_id,
-        created_by=current_user.id,
+        created_by=current_user.user_id,
     )
     db.add(template)
     await db.commit()
@@ -118,7 +118,7 @@ async def create_template(
 async def get_template(
     template_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ReportTemplate:
     tmpl = await db.get(ReportTemplate, template_id)
     if not tmpl or tmpl.tenant_id != current_user.tenant_id:
@@ -130,7 +130,7 @@ async def get_template(
 async def delete_template(
     template_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     tmpl = await db.get(ReportTemplate, template_id)
     if not tmpl or tmpl.tenant_id != current_user.tenant_id:
@@ -151,7 +151,7 @@ async def list_artefacts(
     limit: int = Query(20, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[ReportArtefact]:
     q = select(ReportArtefact).where(ReportArtefact.tenant_id == current_user.tenant_id)
     if report_type:
@@ -167,7 +167,7 @@ async def list_artefacts(
 async def generate_report(
     body: GenerateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ReportArtefact:
     """Enqueue a report generation job. Returns the artefact record immediately with status='pending'."""
     artefact = ReportArtefact(
@@ -179,7 +179,7 @@ async def generate_report(
         output_format=body.output_format,
         delivered_to=body.recipients,
         status="pending",
-        generated_by=str(current_user.id),
+        generated_by=str(current_user.user_id),
     )
     db.add(artefact)
     await db.commit()
@@ -191,7 +191,7 @@ async def generate_report(
 async def get_artefact(
     artefact_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ReportArtefact:
     art = await db.get(ReportArtefact, artefact_id)
     if not art or art.tenant_id != current_user.tenant_id:
@@ -218,7 +218,7 @@ async def weekly_digest(
     period_start: datetime | None = Query(None, description="ISO timestamp; defaults to now-7d"),
     period_end: datetime | None = Query(None, description="ISO timestamp; defaults to now"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ExecutiveDigest | HTMLResponse | Response:
     """Build a deterministic weekly digest for the caller's tenant.
 

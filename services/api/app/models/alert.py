@@ -73,6 +73,14 @@ class Alert(Base):
     affected_users: Mapped[list] = mapped_column(JSONB, default=list)
     affected_assets: Mapped[list] = mapped_column(JSONB, default=list)
 
+    # `[{"type": "host", "value": "…"}, …]`, written by the fusion alert sink.
+    # The four columns above are only ever populated by the demo seed: the
+    # production sink's INSERT does not list them, so the Investigation Rail
+    # showed entity pivots on seeded alerts and none at all on real ones. The
+    # column has existed since migration 001 and was simply never mapped here,
+    # so nothing above the database could read what the pipeline produced.
+    entities: Mapped[list] = mapped_column(JSONB, default=list)
+
     # Relations
     case_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     parent_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

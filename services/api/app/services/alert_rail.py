@@ -35,7 +35,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 from urllib.parse import quote
 
 from pydantic import BaseModel, Field
@@ -200,6 +200,64 @@ def _graph_pivot(kind: str, value: str) -> str:
     return f"/graph?entity={quote(f'{kind}:{value}', safe='')}"
 
 
+# Entity kinds the rail files under "network" rather than "principal".
+_NETWORK_KINDS: Final[frozenset[str]] = frozenset({"ip", "domain", "url"})
+
+# `type` values the fusion sink emits, mapped to the rail's kinds. Anything
+# outside this map is ignored rather than guessed at: an unrecognised kind
+# would build a `/graph?entity=<kind>:…` link the graph cannot resolve, which
+# is the class of defect the pivot-route test exists to prevent.
+_PIPELINE_ENTITY_KINDS: Final[dict[str, str]] = {
+    "host": "host",
+    "hostname": "host",
+    "device": "host",
+    "user": "user",
+    "username": "user",
+    "account": "user",
+    "asset": "asset",
+    "ip": "ip",
+    "ip_address": "ip",
+    "src_ip": "ip",
+    "domain": "domain",
+    "url": "url",
+}
+
+
+def _pipeline_entities(alert: Alert) -> list[tuple[str, str]]:
+    """Entities the fusion sink recorded, as ``(kind, value)`` pairs.
+
+    `services/fusion` writes `alerts.entities` as
+    ``[{"type": "host", "value": "WIN-01"}, …]`` and does **not** write
+    `affected_hosts` / `affected_users` / `affected_ips` — its INSERT does not
+    list those columns. Only `seed_demo.py` populates them. So every entity
+    pivot in the rail rendered for demo data and for nothing the real pipeline
+    produced, on every deployment.
+
+    Order is preserved and the caller's bucket dedups against the
+    denormalised columns, so a row that happens to carry both spellings
+    yields one chip rather than two.
+    """
+    raw = getattr(alert, "entities", None)
+    if not isinstance(raw, list):
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        declared = _norm_str(item.get("type")) or ""
+        kind = _PIPELINE_ENTITY_KINDS.get(declared.lower())
+        value = _norm_str(item.get("value"))
+        if not kind or not value:
+            continue
+        key = (kind, value.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((kind, value))
+    return out
+
+
 def build_related_entities(alert: Alert) -> list[RelatedEntity]:
     """Produce the rail's Related Entities list from an ``Alert`` row.
 
@@ -214,8 +272,16 @@ def build_related_entities(alert: Alert) -> list[RelatedEntity]:
 
     # ── Principal ───────────────────────────────────────────────────────
     # Hosts and users an analyst would isolate / disable. We promote
-    # the denormalised columns first, then mine the raw event blob
-    # for fields the connector didn't curate into a top-level column.
+    # the denormalised columns first, then the `entities` blob the fusion
+    # sink writes, then mine the raw event for fields the connector didn't
+    # curate into a top-level column.
+    for kind, value in _pipeline_entities(alert):
+        bucket.add(
+            group="network" if kind in _NETWORK_KINDS else "principal",
+            kind=kind,
+            value=value,
+            pivot=_graph_pivot(kind, value),
+        )
     for host in _dedup_strs(alert.affected_hosts or ()):
         bucket.add(
             group="principal",

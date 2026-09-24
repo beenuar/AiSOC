@@ -50,11 +50,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.connector import Connector
-from app.models.tenant import User
 from app.security.credential_vault import get_vault
 from app.services.effective_permissions.base import ResolverError
 from app.services.effective_permissions.posture_loader import (
@@ -118,7 +118,7 @@ async def _maybe_live_snapshot(db: AsyncSession, tenant_id: Any, provider: str, 
     summary="List supported effective-permissions providers",
 )
 async def list_providers(
-    _user: User = Depends(get_current_user),
+    _user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return ``{"providers": [{"name", "coverage"}, ...]}``.
 
@@ -149,7 +149,7 @@ async def get_effective_permissions(
             "Optional base64-encoded JSON snapshot for dry-run resolution. " "Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set."
         ),
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Resolve and return the effective-permissions envelope.

@@ -7,7 +7,7 @@ Usage::
     await emit_audit(
         db=db,
         tenant_id=current_user.tenant_id,
-        actor_id=current_user.id,
+        actor_id=current_user.user_id,
         actor_email=current_user.email,
         action="cases:create",
         resource="case",

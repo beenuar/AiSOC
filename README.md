@@ -59,7 +59,7 @@ of the public API. Every stage reports PASS or FAIL:
 [PASS] alert is retrievable by id from the API
 ```
 
-Open **http://localhost:3000** (API docs at **http://localhost:8000/docs**).
+Open **http://localhost:3000** (API docs at **http://localhost:8000/api/docs**).
 
 Something wrong? `make doctor` checks every dependency and tells you what to
 run next. Requires Docker with ~6 GB of RAM.

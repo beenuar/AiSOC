@@ -11,10 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
-from app.models.tenant import User
 
 router = APIRouter(prefix="/remediation", tags=["remediation"])
 
@@ -79,7 +79,7 @@ class WhitelistOut(WhitelistCreate):
 @router.get("/config", response_model=MaturityOut)
 async def get_maturity_config(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> RemediationMaturity:
     result = await db.execute(select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id))
     config = result.scalar_one_or_none()
@@ -98,7 +98,7 @@ async def get_maturity_config(
 async def update_maturity_config(
     body: MaturityConfig,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> RemediationMaturity:
     result = await db.execute(select(RemediationMaturity).where(RemediationMaturity.tenant_id == current_user.tenant_id))
     config = result.scalar_one_or_none()
@@ -108,7 +108,7 @@ async def update_maturity_config(
 
     config.maturity_tier = body.maturity_tier  # type: ignore[assignment]
     config.action_overrides = body.action_overrides  # type: ignore[assignment]
-    config.changed_by = current_user.id  # type: ignore[assignment]
+    config.changed_by = current_user.user_id  # type: ignore[assignment]
     config.changed_at = datetime.now(UTC)  # type: ignore[assignment]
     await db.commit()
     await db.refresh(config)
@@ -126,7 +126,7 @@ async def list_gate_log(
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[RemediationGateLog]:
     q = select(RemediationGateLog).where(RemediationGateLog.tenant_id == current_user.tenant_id)
     if decision:
@@ -144,7 +144,7 @@ async def list_gate_log(
 @router.get("/whitelist", response_model=list[WhitelistOut])
 async def list_whitelist(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[RemediationWhitelist]:
     result = await db.execute(select(RemediationWhitelist).where(RemediationWhitelist.tenant_id == current_user.tenant_id))
     return list(result.scalars().all())
@@ -154,12 +154,12 @@ async def list_whitelist(
 async def add_to_whitelist(
     body: WhitelistCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> RemediationWhitelist:
     entry = RemediationWhitelist(
         **body.model_dump(),
         tenant_id=current_user.tenant_id,
-        approved_by=current_user.id,
+        approved_by=current_user.user_id,
     )
     db.add(entry)
     await db.commit()
@@ -171,7 +171,7 @@ async def add_to_whitelist(
 async def remove_from_whitelist(
     entry_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> None:
     entry = await db.get(RemediationWhitelist, entry_id)
     if not entry or entry.tenant_id != current_user.tenant_id:

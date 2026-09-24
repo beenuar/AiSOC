@@ -208,7 +208,7 @@ async def record_sla_event(
         severity=body.severity,
         event_type=body.event_type,
         occurred_at=body.occurred_at or datetime.utcnow(),
-        actor_id=current_user.id,
+        actor_id=current_user.user_id,
         # ORM attr is `metadata_` (DB column is still `metadata`) — `metadata`
         # itself is reserved on Declarative `Base`.
         metadata_=body.metadata,

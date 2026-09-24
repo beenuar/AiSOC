@@ -11,10 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.insider_threat import InsiderIndicator, InsiderPeerGroup, UserRiskProfile
-from app.models.tenant import User
 
 router = APIRouter(prefix="/insider-threat", tags=["insider-threat"])
 
@@ -100,7 +100,7 @@ async def list_profiles(
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[UserRiskProfile]:
     q = select(UserRiskProfile).where(UserRiskProfile.tenant_id == current_user.tenant_id)
     if risk_tier:
@@ -116,7 +116,7 @@ async def list_profiles(
 async def get_profile(
     profile_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> UserRiskProfile:
     profile = await db.get(UserRiskProfile, profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
@@ -129,7 +129,7 @@ async def update_watchlist(
     profile_id: uuid.UUID,
     body: WatchlistUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> UserRiskProfile:
     profile = await db.get(UserRiskProfile, profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
@@ -138,7 +138,7 @@ async def update_watchlist(
     profile.watchlist_reason = body.watchlist_reason  # type: ignore[assignment]
     if body.is_watchlisted:
         profile.watchlisted_at = datetime.now(UTC)  # type: ignore[assignment]
-        profile.watchlisted_by = current_user.id  # type: ignore[assignment]
+        profile.watchlisted_by = current_user.user_id  # type: ignore[assignment]
     await db.commit()
     await db.refresh(profile)
     return profile
@@ -156,7 +156,7 @@ async def list_indicators(
     limit: int = Query(50, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[InsiderIndicator]:
     q = select(InsiderIndicator).where(InsiderIndicator.tenant_id == current_user.tenant_id)
     if severity:
@@ -172,7 +172,7 @@ async def list_indicators(
 async def create_indicator(
     body: IndicatorCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> InsiderIndicator:
     profile = await db.get(UserRiskProfile, body.profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
@@ -191,12 +191,12 @@ async def create_indicator(
 async def acknowledge_indicator(
     indicator_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> InsiderIndicator:
     indicator = await db.get(InsiderIndicator, indicator_id)
     if not indicator or indicator.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Indicator not found")
-    indicator.acknowledged_by = current_user.id  # type: ignore[assignment]
+    indicator.acknowledged_by = current_user.user_id  # type: ignore[assignment]
     indicator.acknowledged_at = datetime.now(UTC)  # type: ignore[assignment]
     await db.commit()
     await db.refresh(indicator)
@@ -211,7 +211,7 @@ async def acknowledge_indicator(
 @router.get("/peer-groups", response_model=list[PeerGroupOut])
 async def list_peer_groups(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> list[InsiderPeerGroup]:
     result = await db.execute(
         select(InsiderPeerGroup).where(InsiderPeerGroup.tenant_id == current_user.tenant_id).order_by(InsiderPeerGroup.name)
@@ -223,7 +223,7 @@ async def list_peer_groups(
 async def create_peer_group(
     body: PeerGroupCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> InsiderPeerGroup:
     group = InsiderPeerGroup(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(group)
