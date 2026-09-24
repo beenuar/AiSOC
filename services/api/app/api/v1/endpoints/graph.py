@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -121,6 +122,150 @@ class MitreCoverageResponse(BaseModel):
     tactics: list[str]
     cells: list[MitreCoverageCell]
     generatedAt: str
+
+
+# ── Tenant-level overview payload ───────────────────────────────────────────
+# Matches `AttackGraph` in apps/web/src/lib/api.ts. `graphApi.getOverview()`
+# hands the body straight to the Cytoscape canvas with no key remapping, so
+# these field names are camelCase on purpose — the same reason
+# `MitreCoverageResponse` above is.
+
+
+class OverviewNode(BaseModel):
+    id: str
+    label: str
+    kind: str
+    riskScore: float | None = None
+    severity: str | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class OverviewEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    label: str
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class GraphOverviewResponse(BaseModel):
+    """The tenant's entity graph, bounded for one canvas render.
+
+    ``truncated`` is part of the contract rather than a diagnostic. A graph
+    cut at the node ceiling and a graph that is genuinely this size render
+    identically, and a viewer who cannot tell them apart reads a partial
+    picture as the whole estate.
+    """
+
+    nodes: list[OverviewNode]
+    edges: list[OverviewEdge]
+    generatedAt: str
+    truncated: bool = False
+
+
+#: Neo4j label → the node kind the console has a colour and a glyph for.
+#:
+#: The console's `GraphNodeKind` union is ten members wide and the graph
+#: schema declares 29 labels, so this is a projection, not a rename. What it
+#: must not do is *lose* the distinction: every node carries its real labels
+#: in ``attributes.labels``, so a label that projects onto the generic
+#: ``asset`` glyph is still identifiable in the payload.
+_LABEL_KIND: dict[str, str] = {
+    "Host": "host",
+    "Endpoint": "host",
+    "User": "user",
+    "Identity": "user",
+    "ServiceAccount": "user",
+    "Employee": "user",
+    "Process": "process",
+    "Container": "process",
+    "Alert": "alert",
+    "Technique": "technique",
+    "Tactic": "tactic",
+}
+
+#: IOC nodes carry their own type, so they resolve more precisely than their
+#: label alone allows. Keys are matched against a lowercased ``ioc_type``.
+_IOC_KIND: dict[str, str] = {
+    "ip": "ip",
+    "ipv4": "ip",
+    "ipv6": "ip",
+    "ip_address": "ip",
+    "domain": "domain",
+    "fqdn": "domain",
+    "hostname": "domain",
+    "url": "domain",
+    "md5": "hash",
+    "sha1": "hash",
+    "sha256": "hash",
+    "hash": "hash",
+    "file_hash": "hash",
+}
+
+#: The five-tier ladder, and the only values allowed onto `severity`. A
+#: vendor-specific string is dropped rather than coerced: the console shades
+#: by severity, and guessing one would shade a node by a fact nobody
+#: established.
+_SEVERITY_TIERS = frozenset({"info", "low", "medium", "high", "critical"})
+
+#: Properties that can carry a human-readable name, most specific first.
+_LABEL_PROPS = ("hostname", "username", "name", "title", "value", "technique_id", "email", "natural_key", "id")
+
+
+def _node_kind(labels: list[str], properties: dict[str, Any]) -> str:
+    """Project a node's Neo4j labels onto a kind the canvas can draw."""
+    if "IOC" in labels:
+        ioc_type = str(properties.get("ioc_type") or "").strip().lower()
+        return _IOC_KIND.get(ioc_type, "asset")
+    for label in labels:
+        kind = _LABEL_KIND.get(label)
+        if kind:
+            return kind
+    return "asset"
+
+
+def _node_label(node_id: str, properties: dict[str, Any]) -> str:
+    """The name to draw on the node, falling back to its identifier."""
+    for prop in _LABEL_PROPS:
+        value = properties.get(prop)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return node_id
+
+
+def _risk_score(properties: dict[str, Any]) -> float | None:
+    """``risk_score`` when the node carries a usable number, else None.
+
+    None and 0.0 are different claims — "not scored" against "scored zero" —
+    and the console renders the first as an em dash.
+    """
+    raw = properties.get("risk_score")
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return None
+    return round(max(0.0, min(100.0, float(raw))), 1)
+
+
+def _to_overview_node(record: dict[str, Any]) -> OverviewNode | None:
+    """Project one graph record onto the console's node shape.
+
+    Returns None for a node with no resolvable identifier: the canvas keys
+    elements by id, and a blank one would collapse every such node into a
+    single element that claims to be all of them.
+    """
+    node_id = record.get("id")
+    if not isinstance(node_id, str) or not node_id.strip():
+        return None
+    labels = [str(label) for label in (record.get("labels") or [])]
+    properties = dict(record.get("properties") or {})
+    severity = str(properties.get("severity") or "").strip().lower()
+    return OverviewNode(
+        id=node_id,
+        label=_node_label(node_id, properties),
+        kind=_node_kind(labels, properties),
+        riskScore=_risk_score(properties),
+        severity=severity if severity in _SEVERITY_TIERS else None,
+        attributes={"labels": labels},
+    )
 
 
 class UpsertHostRequest(BaseModel):
@@ -246,6 +391,92 @@ async def _attack_path_from_relational(
         "node_count": len(nodes),
         "edge_count": len(edges),
     }
+
+
+@router.get(
+    "",
+    response_model=GraphOverviewResponse,
+    summary="Tenant-level entity graph for the Attack Graph console",
+)
+async def get_graph_overview(
+    depth: Annotated[int, Query(ge=1, le=6)] = 3,
+    entity: Annotated[str | None, Query(max_length=256)] = None,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> GraphOverviewResponse:
+    """The caller's own entity graph, bounded for one canvas render.
+
+    Scoping is the whole of this endpoint's security surface. Every node of
+    every traversed path must satisfy the tenant predicate — not just the
+    node the walk started from — and a node with no ``tenant_id`` is not
+    readable, because an untagged node that *were* readable would bridge two
+    tenants through any entity they happen to share. The narrow exemption is
+    the global MITRE labels, which belong to no tenant by design.
+
+    Two failure modes that must not look alike:
+
+    ``empty``
+        200 with no nodes. The tenant really has no graph yet — nothing has
+        been ingested, or nothing ingested produced entities. The console
+        renders its empty state.
+    ``unavailable``
+        503. The graph backend could not be reached, so we do not know what
+        the tenant has. This deliberately does *not* degrade to an empty
+        graph the way ``/graph/mitre-coverage`` does: an empty attack graph
+        reads as "no attack relationships exist in your estate", which is a
+        security claim, and making it on evidence we never retrieved is the
+        failure this codebase keeps finding. The console's error state names
+        the endpoint and the status, which is the honest answer.
+    """
+    try:
+        data = await graph_service.get_graph_overview(
+            tenant_id=str(current_user.tenant_id),
+            depth=depth,
+            entity=entity,
+        )
+    except Exception as exc:
+        logger.warning(
+            "graph overview: backend unavailable (%s: %s)",
+            type(exc).__name__,
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"graph backend unavailable: {type(exc).__name__}",
+        ) from exc
+
+    nodes = [n for n in (_to_overview_node(r) for r in data["nodes"]) if n is not None]
+    known_ids = {n.id for n in nodes}
+    ref_to_id = {r["ref"]: r["id"] for r in data["nodes"] if isinstance(r.get("id"), str)}
+
+    edges: list[OverviewEdge] = []
+    seen_edges: set[str] = set()
+    for record in data["edges"]:
+        source = ref_to_id.get(record["source"])
+        target = ref_to_id.get(record["target"])
+        # An edge to a node that was dropped (no identifier, or past the node
+        # ceiling) would render as a line into nothing.
+        if source not in known_ids or target not in known_ids:
+            continue
+        edge_id = f"{source}|{record['type']}|{target}"
+        if edge_id in seen_edges:
+            continue
+        seen_edges.add(edge_id)
+        edges.append(
+            OverviewEdge(
+                id=edge_id,
+                source=str(source),
+                target=str(target),
+                label=str(record["type"]),
+                attributes={},
+            )
+        )
+
+    return GraphOverviewResponse(
+        nodes=nodes,
+        edges=edges,
+        generatedAt=datetime.now(UTC).isoformat(),
+        truncated=bool(data.get("truncated")),
+    )
 
 
 @router.get(
@@ -562,9 +793,6 @@ async def get_mitre_coverage_compat(
     ``/graph/mitre-coverage`` and degrade gracefully (empty set) when the
     knowledge graph is offline, mirroring that endpoint's behaviour.
     """
-    from datetime import UTC as _UTC
-    from datetime import datetime as _dt
-
     try:
         records = await graph_service.get_mitre_coverage(
             tenant_id=str(current_user.tenant_id),
@@ -578,7 +806,7 @@ async def get_mitre_coverage_compat(
             return MitreCoverageResponse(
                 tactics=[],
                 cells=[],
-                generatedAt=_dt.now(_UTC).isoformat(),
+                generatedAt=datetime.now(UTC).isoformat(),
             )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -617,7 +845,7 @@ async def get_mitre_coverage_compat(
     return MitreCoverageResponse(
         tactics=sorted(tactics),
         cells=cells,
-        generatedAt=_dt.now(_UTC).isoformat(),
+        generatedAt=datetime.now(UTC).isoformat(),
     )
 
 

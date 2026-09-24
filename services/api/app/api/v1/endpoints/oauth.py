@@ -241,15 +241,18 @@ def _safe_connector_type(value: str) -> str:
     return value
 
 
-async def _fetch_catalog_entry(connector_type: str) -> dict[str, Any]:
-    """Resolve the connector's catalog entry (with OAuthHints) or 422.
+async def _fetch_catalog_entry(connector_type: str, tenant_id: uuid.UUID | str | None) -> dict[str, Any]:
+    """Resolve the connector's catalog entry (with OAuthHints) or refuse.
 
     Reuses :func:`_validate_connector_type` so we share one source of
     truth with the wizard's POST flow — the catalog ships the
     ``category`` we'll use on insert + the ``oauth`` hints (authorize
     URL, token URL, scopes) we need for the redirect dance.
+
+    ``tenant_id`` is the tenant this OAuth flow belongs to; the connectors
+    service requires a service caller to declare it.
     """
-    return await _validate_connector_type(connector_type)
+    return await _validate_connector_type(connector_type, tenant_id)
 
 
 def _hints_from_catalog(catalog_entry: dict[str, Any]) -> dict[str, Any]:
@@ -633,7 +636,7 @@ async def oauth_start(
 
     # Validate against the live catalog (defense in depth — same gate
     # the POST /connectors path uses) and pull OAuth hints in one shot.
-    catalog_entry = await _fetch_catalog_entry(safe_type)
+    catalog_entry = await _fetch_catalog_entry(safe_type, current_user.tenant_id)
     hints = _hints_from_catalog(catalog_entry)
 
     # Schema is the source of truth for whether hosted OAuth is wired
@@ -881,7 +884,7 @@ async def oauth_callback(
     # hints for the token exchange and (b) recover the connector category
     # to stamp on the new row — same gate as POST /connectors.
     try:
-        catalog_entry = await _fetch_catalog_entry(state_row.connector_type)
+        catalog_entry = await _fetch_catalog_entry(state_row.connector_type, state_row.tenant_id)
     except HTTPException:
         # Connector class disappeared from the catalog between start and
         # callback (deployment in flight). Bail with a clear error.

@@ -355,6 +355,11 @@ def _scoped(var: str) -> str:
     return _TENANT_SCOPED.format(var=var)
 
 
+def _is_global(var: str) -> str:
+    """Predicate: this node is shared reference data, not tenant estate."""
+    return f"any(l IN labels({var}) WHERE l IN $global_labels)"
+
+
 async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hops: int = 3) -> dict[str, Any]:
     """
     Compute blast radius: all entities reachable from an IOC/Host/User within N hops.
@@ -529,6 +534,144 @@ async def get_entity_neighbors(
         "source": record["source"],
         "neighbors": record["neighbors"],
         "neighbor_count": len(record["neighbors"]),
+    }
+
+
+#: Bounds on one overview response.
+#:
+#: The console renders this as a force-directed canvas. Past a few hundred
+#: nodes the layout pass blocks the browser's main thread and the picture
+#: stops being readable, so these are the point at which more data makes the
+#: view worse — not a guess about what Neo4j can serve.
+OVERVIEW_SEED_LIMIT = 120
+OVERVIEW_NODE_LIMIT = 400
+OVERVIEW_EDGE_LIMIT = 900
+
+#: Properties that can carry the name an analyst would type into ``?entity=``.
+#: Ordered by how specific they are; the first non-null wins.
+_ENTITY_MATCH_PROPS = ("natural_key", "id", "hostname", "username", "name", "value", "technique_id")
+
+
+def _overview_id_expr(var: str) -> str:
+    """The business identifier for a node, whichever writer created it.
+
+    The Go ingest writer keys on ``natural_key``; ``graph_service``'s own
+    upserts key on ``id``; IOCs key on ``value`` and techniques on
+    ``technique_id``. A single coalesce covers all four rather than the
+    overview having to know which writer produced a given node.
+    """
+    return f"coalesce({', '.join(f'{var}.{p}' for p in ('natural_key', 'id', 'value', 'technique_id'))})"
+
+
+async def get_graph_overview(
+    tenant_id: str,
+    depth: int = 3,
+    entity: str | None = None,
+) -> dict[str, Any]:
+    """The tenant's entity graph, bounded, for the Attack Graph canvas.
+
+    Two statements rather than one, because the second depends on the first
+    having *already* proven every node it returns is in scope:
+
+    1. Seed on the tenant's own nodes, expand up to ``depth`` hops, and keep
+       a path only when **every node on it** satisfies the tenant predicate.
+       Filtering the start node alone is what let a previous blast-radius
+       traversal walk out through a shared entity — a public IP two tenants
+       both saw — and enumerate the other tenant's estate. A node with no
+       ``tenant_id`` is not readable either: ``_scoped`` does not accept
+       null, so an untagged node cannot bridge between two tenants.
+    2. Return relationships **only between nodes already in that set**. There
+       is no second tenant predicate here and there does not need to be: both
+       endpoints were resolved by step 1, so an edge can only exist in the
+       answer if both of its ends were independently proven in scope.
+
+    Seeds exclude the global MITRE labels. They are shared by every tenant,
+    so seeding on them would start every overview from the same reference
+    vocabulary; they remain reachable as neighbours, which is the point of
+    the exemption.
+
+    The Go writer ``MERGE``s on ``natural_key`` alone with ``tenant_id`` as a
+    property, so a shared entity such as a public IP is last-writer-wins. The
+    strict predicate therefore **fails closed** on those nodes — they drop out
+    of the overview rather than appearing under the wrong tenant. That is the
+    intended trade: completeness on shared infrastructure for never leaking.
+    Re-keying on ``(tenant_id, natural_key)`` is the proper fix and needs a
+    migration.
+
+    Returns ``{"nodes": [...], "edges": [...], "truncated": bool}``. An empty
+    node list means the tenant genuinely has no graph — callers must not
+    conflate it with a failed lookup, which raises instead.
+    """
+    # Interpolated because Cypher does not accept a parameter as a
+    # variable-length bound. Coerced and clamped here so the query string can
+    # only ever contain an integer, whatever the caller passed.
+    hops = max(0, min(int(depth), 6))
+
+    entity_clause = ""
+    if entity:
+        matches = " OR ".join(f"toLower(toString(seed.{prop})) = toLower($entity)" for prop in _ENTITY_MATCH_PROPS)
+        entity_clause = f"AND ({matches})"
+
+    nodes_cypher = f"""
+    MATCH (seed)
+    WHERE {_scoped("seed")} AND NOT {_is_global("seed")} {entity_clause}
+    WITH seed
+    ORDER BY coalesce(seed.risk_score, 0) DESC, elementId(seed)
+    LIMIT $seed_limit
+    MATCH path = (seed)-[*0..{hops}]-(n)
+    WHERE all(pn IN nodes(path) WHERE {_scoped("pn")})
+    WITH n, min(length(path)) AS hop
+    ORDER BY hop ASC, coalesce(n.risk_score, 0) DESC, elementId(n)
+    LIMIT $node_limit
+    RETURN collect({{
+        ref: elementId(n),
+        id: {_overview_id_expr("n")},
+        labels: labels(n),
+        properties: properties(n)
+    }}) AS nodes
+    """
+
+    # Both endpoints are constrained to `$refs`, which step 1 already proved
+    # tenant-scoped. Re-deriving the predicate here would be a second place
+    # for it to be got wrong.
+    edges_cypher = """
+    MATCH (a)-[r]->(b)
+    WHERE elementId(a) IN $refs AND elementId(b) IN $refs
+    RETURN
+        elementId(r) AS ref,
+        elementId(a) AS source,
+        elementId(b) AS target,
+        type(r) AS type,
+        properties(r) AS properties
+    ORDER BY ref
+    LIMIT $edge_limit
+    """
+
+    async with get_session() as s:
+        node_result = await s.run(
+            nodes_cypher,
+            tenant_id=tenant_id,
+            entity=entity,
+            global_labels=list(_GLOBAL_LABELS),
+            seed_limit=OVERVIEW_SEED_LIMIT,
+            node_limit=OVERVIEW_NODE_LIMIT,
+        )
+        node_record = await node_result.single()
+        nodes = list(node_record["nodes"]) if node_record else []
+
+        edges: list[dict[str, Any]] = []
+        if nodes:
+            edge_result = await s.run(
+                edges_cypher,
+                refs=[n["ref"] for n in nodes],
+                edge_limit=OVERVIEW_EDGE_LIMIT,
+            )
+            edges = [dict(record) async for record in edge_result]
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "truncated": len(nodes) >= OVERVIEW_NODE_LIMIT or len(edges) >= OVERVIEW_EDGE_LIMIT,
     }
 
 

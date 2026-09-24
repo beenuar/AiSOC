@@ -174,6 +174,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above the key it describes. A line regex credits all three. 13 injected
   defects and 7 parser blind spots, each caught by its own code, plus the shared
   empty-tree refusal.
+- **`GET /api/v1/graph` exists.** The console's Attack Graph view has always
+  called it and always got a 404, while `/graph/neighbors/…` and
+  `/graph/mitre-coverage` returned 200 from the same Neo4j instance holding
+  real graph-at-ingest data — the data and the scoping were sound and only
+  the overview endpoint was missing.
+
+  It returns the caller's own entity graph in the shape the Cytoscape canvas
+  consumes, bounded to 400 nodes and 900 edges per render with `truncated`
+  set when the cut was applied. `depth` (1–6) bounds the walk; `entity`
+  narrows the seed set to one named host, user or indicator.
+
+  Scoping follows the rule the other graph reads had to learn the hard way:
+  **every node of every traversed path** must satisfy the tenant predicate,
+  not only the node the walk starts from, and `tenant_id IS NULL` is never
+  readable — an untagged node that were readable would bridge two tenants
+  through any entity they share. Edges are returned only between nodes that
+  first pass that filter, so an edge cannot reintroduce a node the node query
+  refused. Global MITRE labels stay exempt, but cannot seed a traversal.
+
+  Two failure modes are kept distinguishable. An empty graph is `200` with no
+  nodes; an unreachable graph is `503`. It deliberately does not degrade to an
+  empty graph the way `/graph/mitre-coverage` does, because "no attack
+  relationships exist in your estate" is a security claim, and making it on
+  evidence nobody retrieved is the shape of defect this codebase keeps
+  rediscovering. The console's error state — which names the endpoint and the
+  status rather than inventing topology — is unchanged, and a test now asserts
+  the view holds no graph at **first paint**, so a future `fallbackData` (which
+  disables revalidation, making a mock permanent rather than provisional)
+  fails the build.
 
 - **Every test file in the tree is now executed by a workflow, and a gate
   holds it that way in both directions.** 63 were executed by nothing at all:
@@ -1634,6 +1663,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **The connector catalog proxy never authenticated, and served a stale list
+  on every request because of it.** `_fetch_catalog()` issued a bare
+  `client.get(url)` with no `Authorization` header at a connectors service
+  that is default-deny on every route, so it was answered `401` on every
+  single call and fell through to the catalog bundled in the API image *every
+  time*. The bundle had **26 entries against a live registry of 84**. Nothing
+  failed: the wizard rendered a confidently wrong list, and because
+  `connector_type` is validated against that same list, the 58 connectors it
+  had never heard of were rejected as "unknown connector_type".
+
+  The proxy now presents the service credential and the tenant it is acting
+  for, mirroring the fusion gateway. Every call site passes the tenant
+  explicitly — it is a required parameter, not a defaulted one, because a
+  defaulted parameter is one call sites forget.
+
+  The fallback is kept, and given a stated job: **keep the console usable when
+  the connectors service is not deployed or not answering.** For that to be
+  defensible it has to be distinguishable from the real thing, so
+  `/connectors/catalog` now returns `source` (`live` / `bundled`), `degraded`
+  and `reason`. A deployment with no connectors service is `bundled` but not
+  degraded — there the bundle *is* the source of truth, and flagging it would
+  train operators to ignore the flag.
+
+  While degraded, an unrecognised `connector_type` returns **503 rather than
+  422**: a connectors service rolled ahead of the API image legitimately knows
+  types that image does not, and "unknown connector_type" sends an operator to
+  debug a connector that is fine.
+
+- **The bundled catalog is generated, not refreshed by hand.**
+  `scripts/generate_connector_catalog_fallback.py` builds it from the
+  connector registry and `--check` fails the build on drift, so the artefact
+  cannot fall behind the registry it copies. The gate compares **three**
+  independent readings of connector identity, in both directions: what
+  `_CONNECTOR_CLASSES` declares (read through the AST by
+  `generate_connector_types.parse_registry`, so there is one definition of
+  "the registry" rather than two), what reaches `CONNECTOR_REGISTRY` at
+  runtime, and what each `cls.schema()` **advertises**.
+
+  The third is the reading nothing looked at. `list_connector_schemas()`
+  iterates the registry but takes each entry's `connector_id` from the schema,
+  so a class registered as `tenable_io` whose `schema()` said `tenable` would
+  be offered in the wizard under a name `get_connector_class()` cannot
+  resolve — 84 independent opportunities for two declarations to disagree.
+  Identity is read off the class, never the filename: `jira_connector.py`
+  declares `jira` and `tenable.py` declares `tenable_io`, and `--self-test`
+  asserts that property rather than trusting a comment. The self-test runs
+  before the gate in CI and injects nine defects — a dropped connector, a
+  renamed one, a class that never registers, a deleted artefact, an unhooked
+  consumer, an empty corpus — requiring each to be caught.
 
 - **Two more gates were exempt from the empty-corpus rule only by accident.**
   `check_route_auth.py` and `check_tenant_query_predicates.py` did not exit 0

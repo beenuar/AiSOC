@@ -370,6 +370,34 @@ jobs:
         run: |
           python3 -m pip install --quiet pytest
           python3 -m pytest tests/test_connector_types_generated.py -q
+      # The registry is also what the API image's *fallback* catalog is a copy
+      # of, and that copy had 26 entries against a registry of 84. It was
+      # served on every request — the proxy sent no credential, so the
+      # connectors service (default-deny) answered 401 and the fallback was
+      # never a fallback — and because `connector_type` is validated against
+      # it, the 58 connectors it had never heard of were rejected as "unknown".
+      #
+      # The copy is now generated rather than hand-refreshed, and this gate
+      # compares three independent readings of connector identity in both
+      # directions: what the source declares, what reaches the runtime
+      # registry, and what each `schema()` advertises. The third is the one
+      # nothing looked at — `list_connector_schemas()` walks the registry but
+      # takes each entry's id from the schema, so a class registered as
+      # `tenable_io` whose schema said `tenable` would be offered under a name
+      # `get_connector_class()` cannot resolve.
+      #
+      # Self-test first, on the same tree: it drops a connector, renames one,
+      # deletes the artefact, unhooks the consumer and empties every input,
+      # and requires each to be caught.
+      - name: Connector catalog fallback — self-test
+        # Same import closure as the connector docs gate below: the catalog is
+        # each connector's real schema(), read at runtime, so the gate needs
+        # what those modules import at module scope.
+        run: |
+          python -m pip install --quiet httpx pydantic structlog "cryptography>=46,<51"
+          python3 scripts/generate_connector_catalog_fallback.py --self-test
+      - name: Verify the bundled connector catalog matches the registry
+        run: python3 scripts/generate_connector_catalog_fallback.py --check
       # The count says how many connectors exist; this says whether the name
       # each one is registered under still reaches a normalization profile.
       # The connectors service declares `crowdstrike` and `okta` while the

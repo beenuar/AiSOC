@@ -131,6 +131,50 @@ Time-decayed risk scores per entity, computed by the fusion service.
 | `GET` | `/entity-risk` | Top entities by risk score (descending) |
 | `GET` | `/entity-risk/{entity}` | Risk detail for a specific entity |
 
+### Entity Graph
+
+The Neo4j entity graph written at ingest time. Every read is scoped to the
+calling tenant on **every node of every traversed path**, not only on the node
+the walk starts from, and a node carrying no `tenant_id` is not readable —
+otherwise any entity two tenants happen to share would bridge between them.
+Global MITRE reference labels (`Technique`, `Tactic`, `Mitigation`) are the
+narrow exemption, because they belong to no tenant.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/graph` | Tenant-level overview: nodes, edges, `generatedAt` |
+| `GET` | `/graph/neighbors/{entity_type}/{entity_id}` | Immediate neighbours of one entity |
+| `GET` | `/graph/blast-radius/{entity_type}/{entity_id}` | Entities reachable within N hops |
+| `GET` | `/graph/attack-path/{case_id}` | Case → alerts → hosts/users → IOCs → techniques |
+| `GET` | `/graph/incident-context/{alert_id}` | Identity, asset, cloud, business and threat context |
+| `GET` | `/graph/mitre-coverage` | Technique coverage aggregated from tenant alerts |
+
+`GET /graph` backs the console's Attack Graph view. Two query parameters:
+`depth` (1–6, default 3) bounds how far the traversal walks out from the
+tenant's own nodes, and `entity` narrows the seed set to one named host, user
+or indicator.
+
+One response is bounded to at most 400 nodes and 900 edges — past that a
+force-directed canvas is unreadable — and sets `truncated: true` when the cut
+was applied, so a partial picture is never mistaken for the whole estate.
+
+Its two failure modes are deliberately distinguishable:
+
+- **`200` with an empty `nodes` array** means the tenant genuinely has no
+  graph yet.
+- **`503`** means the graph backend could not be reached. This endpoint does
+  *not* degrade to an empty graph, because "no attack relationships exist in
+  your estate" is a security claim and making it on evidence nobody retrieved
+  is worse than saying nothing. The console surfaces the status and the path.
+
+:::note Shared infrastructure fails closed
+The ingest graph writer merges nodes on `natural_key` with `tenant_id` as a
+property, so a genuinely shared entity such as a public IP is last-writer-wins.
+The strict read filter therefore drops those nodes rather than showing them
+under the wrong tenant: safe, never leaking, at some cost in completeness.
+Re-keying on `(tenant_id, natural_key)` is the proper fix and needs a migration.
+:::
+
 ### Cases & Response
 
 | Method | Path | Description |
