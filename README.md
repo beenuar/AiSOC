@@ -94,8 +94,9 @@ Sentinel, Elastic, CrowdStrike, Okta, AWS (GuardDuty / CloudTrail / Security
 Hub), Wiz, and Kubernetes audit logs. The full list is in the
 [connector docs](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage).
 
-A connector without a vendor profile still ingests through a generic mapping —
-events flow, but entity extraction is weaker.
+A connector without a vendor profile still ingests through a generic mapping,
+which resolves host, user and source IP from the usual spellings so the alert
+is still pivotable. A vendor profile adds that vendor's own field names on top.
 
 ## How it works
 

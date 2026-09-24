@@ -25,8 +25,18 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
 
 **2. Ingest normalizes it.** [`services/ingest`](../../services/ingest) maps
 the vendor payload onto a common OCSF-shaped envelope using a per-connector
-profile. A connector with no profile falls through to a vendor-neutral
-generic profile — the event still flows, but entity extraction is weaker.
+profile. A connector with no profile falls through to a vendor-neutral generic
+profile, which resolves `actor.user.name`, `device.name` and `src_endpoint.ip`
+from the spellings connectors actually use (`user` / `username` / `actor`,
+`host` / `hostname`, `src_ip` / `source_ip` / `client_ip`) in a fixed order.
+The event keeps the entities the rest of the platform pivots on; what a vendor
+profile adds is that vendor's own field names and its OCSF class.
+
+`connector_type` is matched against the profile keys, and the identifiers the
+connectors service declares are the ones to use — `crowdstrike`, not
+`crowdstrike_falcon`. Both resolve, and
+[`scripts/check_connector_profiles.py`](../../scripts/check_connector_profiles.py)
+fails CI if any name in either direction stops resolving.
 
 **3. It enters the event spine.** Ingest publishes to the Kafka topic
 `aisoc.raw_events`. This is the boundary that makes everything downstream

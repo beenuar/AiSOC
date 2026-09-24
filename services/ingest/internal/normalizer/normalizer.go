@@ -254,6 +254,33 @@ var connectorProfiles = map[string]connectorProfile{
 	// as a lowercase string; the map below mirrors KubernetesAuditConnector
 	// so on-prem file_tail and webhook events end up with the same
 	// severity_id.
+	// email_inbox — the pull side of the forwarded-email path.
+	//
+	// EmailInboxConnector.normalize() deliberately returns the message
+	// envelope unchanged, because it is shaped for the email-forwarded.yaml
+	// template rather than for the canonical connector envelope. That left it
+	// as the one registered connector whose events reach neither a profile nor
+	// the canonical branch, so strict mode rejected them outright and lenient
+	// mode resolved a title and nothing else.
+	//
+	// The field map mirrors email-forwarded.yaml so the pull and push paths
+	// produce the same OCSF shape, the same way ai_runtime mirrors
+	// ai-runtime.yaml. Keep the two aligned.
+	"email_inbox": {
+		product:   OcsfProduct{Name: "Forwarded Email", VendorName: "Email"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"subject":    "finding.title",
+			"body":       "finding.desc",
+			"message_id": "finding.uid",
+			"from":       "actor.user.email_addr",
+			"to":         "target_user.email_addr",
+		},
+		severityMap: map[string]int{
+			"critical": 5, "high": 4, "medium": 3, "normal": 3, "low": 2, "info": 1, "informational": 1,
+		},
+	},
 	"kubernetes_audit": {
 		product:   OcsfProduct{Name: "Kubernetes Audit", VendorName: "Kubernetes"},
 		classUID:  6003,
@@ -353,13 +380,53 @@ var _canonicalFieldMap = map[string]string{
 // so a missing actor does not merely blank a column — it collapses the
 // entity segment to "unknown" and every one of that connector's alerts
 // correlates into the same bucket.
+//
+// The dotted sources dig one level for a scalar. Replaying the registry's 84
+// connectors through normalize() found 14 emitting `actor`, and four of those
+// emit it as the vendor's nested object rather than a name. A bare key alone
+// would hand that object to setNestedField and write a map into a slot the
+// entity extractor reads as a name, so each bare key is followed by the
+// scalar-bearing paths underneath it.
 var _canonicalAliases = []struct {
 	dst     string
 	sources []string
 }{
-	{"actor.user.name", []string{"actor", "username", "user", "user_name"}},
-	{"device.name", []string{"hostname", "host", "device_name"}},
-	{"src_endpoint.ip", []string{"src_ip", "source_ip", "client_ip"}},
+	{"actor.user.name", []string{"actor", "actor.name", "actor.displayName", "actor.username", "username", "user", "user.name", "user.username", "user_name"}},
+	{"device.name", []string{"hostname", "host", "host.name", "device_name", "device", "device.name", "device.hostname"}},
+	{"src_endpoint.ip", []string{"src_ip", "source_ip", "client_ip", "src_endpoint.ip", "client.ipAddress"}},
+	// Not identity, but the same fill-the-blank rule and the same reason to
+	// run everywhere. A vendor profile names the field its vendor's rows use
+	// — crowdstrike_falcon reads event_simpleName, not title — so a pushed
+	// payload that reaches a vendor profile left `message` empty and the
+	// promoter fell back to generating "Security Finding from <product>",
+	// discarding the title the caller actually sent. These two are the same
+	// pair _canonicalFieldMap declares; listing them here extends their reach
+	// to the vendor profiles without giving them a second mechanism.
+	{"message", []string{"title"}},
+	{"finding.uid", []string{"external_id"}},
+}
+
+// connectorTypeAliases maps a connector identifier the connectors service
+// actually declares onto the profile key that carries its vendor field map.
+//
+// Two vocabularies grew up either side of the wire. services/connectors
+// declares `crowdstrike` and `okta`; this file keyed their profiles
+// `crowdstrike_falcon` and `okta_system_log`, and so does the rest of the
+// platform — packages/types' ConnectorType union, the CLI's default, the
+// graph extractor and the actions credential resolver all use the longer
+// names. Renaming either side breaks the other, so both resolve instead.
+//
+// Without this an event whose connector_type is the name the product itself
+// advertises — including the one the README tells a new user to paste — missed
+// the profile lookup and fell to the generic fallback, taking generic vendor
+// attribution with it.
+//
+// `splunk` is deliberately absent: it has its own profile for the canonical
+// envelope SplunkConnector emits, which is a different shape from the raw
+// rows `splunk_enterprise` maps.
+var connectorTypeAliases = map[string]string{
+	"crowdstrike": "crowdstrike_falcon",
+	"okta":        "okta_system_log",
 }
 
 // canonicalClassByConnector overrides the default Security Finding class for
@@ -454,6 +521,11 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		var ok bool
 		profile, ok = connectorProfiles[raw.ConnectorType]
 		if !ok {
+			if aliased, isAlias := connectorTypeAliases[raw.ConnectorType]; isAlias {
+				profile, ok = connectorProfiles[aliased]
+			}
+		}
+		if !ok {
 			if n.cfg.NormalizerMode == "strict" {
 				return nil, fmt.Errorf("unknown connector type: %s", raw.ConnectorType)
 			}
@@ -495,27 +567,45 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		}
 	}
 
-	// Canonical envelopes additionally resolve identity aliases in declared
-	// order, so a connector that spells the actor `username` is not silently
-	// anonymised. Only applies where the profile uses the canonical map;
-	// hand-written vendor profiles already name their own fields.
-	if isCanonical {
-		for _, alias := range _canonicalAliases {
-			if getNestedField(ocsf, alias.dst) != nil {
-				continue
-			}
-			for _, src := range alias.sources {
-				if val := getNestedField(raw.Payload, src); val != nil {
-					setNestedField(ocsf, alias.dst, val)
-					break
-				}
-			}
+	// Resolve identity aliases in declared order for every profile, filling
+	// only destinations the field map left empty.
+	//
+	// This used to run for canonical envelopes alone, which left the generic
+	// fallback resolving nothing but title and external_id. Everything
+	// downstream is keyed on identity — entity extraction, the Investigation
+	// Rail's pivots, the {tenant}:{entity}:{tactic} correlation key, the
+	// entity graph, UEBA — so an event that arrives through the fallback
+	// became an alert with no host, no user and no IP, and nobody could pivot
+	// from it. The alert appears, which is what makes it look like it worked.
+	//
+	// Filling only empty destinations is what keeps this safe to run over the
+	// hand-written vendor profiles too: a profile that names its own field for
+	// a slot always wins, and the aliases reach only the slots it left blank.
+	for _, alias := range _canonicalAliases {
+		if getNestedField(ocsf, alias.dst) != nil {
+			continue
+		}
+		if val, found := firstIdentityString(raw.Payload, alias.sources); found {
+			setNestedField(ocsf, alias.dst, val)
 		}
 	}
 
-	// Map severity
+	// Map severity. A vendor profile's own ladder wins; the shared five-tier
+	// ladder is consulted only when that ladder has no entry for the value.
+	//
+	// The fallback matters because a profile's ladder is spelled the way its
+	// vendor spells it — crowdstrike_falcon's is capitalised — while a pushed
+	// payload is written by whoever is pushing, and the README's is lowercase.
+	// Without the fallback a "high" that the ladder spells "High" scores 0 and
+	// renders as Unknown. Case folding alone would not do: the shared ladder
+	// keeps `critical` a distinct fifth tier, so a vendor-native critical maps
+	// to critical rather than collapsing into high.
 	if sevField, ok := raw.Payload["severity"].(string); ok {
-		if sevID, found := profile.severityMap[sevField]; found {
+		sevID, found := profile.severityMap[sevField]
+		if !found {
+			sevID, found = _canonicalSeverityMap[strings.ToLower(strings.TrimSpace(sevField))]
+		}
+		if found {
 			ocsf["severity_id"] = sevID
 			ocsf["severity"] = sevField
 		} else {
@@ -709,6 +799,27 @@ func setNestedField(m map[string]interface{}, path string, val interface{}) {
 		m[parts[0]] = nested
 	}
 	setNestedField(nested, parts[1], val)
+}
+
+// firstIdentityString returns the first non-empty string among the given dotted
+// payload paths, in the order given, and whether one was found.
+//
+// The string requirement is the point. An identity destination — actor.user.name,
+// device.name, src_endpoint.ip — is a scalar the entity extractor turns into a
+// pivotable chip and the correlator folds into {tenant}:{entity}:{tactic}.
+// Several connectors pass the vendor's nested actor object through under the
+// same key a scalar would use, and writing that object into the slot produces
+// an entity that renders as a map and correlates as garbage. Skipping it lets
+// the next path in the list — the scalar one underneath — resolve instead.
+func firstIdentityString(payload map[string]interface{}, paths []string) (string, bool) {
+	for _, p := range paths {
+		if s, ok := getNestedField(payload, p).(string); ok {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				return trimmed, true
+			}
+		}
+	}
+	return "", false
 }
 
 // firstString returns the first non-empty string value among the given payload
