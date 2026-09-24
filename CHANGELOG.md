@@ -133,6 +133,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `labeled` is in the trigger types. A unit-tested function with no caller is
   indistinguishable from a working feature until something asserts the call.
 
+- **Two response verbs worked and could not be reached.** `ack_alert` and
+  `suppress_alert` have had Splunk, Elastic and Defender arms since Phase 3.3
+  and were wired into `EXECUTOR_REGISTRY` — and appeared in none of the three
+  registries that make a verb dispatchable: the live-action adapters, the
+  capability contracts, or the capability vocabulary. Governed dispatch
+  answered `executor_not_found` for code that ran, which reads as a
+  misconfigured integration rather than a capability nobody connected. This is
+  the mirror image of a defect already fixed here in the other direction,
+  where eleven capabilities had a contract and no executor at all — including
+  `unisolate_host`, so the rollback for the most disruptive action in the
+  product resolved to nothing.
+
+  Both verbs now have six vendor adapters (one per vendor arm), a capability
+  contract, an entry in the vocabulary on both sides of the mirror, and a
+  verification probe. Each adapter pins `alert_vendor` so a tenant with two
+  SIEMs configured does not have the target chosen by credential ordering; the
+  pin is still checked against the credentials, so pinning a vendor the tenant
+  has not configured simulates rather than claiming an arm that could not have
+  run.
+
+  `ack_alert` is LOW impact and automatic: it marks a finding in-progress and
+  owned by AiSOC, removing nothing from anyone's view, and two analysts
+  working the same notable is the cost of not doing it. `suppress_alert` is
+  LOW impact and **analyst-gated**, because what makes the disposition
+  writeback safe to automate is the mapping that refuses to close a confirmed
+  true positive, and this verb has no such bound — it closes whatever it is
+  pointed at, on the caller's say-so.
+
+- **A one-directional gate would have missed all of it.** `check_action_contract.py`
+  now compares the four registries a verb needs in **both** directions, and
+  `test_capability_reachability.py` injects drift in each direction and asserts
+  the gate names it. The dominant failure shape in this repository is a check
+  that compares A against B and never B against A, so drift in the direction
+  things actually change passes while the check prints OK — the graph-schema
+  check reported OK with 17 node labels declared and 28 implemented.
+
+  Running it found three more mismatches beyond the two above. `create_ticket`
+  and `notify` were registered, contracted and dispatchable across four
+  vendors while absent from `KNOWN_CAPABILITIES` and the connectors
+  `Capability` enum, so the registry logged `capability_unknown` for them at
+  every startup; both are now in the vocabulary. `chatops_verify` has an
+  executor no adapter reaches, and three `ActionType` members
+  (`capture_forensics`, `add_ioc_to_blocklist`, `run_playbook`) have no
+  executor at all — the first of those is proposed by name by the
+  investigation agent on the C2/exfiltration path, so the product recommends
+  evidence acquisition it cannot perform. Those four are recorded in the
+  gate's exemption lists with the reason each is open. Both lists are
+  ratchets: an entry that gains an implementation and is not removed fails the
+  build.
+
+- **The disposition writeback now verifies itself against the vendor.** It
+  shipped declaring no verification probe, which was honest — a declared probe
+  that does not run is the defect the contract gate exists to catch — but the
+  standing rule is that an unverifiable action is not an autonomous one, and
+  this action is automatic. The probe re-reads the finding and compares its
+  state against the plan re-derived from the same verdict through the same
+  `plan_writeback` the executor used, rather than being told separately what
+  to expect. Splunk ES reads back the `incident_review` collection (a new
+  `SplunkClient.get_notable_event_state`) and confirms status `5` on a close,
+  or status `1` *and* the owner AiSOC set on an escalation, since status alone
+  cannot distinguish a notable an analyst had already picked up. QRadar
+  confirms `CLOSED` through `get_offense`, whose docstring had claimed to be
+  the writeback probe since it was written and had no caller.
+
+  A QRadar **escalation** deliberately reports `unverified`: escalating leaves
+  the offense `OPEN`, which is also its prior state, so confirming "still
+  OPEN" would certify a write that never happened — the same shape as the
+  isolation probe that returned `bool(device_id)` and would have certified an
+  uncontained host. Elastic, Sentinel and Defender expose no read of a
+  finding's state and report `unverified` too. `ack_alert` and
+  `suppress_alert` are verified against the same read-back.
+
 - **A dry run called the customer's production SIEM.** The live-action dry-run
   path works by stripping credentials so the executor falls through to
   simulation, and the strip list did not match what the client factory reads:

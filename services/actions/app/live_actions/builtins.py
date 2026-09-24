@@ -64,9 +64,11 @@ from app.executors.notification import (
     NotifySlackExecutor,
 )
 from app.executors.siem import (
+    AckAlertExecutor,
     BlockIOCExecutor,
     CreateNotableEventExecutor,
     SearchSIEMExecutor,
+    SuppressAlertExecutor,
     SyncDetectionRuleExecutor,
     UpdateAlertDispositionExecutor,
     UpdateWatcherExecutor,
@@ -562,6 +564,106 @@ class DefenderUpdateAlertDisposition(_DispositionWriteback):
 
 
 # ---------------------------------------------------------------------------
+# Alert lifecycle — acknowledge and suppress
+# ---------------------------------------------------------------------------
+#
+# Both executors have had Splunk, Elastic and Defender arms since Phase 3.3,
+# sat in EXECUTOR_REGISTRY the whole time, and had no adapter here — so
+# governed dispatch answered executor_not_found for working code, and the only
+# route to it was the ActionType REST endpoint, which has no capability
+# contract, no approval matrix and no autonomy policy in front of it.
+#
+# `alert_vendor` is pinned per arm for the same reason the writeback pins it:
+# a tenant with two SIEMs configured would otherwise have the target chosen by
+# whichever credential block `_ack_vendor` happens to check first. The pin is
+# still verified against the credentials inside `siem._ack_vendor`, so pinning
+# a vendor the tenant has not configured simulates rather than claiming an arm
+# that could not have run.
+
+
+class _AlertLifecycleAdapter(_LegacyExecutorAdapter):
+    """Shared body for the ack / suppress vendor arms.
+
+    Declares no ``capability`` and no ``vendor_id``: an intermediate class
+    naming one without the other is graded by the action-contract gate as a
+    half-declared executor. Each concrete arm below declares both.
+    """
+
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        pinned = {**request.params, "alert_vendor": self.vendor_id}
+        return await super().execute(request.model_copy(update={"params": pinned}))
+
+    def _summarise(self, output: dict[str, Any], status: LiveActionStatus) -> str:
+        alert_id = output.get("alert_id") or ""
+        verb = self.capability.replace("_", " ")
+        if status == LiveActionStatus.FAILED:
+            return f"Failed to {verb} {self.vendor_id} finding {alert_id}".strip()
+        if status == LiveActionStatus.SIMULATED:
+            return f"Simulated {verb} on {self.vendor_id} finding {alert_id}".strip()
+        return f"{verb.capitalize()} on {self.vendor_id} finding {alert_id}".strip()
+
+
+class _AckAlert(_AlertLifecycleAdapter):
+    _legacy_executor = AckAlertExecutor()
+    _legacy_action_type = ActionType.ACK_ALERT
+
+
+class _SuppressAlert(_AlertLifecycleAdapter):
+    _legacy_executor = SuppressAlertExecutor()
+    _legacy_action_type = ActionType.SUPPRESS_ALERT
+
+
+@apply_contract
+class SplunkAckAlert(_AckAlert):
+    capability = "ack_alert"
+    vendor_id = "splunk"
+    description = "Acknowledge a Splunk ES notable and assign it to AiSOC."
+    _credential_keys = _SPLUNK_KEYS
+
+
+@apply_contract
+class ElasticAckAlert(_AckAlert):
+    capability = "ack_alert"
+    vendor_id = "elastic"
+    description = "Acknowledge an Elastic Security signal."
+    _credential_keys = _ELASTIC_KEYS
+
+
+@apply_contract
+class DefenderAckAlert(_AckAlert):
+    capability = "ack_alert"
+    vendor_id = "defender"
+    description = "Acknowledge a Microsoft Defender alert and assign it."
+    _credential_keys = _DEFENDER_IOC_KEYS
+
+
+@apply_contract
+class SplunkSuppressAlert(_SuppressAlert):
+    capability = "suppress_alert"
+    vendor_id = "splunk"
+    description = "Close a Splunk ES notable event."
+    _credential_keys = _SPLUNK_KEYS
+
+
+@apply_contract
+class ElasticSuppressAlert(_SuppressAlert):
+    capability = "suppress_alert"
+    vendor_id = "elastic"
+    description = "Close an Elastic Security signal."
+    _credential_keys = _ELASTIC_KEYS
+
+
+@apply_contract
+class DefenderSuppressAlert(_SuppressAlert):
+    capability = "suppress_alert"
+    vendor_id = "defender"
+    description = "Resolve a Microsoft Defender alert with a classification."
+    _credential_keys = _DEFENDER_IOC_KEYS
+
+
+# ---------------------------------------------------------------------------
 # Phase B2 — previously-unregistered vendor adapters.
 #
 # The legacy executors already speak these vendors (they pick the client at
@@ -733,6 +835,14 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     SentinelUpdateAlertDisposition,
     QRadarUpdateAlertDisposition,
     DefenderUpdateAlertDisposition,
+    # Alert lifecycle: executors that existed with three vendor arms each and
+    # were unreachable through governed dispatch.
+    SplunkAckAlert,
+    ElasticAckAlert,
+    DefenderAckAlert,
+    SplunkSuppressAlert,
+    ElasticSuppressAlert,
+    DefenderSuppressAlert,
     # Phase B2 — previously-unregistered vendors
     SentinelOneIsolateHost,
     EntraDisableUser,

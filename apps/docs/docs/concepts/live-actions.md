@@ -216,7 +216,55 @@ included in the agent's planning catalogue. No core changes required.
   these fields.
 - **Soft capability validation.** Capabilities outside the canonical
   enum are accepted (with a warning) so plugins can ship novel verbs
-  without waiting for a core release.
+  without waiting for a core release. That leniency is for *plugins*.
+  In-tree executors are held to the vocabulary by the reachability gate
+  below, because a warning in a startup log is not a control.
+
+---
+
+## Reachability
+
+Four registries have to agree before a verb can be dispatched under
+governance:
+
+| Registry | What it supplies |
+| --- | --- |
+| `EXECUTOR_REGISTRY` | The vendor call itself, keyed by `ActionType` |
+| `_BUILTIN_ADAPTERS` | The `(vendor_id, capability)` pair the dispatcher looks up |
+| `CAPABILITY_CONTRACTS` | Impact, reversibility, verification, approval tier |
+| `KNOWN_CAPABILITIES` | The vocabulary everything validates against |
+
+A verb can be complete in three of the four and unreachable, and nothing in
+the failure message says which one is missing. `ack_alert` and
+`suppress_alert` were exactly that for several releases: real executors with
+Splunk, Elastic and Defender arms, wired into `EXECUTOR_REGISTRY`, and absent
+from the other three. Governed dispatch answered `executor_not_found` for code
+that worked, which reads as a misconfigured integration rather than a
+capability nobody connected.
+
+`scripts/check_action_contract.py` now compares all four, **in both
+directions**, on every pull request. Both directions is the part that matters.
+The characteristic failure of a drift check is that it compares A against B
+and never B against A, so drift in the direction things actually change passes
+while the check prints OK — this repository's graph-schema check did precisely
+that, reporting OK with 17 node labels declared in YAML and 28 implemented in
+Go, because it only ever looked for labels the YAML had and the code lacked.
+
+The gate reports:
+
+- an executor whose capability is absent from the vocabulary, or from the
+  contracts, or which never registers;
+- a capability with a contract and no executor behind it;
+- a legacy `ActionType` executor that no adapter reaches, so it bypasses the
+  contract, the approval matrix and the autonomy policy;
+- an adapter pointing at an `ActionType` with no executor, which would fail at
+  execution rather than at registration;
+- an `ActionType` with no executor at all.
+
+Two exemption lists carry the cases that are known and not yet closed, each
+with the reason it is open. They are ratchets: an entry that gains an
+implementation and is not removed fails the build, because a baseline nobody
+prunes is a gate that quietly stops checking.
 
 ---
 

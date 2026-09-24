@@ -381,6 +381,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=True,
         note=(
             "Writes a verdict onto a finding in the customer's SIEM. Classified "
             "the same as create_notable_event and push_status, which it is the "
@@ -391,7 +392,51 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
             "closed, and a verdict outside the taxonomy is refused rather than "
             "guessed (app/services/disposition_writeback.py). On top of that "
             "the feature ships dry-run by default: AISOC_SIEM_WRITEBACK_EXECUTE "
-            "is off, so an operator opts in to the vendor call, not out of it."
+            "is off, so an operator opts in to the vendor call, not out of it. "
+            "The probe re-reads the finding and compares its state against the "
+            "plan the executor derived from the same disposition: Splunk's "
+            "notable status and QRadar's offense status both change observably "
+            "on a close. A QRadar escalation leaves the offense OPEN, which is "
+            "also its prior state, so that combination answers indeterminate "
+            "rather than confirming a write that may not have happened."
+        ),
+    ),
+    # ── Alert lifecycle ────────────────────────────────────────────────────
+    #
+    # Impact is the same as update_alert_disposition, and for the same reason:
+    # these move a queue item, not an estate. The approval tiers differ,
+    # because what bounds the writeback is its disposition mapping and these
+    # two verbs have none — they do what the caller says.
+    "ack_alert": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=True,
+        note=(
+            "Marks a vendor finding in-progress and owned by AiSOC. It removes "
+            "nothing from anyone's view — it says who is already looking, which "
+            "is the point of automating it: two analysts working the same "
+            "notable is the cost of not doing so. The probe reads the notable's "
+            "status back, so the claim is checked rather than inferred from a "
+            "202."
+        ),
+    ),
+    "suppress_alert": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=True,
+        note=(
+            "Closes a vendor finding outright. The impact is a queue item, the "
+            "same as update_alert_disposition — but analyst-gated where that "
+            "one is automatic, because the thing that makes the writeback safe "
+            "to automate is the disposition mapping that refuses to close a "
+            "confirmed true positive, and this verb has no such bound. It "
+            "closes whatever it is pointed at, on the caller's say-so. Prefer "
+            "update_alert_disposition for anything driven by a verdict; this "
+            "exists for an analyst acting deliberately."
         ),
     ),
     # ── Ticketing and notification ─────────────────────────────────────────

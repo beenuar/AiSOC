@@ -21,14 +21,17 @@ from unittest.mock import create_autospec
 from uuid import uuid4
 
 import pytest
+from app.clients.defender_client import DefenderClient
 from app.clients.elastic_client import ElasticClient
 from app.clients.qradar_client import QRadarClient
 from app.clients.sentinel_client import SentinelClient
 from app.clients.splunk_client import SplunkClient
 from app.executors import siem
 from app.executors.siem import (
+    AckAlertExecutor,
     CreateNotableEventExecutor,
     SearchSIEMExecutor,
+    SuppressAlertExecutor,
     UpdateAlertDispositionExecutor,
 )
 from app.models.action import ActionRequest, ActionStatus, ActionType
@@ -134,3 +137,77 @@ async def test_disposition_writeback_matches_every_client_signature(
     assert result.status is ActionStatus.COMPLETED, result.error
     assert result.output["written"] is True
     getattr(client, method).assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("executor_cls", "action_type", "vendor", "factory_attr", "client_cls", "method"),
+    [
+        (AckAlertExecutor, ActionType.ACK_ALERT, "splunk", "_splunk_client", SplunkClient, "acknowledge_notable_event"),
+        (AckAlertExecutor, ActionType.ACK_ALERT, "elastic", "_elastic_client", ElasticClient, "acknowledge_alert"),
+        (SuppressAlertExecutor, ActionType.SUPPRESS_ALERT, "splunk", "_splunk_client", SplunkClient, "suppress_notable_event"),
+        (SuppressAlertExecutor, ActionType.SUPPRESS_ALERT, "elastic", "_elastic_client", ElasticClient, "close_alert"),
+    ],
+)
+async def test_alert_lifecycle_arms_match_their_client_signatures(
+    monkeypatch,
+    executor_cls: type,
+    action_type: ActionType,
+    vendor: str,
+    factory_attr: str,
+    client_cls: type,
+    method: str,
+) -> None:
+    """The ack / suppress arms, autospec'd, now that they are reachable.
+
+    These executors were unreachable through governed dispatch for as long as
+    they have existed, so nothing exercised their client calls under a spec
+    that could reject a wrong keyword. Registering them without this would
+    move the ``TypeError`` from unreachable code into a live SOC.
+    """
+    client = _autospec(client_cls)
+    getattr(client, method).return_value = {"success": True}
+    for attr in ("_splunk_client", "_elastic_client", "_sentinel_client", "_qradar_client"):
+        monkeypatch.setattr(siem, attr, (lambda params: client) if attr == factory_attr else (lambda params: None))
+
+    result = await executor_cls().execute(
+        _request(
+            action_type,
+            target="FINDING-88",
+            alert_vendor=vendor,
+            owner="aisoc",
+            comment="Handled by AiSOC.",
+        )
+    )
+
+    assert result.status is ActionStatus.COMPLETED, result.error
+    getattr(client, method).assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_defender_alert_lifecycle_arms_match_the_client_signature(monkeypatch) -> None:
+    """Defender builds its client inline rather than through a factory, so it
+    is patched at the class rather than at a factory function."""
+    from app.clients import defender_client as defender_module
+
+    client = _autospec(DefenderClient)
+    client.acknowledge_alert.return_value = {"success": True}
+    client.suppress_alert.return_value = {"success": True}
+    monkeypatch.setattr(defender_module, "DefenderClient", lambda **kwargs: client)
+    for attr in ("_splunk_client", "_elastic_client", "_sentinel_client", "_qradar_client"):
+        monkeypatch.setattr(siem, attr, lambda params: None)
+
+    creds = {
+        "mde_tenant_id": "00000000-0000-0000-0000-000000000001",
+        "mde_client_id": "00000000-0000-0000-0000-000000000002",
+        "mde_client_secret": "unit-test-placeholder",
+        "alert_vendor": "defender",
+    }
+
+    ack = await AckAlertExecutor().execute(_request(ActionType.ACK_ALERT, target="MDE-1", **creds))
+    suppress = await SuppressAlertExecutor().execute(_request(ActionType.SUPPRESS_ALERT, target="MDE-1", **creds))
+
+    assert ack.status is ActionStatus.COMPLETED, ack.error
+    assert suppress.status is ActionStatus.COMPLETED, suppress.error
+    client.acknowledge_alert.assert_called_once()
+    client.suppress_alert.assert_called_once()

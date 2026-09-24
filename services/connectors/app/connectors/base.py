@@ -140,10 +140,21 @@ class Capability(str, Enum):
     # this verb carries AiSOC's verdict back out to the same finding, so a
     # notable AiSOC dismissed is not re-triaged by a human in Splunk.
     UPDATE_ALERT_DISPOSITION = "update_alert_disposition"
+    # Alert lifecycle. Both have had Splunk, Elastic and Defender arms since
+    # Phase 3.3 and appeared in neither vocabulary, so the only way to reach
+    # working code was the ungoverned ActionType REST route.
+    ACK_ALERT = "ack_alert"
+    SUPPRESS_ALERT = "suppress_alert"
 
     # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     PUSH_CASE = "push_case"
     PUSH_STATUS = "push_status"
+    # Registered against Jira, ServiceNow, PagerDuty and Slack for as long as
+    # those adapters have existed, and absent here — so the registry logged
+    # `capability_unknown` for four executors at every startup. Distinct from
+    # push_case, which syncs an existing case rather than opening a record.
+    CREATE_TICKET = "create_ticket"
+    NOTIFY = "notify"
 
     # AUDIT — read-only configuration / posture queries.
     READ_AUDIT_TRAIL = "read_audit_trail"
