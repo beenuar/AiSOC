@@ -225,17 +225,14 @@ def _cd_target(segment: str, cwd: str) -> str | None:
     target = tokens[1]
     if target.startswith("$") or target.startswith("/"):
         return cwd
-    joined = Path(cwd or ".") / target
-    normalised = Path(*[])
     parts: list[str] = []
-    for part in joined.parts:
+    for part in (Path(cwd or ".") / target).parts:
         if part == "..":
             if parts:
                 parts.pop()
         elif part not in {".", ""}:
             parts.append(part)
-    normalised = Path(*parts) if parts else Path()
-    return normalised.as_posix().strip("./") if parts else ""
+    return Path(*parts).as_posix() if parts else ""
 
 
 def _args_after_pytest(tokens: list[str]) -> list[str] | None:
