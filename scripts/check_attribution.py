@@ -277,7 +277,7 @@ def main() -> int:
             print(f"  {origin}:{n}: {line}")
         print(
             "\nAiSOC does not attribute work to a development tool or AI assistant.\n"
-            "Remove the line. If it is a commit trailer, `bash scripts/setup_hooks.sh`\n"
+            "Remove the line. If it is a commit trailer, `sh scripts/setup_hooks.sh`\n"
             "installs the hook that strips it automatically, then amend the commit.\n"
             "If this is a false positive (a contributor whose name collides with a\n"
             "vendor string, or neutral prose), add a justified entry to\n"

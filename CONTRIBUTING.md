@@ -144,7 +144,7 @@ Some editors append such a trailer at commit time on their own. Install the
 repository's hooks once and the trailer is stripped before it reaches a commit:
 
 ```bash
-bash scripts/setup_hooks.sh        # or: pnpm install, which runs it for you
+sh scripts/setup_hooks.sh        # or: pnpm install, which runs it for you
 ```
 
 This sets `core.hooksPath` to the tracked [`.githooks/`](.githooks) directory,

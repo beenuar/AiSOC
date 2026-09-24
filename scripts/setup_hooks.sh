@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Point this clone's git hooks at the tracked .githooks/ directory.
 #
 # Git hooks live in .git/hooks/, which is not version-controlled and therefore
@@ -9,11 +9,24 @@
 # This runs automatically as the `prepare` script on `pnpm install`. Run it by
 # hand if you do not use pnpm:
 #
-#     bash scripts/setup_hooks.sh
+#     sh scripts/setup_hooks.sh
 #
 # It is idempotent and safe to run repeatedly.
+#
+# POSIX sh on purpose, invoked as `sh` and not `bash`. The web image builds on
+# Alpine, which ships busybox ash and no bash at all; a `prepare` script that
+# assumes bash fails `pnpm install` and takes the whole image build down with
+# it. For the same reason package.json runs this as `… || exit 0`: installing
+# a git hook is a convenience, and it must never be the reason a build fails.
+# CI is what actually enforces the rule.
 
-set -euo pipefail
+set -eu
+
+# No git binary at all (slim build image) — nothing to configure.
+if ! command -v git >/dev/null 2>&1; then
+    echo "setup_hooks: no git binary, nothing to do."
+    exit 0
+fi
 
 # Not a git checkout (release tarball, Docker build context, vendored copy) —
 # there is nothing to configure and that is not an error.

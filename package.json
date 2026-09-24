@@ -10,8 +10,8 @@
     "packages/*"
   ],
   "scripts": {
-    "prepare": "bash scripts/setup_hooks.sh",
-    "hooks:setup": "bash scripts/setup_hooks.sh",
+    "prepare": "sh scripts/setup_hooks.sh || exit 0",
+    "hooks:setup": "sh scripts/setup_hooks.sh",
     "build": "turbo run build",
     "dev": "turbo run dev",
     "test": "turbo run test",
