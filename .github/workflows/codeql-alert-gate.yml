@@ -54,6 +54,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install deps
+        # The gate itself is stdlib-only, deliberately: it must run on a bare
+        # interpreter. pytest is for the unit tests below; pydantic + httpx
+        # let the two `validate_playbooks` regression tests import the real
+        # model rather than skip — a skipped regression test is not a
+        # regression test. Same set the parity job in `ci.yml` installs, for
+        # the same reason.
+        run: pip install --quiet pytest pydantic httpx
+
       # The self-test runs first and on the same tree. It injects an alert at
       # every severity — including `note`, the severity of the two alerts that
       # motivated this gate — plus each shape of vacuous pass (no analysis, a

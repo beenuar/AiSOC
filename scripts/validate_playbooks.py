@@ -47,7 +47,7 @@ try:
 except Exception as exc:  # noqa: BLE001 - environment, not input
     raise ImportError(
         f"cannot import the Playbook model from services/agents: {exc}. "
-        "Install its dependencies (pydantic) before running the playbook validator."
+        "Install that service's dependencies before running the playbook validator."
     ) from exc
 
 
