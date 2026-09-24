@@ -210,8 +210,13 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | — | **Required.** OpenAI key used by the investigator and copilot agents |
-| `OPENAI_MODEL` | `gpt-4o` | LLM identifier — set per agent if you need different models |
+| `OPENAI_API_KEY` | — | Provider key. With the bundled gateway running, the *gateway* uses this to reach the upstream model; AiSOC itself authenticates with `LITELLM_MASTER_KEY`. |
+| `LLM_GATEWAY_URL` | `http://litellm:4000/v1` (set by compose) | In-network URL of the bundled LiteLLM gateway. Both resolvers read it for any `aisoc-<role>` alias — an alias resolves nowhere else. A concrete `AISOC_MODEL_PIN_<ROLE>` is left pointing at its provider. |
+| `LITELLM_MASTER_KEY` | `sk-aisoc-local` in compose | Bearer AiSOC sends when it routes to the gateway itself. Resolved *with* the URL, so a provider key is never sent to the gateway (it rejects one). |
+| `OPENAI_BASE_URL` / `LLM_BASE_URL` | — | Explicit override. Outranks `LLM_GATEWAY_URL` for every role; you own the key pairing when you set it. |
+| `AISOC_MODEL_PIN_<ROLE>` | `aisoc-<role>` | Per-role model. Set a concrete provider model to call a provider directly with no gateway. Roles: `triage`, `recon`, `investigation`, `copilot`, `summary`, `report`, `nl`. |
+| `OPENAI_MODEL` | `aisoc-summary` | BYOK / "explain this alert" path **only** — never a task role's model. Ships as an alias because the default deployment routes through the gateway, which 400s anything `infra/litellm/config.yaml` does not define. |
+| `AISOC_EMBEDDING_BASE_URL` / `AISOC_EMBEDDING_MODEL` | — / `text-embedding-3-large` | MITRE RAG embeddings. Deliberately outside the gateway, whose model list is chat aliases only. |
 | `DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for the Investigation Ledger |
 | `QDRANT_URL` | `http://localhost:6333` | Vector store for case memory and RAG |
 | `ENRICHMENT_SERVICE_URL` | `http://enrichment:8011` | URL of the enrichment service (Go) |
@@ -449,8 +454,11 @@ AISOC_CORS_ORIGINS=http://localhost:3000
 JWT_SECRET=$(openssl rand -hex 32)
 
 # --- Agents ---
+# The gateway reads OPENAI_API_KEY; AiSOC authenticates to the gateway with
+# LITELLM_MASTER_KEY. Routing is already wired — compose sets LLM_GATEWAY_URL
+# on api and agents, and both resolvers read it.
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o
+LITELLM_MASTER_KEY=$(openssl rand -hex 32)
 ENRICHMENT_SERVICE_URL=http://enrichment:8011
 
 # --- Realtime ---

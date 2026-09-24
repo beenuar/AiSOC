@@ -75,7 +75,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the breaking-change gate does not see this; it is recorded here because a
   dropped enum value is a break whether or not a workflow notices.
 
+### Fixed
+
+- **AI triage could not reach a model in the default deployment, and it was
+  not a missing key.** `docker-compose.yml` set `LLM_GATEWAY_URL` on the `api`
+  and `agents` services. Nothing read it. Both resolvers honoured only
+  `OPENAI_BASE_URL`, which compose never set, and each carried a comment
+  explaining that the refusal was deliberate — routing through the gateway
+  should be an explicit choice so it is never ambiguous whether the bearer is
+  the gateway master key or a provider key. The reasoning was sound and the
+  result was that every `aisoc-<role>` alias went to `api.openai.com`, which
+  cannot resolve one, and the caller's `except` rendered that as "no LLM
+  available". `preflight_llm()` logged exactly this condition at boot with the
+  remedy, so the diagnosis existed and the wiring did not.
+
+  `LLM_GATEWAY_URL` is now the lowest-precedence base URL, and the ambiguity is
+  resolved rather than avoided. **The model decides the route:** the gateway is
+  adopted only for a gateway alias, which resolves nowhere else, while a
+  concrete `AISOC_MODEL_PIN_<ROLE>` — the documented direct-to-provider escape
+  hatch — is left pointing at its provider. **The route decides the bearer:**
+  when AiSOC picks the gateway itself it sends `LITELLM_MASTER_KEY`, which
+  compose now supplies to both services, and never a provider key. An explicit
+  `OPENAI_BASE_URL` still outranks both. The rule lives once, in
+  `services/agents/app/llm/routing.py`, shared with the BYOK resolver and
+  mirrored in `services/api/app/services/model_aliases.py` for the service that
+  cannot import it.
+
+  Consumers audited and fixed alongside it: the API copilot and the NL-query
+  translator (both already went through the shared helpers); the agents
+  **contextual copilot**, which built `ChatOpenAI(model=…)` with no base URL at
+  all and reported "LLM not configured" from a key check that could not see the
+  gateway's; the **detection builder** (`/nl-detection`), the only consumer that
+  could not be pointed anywhere — it POSTed to a hardcoded
+  `https://api.openai.com/v1/chat/completions` with `OPENAI_MODEL`; the four API
+  endpoints (translation, hunts, knowledge base, phishing) that read
+  `LLM_BASE_URL` and defaulted to OpenAI without consulting `OPENAI_BASE_URL`;
+  the BYOK / "explain this alert" resolvers in both services, which defaulted
+  straight to `https://api.openai.com` and took an alias there; and
+  `GET /llm/status`, so the indicator describes the route the explain path
+  actually takes. The **MITRE RAG embedding** path is a deliberate exclusion —
+  `infra/litellm/config.yaml` declares chat aliases only, so an embedding call
+  routed there would 400 on every batch. It has its own
+  `AISOC_EMBEDDING_BASE_URL` / `AISOC_EMBEDDING_MODEL` pair and the gate checks
+  the exclusion in both directions.
+
+- **`OPENAI_MODEL` replaced the triage role's model on the highest-volume path
+  in the product.** `.env.example` shipped `OPENAI_MODEL=gpt-4-turbo-preview`,
+  a model no gateway config in this tree has ever defined. The auto-triage
+  worker layers a tenant's BYOK configuration over the role pin — but the
+  resolver's `LlmConfig` collapsed provenance into a single `source` word, so
+  the worker could not tell a per-tenant override from the process-wide env
+  baseline and bound all three fields unconditionally. Once traffic reached the
+  gateway that would have produced `Invalid model name` on every triage call:
+  the failure the commercial deployment already hit, where the copilot and every
+  triage agent degraded to empty output.
+
+  `LlmConfig` now carries `model_from_tenant` / `base_url_from_tenant` /
+  `api_key_from_tenant`, computed from state the resolvers already tracked, and
+  only a field the tenant actually set is treated as an override. A real BYOK
+  model still wins. `.env.example` ships `OPENAI_MODEL=aisoc-summary` — an alias
+  the bundled gateway defines — and the variable is documented as the BYOK /
+  explain path only, never a task role.
+
+- **A model with nowhere to go is now an error instead of a fallback.**
+  `make_chat_model` and `chat_completions_url` raise `UnroutableModelError`,
+  naming the alias and the remedy, when a gateway alias is requested with no
+  gateway configured — rather than building a client destined to 404 and
+  letting a caller read that as "the LLM is unavailable". `run_auto_triage`
+  constructs its model inside its own `try` so the failure arrives as
+  `AutoTriageError` like every other LLM failure; `auto_triage_node` catches
+  that specifically, so constructing outside it would have failed a whole graph
+  run over a configuration problem the deterministic path handles. The
+  deterministic floor is unchanged and still reports `call_count=0 models=[]
+  total_tokens=0` with no `recommended_actions`. `preflight_llm()` now reports
+  both directions at boot: an alias with no gateway, and a concrete model
+  pointed at the bundled gateway.
+
 ### Added
+
+- **A model name must resolve, and the variable that routes it must be read —
+  gated in both directions.** `scripts/check_llm_model_routing.py` reconciles
+  `infra/litellm/config.yaml`, the role pins, the API-side mirror,
+  `.env.example` and `docker-compose.yml`: every pin's alias must be defined by
+  the gateway and every alias claimed by a pin; every model named in an env or
+  compose file that wires the bundled gateway must be one the gateway defines;
+  every variable compose points at the gateway must be read by *both* resolvers
+  and every gateway variable the resolvers read must be set by compose; and a
+  service handed the gateway URL must be handed the gateway key. Wired into
+  `ci.yml :: python-lint`, with the self-test running first.
+
+  Every parser is AST- or comment-aware, and the self-test proves each refusal
+  rather than asserting it, because all three corpora contain text shaped
+  exactly like what the gate looks for: the gateway config's commented
+  Ollama/vLLM examples repeat `model_name: aisoc-triage` verbatim,
+  `.env.example` documents the escape hatch as a commented
+  `AISOC_MODEL_PIN_TRIAGE=gpt-4o-mini`, and `docker-compose.yml` explains the
+  gateway in prose containing `OPENAI_BASE_URL=http://litellm:4000/v1` two lines
+  above the key it describes. A line regex credits all three. 13 injected
+  defects and 7 parser blind spots, each caught by its own code, plus the shared
+  empty-tree refusal.
 
 - **Every test file in the tree is now executed by a workflow, and a gate
   holds it that way in both directions.** 63 were executed by nothing at all:

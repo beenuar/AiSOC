@@ -33,7 +33,6 @@ unset, so the demo path never breaks.
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -46,7 +45,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
-from app.llm.factory import resolve_model_alias
+from app.llm.factory import make_chat_model, resolve_api_key, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 from app.security.tenant_scope import require_console_or_service_auth
 
@@ -369,17 +368,18 @@ async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
     Falls back to a deterministic stub response when ``OPENAI_API_KEY`` is
     missing so the demo never hard-fails.
     """
-    if not os.getenv("OPENAI_API_KEY"):
+    if not resolve_api_key(model):
         return _fallback_response(system, user), 0
 
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
     except ImportError as exc:
         logger.warning("contextual.llm.import_failed", error=str(exc))
         return _fallback_response(system, user), 0
 
-    llm = ChatOpenAI(model=model, temperature=0.2)
+    # Was a bare ``ChatOpenAI(model=model)`` — no base URL, so the copilot sent
+    # `aisoc-copilot` to the provider default and took the 404 as "no LLM".
+    llm = make_chat_model("copilot", temperature=0.2)
     response = await safe_ainvoke(llm, [SystemMessage(content=system), HumanMessage(content=user)])
     text = response.content if isinstance(response.content, str) else str(response.content)
     tokens = 0
@@ -390,7 +390,7 @@ async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
 
 async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
     """Yield response delta chunks. Used by the NDJSON streaming endpoint."""
-    if not os.getenv("OPENAI_API_KEY"):
+    if not resolve_api_key(model):
         # Fake-stream the fallback in 8-character chunks for a nice UX in the
         # demo path.
         text = _fallback_response(system, user)
@@ -400,14 +400,13 @@ async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
 
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
     except ImportError:
         text = _fallback_response(system, user)
         for i in range(0, len(text), 8):
             yield text[i : i + 8]
         return
 
-    llm = ChatOpenAI(model=model, temperature=0.2, streaming=True)
+    llm = make_chat_model("copilot", temperature=0.2, streaming=True)
     async for chunk in safe_astream(llm, [SystemMessage(content=system), HumanMessage(content=user)]):
         if hasattr(chunk, "content") and chunk.content:
             yield chunk.content if isinstance(chunk.content, str) else str(chunk.content)
@@ -423,9 +422,9 @@ def _fallback_response(system: str, user: str) -> str:
         "so the contextual Copilot cannot reach a language model right now. "
         "You're seeing a deterministic placeholder response.\n\n"
         "**To enable real contextual answers:**\n\n"
-        "1. Set `OPENAI_API_KEY` in your `.env` file\n"
-        "2. Point AiSOC at the LiteLLM gateway (`OPENAI_BASE_URL=http://litellm:4000/v1`), "
-        "which maps each task alias to a real model\n"
+        "1. Set `OPENAI_API_KEY` in your `.env` file — the gateway reads it\n"
+        "2. Bring up the `full` profile so the LiteLLM gateway runs; "
+        "`LLM_GATEWAY_URL` already points every service at it\n"
         "3. Restart the `aisoc-agents` service\n\n"
         "See the LLM-gateway docs for self-hosted model alternatives (Ollama, vLLM, Together)."
     )
@@ -453,7 +452,10 @@ async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
     system, user = _build_messages(req)
     model = resolve_model_alias("copilot")
 
-    fallback = not bool(os.getenv("OPENAI_API_KEY"))
+    # Same question _call_llm asks, so the flag the UI reads and the branch
+    # actually taken cannot disagree — the gateway authenticates with
+    # LITELLM_MASTER_KEY, which OPENAI_API_KEY alone does not see.
+    fallback = not resolve_api_key(model)
     try:
         content, tokens = await _call_llm(system, user, model)
     except Exception as exc:  # noqa: BLE001
@@ -512,7 +514,10 @@ async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
     model = resolve_model_alias("copilot")
     title = _TITLES.get((req.page, req.action), f"{req.page} · {req.action}")
     suggestions = _FOLLOW_UPS.get((req.page, req.action), [])
-    fallback = not bool(os.getenv("OPENAI_API_KEY"))
+    # Same question _call_llm asks, so the flag the UI reads and the branch
+    # actually taken cannot disagree — the gateway authenticates with
+    # LITELLM_MASTER_KEY, which OPENAI_API_KEY alone does not see.
+    fallback = not resolve_api_key(model)
 
     async def gen() -> AsyncIterator[bytes]:
         # Header frame so the UI can render the title before tokens arrive.

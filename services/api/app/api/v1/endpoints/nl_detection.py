@@ -14,7 +14,6 @@ functional in all deployment environments.
 from __future__ import annotations
 
 import json
-import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -29,6 +28,12 @@ from app.models.detection_proposal import DetectionRuleProposal
 from app.services.detection_eval import evaluate_candidate_rule
 from app.services.fixture_synth import derive_fixtures_from_sigma
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
+from app.services.model_aliases import (
+    UnroutableModelError,
+    chat_completions_url,
+    resolve_api_key,
+    resolve_model_alias,
+)
 
 logger = structlog.get_logger()
 
@@ -122,9 +127,16 @@ FROM logs-*
 
 async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
     """Attempt LLM-based translation; fall back to templates on any error."""
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    # The detection builder asked ``OPENAI_MODEL`` for its model and posted to a
+    # hardcoded api.openai.com — so it was the one LLM consumer that could not be
+    # pointed anywhere, and the model it sent (`gpt-4-turbo-preview`, from
+    # .env.example) is not one the bundled gateway defines. It is a
+    # natural-language translation task, so it takes the `nl` role like every
+    # other one.
+    model = resolve_model_alias("nl")
+    api_key = resolve_api_key(model) or ""
     if not api_key:
-        logger.debug("nl_detection.llm_unavailable", reason="no OPENAI_API_KEY")
+        logger.debug("nl_detection.llm_unavailable", reason="no API key resolved for the nl role")
         return _template_fallback(request)
 
     platforms_str = ", ".join(request.target_platforms)
@@ -136,14 +148,17 @@ async def _llm_translate(request: NLDetectionRequest) -> dict[str, str | None]:
         f"Return JSON with keys matching the platform names (sigma, kql, spl, esql)."
     )
 
-    completions_url = "https://api.openai.com/v1/chat/completions"
+    try:
+        completions_url = chat_completions_url(model)
+    except UnroutableModelError as exc:
+        logger.warning("nl_detection.unroutable_model", model=model, reason=str(exc))
+        return _template_fallback(request)
     try:
         enforce_airgap_for_url(completions_url)
     except AirgapViolation as exc:
         logger.info("nl_detection.airgap_block", url=completions_url, reason=str(exc))
         return _template_fallback(request)
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     try:
         # T2.3 — the description is analyst-authored but routinely contains a
         # pasted log line, which is exactly what the contract refuses to

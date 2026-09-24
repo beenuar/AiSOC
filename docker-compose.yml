@@ -344,10 +344,17 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       ENVIRONMENT: development
       LOG_LEVEL: info
-      # Issue #478 — LiteLLM gateway. Route this service's live LLM endpoints
-      # (translation, hunts, KB, phishing, NL-detection) through the gateway by
-      # setting OPENAI_BASE_URL=http://litellm:4000/v1 + OPENAI_API_KEY=$LITELLM_MASTER_KEY.
+      # Issue #478 — LiteLLM gateway. This service's live LLM endpoints
+      # (translation, hunts, KB, phishing, NL-detection) route here by default:
+      # `app.services.model_aliases.resolve_base_url` reads LLM_GATEWAY_URL for
+      # any aisoc-<role> alias. It was previously read by nothing, so the
+      # variable was set, documented, and dead — every alias went to the
+      # provider default and 404'd. OPENAI_BASE_URL still overrides it.
       LLM_GATEWAY_URL: http://litellm:4000/v1
+      # The bearer that pairs with the URL above. Without it AiSOC would send a
+      # provider key to the gateway, which rejects it as an invalid proxy token.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # services/actions — where an approved response action is executed.
       # The API had no pointer to it at all: the one endpoint that called it
       # read the URL from os.environ and fell back to `aisoc-actions`, which
@@ -516,13 +523,20 @@ services:
       NEO4J_PASSWORD: neo4j_dev_secret
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # BYOK / "explain this alert" only — never a task role. A task role asks
+      # `app.llm.model_pins` for its aisoc-<role> alias, and this leaking into
+      # that path is what replaced `aisoc-triage` with a model the gateway does
+      # not define. Defaults to the summary alias so the explain path resolves
+      # at the gateway too; set a concrete model only for direct-to-provider.
+      OPENAI_MODEL: ${OPENAI_MODEL:-aisoc-summary}
       # Issue #478 — the LiteLLM gateway (below) is the single entry point for
-      # live LLM calls when enabled. To route this service through it, set in
-      # .env: OPENAI_BASE_URL=http://litellm:4000/v1 and
-      # OPENAI_API_KEY=$LITELLM_MASTER_KEY. Left unset, calls go direct to the
-      # provider (unchanged behaviour).
+      # live LLM calls. `app.llm.factory.resolve_base_url` reads this for any
+      # aisoc-<role> alias, so the default deployment reaches the gateway with
+      # no further configuration; OPENAI_BASE_URL still overrides it, and a
+      # concrete AISOC_MODEL_PIN_<ROLE> is left pointing at its provider.
       LLM_GATEWAY_URL: http://litellm:4000/v1
+      # The bearer that pairs with the URL above — see the api service.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
       # Where to post an approval card when triage raises one. Unset means
       # no ChatOps notification; the approval is still durable and visible in

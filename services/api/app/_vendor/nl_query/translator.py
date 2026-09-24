@@ -930,11 +930,12 @@ async def enhance_with_llm(
             {"role": "user", "content": prompt},
         ]
 
+        resolved_model = model or resolve_model_alias("nl")
         payload = await safe_chat_completions_request(
             api_key=api_key,
-            model=model or resolve_model_alias("nl"),
+            model=resolved_model,
             messages=messages,
-            url=chat_completions_url(),
+            url=chat_completions_url(resolved_model),
             timeout=timeout,
             response_format={"type": "json_object"},
             temperature=0,

@@ -28,7 +28,7 @@ from sqlalchemy import text
 from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
-from app.services.model_aliases import resolve_model_alias
+from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
 
 logger = logging.getLogger(__name__)
 
@@ -89,17 +89,18 @@ Analyse the submitted artifact and return ONLY valid JSON with:
 
 
 async def _triage(artifact_kind: str, content: str, urls: list[str]) -> TriageResult | None:
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("investigation")
+    # Resolved together with the route: when the call goes to the bundled
+    # gateway the bearer is the gateway's master key, not a provider key.
+    api_key = resolve_api_key(model)
     if not api_key:
         return None
-    base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("LLM_MODEL") or resolve_model_alias("investigation")
     user_msg = f"ARTIFACT TYPE: {artifact_kind}\n"
     if urls:
         user_msg += f"URLS: {', '.join(urls[:10])}\n"
     if content:
         user_msg += f"CONTENT (first 2000 chars):\n{content[:2000]}"
-    completions_url = f"{base_url}/chat/completions"
+    completions_url = chat_completions_url(model)
     # Air-gap enforcement: refuse the call rather than letting httpx fan out.
     # AirgapViolation propagates to the caller so the endpoint can surface 503.
     enforce_airgap_for_url(completions_url)

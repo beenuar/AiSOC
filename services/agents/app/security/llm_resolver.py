@@ -42,8 +42,9 @@ For each of the three fields we resolve in this order:
 1. Tenant row (when present, ``enabled=true``, and successfully
    decrypted in the ``api_key_vault`` case).
 2. Process env vars (``OPENAI_*`` / ``LLM_*``).
-3. Platform default (``https://api.openai.com`` / ``gpt-4o-mini``)
-   so the explain path always has a deterministic config to log
+3. Platform default — the bundled gateway and the ``summary`` alias when a
+   gateway is configured, ``https://api.openai.com`` / ``gpt-4o-mini``
+   otherwise — so the explain path always has a deterministic config to log
    against, even when it ultimately decides ``allowed=False``.
 
 Whichever field came from the tenant row is recorded so the resolver
@@ -82,6 +83,7 @@ from urllib.parse import urlparse
 import asyncpg
 import structlog
 
+from app.llm.routing import gateway_url, is_gateway_alias, resolve_api_key
 from app.security.credential_vault import CredentialVaultError, get_vault
 
 # NOTE: ``app.investigator.ledger`` is imported lazily inside
@@ -106,6 +108,10 @@ logger = structlog.get_logger()
 
 _DEFAULT_OPENAI_BASE = "https://api.openai.com"
 _DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+#: The role the explain path's work belongs to. Its alias is the default model
+#: when a gateway is configured, because ``gpt-4o-mini`` is not a model the
+#: bundled gateway defines and sending it there returns "Invalid model name".
+_EXPLAIN_ROLE_ALIAS = "aisoc-summary"
 
 
 @dataclass(frozen=True)
@@ -138,6 +144,16 @@ class LlmConfig:
     api_key: str | None
     source: str
     reason: str
+    # Per-field provenance. ``source`` collapses the whole config into one
+    # word, which is enough to log and not enough to act on: the auto-triage
+    # worker binds this config as a per-tenant BYOK *override*, and without
+    # knowing which fields the tenant actually set it overrode the task role's
+    # model with whatever ``OPENAI_MODEL`` happened to be — shipped in
+    # .env.example as `gpt-4-turbo-preview`, which no gateway here defines. An
+    # env baseline is a default, never an override.
+    model_from_tenant: bool = False
+    base_url_from_tenant: bool = False
+    api_key_from_tenant: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +173,15 @@ def _env_baseline() -> tuple[str, str, str | None]:
     """
     base_url = os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
     model = os.getenv("OPENAI_MODEL", "").strip() or os.getenv("LLM_MODEL", "").strip() or os.getenv("AISOC_LLM_MODEL", "").strip()
-    api_key = os.getenv("OPENAI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip()
+    if not base_url and gateway_url() and is_gateway_alias(model or _EXPLAIN_ROLE_ALIAS):
+        # The compose-provided gateway, under the same rule every other caller
+        # uses (``app.llm.routing``): adopted for an alias, never for a concrete
+        # model. Without this the explain path was the one consumer that could
+        # not reach the gateway at all — it defaulted straight to
+        # ``https://api.openai.com`` and took an alias there.
+        base_url = gateway_url() or ""
+        model = model or _EXPLAIN_ROLE_ALIAS
+    api_key = resolve_api_key(model) or ""
     return base_url, model, (api_key or None)
 
 
@@ -388,6 +412,9 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
             api_key=None,
             source=source if source != "none" else "none",
             reason="no API key configured (neither tenant BYOK nor env)",
+            model_from_tenant=tenant_contributed_model,
+            base_url_from_tenant=tenant_contributed_base_url,
+            api_key_from_tenant=tenant_contributed_key,
         )
 
     blocked, reason = _airgap_blocks(base_url)
@@ -399,6 +426,9 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
             api_key=api_key,  # safe: caller does not log this on failure
             source=source,
             reason=reason,
+            model_from_tenant=tenant_contributed_model,
+            base_url_from_tenant=tenant_contributed_base_url,
+            api_key_from_tenant=tenant_contributed_key,
         )
 
     return LlmConfig(
@@ -408,6 +438,9 @@ async def resolve_llm_config(tenant_ref: str | None) -> LlmConfig:
         api_key=api_key,
         source=source,
         reason="",
+        model_from_tenant=tenant_contributed_model,
+        base_url_from_tenant=tenant_contributed_base_url,
+        api_key_from_tenant=tenant_contributed_key,
     )
 
 

@@ -101,7 +101,7 @@ Postgres and Kafka are the natural ceiling; both scale predictably under standar
 
 ### Which model does the agent use?
 
-Whichever you configure. `OPENAI_MODEL` (and per-agent overrides) is read at startup. Default is `gpt-4o`. Anthropic Claude works via the agents service's provider abstraction. Self-hosted Llama / Mistral works via OpenAI-compatible endpoints (vLLM, Ollama, llama.cpp server).
+Whichever you configure, and the choice lives in one file. Each workload asks for a logical alias (`aisoc-triage`, `aisoc-investigation`, …) and `infra/litellm/config.yaml` maps aliases to real models — so you re-point a task without touching AiSOC. Hosted providers, Anthropic Claude, and self-hosted Llama / Mistral behind an OpenAI-compatible endpoint (vLLM, Ollama, llama.cpp server) are all just a different line in that file. To skip the gateway entirely, pin a concrete model per role with `AISOC_MODEL_PIN_<ROLE>`. See [LLM gateway](./llm-gateway.md).
 
 ### Will the agent do things without my permission?
 
