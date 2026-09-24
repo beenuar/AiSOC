@@ -790,8 +790,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alembic-managed services read as unprotected however many policies they
   carried; and a policy created inside a PL/pgSQL `EXECUTE` is invisible to
   it, which is why `060_rls_coverage.sql` spells out 56 literal `ALTER TABLE` /
-  `CREATE POLICY` statements instead of looping over an array. `--self-test`
-  grew from 8 cases to 14, covering both new rules in both directions.
+  `CREATE POLICY` statements instead of looping over an array. And the rule
+  credited the *session* as a validated key — `db` is passed to the guard and
+  appears in every raw statement's expression, so `keys & resolved` matched
+  whatever the query was really keyed on; a call receiver is now excluded
+  structurally rather than by naming `db`. `--self-test` grew from 8 cases to
+  15, covering all of it in both directions.
 
 - **`check_gate_coverage.py` decides what a check is from what a script does,
   not what it is called.** It classified by filename — `check_*`,

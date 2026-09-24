@@ -597,6 +597,24 @@ def _tenant_validated_keys(
     validated: set[str] = set()
     if not auth_names:
         return validated
+
+    # A guard is handed the session as well as the key, and for raw SQL the
+    # statement's resolved name set contains the session too (`db.execute(...)`
+    # is part of the expression). So `db` satisfied `keys & resolved` and every
+    # raw statement in a function that called *any* tenant-carrying guard was
+    # credited, whatever it was actually keyed on — a query on an unrelated id
+    # sailed through. Found by probing what the rule credits rather than what
+    # it flags.
+    #
+    # Excluded structurally by what the name is used *as*: a session is the
+    # receiver of a call, a row key is not. Naming `db` / `session` / `conn`
+    # would be the hand-written vocabulary this file exists to avoid.
+    receivers = {
+        node.func.value.id
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+    }
+
     for node in ast.walk(fn):
         if not isinstance(node, ast.Call):
             continue
@@ -615,7 +633,7 @@ def _tenant_validated_keys(
         if not _guard_enforces(fn, node, parents, module_fns):
             continue
         for expr in [*node.args, *[kw.value for kw in node.keywords]]:
-            if isinstance(expr, ast.Name):
+            if isinstance(expr, ast.Name) and expr.id not in receivers:
                 validated.add(expr.id)
     return validated
 
@@ -1173,6 +1191,23 @@ async def read_parts(widget_id, user: AuthUser, db):
     return await db.execute(select(Widget).where(Widget.id == widget_id))
 """
 
+_GUARD_VALIDATES_A_DIFFERENT_KEY = """
+from typing import Annotated
+from sqlalchemy import select, text
+from app.api.v1.deps import AuthUser
+from app.models.widget import Widget
+
+async def _fetch_widget(db, widget_id, tenant_id):
+    row = (await db.execute(select(Widget).where(Widget.id == widget_id, Widget.tenant_id == tenant_id))).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404)
+    return row
+
+async def read_unrelated(widget_id, other_id, user: AuthUser, db):
+    await _fetch_widget(db, widget_id, user.tenant_id)
+    return await db.execute(text("SELECT * FROM widgets WHERE owner_ref = :o").bindparams(o=other_id))
+"""
+
 _GUARD_NOT_RESOLVABLE = """
 from typing import Annotated
 from sqlalchemy import select
@@ -1261,6 +1296,7 @@ def _self_test() -> int:
         ("control: guard tested with a raising handler is enforcing", {"r.py": _GUARD_TESTED_AND_RAISES}, 0, None),
         ("drift C: guard that logs and carries on is not a guard", {"r.py": _GUARD_THAT_FAILS_SOFT}, 1, None),
         ("drift D: guard defined elsewhere is undecidable, so not credited", {"r.py": _GUARD_NOT_RESOLVABLE}, 1, None),
+        ("drift F: an enforcing guard on a different key credits nothing", {"r.py": _GUARD_VALIDATES_A_DIFFERENT_KEY}, 1, None),
         # The RLS-context rule, on both sides of its condition.
         ("control: RLS context bound on a table that has a policy", {"r.py": _RLS_CONTEXT_ON_COVERED_TABLE}, 0, _PROBE_MIGRATION),
         ("drift E: RLS context bound on a table with no policy", {"r.py": _RLS_CONTEXT_ON_UNCOVERED_TABLE}, 1, _PROBE_MIGRATION),
