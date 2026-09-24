@@ -370,7 +370,23 @@ rather than the one that catches the library.
 
 ## Static analysis (CodeQL)
 
-GitHub CodeQL runs on every pull request and on a nightly schedule against `main`. As of the v8.0 wave-1 push the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow and blocks the next release.
+GitHub CodeQL (`.github/workflows/codeql.yml`) analyses `javascript-typescript`, `python` and `go` on every push to `main`, on every pull request targeting `main`, and on a weekly schedule (Mondays, 03:00 UTC).
+
+**The invariant: zero *open* CodeQL alerts on `main`, at every severity — `note` included.** It is enforced by `.github/workflows/codeql-alert-gate.yml`, which runs `scripts/check_codeql_alerts.py`. Precisely what that means:
+
+- **Every severity counts.** `note`, `warning` and `error` all break the gate, and so do alerts that carry no `security_severity_level` at all (quality queries generally do not). There is no threshold to sit underneath.
+- **Dismissed alerts are excluded, and counted out loud.** Dismissal is GitHub's audited escape hatch: it records the actor, the reason and the timestamp, and it requires write access. We use it for roughly twenty accepted-risk `py/request-without-cert-validation` findings on the on-prem appliance clients (Splunk, FortiGate, PAN-OS, osctrl, FleetDM, MISP): those clients default to `verify=True` and only disable verification on an explicit operator opt-in, which self-signed and internal-CA appliances require. They are dismissed `won't fix` with CA-bundle pinning recorded as the future alternative. The gate prints how many dismissals it excluded on every run, so a silent mass-dismissal is visible in its own output rather than hidden behind a green tick.
+- **An unanalysed ref is a failure, not a pass.** The gate requires a CodeQL analysis for *each* declared language, pinned to the commit that triggered the run, and it fails if the newest analysis is more than ten days old. Zero alerts because nothing ran is the answer it exists to refuse.
+- **It runs on `push` to `main`, not only on pull requests,** plus a `workflow_run` trigger after CodeQL finishes and a daily schedule.
+- **Scorecard findings are out of scope.** Scorecard uploads SARIF to the same code-scanning page under its own tool name (`PinnedDependenciesID`, `TokenPermissionsID` and friends). They are a different policy with a different owner; the gate reports them and does not gate on them.
+
+`scripts/check_codeql_alerts.py --self-test` injects an alert at each severity plus every shape of vacuous pass — no analysis, a dropped language, a frozen analysis, mixed `codeql-action` pins, a PR-only trigger — and requires the gate to catch each one. CI runs that self-test immediately before the gate itself, on the same tree.
+
+:::warning This invariant was stated for four months before anything enforced it
+This section used to read "the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow". No mechanism existed. `codeql.yml` uploads SARIF, and `github/codeql-action/analyze` does not fail a build on findings; `main` has no branch protection, so "Code scanning results" was not a required check either; and `security.yml`'s only hard job is the claim-to-gate matrix. Nothing in the repository queried the code-scanning API.
+
+It was found the way these things are always found: two alerts — [#893](https://github.com/beenuar/AiSOC/security/code-scanning/893) (`py/unused-global-variable`) and [#896](https://github.com/beenuar/AiSOC/security/code-scanning/896) (`py/print-during-import`), both `note` — sat open on `main` while this page said the count was zero. The scan itself was healthy and current; the enforcement was imaginary. The sentence above now describes a job that exists, and the gate's self-test is what keeps it that way.
+:::
 
 Two patterns are worth documenting because they came up repeatedly during the sweep that drove the alert count to zero:
 

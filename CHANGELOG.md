@@ -313,6 +313,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The zero-CodeQL-alert invariant was documented for four months with
+  nothing enforcing it.** `apps/docs/docs/operations/security.md` has said
+  since 2026-05-15 that "the Python alert count on `main` is zero, and we
+  treat that as a CI gate — a new alert breaks the security workflow". No such
+  gate existed anywhere in the repository. `codeql.yml` uploads SARIF and
+  `github/codeql-action/analyze` does not fail a build on findings; `main` has
+  no branch protection, so "Code scanning results" was not a required check
+  either; `security.yml`'s only hard job is the claim-to-gate matrix; and
+  nothing in the tree queried the code-scanning API. The scan itself was
+  healthy — `main` was analysed continuously, most recently minutes before
+  this was written — so the usual stale-green and mixed-`codeql-action`-pin
+  traps were both ruled out. The enforcement was simply imaginary, which is
+  why two `note`-severity alerts could sit open on `main` under a documented
+  count of zero.
+
+  `scripts/check_codeql_alerts.py` is that gate, wired into the new
+  `.github/workflows/codeql-alert-gate.yml` on push to `main`, on pull
+  requests, on a `workflow_run` after CodeQL finishes, and daily. It fails on
+  any open CodeQL alert at **any** severity — `note` included, since both
+  motivating alerts were `note` and carried no `security_severity_level`, so a
+  threshold anywhere would have reproduced the original silence exactly. It
+  also refuses the vacuous pass: an unanalysed ref, a declared language with
+  no analysis, an analysis older than ten days, or one belonging to a
+  different commit than the one that triggered the run are all failures rather
+  than a clean bill of health, and an input it cannot read exits 2 rather than
+  0. Dismissed alerts stay excluded — that is GitHub's audited escape hatch
+  and the repository uses it for ~20 accepted-risk
+  `py/request-without-cert-validation` findings — but the count is printed on
+  every run so a silent mass-dismissal is visible. `--self-test` injects an
+  alert at each severity plus every shape of vacuous pass and requires the
+  gate to catch all ten; CI runs it immediately before the gate itself.
+
+- **`scripts/validate_playbooks.py` printed to stderr and called `sys.exit(2)`
+  while being imported** (CodeQL `py/print-during-import`, alert #896). Beyond
+  the note, this was a live defect:
+  `scripts/check_playbook_schema_parity.py` imports the module to read
+  `SUPPORTED_TRIGGERS` and wraps the import in `except Exception`, which
+  cannot catch `SystemExit` — a broken environment would have killed the
+  parity gate's interpreter instead of producing its diagnostic. The import
+  now raises `ImportError`, which that handler catches.
+
 - **The maintainers' hosted origin shipped in the default CORS allow-list of
   nine services.** `services/{api,agents,connectors,honeytokens,purple-team,ueba}`
   (six byte-identical copies of the shared `cors.py`), `services/realtime`, and

@@ -37,11 +37,18 @@ DEFAULT_PACK = ROOT / "playbooks" / "packs" / "v1"
 # Make the services/agents Pydantic models importable.
 sys.path.insert(0, str(ROOT / "services" / "agents"))
 
+# Raised rather than printed-and-exited: `scripts/check_playbook_schema_parity.py`
+# imports this module to read SUPPORTED_TRIGGERS, and `sys.exit()` raises
+# SystemExit, which derives from BaseException and so slips past that gate's
+# `except Exception`. A broken environment would have killed the parity gate's
+# interpreter instead of producing its diagnostic.
 try:
     from app.playbook.models import Playbook, StepType  # type: ignore[import-not-found]
-except Exception as exc:  # pragma: no cover - import errors visible to user
-    print(f"FATAL: cannot import Playbook model: {exc}", file=sys.stderr)
-    sys.exit(2)
+except Exception as exc:  # noqa: BLE001 - environment, not input
+    raise ImportError(
+        f"cannot import the Playbook model from services/agents: {exc}. "
+        "Install its dependencies (pydantic) before running the playbook validator."
+    ) from exc
 
 
 SUPPORTED_TRIGGERS = {"alert", "case", "manual", "schedule"}
