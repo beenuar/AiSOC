@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- **`CostTracker` no longer reports an estimated dollar figure as a measured
+  one, and `CostTracker.total_cost_usd` is gone.** It priced a call by looking
+  its **model name** up in a table of hosted list prices, and the name it
+  looked up was an `aisoc-<role>` alias — a label the LiteLLM gateway resolves
+  to a model, not a model. No alias is in the table, so every call fell
+  through a `(0.001, 0.002)` default and was booked at a price nobody charges
+  for a model nobody named. Measured live: a 903-token completion on an
+  operator's own hardware, through a local Ollama model, reported
+  `total_cost_usd=0.000999`. The same call now reports `$0.00`, measured.
+
+  The figure was not confined to a dashboard. It fed the funnel insights, the
+  per-run Investigation Ledger, the investigation summary export, and the
+  **budget circuit breaker** — which trips at `AISOC_BUDGET_HARD_USD` and
+  would eventually have degraded a working local install to
+  deterministic-only over money nobody spent.
+
+  Every cost is now one of three things, and says which:
+
+  - **measured** — the gateway reported it. The real figure comes off the
+    response headers (`x-litellm-response-cost`, and `x-litellm-model-name`
+    for what the alias resolved to), so `make_chat_model` now builds clients
+    with `include_response_headers=True`. A measured `0.0` — what a local
+    model genuinely costs — is a value, not a gap.
+  - **estimated** — re-priced from a public list price for a *concrete* model
+    id, and labelled an estimate on every surface: `~$` in the console, an
+    `estimated_cost_usd` field of its own on every response, and
+    "list-price estimate … not billed" in the export. Never merged into a
+    measured figure, because one number cannot be labelled two ways.
+  - **not measured** — neither. Rendered as an em dash with the reason, never
+    as `$0.00`. Following the MTTR precedent: the count of calls a sum was
+    computed over travels with the sum, so a zero can be told from an absence.
+
+  There is deliberately no default price any more. An unknown model imputes
+  nothing and is counted as unpriced; the BYOK savings panel reports
+  "not estimable" rather than a saving computed from an invented rate.
+
+  What callers must change: `CostTracker.total_cost_usd` is replaced by
+  `measured_cost_usd` (`float | None`) plus `measured_call_count`, mirrored by
+  `estimated_cost_usd` / `estimated_call_count` / `unpriced_call_count`;
+  `CallRecord.cost_usd` is now `float | None` and carries `cost_source`;
+  `summary()` no longer emits a `total_cost_usd` key. On the wire the fields
+  are additive — `total_cost_usd` keeps its name and now carries measured
+  cost only, with `measured_call_count` beside it. Migration
+  `063_cost_provenance.sql` adds the columns; **every pre-063 row reads as
+  "not measured"**, which is the truth about it, and the historical values are
+  left in place rather than deleted. Gated by
+  `scripts/check_cost_provenance.py`.
+
 - **Three MSSP response schemas describing fabricated data are removed:
   `MSSPKpiOverview`, `ManagedTenantRow`, `CrossTenantIncident`.** They were
   the shape of five hardcoded companies with invented alert counts, not the
@@ -76,6 +124,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dropped enum value is a break whether or not a workflow notices.
 
 ### Fixed
+
+- **The LLM gateway moves from the `full` profile into CORE, so the documented
+  default install can actually do AI triage.** It was `full`-profile on the
+  reasoning that the gateway is "only needed when a provider key is
+  configured" — which skipped a step: every task role resolves to an
+  `aisoc-<role>` alias, and an alias resolves at the gateway and nowhere else,
+  so a CORE deployment could not use a key either. `make up`, the quickstart's
+  Path B, and a plain `docker compose up -d` all now start it.
+
+  With no provider key it boots, serves its seven aliases and answers
+  `/health/liveliness` (verified against the bundled config with both provider
+  keys empty); AiSOC makes no LLM call and the deterministic path is
+  unchanged. CORE goes from 10 to 11 services and ~6 GB to ~6.5 GB — the image
+  is 1.67 GB and idles at 451 MiB, measured, so "one lightweight container"
+  was not true and the README's numbers moved rather than staying put. The
+  gateway is also the only party that can report what a call cost, so CORE's
+  cost figures were previously unmeasurable by construction. Reasoning and the
+  two rejected alternatives: `docs/decisions/0006-llm-gateway-in-core.md`.
+  While correcting that table, the `full` row's service count was checked and
+  was wrong: `make up-full` starts **21** services, not 30 (30 is `full` plus
+  the `monitoring`, `chatops`, `extras` and `osquery` profiles).
+
+- **`Event spine (real containers)` had a genuine race, not a flaky
+  environment.** The graph-writer assertion was
+  `docker compose logs … 2>/dev/null | grep -q "<early string>"` inside a step
+  running under `set -euo pipefail`. `grep -q` exits the instant it matches —
+  and that string is line 4 of the service's output — which closes the pipe
+  while Compose is still writing; Compose exits 255 on the broken pipe and
+  `pipefail` promotes that over grep's 0. The pipeline reported failure over a
+  line that was present, which the failing run proves: the log dump its own
+  error handler printed 115 ms later contains the exact string.
+
+  Reproduced deterministically rather than inferred — with a large log the
+  pipeline returns 255 every time, with a small one that fits the pipe buffer
+  it returns 0 every time, and the match is in both. That size dependence is
+  why it read as a flake. `2>/dev/null` made it worse by discarding the only
+  message that distinguished "Compose failed" from "the line is absent", so
+  the run reported the wrong cause. Fixed by capturing the logs once and
+  grepping the capture, and by checking Compose's own exit status separately —
+  not by a retry or a longer sleep, which would have converted a real race
+  into a slower real race. `scripts/doctor.sh` has the same shape twice and is
+  unaffected: it does not set `pipefail`.
 
 - **AI triage could not reach a model in the default deployment, and it was
   not a missing key.** `docker-compose.yml` set `LLM_GATEWAY_URL` on the `api`

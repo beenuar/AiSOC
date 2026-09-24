@@ -123,12 +123,21 @@ One architecture, three profiles of it.
 
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 10 | ~6 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console |
-| **full** | `make up-full` | 30 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, scheduled connectors |
-| **demo** | `make up && make demo` | 10 | ~6 GB | Core plus labelled synthetic data |
+| **core** | `make up` | 11 | ~6.5 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console, plus the LLM gateway |
+| **full** | `make up-full` | 21 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, scheduled connectors |
+| **demo** | `make up && make demo` | 11 | ~6.5 GB | Core plus labelled synthetic data |
 
 CORE is not a cut-down toy — it is the smallest deployment that takes a real
 event and produces a real alert.
+
+**What CORE can and cannot do about AI.** The LLM gateway ships in CORE, so
+AI triage works as soon as you put a provider key in `.env` — no profile
+change and no second command. Until you do, there is no AI: every alert is
+triaged by the deterministic path, the console says so, and no LLM call is
+made. That is the honest default, not a degraded one. The gateway is also
+what reports what a call cost, so a CORE install's cost figures are measured
+rather than estimated. Reasoning:
+[ADR-0006](docs/decisions/0006-llm-gateway-in-core.md).
 
 ## Real vs synthetic data
 

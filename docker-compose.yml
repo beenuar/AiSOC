@@ -557,8 +557,24 @@ services:
   # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
   # `agents` service above.
   litellm:
-    # full profile — LLM gateway. Only needed when a provider key is configured.
-    profiles: ["full"]
+    # CORE, deliberately — see docs/architecture/decisions/0001-llm-gateway-in-core.md.
+    #
+    # This was `profiles: ["full"]` on the reasoning that the gateway is "only
+    # needed when a provider key is configured". The reasoning skipped a step:
+    # a CORE deployment *with* a key could not use it either, because every
+    # `aisoc-<role>` alias resolves nowhere except here. So the documented
+    # default install — what `make up` starts and what the quickstart walks a
+    # new evaluator through — could not do AI triage at all, and the profile
+    # table said it did "triage".
+    #
+    # With no key it boots, serves its seven aliases and answers /health;
+    # AiSOC's deterministic path is unchanged and still honest. Measured cost:
+    # a 1.67 GB image idling at ~451 MiB, which is why the RAM figure in the
+    # README moved rather than staying put.
+    #
+    # It is also the only party that can say what a call cost — the real
+    # figure comes off its response headers — so leaving it out of CORE left
+    # the default install's cost dashboard permanently unmeasurable.
     image: ghcr.io/berriai/litellm:main-stable
     container_name: aisoc-litellm
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]

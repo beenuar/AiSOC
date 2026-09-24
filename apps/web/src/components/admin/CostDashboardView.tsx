@@ -17,6 +17,20 @@
  * imputed savings vs a hosted alternative without us claiming billing-grade
  * accuracy.
  *
+ * Every dollar on this page is one of three things and says which:
+ *
+ *   measured    the gateway reported it. Real money. A measured $0.00 — what
+ *               a local model costs — is a value, not a gap.
+ *   estimate    re-priced from a public list price. Always prefixed "~" and
+ *               labelled, never merged into a measured figure.
+ *   —           not measured. Rendered as an em dash with the reason, never
+ *               as $0.00.
+ *
+ * The last case is why the counts exist. Before them the page could not tell
+ * "the agents spent nothing" from "nobody recorded what the agents spent",
+ * and rendered the first: a free AI-SOC, on a tracker that was pricing a
+ * gateway alias against a hosted table it does not appear in.
+ *
  * Styling intentionally mirrors `components/reports/ExecutiveDigest.tsx` so
  * the two admin reports feel like siblings (same Card, KpiCard, Stat
  * primitives, same dark-on-violet hero band).
@@ -43,6 +57,43 @@ function fmtUsd(value: number | null | undefined): string {
   if (value < 1000) return `$${value.toFixed(2)}`;
   if (value < 1_000_000) return `$${(value / 1000).toFixed(2)}k`;
   return `$${(value / 1_000_000).toFixed(2)}M`;
+}
+
+/**
+ * A measured amount, an estimate, or an em dash — decided by the count.
+ *
+ * Every spend cell on this page goes through here so none can quietly print
+ * `$0.00` for a figure nobody measured. `measuredCount` is the same contract
+ * the MTTR tiles use: a sum over zero rows is not a sum.
+ */
+function fmtSpend(
+  measured: number | null | undefined,
+  measuredCount: number,
+  estimated?: number | null,
+  estimatedCount?: number,
+): string {
+  if (measuredCount > 0) return fmtUsd(measured);
+  if ((estimatedCount ?? 0) > 0) return `~${fmtUsd(estimated)}`;
+  return '—';
+}
+
+/** The words under a spend cell explaining which of the three it is. */
+function spendProvenance(
+  measuredCount: number,
+  estimatedCount: number,
+  unpricedCount: number,
+): string {
+  if (measuredCount > 0) {
+    const suffix = estimatedCount > 0 ? `, ${estimatedCount} estimated` : '';
+    return `measured over ${measuredCount} call${measuredCount === 1 ? '' : 's'}${suffix}`;
+  }
+  if (estimatedCount > 0) {
+    return `list-price estimate over ${estimatedCount} call${estimatedCount === 1 ? '' : 's'} — not billed`;
+  }
+  if (unpricedCount > 0) {
+    return `not measured · ${unpricedCount} call${unpricedCount === 1 ? '' : 's'} the gateway did not price`;
+  }
+  return 'not measured';
 }
 
 function fmtNumber(value: number | null | undefined): string {
@@ -90,8 +141,9 @@ export function CostDashboardView() {
         <div>
           <h1 className="text-2xl font-bold text-white">Cost Dashboard</h1>
           <p className="mt-1 text-sm text-gray-400">
-            LLM spend, automation activity, and BYOK savings for the current tenant. Numbers are
-            recorded by the cost tracker — no estimation unless explicitly labelled.
+            LLM spend, automation activity, and BYOK savings for the current tenant. Spend figures
+            are what the LLM gateway reported it charged. Anything it could not price is shown as
+            an estimate or as not measured — never as zero.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -158,15 +210,32 @@ function PeriodHero({ data }: { data: CostDashboard }) {
     if (headline.total_calls === 0) {
       return 'No LLM calls recorded in this window.';
     }
-    const perRun = headline.avg_cost_per_run_usd;
     const runsLabel = headline.total_runs === 1 ? 'investigation' : 'investigations';
     const callsLabel = headline.total_calls === 1 ? 'call' : 'calls';
-    const cost = fmtUsd(headline.total_cost_usd);
     const tokens = fmtNumber(headline.total_tokens);
-    if (perRun === null) {
-      return `${cost} of LLM spend across ${headline.total_calls.toLocaleString()} ${callsLabel} (${tokens} tokens). No completed investigation runs in the window.`;
+    const volume = `${headline.total_calls.toLocaleString()} ${callsLabel} (${tokens} tokens) across ${headline.total_runs.toLocaleString()} ${runsLabel}`;
+
+    // The sentence used to open with a dollar figure unconditionally. When
+    // nothing has been measured there is no figure to open with, and saying
+    // "$0.00 of LLM spend" about an unmeasured window is the whole defect in
+    // one sentence.
+    if (headline.measured_call_count === 0) {
+      if (headline.estimated_call_count > 0) {
+        return `${volume}. Spend was not measured — the gateway reported no cost — but ${fmtUsd(headline.estimated_cost_usd)} is the list price for the models involved.`;
+      }
+      return `${volume}. Spend is not measured: no call in this window reported a cost, and nothing here has a published price to estimate from.`;
     }
-    return `${cost} of LLM spend across ${headline.total_runs.toLocaleString()} ${runsLabel}, averaging ${fmtUsd(perRun)} per run on ${tokens} tokens.`;
+
+    const perRun = headline.avg_cost_per_run_usd;
+    const cost = fmtUsd(headline.total_cost_usd);
+    const unmeasured =
+      headline.estimated_call_count + headline.unpriced_call_count > 0
+        ? ` ${(headline.estimated_call_count + headline.unpriced_call_count).toLocaleString()} further calls were not billed by the gateway.`
+        : '';
+    if (perRun === null) {
+      return `${cost} of measured LLM spend across ${volume}.${unmeasured}`;
+    }
+    return `${cost} of measured LLM spend across ${volume}, averaging ${fmtUsd(perRun)} per run.${unmeasured}`;
   }, [headline]);
 
   return (
@@ -185,13 +254,32 @@ function Headline({ data }: { data: CostDashboard }) {
   const { headline } = data;
   return (
     <section className="grid grid-cols-2 gap-4 sm:grid-cols-4" data-testid="cost-headline">
-      <KpiCard label="Total LLM spend" value={fmtUsd(headline.total_cost_usd)} sub={`${fmtNumber(headline.total_calls)} calls`} />
+      <KpiCard
+        label="Measured LLM spend"
+        value={fmtSpend(
+          headline.total_cost_usd,
+          headline.measured_call_count,
+          headline.estimated_cost_usd,
+          headline.estimated_call_count,
+        )}
+        sub={spendProvenance(
+          headline.measured_call_count,
+          headline.estimated_call_count,
+          headline.unpriced_call_count,
+        )}
+      />
       <KpiCard label="Tokens consumed" value={fmtNumber(headline.total_tokens)} sub="prompt + completion" />
       <KpiCard label="Investigation runs" value={fmtNumber(headline.total_runs)} sub={`${data.action_counts.length} distinct actions`} />
       <KpiCard
         label="Avg cost / run"
-        value={fmtUsd(headline.avg_cost_per_run_usd)}
-        sub={headline.total_runs === 0 ? 'no completed runs yet' : 'rolling window mean'}
+        value={headline.measured_call_count > 0 ? fmtUsd(headline.avg_cost_per_run_usd) : '—'}
+        sub={
+          headline.measured_call_count === 0
+            ? 'not measured'
+            : headline.total_runs === 0
+              ? 'no completed runs yet'
+              : 'rolling window mean of measured spend'
+        }
       />
     </section>
   );
@@ -204,8 +292,12 @@ function DailySpend({ data }: { data: CostDashboard }) {
     [daily_costs],
   );
 
+  // A day with calls but nothing measured draws no bar, which is honest only
+  // if the reader is told why — otherwise a flat chart reads as a free week.
+  const unmeasuredDays = daily_costs.filter((b) => b.measured_call_count === 0 && b.call_count > 0).length;
+
   return (
-    <Card title="Daily LLM spend" subtitle="One bar per UTC day in the window — bars are scaled to the peak day">
+    <Card title="Daily measured LLM spend" subtitle="One bar per UTC day in the window — bars are scaled to the peak day">
       {daily_costs.length === 0 ? (
         <p className="text-sm text-gray-500">No LLM activity recorded for this window.</p>
       ) : (
@@ -213,11 +305,17 @@ function DailySpend({ data }: { data: CostDashboard }) {
           <div className="flex h-32 items-end gap-1">
             {daily_costs.map((bucket) => {
               const pct = max > 0 ? (bucket.total_cost_usd / max) * 100 : 0;
+              const spend = fmtSpend(
+                bucket.total_cost_usd,
+                bucket.measured_call_count,
+                bucket.estimated_cost_usd,
+                bucket.estimated_call_count,
+              );
               return (
                 <div
                   key={bucket.day}
                   className="group relative flex h-full flex-1 flex-col justify-end"
-                  title={`${fmtDate(bucket.day)}: ${fmtUsd(bucket.total_cost_usd)} · ${fmtNumber(bucket.call_count)} calls · ${fmtNumber(bucket.total_tokens)} tokens`}
+                  title={`${fmtDate(bucket.day)}: ${spend} · ${fmtNumber(bucket.call_count)} calls · ${fmtNumber(bucket.total_tokens)} tokens · ${spendProvenance(bucket.measured_call_count, bucket.estimated_call_count, bucket.unpriced_call_count)}`}
                 >
                   <div
                     className="rounded-t bg-violet-500/70 transition-colors group-hover:bg-violet-400"
@@ -229,9 +327,15 @@ function DailySpend({ data }: { data: CostDashboard }) {
           </div>
           <div className="mt-2 flex justify-between text-xs text-gray-500">
             <span>{fmtDate(daily_costs[0]!.day)}</span>
-            <span>peak {fmtUsd(max)}</span>
+            <span>peak {max > 0 ? fmtUsd(max) : '—'}</span>
             <span>{fmtDate(daily_costs[daily_costs.length - 1]!.day)}</span>
           </div>
+          {unmeasuredDays > 0 && (
+            <p className="mt-2 text-xs text-amber-300/80" data-testid="daily-spend-unmeasured">
+              {unmeasuredDays} day{unmeasuredDays === 1 ? '' : 's'} in this window had LLM calls whose
+              cost was not measured — those days draw no bar, which is not the same as costing nothing.
+            </p>
+          )}
         </div>
       )}
     </Card>
@@ -241,19 +345,22 @@ function DailySpend({ data }: { data: CostDashboard }) {
 function ModelTable({ data }: { data: CostDashboard }) {
   const { by_model } = data;
   return (
-    <Card title="Spend by model" subtitle="Recorded vs imputed list-price cost, per model id">
+    <Card
+      title="Spend by model"
+      subtitle="Measured cost vs imputed list price, per model. An alias row shows what the gateway resolved it to."
+    >
       {by_model.length === 0 ? (
         <p className="text-sm text-gray-500">No per-model rows recorded for this window.</p>
       ) : (
         <div className="overflow-x-auto" data-testid="model-table">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead>
               <tr className="border-b border-gray-700 text-xs uppercase tracking-wide text-gray-500">
                 <th className="py-2 pr-4 font-medium">Model</th>
                 <th className="py-2 pr-4 font-medium text-right">Calls</th>
                 <th className="py-2 pr-4 font-medium text-right">Prompt tokens</th>
                 <th className="py-2 pr-4 font-medium text-right">Completion tokens</th>
-                <th className="py-2 pr-4 font-medium text-right">Recorded</th>
+                <th className="py-2 pr-4 font-medium text-right">Measured</th>
                 <th className="py-2 pr-4 font-medium text-right">Imputed (list)</th>
                 <th className="py-2 font-medium text-right">Avg latency</th>
               </tr>
@@ -261,7 +368,12 @@ function ModelTable({ data }: { data: CostDashboard }) {
             <tbody>
               {by_model.map((m) => (
                 <tr key={m.model} className="border-b border-gray-800/80">
-                  <td className="py-2.5 pr-4 font-mono text-xs text-gray-100">{m.model}</td>
+                  <td className="py-2.5 pr-4 font-mono text-xs text-gray-100">
+                    {m.model}
+                    {m.resolved_model && (
+                      <span className="block text-[10px] text-gray-500">→ {m.resolved_model}</span>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-4 text-right text-gray-200 tabular-nums">
                     {fmtNumber(m.calls)}
                   </td>
@@ -272,10 +384,27 @@ function ModelTable({ data }: { data: CostDashboard }) {
                     {fmtNumber(m.total_completion_tokens)}
                   </td>
                   <td className="py-2.5 pr-4 text-right text-white tabular-nums">
-                    {fmtUsd(m.total_cost_usd)}
+                    {fmtSpend(
+                      m.total_cost_usd,
+                      m.measured_call_count,
+                      m.estimated_cost_usd,
+                      m.estimated_call_count,
+                    )}
+                    <span className="block text-[10px] font-normal text-gray-500">
+                      {spendProvenance(
+                        m.measured_call_count,
+                        m.estimated_call_count,
+                        m.unpriced_call_count,
+                      )}
+                    </span>
                   </td>
                   <td className="py-2.5 pr-4 text-right text-gray-400 tabular-nums">
-                    {fmtUsd(m.imputed_public_cost_usd)}
+                    {m.imputed_public_cost_usd === null ? '—' : fmtUsd(m.imputed_public_cost_usd)}
+                    {m.unpriced_tokens > 0 && (
+                      <span className="block text-[10px] text-gray-500">
+                        {m.imputed_public_cost_usd === null ? 'no published price' : `excludes ${fmtNumber(m.unpriced_tokens)} unpriced tokens`}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2.5 text-right text-gray-400 tabular-nums">
                     {fmtMs(m.avg_latency_ms)}
@@ -293,7 +422,7 @@ function ModelTable({ data }: { data: CostDashboard }) {
 function CasesAndActions({ data }: { data: CostDashboard }) {
   return (
     <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card title="Top-cost investigations" subtitle="Cases ranked by recorded LLM spend in the window">
+      <Card title="Top-cost investigations" subtitle="Cases ranked by measured LLM spend in the window">
         {data.top_cases.length === 0 ? (
           <p className="text-sm text-gray-500">No case-attributed runs recorded for this window.</p>
         ) : (
@@ -305,7 +434,14 @@ function CasesAndActions({ data }: { data: CostDashboard }) {
                   <span className="text-xs text-gray-500 tabular-nums">
                     {fmtNumber(c.runs)} runs · {fmtNumber(c.total_tokens)} tokens
                   </span>
-                  <span className="w-20 text-right text-white tabular-nums">{fmtUsd(c.total_cost_usd)}</span>
+                  <span className="w-20 text-right text-white tabular-nums">
+                    {fmtSpend(
+                      c.total_cost_usd,
+                      c.measured_call_count,
+                      c.estimated_cost_usd,
+                      c.estimated_call_count,
+                    )}
+                  </span>
                 </span>
               </li>
             ))}
@@ -350,26 +486,44 @@ function ByokPanel({ data }: { data: CostDashboard }) {
         <div>
           <p className="text-xs uppercase tracking-wide text-gray-400">BYOK savings</p>
           <p className="mt-1 text-lg font-semibold text-white">
-            {b.is_byok_active
-              ? `~${fmtUsd(b.savings_usd)} saved by running your own model`
-              : `Hosted via ${b.provider} — no local-model savings to attribute`}
+            {b.savings_usd === null
+              ? 'Not estimable — no model in this window has a published list price'
+              : b.is_byok_active
+                ? `~${fmtUsd(b.savings_usd)} saved by running your own model`
+                : `Hosted via ${b.provider} — no local-model savings to attribute`}
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-medium ${badge.cls}`}>{badge.text}</span>
       </div>
       <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
-        <Stat label="Recorded cost" value={fmtUsd(b.recorded_cost_usd)} />
-        <Stat label="Imputed list-price cost" value={fmtUsd(b.imputed_public_cost_usd)} />
+        <Stat
+          label="Measured cost"
+          value={b.recorded_is_measured ? fmtUsd(b.recorded_cost_usd) : '—'}
+          hint={b.recorded_is_measured ? 'reported by the gateway' : 'not measured'}
+        />
+        <Stat
+          label="Imputed list-price cost"
+          value={b.imputed_public_cost_usd === null ? '—' : `~${fmtUsd(b.imputed_public_cost_usd)}`}
+          hint={
+            b.imputed_public_cost_usd === null
+              ? 'no published price for these models'
+              : b.unpriced_tokens > 0
+                ? `estimate · excludes ${fmtNumber(b.unpriced_tokens)} unpriced tokens`
+                : 'estimate'
+          }
+        />
         <Stat
           label="Estimated savings"
-          value={fmtUsd(b.savings_usd)}
-          accent={b.is_byok_active ? 'text-emerald-300' : 'text-gray-300'}
+          value={b.savings_usd === null ? '—' : `~${fmtUsd(b.savings_usd)}`}
+          hint={b.savings_usd === null ? 'not estimable' : 'estimate'}
+          accent={b.is_byok_active && b.savings_usd !== null ? 'text-emerald-300' : 'text-gray-300'}
         />
       </dl>
       <p className="mt-4 text-xs text-gray-500">
-        Imputed cost re-prices recorded prompt + completion tokens against each model&apos;s public list
-        price. Savings approximate what an equivalent hosted call would have cost — not a billing-grade
-        figure.
+        Imputed cost re-prices prompt + completion tokens against each model&apos;s public list price,
+        and only for models that have one — there is no default rate, so a model nobody publishes a
+        price for contributes nothing here rather than a guess. Savings approximate what an equivalent
+        hosted call would have cost; they are an estimate, not a billing-grade figure.
       </p>
     </section>
   );
@@ -419,15 +573,18 @@ function Stat({
   label,
   value,
   accent,
+  hint,
 }: {
   label: string;
   value: number | string;
   accent?: string;
+  hint?: string;
 }) {
   return (
     <div>
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className={`mt-1 text-xl font-semibold tabular-nums ${accent ?? 'text-white'}`}>{value}</dd>
+      {hint && <p className="mt-0.5 text-[10px] text-gray-500">{hint}</p>}
     </div>
   );
 }

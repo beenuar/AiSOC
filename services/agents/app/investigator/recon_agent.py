@@ -111,7 +111,11 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
             step="recon",
             tool="llm.recon",
         )
-        cost_usd = call_record.cost_usd if call_record is not None else 0.0
+        # None when nothing could price the call — see app/core/gateway_cost.py.
+        # Not 0.0: an unpriced call is not a free one.
+        cost_usd = call_record.cost_usd if call_record is not None else None
+        cost_source = call_record.cost_source if call_record is not None else "unpriced"
+        resolved_model = call_record.resolved_model if call_record is not None else None
         state.log_llm_response(
             agent="ReconAgent",
             response=content if isinstance(content, str) else str(content),
@@ -120,6 +124,8 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
             tokens_used=tokens,
             latency_ms=latency_ms,
             cost_usd=cost_usd,
+            cost_source=cost_source,
+            resolved_model=resolved_model,
         )
         # Extract JSON from the response
         import re

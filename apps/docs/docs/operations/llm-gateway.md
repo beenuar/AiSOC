@@ -51,9 +51,9 @@ point is that you change it. The alias names stay constant.
 
 ## Enable the gateway
 
-The `litellm` service is part of the `full` profile in `docker-compose.yml`, and
-routing to it is already wired. Put your provider key in `.env` and bring the
-profile up:
+The `litellm` service is in the **CORE** profile, so `make up` and a plain
+`docker compose up -d` already start it and routing to it is already wired.
+Supplying a key is the only step:
 
 ```bash
 OPENAI_API_KEY=<your-real-provider-key>    # the gateway uses this to reach the upstream model
@@ -61,8 +61,19 @@ LITELLM_MASTER_KEY=<a-strong-key>          # AiSOC authenticates to the gateway 
 ```
 
 ```bash
-docker compose --profile full up -d
+docker compose up -d        # or: make up
 ```
+
+It was a `full`-profile service until 2026-09, which meant a CORE deployment
+could not do AI triage *even with a key* — every `aisoc-<role>` alias resolves
+here and nowhere else. See
+[ADR-0006](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0006-llm-gateway-in-core.md)
+for the trade-off, including the measured cost of the container.
+
+**With no provider key**, the gateway still boots, serves its seven aliases
+and answers `/health/liveliness`; AiSOC makes no LLM call and every alert is
+triaged by the deterministic path. Nothing about the install is broken and
+nothing claims AI is running.
 
 That is the whole configuration. `docker-compose.yml` sets `LLM_GATEWAY_URL` on
 the `api` and `agents` services, and both services' resolvers read it for any

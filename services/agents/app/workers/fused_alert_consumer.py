@@ -46,7 +46,7 @@ from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, n
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
 from app.core.cost_governor import Decision, get_governor
-from app.core.cost_telemetry import CostTracker
+from app.core.cost_telemetry import CostSummary, CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.investigator import siem_writeback
@@ -410,7 +410,9 @@ class FusedAlertTriageWorker:
         decision = governor.check(str(state.tenant_id), fingerprint)
 
         tier: str
-        cost_usd = 0.0
+        # None, not 0.0: a cached or deterministic verdict placed no LLM call,
+        # and "no call was made" is a different fact from "the call was free".
+        cost: CostSummary = CostSummary()
         tokens = 0
         if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict:
             _METRICS["deduplicated"] += 1
@@ -449,7 +451,7 @@ class FusedAlertTriageWorker:
                     state = await run_triage(state)
                     tier = "deterministic"
                     _METRICS["deterministic"] += 1
-                cost_usd = tracker.total_cost_usd
+                cost = CostSummary.from_tracker(tracker)
                 tokens = tracker.total_tokens
             verdict = state.verdict
             confidence = state.confidence
@@ -466,11 +468,18 @@ class FusedAlertTriageWorker:
             # dedups instead of re-paying) and account the spend (so per-tenant
             # budgets + the circuit breaker actually fire). Best-effort.
             try:
+                # The budget circuit breaker gets measured spend only. Fed the
+                # old alias-priced guess it would eventually trip
+                # AISOC_BUDGET_HARD_USD on a local deployment and degrade a
+                # working install to deterministic-only over money nobody
+                # spent. An unmeasured call contributes no dollars — it still
+                # contributes tokens, which is the cap that can be enforced
+                # honestly without a price.
                 governor.record_verdict(
                     str(state.tenant_id),
                     fingerprint,
                     {"verdict": verdict, "confidence": confidence},
-                    usd=cost_usd,
+                    usd=cost.measured_usd or 0.0,
                     tokens=tokens,
                 )
             except Exception as exc:  # noqa: BLE001 — governance accounting is best-effort
@@ -484,7 +493,7 @@ class FusedAlertTriageWorker:
         verdict, confidence = self._apply_groundedness_gate(state, verdict, confidence)
 
         _METRICS["triaged"] += 1
-        await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost_usd=cost_usd)
+        await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost=cost)
 
         # Wave 1 — write the durable outcome back as a per-signature prior so
         # autonomous closures compound (a later identical alert can suppress).
@@ -803,7 +812,7 @@ class FusedAlertTriageWorker:
         verdict: Any,
         confidence: float,
         tokens: int = 0,
-        cost_usd: float = 0.0,
+        cost: CostSummary | None = None,
     ) -> None:
         """Durably persist the triage outcome (issue #571).
 
@@ -839,7 +848,11 @@ class FusedAlertTriageWorker:
             auto_closed=state.status is AgentStatus.COMPLETED,
             iterations=state.iteration_count,
             tokens=tokens,
-            cost_usd=cost_usd,
+            cost_usd=(cost or CostSummary()).measured_usd,
+            measured_call_count=(cost or CostSummary()).measured_calls,
+            estimated_cost_usd=(cost or CostSummary()).estimated_usd,
+            estimated_call_count=(cost or CostSummary()).estimated_calls,
+            unpriced_call_count=(cost or CostSummary()).unpriced_calls,
             # Persisted so an ungrounded auto-closure is auditable after the
             # fact and aggregatable on /metrics/funnel, rather than surviving
             # only inside a findings string.

@@ -428,6 +428,20 @@ jobs:
         run: python3 scripts/check_llm_model_routing.py --self-test
       - name: LLM model routing gate
         run: python3 scripts/check_llm_model_routing.py
+      # The routing gate above says a model name can reach a model. This says
+      # that what the call cost arrives with the thing that says how it is
+      # known. The tracker priced the `aisoc-<role>` *alias* against a hosted
+      # list table it does not appear in, so every call took a default rate:
+      # a 903-token completion on an operator's own hardware reported
+      # $0.000999, and that figure reached the cost dashboard, the funnel, the
+      # ledger and the budget circuit breaker. Self-test first, as always —
+      # its corpora contain text shaped exactly like what it looks for,
+      # including this module's own docstring table of the five decoy cost
+      # headers it exists to refuse.
+      - name: Cost provenance gate — self-test
+        run: python3 scripts/check_cost_provenance.py --self-test
+      - name: Cost provenance gate
+        run: python3 scripts/check_cost_provenance.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector

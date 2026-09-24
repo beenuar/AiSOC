@@ -242,8 +242,32 @@ jobs:
           [ "${running}" = "true" ] || { echo "::error::connectors container is not running"; docker compose logs --tail=60 --no-color connectors || true; exit 1; }
 
           echo "── ingest enabled the graph writer ──"
-          docker compose logs --no-color ingest-worker 2>/dev/null | grep -q "graph: ingest-side writer enabled" \
-            || { echo "::error::graph-at-ingest was not enabled by default"; docker compose logs --tail=60 --no-color ingest-worker || true; exit 1; }
+          # Capture first, then grep the capture. This step runs under
+          # `set -euo pipefail`, and the previous shape
+          #
+          #   docker compose logs … 2>/dev/null | grep -q "<early match>"
+          #
+          # fails intermittently *when the match succeeds*. `grep -q` exits
+          # the instant it matches — and this string is line 4 of the
+          # service's output — which closes the pipe while `docker compose`
+          # is still writing. Compose exits 255 on the broken pipe, and
+          # `pipefail` promotes that over grep's 0, so the pipeline reports
+          # failure over a line that is present. Reproduced deterministically:
+          # with a large log the pipeline returns 255 every time, with a small
+          # one that fits the pipe buffer it returns 0 every time, and the
+          # match is in both. That size dependence is why it read as a flake.
+          #
+          # `2>/dev/null` made it worse by discarding the only message that
+          # would have distinguished "compose failed" from "the line is
+          # absent", so the run reported the wrong cause. Compose's stderr is
+          # now kept and its exit status checked on its own.
+          if ! docker compose logs --no-color ingest-worker > /tmp/ingest-worker.log 2>/tmp/ingest-worker.err; then
+            echo "::error::could not read ingest-worker logs — this is not the same as the graph writer being off"
+            cat /tmp/ingest-worker.err || true
+            exit 1
+          fi
+          grep -q "graph: ingest-side writer enabled" /tmp/ingest-worker.log \
+            || { echo "::error::graph-at-ingest was not enabled by default"; tail -60 /tmp/ingest-worker.log || true; exit 1; }
 
           echo "── graph has nodes after the spine flowed ──"
           ok=""

@@ -20,7 +20,17 @@ interface RunSummary {
   model_used: string | null;
   iterations: number;
   total_tokens: number;
+  /**
+   * Measured (gateway-reported) spend. Read it together with
+   * `measured_call_count`: a zero there means the cost was never measured,
+   * which an agent consuming this must not report as a free run.
+   */
   total_cost_usd: number;
+  measured_call_count: number;
+  /** List-price estimate for calls the gateway did not price. Label it. */
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
   started_at: string;
   completed_at: string | null;
   error: string | null;

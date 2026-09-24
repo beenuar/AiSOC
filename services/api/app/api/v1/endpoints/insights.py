@@ -296,16 +296,21 @@ async def _llm_cost_aggregate(
     start: datetime,
     end: datetime,
 ) -> tuple[float, int]:
-    """Return ``(total_cost_usd, distinct_run_count)`` over the window.
+    """Return ``(measured_cost_usd, distinct_run_count)`` over the window.
 
     Joins ``aisoc_run_costs`` with ``investigation_runs`` to tenant-scope
     the spend. Returns ``(0.0, 0)`` if the cost table isn't deployed
     yet so the UI can render zeroes rather than a 500.
+
+    The sum is over ``measured_cost_usd`` — cost the gateway reported — not
+    ``total_cost_usd``, which on rows written before migration 063 holds a
+    list-price guess keyed on a gateway alias. Summing those published spend
+    for a deployment that had spent nothing.
     """
     sql = text(
         """
-        SELECT COALESCE(SUM(c.total_cost_usd), 0.0) AS cost,
-               COUNT(DISTINCT c.run_id)             AS runs
+        SELECT COALESCE(SUM(c.measured_cost_usd), 0.0) AS cost,
+               COUNT(DISTINCT c.run_id)                AS runs
         FROM aisoc_run_costs c
         JOIN investigation_runs r ON r.id::text = c.run_id
         WHERE r.tenant_id = :tenant_id
@@ -346,7 +351,7 @@ async def _llm_cost_sparkline(
     sql = text(
         """
         SELECT r.started_at AS started_at,
-               c.total_cost_usd AS cost
+               c.measured_cost_usd AS cost
         FROM aisoc_run_costs c
         JOIN investigation_runs r ON r.id::text = c.run_id
         WHERE r.tenant_id = :tenant_id

@@ -44,6 +44,19 @@ export function AgentThroughputPanel() {
   const headline = data?.headline;
   const byModel = data?.by_model ?? [];
   const maxModelCost = Math.max(...byModel.map((m) => m.total_cost_usd), 0.0001);
+  // A bar can only be drawn from a measured figure. Scaling an unmeasured
+  // zero still draws nothing, but the label beside it would have read
+  // "$0.00" — a claim the panel has no basis for.
+  //
+  // A *missing* count is treated as zero, i.e. not measured. This is the
+  // opposite of what the MTTR tiles do with a missing sample count, and
+  // deliberately so: an older API that omits a sample size still sent a real
+  // mean, whereas an older API that omits these counts sent a figure we now
+  // know was a list-price guess keyed on a gateway alias. Rendering the
+  // familiar number is the safe default there and the unsafe one here.
+  const measuredCalls = headline?.measured_call_count ?? 0;
+  const estimatedCalls = headline?.estimated_call_count ?? 0;
+  const anyMeasured = measuredCalls > 0;
 
   return (
     <section
@@ -82,15 +95,24 @@ export function AgentThroughputPanel() {
             <Stat label="Runs" value={headline.total_runs.toLocaleString()} />
             <Stat label="LLM calls" value={formatCompact(headline.total_calls)} />
             <Stat label="Tokens" value={formatCompact(headline.total_tokens)} />
-            <Stat label="Spend" value={formatUsd(headline.total_cost_usd)} />
+            <Stat
+              label="Measured spend"
+              value={anyMeasured ? formatUsd(headline.total_cost_usd) : '—'}
+            />
           </div>
 
           {/* Only render the derived per-run figure the server computed. When
               it is null the server had no basis for it, and dividing here
               would invent one. */}
-          {headline.avg_cost_per_run_usd != null && (
+          {anyMeasured && headline.avg_cost_per_run_usd != null ? (
             <p className="text-[11px] text-gray-500">
-              {`${formatUsd(headline.avg_cost_per_run_usd)} per run on average.`}
+              {`${formatUsd(headline.avg_cost_per_run_usd)} per run on average, measured over ${measuredCalls.toLocaleString()} calls.`}
+            </p>
+          ) : (
+            <p className="text-[11px] text-gray-500">
+              {estimatedCalls > 0
+                ? `Spend not measured — the gateway reported no cost. List price for the models involved is ~${formatUsd(headline.estimated_cost_usd)}.`
+                : 'Spend not measured: no call in this window reported a cost.'}
             </p>
           )}
 
@@ -107,17 +129,25 @@ export function AgentThroughputPanel() {
                         {m.model}
                       </span>
                       <span className="shrink-0 text-[11px] text-gray-500">
-                        {`${m.runs} runs · ${formatUsd(m.total_cost_usd)}`}
+                        {`${m.runs} runs · ${
+                          (m.measured_call_count ?? 0) > 0
+                            ? formatUsd(m.total_cost_usd)
+                            : (m.estimated_call_count ?? 0) > 0
+                              ? `~${formatUsd(m.estimated_cost_usd)} est.`
+                              : 'cost not measured'
+                        }`}
                       </span>
                     </div>
-                    <div className="h-1 rounded-full bg-gray-800">
-                      <div
-                        className="h-1 rounded-full bg-indigo-500/60"
-                        style={{
-                          width: `${Math.round((m.total_cost_usd / maxModelCost) * 100)}%`,
-                        }}
-                      />
-                    </div>
+                    {anyMeasured && (
+                      <div className="h-1 rounded-full bg-gray-800">
+                        <div
+                          className="h-1 rounded-full bg-indigo-500/60"
+                          style={{
+                            width: `${Math.round((m.total_cost_usd / maxModelCost) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
