@@ -19,13 +19,20 @@ canonical copy.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from app._health import install_health_routes, register_subscription
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-def _build_app() -> tuple[FastAPI, callable, callable]:
+def _build_app() -> tuple[FastAPI, Callable[[], None], Callable[[], None]]:
+    # `callable` (the builtin) was used here as a type, which is not one:
+    # mypy read every `mark_ready()` in this file as calling a value of type
+    # `callable?` and recorded six `misc` findings plus a `valid-type` for
+    # the annotation. Adding tests below made the count grow rather than the
+    # cause get fixed.
     app = FastAPI()
     mark_ready, mark_not_ready = install_health_routes(app, service_name="aisoc-test")
     return app, mark_ready, mark_not_ready

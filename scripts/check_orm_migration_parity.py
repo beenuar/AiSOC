@@ -243,6 +243,8 @@ def _column_from_assignment(node: ast.AST) -> tuple[str, tuple[str | None, int |
     the call passes an explicit string first — ``mapped_column("other", ...)``
     — which is the case a regex over attribute names would get wrong.
     """
+    target: ast.expr
+    value: ast.expr | None
     if isinstance(node, ast.AnnAssign):
         target, value = node.target, node.value
     elif isinstance(node, ast.Assign) and len(node.targets) == 1:

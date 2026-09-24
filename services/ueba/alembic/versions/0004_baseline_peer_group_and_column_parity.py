@@ -40,7 +40,7 @@ removing it would be an irreversible change made for tidiness.
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import op  # type: ignore[attr-defined]  # re-exported at runtime, absent from the stub
 
 revision = "0004"
 down_revision = "0003"
