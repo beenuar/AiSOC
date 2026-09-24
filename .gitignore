@@ -120,6 +120,14 @@ apps/docs/build/
 # Local QA artifacts (screenshots from manual UI checks)
 apps/web/.qa-screenshots/
 
+# Runtime playbook store. `PlaybookStore` keeps the bundled corpus read-only and
+# writes every mutation to `index.json` in the same directory, so anything that
+# exercises `POST /api/v1/playbooks` — a test, a local run, a reproduction of a
+# bug — leaves a several-thousand-line file behind. Committing it ships whatever
+# the last run happened to hold as if it were curated content, and the playbook
+# schema lint counts it as a 65th file.
+services/agents/data/playbooks/index.json
+
 # Marketplace index staged into the API service build context at deploy time
 # (see infra/fly/fly-demo-deploy.sh). The canonical source is marketplace/index.json
 # at the repo root; the API Dockerfile only sees its own dir as build context, so
