@@ -155,12 +155,22 @@ class GraphOverviewResponse(BaseModel):
     cut at the node ceiling and a graph that is genuinely this size render
     identically, and a viewer who cannot tell them apart reads a partial
     picture as the whole estate.
+
+    ``nodeLimit`` and ``edgeLimit`` travel with it so the ceiling a caller
+    reports is the ceiling this service applied. They are the same two
+    constants the traversal is bounded by, read from
+    ``graph_service`` rather than restated: a console that hardcoded 400 and
+    900 would keep printing those numbers after someone moved them here, and
+    a client telling an analyst the wrong limit is a smaller version of the
+    bug ``truncated`` exists to fix.
     """
 
     nodes: list[OverviewNode]
     edges: list[OverviewEdge]
     generatedAt: str
     truncated: bool = False
+    nodeLimit: int = graph_service.OVERVIEW_NODE_LIMIT
+    edgeLimit: int = graph_service.OVERVIEW_EDGE_LIMIT
 
 
 #: Neo4j label → the node kind the console has a colour and a glyph for.

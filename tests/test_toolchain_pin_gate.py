@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -342,31 +343,208 @@ def test_every_runtime_records_why_it_matters():
 # ── esbuild overrides ────────────────────────────────────────────────────────
 
 
-def _write_workspace(root: Path, overrides: dict, resolved: list[str]) -> None:
-    (root / "package.json").write_text(json.dumps({"pnpm": {"overrides": overrides}}), encoding="utf-8")
-    (root / "pnpm-lock.yaml").write_text("\n".join(f"  /esbuild@{v}:" for v in resolved), encoding="utf-8")
+def _write_workspace(root: Path, overrides: dict, resolved: list[str], subdir: str = "") -> gate.Scan:
+    """One install root, returned as the Scan the checks take.
+
+    `subdir` puts the manifest somewhere other than the repository root,
+    because the scoping half of the esbuild check now applies to every
+    install root and the interesting case is the one that is *not* the root —
+    `apps/mobile` is where a workspace-wide override could previously be
+    added with nothing looking at it.
+    """
+    directory = root / subdir if subdir else root
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "package.json").write_text(json.dumps({"pnpm": {"overrides": overrides}}), encoding="utf-8")
+    (directory / "pnpm-lock.yaml").write_text("\n".join(f"  /esbuild@{v}:" for v in resolved), encoding="utf-8")
+    scan = gate.Scan()
+    scan.node_roots = gate.scan_node_roots(root)
+    return scan
 
 
 def test_a_scoped_esbuild_override_is_allowed(tmp_path):
-    _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, list(gate.EXPECTED_ESBUILD))
-    assert gate.check_esbuild_overrides(tmp_path) == []
+    scan = _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, list(gate.EXPECTED_ESBUILD))
+    assert gate.check_esbuild_overrides(tmp_path, scan) == []
 
 
 def test_a_workspace_wide_esbuild_override_fails(tmp_path):
     """Next bundles its own esbuild; replacing it broke Turbopack's font map."""
-    _write_workspace(tmp_path, {"esbuild": "^0.28.1"}, list(gate.EXPECTED_ESBUILD))
-    assert any("override scope" in p for p in gate.check_esbuild_overrides(tmp_path))
+    scan = _write_workspace(tmp_path, {"esbuild": "^0.28.1"}, list(gate.EXPECTED_ESBUILD))
+    assert any("override scope" in p for p in gate.check_esbuild_overrides(tmp_path, scan))
+
+
+def test_a_workspace_wide_esbuild_override_fails_in_a_satellite_root(tmp_path):
+    """The one root the check could not see until it stopped reading only `/`."""
+    _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, list(gate.EXPECTED_ESBUILD))
+    scan = _write_workspace(tmp_path, {"esbuild": "^0.28.1"}, ["0.28.1"], subdir="apps/mobile")
+    problems = gate.check_esbuild_overrides(tmp_path, scan)
+    assert any("override scope" in p and "apps/mobile/package.json" in p for p in problems)
 
 
 def test_a_moved_esbuild_resolution_fails(tmp_path):
     """A vite bump pulls esbuild through the scoped override with no esbuild in the diff."""
-    _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, [*gate.EXPECTED_ESBUILD, "0.30.0"])
-    assert any("0.30.0" in p for p in gate.check_esbuild_overrides(tmp_path))
+    scan = _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, [*gate.EXPECTED_ESBUILD, "0.30.0"])
+    assert any("0.30.0" in p for p in gate.check_esbuild_overrides(tmp_path, scan))
 
 
 def test_a_stale_expectation_fails(tmp_path):
-    _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, [sorted(gate.EXPECTED_ESBUILD)[0]])
-    assert any("stale" in p for p in gate.check_esbuild_overrides(tmp_path))
+    scan = _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, [sorted(gate.EXPECTED_ESBUILD)[0]])
+    assert any("stale" in p for p in gate.check_esbuild_overrides(tmp_path, scan))
+
+
+# ── Cross-root override propagation ──────────────────────────────────────────
+
+
+@pytest.fixture
+def no_exemptions(monkeypatch):
+    """Test the propagation logic against an empty exemption list.
+
+    These fixtures build a tree containing `apps/mobile`, which the real
+    exemption list has an entry for. Leaving it in place would mean every
+    assertion below also asserted something about this repository's current
+    exemptions, and a future entry would fail tests that have nothing to do
+    with it. The live entries are checked separately — by
+    `test_every_cross_root_exemption_records_versions_and_a_reason` for shape
+    and by the whole-repository run at the bottom of this file for liveness.
+    """
+    monkeypatch.setattr(gate, "CROSS_ROOT_OVERRIDE_EXEMPT", {})
+
+
+def _two_roots(root: Path, root_overrides: dict, root_lock: dict, sat_overrides: dict, sat_lock: dict) -> gate.Scan:
+    """A workspace plus one independent install root, as `apps/mobile` is."""
+    for directory, overrides, lock in (
+        (root, root_overrides, root_lock),
+        (root / "apps" / "mobile", sat_overrides, sat_lock),
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "package.json").write_text(json.dumps({"pnpm": {"overrides": overrides}}), encoding="utf-8")
+        (directory / "pnpm-lock.yaml").write_text(
+            "lockfileVersion: '6.0'\n" + "".join(f"  /{n}@{v}:\n" for n, vs in lock.items() for v in vs),
+            encoding="utf-8",
+        )
+    scan = gate.Scan()
+    scan.node_roots = gate.scan_node_roots(root)
+    return scan
+
+
+def test_an_override_that_reached_one_install_root_fails(tmp_path, no_exemptions):
+    """The measured bug: the workspace pinned image-size, apps/mobile kept 1.2.1."""
+    scan = _two_roots(tmp_path, {"image-size": ">=2.0.4 <3"}, {"image-size": ["2.0.4"]}, {}, {"image-size": ["1.2.1"]})
+    problems = gate.check_override_propagation(tmp_path, scan)
+    assert any("override propagation" in p and "apps/mobile/pnpm-lock.yaml" in p for p in problems)
+
+
+def test_an_override_present_in_both_roots_passes(tmp_path, no_exemptions):
+    scan = _two_roots(
+        tmp_path,
+        {"image-size": ">=2.0.4 <3"},
+        {"image-size": ["2.0.4"]},
+        {"image-size": ">=2.0.4 <3"},
+        {"image-size": ["2.0.4"]},
+    )
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+
+def test_a_package_absent_from_the_other_root_passes(tmp_path, no_exemptions):
+    """Not every override has to appear everywhere — only where it is resolved."""
+    scan = _two_roots(tmp_path, {"sharp": ">=0.35.4"}, {"sharp": ["0.35.4"]}, {}, {"left-pad": ["1.3.0"]})
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+
+def test_a_version_selector_only_governs_its_own_line(tmp_path, no_exemptions):
+    """`brace-expansion@1` says nothing about the 5.x the workspace also resolves."""
+    scan = _two_roots(
+        tmp_path,
+        {"brace-expansion@1": ">=1.1.18 <2"},
+        {"brace-expansion": ["1.1.21", "5.0.12"]},
+        {},
+        {"brace-expansion": ["5.0.12"]},
+    )
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+
+def test_a_parent_scoped_override_is_not_read_as_a_global_one(tmp_path, no_exemptions):
+    """`vite>esbuild` constrains esbuild under vite, not esbuild everywhere."""
+    scan = _two_roots(tmp_path, {"vite>esbuild": "^0.28.1"}, {"esbuild": ["0.28.1"]}, {}, {"esbuild": ["0.25.12"]})
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+
+def test_a_lockfile_behind_its_own_manifest_fails(tmp_path, no_exemptions):
+    scan = _two_roots(
+        tmp_path,
+        {"image-size": ">=2.0.4 <3"},
+        {"image-size": ["2.0.4"]},
+        {"image-size": ">=2.0.4 <3"},
+        {"image-size": ["1.2.1"]},
+    )
+    assert any("was not regenerated" in p for p in gate.check_override_propagation(tmp_path, scan))
+
+
+def test_an_unreadable_lockfile_is_not_a_clean_root(tmp_path):
+    """What the check *credits*: a root it could not read agrees with everyone."""
+    scan = _two_roots(tmp_path, {"image-size": ">=2.0.4 <3"}, {"image-size": ["2.0.4"]}, {}, {})
+    assert any("node root corpus" in p for p in gate.check_node_root_corpus(scan))
+
+
+def test_no_install_root_at_all_is_a_failure(tmp_path):
+    assert any("no Node install root" in p for p in gate.check_node_root_corpus(gate.Scan()))
+
+
+def test_a_range_the_comparison_cannot_evaluate_is_reported(tmp_path, no_exemptions):
+    """A union range must not silently pass for want of an opinion."""
+    scan = _two_roots(tmp_path, {"image-size": "1.x || >=2.0.4"}, {"image-size": ["2.0.4"]}, {}, {"image-size": ["1.2.1"]})
+    assert any("cannot evaluate" in p for p in gate.check_override_propagation(tmp_path, scan))
+
+
+def test_an_override_block_the_parser_cannot_read_is_reported(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({"pnpm": {"override": {"image-size": ">=2"}}}), encoding="utf-8")
+    (tmp_path / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /image-size@1.2.1:\n", encoding="utf-8")
+    scan = gate.Scan()
+    scan.node_roots = gate.scan_node_roots(tmp_path)
+    assert any("override parser coverage" in p for p in gate.check_override_parser_coverage(tmp_path, scan))
+
+
+def test_npm_nested_overrides_are_read(tmp_path):
+    """npm writes `{"a": {"b": "1"}}` where pnpm writes `a>b`; both must be seen."""
+    (tmp_path / "package.json").write_text(
+        json.dumps({"overrides": {"qs": "^6.16.0", "express": {"body-parser": "^2.3.0"}}}), encoding="utf-8"
+    )
+    (tmp_path / "package-lock.json").write_text(
+        json.dumps({"lockfileVersion": 3, "packages": {"node_modules/qs": {"version": "6.16.0"}}}), encoding="utf-8"
+    )
+    root = gate.scan_node_roots(tmp_path)[0]
+    assert root.overrides == {"qs": "^6.16.0", "express>body-parser": "^2.3.0"}
+    assert root.resolved == {"qs": ["6.16.0"]}
+
+
+def test_an_exemption_holds_only_for_the_versions_it_records(tmp_path, monkeypatch):
+    """The ratchet. A bump past the verified version re-opens the question."""
+    monkeypatch.setattr(gate, "CROSS_ROOT_OVERRIDE_EXEMPT", {("image-size", "apps/mobile"): (("1.2.1",), "verified")})
+    scan = _two_roots(tmp_path, {"image-size": ">=2.0.4 <3"}, {"image-size": ["2.0.4"]}, {}, {"image-size": ["1.2.1"]})
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+    moved = _two_roots(tmp_path, {"image-size": ">=2.0.4 <3"}, {"image-size": ["2.0.4"]}, {}, {"image-size": ["1.2.0"]})
+    problems = gate.check_override_propagation(tmp_path, moved)
+    assert any("re-opens the question" in p for p in problems)
+    assert any("1.2.0" in p for p in problems)
+
+
+def test_an_exemption_for_a_directory_outside_this_tree_is_not_drift(tmp_path, monkeypatch):
+    """A fixture or a fork simply lacks the directory; that must not fail the gate."""
+    monkeypatch.setattr(gate, "CROSS_ROOT_OVERRIDE_EXEMPT", {("image-size", "apps/never-existed"): (("1.2.1",), "x")})
+    scan = _two_roots(tmp_path, {"image-size": ">=2.0.4 <3"}, {"image-size": ["2.0.4"]}, {}, {})
+    assert gate.check_override_propagation(tmp_path, scan) == []
+
+    # But a directory that is *there* and has stopped resolving its own
+    # node_modules is drift, and must be reported.
+    (tmp_path / "apps" / "never-existed").mkdir(parents=True)
+    assert any("no longer an install root" in p for p in gate.check_override_propagation(tmp_path, scan))
+
+
+def test_every_cross_root_exemption_records_versions_and_a_reason(tmp_path):
+    """A bare package/root pair would be a permanent hole; the versions make it a ratchet."""
+    for key, (versions, reason) in gate.CROSS_ROOT_OVERRIDE_EXEMPT.items():
+        assert versions and all(re.match(r"^\d+\.\d+", v) for v in versions), key
+        assert "OSV" in reason and len(reason) > 80, key
 
 
 # ── The gate against this repository ─────────────────────────────────────────
