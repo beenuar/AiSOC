@@ -525,7 +525,7 @@ def self_test(root: Path) -> int:
         (
             "DOCS: a documented example naming a real connector with no profile behind it",
             "doc-example-no-profile",
-            mutate(doc_examples=lambda d: d.update({"wazuh": ["README.md"]})),
+            mutate(doc_examples=lambda d: d.update({"confluence_audit": ["README.md"]})),
         ),
         (
             "GO -> PY: an alias pointing at a profile that does not exist",
