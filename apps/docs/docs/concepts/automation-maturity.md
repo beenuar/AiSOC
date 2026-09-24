@@ -96,11 +96,17 @@ Entry criteria:
 
 Auto-executed:
 
-- `notify_slack`, `create_ticket`, `chatops_verify`, `search_siem`.
+- `notify_slack`, `create_ticket`, `search_siem`.
 
 Gated:
 
 - Everything `LOW` and above.
+- `chatops_verify`, despite its MINIMAL blast radius. Its capability contract
+  is analyst-gated, and a contract can raise the requirement a tier would
+  allow and never lower it. The verb messages the account under investigation
+  rather than a SOC channel: sent automatically on a true positive it tells an
+  attacker they have been detected, and it has no way to know whether the
+  person it is asking is the suspect.
 
 Honest performance:
 
@@ -128,12 +134,20 @@ Entry criteria:
 
 Auto-executed:
 
-- Everything at L1 plus: `quarantine_file`, `capture_forensics`,
-  `add_ioc_to_blocklist`, `run_av_scan`, `create_notable_event`.
+- Everything at L1 plus: `quarantine_file`, `run_av_scan`,
+  `create_notable_event`.
 
 Gated:
 
 - Everything `MEDIUM` and above.
+- `capture_forensics`, despite its LOW blast radius. The tier ladder is the
+  blast-radius axis only, and a capability contract can raise the requirement
+  the tier would allow — never lower it. Evidence acquisition is
+  analyst-gated because nothing bounds what it collects or from whom: the
+  result is a copy of somebody's endpoint in a vendor cloud, and pointed at
+  the wrong host that is not undoable. See
+  `services/actions/app/live_actions/capability_contracts.py`, which is the
+  authority for any verb whose two axes disagree.
 
 Honest performance:
 
@@ -155,10 +169,16 @@ counting recommendations as actions.
 ### L3 — Remediate (medium-blast-radius autonomous, audited after-the-fact)
 
 The agent is allowed to take medium-blast-radius actions: block an IP at the
-firewall, block a domain at DNS, kill a process, reset a password, run a
-playbook. These affect a single resource but the affected resource is more
-visible — a real human's password gets reset, a service's outbound traffic
-is interrupted.
+firewall, block a domain at DNS, kill a process, reset a password. These
+affect a single resource but the affected resource is more visible — a real
+human's password gets reset, a service's outbound traffic is interrupted.
+
+A playbook is not one of them, and there is no `run_playbook` action. A
+playbook is a sequence of these verbs, and it runs step by step through the
+actions service so each step meets its own contract on the way past. An
+action that ran a whole playbook would be approved once and then execute
+whatever it contained, which is what the per-capability contract exists to
+prevent.
 
 Entry criteria:
 
@@ -172,7 +192,7 @@ Entry criteria:
 Auto-executed:
 
 - Everything at L2 plus: `block_ip`, `block_domain`, `kill_process`,
-  `reset_password`, `force_mfa`, `run_playbook`, `allow_ip`, `block_ioc`,
+  `reset_password`, `force_mfa`, `allow_ip`, `block_ioc`,
   `sync_detection_rule`, `update_watcher`.
 
 Gated:

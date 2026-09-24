@@ -224,8 +224,8 @@ included in the agent's planning catalogue. No core changes required.
 
 ## Reachability
 
-Four registries have to agree before a verb can be dispatched under
-governance:
+Five registries have to agree before a verb can be recommended and then
+dispatched under governance:
 
 | Registry | What it supplies |
 | --- | --- |
@@ -233,6 +233,7 @@ governance:
 | `_BUILTIN_ADAPTERS` | The `(vendor_id, capability)` pair the dispatcher looks up |
 | `CAPABILITY_CONTRACTS` | Impact, reversibility, verification, approval tier |
 | `KNOWN_CAPABILITIES` | The vocabulary everything validates against |
+| `ProposedAction(action_type=...)` | What the agent puts in front of an analyst |
 
 A verb can be complete in three of the four and unreachable, and nothing in
 the failure message says which one is missing. `ack_alert` and
@@ -259,12 +260,55 @@ The gate reports:
   contract, the approval matrix and the autonomy policy;
 - an adapter pointing at an `ActionType` with no executor, which would fail at
   execution rather than at registration;
-- an `ActionType` with no executor at all.
+- an `ActionType` with no executor at all;
+- a verb the agent proposes by name that no executor implements.
 
-Two exemption lists carry the cases that are known and not yet closed, each
-with the reason it is open. They are ratchets: an entry that gains an
+That last one is the check that spans two services, and it is the one that
+mattered most. `investigation_agent` proposes `capture_forensics` whenever an
+investigation reaches the C2 or exfiltration stage, with
+`requires_approval=True`. No executor implemented it, so on the most serious
+class of incident the product recommended evidence acquisition, raised an
+approval for it, and answered `No executor found for action type` when
+somebody approved — a control reachable from a recommendation and dead on
+approval. The other checks compare the actions service against itself; this
+one compares it against the thing that puts a verb in front of a person.
+
+**Both exemption lists are empty.** They are ratchets: an entry that gains an
 implementation and is not removed fails the build, because a baseline nobody
-prunes is a gate that quietly stops checking.
+prunes is a gate that quietly stops checking. Emptying them meant making a
+decision per verb rather than recording one:
+
+| Verb | Outcome |
+| --- | --- |
+| `capture_forensics` | Implemented — a Defender investigation-package arm with a probe that reads the package back |
+| `chatops_verify` | Implemented — needed `LiveActionStatus.AWAITING_COMPLETION` before it could report honestly |
+| `add_ioc_to_blocklist` | Removed — a second name for `block_ioc`, which is fully wired |
+| `run_playbook` | Removed — playbook execution belongs to `services/agents`, and "run an arbitrary bundle of verbs" has no verb-level contract |
+
+The rule the last two follow: a verb with no implementation path should leave
+the `ActionType` surface rather than sit on it dead. The API accepts any
+member of the enum, so a member with nothing behind it is a request that is
+accepted and then fails with a message that reads like a broken deployment.
+
+### Actions that are not finished when they return
+
+Most executors are synchronous: the vendor call returns and the action is
+over. Two are not, and both report `AWAITING_COMPLETION`:
+
+- `chatops_verify` delivers a prompt and waits for a person to click.
+- `capture_forensics` queues an MDE machine action that completes minutes
+  later, or fails.
+
+`AWAITING_COMPLETION` means the vendor was touched and the outcome is not yet
+known. It is the opposite of `PENDING_APPROVAL`, which means nothing ran
+because policy wants a human first. Post-action verification deliberately does
+not run against it — there is no effect to read back yet.
+
+Both executors were unreachable through governed dispatch until this state
+existed, and leaving them that way was the right call at the time: the status
+translation folded everything that was not `FAILED` or a simulation into
+`SUCCEEDED`, so registering them would have reported an unanswered question
+and an uncollected evidence package as completed actions.
 
 ---
 

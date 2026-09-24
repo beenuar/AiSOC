@@ -8,6 +8,7 @@ ActionRequest.parameters — no credentials = safe, observable simulation.
 
 from app.executors.chatops import ChatOpsVerifyExecutor
 from app.executors.endpoint import (
+    CaptureForensicsExecutor,
     IsolateHostExecutor,
     KillProcessExecutor,
     QuarantineFileExecutor,
@@ -45,6 +46,9 @@ EXECUTOR_REGISTRY = {
     ActionType.KILL_PROCESS: KillProcessExecutor(),
     ActionType.RUN_SCRIPT: RunScriptExecutor(),
     ActionType.RUN_AV_SCAN: RunAVScanExecutor(),
+    # Evidence acquisition. The agent proposes this on the C2 / exfiltration
+    # path, where it previously resolved to nothing.
+    ActionType.CAPTURE_FORENSICS: CaptureForensicsExecutor(),
     # Identity (Okta)
     ActionType.DISABLE_USER: DisableUserExecutor(),
     ActionType.RESET_PASSWORD: ResetPasswordExecutor(),

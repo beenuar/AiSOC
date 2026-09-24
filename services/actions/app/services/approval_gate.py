@@ -18,12 +18,16 @@ auto-execute that did not before.
 
 Two honest limits, both logged rather than papered over:
 
-Seven of the 25 ``ActionType`` members have no capability contract
-(``ack_alert``, ``notify_slack``, ``run_playbook`` and four others). For
-those the matrix has no impact to reason about and blast radius decides
-alone. That is recorded at debug rather than guessed at, because inventing an
-impact for an unmapped verb is how a gate starts certifying things it never
-examined.
+One of the 24 ``ActionType`` members has no capability contract, down from
+five: ``capture_forensics`` and ``chatops_verify`` gained one, and
+``add_ioc_to_blocklist`` and ``run_playbook`` left the enum because neither
+had an implementation path. The one left is ``notify_slack``, and it is a
+naming gap rather than an undeclared verb — the lookup below is by
+``ActionType`` value and the matching capability is called ``notify``, which
+does have a contract. For an unmapped verb the matrix has no impact to reason
+about and blast radius decides alone. That is recorded at debug rather than
+guessed at, because inventing an impact for an unmapped verb is how a gate
+starts certifying things it never examined.
 
 A request with no ``confidence`` is treated as the lowest band. For anything
 above READ_ONLY impact that means analyst approval, which is a real tightening

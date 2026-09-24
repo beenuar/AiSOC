@@ -96,6 +96,14 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # executor_not_found for code that worked.
         "ack_alert",
         "suppress_alert",
+        # EVIDENCE. An ActionType with no executor anywhere, proposed by name
+        # on the C2 / exfiltration path — so the most serious incidents got a
+        # recommendation that answered "No executor found for action type".
+        "capture_forensics",
+        # HUMAN-IN-THE-LOOP. A working executor no adapter reached, because
+        # its honest result ("prompt delivered, nobody has answered") had no
+        # LiveActionStatus to land in.
+        "chatops_verify",
         # TICKET
         "push_case",
         "push_status",

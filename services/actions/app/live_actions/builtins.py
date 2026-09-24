@@ -41,7 +41,9 @@ import structlog
 
 from app.executors import siem
 from app.executors.base import BaseExecutor
+from app.executors.chatops import ChatOpsVerifyExecutor
 from app.executors.endpoint import (
+    CaptureForensicsExecutor,
     IsolateHostExecutor,
     KillProcessExecutor,
     QuarantineFileExecutor,
@@ -109,15 +111,24 @@ def _to_live_status(legacy_status: ActionStatus, output: dict[str, Any]) -> Live
     """Translate a legacy ``ActionStatus`` into a :class:`LiveActionStatus`.
 
     Legacy status has more states (PENDING, AWAITING_APPROVAL, ...) but
-    only three are reachable from a synchronous executor call: COMPLETED,
-    FAILED, and (rarely) ROLLED_BACK. We collapse ROLLED_BACK into
+    only four are reachable from an executor call: COMPLETED, FAILED,
+    RUNNING, and (rarely) ROLLED_BACK. We collapse ROLLED_BACK into
     SUCCEEDED because rollback is out-of-scope for the live-action layer
     — see :class:`LiveActionExecutor` docstring for the rationale.
+
+    RUNNING is **not** collapsed. Two executors return it to mean "the work
+    started and the outcome is not known yet": the ChatOps prompt nobody has
+    answered, and the forensic package MDE has not finished collecting. This
+    function used to fold both into SUCCEEDED, which is why registering either
+    one would have reported an unanswered question and an absent evidence
+    package as completed actions — and why they had no adapter at all.
     """
     if legacy_status == ActionStatus.FAILED:
         return LiveActionStatus.FAILED
     if _detect_simulation(output):
         return LiveActionStatus.SIMULATED
+    if legacy_status == ActionStatus.RUNNING:
+        return LiveActionStatus.AWAITING_COMPLETION
     return LiveActionStatus.SUCCEEDED
 
 
@@ -202,6 +213,10 @@ class _LegacyExecutorAdapter(LiveActionExecutor):
             return f"Simulated {verb} {target}".strip()
         if status == LiveActionStatus.FAILED:
             return f"Failed to {verb} {target}".strip()
+        if status == LiveActionStatus.AWAITING_COMPLETION:
+            # Past tense here would say the work is done. It is not — that is
+            # the whole reason this status exists.
+            return f"Started {verb} {target}; not finished".strip()
         return f"{verb.capitalize()} {target}".strip()
 
 
@@ -214,6 +229,13 @@ class _LegacyExecutorAdapter(LiveActionExecutor):
 # is present. Each adapter declares the credential keys it cares about so
 # the discovery API can surface "credentials missing" accurately and so
 # ``dry_run`` strips the right keys.
+#
+# The Defender arms borrow the SIEM module's tuple rather than repeating the
+# three key names, because ``_mde_client`` and the SIEM module read the same
+# set and ``tests/test_dry_run_credential_strip.py`` grades *every* adapter
+# whose vendor is ``defender`` against it. A hand-copied list here is the
+# shape that let a "dry run" reach production Splunk.
+_MDE_KEYS = siem.DEFENDER_CLIENT_PARAM_KEYS
 
 
 @apply_contract
@@ -235,7 +257,7 @@ class DefenderIsolateHost(_LegacyExecutorAdapter):
     requires_credentials = True
     _legacy_executor = IsolateHostExecutor()
     _legacy_action_type = ActionType.ISOLATE_HOST
-    _credential_keys = ("mde_tenant_id", "mde_client_id", "mde_client_secret")
+    _credential_keys = _MDE_KEYS
 
 
 @apply_contract
@@ -279,7 +301,38 @@ class DefenderRunAVScan(_LegacyExecutorAdapter):
     requires_credentials = True
     _legacy_executor = RunAVScanExecutor()
     _legacy_action_type = ActionType.RUN_AV_SCAN
-    _credential_keys = ("mde_tenant_id", "mde_client_id", "mde_client_secret")
+    _credential_keys = _MDE_KEYS
+
+
+@apply_contract
+class DefenderCaptureForensics(_LegacyExecutorAdapter):
+    """Evidence acquisition, which had no executor at all until now.
+
+    Only Defender: MDE's investigation package is a whole-host artefact
+    bundle whose completion and download URI are both readable. CrowdStrike
+    RTR's ``get`` fetches one named path, which is a different verb — see
+    :class:`app.executors.endpoint.CaptureForensicsExecutor`.
+    """
+
+    vendor_id = "defender"
+    capability = "capture_forensics"
+    description = "Collect a Microsoft Defender investigation package from a host."
+    requires_credentials = True
+    _legacy_executor = CaptureForensicsExecutor()
+    _legacy_action_type = ActionType.CAPTURE_FORENSICS
+    _credential_keys = _MDE_KEYS
+
+    def _summarise(self, output: dict[str, Any], status: LiveActionStatus) -> str:
+        host = output.get("hostname") or ""
+        action_id = output.get("mde_action_id") or ""
+        if status == LiveActionStatus.FAILED:
+            return f"Failed to start forensic acquisition on {host}".strip()
+        if status == LiveActionStatus.SIMULATED:
+            return f"Simulated forensic acquisition on {host}".strip()
+        # The only other state this executor produces is AWAITING_COMPLETION.
+        # Naming the machine action matters: it is what a later verification
+        # pass reads, and without it the analyst has nothing to follow up.
+        return f"Forensic acquisition queued on {host} (machine action {action_id}); package not yet available".strip()
 
 
 # ---------------------------------------------------------------------------
@@ -406,7 +459,7 @@ _SPLUNK_KEYS = siem.SPLUNK_CLIENT_PARAM_KEYS
 _ELASTIC_KEYS = siem.ELASTIC_CLIENT_PARAM_KEYS
 _SENTINEL_KEYS = siem.SENTINEL_CLIENT_PARAM_KEYS
 _QRADAR_KEYS = siem.QRADAR_CLIENT_PARAM_KEYS
-_DEFENDER_IOC_KEYS = siem.DEFENDER_CLIENT_PARAM_KEYS
+_DEFENDER_IOC_KEYS = _MDE_KEYS
 
 
 @apply_contract
@@ -788,6 +841,92 @@ class SlackNotify(_LegacyExecutorAdapter):
 
 
 # ---------------------------------------------------------------------------
+# Human-in-the-loop — ask the affected user, route the signed answer back
+# ---------------------------------------------------------------------------
+#
+# ``ChatOpsVerifyExecutor`` worked and sat in ``EXECUTOR_REGISTRY`` with no
+# adapter, because the only honest thing it can say — "the prompt went out and
+# nobody has answered" — had no ``LiveActionStatus`` to land in, and
+# ``_to_live_status`` folded it into SUCCEEDED. Registering it before
+# AWAITING_COMPLETION existed would have reported an unanswered question as a
+# completed action, which is worse than leaving it unreachable.
+#
+# ``transport`` is pinned per arm for the reason the SIEM arms pin
+# ``alert_vendor``: otherwise the channel a prompt goes out on is decided by a
+# default buried in the executor rather than by the caller's choice of vendor.
+# Unlike those, there is no credential-ordering hazard to guard against — both
+# transports authenticate with the same single ``webhook_url``, so the pin
+# selects a message format, and a missing webhook still fails rather than
+# silently choosing the other transport.
+
+
+class _ChatOpsVerify(_LegacyExecutorAdapter):
+    """Shared body for the ChatOps transports.
+
+    Declares neither ``capability`` nor ``vendor_id``: an intermediate class
+    naming one without the other is graded by the action-contract gate as a
+    half-declared executor.
+    """
+
+    requires_credentials = True
+    _legacy_executor = ChatOpsVerifyExecutor()
+    _legacy_action_type = ActionType.CHATOPS_VERIFY
+    _credential_keys = ("webhook_url", "bot_token")
+    _transport: str = ""
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        # The base class implements dry_run by stripping credentials so the
+        # legacy executor falls into its simulation branch. This executor has
+        # no such branch on purpose — its module docstring is explicit that an
+        # unreachable transport is a hard failure, because an action whose
+        # entire point is asking a person a question must not quietly not ask.
+        # Stripping the webhook here would therefore report a preview as a
+        # failure. Simulate in the adapter instead, before anything mints a
+        # callback token or opens a socket.
+        if request.dry_run:
+            return LiveActionResult(
+                request_id=request.request_id,
+                status=LiveActionStatus.SIMULATED,
+                capability=self.capability,
+                vendor_id=self.vendor_id,
+                summary=f"Simulated {self._transport} verification prompt to {request.target or 'the affected user'}",
+                details={
+                    "action": "chatops_verify",
+                    "transport": self._transport,
+                    "user_ref": request.params.get("user_ref") or request.target,
+                    "note": "Simulation mode — dry run, no prompt was delivered and no callback token was minted.",
+                },
+            )
+        pinned = {**request.params, "transport": self._transport}
+        return await super().execute(request.model_copy(update={"params": pinned}))
+
+    def _summarise(self, output: dict[str, Any], status: LiveActionStatus) -> str:
+        user = output.get("user_ref") or ""
+        if status == LiveActionStatus.FAILED:
+            return f"Failed to send a {self._transport} verification prompt to {user}".strip()
+        if status == LiveActionStatus.SIMULATED:
+            return f"Simulated {self._transport} verification prompt to {user}".strip()
+        ttl = output.get("expires_in_seconds")
+        return f"Asked {user} to confirm on {self._transport}; awaiting their reply (expires in {ttl}s)".strip()
+
+
+@apply_contract
+class SlackChatOpsVerify(_ChatOpsVerify):
+    capability = "chatops_verify"
+    vendor_id = "slack"
+    description = "Ask the affected user to confirm or deny activity via an interactive Slack prompt."
+    _transport = "slack"
+
+
+@apply_contract
+class TeamsChatOpsVerify(_ChatOpsVerify):
+    capability = "chatops_verify"
+    vendor_id = "teams"
+    description = "Ask the affected user to confirm or deny activity via a Microsoft Teams card."
+    _transport = "teams"
+
+
+# ---------------------------------------------------------------------------
 # Registration entry point
 # ---------------------------------------------------------------------------
 
@@ -813,6 +952,9 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     CrowdStrikeKillProcess,
     CrowdStrikeRunScript,
     DefenderRunAVScan,
+    # Evidence acquisition: an ActionType the agent proposes on the C2 /
+    # exfiltration path, which had no executor anywhere.
+    DefenderCaptureForensics,
     # Identity (Okta)
     OktaDisableUser,
     OktaResetPassword,
@@ -854,6 +996,10 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     ServiceNowCreateTicket,
     PagerDutyCreateTicket,
     SlackNotify,
+    # Human-in-the-loop: a working executor whose honest "not answered yet"
+    # had no status to land in until AWAITING_COMPLETION existed.
+    SlackChatOpsVerify,
+    TeamsChatOpsVerify,
 )
 
 

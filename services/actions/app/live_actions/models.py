@@ -69,6 +69,22 @@ class LiveActionStatus(str, Enum):
     # invoked: the tier/blast policy blocked it outright, or it needs a human.
     BLOCKED = "blocked"
     PENDING_APPROVAL = "pending_approval"
+    #: The vendor accepted the request, the work started, and the outcome is
+    #: not known yet. Nothing failed and nothing is finished.
+    #:
+    #: Added because two executors had no honest state to land in and so were
+    #: unreachable through governed dispatch. ``chatops_verify`` delivers a
+    #: prompt and waits for a person to click; ``capture_forensics`` queues an
+    #: acquisition that MDE completes minutes later. Both returned the legacy
+    #: ``ActionStatus.RUNNING``, which ``_to_live_status`` collapsed into
+    #: SUCCEEDED along with everything else that was not FAILED — reporting an
+    #: unanswered question and an uncollected package as completed actions.
+    #:
+    #: Distinct from PENDING_APPROVAL, which means the opposite: nothing ran,
+    #: because policy wants a human first. Here the vendor was touched and the
+    #: caller has to come back — post-action verification deliberately does not
+    #: run against this state, since there is not yet an effect to read back.
+    AWAITING_COMPLETION = "awaiting_completion"
 
 
 class LiveActionRequest(BaseModel):

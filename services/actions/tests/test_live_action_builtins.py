@@ -58,8 +58,10 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # registry — SentinelOne implemented seven operations with one
     # reachable, Entra six with one. The writeback arms are the return leg
     # of a two-way SIEM integration: AiSOC's verdict back onto the notable,
-    # signal, incident or offense that produced the alert.
-    assert count == 63
+    # signal, incident or offense that produced the alert. Plus 3 for the
+    # verbs that were reachable from a recommendation and not from dispatch:
+    # Defender evidence acquisition, and the two ChatOps transports.
+    assert count == 66
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -94,6 +96,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("crowdstrike", "unisolate_host"),
         ("defender", "ack_alert"),
         ("defender", "block_ioc"),
+        ("defender", "capture_forensics"),
         ("defender", "update_alert_disposition"),
         ("defender", "get_host"),
         ("defender", "isolate_host"),
@@ -130,6 +133,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("sentinelone", "run_script"),
         ("sentinelone", "unisolate_host"),
         ("servicenow", "create_ticket"),
+        ("slack", "chatops_verify"),
         ("slack", "notify"),
         ("splunk", "ack_alert"),
         ("splunk", "create_notable_event"),
@@ -137,6 +141,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("splunk", "search_siem"),
         ("splunk", "sync_detection_rule"),
         ("splunk", "update_alert_disposition"),
+        ("teams", "chatops_verify"),
     }
     assert pairs == expected
 
@@ -167,7 +172,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 63
+    assert count == 66
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

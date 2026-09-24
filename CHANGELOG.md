@@ -49,6 +49,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Nothing in `apps/web` consumes these three routes; it calls
   `/mssp/children`, which is unchanged.
 
+- **Two `ActionType` members are removed: `add_ioc_to_blocklist` and
+  `run_playbook`.** Neither had an executor. `POST /actions` accepted both and
+  answered `No executor found for action type`, which reads as a broken
+  deployment rather than a verb nobody built; it now rejects them at
+  validation. A verb with no implementation path should leave the surface
+  rather than sit on it dead.
+
+  Why neither could be preserved by implementing it:
+
+  - `add_ioc_to_blocklist` was a second name for `block_ioc`, which has a
+    Defender arm, a capability contract, a registered adapter and a place in
+    the vocabulary. Two names for one verb means half the callers reach the
+    dead one. Use `block_ioc`.
+  - `run_playbook` is the wrong shape for this registry rather than a missing
+    feature. Playbook execution lives in `services/agents` and always has, and
+    the contract in this service belongs to the *verb* — "run an arbitrary
+    bundle of verbs" has no verb-level impact, reversal or verification probe
+    to declare. Approving it once would execute whatever steps it contained
+    without each step meeting its own contract, which is precisely what the
+    per-capability contract exists to prevent. Playbooks already dispatch step
+    by step through this service, so every step is graded on the way past.
+
+  The actions service's `ActionType` is not part of `docs/openapi.yaml`, so
+  the breaking-change gate does not see this; it is recorded here because a
+  dropped enum value is a break whether or not a workflow notices.
+
 ### Added
 
 - **Tool attribution is now prevented at commit time and blocked in CI.** AiSOC
@@ -194,6 +220,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now.
 
 ### Fixed
+
+- **The agent recommended evidence acquisition the platform could not
+  perform.** `capture_forensics` was an `ActionType` with no executor
+  anywhere, and `services/agents/app/agents/investigation_agent.py` proposes
+  it by name whenever an investigation reaches the C2 or exfiltration stage,
+  with `requires_approval=True`. So on the most serious class of incident the
+  product raised an approval for forensic acquisition and failed with `No
+  executor found for action type` when an analyst approved it — a control
+  reachable from a recommendation and dead on approval.
+
+  It now has a Microsoft Defender arm that collects an investigation package,
+  declared LOW impact and **analyst-gated**. Analyst rather than automatic for
+  the reason that separated `suppress_alert` from `update_alert_disposition`
+  at an identical impact tier: the question is what bounds the verb. The
+  writeback is bounded by a disposition mapping that refuses to close a
+  confirmed true positive; this verb has no bound at all — it collects
+  whatever the vendor package contains from whichever host it is pointed at,
+  and the result is a copy of somebody's endpoint in a vendor cloud behind a
+  download URI. Pointed at the wrong host that is a data-handling event nobody
+  can take back.
+
+  Only Defender, deliberately. MDE's investigation package is a whole-host
+  artefact bundle whose completion state and download URI are both readable.
+  CrowdStrike RTR's `get` retrieves one *named file*, which is a different
+  verb with a different blast radius; wiring it here would make one capability
+  mean two things depending on the tenant's vendor. Without MDE credentials
+  the executor simulates and says which credentials would enable it, rather
+  than reporting an acquisition that did not happen.
+
+  The probe is real and reads the package back. Acquisition is asynchronous,
+  so the vendor's response is emphatically not the confirmation — it says a
+  machine action was queued. `Succeeded` **and** a retrievable download URI is
+  VERIFIED; `Failed` / `TimeOut` / `Cancelled` is FAILED, which is the alarm
+  worth having; `Pending` / `InProgress` is UNVERIFIED, because not finished
+  is not the same fact as not happening. Reading the status alone would
+  certify a collection that finished with nothing to download.
+
+- **A delivered ChatOps prompt nobody had answered would have reported as a
+  completed action.** `ChatOpsVerifyExecutor` worked, sat in
+  `EXECUTOR_REGISTRY`, and no live-action adapter reached it, so the only
+  route to it was the legacy `ActionType` endpoint — which has no capability
+  contract, no approval matrix and no autonomy policy in front of it. Leaving
+  it unreachable was the right call at the time: it returns
+  `ActionStatus.RUNNING` to mean "the prompt went out, nobody has answered",
+  and `_to_live_status` folded everything that was not `FAILED` or a
+  simulation into `SUCCEEDED`.
+
+  The fix is the missing state rather than the exemption.
+  `LiveActionStatus.AWAITING_COMPLETION` means the vendor was touched and the
+  outcome is not yet known — the opposite of `PENDING_APPROVAL`, which means
+  nothing ran because policy wants a human first. Post-action verification
+  does not run against it, since there is no effect to read back yet. The same
+  state is what evidence acquisition needed, so one addition covers both
+  executors that had no honest result to return.
+
+  Registered against Slack and Teams, LOW impact and analyst-gated. Not
+  automatic like `notify` at the same impact, because `notify` addresses a SOC
+  channel and this addresses the account under investigation: sent
+  automatically on a true positive it tells an attacker they have been
+  detected, and the verb cannot know whether the person it is asking is the
+  suspect. Its dry run simulates in the adapter rather than stripping
+  credentials — the base adapter's strip-and-fall-through would turn a preview
+  into a failure for an executor that has no simulation branch by design.
+
+- **Nothing compared what the agent recommends against what the platform can
+  execute.** `scripts/check_action_contract.py` compared four registries
+  inside the actions service and could not see a fifth: the verbs
+  `services/agents` puts in front of an analyst. It now parses every
+  `ProposedAction(action_type=...)` call site — including the conditional form
+  `attack_path_agent` uses — and fails when a proposed verb has no executor,
+  naming the file and line. Run against the tree before this change it reports
+  `capture_forensics` at `investigation_agent.py:157`.
+
+  Both exemption lists in that gate are now empty, and
+  `test_capability_reachability.py` asserts that emptiness directly, so a verb
+  can only be exempted by editing a reviewable assertion rather than appending
+  to a list.
 
 - **The MSSP console showed six invented tenants and made no API call at all.**
   `MSSPDashboardView.tsx` declared `const TENANTS = [...]` — "Acme Financial",
