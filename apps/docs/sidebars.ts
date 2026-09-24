@@ -236,7 +236,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Contributing",
-      items: ["contributing/dev-setup", "contributing/guidelines"],
+      items: ["contributing/dev-setup", "contributing/guidelines", "contributing/reproducible-builds"],
     },
     "glossary",
   ],

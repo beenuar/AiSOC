@@ -21,8 +21,8 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-httpx>=0.30",
-    "mypy>=1.9",
-    "ruff>=0.4",
+    "mypy>=1.10,<2",
+    "ruff>=0.4.4,<0.5",
 ]
 
 [project.urls]

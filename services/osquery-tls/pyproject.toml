@@ -4,11 +4,17 @@ version = "0.1.0"
 description = "AiSOC osquery TLS plugin service — direct osqueryd TLS endpoint without a separate fleet manager"
 authors = ["AiSOC Community"]
 license = "MIT"
-readme = "README.md"
+# No `readme` key: these services are installed with `--no-root` and are not
+# published as packages. The key used to name a README.md that has never
+# existed in this tree, which made `poetry check` fail on a manifest error
+# and hid whether the lock was fresh.
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = ">=0.111,<0.142"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.142"
 uvicorn = { version = "^0.29.0", extras = ["standard"] }
 pydantic = ">=2.7,<2.11"
 pydantic-settings = "^2.2.1"
@@ -18,9 +24,13 @@ alembic = "^1.13.1"
 httpx = ">=0.27,<0.29"
 structlog = "^24.1.0"
 prometheus-client = ">=0.20,<0.26"
-# Floor raised to 44.0.1 to clear CVE-2024-12797 (and later 42.x advisories);
-# matches the resolved 48.x line used by the api/actions services.
-cryptography = ">=44.0.1,<51"
+# One range across every service that touches the vault: the Fernet /
+# MultiFernet token format is a contract between the writer (api) and the
+# readers (connectors, agents, osquery-tls), and they share one
+# AISOC_CREDENTIAL_KEY. The floor is 46 rather than the 44.0.1 that cleared
+# CVE-2024-12797 because agents already required 46 and CI was installing
+# `>=41,<46` — a range disjoint from what the image shipped.
+cryptography = ">=46,<51"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
@@ -30,8 +40,12 @@ pytest = ">=9.0.3,<10.0"
 pytest-asyncio = ">=1.0,<2.0"
 pytest-cov = "^5.0.0"
 httpx = ">=0.27,<0.29"
-ruff = "^0.4.4"
-mypy = "^1.10.0"
+# One range everywhere: `ruff format --check services/` is a hard gate and
+# ruff's formatter output changes between minors, so a contributor whose
+# manifest permits a newer ruff reformats the tree and reds their own PR.
+# Moving this range means reformatting the tree, which is its own change.
+ruff = ">=0.4.4,<0.5"
+mypy = ">=1.10,<2"
 aiosqlite = ">=0.19,<0.22"
 
 [build-system]

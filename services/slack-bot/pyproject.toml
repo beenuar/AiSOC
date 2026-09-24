@@ -11,7 +11,10 @@ python = "^3.11"
 # 1.0.0, which carries six advisories (PYSEC-2026-161/248/249/2280/2281),
 # and because a stale poetry.lock kept this service out of the dependency
 # scan entirely, nothing in CI ever said so (#650).
-fastapi = ">=0.111,<0.142"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.142"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"

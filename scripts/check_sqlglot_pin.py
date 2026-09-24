@@ -34,12 +34,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # that notices when a declaration exists in a file this list does not name.
 DECLARING_FILES = (
     "services/api/pyproject.toml",
-    "services/api/Dockerfile",
     ".github/workflows/ci.yml",
     ".github/workflows/integration.yml",
     ".github/workflows/isolation-live.yml",
     ".github/workflows/cross-tenant-rbac.yml",
     ".github/workflows/check-openapi.yml",
+    ".github/workflows/reproducible-builds.yml",
 )
 
 # `lake-isolation.yml` installs sqlglot from a build matrix, deliberately
@@ -49,6 +49,45 @@ DECLARING_FILES = (
 # `shipped` is checked against the agreed pin below.
 MATRIX_WORKFLOW = ".github/workflows/lake-isolation.yml"
 _SHIPPED_MATRIX_LEG = re.compile(r"""-\s*sqlglot:\s*["'](?P<spec>[^"']+)["']\s*\n\s*label:\s*shipped""")
+
+# `services/api/Dockerfile` used to be on the list above, because its pip
+# fallback carried its own copy of the dependency list. That fallback is gone:
+# the image installs from `poetry.lock`, which no longer states a *range* but
+# the single version that actually ships. So the lock is checked differently —
+# its resolved version must fall inside the agreed range. Comparing the ranges
+# to each other and never to the lock would leave this gate agreeing about a
+# bound that nothing installs.
+RESOLVED_FILE = "services/api/poetry.lock"
+_LOCKED_VERSION = re.compile(r"""^name = "sqlglot"\nversion = "(?P<version>[^"]+)\"""", re.MULTILINE)
+
+
+def _release(version: str) -> tuple[int, ...]:
+    digits = re.match(r"(\d+(?:\.\d+)*)", version)
+    return tuple(int(p) for p in digits.group(1).split(".")) if digits else (0,)
+
+
+def satisfies(version: str, spec: str) -> bool:
+    """Whether a concrete version falls inside a comma-joined specifier."""
+    actual = _release(version)
+    for clause in spec.replace(" ", "").split(","):
+        match = re.fullmatch(r"(?P<op>[<>=!]+)(?P<ver>[0-9][0-9.]*)", clause)
+        if not match:
+            return False
+        bound = _release(match.group("ver"))
+        width = max(len(actual), len(bound))
+        left = actual + (0,) * (width - len(actual))
+        right = bound + (0,) * (width - len(bound))
+        allowed = {
+            ">=": left >= right,
+            ">": left > right,
+            "<=": left <= right,
+            "<": left < right,
+            "==": left == right,
+            "!=": left != right,
+        }.get(match.group("op"))
+        if not allowed:
+            return False
+    return True
 
 # Where we deliberately do not look: prose, and the archived prototype subtree.
 SKIP_PREFIXES = ("plans/", "apps/docs/", "docs/", "scripts/check_sqlglot_pin.py")
@@ -156,6 +195,22 @@ def main() -> int:
         detail = "; ".join(f"[{norm or 'unbounded'}] {', '.join(files)}" for norm, files in sorted(seen.items()))
         problems.append(f"sqlglot is pinned {len(seen)} different ways: {detail}")
 
+    agreed_so_far = next(iter(seen)) if len(seen) == 1 else None
+    lock_path = REPO_ROOT / RESOLVED_FILE
+    locked_version: str | None = None
+    if not lock_path.exists():
+        problems.append(f"{RESOLVED_FILE} is missing — the api image would resolve sqlglot afresh on every build")
+    else:
+        match = _LOCKED_VERSION.search(lock_path.read_text(encoding="utf-8"))
+        if match is None:
+            problems.append(f"{RESOLVED_FILE} does not lock sqlglot, so the api image installs an unpinned parser")
+        else:
+            locked_version = match.group("version")
+            if agreed_so_far is not None and not satisfies(locked_version, agreed_so_far):
+                problems.append(
+                    f"{RESOLVED_FILE} resolved sqlglot {locked_version}, outside the declared {agreed_so_far}"
+                )
+
     stray = scan_for_unregistered()
     if stray:
         problems.append("sqlglot installed in unregistered file(s), add them to DECLARING_FILES: " + ", ".join(sorted(stray)))
@@ -181,7 +236,10 @@ def main() -> int:
         return 1
 
     only = next(iter(seen))
-    print(f"check_sqlglot_pin: OK — {len(DECLARING_FILES)} install paths all declare {only}")
+    print(
+        f"check_sqlglot_pin: OK — {len(DECLARING_FILES)} install paths all declare {only}, "
+        f"and {RESOLVED_FILE} resolves {locked_version} inside it"
+    )
     return 0
 
 

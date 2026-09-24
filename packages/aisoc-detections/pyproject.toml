@@ -30,7 +30,7 @@ aisoc-detections = "aisoc_detections.runner:main"
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
-  "ruff>=0.4",
+  "ruff>=0.4.4,<0.5",
 ]
 
 [project.urls]

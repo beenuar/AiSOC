@@ -17,54 +17,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install poetry==1.8.2 && \
+RUN pip install poetry==2.4.1 && \
     poetry config virtualenvs.create false
 
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml poetry.lock ./
 
-# Run poetry without swallowing errors. If resolution fails (transient
-# registry timeout, proxy hiccup, etc.) we fall through to a pip install
-# that mirrors pyproject.toml so the image still ships a working api
-# service. The fallback list MUST stay in lockstep with
-# services/api/pyproject.toml — missing a dep there means the image
-# builds but crashes on import.
-RUN set -eux; \
-    if poetry install --no-interaction --no-ansi --without dev --no-root; then \
-        echo "[api] poetry install succeeded"; \
-    else \
-        echo "[api] poetry install failed; using pip fallback"; \
-        pip install --no-cache-dir \
-            "fastapi>=0.111,<0.112" \
-            "uvicorn[standard]>=0.29,<0.30" \
-            "pydantic[email]>=2.7,<2.14" \
-            "pydantic-settings>=2.2,<3" \
-            "sqlalchemy[asyncio]>=2.0.30,<3" \
-            "asyncpg>=0.29,<0.32" \
-            "alembic>=1.13,<2" \
-            "redis[hiredis]>=5.0.4,<8.0.0" \
-            "httpx>=0.27,<0.29" \
-            "PyJWT>=2.8,<3" \
-            "cryptography>=42,<43" \
-            "bcrypt>=4.1,<5" \
-            "python-multipart>=0.0.9,<0.1" \
-            "tenacity>=8.3,<10" \
-            "structlog>=24.1,<25" \
-            "prometheus-client>=0.20,<0.26" \
-            "opentelemetry-sdk>=1.24,<2" \
-            "opentelemetry-instrumentation-fastapi>=0.45b0" \
-            "opentelemetry-instrumentation-sqlalchemy>=0.45b0" \
-            "clickhouse-driver>=0.2.8,<0.3" \
-            "sqlglot>=23,<27" \
-            "boto3>=1.34,<2" \
-            "neo4j>=5.19,<7" \
-            "pysigma>=0.11,<0.12" \
-            "pysigma-backend-opensearch>=1.0,<2" \
-            "yara-python>=4.5,<5" \
-            "pyyaml>=6.0.1,<7" \
-            "strawberry-graphql[fastapi]>=0.236,<0.237" \
-            "webauthn>=2.2,<3" \
-            "weasyprint>=62,<63" ; \
-    fi
+# Dependencies come from poetry.lock and nowhere else, so two builds of this
+# commit install byte-identical versions. `poetry install` refuses a lock that
+# no longer matches pyproject.toml ("changed significantly since poetry.lock
+# was last generated"), so editing the manifest without re-locking is a build
+# error rather than a silent re-resolution nobody reviewed. The matching
+# `poetry check --lock` runs in CI, where the README the check wants is on
+# disk; this layer has only the two files it installs from.
+#
+# There is deliberately no pip fallback here. The one this replaced carried its
+# own copy of the dependency list, drifted from pyproject.toml, and pinned
+# versions no test ever ran. When a transient poetry failure triggered it on
+# 2026-09-24 the api image shipped FastAPI 0.111.1 and died at import. A build
+# that fails is recoverable; an image that boots on untested versions is not.
+RUN poetry install --no-interaction --no-ansi --only main --no-root
 
 COPY . .
 

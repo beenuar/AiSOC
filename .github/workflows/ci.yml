@@ -220,7 +220,7 @@ jobs:
           python-version: '3.12'
       - name: Install Ruff & Mypy
         # Pin to versions compatible with the constraints declared in each
-        # service's ``pyproject.toml`` (``ruff = "^0.4.4"``, ``mypy = "^1.10.0"``).
+        # service's ``pyproject.toml`` (``ruff = ">=0.4.4,<0.5"``, ``mypy = ">=1.10,<2"``).
         # The CI gate previously left these unpinned, so every new ruff release
         # (e.g. 0.15.x adding ``UP037`` enforcement) silently broke main without
         # any dependency-file change. Dependabot bumps to the pyproject
@@ -321,7 +321,7 @@ jobs:
           # Verified as the complete set in a clean venv: the import closure
           # is app.connectors.* plus app.federated.*, and nothing in it
           # reaches for a database driver or a web framework.
-          python -m pip install --quiet httpx pydantic structlog cryptography
+          python -m pip install --quiet httpx pydantic structlog "cryptography>=46,<51"
           python scripts/generate_connector_docs.py --check
       # Eight fields shipped across v7.7 and v8.0 without reaching the funnel
       # docs, and they are the eight that say whether the automation is
@@ -428,13 +428,13 @@ jobs:
     needs: python-lint
     env:
       API_DEPS: >-
-        fastapi "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-        structlog PyJWT cryptography "passlib[bcrypt]" tenacity pyyaml
+        "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+        structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
         prometheus-client "opentelemetry-sdk" "opentelemetry-api"
         "opentelemetry-exporter-otlp-proto-grpc"
         "opentelemetry-instrumentation-fastapi"
         "strawberry-graphql[fastapi]"
-        neo4j redis celery httpx aiofiles email-validator PyJWT
+        neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
         "sqlglot>=23,<27" aiosqlite
         "croniter>=2.0,<7.0"
         pytest pytest-asyncio
@@ -642,7 +642,7 @@ jobs:
         # dependency, and importing the router to enumerate its routes pulls
         # sqlalchemy. Skipping the import instead would leave a gate that
         # cannot fail, which is worse than installing one more package.
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis fastapi httpx aiokafka asyncpg clickhouse-driver pyyaml cryptography sqlalchemy
+        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis "fastapi>=0.117,<0.142" httpx aiokafka asyncpg clickhouse-driver pyyaml "cryptography>=46,<51" sqlalchemy
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage
@@ -741,7 +741,7 @@ jobs:
         # uniform matrix is one install path, one cache hit.
         run: |
           pip install --quiet \
-            'fastapi>=0.109,<0.140' \
+            'fastapi>=0.117,<0.142' \
             'pydantic>=2.5,<3' \
             'pydantic-settings>=2.1,<3' \
             'httpx>=0.27,<0.29' \
@@ -761,7 +761,7 @@ jobs:
             'sqlalchemy[asyncio]>=2,<3' \
             'aiosqlite>=0.19,<0.22' \
             'asyncpg>=0.29,<0.31' \
-            'cryptography>=41,<46' \
+            'cryptography>=46,<51' \
             'pyyaml>=6,<7' \
             'jinja2>=3,<4' \
             'jsonschema>=4,<5' \

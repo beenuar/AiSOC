@@ -17,16 +17,16 @@ on:
 # generate requirements.txt via `poetry export`.
 env:
   OPENAPI_DEPS: >-
-    fastapi uvicorn pydantic "pydantic[email]" pydantic-settings
+    "fastapi>=0.117,<0.142" uvicorn pydantic "pydantic[email]" pydantic-settings
     "sqlalchemy[asyncio]" asyncpg structlog
-    PyJWT cryptography "passlib[bcrypt]"
+    "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]"
     tenacity pyyaml prometheus-client
     neo4j redis celery aiofiles aiokafka
     boto3 clickhouse-driver
     opentelemetry-sdk opentelemetry-api
     opentelemetry-exporter-otlp-proto-grpc
     "opentelemetry-instrumentation-fastapi"
-    "strawberry-graphql[fastapi]" httpx email-validator PyJWT
+    "strawberry-graphql[fastapi]" httpx email-validator "PyJWT>=2.8,<3"
     "sqlglot>=23,<27"
 
 jobs:
