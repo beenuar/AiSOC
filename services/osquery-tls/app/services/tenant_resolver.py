@@ -68,7 +68,7 @@ async def resolve_tenant_uuid(db: AsyncSession, tenant_ref: str | None) -> uuid.
         row = (await db.execute(text("SELECT id FROM tenants WHERE id = :tid"), {"tid": str(candidate)})).first()
         if row:
             return candidate
-        logger.warning("osquery_tls.tenant_unknown_uuid ref=%s", candidate)
+        logger.warning("osquery_tls.tenant_unknown_uuid ref=%s", str(candidate).replace("\r", "").replace("\n", " ")[:64])
         return None
 
     # 2. Exact slug / name match.
@@ -87,12 +87,14 @@ async def resolve_tenant_uuid(db: AsyncSession, tenant_ref: str | None) -> uuid.
             return uuid.UUID(str(rows[0][0]))
         logger.warning(
             "osquery_tls.tenant_placeholder_ambiguous ref=%r tenant_count=%d — refusing to guess",
-            ref,
+            # `ref` arrives on the X-AiSOC-Tenant header, so it is sanitised
+            # inline at the call site where CodeQL can see the property.
+            str(ref).replace("\r", "").replace("\n", " ")[:64],
             len(rows),
         )
         return None
 
-    logger.warning("osquery_tls.tenant_unknown_ref ref=%r", ref)
+    logger.warning("osquery_tls.tenant_unknown_ref ref=%r", str(ref).replace("\r", "").replace("\n", " ")[:64])
     return None
 
 

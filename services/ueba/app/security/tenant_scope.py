@@ -168,8 +168,11 @@ def resolve_scoped_tenant(
         # tenant they do not hold is a security event, not routine noise.
         logger.warning(
             "tenant_scope.refused subject=%s requested=%s scope_size=%d",
-            principal.subject,
-            wanted,
+            # Sanitised inline rather than through a helper: CodeQL does not
+            # track a helper across the call boundary, and `subject` really is
+            # attacker-influenced — it carries the JWT `sub` claim.
+            str(principal.subject).replace("\r", "").replace("\n", " ")[:128],
+            str(wanted).replace("\r", "").replace("\n", " ")[:64],
             len(principal.tenant_ids),
         )
         raise TenantScopeError("requested tenant is outside the caller's authorised scope")

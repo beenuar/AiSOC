@@ -68,13 +68,15 @@ def resolve_scoped_tenant(
 
     if wanted != own_uuid:
         # Warning, not debug: a caller reaching for a tenant they do not hold
-        # is a security event. Values are interpolated as %s args rather than
-        # formatted in, and they are UUIDs, so there is no newline to inject.
+        # is a security event. Sanitised inline at the call site rather than
+        # through a helper — CodeQL does not follow a helper across the call
+        # boundary, and making the property visible to the next reader is
+        # worth more than the deduplication.
         logger.warning(
             "tenant_scope.refused user=%s own=%s requested=%s",
-            getattr(user, "user_id", "unknown"),
-            own_uuid,
-            wanted,
+            str(getattr(user, "user_id", "unknown")).replace("\r", "").replace("\n", " ")[:64],
+            str(own_uuid).replace("\r", "").replace("\n", " ")[:64],
+            str(wanted).replace("\r", "").replace("\n", " ")[:64],
         )
         raise TenantScopeError("requested tenant is outside the caller's authorised scope")
     return own_uuid
