@@ -288,6 +288,31 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # The count comes from the registry; so, now, does the console's
+      # `ConnectorType` union. It used to be written by hand, which is how ten
+      # members came to name nothing the platform ingests — `ibm_qradar`
+      # reached no profile and no connector, so strict mode rejected those
+      # events and lenient mode minted a vendor named after the spelling, a
+      # second alert source for a QRadar deployment `qradar` already fed.
+      #
+      # The self-test runs first and on the same tree: it hand-edits the
+      # generated file, deletes it, puts the union back in connector.ts and
+      # flattens a canonical fold, and requires each to be caught.
+      - name: Connector type union — self-test
+        run: python3 scripts/generate_connector_types.py --self-test
+      - name: Verify the ConnectorType union matches the registry
+        run: python3 scripts/generate_connector_types.py --check
+      # The properties that make generation safe to rely on, asserted rather
+      # than assumed: regeneration is idempotent, reversing the registry
+      # changes no byte (nothing is positional, so no lock file is needed),
+      # and identity is read off the class — `jira_connector.py` declares
+      # `jira` and `tenable.py` declares `tenable_io`, so a filename slug
+      # would misname both, which is how `generate_connector_docs.py` came to
+      # emit duplicate pages while reporting 100% coverage.
+      - name: Connector type union — generation properties
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_connector_types_generated.py -q
       # The count says how many connectors exist; this says whether the name
       # each one is registered under still reaches a normalization profile.
       # The connectors service declares `crowdstrike` and `okta` while the
@@ -331,6 +356,14 @@ jobs:
       # without anyone noticing.
       - name: Verify the funnel response contract is documented
         run: python scripts/check_funnel_contract.py
+      # Phase 2.1 shipped this gate and left it unwired, with "wire this into
+      # CI itself once the matrix has stabilised" in its own docstring. It
+      # stayed unwired, so the audit it automates — a service that ships tests
+      # no job collects — went back to being something a human had to notice.
+      # Seven services were in that state before Phase 2.1, 971 tests between
+      # them. The matrix has stabilised: all 13 tested services are gated.
+      - name: Every tested Python service is gated by a CI job
+        run: python3 scripts/list_python_services_with_tests.py --check
       # A support bundle is the most concentrated pile of configuration a
       # deployment produces, and its whole purpose is to leave the building.
       # Redaction is allow-list rather than deny-list, so a setting added
@@ -571,12 +604,19 @@ jobs:
         # reach. The inverse direction too — a workflow step naming a
         # scripts/ path that no longer exists cannot do what it says.
         #
+        # Which scripts it resolves is decided structurally — a declared
+        # verdict flag, an exit status derived from findings the script
+        # accumulates, or a workflow job whose output another job branches on.
+        # It used to be decided by filename, which hid nineteen gates, fifteen
+        # of them run by a workflow with `--check`.
+        #
         # Self-test first, on the same tree, so a resolver that quietly starts
         # returning "reached" for everything fails here rather than printing OK.
         run: |
-          python -m pip install --quiet pyyaml
+          python -m pip install --quiet pyyaml pytest
           python3 scripts/check_gate_coverage.py --self-test
           python3 scripts/check_gate_coverage.py --list
+          python3 -m pytest tests/test_gate_coverage_classifier.py -q
 
       - name: Gate store migration runners and their call sites
         # Neo4j, ClickHouse and Qdrant hold schema that code depends on, and

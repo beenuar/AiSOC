@@ -328,6 +328,17 @@ Add your class to the `_CONNECTOR_CLASSES` tuple and `__all__` in
 The registry powers `/connectors/schemas` and the wizard's catalog grid —
 no other wiring required.
 
+Then regenerate the two things derived from that tuple, and commit the result:
+
+```bash
+python3 scripts/generate_connector_count.py   # the "N connectors" claims
+python3 scripts/generate_connector_types.py   # the console's ConnectorType union
+```
+
+Both have a `--check` mode wired into CI, so forgetting is a red build rather
+than a quiet drift. The union used to be hand-written and ten of its members
+named nothing the platform could ingest.
+
 ### 3. Add a marketplace plugin manifest
 
 Drop a `plugins/<connector-id>/plugin.yaml` mirroring your `schema()`. See

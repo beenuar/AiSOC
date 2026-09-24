@@ -447,6 +447,25 @@ var connectorTypeAliases = map[string]string{
 // "Syslog / CEF"). Resolution happens once, at the top of Normalize, so the
 // profile lookup, the alias map, canonicalClassByConnector and the product
 // identity on the canonical path all agree on one name.
+//
+// `palo_alto_cortex` was the one entry that named a vendor rather than a
+// product, and Palo Alto ships two the platform can ingest: `cortex_xdr` and
+// `cortex_xsiam`. It folds onto Cortex XDR, and the record is:
+//
+//   - the spelling entered packages/types in the initial-release commit
+//     (2026-05-01), before either connector existed — `cortex_xsiam` landed
+//     2026-05-07 and `cortex_xdr` 2026-05-08 — so it was aspirational vendor
+//     vocabulary, not a reference to a connector somebody had wired;
+//   - outside this map, the union and the changelog, the string appears
+//     nowhere in the tree and never has: no console code, no saved connector
+//     instance, no seed row, no API catalog entry, no fixture. Nothing
+//     emitting it can be misrouted, because nothing emits it;
+//   - where the console does name the product it says "Cortex XDR" (the
+//     landing catalog lists it under EDR and lists no XSIAM), which matches
+//     CortexXDRConnector's own description, "Palo Alto Cortex XDR incidents
+//     via the public REST API";
+//   - XSIAM is a SIEM reachable under its own id, so nothing is lost: a
+//     deployment that means XSIAM says `cortex_xsiam` and always could.
 var connectorTypeCanonical = map[string]string{
 	"google_chronicle": "chronicle",
 	"ibm_qradar":       "qradar",
