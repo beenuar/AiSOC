@@ -102,6 +102,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failed, which only happens for a malformed URL — the one error in that
   loop no retry can clear. It now says so and stops.
 
+### Fixed
+
+- **The wave-1 service-test job installed twelve packages with no version
+  bound, which is the outage that already happened, still loaded.** A CI job
+  pip-installing a hand-curated list named a bare, unbounded `sqlalchemy` and
+  passed for months only because a platform marker happened to pull
+  `greenlet`; when 2.1.0 deleted that clause, every import of
+  `sqlalchemy.ext.asyncio` began failing at collection. That one was bounded.
+  The other twelve in the same list were not, and the job's own comment said
+  so — *"Bounding the range is the second half: unbounded, any upstream
+  release lands here before anyone reads it."* `pydantic`,
+  `pydantic-settings`, `pytest`, `pytest-asyncio`, `structlog`, `redis`,
+  `aioredis`, `httpx`, `aiokafka`, `asyncpg`, `clickhouse-driver` and `pyyaml`
+  now carry the range the three services under test declare, so the job
+  installs what they ship rather than whatever PyPI is serving this morning.
+
+  Two things fell out of doing it, both pre-existing and both invisible while
+  the install was unbounded. `redis` was installed bare while
+  `services/fusion` declares `redis[hiredis]` — the same dropped-extra shape
+  as the `sqlalchemy` break, an install path quietly installing a smaller set
+  than ships. And the three manifests **could not be satisfied at once**:
+  `services/fusion` declared `httpx = "^0.26.0"` while `honeytokens` and
+  `purple-team` declare `>=0.27.0`. The unbounded install resolved 0.28.1, so
+  fusion was being tested on a version its own manifest forbade and shipping
+  0.26.0 — tested and shipped were different software, which is the exact
+  thing `check_dependency_pins.py` exists to prevent. fusion moves to
+  `>=0.27,<0.29`, matching api / actions / mesh / osquery-tls / slack-bot /
+  teams-bot, and its lock re-resolves to 0.28.1 so the three now agree and the
+  job tests what fusion ships. All three suites pass on the bounded set
+  (fusion 308, honeytokens 66, purple-team 100, every coverage floor met).
+
+  Still unbounded and reported rather than silently fixed: `services/connectors`
+  and `services/threatintel` also declare `httpx = "^0.26.0"`, and neither is
+  in this job.
+
 ### Changed
 
 - **`mypy` moved to 2.3.1 across all ten declarations, and the baseline it
