@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from 'react';
 
+import {
+  DETECTION_CATEGORIES,
+  EXECUTABLE_DETECTION_COUNT,
+} from '@/data/corpusStats';
+
 const CONTRIBUTE_URL =
   'https://github.com/beenuar/AiSOC/blob/main/.github/PULL_REQUEST_TEMPLATE/detection_rule.md';
 const DETECTIONS_URL =
@@ -21,8 +26,16 @@ const BADGE_STYLES: Record<Contributor['badge'], { bg: string; text: string; bor
   bronze:   { bg: 'bg-orange-500/10',  text: 'text-orange-300', border: 'border-orange-500/30', label: 'Bronze' },
 };
 
+// The core row is the executable corpus, read from the generated artefact
+// rather than typed: it previously claimed 218 rules across 5 categories,
+// which matched neither the engine (833) nor the indexed corpus.
 const CORE_CONTRIBUTORS: Contributor[] = [
-  { name: 'AiSOC', rules: 218, categories: ['cloud', 'endpoint', 'identity', 'network', 'application'], badge: 'platinum' },
+  {
+    name: 'AiSOC',
+    rules: EXECUTABLE_DETECTION_COUNT,
+    categories: Object.keys(DETECTION_CATEGORIES),
+    badge: 'platinum',
+  },
 ];
 
 const BADGE_THRESHOLDS: { tier: Contributor['badge']; min: number; label: string }[] = [
@@ -187,8 +200,8 @@ export function ContributorLeaderboard() {
             rel="noreferrer"
             className="underline decoration-dotted hover:text-gray-300"
           >
-            {sorted.reduce((sum, c) => sum + c.rules, 0).toLocaleString()}+ rules across{' '}
-            {[...new Set(sorted.flatMap((c) => c.categories))].length} categories
+            {sorted.reduce((sum, c) => sum + c.rules, 0).toLocaleString()} executable rules
+            across {[...new Set(sorted.flatMap((c) => c.categories))].length} categories
           </a>
         </p>
         <p className="text-xs text-gray-500">

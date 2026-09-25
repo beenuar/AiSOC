@@ -98,9 +98,12 @@ it here in detail.
 The substrate suite drives deterministic code only:
 
 - **Keyword extractors** — pulled out of `services/agents/app/extractors/`
-- **Fusion grouping** — a faithful in-harness re-implementation of the
-  Tier 1/2/3 rules used by `services/fusion`, minus the DB-backed dedup
-  and the ML scorer
+- **Fusion grouping** — a four-tier scheme implemented inside the test,
+  keyed on `(rule_id, host, user)`. It is **not** the grouping
+  `services/fusion` runs, which keys on `{tenant}:{entity}:{tactic}`;
+  it is retained as a regression gate and its number does not describe
+  this product. See [Why there are two alert-reduction
+  numbers](./benchmark.md#why-there-are-two-alert-reduction-numbers)
 - **Report and plan templates** — the deterministic synthesisers used as
   fall-back when an LLM call fails
 - **Offline judges** — keyword-coverage and rubric-score checks
@@ -150,7 +153,8 @@ The summary, with class labels:
 | Suite | Class | Headline metric |
 |-------|-------|-----------------|
 | `mitre_accuracy` | Substrate self-check | Per-template macro accuracy of the keyword extractor |
-| `alert_reduction` | Real measurement | 1 000-alert noisy stream → fused incident count |
+| `alert_reduction` | Legacy — does not describe this product | 1 000-alert noisy stream → four-tier in-test grouping, retained as a regression gate ([why](./benchmark.md#why-there-are-two-alert-reduction-numbers)) |
+| alert reduction (product logic) | Real measurement | The same stream grouped with `RawAlert.correlation_key()`, the method `Correlator` calls |
 | `investigation_completeness` | Substrate self-check | Mean keyword coverage of the report template |
 | `response_quality` | Substrate self-check | Mean rubric score of the synthesised plan |
 | `playbook_completion_rate` | Operational coverage gate | Fraction of in-scope incidents with a matched playbook |

@@ -10,6 +10,9 @@
  *     of the real `_CONNECTOR_CLASSES` registry. The full catalogue size
  *     is rendered from `CONNECTOR_COUNT` (sourced from the registry by
  *     `scripts/generate_connector_count.py`) so the prose can never drift.
+ *     The corpus figures come from `corpusStats.ts` the same way
+ *     (`scripts/generate_corpus_stats.py`), and lead with the executable
+ *     count — the indexed corpus is mostly quarantined and never loaded.
  *   - Code callout with a "Write a connector in 50 lines" snippet
  *     mirroring the BaseConnector pattern used in the registry.
  *
@@ -23,6 +26,10 @@ import { Marquee } from '@/components/magicui/Marquee';
 import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 import { CONNECTOR_COUNT } from '@/data/connectorCount';
+import {
+  EXECUTABLE_DETECTION_COUNT,
+  PLAYBOOK_PACK_COUNT,
+} from '@/data/corpusStats';
 
 interface ConnectorPill {
   name: string;
@@ -142,7 +149,10 @@ export function ConnectorsMarquee() {
             id="connectors-heading"
             className="font-velvet-display font-normal mt-3 text-3xl tracking-tight text-velvet-content-primary sm:text-4xl lg:text-[40px] lg:leading-[1.15] lg:tracking-[-0.015em]"
           >
-            {CONNECTOR_COUNT} connectors. 6,998 detections. 62 playbook packs.
+            {/* One template literal, so SSR emits a single text node: adjacent
+                JSX children around an interpolation get `<!-- -->` separators
+                injected server-side that the client does not reproduce. */}
+            {`${CONNECTOR_COUNT} connectors. ${EXECUTABLE_DETECTION_COUNT} executable detections. ${PLAYBOOK_PACK_COUNT} playbook packs.`}
           </h2>
           <p className="mt-4 text-base leading-relaxed text-velvet-content-secondary sm:text-lg">
             Every connector renders a schema-driven form, encrypts its

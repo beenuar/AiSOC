@@ -398,7 +398,34 @@ CLAIM_MATRIX = REPO_ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
 #: same way the README is: a figure repeated in prose drifts from its
 #: source the first time the source changes, and a compliance page
 #: quoting a stale number is worse than one quoting none.
-FIGURE_DOCS = (REPO_ROOT / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md",)
+#:
+#: `ROADMAP.md` was the omission that proved the point. Its tally line even
+#: instructs the reader to recount with the script "rather than trusting a
+#: figure quoted in prose — this line has gone stale before", and it had gone
+#: stale again (136/128 against a matrix holding 139/131) with every check in
+#: the repository green, because this tuple listed one compliance page and the
+#: governance documents were not in it.
+FIGURE_DOCS = (
+    REPO_ROOT / "apps" / "docs" / "docs" / "compliance" / "evidence-pack.md",
+    REPO_ROOT / "ROADMAP.md",
+    REPO_ROOT / "RELEASES.md",
+)
+
+#: A figure the prose explicitly dates is a record, not a claim about now.
+#: `RELEASES.md` deliberately quotes the tally as it stood at an older
+#: release; holding that to today's count would force the history to be
+#: rewritten every time the matrix grows.
+_HISTORICAL_QUOTE = re.compile(
+    r"at that time|at the time|as it stood|as of v\d|at the v\d[\d.]* cut",
+    re.IGNORECASE,
+)
+
+
+def _is_historical(text: str, index: int) -> bool:
+    """Whether the figure at ``index`` sits in a sentence that dates itself."""
+    start = text.rfind("\n", 0, index) + 1
+    end = text.find("\n", index)
+    return bool(_HISTORICAL_QUOTE.search(text[start : len(text) if end < 0 else end]))
 
 
 def _truth_table_executable() -> int | None:
@@ -427,6 +454,24 @@ def _matrix_counts() -> tuple[int, int] | None:
         elif "GATED" in line:
             gated += 1
     return (gated, partial) if (gated or partial) else None
+
+
+def _matrix_row_total() -> int | None:
+    """Every data row, `NO GATE` included.
+
+    `_matrix_counts` deliberately skips `NO GATE` rows, so the tally prose —
+    "N rows — G GATED / P PARTIAL / Z NO GATE" — had its *leading* figure
+    checked by nothing. Returned separately rather than widening that
+    function's tuple, which is unpacked as a pair by its tests.
+    """
+    if not CLAIM_MATRIX.exists():
+        return None
+    rows = sum(
+        1
+        for line in _read(CLAIM_MATRIX).splitlines()
+        if line.lstrip().startswith("|") and ("NO GATE" in line or "PARTIAL" in line or "GATED" in line)
+    )
+    return rows or None
 
 
 def gate_readme_figures() -> list[GateFailure]:
@@ -480,6 +525,8 @@ def gate_readme_figures() -> list[GateFailure]:
 
         for label, text in sources:
             for m in re.finditer(r"(\d+)\s+(?:rows\s+)?`?GATED`?[,/\s]+(?:and\s+)?(\d+)\s+`?PARTIAL", text):
+                if _is_historical(text, m.start()):
+                    continue
                 if (int(m.group(1)), int(m.group(2))) != (gated, partial):
                     failures.append(
                         GateFailure(
@@ -489,6 +536,18 @@ def gate_readme_figures() -> list[GateFailure]:
                             f"{gated} GATED / {partial} PARTIAL.",
                         )
                     )
+            total = _matrix_row_total()
+            if total is not None:
+                for m in re.finditer(r"(\d+)\s+rows\s*[—–-]\s*\d+\s+`?GATED", text):
+                    if _is_historical(text, m.start()):
+                        continue
+                    if int(m.group(1)) != total:
+                        failures.append(
+                            GateFailure(
+                                "readme-figures",
+                                f"{label} claims {m.group(1)} matrix rows; docs/audit/CLAIM_TO_GATE_MATRIX.md holds {total}.",
+                            )
+                        )
             # The bullet-list form the matrix's Summary uses. The inline
             # pattern above needs both figures on one line and silently
             # matched nothing here, which is how the stale count survived.

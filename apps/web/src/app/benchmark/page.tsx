@@ -98,10 +98,12 @@ export default async function BenchmarkPage() {
           </h1>
           <p className="mt-4 max-w-3xl text-lg text-gray-400">
             A deterministic regression harness over the AiSOC substrate &mdash;
-            the keyword extractors, the in-harness fusion grouping (a faithful
-            re-implementation of the production Tier 1/2/3 logic in{' '}
-            <code className="text-gray-300">services/fusion</code>, minus the
-            DB-backed dedup and ML scoring), the report and response
+            the keyword extractors, the in-harness fusion grouping (a four-tier
+            scheme implemented inside the test, which groups on different
+            dimensions from{' '}
+            <code className="text-gray-300">services/fusion</code> and is
+            retained for continuity &mdash; its number does not describe this
+            product), the report and response
             templates, and the offline judges that grade them. The dataset,
             the harness, and the CI gate are in the repo. The numbers on this
             page are pulled from{' '}
@@ -216,27 +218,41 @@ export default async function BenchmarkPage() {
             What each suite measures
           </h2>
           <div className="mt-6 space-y-4 text-sm">
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.03] p-5">
+            <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.03] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-semibold text-white">
-                  Alert reduction ({fmtPct(ar?.value)})
+                  Alert reduction, legacy suite ({fmtPct(ar?.value)})
                 </h3>
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-200">
-                  Real measurement
+                <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-200">
+                  Legacy &mdash; does not describe this product
                 </span>
               </div>
               <p className="mt-2 text-gray-300">
                 A 1,000-alert noisy stream with duplicates, near-duplicates,
                 rule-storms, and benign chatter is fabricated deterministically,
                 then passed through{' '}
-                <code className="text-gray-300">fuse_alerts</code> &mdash; an
-                in-harness re-implementation of the same Tier 1 / 2 / 3 merge
-                windows and score floor that the production fusion service
-                runs. The grouping logic is identical; the harness skips the
-                DB-backed deduplicator and ML scorer that ride on top in
-                production. The reduction ratio is whatever the harness code
-                emits. This is a legitimate measurement of the grouping logic,
-                and a regression in those rules will move the number.
+                <code className="text-gray-300">fuse_alerts</code> &mdash; four
+                tiers keyed on{' '}
+                <code className="text-gray-300">(rule_id, host, user)</code>{' '}
+                with 10/30/5-minute windows. This panel used to say the
+                grouping logic was identical to production. It is not:{' '}
+                <code className="text-gray-300">
+                  RawAlert.correlation_key()
+                </code>
+                , the method the fusion{' '}
+                <code className="text-gray-300">Correlator</code> actually
+                calls, keys on{' '}
+                <code className="text-gray-300">
+                  &#123;tenant&#125;:&#123;entity&#125;:&#123;tactic&#125;
+                </code>{' '}
+                over a one-hour window. Different dimensions, different
+                windows, different answer. The figure that describes this
+                product is <strong>33.3%</strong>, measured against the real
+                key by{' '}
+                <code className="text-gray-300">
+                  services/fusion/tests/test_alert_reduction_real.py
+                </code>
+                . The legacy number is retained as a regression gate.
               </p>
             </div>
 
