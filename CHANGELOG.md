@@ -88,6 +88,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `vitest run --coverage` (62.17% statements, gate green), `next build` and
   `storybook build` all pass.
 
+- **Five more root-workspace bumps landed as one lockfile change.**
+  `@vitest/coverage-v8` 4.1.10 → 4.1.11, `axe-core` 4.11.4 → 4.13.0,
+  `react-hot-toast` 2.6.0 → 2.6.1, `framer-motion` 12.43.0 → 13.4.0 and
+  `zod` 4.4.3 → 4.6.5 (the last in `services/mcp`), regenerated once: 61
+  insertions against 84 deletions, versus 1,040 insertions across the five
+  individual proposals.
+  The `@vitest/coverage-v8` bump is the first pull request the new `vitest`
+  group produced, and it closes the exact-version peer drift that group was
+  added for — `pnpm install` stops reporting
+  `unmet peer @vitest/coverage-v8@4.1.11: found 4.1.10`.
+  `framer-motion` is a major and what installs is **13.4.3**, not the 13.4.0
+  in the proposal's title, because `^13.4.0` resolves above it. Verified on
+  13.4.3 rather than on the proposed number: `tsc --noEmit` passes, which is
+  the gate that would see a removed API, and this app's entire framer-motion
+  surface is `motion`, `AnimatePresence` and `useReducedMotion` across 37
+  import sites. v13 drops the optional `@emotion/is-prop-valid` peer that
+  v12 declared, and this workspace does not use emotion. 615 tests pass with
+  zero errors and coverage unchanged to the digit (62.17% / 57.71% / 54.77% /
+  64%), `next build` generates all 104 static pages, and `storybook build`
+  succeeds.
+
 ### Fixed
 
 - **Dependabot proposed Expo SDK 57 packages for an SDK 54 app, from an entry
