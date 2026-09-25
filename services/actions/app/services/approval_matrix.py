@@ -55,10 +55,12 @@ class _Contract(Protocol):
     """
 
     @property
-    def impact(self) -> ActionImpact: ...
+    def impact(self) -> ActionImpact:
+        """What this does to the estate if the finding is wrong."""
 
     @property
-    def approval(self) -> ApprovalRequirement: ...
+    def approval(self) -> ApprovalRequirement:
+        """Baseline requirement, which the matrix may raise and never lower."""
 
 
 #: Confidence floor per impact tier for a *fully automatic* execution.

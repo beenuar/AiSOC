@@ -136,7 +136,10 @@ def client(monkeypatch: pytest.MonkeyPatch, touches: _VendorTouches) -> TestClie
                 summary="executed",
             )
 
-    for action_type in ActionType:
+    # `list(...)` rather than iterating the enum class directly: CodeQL
+    # resolves `ActionType` through its `str` base and reports the class
+    # object as non-iterable, which is a false positive it raises at `error`.
+    for action_type in list(ActionType):
         monkeypatch.setitem(EXECUTOR_REGISTRY, action_type, _LegacyRecorder())
     monkeypatch.setattr(registry, "get_executor", lambda vendor, capability: _LiveRecorder())
 
