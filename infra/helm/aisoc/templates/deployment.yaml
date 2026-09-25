@@ -71,6 +71,36 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if eq $name "web" }}
+            {{- /*
+              The console proxies every browser request to these addresses.
+              They have to be named here because the published image is built
+              against the Compose network's DNS (`http://api:8000`), and no
+              such host exists in a cluster — the chart's Services are
+              `<release>-api`, `<release>-agents`, `<release>-realtime`. The
+              chart set none of them, so a Helm install rendered a console
+              whose every API call resolved nowhere.
+
+              Setting them was necessary and not sufficient: until
+              apps/web/docker-entrypoint.sh shipped, these were read by
+              nothing at run time, because `next build` compiles rewrite
+              destinations into .next/routes-manifest.json. An image older
+              than that entrypoint will ignore these and still dial
+              `http://api:8000`.
+
+              `values.yaml`'s `services.web.env` wins, for an API that lives
+              outside the release.
+            */}}
+            {{- $fullname := include "aisoc.fullname" $ }}
+            {{- $webEnv := $svc.env | default dict }}
+            {{- range $upstream, $target := dict "API_URL" "api" "AGENTS_URL" "agents" "REALTIME_URL" "realtime" }}
+            {{- if not (hasKey $webEnv $upstream) }}
+            {{- $targetSvc := get $.Values.services $target }}
+            - name: {{ $upstream }}
+              value: "http://{{ $fullname }}-{{ $target }}:{{ $targetSvc.service.port | default 80 }}"
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- range $k, $v := $svc.env }}
             - name: {{ $k }}
               value: {{ $v | quote }}

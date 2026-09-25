@@ -412,14 +412,41 @@ All variables use the `PURPLE_TEAM_` prefix.
 
 ## Web app (`apps/web`)
 
-The Next.js frontend reads only public, build-time variables. Anything sensitive belongs in the API layer.
+The console runs a Node process as well as serving a bundle, and the two read
+their configuration at different times. Getting this backwards is why setting
+"the right variables" on a self-hosted deployment could change nothing.
+
+### Read when the container starts
+
+Set these in `.env` or on the Deployment. They take effect on restart, with no
+rebuild. They are the addresses the console's **server** proxies browser
+requests to; the browser itself only ever talks to the console's own origin,
+which is why there is no CORS to configure.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Base URL the browser uses to reach the API |
-| `NEXT_PUBLIC_REALTIME_URL` | `http://localhost:8086` | HTTP base of the realtime service (used for VAPID subscription registration) |
-| `NEXT_PUBLIC_WS_URL` | `ws://localhost:8086` | WebSocket URL for the realtime feed |
+| `AISOC_API_URL` | `http://api:8000` | Core API the console proxies `/api/v1/*` to |
+| `AISOC_AGENTS_URL` | `http://agents:8084` | Agents service (copilot, hunt, playbooks) |
+| `AISOC_REALTIME_URL` | `http://realtime:4000` | Realtime gateway for `/ws/*` and `/sse` |
+| `AISOC_DEMO_MODE` | `false` | Whether this deployment is a demo. Reported at `/api/runtime-config` |
+| `AISOC_CONSOLE_BIND_ADDR` | `127.0.0.1` | Interface the console's host port publishes on |
+| `AISOC_BIND_ADDR` | `127.0.0.1` | Interface **every** host port publishes on, datastores included |
+
+### Fixed when the image is built
+
+`NEXT_PUBLIC_*` values are inlined into the JavaScript bundle by `next build`.
+Setting one on a container running a pulled image does nothing — it is not
+read at run time by anything. Change them with `--build-arg` and a rebuild, or
+leave them empty and let same-origin proxying handle it, which is the default.
+
+| Build arg | Default | Description |
+|-----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | *(empty)* | Absolute API origin for the browser. Empty means same-origin; setting it opts into configuring CORS |
+| `NEXT_PUBLIC_WS_URL` | *(empty)* | Absolute WebSocket origin. Empty derives it from the page's own origin |
+| `NEXT_PUBLIC_DEMO_MODE` | *(empty)* | Compiles the image as a demo build. `AISOC_DEMO_MODE` overrides it at run time |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | — | Must match the realtime service's `VAPID_PUBLIC_KEY` |
+
+See [Single-host deployment](./single-host.md) for the whole path end to end.
 
 ---
 
@@ -526,8 +553,15 @@ PURPLE_TEAM_DATABASE_URL=${DATABASE_URL}
 PURPLE_TEAM_CALDERA_API_KEY=...
 
 # --- Web ---
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_REALTIME_URL=ws://localhost:8086
+# Where the console's server proxies to. Read at container start, so these
+# work on a pulled image; NEXT_PUBLIC_* would not, being compiled into the
+# bundle at build time.
+AISOC_API_URL=http://api:8000
+AISOC_AGENTS_URL=http://agents:8084
+AISOC_REALTIME_URL=http://realtime:4000
+# Publish the console beyond loopback. Required on any host you browse to
+# from another machine; put TLS in front of it.
+AISOC_CONSOLE_BIND_ADDR=0.0.0.0
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
 ```
 

@@ -229,6 +229,7 @@ const sidebars: SidebarsConfig = {
       label: "Deployment",
       items: [
         "deployment/docker",
+        "deployment/single-host",
         "deployment/kubernetes",
         "deployment/gcp",
         "deployment/azure",
