@@ -93,6 +93,14 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.NOT_APPLICABLE,
         required_permission=_READ,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back. Verification answers "
+            "'did the write land', and there is no write — the results are "
+            "the response, and a second query would not confirm the first, it "
+            "would be another one. Recorded rather than left blank so this "
+            "reads as the answer it is and not as an omission."
+        ),
         note="A query. Safe at any confidence, which is the point of separating impact from confidence.",
     ),
     # ── Endpoint containment ───────────────────────────────────────────────
@@ -130,7 +138,16 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="restore_file",
         required_permission=_CONTAIN,
-        note="Quarantining a legitimate binary breaks whatever depended on it.",
+        has_verification_probe=True,
+        note=(
+            "Quarantining a legitimate binary breaks whatever depended on it. "
+            "The CrowdStrike arm is an RTR 'rm', so the probe reads the path "
+            "back with 'ls': the effect is the file's absence, and RTR "
+            "accepting a delete is not the same fact. SentinelOne's arm "
+            "fetches the file into the forensics vault instead of removing "
+            "it, so the probe reports indeterminate there rather than "
+            "checking for an absence that arm never causes."
+        ),
     ),
     "restore_file": CapabilityContract(
         impact=ActionImpact.MODERATE,
@@ -144,10 +161,16 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.ANALYST,
         reversal=Reversal.SELF_HEALING,
         required_permission=_CONTAIN,
+        has_verification_probe=True,
         note=(
             "A killed process cannot be un-killed, but the effect does not "
             "persist: a service restarts, a user runs the program again. "
-            "Self-healing is the honest answer here, not 'irreversible'."
+            "Self-healing is the honest answer here, not 'irreversible'. "
+            "The probe re-reads the host's process table over RTR, because "
+            "an accepted 'kill' and a dead process differ whenever the agent "
+            "is offline or the process is protected. SentinelOne targets "
+            "binaries by hash and lists no processes, so that arm reports "
+            "indeterminate."
         ),
     ),
     "run_av_scan": CapabilityContract(
@@ -155,7 +178,16 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.SELF_HEALING,
         required_permission=_CONTAIN,
-        note="Consumes CPU on one host and finishes. Nothing to undo.",
+        has_verification_probe=True,
+        note=(
+            "Consumes CPU on one host and finishes. Nothing to undo. It is "
+            "automatic, and Defender replies 'Pending' the instant it queues "
+            "the sweep — so the response is the one thing that certainly is "
+            "not the confirmation. The probe reads the machine action's "
+            "terminal state instead, and answers indeterminate while the "
+            "scan is still running, which an immediate post-dispatch check "
+            "almost always is."
+        ),
     ),
     "run_script": CapabilityContract(
         impact=ActionImpact.SEVERE,
@@ -288,7 +320,18 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.SELF_HEALING,
         required_permission=_IDENTITY,
         has_verification_probe=False,
-        verification_gap="Same absent read-back as suspend_session.",
+        verification_gap=(
+            "Same absent read-back as suspend_session, stated here rather than "
+            "by reference because a gap that points at another entry stops "
+            "being checkable when that entry changes. Okta withdrew session "
+            "listing from the Management API and Entra's revokeSignInSessions "
+            "returns only an acknowledgement, so neither provider will say "
+            "whether the sessions are gone. The nearest readable field, "
+            "Entra's signInSessionsValidFromDateTime, moves when the call is "
+            "accepted rather than when the tokens stop working, so a probe "
+            "reading it would report VERIFIED on the strength of the same "
+            "acknowledgement the executor already has."
+        ),
     ),
     "reset_password": CapabilityContract(
         impact=ActionImpact.HIGH,
@@ -300,7 +343,14 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
             "Neither Okta nor Entra exposes a readable 'password was reset' state. "
             "The user's lifecycle status is unchanged by a reset, so a probe "
             "reading it would confirm nothing and report VERIFIED for a reset that "
-            "never happened — worse than reporting unverified."
+            "never happened — worse than reporting unverified. The obvious "
+            "candidate, Okta's passwordChanged timestamp, is the wrong read and "
+            "not merely a missing one: the executor calls "
+            "lifecycle/reset_password with sendEmail, which issues a recovery "
+            "link. The password changes later, if the user follows it, so a "
+            "probe watching that field would report FAILED for every correctly "
+            "executed reset and VERIFIED only once the user had already "
+            "recovered. Entra's lastPasswordChangeDateTime behaves the same way."
         ),
         note="The user recovers through the normal reset flow, but is locked out until they do.",
     ),
@@ -380,6 +430,15 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="allow_hash",
         required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "Same absent read as block_ioc, of which this is the narrowest "
+            "case: the indicator API creates and deletes and offers no list "
+            "to compare against. Unlike block_ioc this one is automatic, so "
+            "the gap is load-bearing and worth restating — it has no "
+            "ActionType either, which means a probe could not be keyed to it "
+            "even if Defender grew the read tomorrow."
+        ),
         note=(
             "A hash identifies one exact binary, so a wrong block affects only "
             "that file. The narrowest containment the platform has, and the "
@@ -399,6 +458,16 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="allow_ioc",
         required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=(
+            "Defender's indicator API is write-only in this client: block_ioc "
+            "creates one and remove_ioc deletes one by id, and there is no read "
+            "of the current indicator set to compare against. Confirming the "
+            "indicator exists would also be the weaker of the two available "
+            "claims — what a responder needs to know is whether it is being "
+            "enforced on the estate, and Defender reports indicator "
+            "distribution nowhere this client can reach."
+        ),
         note="Breadth depends on the indicator type, so it is classified at the worst case.",
     ),
     "allow_ioc": CapabilityContract(
@@ -414,6 +483,17 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "The creation is synchronous — Splunk's /services/notable_events "
+            "either writes the notable or returns an error, with no queued "
+            "state in between — so unlike run_av_scan the response really is "
+            "the confirmation. It is also the only one available: the reply "
+            "carries no event_id, and get_notable_event_state needs one. "
+            "Searching the notable index by rule name instead would match any "
+            "notable that rule has ever produced, which is a probe that "
+            "passes without the action."
+        ),
         note="Writes a record into someone else's queue. Noise, not damage.",
     ),
     "sync_detection_rule": CapabilityContract(
@@ -422,6 +502,15 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="sync_detection_rule",
         required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "The client writes correlation searches and watchers through "
+            "create-or-update calls and exposes no read of the saved "
+            "definition, so there is nothing to compare the intended content "
+            "against. Confirming the object merely exists would be the wrong "
+            "check anyway: this verb's failure mode is a rule that saved with "
+            "different content, not one that did not save."
+        ),
         note=(
             "Changing detection content in the customer's SIEM can silence a "
             "rule as easily as add one. Its own reverse: sync the prior version."
@@ -433,6 +522,12 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="update_watcher",
         required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "Same absence as sync_detection_rule, which this is the Elastic "
+            "spelling of: the write goes through a create-or-update and no "
+            "read of the stored watcher comes back to compare against."
+        ),
     ),
     "update_alert_disposition": CapabilityContract(
         impact=ActionImpact.LOW,
@@ -503,24 +598,56 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "This is the case the probe rule waives, and it is worth writing "
+            "down rather than leaving as an absence. Jira, ServiceNow and "
+            "PagerDuty all return the identifier they allocated, and none of "
+            "them can allocate one without having created the record — so the "
+            "response is the confirmation, in the strict sense that a "
+            "read-back could not tell us anything the create did not. The "
+            "identifier is also what every later step uses, so a fabricated "
+            "one fails loudly at the next transition rather than passing "
+            "silently."
+        ),
     ),
     "push_case": CapabilityContract(
         impact=ActionImpact.LOW,
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Creates a record in the ticketing system and gets its identifier "
+            "back, the same as create_ticket: the identifier cannot exist "
+            "without the record."
+        ),
     ),
     "push_status": CapabilityContract(
         impact=ActionImpact.LOW,
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Updates a record the caller already holds the identifier for, "
+            "and the vendors answer with the transition they applied. No "
+            "ActionType keys this one, so a probe could not be reached for it "
+            "in any case."
+        ),
     ),
     "notify": CapabilityContract(
         impact=ActionImpact.LOW,
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Chat platforms return the posted message's timestamp, which is "
+            "the confirmation — they cannot allocate one for a message they "
+            "did not post. Reading the channel back afterwards would answer a "
+            "different question, whether anyone has since deleted it."
+        ),
         note=("A message cannot be unsent, but paging the wrong channel is embarrassment rather than impact."),
     ),
 }

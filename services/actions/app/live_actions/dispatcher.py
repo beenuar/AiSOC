@@ -38,7 +38,7 @@ from uuid import uuid4
 import structlog
 
 from app.models.action import ActionRequest, ActionType
-from app.services.approval_matrix import evaluate as evaluate_matrix
+from app.services.approval_matrix import evaluate_contract
 from app.services.autonomy_safety import (
     _BLAST_ORDER,
     ACTION_BLAST_RADIUS,
@@ -245,22 +245,14 @@ def _apply_capability_contract(
         )
         return decision
 
-    if contract.impact is ActionImpact.READ_ONLY and contract.approval is ApprovalRequirement.AUTOMATIC:
-        # A read has nothing to raise. `capability_contracts` calls the read
-        # verbs "automatic by construction ... gating a read behind an analyst
-        # is how an agent learns to conclude without looking", and
-        # `approval_matrix`'s own docstring names an enrichment stuck in an
-        # approval queue as a failure mode it exists to prevent — yet its tier
-        # ceiling returns ANALYST for every impact at L0 and L1, which is the
-        # default tier. Rather than overturn `TIER_MAX_AUTOMATIC`, which is a
-        # deliberate posture for state-changing impact and is tested as one,
-        # the read case keeps whatever blast radius decided. That still blocks
-        # at L0, where nothing executes at all.
-        return decision
-
-    verdict = evaluate_matrix(
-        impact=contract.impact,
-        declared_approval=contract.approval,
+    # The whole grading, in one shared call. This used to short-circuit
+    # READ_ONLY + AUTOMATIC before reaching the matrix, because the matrix's
+    # tier ceiling was `None` at L1 and put a pure read in the analyst queue.
+    # The legacy door had no such bypass, so `search_siem` executed here and
+    # queued there. The ceiling is fixed at its source now, so the bypass is
+    # gone and both doors read the same answer out of the same function.
+    verdict = evaluate_contract(
+        contract=contract,
         confidence=request.confidence,
         tier=tier_label,
     )

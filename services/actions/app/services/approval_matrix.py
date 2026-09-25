@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Protocol
 
 from app.live_actions.contract import (
     NEVER_AUTONOMOUS,
@@ -42,6 +43,25 @@ from app.live_actions.contract import (
 )
 
 logger = logging.getLogger("aisoc.approval_matrix")
+
+
+class _Contract(Protocol):
+    """The two fields a capability contract contributes to a grading.
+
+    Structural rather than an import of ``CapabilityContract``: this module
+    lives in ``app.services`` and that one in ``app.live_actions``, whose
+    package ``__init__`` already imports the dispatcher, which imports this
+    module. Naming the class would close that loop.
+    """
+
+    @property
+    def impact(self) -> ActionImpact:
+        """What this does to the estate if the finding is wrong."""
+
+    @property
+    def approval(self) -> ApprovalRequirement:
+        """Baseline requirement, which the matrix may raise and never lower."""
+
 
 #: Confidence floor per impact tier for a *fully automatic* execution.
 #: Below the floor, the action drops to analyst approval.
@@ -65,9 +85,27 @@ TIER_ORDER = ("L0", "L1", "L2", "L3", "L4")
 
 #: The highest impact each tier may execute without an analyst, *given* the
 #: confidence floor above is also met.
+#:
+#: ``None`` means exactly one thing: this tier executes nothing at all. That
+#: is true of L0 and of L0 only. ``maturity.py`` defines the ladder as "L0 —
+#: Observe: all actions routed to approval queue. L1 — Notify: MINIMAL
+#: blast-radius actions are automatic", and ``_AUTO_ALLOWED_AT_TIER`` encodes
+#: it as ``set()`` for L0 and ``{MINIMAL}`` for L1. READ_ONLY impact is the
+#: same thing as MINIMAL blast radius — ``dispatcher._IMPACT_BLAST`` maps one
+#: onto the other — so L1's entry here is READ_ONLY.
+#:
+#: It read ``None``, which put a pure read into the analyst queue at the
+#: default tier. That is the failure mode this module's own docstring opens
+#: by naming, and the contract gate calls a read requiring approval
+#: "mis-classified or not actually a read". The registry door had grown a
+#: local bypass to route around it; this table entry is where the answer
+#: belongs, so there is one of it.
+#:
+#: Only READ_ONLY moves. Every impact above it ranks higher than the L1
+#: ceiling and still returns ANALYST, exactly as the ``None`` branch did.
 TIER_MAX_AUTOMATIC: dict[str, ActionImpact | None] = {
-    "L0": None,  # observe only
-    "L1": None,  # recommend only
+    "L0": None,  # observe only — not even a read
+    "L1": ActionImpact.READ_ONLY,  # notify: reads run, nothing acts
     "L2": ActionImpact.READ_ONLY,
     "L3": ActionImpact.MODERATE,  # reversible actions
     "L4": ActionImpact.HIGH,  # bounded response; never SEVERE or IRREVERSIBLE
@@ -225,5 +263,41 @@ def evaluate(
         ),
         impact=impact,
         confidence=score,
+        tier=tier,
+    )
+
+
+def evaluate_contract(
+    *,
+    contract: _Contract,
+    confidence: float | None,
+    tier: str,
+) -> ApprovalDecision:
+    """Grade a capability contract. **The one place a door may decide.**
+
+    Every entry point that grades a verb calls this and nothing else:
+    ``approval_gate.apply_matrix`` behind ``POST /actions``,
+    ``dispatcher._apply_capability_contract`` behind
+    ``POST /live-actions/dispatch`` and the playbook bridge.
+
+    It exists because the two doors were separately responsible for
+    unpacking a contract into :func:`evaluate`'s four arguments, and one of
+    them grew a local short-circuit the other did not have. ``search_siem``
+    is read_only/automatic and returned ``awaiting_approval`` through the
+    legacy door while executing through the registry door — the same verb
+    graded differently depending on which door it came through, which is the
+    precise thing the dispatcher's docstring says its contract block exists
+    to stop.
+
+    Keeping the unpacking here is what makes that structural rather than a
+    matter of discipline. A third door gets the answer by calling this; it
+    cannot get a different one without reimplementing the function, and
+    ``tests/test_approval_doors_agree.py`` sweeps both live doors over every
+    capability, tier and confidence band to catch it if one does.
+    """
+    return evaluate(
+        impact=contract.impact,
+        declared_approval=contract.approval,
+        confidence=confidence,
         tier=tier,
     )

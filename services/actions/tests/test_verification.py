@@ -77,10 +77,21 @@ async def test_unverified_without_credentials(monkeypatch):
 
 
 async def test_unverified_for_action_without_probe():
+    """A verb with no probe says so by name, in the shipped configuration.
+
+    The verb is derived rather than named. This used to assert on
+    ``QUARANTINE_FILE``, which now has a probe — so the test would have gone
+    green for the wrong reason if the stand-in had been swapped for another
+    hardcoded verb that later gained one too.
+    """
     v = PostActionVerifier()
-    res = await v.verify(ActionType.QUARANTINE_FILE, "x", {})
+    unprobed = [a for a in ActionType if a not in v.probes]
+    assert unprobed, "every ActionType has a probe; this test no longer proves anything and should be deleted"
+
+    res = await v.verify(unprobed[0], "x", {})
     assert res.outcome == VerificationOutcome.UNVERIFIED
     assert "no read-back verifier" in res.reason
+    assert unprobed[0].value in res.reason
 
 
 async def test_probe_error_is_unverified_never_false_verified(monkeypatch):
