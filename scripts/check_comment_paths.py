@@ -184,26 +184,21 @@ ACCEPTED: dict[tuple[str, str], str] = {
         "path that exists would lose the only record of the migration."
     ),
     ("infra/fly/managed/provision.sh", "infra/fly/managed/tenants/acme.yaml"): (
-        "A placeholder tenant file in the usage line. Real tenant descriptors are supplied by the "
-        "operator and are not committed."
+        "A placeholder tenant file in the usage line. Real tenant descriptors are supplied by the operator and are not committed."
     ),
-    ("infra/fly/managed/render.sh", "infra/fly/managed/tenants/acme.yaml"): (
-        "Same usage line in the sibling script, same placeholder."
-    ),
+    ("infra/fly/managed/render.sh", "infra/fly/managed/tenants/acme.yaml"): ("Same usage line in the sibling script, same placeholder."),
     ("scripts/audit_runbook_links.py", "docs/runbooks/foo.md"): (
         "An illustrative path in a docstring explaining which link shapes the gate accepts."
     ),
     ("scripts/check_competitor_names.py", "docs/connectors/x.md"): (
-        "An illustrative path in a docstring explaining glob semantics: 'docs/connectors/** matches "
-        "docs/connectors/x.md'."
+        "An illustrative path in a docstring explaining glob semantics: 'docs/connectors/** matches docs/connectors/x.md'."
     ),
     ("scripts/check_gate_contract.py", "scripts/foo.py"): (
         "An illustrative path in a docstring showing what shlex returns for a quoted path inside an "
         "echo. Naming a real script would make the example read as a claim about that script."
     ),
     ("scripts/check_repo_self_links.py", "services/api/app/api/deps.py"): (
-        "Prose recording the dead link that motivated that gate — the path moved under v1/, and the "
-        "sentence is about it having moved."
+        "Prose recording the dead link that motivated that gate — the path moved under v1/, and the sentence is about it having moved."
     ),
     ("tools/detection_import/splunk_importer.py", "detections/cloud/foo.yml"): (
         "An illustrative path in a docstring showing how a category is derived from a rule path."
