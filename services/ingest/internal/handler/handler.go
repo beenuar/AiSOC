@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
@@ -133,8 +134,11 @@ func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.Events) > h.cfg.MaxBatchSize {
+		// strconv, not string(rune(…)): the conversion produces the *code point*
+		// with that value, so a limit of 1000 rendered as "Ϩ" and the caller was
+		// told their batch exceeded a maximum of one Greek letter.
 		writeError(w, http.StatusRequestEntityTooLarge,
-			"batch size exceeds maximum of "+string(rune(h.cfg.MaxBatchSize)))
+			"batch size exceeds maximum of "+strconv.Itoa(h.cfg.MaxBatchSize))
 		return
 	}
 

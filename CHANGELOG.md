@@ -7,6 +7,187 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The documented quick start broke the product, and then the product had nothing to show
+
+
+Every item below passed the existing test suite and failed on a real
+deployment. They are grouped by what a new user actually hit, in the order
+they hit it.
+
+#### Following the README broke the credential vault
+
+- **`.env.example` shipped `AISOC_CREDENTIAL_KEY=replace-me-with-a-freshly-generated-fernet-key`,
+  and `cp .env.example .env` is step two of the quick start.** The vault takes
+  its friendly ephemeral-development-key path only when the key is *empty*; a
+  non-empty invalid key reaches `Fernet()` and raises, which the connector
+  endpoints turn into HTTP 500 `credential vault unavailable`. Nothing failed
+  at boot. So **not** copying the template produced a working vault and
+  following the documented instructions produced a broken one, discovered
+  minutes later at the connector wizard with nothing linking the two.
+
+  Fixed at setup rather than in the vault: `make up` now runs
+  `scripts/ensure_env.py`, which creates `.env` and writes a real random value
+  for `AISOC_CREDENTIAL_KEY`, `SECRET_KEY` and `AISOC_SERVICE_TOKEN`. It is
+  idempotent and never rotates a value an operator already set, and it uses
+  the standard library so it does not put a `pip install` in front of
+  `make up`. Teaching the vault to tolerate a placeholder was the alternative
+  and would have been worse: a deployment whose saved connector credentials
+  silently do not survive a restart. The three secrets now ship **empty** in
+  the template as well, so a hand-copied `.env` degrades to the documented
+  development path instead of a hard 500.
+
+- **`make doctor`'s placeholder check matched neither placeholder the
+  repository shipped.** It grepped
+  `^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$` while the template
+  carried `replace-me-…` and `change-this-…` — a gate built to catch shipped
+  placeholders that was blind to every shipped placeholder, and that reported
+  clean on the one `.env` that broke the vault. The check now delegates to
+  `scripts/check_env_placeholders.py`, and `tests/test_env_placeholder_gate.py`
+  compares the detector against the template in both directions: every
+  non-empty value in `.env.example` must be either recognised as a placeholder
+  or declared in the test as a deliberate working default. A new placeholder
+  cannot be added without one of the two failing.
+
+#### The connector wizard could not complete
+
+Three independent causes, all silent, all fixed:
+
+- **The API was never given the credential it presents to the connectors
+  service.** `_service_token()` reads `AISOC_CONNECTORS_SERVICE_TOKEN` then
+  `AISOC_SERVICE_TOKEN`; compose interpolated the shared token into
+  `connectors`, `ueba`, `honeytokens` and `purple-team` and **not into the one
+  service that has to send it**, and with no `env_file` anywhere a value in
+  `.env` could not reach it by any route. Every catalog call was answered 401
+  and fell back to the bundled copy with `degraded=True`. Measured after the
+  fix: the catalog is `live` with **84** connectors instead of the bundled 26.
+
+- **"Test connection" sent no `Authorization` header at all.** The catalog call
+  beside it had been given one and this one had not, so it was answered 401 on
+  every invocation — and 401 was the one status the ladder did not branch on,
+  so it fell through and returned a body with no `success` key. The wizard
+  reads `result.success`, found it absent, and rendered the bare string
+  **"Connection test failed"** for an internal service-auth misconfiguration,
+  while its own help text promised "Credentials are tested against the
+  upstream API". The upstream API was never reached. It now sends the same
+  headers as the catalog call, branches on 401/403 explicitly, refuses any
+  unhandled 4xx rather than returning it as a verdict, and guarantees a
+  `success` key. An operator now sees: *"connectors service returned HTTP 401
+  to this API's service credential. AiSOC's API could not authenticate to its
+  own connectors service, so your credentials were never sent upstream. Set
+  `AISOC_SERVICE_TOKEN` …"*. The wizard also reads FastAPI's `detail` out of
+  the response body instead of showing only the status line.
+
+- **The connectors service answered 503 to everything on a default stack.**
+  Its `SECRET_KEY` compose default is one of `INSECURE_SECRET_DEFAULTS`, so
+  `resolve_console_secret()` returns `""`; with `AISOC_SERVICE_TOKEN` also
+  blank it has no credential material and fails closed, correctly. The
+  dev-mode escape that exists for exactly that case was set on `actions`,
+  `ueba`, `honeytokens`, `purple-team` and `slack-bot`, and not on
+  `connectors`. Now set — and once `make env` generates a real token, dev mode
+  stops applying at all.
+
+#### CORE had no real data and no AI
+
+- **`services/threatintel` and `qdrant` moved from the `full` profile into
+  CORE.** The CISA Known Exploited Vulnerabilities catalog is authoritative,
+  public and needs no API key, and has been wired as a scheduled handler the
+  whole time in a profile nobody starting out runs. Meanwhile the console
+  shipped a `/threat-intel` page whose endpoint existed in no profile, and that
+  page was recently caught rendering five invented IOCs. The missing feed and
+  the fabrication were one hole. A fresh `make up` now populates the console
+  with **1,723 real KEV entries** within a minute of boot, with no credentials.
+  New: `GET /api/v1/threat-intel/indicators` on the API, proxying a new
+  indicators route on `services/threatintel` backed by Qdrant.
+
+- **A daily feed would not have polled for a day.** `FeedScheduler.register`
+  handed APScheduler an `IntervalTrigger` and nothing else, and an interval
+  trigger schedules its *first* run one whole interval after start — 86400
+  seconds for KEV. A fresh install had a healthy container, a registered feed,
+  a created collection, and an empty page for twenty-four hours, with nothing
+  anywhere reporting a fault. First poll is now jittered into the first twenty
+  seconds.
+
+- **CISA's edge returns 403 to whole networks regardless of user agent.**
+  Observed with curl, httpx and a browser UA. Without a fallback every
+  deployment on such a network gets permanently zero indicators and no error a
+  user would see. The canonical `cisa.gov` URL stays primary; CISA's own
+  `cisagov/kev-data` GitHub repository — same publisher, identical schema — is
+  the fallback, and the log line names which source answered.
+
+- **OpenSearch and Neo4j are no longer required by `threatintel`.** Its
+  lifespan called `os_store.initialize()` with no `try`, which made a
+  `full`-profile store a hard dependency of a CORE service. Both that call and
+  the pipeline's bulk index are best-effort now: with OpenSearch you
+  additionally get full-text IOC search; without it the feeds still write to
+  Qdrant, which is what the console reads.
+
+- **Ollama moved from the air-gapped overlay into CORE**, with its pinned
+  `llama3.2:3b-instruct-q4_K_M` (~2 GB, CPU-only). The gateway had already
+  moved into CORE and the models it pointed at had not, so a default install
+  could route a key nobody had. `make up` now produces real triage verdicts
+  from a real model with real token counts. `litellm` waits on the model pull
+  completing rather than on Ollama being healthy, because a gateway that is up
+  before the weights exist answers the first request — the one a new user
+  makes — with "model not found". The aliases in `infra/litellm/config.yaml`
+  now read their backend from the environment, so moving to a hosted provider
+  is three variables in `.env` rather than an edit to a mounted config file.
+
+- **Every auto-triage run on a default install was dead-lettered.**
+  `record_auto_triage` bound the two cost columns directly while
+  `complete_run` beside it used `COALESCE`; both are `NOT NULL`, and
+  `estimated_cost_usd` is `None` for every run against a local model because
+  there is no list price for `ollama_chat/…`. The UPDATE violated the
+  constraint, the transaction rolled back, the worker retried three times and
+  dead-lettered the alert — a real LLM call, real tokens, and no verdict in
+  the console. Found only because a model shipped in CORE made it the normal
+  case rather than an edge case.
+
+- **A small model that stops mid-JSON no longer loses its verdict.** Measured
+  against the bundled model, triage responses arrive with the closing quote
+  and brace absent and `finish_reason: "stop"` — every field the caller reads
+  present and correct, and the whole response discarded. The parser now closes
+  what the model opened, and nothing more: a fragment too damaged to read
+  still raises, so the deterministic fallback stays reachable rather than a
+  verdict being invented from an empty object. A failed parse now logs a
+  bounded excerpt of what the model actually said, which previously could only
+  be discovered by reproducing the prompt by hand.
+
+#### Other first-run friction
+
+- **`ENVIRONMENT` was a bare literal in `docker-compose.yml`**, so the value
+  `.env.example` documents was ignored and setting `production` changed
+  nothing — including the dev auth bypass in `dev_auth.py`, which could not be
+  switched off from `.env` at all. Now interpolated, along with `LOG_LEVEL`.
+- **`AISOC_CONSOLE_URL` appeared in no `.env.example` entry, no compose
+  service and no doc**, so every deployment that is not a laptop printed the
+  wrong sign-in address beside a password shown exactly once. Now wired and
+  documented.
+- **`python3`, `bash` and the Docker disk requirement were undocumented** while
+  `make smoke` — the README's headline proof — runs a Python script on the
+  host. `make doctor` now checks for both interpreters, and the measured
+  requirements are published.
+- **`handler.go` rendered its over-size error with `string(rune(…))`**, so a
+  limit of 1000 told the caller their batch exceeded a maximum of `Ϩ`.
+- **`apps/docs/docs/operations/security.md` named an init script that does not
+  exist** (`zz_runtime_role_password.sh`; the file is
+  `20_runtime_role_password.sh`).
+
+#### Measured, not estimated
+
+CORE's published figures moved because the footprint was measured before and
+after on the same machine:
+
+| | Before | After |
+|---|---|---|
+| Services | 11 | 14 (plus a one-shot model pull) |
+| Images, unique layers | 8.11 GB | 16.46 GB |
+| Model weights (named volume) | — | 2.02 GB |
+| Resident memory, whole stack | 1.72 GiB | 4.84 GiB |
+
+The README's `~6.5 GB` becomes **8 GB of memory and 20 GB of disk**. Ollama is
+9.6 MiB resident when idle and 2.96 GiB while serving a request; the second
+number is the one the requirement is sized against.
+
 ### Added
 
 
@@ -108,6 +289,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is the hole `SLADashboard` fell through. Its `KNOWN_UNGATED` ratchet is
   empty and checked in both directions; a gate seeded with its own exceptions
   has never been true.
+
+- **The playbook parity gate now reads every declaration of the step
+  vocabulary, wherever it is.** `scripts/check_playbook_schema_parity.py`
+  compared the engine against `packages/types/src/playbook.ts` and never
+  opened `apps/web`; naming the editor's file here would have fixed that file
+  and left the next one free. The TypeScript half is a scan: every `.ts` and
+  `.tsx` file in the tree is parsed for literal collections of step-type
+  names, and any collection overlapping the engine's vocabulary must either
+  match it exactly or be a recorded subset with a reason, checked in both
+  directions so an exemption that stops being needed fails the build. The
+  editor's execution annotations are compared against the schema's
+  `x-aisoc-execution` in both directions as well, so a surface cannot tell an
+  author a step will run when the contract says it will not. `--list` prints
+  what the scan credited, not only what it flagged, and the gate refuses to
+  report agreement when it finds no declaration at all.
+
+  Against `origin/main` it reports 56 disagreements across all five
+  vocabularies; against this tree it credits five declarations, each complete.
+
+  Two limits are stated rather than left implicit: a collection overlapping
+  the vocabulary by fewer than two members is not treated as one, and a list
+  derived at runtime is not a literal and is not seen — which is the shape the
+  gate wants, because a derived list cannot drift. A file the reader cannot
+  parse to the end is never silently skipped: it is checked for step-type
+  names in its raw bytes first, and the gate refuses the tree if it finds any.
+
+- **A WCAG AA sweep over all twenty-two inspector forms.** The labels in
+  `SchemaForm` and `StepInspector` sat beside their controls with no
+  association, requiredness was an `aria-hidden` asterisk, help text was
+  unreferenced, and the error summary named fields it could not be reached
+  from. Controls now carry ids, labels `htmlFor`, `aria-required`,
+  `aria-invalid` and `aria-describedby`; errors are reported per field as well
+  as in the summary; the condition and params groups are fieldsets. The sweep
+  also caught `<ul role="alert">`, which is not an allowed role for a list and
+  left its items without a list parent.
 
 - **Verification probes for the disruptive endpoint verbs.** `kill_process`
   and `quarantine_file` had their success inferred from CrowdStrike RTR
@@ -665,6 +881,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   too. `/investigate` already permanently redirects to `/hunt`, and the
   multi-turn copilot is `CopilotDock` and `/copilot`, so the docs line naming
   this component was corrected rather than the component wired.
+
+- **The playbook editor could author nine of the engine's twenty-two step
+  types, and the build was green.** `apps/web/src/components/playbooks/types.ts`
+  declared its own nine-member `StepType` union under a header comment
+  claiming it mirrored `services/agents/app/playbook/models.py`, which
+  declares twenty-two. The registry behind every form is keyed
+  `Record<StepType, StepSchema>`, so exhaustiveness was satisfied against the
+  *local* union and thirteen missing forms compiled cleanly; had it imported
+  the union from `packages/types`, `Record` would have failed with thirteen
+  missing keys. None of the fourteen files in the directory imported the
+  published package. It now re-exports `StepType` from `@aisoc/types`, and the
+  compiler named the gap.
+
+  The thirteen forms are built: `block_ioc`, `osquery_live_query`,
+  `disable_user`, `reset_password`, `revoke_session`, `force_mfa`,
+  `kill_process`, `quarantine_file`, `run_av_scan`, `run_script`,
+  `search_siem`, `create_notable_event`, and `approval`. Each collects what
+  its executor in `services/actions` reads, and each governed verb's target
+  field is keyed on the name `engine._resolve_target` actually looks for, so a
+  saved step carries its own target rather than depending on the alert context
+  happening to hold one. Nothing collects a credential — those are resolved
+  per tenant from the connector vault at dispatch — and nothing offers a
+  `dry_run` control, because the bridge does not read one.
+
+  `approval` is presented, never offered. The engine records it in
+  `_UNBRIDGEABLE` with a full reason, so the palette and the type dropdown
+  filter on `execution !== 'unimplemented'` rather than on its name, an
+  existing `approval` step still renders so an imported playbook can be read
+  and fixed, and the inspector states that the engine fails the step closed
+  and the run stops there.
+
+- **`osquery_live_query` reported SUCCESS while running nothing.** Its handler
+  returned an error dict when the osquery backend clients could not be
+  imported — which is always, in the shipped agents image, because those
+  clients live in `services/actions` — and a returned dict leaves the step
+  status at SUCCESS. Reachable from the console the moment the editor could
+  author the type, so it now raises `PermanentStepFailure` and fails closed.
+
+- **Three more partial vocabularies in the same directory.** `stepColors.ts`
+  held a second nine-entry `Record<StepType, …>`; `StepInspector` and
+  `PlaybookEditor` each hard-coded a nine-member array. All three are derived
+  from the registry now. `packHelpers.ts` mapped step types to integration
+  badges as a `Record<string, …>` covering eighteen of twenty-two, so a
+  playbook built from the other four claimed to use no integrations at all.
 
 ## [10.0.0] — 2026-09-25
 

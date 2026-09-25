@@ -114,3 +114,64 @@ against the tree and was wrong: `make up-full` runs `--profile full`, which is
 does not start. Corrected rather than left, since the table is being edited
 anyway and a published number that is not true is the thing this repository
 keeps having to find.
+
+## Addendum — the gateway without a model was half the fix
+
+*Added when `ollama` was promoted into CORE.*
+
+This ADR moved the gateway and stopped there, and the consequence list above
+says so in plain sight: "AI triage works in CORE the moment an operator
+supplies a provider key". Read against the problem statement — an evaluator
+following the documented path cannot see the product's central claim work —
+that is the same failure one step further along. The evaluator now has a
+gateway that routes correctly to a provider they do not have an account with.
+`make up` still produced no AI.
+
+The missing half was a model, and one was already in the tree: the air-gapped
+overlay (`infra/compose/docker-compose.airgap.yml`) has run Ollama with a
+pinned `llama3.2:3b-instruct-q4_K_M` — ~2 GB, quantized, sized for CPU-only
+inference in 8 GB of RAM — and the full triage path has been proven end to end
+against it. It was reachable only by choosing an overlay named for air-gapped
+deployments, which nobody evaluating the product on a laptop is looking for.
+
+**Decision: promote `ollama` and its one-shot `ollama-pull` into CORE.** A
+default `make up` now does real AI triage — real tokens, real generated text,
+a real cost figure off the gateway's headers — with no account and no key.
+
+Three details worth recording, because each was a choice:
+
+- **`litellm` waits on `ollama-pull` completing, not on `ollama` being
+  healthy.** A gateway that is up before the weights exist answers the first
+  triage request with "model not found", and the first request is the one a new
+  user makes.
+- **The aliases read their backend from the environment** rather than naming a
+  model inline, so `infra/litellm/config.yaml` no longer has to be edited to
+  move to a hosted provider — it is `OPENAI_API_KEY` plus two model variables
+  in `.env`. The mounted config stays the place to go for *per-alias*
+  divergence, which is what it is actually good at.
+- **A 3B quantized model is not a frontier model,** and the README says so
+  rather than implying the local default is equivalent. The upgrade is
+  signposted in the same paragraph as the claim.
+
+### What it costs, measured
+
+Same method as the gateway's numbers above, on the same machine, with the
+whole of CORE running.
+
+| | Before | After |
+|---|---|---|
+| CORE services | 11 | **14** (plus a one-shot `ollama-pull`) |
+| Images, unique layers | 8.11 GB | **16.46 GB** |
+| Images, sum of sizes | 11.47 GB | **20.03 GB** |
+| Model weights (named volume) | — | **2.02 GB** |
+| Resident memory, whole stack | 1.72 GiB | **4.84 GiB** |
+
+Per added service: `ollama` **6.92 GB** image / **9.6 MiB** idle,
+`threatintel` **1.40 GB** / **219 MiB**, `qdrant` **245 MB** / **79 MiB**.
+
+Ollama's 6.92 GB image is the single largest thing in CORE and its 9.6 MiB
+idle figure is the misleading half of the truth: the model is mapped in on
+first inference and the container measured **2.96 GiB** while serving a
+request. That, not the idle number, is why the README's memory figure moved
+from ~6.5 GB to 8 GB and its disk figure to 20 GB. The trade is real and the
+numbers are published so a self-hoster can judge it rather than discover it.

@@ -9,6 +9,8 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+import random
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import structlog
@@ -19,6 +21,15 @@ if TYPE_CHECKING:
     from app.feeds.pipeline import ThreatIntelPipeline
 
 logger = structlog.get_logger(__name__)
+
+#: Window the first poll of each feed is scattered across, in seconds.
+#:
+#: Not zero, because several feeds registering at once would otherwise fire
+#: simultaneously into the same Redis bloom filter and the same vector store on
+#: every boot. Not large, because a new install has nothing on its threat-intel
+#: page until the first poll returns and that page is one of the first a new
+#: user opens.
+FIRST_POLL_JITTER_SECONDS = 20
 
 
 class FeedScheduler:
@@ -40,7 +51,17 @@ class FeedScheduler:
         handler,
         interval_seconds: int,
     ) -> None:
-        """Register a feed polling function."""
+        """Register a feed polling function, polled now and then on interval.
+
+        ``next_run_time`` is explicit because an ``IntervalTrigger`` on its own
+        schedules its *first* run one full interval after the scheduler starts.
+        CISA KEV polls daily, so a fresh ``make up`` would have shown an empty
+        Threat Intelligence page for twenty-four hours — with every component
+        running, healthy, and correct. That is indistinguishable from the
+        feature not working, and it is the first page a new user looks at for
+        evidence the product does anything on its own.
+        """
+        first_run = datetime.now(UTC) + timedelta(seconds=random.uniform(1, FIRST_POLL_JITTER_SECONDS))  # noqa: S311 - scheduling jitter, not a security decision
         self._scheduler.add_job(
             func=handler,
             trigger=IntervalTrigger(seconds=interval_seconds),
@@ -49,11 +70,13 @@ class FeedScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=first_run,
         )
         logger.info(
             "Registered feed",
             feed=feed_name,
             interval_seconds=interval_seconds,
+            first_poll_at=first_run.isoformat(),
         )
 
     def start(self) -> None:

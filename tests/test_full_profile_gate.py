@@ -126,12 +126,53 @@ def test_service_healthy_dependencies_have_a_healthcheck_to_wait_on() -> None:
     assert not missing, "; ".join(missing)
 
 
-def test_threatintel_waits_for_a_ready_opensearch() -> None:
-    dep = (_services()["threatintel"].get("depends_on") or {}).get("opensearch")
-    assert isinstance(dep, dict) and dep.get("condition") == "service_healthy", (
-        "threatintel aborts its lifespan when OpenSearch does not answer, so "
-        "`service_started` leaves restart:unless-stopped to paper over a crash loop."
+# ── A CORE service may not require a store that only the full profile starts ─
+#
+# This used to assert the opposite: that threatintel waited on a *healthy*
+# OpenSearch, because its lifespan called `os_store.initialize()` with no
+# try/except and starting early killed the container.
+#
+# threatintel is in CORE now — it is what puts real CISA KEV data in front of a
+# new user — and OpenSearch is not. Keeping the dependency would have made
+# `make up` start a 2 GB JVM for a full-text index CORE does not read. So the
+# unguarded call was fixed instead, which is the stronger property: the service
+# no longer aborts, rather than being sequenced so it does not have to. These
+# two tests pin both halves — the manifest must not reintroduce the dependency,
+# and the code must keep the call guarded, because either alone would let the
+# crash loop back in.
+def test_no_core_service_depends_on_a_full_profile_service() -> None:
+    services = _services()
+    core = {name for name, svc in services.items() if not svc.get("profiles")}
+    offenders: list[str] = []
+    for name in sorted(core):
+        for dep in services[name].get("depends_on") or {}:
+            if (services.get(dep) or {}).get("profiles"):
+                offenders.append(f"{name} (CORE) depends on {dep}, which only starts under {services[dep]['profiles']}")
+    assert not offenders, (
+        "\n".join(offenders) + "\n\nCompose starts a profiled dependency anyway, so this does not fail loudly — "
+        "it silently enlarges CORE by whatever that service costs."
     )
+
+
+def test_threatintels_optional_stores_are_guarded_in_code() -> None:
+    """The manifest check above is only safe because these calls cannot raise out."""
+    lifespan = (REPO / "services/threatintel/app/main.py").read_text()
+    pipeline = (REPO / "services/threatintel/app/feeds/pipeline.py").read_text()
+
+    assert "await os_store.initialize()" in lifespan
+    init_block = lifespan.split("await os_store.initialize()")[0]
+    assert init_block.rstrip().endswith("try:"), (
+        "services/threatintel/app/main.py calls os_store.initialize() outside a try — an unreachable "
+        "OpenSearch then kills a CORE service on boot."
+    )
+
+    for call in ("self._os.bulk_index_iocs(new_iocs)", "self._os.bulk_index_actors(actors)"):
+        assert call in pipeline, f"{call} moved; re-point this gate"
+        before = pipeline.split(call)[0]
+        assert "try:" in before.rsplit("\n\n", 1)[-1], (
+            f"{call} is not inside a try block. It is the first sink written, so an exception there "
+            "aborts the batch before Qdrant — the store CORE actually reads — is touched at all."
+        )
 
 
 # ── The API reads CLICKHOUSE_HOST, and nothing under services/api reads a URL ─

@@ -11964,6 +11964,77 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/threat-intel/indicators:
+    get:
+      tags:
+      - threat-intel
+      summary: List Feed Indicators
+      description: 'Indicators the feed scheduler has collected, from `services/threatintel`.
+
+
+        The console has called this path since the IOC inbox shipped and nothing
+
+        served it — the page 404''d, and for a while rendered five invented IOCs
+
+        instead. `services/threatintel` and its Qdrant store are in CORE now, and
+
+        the CISA Known Exploited Vulnerabilities catalog is public and keyless, so
+
+        a default install has real indicators to show within a poll interval.
+
+
+        Tenant scope is enforced upstream: this proxy asserts the caller''s tenant
+
+        in the same header the connectors proxy uses, and the threatintel route
+
+        filters on it plus the `shared` sentinel that public feed intel is written
+
+        under.'
+      operationId: list_feed_indicators_api_v1_threat_intel_indicators_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: filter to one indicator type
+          title: Type
+        description: filter to one indicator type
+      - name: tag
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tag
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: substring match on value or description
+          title: Q
+        description: substring match on value or description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedIndicatorsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/threat-intel/iocs:
     get:
       tags:
@@ -20156,6 +20227,44 @@ components:
       - name
       - feed_type
       title: FeedCreate
+    FeedIndicatorsResponse:
+      properties:
+        indicators:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Indicators
+        total:
+          type: integer
+          title: Total
+        source:
+          type: string
+          title: Source
+        degraded:
+          type: boolean
+          title: Degraded
+          default: false
+        reason:
+          type: string
+          title: Reason
+          default: ''
+      type: object
+      required:
+      - indicators
+      - total
+      - source
+      title: FeedIndicatorsResponse
+      description: 'What the console''s `/threat-intel` page renders.
+
+
+        ``source`` and ``degraded`` travel with the payload for the same reason
+
+        they do on the connector catalog: an empty list because nothing has been
+
+        collected yet and an empty list because the service is not deployed are
+
+        different facts, and a reader cannot tell them apart from the rows alone.'
     FeedOut:
       properties:
         name:

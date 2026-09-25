@@ -732,6 +732,22 @@ ensure_env_file() {
   # in that file), so .env isn't actually load-bearing for the demo. But
   # several apps and scripts do read .env, so we make sure it exists with
   # the example defaults to avoid spurious "key not found" warnings.
+  #
+  # A plain `cp` is what this used to do, and a plain `cp` is what broke the
+  # vault: `.env.example` shipped a non-empty placeholder for
+  # AISOC_CREDENTIAL_KEY, which fails Fernet validation and turns every
+  # connector save into an HTTP 500. scripts/ensure_env.py does the copy *and*
+  # writes real random values for the secrets that need generating. It is
+  # idempotent, so it is safe to run over an existing .env.
+  if [ -x "$(command -v python3 || true)" ] && [ -f "$REPO_ROOT/scripts/ensure_env.py" ]; then
+    if python3 "$REPO_ROOT/scripts/ensure_env.py" --env "$REPO_ROOT/.env" --example "$REPO_ROOT/.env.example"; then
+      ok "$REPO_ROOT/.env is configured"
+      info "  (Optional: set OPENAI_API_KEY in $REPO_ROOT/.env to upgrade from the bundled local model.)"
+      return 0
+    fi
+    warn "scripts/ensure_env.py failed; falling back to a plain copy."
+  fi
+
   if [ -f "$REPO_ROOT/.env" ]; then
     ok ".env already exists at $REPO_ROOT/.env"
     return 0
@@ -739,7 +755,7 @@ ensure_env_file() {
   if [ -f "$REPO_ROOT/.env.example" ]; then
     cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
     ok "Created $REPO_ROOT/.env from .env.example"
-    info "  (Optional: edit $REPO_ROOT/.env to add your OpenAI/Anthropic API key for richer agent runs.)"
+    warn "Generated secrets were not filled in (no python3). Run: make env"
   else
     warn "No .env.example found in repo; skipping .env creation."
   fi

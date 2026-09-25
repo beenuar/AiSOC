@@ -31,10 +31,15 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SECRET_KEY` | `change-me-in-production-at-least-32-chars` | **Required in production.** Signs primary access/refresh JWTs. Generate with `openssl rand -hex 32`. |
+| `SECRET_KEY` | `change-me-in-production-at-least-32-chars` | **Required in production.** Signs primary access/refresh JWTs. `make env` generates one into `.env`; the connectors service must see the same value. Generate by hand with `openssl rand -hex 32`. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Lifetime of an access token |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
+| `AISOC_CREDENTIAL_KEY` | _empty_ | Fernet key encrypting connector credentials at rest. Empty means "not configured" and the API generates an **ephemeral** key per process, so saved credentials do not survive a restart. Any other invalid value raises, and every connector save answers HTTP 500 — which is why `.env.example` ships it empty rather than as a placeholder. `make env` writes a real one. |
+| `AISOC_CREDENTIAL_KEY_ROTATION_FROM` | _empty_ | Comma-separated previous keys, accepted for decryption only, for zero-downtime rotation. |
+| `AISOC_SERVICE_TOKEN` | _empty_ | Shared bearer for service-to-service calls. The API **sends** it when proxying the connector catalog and "Test connection" to `services/connectors`, which **verifies** it — so a value set on one side only is a 401 the wizard reports as a failed connection test. `make env` generates one and compose passes it to both. |
+| `AISOC_CONNECTORS_SERVICE_TOKEN` | _empty_ | Per-service override for the above, if you would rather not share one secret. |
+| `AISOC_CONSOLE_URL` | `http://localhost:3000` | Base URL `make bootstrap` prints as the sign-in address. Set it to the address operators actually browse to — any non-localhost deployment otherwise prints the wrong one beside a credential shown exactly once. |
 
 ### Migration runner
 

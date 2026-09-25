@@ -165,6 +165,172 @@ def test_catches_playbook_level_key_drift_in_both_directions(registries, gate):
 
 
 # ---------------------------------------------------------------------------
+# The TypeScript scan: every declaration of the vocabulary, wherever it is
+# ---------------------------------------------------------------------------
+
+
+def test_the_scan_finds_the_editors_registry_and_the_published_union(registries):
+    """The gate used to know one TypeScript file by name and it was not the
+    one an operator clicked. The scan has to reach both."""
+    found = {v.path for v in registries.ts_vocabularies}
+    assert "packages/types/src/playbook.ts" in found
+    assert any(path.startswith("apps/web/") for path in found), (
+        "no declaration of the step vocabulary was found under apps/web; the editor's form registry "
+        f"is meant to be there. Found: {sorted(found)}"
+    )
+
+
+def test_every_declaration_it_found_matches_the_engine(registries):
+    for vocabulary in registries.ts_vocabularies:
+        assert vocabulary.members == registries.model_step_types, (
+            f"{vocabulary.ref} declares {len(vocabulary.members)} step types against the engine's {len(registries.model_step_types)}"
+        )
+
+
+def test_the_editor_declares_an_execution_class_for_every_step_type(registries):
+    """A surface that offers a step has to say what will happen when it runs,
+    and say the same thing the schema does."""
+    annotated = [v for v in registries.ts_vocabularies if v.execution]
+    assert annotated, "no TypeScript surface annotates execution; the editor is supposed to"
+    for vocabulary in annotated:
+        assert vocabulary.execution == registries.execution, f"{vocabulary.ref} disagrees with `x-aisoc-execution`"
+
+
+def test_catches_a_web_surface_that_declares_fewer_step_types(registries, gate):
+    """The exact defect: a nine-member union satisfying `Record<StepType, …>`
+    against itself while the engine ran twenty-two."""
+    sample = registries.ts_vocabularies[0]
+    victim = sorted(sample.members)[0]
+    shrunk = dataclasses.replace(sample, members=sample.members - {victim})
+    broken = _perturb(registries, ts_vocabularies=(shrunk, *registries.ts_vocabularies[1:]))
+    assert any("omits step type" in e for e in gate.compare(broken))
+
+
+def test_catches_a_web_surface_that_invents_a_step_type(registries, gate):
+    sample = registries.ts_vocabularies[0]
+    grown = dataclasses.replace(sample, members=sample.members | {"quarantine_mailbox"})
+    broken = _perturb(registries, ts_vocabularies=(grown, *registries.ts_vocabularies[1:]))
+    assert any("does not implement" in e for e in gate.compare(broken))
+
+
+def test_catches_a_surface_promising_an_execution_the_schema_denies(registries, gate):
+    annotated = next(v for v in registries.ts_vocabularies if v.execution)
+    member = next(k for k, v in annotated.execution.items() if v == "unimplemented")
+    lying = dataclasses.replace(annotated, execution={**annotated.execution, member: "executed"})
+    broken = _perturb(
+        registries,
+        ts_vocabularies=tuple(lying if v.ref == annotated.ref else v for v in registries.ts_vocabularies),
+    )
+    assert any("the surface and the contract disagree" in e for e in gate.compare(broken))
+
+
+def test_refuses_to_pass_having_found_no_declaration(registries, gate):
+    """Found nothing and scanned nothing print the same word."""
+    assert any("would pass on nothing" in e for e in gate.compare(_perturb(registries, ts_vocabularies=())))
+
+
+def test_the_recorded_subset_ratchet_works_in_both_directions(registries, gate):
+    sample = registries.ts_vocabularies[0]
+    victim = sorted(sample.members)[0]
+    shrunk = dataclasses.replace(sample, members=sample.members - {victim})
+    partial = _perturb(registries, ts_vocabularies=(shrunk, *registries.ts_vocabularies[1:]))
+
+    excused = gate.compare(partial, recorded_subsets={shrunk.ref: "recorded for the test"})
+    assert not any("omits step type" in e for e in excused), "a recorded subset was not excused"
+
+    stale = gate.compare(registries, recorded_subsets={sample.ref: "recorded for the test"})
+    assert any("remove the entry" in e for e in stale), "an exemption that stopped being needed was not reported"
+
+    ghost = gate.compare(registries, recorded_subsets={"nowhere.ts::Ghost": "recorded for the test"})
+    assert any("which the scan did not find" in e for e in ghost)
+
+
+def test_the_recorded_subset_list_is_empty_on_this_tree(gate):
+    """Every entry is a place somebody has to be told "yes, on purpose". The
+    list exists so an exception must be written down, not so it gets used."""
+    assert gate.RECORDED_TS_SUBSETS == {}
+
+
+# ---------------------------------------------------------------------------
+# The reader, which is where a scan silently loses a file
+# ---------------------------------------------------------------------------
+
+
+def test_the_reader_survives_a_template_literal_with_nested_backticks(gate):
+    """The first version of the reader treated a backtick as a plain quote, so
+    an interpolation containing another template desynchronised it and every
+    declaration after that point in the file was invisible. The scan reported
+    agreement having never seen the registry."""
+    source = "const A = ['enrich'];\nconst h = `x ${xs.map((k) => `\\`${k}\\``).join(', ')} y`;\nconst B = ['notify'];\n"
+    masked, _strings, unreadable = gate._mask_ts(source)
+    assert unreadable == "", unreadable
+    assert "const B" in masked, "the reader stopped before the end of the file"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "const a = /couldn\\'t load the envelope/i;\nconst B = ['enrich', 'notify'];\n",
+        "const el = <p>Don't</p>;\nconst B = ['enrich', 'notify'];\n",
+    ],
+    ids=["apostrophe-in-a-regex", "apostrophe-in-jsx-text"],
+)
+def test_a_lone_apostrophe_does_not_swallow_the_rest_of_the_file(gate, source: str):
+    """A quoted string cannot contain a raw newline, so a quote with no
+    partner on its line is not opening one."""
+    masked, _strings, unreadable = gate._mask_ts(source)
+    assert unreadable == ""
+    assert "const B" in masked
+
+
+def test_a_file_the_reader_cannot_finish_is_never_silently_skipped(gate, tmp_path: Path):
+    """Skipping is only safe when the file provably holds no vocabulary, and a
+    vocabulary needs at least two step-type literals in the raw bytes."""
+    path = tmp_path / "broken.tsx"
+    path.write_text("const t = `unterminated\nconst M = { isolate_host: 1, block_ip: 2, disable_user: 3 };\n")
+    with pytest.raises(gate.GateError) as exc:
+        gate._scan_ts_file(path, "broken.tsx", frozenset({"isolate_host", "block_ip", "disable_user"}))
+    assert "could not parse the file to the end" in str(exc.value)
+
+
+def test_a_file_the_reader_cannot_finish_and_that_mentions_nothing_is_skipped(gate, tmp_path: Path):
+    path = tmp_path / "prose.tsx"
+    path.write_text("const t = `unterminated\nconst greeting = 'hello';\n")
+    found, unreadable = gate._scan_ts_file(path, "prose.tsx", frozenset({"isolate_host", "block_ip"}))
+    assert found == []
+    assert unreadable, "the skip has to be reported so it can be counted"
+
+
+def test_the_scan_reads_more_than_a_handful_of_files(registries):
+    """A glob that stops matching is the cheapest way for this to go quiet."""
+    assert registries.ts_files_scanned > 100, f"only {registries.ts_files_scanned} TypeScript files scanned"
+    assert len(registries.ts_files_skipped) * 4 < registries.ts_files_scanned, (
+        f"{len(registries.ts_files_skipped)} of {registries.ts_files_scanned} files could not be read; "
+        "the reader has regressed far enough that its skips are no longer incidental"
+    )
+
+
+def test_the_reader_finds_each_shape_a_vocabulary_can_take(gate, tmp_path: Path):
+    """Union, array and object — plus the execution annotation, recognised by
+    the shape of its values rather than by the property's name."""
+    path = tmp_path / "shapes.ts"
+    path.write_text(
+        'export type S = \n  | "enrich"\n  | "notify";\n'
+        "const LIST: S[] = ['enrich', 'notify'];\n"
+        "const REG = {\n"
+        "  enrich: { kind: 'executed', label: 'a' },\n"
+        "  notify: { kind: 'governed', label: 'b' },\n"
+        "};\n"
+    )
+    found, _ = gate._scan_ts_file(path, "shapes.ts", frozenset({"enrich", "notify"}))
+    by_symbol = {v.symbol: v for v in found}
+    assert set(by_symbol) == {"S", "LIST", "REG"}
+    assert {v.kind for v in found} == {"union", "array", "object"}
+    assert by_symbol["REG"].execution == {"enrich": "executed", "notify": "governed"}
+    assert by_symbol["LIST"].execution == {}
+
+
+# ---------------------------------------------------------------------------
 # The gate's own footing
 # ---------------------------------------------------------------------------
 

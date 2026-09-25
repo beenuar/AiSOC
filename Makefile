@@ -6,12 +6,14 @@
 # documentation without a red build.
 #
 # Profiles (see docs/architecture/README.md):
-#   core  — default. postgres, redis, kafka, ingest, fusion, api, web, agents.
-#           The smallest deployment that can take an event and produce an
-#           alert. ~6GB RAM.
+#   core  — default. postgres, redis, kafka, ingest, fusion, api, web, agents,
+#           the LLM gateway and the local model behind it, and the threat-intel
+#           feed with its vector store. The smallest deployment that can take an
+#           event, produce an alert, and triage it with a real model — with no
+#           credentials at all. ~8GB RAM.
 #   full  — core plus the event lake (ClickHouse), entity graph (Neo4j),
-#           vector store (Qdrant), search (OpenSearch), enrichment, connectors
-#           and the LLM gateway. ~12GB RAM.
+#           full-text search (OpenSearch), enrichment and scheduled connectors.
+#           ~12GB RAM.
 #   demo  — core plus clearly-labelled synthetic data.
 
 .DEFAULT_GOAL := help
@@ -23,7 +25,7 @@ PROFILE ?=
 # `--profile full` when PROFILE=full, nothing otherwise.
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 
-.PHONY: help install up up-full down restart status doctor smoke demo logs clean \
+.PHONY: help install env up up-full down restart status doctor smoke demo logs clean \
         bootstrap test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
@@ -31,6 +33,7 @@ help:
 	@echo ""
 	@echo "  Getting started"
 	@echo "    make install        Install prerequisites, configure, start, and verify"
+	@echo "    make env            Create .env and generate its secrets (run by make up)"
 	@echo "    make up             Start the CORE stack (postgres, kafka, ingest, fusion, api, web)"
 	@echo "    make up-full        Start CORE plus lake, graph, vector, search and enrichment"
 	@echo "    make bootstrap      Create the first administrator and print its password once"
@@ -56,12 +59,22 @@ help:
 install:
 	./install.sh
 
+# Creates .env from .env.example and writes a real random value for each secret
+# that is empty or still a placeholder. Idempotent: a second run leaves values
+# it already generated alone, so `up` can depend on it unconditionally.
+#
+# This runs *before* compose because compose only interpolates `.env`; there is
+# no `env_file` directive anywhere in docker-compose.yml. A value that is wrong
+# at `up` time is baked into every container's environment until the next `up`.
+env:
+	@$(PYTHON) scripts/ensure_env.py
+
 # The port check runs before compose, not after it fails. `docker compose up`
 # reports a conflict as `Bind for 127.0.0.1:5432 failed: port is already
 # allocated` against whichever container lost the race, which names neither the
 # process holding the port nor what to do about it. Half the stack is running
 # by then, so the error also arrives after a minute of unrelated output.
-up: _ports
+up: env _ports
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "Waiting for services to become healthy…"
@@ -101,7 +114,7 @@ bootstrap:
 # 8123 stopped the stack after eight containers had already started, with
 # `Bind for 0.0.0.0:8123 failed: port is already allocated` naming neither the
 # process holding it nor what to do.
-up-full: _ports
+up-full: env _ports
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait PROFILE=full
 	@echo ""

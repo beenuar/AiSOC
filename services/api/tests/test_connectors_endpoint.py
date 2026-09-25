@@ -301,7 +301,7 @@ async def test_proxy_test_connection_passthrough_success() -> None:
     upstream_body = {"success": True, "connector": "splunk", "version": "9.0"}
     resp = _mock_response(200, upstream_body)
     with _patched_client(post_resp=resp):
-        result = await _proxy_test_connection("splunk", {"token": "x"}, {"host": "y"})
+        result = await _proxy_test_connection("splunk", {"token": "x"}, {"host": "y"}, _TENANT)
     assert result == upstream_body
 
 
@@ -311,7 +311,7 @@ async def test_proxy_test_connection_passthrough_connector_failure() -> None:
     upstream_body = {"success": False, "connector": "splunk", "error": "401 Unauthorized"}
     resp = _mock_response(200, upstream_body)
     with _patched_client(post_resp=resp):
-        result = await _proxy_test_connection("splunk", {"token": "bad"}, {})
+        result = await _proxy_test_connection("splunk", {"token": "bad"}, {}, _TENANT)
     # Critically, this is NOT raised — the wizard wants to render the
     # connector's own error message.
     assert result["success"] is False
@@ -324,7 +324,7 @@ async def test_proxy_test_connection_422_passes_detail() -> None:
     resp = _mock_response(422, {"detail": "missing field 'tenant_id'"})
     with _patched_client(post_resp=resp):
         with pytest.raises(HTTPException) as exc_info:
-            await _proxy_test_connection("azure_entra", {}, {})
+            await _proxy_test_connection("azure_entra", {}, {}, _TENANT)
     assert exc_info.value.status_code == 422
     assert "tenant_id" in exc_info.value.detail
 
@@ -340,7 +340,7 @@ async def test_proxy_test_connection_404_becomes_503() -> None:
     resp = _mock_response(404, {"detail": "not found"})
     with _patched_client(post_resp=resp):
         with pytest.raises(HTTPException) as exc_info:
-            await _proxy_test_connection("splunk", {}, {})
+            await _proxy_test_connection("splunk", {}, {}, _TENANT)
     assert exc_info.value.status_code == 503
 
 
@@ -350,7 +350,7 @@ async def test_proxy_test_connection_5xx_becomes_502() -> None:
     resp = _mock_response(500, {"detail": "boom"})
     with _patched_client(post_resp=resp):
         with pytest.raises(HTTPException) as exc_info:
-            await _proxy_test_connection("splunk", {}, {})
+            await _proxy_test_connection("splunk", {}, {}, _TENANT)
     assert exc_info.value.status_code == 502
 
 
@@ -367,7 +367,7 @@ async def test_proxy_test_connection_unreachable_becomes_503() -> None:
         return_value=client_cm,
     ):
         with pytest.raises(HTTPException) as exc_info:
-            await _proxy_test_connection("splunk", {}, {})
+            await _proxy_test_connection("splunk", {}, {}, _TENANT)
     assert exc_info.value.status_code == 503
 
 
@@ -376,6 +376,107 @@ async def test_proxy_test_connection_non_dict_body_normalised() -> None:
     """Defend against connectors microservice returning a non-dict 200."""
     resp = _mock_response(200, "ok")
     with _patched_client(post_resp=resp):
-        result = await _proxy_test_connection("splunk", {}, {})
+        result = await _proxy_test_connection("splunk", {}, {}, _TENANT)
     assert isinstance(result, dict)
     assert result["success"] is False
+
+
+# ---------------------------------------------- the proxy's own credential
+#
+# The catalog call was given an Authorization header and a tenant assertion;
+# the test-connection call beside it was not. Both talk to the same
+# `require_console_or_service_auth`-guarded router, so "Test connection" was
+# answered 401 on every invocation in every deployment that had a service
+# token configured — and 401 was the one status the ladder did not branch on,
+# so the function returned an error body with no `success` key and the wizard
+# rendered the bare string "Connection test failed".
+
+
+def _captured_post(post_resp: MagicMock):
+    """Patch the client and hand back the mock whose `.post` was called."""
+    client_instance = MagicMock()
+    client_instance.post = AsyncMock(return_value=post_resp)
+    client_cm = MagicMock()
+    client_cm.__aenter__ = AsyncMock(return_value=client_instance)
+    client_cm.__aexit__ = AsyncMock(return_value=None)
+    return (
+        patch("app.api.v1.endpoints.connectors.httpx.AsyncClient", return_value=client_cm),
+        client_instance,
+    )
+
+
+@pytest.mark.asyncio
+async def test_proxy_test_connection_sends_the_service_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The headers the catalog call sends, sent by this call too."""
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "a-real-token")
+    monkeypatch.delenv("AISOC_CONNECTORS_SERVICE_TOKEN", raising=False)
+    patcher, client = _captured_post(_mock_response(200, {"success": True}))
+    with patcher:
+        await _proxy_test_connection("splunk", {"token": "x"}, {}, _TENANT)
+
+    headers = client.post.await_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer a-real-token"
+    # A service token identifies a service, not a tenant; the connectors
+    # service answers 403 to one that does not declare the tenant it acts for.
+    assert headers["X-AiSOC-Tenant-ID"] == str(_TENANT)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("upstream", [401, 403])
+async def test_service_auth_rejection_names_the_status_and_the_service(upstream: int) -> None:
+    """An operator must be able to tell this from a bad vendor credential.
+
+    The failure is in AiSOC's own configuration and the remedy is
+    AISOC_SERVICE_TOKEN — nothing the customer's Splunk token can fix.
+    """
+    resp = _mock_response(upstream, {"detail": "Not authenticated"})
+    with _patched_client(post_resp=resp):
+        with pytest.raises(HTTPException) as exc_info:
+            await _proxy_test_connection("splunk", {"token": "x"}, {}, _TENANT)
+
+    assert exc_info.value.status_code == 502
+    detail = exc_info.value.detail
+    assert str(upstream) in detail, "the operator cannot act on a status they are not told"
+    assert "connectors service" in detail
+    assert "AISOC_SERVICE_TOKEN" in detail
+    assert "never sent upstream" in detail, "the wizard promises the upstream API is reached; say when it was not"
+
+
+@pytest.mark.asyncio
+async def test_an_unhandled_4xx_does_not_fall_through_as_a_verdict() -> None:
+    """The ladder ended at >=500, so 400/405/429 returned the error body itself."""
+    resp = _mock_response(429, {"detail": "slow down"})
+    with _patched_client(post_resp=resp):
+        with pytest.raises(HTTPException) as exc_info:
+            await _proxy_test_connection("splunk", {}, {}, _TENANT)
+    assert exc_info.value.status_code == 502
+    assert "429" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_a_200_with_no_verdict_is_not_a_pass() -> None:
+    """`if (result.success)` in the wizard reads an absent key as failure.
+
+    Returning the body unchanged left it with neither `success` nor `error`,
+    which is how the modal came to show a message with no cause in it.
+    """
+    resp = _mock_response(200, {"connector": "splunk"})
+    with _patched_client(post_resp=resp):
+        result = await _proxy_test_connection("splunk", {}, {}, _TENANT)
+    assert result["success"] is False
+    assert result["error"], "a failure the wizard renders must carry a reason"
+
+
+@pytest.mark.asyncio
+async def test_connectors_service_absent_says_how_to_start_it() -> None:
+    """CORE does not ship the connectors service; the 503 must say so."""
+    client_instance = MagicMock()
+    client_instance.post = AsyncMock(side_effect=httpx.ConnectError("conn refused"))
+    client_cm = MagicMock()
+    client_cm.__aenter__ = AsyncMock(return_value=client_instance)
+    client_cm.__aexit__ = AsyncMock(return_value=None)
+    with patch("app.api.v1.endpoints.connectors.httpx.AsyncClient", return_value=client_cm):
+        with pytest.raises(HTTPException) as exc_info:
+            await _proxy_test_connection("splunk", {}, {}, _TENANT)
+    assert exc_info.value.status_code == 503
+    assert "up-full" in exc_info.value.detail or "docker compose up -d connectors" in exc_info.value.detail

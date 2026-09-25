@@ -31,6 +31,36 @@ When the installer finishes, the CORE stack is running at
 was printed once during the run, and one real event has been pushed
 through the pipeline and read back out of the API as an alert.
 
+## Requirements
+
+What CORE (`make up`) actually needs, and what each figure was measured
+against rather than estimated from.
+
+| | CORE | Why |
+|---|---|---|
+| Docker memory | **8 GB** | Steady-state RSS across the fourteen CORE containers is well under this. The headroom is for the bundled local model, whose process grows to roughly the model size (~2 GB) while a request is in flight. |
+| Docker disk | **20 GB** | Images plus the ~2 GB model plus room for Kafka, Postgres and Qdrant volumes to grow. Below roughly 2 GB free, Kafka corrupts its log directory **and still passes its healthcheck** — `make doctor` fails on this before it can happen. |
+| `python3` | **3.9+** | `make up` runs `scripts/ensure_env.py` on the host to create `.env` and generate its secrets, and `make smoke` — the headline proof — is a host-side Python script. CI runs 3.11. |
+| `bash` | any | Every script under `scripts/` has a bash shebang. macOS's bundled 3.2 is sufficient. |
+| `docker compose` | **v2** | The v1 `docker-compose` binary is not supported; profiles and `service_completed_successfully` both need v2. |
+
+`make up-full` adds ClickHouse, Neo4j, OpenSearch and the enrichment and
+connector services, and wants ~12 GB of memory.
+
+None of this needs a credential. There is no account to create, no API key to
+obtain, and no paid service in the default path.
+
+### The six most common failures
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `port is already allocated` | Something else on 5432/6379/9092/3000 | `make doctor` names the process or container holding it; stop it, or change the host port |
+| Kafka reports healthy but nothing flows | Docker VM out of disk — Kafka corrupts its log dir and its healthcheck still passes | `docker system prune -af`, then `make clean && make up` |
+| `make smoke` fails at "became an alert" | fusion is down or not consuming | `docker compose logs fusion \| tail -60` |
+| Console loads but is empty | No data yet — this is correct | `make smoke`, or `make demo` |
+| Services restart-loop on 8 GB machines | Not enough memory for `full` | Use `make up` (CORE) |
+| `credential vault unavailable` on saving a connector | `AISOC_CREDENTIAL_KEY` in `.env` is set to something that is not a valid Fernet key | `make env` generates a real one, then `docker compose up -d api` |
+
 ## Supported platforms
 
 | OS | Package manager | Tested versions |
