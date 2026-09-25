@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 _VALID_SEVERITIES = frozenset({"info", "low", "medium", "high", "critical"})
 
@@ -65,7 +66,9 @@ def load_detection(path: str | Path) -> Detection:
     module = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(module)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        # A detection module is third-party content: any exception at import
+        # is the author's, and it becomes a DetectionError naming the file.
         raise DetectionError(f"{path.name}: import failed: {exc}") from exc
 
     rule = _require(module, "rule", path)
