@@ -12,8 +12,12 @@ interface Vendor {
 
 /**
  * The AiSOC row uses qualifiers that match what the harness actually does:
- * - Alert reduction is a *real* measurement against a fixed noisy stream, so
- *   we tag it "measured".
+ * - Alert reduction quotes the figure produced by the grouping the product
+ *   actually runs — `RawAlert.correlation_key()`, measured by
+ *   `services/fusion/tests/test_alert_reduction_real.py`. The older 75.3%
+ *   came from a four-tier scheme implemented inside a test and describes an
+ *   algorithm this product does not run; quoting it here was qualified as
+ *   "measured on fixed noisy stream", which is not the qualifier that matters.
  * - MITRE "accuracy" is a substrate self-consistency check (extractor vs.
  *   dataset that's written to feed it), so we tag it "regression gate" rather
  *   than implying it is a leaderboard score for an LLM agent.
@@ -24,7 +28,7 @@ const VENDORS: Vendor[] = [
   {
     name: 'AiSOC',
     type: 'open',
-    reduction: '75.3% (measured on fixed noisy stream)',
+    reduction: '33.3% (real correlation key, fixed noisy stream)',
     mitre: '97% (substrate regression gate)',
     audit: 'Per-step ledger',
     selfHost: 'Yes (MIT)',

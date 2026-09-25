@@ -1,6 +1,15 @@
 import clsx from 'clsx';
 
-type Kind = 'measurement' | 'self-consistency';
+/**
+ * `legacy` exists because one suite is neither a measurement of this product
+ * nor a self-consistency gate: the alert-reduction suite groups on four tiers
+ * of `(rule_id, host, user)`, while the shipping `RawAlert.correlation_key()`
+ * groups on `{tenant}:{entity}:{tactic}`. It does not merely re-implement
+ * fusion's grouping, it implements *different* grouping, so its number
+ * describes an algorithm the product does not run. `apps/docs/docs/benchmark.md`
+ * withdrew the claim; this surface badged it "Real measurement" regardless.
+ */
+type Kind = 'measurement' | 'self-consistency' | 'legacy';
 
 interface PerTemplateBlock {
   metric: string;
@@ -42,10 +51,16 @@ export interface EvalReport {
 /**
  * Snapshot fallback used when the live fetch from the `eval-results` branch
  * fails (e.g. the branch hasn't been initialized yet, or the build runs
- * offline). Numbers are hand-copied from a recent `scripts/run_evals.py`
- * run on `main`. The pass/fail gates in `services/agents/tests/test_*.py`
+ * offline). Numbers are hand-copied from a `scripts/run_evals.py` run on
+ * `main`, and `generated_at` below is that run's date, not this file's — the
+ * page renders it alongside a "Snapshot fallback" badge so a reader can see
+ * how old it is. The pass/fail gates in `services/agents/tests/test_*.py`
  * are the source of truth — if they pass, the headline "≥ target" claim
  * still holds even if these exact percentages lag a commit or two.
+ *
+ * `alert_reduction` here is the *legacy* four-tier suite, the only one
+ * `run_evals.py` emits under that key. It is rendered with a `legacy` badge
+ * rather than a measurement one; see the `Kind` docblock above.
  */
 const SNAPSHOT_REPORT: EvalReport = {
   generated_at: '2026-05-06T04:32:09.258436+00:00',
@@ -157,11 +172,11 @@ interface SuiteCard {
 const SUITE_META: Record<string, SuiteCard> = {
   alert_reduction: {
     id: 'alert_reduction',
-    name: 'Alert reduction',
+    name: 'Alert reduction (legacy suite)',
     metricLabel: 'Reduction ratio',
-    kind: 'measurement',
+    kind: 'legacy',
     blurb:
-      "A 1,000-alert noisy stream (duplicates, near-duplicates, rule storms, low-score chatter) is fed into an in-harness re-implementation of the production Tier 1 / 2 / 3 grouping rules — same logic, no DB-backed dedup or ML scorer. The number is whatever the code produces; a regression in the grouping rules moves it.",
+      'A four-tier scheme implemented inside the test, keyed on (rule_id, host, user) with 10/30/5-minute windows. RawAlert.correlation_key() — what Correlator actually calls — keys on {tenant}:{entity}:{tactic} over a one-hour window. Different dimensions, different windows, different answer. Retained for continuity; it does not describe this product. The number that does is measured against the real correlation key by services/fusion/tests/test_alert_reduction_real.py and published on the benchmark page.',
   },
   mitre_accuracy: {
     id: 'mitre_accuracy',
@@ -197,6 +212,10 @@ const KIND_LABEL: Record<Kind, { label: string; classes: string }> = {
   'self-consistency': {
     label: 'Substrate self-consistency',
     classes: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+  },
+  legacy: {
+    label: 'Legacy — does not describe this product',
+    classes: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
   },
 };
 
@@ -246,11 +265,13 @@ interface BenchmarkResultsProps {
 }
 
 export function BenchmarkResults({ report }: BenchmarkResultsProps) {
+  // The legacy suite sorts last: it led the grid while badged as a real
+  // measurement, which put a withdrawn figure in the first card a reader sees.
   const orderedIds: string[] = [
-    'alert_reduction',
     'mitre_accuracy',
     'investigation_completeness',
     'response_quality',
+    'alert_reduction',
   ];
 
   return (

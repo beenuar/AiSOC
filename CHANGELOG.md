@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A retracted benchmark figure was still badged "Real measurement".**
+  `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
+  the harness that produced it groups on four tiers of `(rule_id, host,
+  user)` while the shipping `RawAlert.correlation_key()` groups on
+  `{tenant}:{entity}:{tactic}`, so it does not merely re-implement fusion's
+  grouping, it implements *different* grouping. The retraction reached one
+  surface of five. `BenchmarkResults.tsx` rendered a green **"Real
+  measurement"** badge on `0.753` with a blurb claiming the harness used the
+  production rules, "same logic"; `benchmarks/alert-reduction.md`
+  (`sidebar_position: 1`) called it a "faithful in-harness re-implementation"
+  and headlined 75.3 %; `ComparisonTable.tsx` qualified it as "measured on
+  fixed noisy stream". Two more were found while gating the invariant:
+  `benchmark-methodology.md`, and `benchmark.md` itself, which re-asserted
+  the claim in its own intro blockquote. All five now carry the wording
+  `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
+  figure measured against the key the product actually runs.
+- **The landing page published three different wrong corpus counts.**
+  "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
+  are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
+  community items" (7,155), and `218 rules across 5 categories` on the
+  contributor leaderboard (833 across 6). The 6,998 figure also quoted the
+  imported corpus as the detection capability, presenting quarantined rules
+  as executable.
+- **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
+  128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
+  sentence that tells the reader to recount with the script "rather than
+  trusting a figure quoted in prose — this line has gone stale before".
+  `CLAIM_TO_GATE_MATRIX.md` carried a stale executable-rule figure (939) in
+  a row note. The scoreboard's newest substrate row was labelled `v8.1.1`
+  while `VERSION` read `10.0.0`; it is refreshed from a fresh deterministic
+  run (0.97, unchanged) and now carries the tree's version. The scoreboard
+  keeps its three rows, all `substrate: true`, and no live-LLM row was
+  invented.
+- **The "Design partners" block on the landing page was removed** rather
+  than updated. Four dashed "Partner A–D" chips under the caption
+  "Reference partners onboarding through Q2 2026": placeholders rather than
+  fabricated logos, but four of them assert a partner count nothing in the
+  repository supports, and the window closed in June 2026 while still being
+  advertised as upcoming.
+
 - **A pure read sat in the analyst approval queue, because the two dispatch
   doors graded the same verb differently.** `search_siem` declares
   `read_only` impact and `automatic` approval, and the contract gate's own
@@ -46,6 +86,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`scripts/generate_corpus_stats.py`** — generates
+  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
+  engine ruleset, the generated detection truth table, and the marketplace
+  index, reconciling all three against each other and refusing to publish if
+  they disagree. Every landing surface imports the constants, so none can
+  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
+  `--self-test` hand-edits the artefact and requires the drift to be caught.
+  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
+  fields, and the UI leads with the executable count.
+- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
+  the way a count can, so the retraction is gated instead. No published
+  surface may assert the legacy harness runs the production grouping; any
+  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
+  suite card may not be declared `kind: 'measurement'`; and every surface
+  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
+  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
+  test asserts against its own measurement — so the chain from measurement
+  to published prose has no hand-copied link. A paragraph that dates or
+  negates the claim is exempt, so the retraction can quote the wording it
+  retracts.
+
 - **Verification probes for the disruptive endpoint verbs.** `kill_process`
   and `quarantine_file` had their success inferred from CrowdStrike RTR
   accepting a command; both now read the effect back over the read-only tier
@@ -70,6 +131,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because `run_av_scan` had been taking it silently.
 
 ### Changed
+
+- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
+  list named one compliance page, which is why `ROADMAP.md` drifted with CI
+  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
+  **row total** is compared as well as the GATED/PARTIAL split, and a figure
+  the prose explicitly dates ("the count at that time") is exempt so history
+  need not be rewritten.
+- **`check_scoreboard.py --check` verifies `agent_version` against
+  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
+  freshness gate reads only the date — which a refresh keeps current — so a
+  row could be two days old and still labelled two majors behind.
 
 - `tests/test_approval_doors_agree.py` gates the invariant rather than the
   instance: both live doors swept over every capability, autonomy tier and
