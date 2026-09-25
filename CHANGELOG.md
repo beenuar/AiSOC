@@ -189,6 +189,25 @@ number is the one the requirement is sized against.
 
 ### Added
 
+- **`RENDER_FALLBACK_EXEMPT` is now checked in both directions.**
+  `ALLOWED_ILLUSTRATIVE` had a staleness check from the start and this list
+  had none, so an exemption could outlive the code it excused and go on
+  covering whatever was written next under that name.
+- **A corpus floor.** The gate refuses a root holding no `.ts`/`.tsx` rather
+  than certifying it: a renamed directory or a changed suffix produces zero
+  findings over zero files, and found-nothing and scanned-nothing print the
+  same word. It also names what it scanned, rooted at `git rev-parse`.
+- **A real `--self-test`.** Twenty-six cases, each asserting the *rule* that
+  must account for it rather than that something fired — the conditional rules
+  overlap by construction, so a boolean check would pass with half the fixes
+  reverted. Each case builds its own source and its own tree.
+- **`KNOWN_UNGATED`**, a shrink-only ledger of the sites this revision detects
+  that the tree has not fixed yet, each with a reason. Not an exemption: the
+  detector still reports them, and the gate prints the outstanding count
+  instead of claiming the console is clean. Recorded by count so an entry
+  cannot survive its fix and a second violation cannot hide behind a recorded
+  one.
+
 - **`scripts/generate_corpus_stats.py`** — generates
   `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
   engine ruleset, the generated detection truth table, and the marketplace
@@ -357,6 +376,47 @@ number is the one the requirement is sized against.
   row could be two days old and still labelled two majors behind.
 
 ### Fixed
+
+- **`check_mock_data_gated.py` reported "All sample-data fallbacks are gated
+  behind demo mode." on a tree carrying nine of them.** Each gap was confirmed
+  by running the gate's own patterns against the live lines rather than by
+  reading them, and every fix is falsifiable on its own: reverting any one of
+  them turns exactly one self-test case red.
+
+  The dominant one was the fabrication test. It required an identity **and**
+  at least two numeric keys, so four datasets with zero numbers between them
+  were invisible — including fifteen invented ATT&CK coverage verdicts from
+  which `CoverageAdvisorView.tsx` derives and prints a coverage percentage.
+  The harm was never numeric, and the headline figure never existed as a
+  literal the gate could match. The numeric requirement is gone, replaced by
+  two unequal arms: an **estate identifier** — a hostname, an address, a
+  ticket reference — stands alone, because no filter list or route table in
+  this console contains one; a **proper noun** counts only alongside an
+  assertion of state, because most of this console's configuration is made of
+  proper nouns. That distinction is what separates fifteen coverage verdicts
+  from the fourteen-entry MITRE tactic vocabulary two directories away.
+
+  Eight more: a ternary (`cond ? real : MOCK_X`) is the same bypass as `??`
+  and matched nothing; a demo factory reached by `return` rather than through
+  a setter; an inline object literal handed to a setter in a `catch`, which
+  the docstring had always claimed to catch and never did; `= {` object
+  literals, scanned now like `= [` arrays; `useState(MOCK_X)`; a one-record
+  array, under a `< 3` floor; a single `(` defeating `\s*` in the nullish
+  rule; and `.ts` modules, which the record glob never opened.
+
+  Gating is now decided **per constant** from its use sites, not once per
+  file: one `demoFallback` anywhere used to credit every dataset in the
+  module, and `HuntView.tsx` has exactly that pair. `_is_exempt_name` was a
+  substring test over the whole line, so a line mentioning an editor
+  placeholder was skipped even when it also carried a real bypass.
+
+  Two things the relaxed detector got wrong, both found by enumerating what it
+  *credits* rather than what it flags: a comment explaining why a mock is
+  **not** reached at render was counted as a use of it, so three components
+  were reported for documenting their own fix; and the marketing pages'
+  published disclosure address matched the mailbox arm, so a mailbox now
+  counts as estate data only when it is not sitting beside the link you are
+  meant to click.
 
 - **A retracted benchmark figure was still badged "Real measurement".**
   `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
