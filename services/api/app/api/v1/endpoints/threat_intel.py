@@ -19,20 +19,31 @@ See ``app.core.security.ROLE_PERMISSIONS`` for the authoritative map.
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.config import settings
 from app.db.database import get_db
 from app.models.threat_intel import ThreatActor, ThreatIntelFeed, ThreatIntelIOC
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/threat-intel", tags=["threat-intel"])
+
+#: Header a trusted service uses to declare which tenant it is acting for.
+#: Must match ``TENANT_HEADER`` in
+#: services/threatintel/app/security/tenant_scope.py.
+_TENANT_HEADER = "X-AiSOC-Tenant-ID"
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +120,102 @@ class FeedOut(FeedCreate):
     created_at: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Collected feed indicators (proxied from services/threatintel)
+# ---------------------------------------------------------------------------
+
+
+class FeedIndicatorsResponse(BaseModel):
+    """What the console's `/threat-intel` page renders.
+
+    ``source`` and ``degraded`` travel with the payload for the same reason
+    they do on the connector catalog: an empty list because nothing has been
+    collected yet and an empty list because the service is not deployed are
+    different facts, and a reader cannot tell them apart from the rows alone.
+    """
+
+    indicators: list[dict[str, Any]]
+    total: int
+    source: str
+    degraded: bool = False
+    reason: str = ""
+
+
+@router.get("/indicators", response_model=FeedIndicatorsResponse)
+async def list_feed_indicators(
+    current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
+    # `alias` preserves the `?type=` the console sends while keeping the
+    # builtin `type()` callable in this scope — it is used in the except arm.
+    ioc_type: str | None = Query(None, alias="type", description="filter to one indicator type"),
+    tag: str | None = Query(None),
+    q: str | None = Query(None, description="substring match on value or description"),
+) -> FeedIndicatorsResponse:
+    """Indicators the feed scheduler has collected, from `services/threatintel`.
+
+    The console has called this path since the IOC inbox shipped and nothing
+    served it — the page 404'd, and for a while rendered five invented IOCs
+    instead. `services/threatintel` and its Qdrant store are in CORE now, and
+    the CISA Known Exploited Vulnerabilities catalog is public and keyless, so
+    a default install has real indicators to show within a poll interval.
+
+    Tenant scope is enforced upstream: this proxy asserts the caller's tenant
+    in the same header the connectors proxy uses, and the threatintel route
+    filters on it plus the `shared` sentinel that public feed intel is written
+    under.
+    """
+    base = (getattr(settings, "THREATINTEL_SERVICE_URL", "") or "").strip().rstrip("/")
+    if not base:
+        return FeedIndicatorsResponse(
+            indicators=[],
+            total=0,
+            source="unconfigured",
+            degraded=True,
+            reason="THREATINTEL_SERVICE_URL is not set on this deployment",
+        )
+
+    params = {k: v for k, v in (("type", ioc_type), ("tag", tag), ("q", q)) if v}
+    headers: dict[str, str] = {_TENANT_HEADER: str(current_user.tenant_id)}
+    token = (os.getenv("AISOC_THREATINTEL_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    timeout = httpx.Timeout(settings.THREATINTEL_SERVICE_TIMEOUT_SECONDS, connect=5.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(f"{base}/api/v1/threat-intel/indicators", params=params, headers=headers)
+            resp.raise_for_status()
+            body = resp.json()
+    except httpx.HTTPError as exc:
+        upstream_status = getattr(getattr(exc, "response", None), "status_code", None)
+        logger.warning(
+            "threatintel.indicators.unreachable error_type=%s status=%s",
+            type(exc).__name__,
+            upstream_status,
+        )
+        return FeedIndicatorsResponse(
+            indicators=[],
+            total=0,
+            source="unavailable",
+            degraded=True,
+            reason=(
+                f"the threat-intel service did not answer ({type(exc).__name__}"
+                + (f", HTTP {upstream_status}" if upstream_status else "")
+                + "); no indicators can be listed"
+            ),
+        )
+
+    if not isinstance(body, dict):
+        return FeedIndicatorsResponse(indicators=[], total=0, source="unavailable", degraded=True, reason="malformed upstream response")
+
+    raw = body.get("indicators")
+    indicators = [i for i in raw if isinstance(i, dict)] if isinstance(raw, list) else []
+    return FeedIndicatorsResponse(
+        indicators=indicators,
+        total=int(body.get("total") or len(indicators)),
+        source=str(body.get("source") or "threatintel"),
+    )
 
 
 # ---------------------------------------------------------------------------

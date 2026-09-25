@@ -515,10 +515,32 @@ async def _validate_connector_type(connector_type: str, tenant_id: uuid.UUID | s
     )
 
 
+#: The remedy for a vault that will not encrypt. `.env.example` used to ship
+#: ``AISOC_CREDENTIAL_KEY=replace-me-…``, which is non-empty and not a valid
+#: Fernet key, so the documented ``cp .env.example .env`` produced this 500 on
+#: every connector save while *not* copying the template produced a working
+#: vault. The template now ships the key empty and `make env` generates a real
+#: one; naming the command here means an operator who still hits this has the
+#: fix in the message rather than in a changelog.
+_VAULT_HINT = "Run `make env` to generate a valid AISOC_CREDENTIAL_KEY, then restart the API."
+
+#: What an operator is told when the connectors service refuses this proxy's
+#: credential. It names the status and the service because the alternative —
+#: what the wizard showed for as long as this was broken — is the bare string
+#: "Connection test failed", which points at the customer's Splunk instead of
+#: at the deployment's own configuration.
+_SERVICE_AUTH_HINT = (
+    "AiSOC's API could not authenticate to its own connectors service, so your credentials were "
+    "never sent upstream. Set AISOC_SERVICE_TOKEN to the same value in .env for both services "
+    "(`make env` generates one) and restart, or check SECRET_KEY matches across them."
+)
+
+
 async def _proxy_test_connection(
     connector_type: str,
     auth_config: dict[str, Any],
     connector_config: dict[str, Any],
+    tenant_id: uuid.UUID | str | None,
 ) -> dict[str, Any]:
     """POST plaintext credentials at the stateless test endpoint.
 
@@ -528,6 +550,18 @@ async def _proxy_test_connection(
     service on the public internet, terminate TLS in front of it and
     add a shared-secret header (mirroring how the realtime push proxy in
     this codebase does it).
+
+    ``tenant_id`` is required, not defaulted, for the same reason as in
+    :func:`_fetch_catalog`: every route on the connectors service sits behind
+    ``require_console_or_service_auth``, which refuses a service token that
+    does not declare the tenant it acts for. This call used to send no
+    ``headers=`` at all — the catalog call beside it was fixed and this one was
+    not — so it was answered 401 on every single invocation, and 401 was the
+    one status the ladder below did not branch on. The function then fell
+    through to ``resp.json()`` and returned a body with no ``success`` key,
+    which the wizard renders as "Connection test failed" while its own help
+    text promises "Credentials are tested against the upstream API". The
+    upstream API was never reached.
     """
     if not _CONNECTOR_TYPE_RE.match(connector_type):
         raise HTTPException(
@@ -541,7 +575,7 @@ async def _proxy_test_connection(
     }
     try:
         async with httpx.AsyncClient(timeout=_CATALOG_TIMEOUT) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=_catalog_headers(tenant_id))
     except httpx.HTTPError as exc:
         logger.warning(
             "connectors_service.test.unreachable err=%s",
@@ -549,7 +583,11 @@ async def _proxy_test_connection(
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="connectors service is unavailable; cannot test connection",
+            detail=(
+                "AiSOC's connectors service is not reachable, so your credentials were never sent "
+                "upstream. It ships in the `full` profile: start it with `make up-full`, or "
+                "`docker compose up -d connectors` to add just this one."
+            ),
         ) from exc
 
     # 404 from the microservice = unknown connector_type. We've already
@@ -561,6 +599,27 @@ async def _proxy_test_connection(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"connector '{connector_type}' is no longer available in the connectors service",
         )
+    # 401/403 is this deployment's own service-to-service auth, never the
+    # vendor's. Saying so is the difference between an operator checking
+    # AISOC_SERVICE_TOKEN and an operator re-issuing a perfectly good Splunk
+    # token because the product told them their credentials failed.
+    if resp.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
+        logger.error(
+            "connectors_service.test.service_auth_rejected status=%s connector_type=%s",
+            resp.status_code,
+            # Sanitised inline rather than through `_safe_connector_type`.
+            # CodeQL's taint tracker does not follow the helper across the
+            # function boundary but does recognise this replace chain, so the
+            # helper form raises py/log-injection (#924) on a value that was
+            # already `_CONNECTOR_TYPE_RE`-validated at the top of this
+            # function. Inline keeps the property visible to the scanner and
+            # to the next reader.
+            str(connector_type).replace("\r", "").replace("\n", " ")[:100],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"connectors service returned HTTP {resp.status_code} to this API's service credential. {_SERVICE_AUTH_HINT}",
+        )
     if resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
         # Forward the schema-mismatch detail so the wizard can highlight
         # the offending field.
@@ -571,7 +630,19 @@ async def _proxy_test_connection(
     if resp.status_code >= 500:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="connectors service failed while testing connection",
+            detail=f"connectors service failed while testing connection (HTTP {resp.status_code})",
+        )
+    # Anything else in the 4xx range is still not a verdict about the vendor.
+    # The ladder above used to end at >=500, so every unhandled status fell
+    # through to the JSON decode below and returned whatever shape the body
+    # happened to have — which for an error body is one with no `success` key.
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"connectors service returned an unexpected HTTP {resp.status_code} while testing "
+                f"this connector; your credentials were not sent upstream"
+            ),
         )
 
     body: dict[str, Any]
@@ -584,6 +655,15 @@ async def _proxy_test_connection(
         ) from exc
     if not isinstance(body, dict):
         body = {"success": False, "error": "malformed response"}
+    if "success" not in body:
+        # A 2xx with no verdict is not a pass. The wizard branches on
+        # `result.success`, so an absent key reads as failure with no message —
+        # exactly the dead end this function used to produce on a 401.
+        body = {
+            **body,
+            "success": False,
+            "error": body.get("detail") or "connectors service returned a response with no success verdict",
+        }
     return body
 
 
@@ -697,6 +777,7 @@ async def test_connection(
         request.connector_type,
         request.auth_config,
         request.connector_config,
+        current_user.tenant_id,
     )
 
 
@@ -736,7 +817,7 @@ async def create_connector(
     except CredentialVaultError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"credential vault unavailable: {exc}",
+            detail=f"credential vault unavailable: {exc}. {_VAULT_HINT}",
         ) from exc
 
     connector = Connector(
@@ -811,7 +892,7 @@ async def update_connector(
             except CredentialVaultError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"credential vault unavailable: {exc}",
+                    detail=f"credential vault unavailable: {exc}. {_VAULT_HINT}",
                 ) from exc
         updates[field] = val
 
@@ -983,6 +1064,7 @@ async def test_existing_connector(
         connector.connector_type,
         decrypted_auth,
         connector.connector_config or {},
+        current_user.tenant_id,
     )
 
     health_status = "healthy" if verdict.get("success") else "unhealthy"

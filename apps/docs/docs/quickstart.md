@@ -234,32 +234,37 @@ does not.
 
 | Profile | Services |
 | --- | --- |
-| *(default — CORE)* | **postgres** (5432) · **redis** (6379) · **zookeeper** · **kafka** (9092) · **litellm** (4000, LLM gateway) · **ingest-worker** (8081, Go) · **fusion** (8003) · **api** (8000) · **agents** (8001) · **realtime** (8086) · **web** (3000) |
-| `full` | **clickhouse** (8123/9000) · **neo4j** (7474/7687) · **qdrant** (6333) · **opensearch** (9200) · **threatintel** (8005) · **ueba** (8007) · **connectors** (8088) · **enrichment** (8080, Go) · **kafka-ui** (8090) · **actions** (8002) |
+| *(default — CORE)* | **postgres** (5432) · **redis** (6379) · **zookeeper** · **kafka** (9092) · **qdrant** (6333) · **litellm** (4000, LLM gateway) · **ollama** (11434, local model) · **ollama-pull** (one-shot model fetch) · **ingest-worker** (8081, Go) · **fusion** (8003) · **api** (8000) · **agents** (8001) · **threatintel** (8005) · **realtime** (8086) · **web** (3000) |
+| `full` | **clickhouse** (8123/9000) · **neo4j** (7474/7687) · **opensearch** (9200) · **ueba** (8007) · **connectors** (8088) · **enrichment** (8080, Go) · **kafka-ui** (8090) · **actions** (8002) |
 | `extras` | **honeytokens** (8008) · **purple-team** (8006) |
 | `chatops` | **slack-bot** (8009) · **actions** (8002) |
 | `monitoring` | **prometheus** (9091) · **grafana** (3001) · **alertmanager** (9094) · **tempo** (3200) · **otel-collector** (4317/4318) |
 | `osquery` | **osquery-tls** (8091) |
 
-CORE is 11 services and `full` is 21 — `actions` is in both `full` and
+CORE is 14 long-running services — 15 counting `ollama-pull`, which fetches
+the model once and exits — and `full` is 22; `actions` is in both `full` and
 `chatops`, so it is counted once. Named profiles compose, so
 `docker compose --profile full --profile extras up -d` is valid; it just does
 not wait for health the way `make up-full` does.
 
-**What this gives you about AI.** Every command above starts the CORE profile,
-which includes the `litellm` LLM gateway. AiSOC asks for logical task aliases
-(`aisoc-triage`, `aisoc-investigation`, …) and the gateway is the only thing
-that resolves them, so it has to be running for AI triage to happen at all —
-it was a `full`-profile service until 2026-09, which meant the default install
-could not do AI triage even with the key you set
+**What this gives you about AI.** CORE contains both halves: the `litellm`
+gateway, which is the only thing that resolves AiSOC's task aliases
+(`aisoc-triage`, `aisoc-investigation`, …), and `ollama` running a pinned
+~2 GB `llama3.2:3b-instruct-q4_K_M` behind it. Neither was there to begin with,
+and moving only the first was only half the fix: a gateway with no model still
+left the default install routing a key nobody had
 ([ADR-0006](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0006-llm-gateway-in-core.md)).
 
-- **With a provider key** in `.env`: alerts are triaged by the AI, and the
-  cost dashboard reports what each call actually cost, because the gateway
-  reports it.
-- **Without one**: the gateway still boots and the stack is healthy, but no
-  LLM call is made. Every alert is triaged by the deterministic path and the
-  console labels it as such. Nothing pretends the AI ran.
+- **Out of the box, no key**: alerts are triaged by a real model. Real
+  generated text, real token counts in the Investigation Ledger. A 3B
+  quantized model is not a frontier model, and the console does not claim it
+  is.
+- **With a provider key**: set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`,
+  `AISOC_LLM_MODEL_DEEP` and an empty `AISOC_LLM_API_BASE` in `.env`, then
+  `make up` again. The cost dashboard then reports what each call actually
+  cost, because the gateway reports it.
+- **If no model is reachable at all**: every alert takes the deterministic
+  path and the console labels it as such. Nothing pretends the AI ran.
 
 ### Database migrations — nothing to run
 

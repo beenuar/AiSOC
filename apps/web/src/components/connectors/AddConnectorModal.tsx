@@ -48,6 +48,34 @@ import {
   type TroubleshootResponse,
 } from '@/lib/api';
 
+/**
+ * Turn a thrown request error into something an operator can act on.
+ *
+ * `ApiError.message` is the status line — `API 502 Bad Gateway — /api/v1/…`.
+ * Everything that identifies the fault lives in `body`, which FastAPI sends as
+ * `{"detail": "…"}`. This matters most for the failure that is not the
+ * customer's: when the API cannot authenticate to AiSOC's own connectors
+ * service, the detail names the status, the service and the variable to set,
+ * and the status line alone names none of them.
+ */
+function describeApiError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (err.body) {
+      try {
+        const parsed = JSON.parse(err.body) as { detail?: unknown };
+        if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+          return parsed.detail;
+        }
+      } catch {
+        // Not JSON — a proxy error page or a truncated body. Fall through to
+        // the status line, which at least names the status.
+      }
+    }
+    return err.message;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 // ─── Field rendering helpers ────────────────────────────────────────────────
 
 /**
@@ -1385,7 +1413,12 @@ export function AddConnectorModal({
         toast.error(result.error ?? result.message ?? 'Connection test failed');
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Test request failed';
+      // `ApiError.message` is only "API 502 Bad Gateway — /api/v1/connectors/test".
+      // The reason the operator can act on — which service refused, with what
+      // status, and what to set — is in the response body, so a bare `.message`
+      // here reproduced the dead end this panel is meant to have stopped
+      // showing. Prefer the API's `detail`, fall back to the status line.
+      const msg = describeApiError(err, 'Test request failed');
       setTestResult({ success: false, error: msg });
       toast.error(msg);
     } finally {
@@ -1419,7 +1452,10 @@ export function AddConnectorModal({
       setCreatedConnector(created);
       setStep('verify');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to save connector';
+      // Same reasoning as handleTest: a save refused by the credential vault
+      // answers 500 with a detail that names AISOC_CREDENTIAL_KEY, and the
+      // status line names nothing.
+      const msg = describeApiError(err, 'Failed to save connector');
       toast.error(msg);
     } finally {
       setSaving(false);

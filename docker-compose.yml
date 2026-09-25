@@ -62,6 +62,9 @@ volumes:
   qdrant_data:
   neo4j_data:
   neo4j_logs:
+  # ~2 GB of model weights. Named so `make down` keeps them and only
+  # `make clean` re-downloads.
+  ollama_data:
 
 services:
 
@@ -266,8 +269,14 @@ services:
     mem_reservation: 1g
 
   qdrant:
-    # full profile — Vector store for threat-intel embeddings (services/threatintel).
-    profiles: ["full"]
+    # CORE — the store `services/threatintel` writes collected indicators to,
+    # and the one the console's /threat-intel page is served from. It moved in
+    # with threatintel: see that service's comment for the reasoning.
+    #
+    # Measured: 245 MB image, 79 MiB RSS with the two threat-intel collections
+    # created. It is by a wide margin the cheapest of the four stores — the
+    # next one up, OpenSearch, is 2 GB of image and ~1.05 GB resident — which
+    # is why it is the one CORE takes.
     image: qdrant/qdrant:v1.7.0
     container_name: aisoc-qdrant
     ports:
@@ -276,6 +285,16 @@ services:
       - qdrant_data:/qdrant/storage
     networks:
       - aisoc
+    healthcheck:
+      # threatintel creates its collections at startup, so it needs the store
+      # answering rather than merely existing. The image ships neither curl nor
+      # wget; `/proc/net/tcp` is what is left, and a listener on 6333 (hex
+      # 18BD) is the thing being asserted.
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   neo4j:
     # full profile — Entity graph. Backs graph traversals and blast radius, not alert generation.
@@ -361,8 +380,34 @@ services:
       # match whatever the connectors service verifies with, or the console
       # token the API forwards there fails its signature check.
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
-      ENVIRONMENT: development
-      LOG_LEVEL: info
+      # The credential this service presents when it proxies the connector
+      # catalog and "Test connection" to the connectors service.
+      # `_service_token()` in app/api/v1/endpoints/connectors.py reads
+      # AISOC_CONNECTORS_SERVICE_TOKEN then AISOC_SERVICE_TOKEN — and compose
+      # interpolated the shared token into connectors, ueba, honeytokens and
+      # purple-team but not into the one service that has to *send* it. There
+      # is no `env_file` here either, so a value in .env could not reach it by
+      # any route. The catalog call was answered 401 on every request and fell
+      # back to the bundled copy; the fix that made the proxy read the right
+      # variable shipped against a variable nothing ever set.
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_CONNECTORS_SERVICE_TOKEN: ${AISOC_CONNECTORS_SERVICE_TOKEN:-}
+      CONNECTORS_SERVICE_URL: ${CONNECTORS_SERVICE_URL:-http://connectors:8003}
+      # Where GET /api/v1/threat-intel/indicators is served from. The console
+      # has called that path since the IOC inbox shipped and nothing answered
+      # it; threatintel is in CORE now and this is the wire.
+      THREATINTEL_SERVICE_URL: ${THREATINTEL_SERVICE_URL:-http://threatintel:8005}
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
+      # Printed by `make bootstrap` as the sign-in address and used as the
+      # console's public origin. Read from os.environ by
+      # app/scripts/bootstrap_admin.py, which no compose service set — so any
+      # deployment that is not a laptop printed the wrong address.
+      AISOC_CONSOLE_URL: ${AISOC_CONSOLE_URL:-http://localhost:3000}
+      # Was a bare literal, so `.env`'s documented ENVIRONMENT was ignored and
+      # `production` changed nothing — including the dev auth bypass in
+      # app/api/v1/dev_auth.py, which could not be switched off from .env at all.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Issue #478 — LiteLLM gateway. This service's live LLM endpoints
       # (translation, hunts, KB, phishing, NL-detection) route here by default:
       # `app.services.model_aliases.resolve_base_url` reads LLM_GATEWAY_URL for
@@ -575,6 +620,62 @@ services:
   # exported on /metrics (scraped as job `aisoc-litellm`). Lightweight and inert
   # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
   # `agents` service above.
+  ollama:
+    # CORE — the model behind the gateway.
+    #
+    # The gateway shipped in CORE and the models it pointed at did not: every
+    # alias resolved to a hosted provider, so the default install could route a
+    # key it did not have and otherwise did no AI at all. This closes that: a
+    # clone with no account produces a real triage verdict, from a real model,
+    # with real token counts.
+    #
+    # Promoted from infra/compose/docker-compose.airgap.yml, where this exact
+    # pairing has been proven end to end. The model is pinned rather than
+    # floating on `latest` for the same reason every other image here is.
+    #
+    # Measured: 6.92 GB image — by some distance the largest thing in CORE —
+    # 2.02 GB of weights in the volume, and 9.6 MiB resident when idle.
+    #
+    # Quoting the idle figure alone would be the misleading half of the truth:
+    # the model is mapped in on first inference and the container measured
+    # 2.96 GiB while serving. That is what moved the README's memory figure to
+    # 8 GB, not the idle number.
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ollama-pull:
+    # One-shot: pull the pinned model, then exit. A cache hit is a no-op, so
+    # this costs one `ollama list` on every `up` after the first.
+    #
+    # litellm waits on `service_completed_successfully` here rather than on
+    # ollama's health: a gateway that is up before the weights exist answers the
+    # first triage request with "model not found", and the first request is the
+    # one a new user makes.
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama", "pull", "${AISOC_LLM_LOCAL_MODEL:-llama3.2:3b-instruct-q4_K_M}"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    networks:
+      - aisoc
+    restart: "no"
+
   litellm:
     # CORE, deliberately — see docs/decisions/0006-llm-gateway-in-core.md.
     #
@@ -599,13 +700,30 @@ services:
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     volumes:
       - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
     environment:
       # Clients authenticate to the gateway with this key (AiSOC sends it as its
       # OPENAI_API_KEY when OPENAI_BASE_URL points here). Override in .env.
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      # Which backend every alias resolves to. infra/litellm/config.yaml reads
+      # these through `os.environ/...` instead of naming a model inline, so the
+      # local→hosted upgrade is three variables in .env rather than an edit to a
+      # mounted config file.
+      #
+      # The defaults are the bundled local model, which is what makes AI triage
+      # work in a default `make up` with no account and no key. Set
+      # OPENAI_API_KEY plus these two to openai/gpt-4o-mini and openai/gpt-4o —
+      # and clear AISOC_LLM_API_BASE — to route to a hosted provider instead.
+      AISOC_LLM_MODEL_FAST: ${AISOC_LLM_MODEL_FAST:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
+      AISOC_LLM_MODEL_DEEP: ${AISOC_LLM_MODEL_DEEP:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
+      # `-` and not `:-`, deliberately: an operator moving to a hosted provider
+      # sets AISOC_LLM_API_BASE= (empty) in .env, and `:-` would helpfully undo
+      # that by substituting the Ollama address back in.
+      AISOC_LLM_API_BASE: ${AISOC_LLM_API_BASE-http://ollama:11434}
       # Upstream provider keys the aliases resolve against (os.environ/... in the
-      # config). Empty is fine — the gateway still boots, serves /health and
-      # /metrics, and AiSOC falls back to its deterministic path.
+      # config). Empty is fine — the local model answers instead.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
@@ -727,9 +845,6 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8088:8003"
-    # Phase A3 — the connector runtime is part of the default stack now (was
-    # profile-gated). It idles harmlessly with no configured instances; a cold
-    # `up` therefore ships the full ingest→detect→respond spine out of the box.
     environment:
       # app/scripts/serve.py binds PORT, defaulting to 8087. The mapping above
       # publishes container port 8003, so leaving PORT unset put the listener
@@ -742,6 +857,17 @@ services:
       # API image instead of the 84 connectors the registry actually has.
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # The third way this service answered 503 to everything. `SECRET_KEY`'s
+      # compose default is one of INSECURE_SECRET_DEFAULTS, so
+      # `resolve_console_secret()` returns "" for it; with AISOC_SERVICE_TOKEN
+      # also blank, `require_console_or_service_auth` has no credential
+      # material at all and fails closed — correctly. The dev-mode escape that
+      # exists for exactly this case was set on actions, ueba, honeytokens,
+      # purple-team and slack-bot, and not on connectors. Dev mode only applies
+      # when nothing is configured, so once `make env` generates a real
+      # AISOC_SERVICE_TOKEN this flag stops having any effect.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:redis_dev_secret@redis:6379/6
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
@@ -764,8 +890,19 @@ services:
     restart: unless-stopped
 
   threatintel:
-    # full profile — IOC harvesting and actor attribution. Needs Qdrant.
-    profiles: ["full"]
+    # CORE — the only thing in the default install that puts *real*, externally
+    # sourced security data in front of a new user on day one.
+    #
+    # `app/clients/cisa_kev.py` fetches the CISA Known Exploited Vulnerabilities
+    # catalog: authoritative, public, and needing no API key. It has been wired
+    # as a scheduled handler the whole time and sat in a profile nobody starting
+    # out runs. Meanwhile the console shipped a /threat-intel page calling
+    # `/api/v1/threat-intel/indicators`, which had nothing behind it in CORE and
+    # was for a while filled with five invented IOCs. The missing feed and the
+    # fabrication were the same hole: there was no real data to show, so
+    # something invented some.
+    #
+    # Measured: 1.4 GB image, 219 MiB RSS steady state.
     build:
       context: ./services/threatintel
       dockerfile: Dockerfile
@@ -777,13 +914,16 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      # OpenSearch is a hard dependency, not an optional one: the lifespan
-      # calls os_store.initialize() without a try/except, so starting before
-      # it is up kills the container and leaves `restart: unless-stopped` to
-      # paper over the race. `service_healthy` is the condition that actually
-      # expresses that; `service_started` only says the container exists.
-      opensearch:
+      qdrant:
         condition: service_healthy
+    # OpenSearch is deliberately NOT a dependency any more. It was one because
+    # the lifespan called os_store.initialize() without a try/except, so an
+    # unreachable node killed the container — which made a `full`-profile store
+    # a hard requirement of a CORE service. Both that call and the pipeline's
+    # bulk index are best-effort now: with OpenSearch present you additionally
+    # get full-text IOC search, and without it the feeds still write to Qdrant,
+    # which is what the console reads. `make up-full` starts it and this
+    # service picks it up on its next restart.
     ports:
       - "127.0.0.1:8005:8005"
     environment:
@@ -799,6 +939,10 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: neo4j_dev_secret
+      # Same credential the API presents when it proxies /threat-intel/indicators.
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
       MISP_URL: ${MISP_URL:-}
       MISP_API_KEY: ${MISP_API_KEY:-}
       OTX_API_KEY: ${OTX_API_KEY:-}

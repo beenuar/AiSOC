@@ -18,75 +18,95 @@
 #     OPENAI_BASE_URL=http://litellm:4000/v1
 #     OPENAI_API_KEY=$LITELLM_MASTER_KEY
 #
-# Air-gapped / fully-local deployments: swap the commented Ollama/vLLM blocks in
-# for the `openai/*` lines — the alias names stay identical, so AiSOC is unaware
-# of the switch. When no live model is reachable AiSOC still degrades to its
-# deterministic offline path (the `deterministic` floor in model_pins.py).
+# ── WHICH MODEL ANSWERS, AND HOW TO CHANGE IT ─────────────────────────────────
+#
+# Every alias below takes its backend from the environment rather than naming
+# one inline, and docker-compose.yml supplies the defaults. Out of the box those
+# defaults point at the **Ollama service bundled in CORE**, running a pinned
+# ~2 GB llama3.2:3b-instruct-q4_K_M sized for CPU-only inference in 8 GB of RAM.
+# That is why a default `make up` can do real AI triage with no API key and no
+# account: the local model is the floor, not a stub.
+#
+# It is a 3B quantized model. It is genuinely doing the work — real tokens, real
+# cost accounting, real generated text — and it is not as good as a frontier
+# model. **To upgrade**, put a provider key in `.env` and set the two model
+# variables beside it:
+#
+#     OPENAI_API_KEY=sk-...
+#     AISOC_LLM_MODEL_FAST=openai/gpt-4o-mini
+#     AISOC_LLM_MODEL_DEEP=openai/gpt-4o
+#     AISOC_LLM_API_BASE=
+#
+# then `make up` again. No code change, no profile change, no edit to this file.
+# Air-gapped deployments keep the defaults and never set a key.
+#
+# When no live model is reachable at all AiSOC still degrades to its
+# deterministic offline path (the `deterministic` floor in model_pins.py) and
+# reports zero model calls and zero tokens rather than pretending to triage.
 
 model_list:
   # ── Auto-triage: high volume, cheap+fast. ─────────────────────────────────────
   - model_name: aisoc-triage
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Recon / enrichment reasoning. ─────────────────────────────────────────────
   - model_name: aisoc-recon
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Deep investigation: the multi-step reasoning path — worth a stronger model.
   - model_name: aisoc-investigation
     litellm_params:
-      model: openai/gpt-4o
+      model: os.environ/AISOC_LLM_MODEL_DEEP
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Contextual copilot: interactive analyst Q&A. ──────────────────────────────
   - model_name: aisoc-copilot
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Summaries: alert/incident condensation. ───────────────────────────────────
   - model_name: aisoc-summary
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Reports: analyst-facing write-ups — quality over cost. ────────────────────
   - model_name: aisoc-report
     litellm_params:
-      model: openai/gpt-4o
+      model: os.environ/AISOC_LLM_MODEL_DEEP
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
   # ── Natural-language generation: NL→query / NL→detection translation. ─────────
   - model_name: aisoc-nl
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
-  # ── Local / air-gapped example (Ollama) ───────────────────────────────────────
-  # Duplicate any alias above with a local backend to keep the call on-prem. The
-  # alias name MUST stay the same so AiSOC is unaware of the swap:
+  # ── Other backends ────────────────────────────────────────────────────────────
+  # The two variables above take any LiteLLM model string, so most swaps need no
+  # edit here at all:
   #
-  # - model_name: aisoc-triage
-  #   litellm_params:
-  #     model: ollama/llama3.1
-  #     api_base: http://ollama:11434
+  #   self-hosted vLLM   AISOC_LLM_MODEL_DEEP=openai/Qwen2.5-32B-Instruct
+  #                      AISOC_LLM_API_BASE=http://vllm:8000/v1
+  #   Anthropic          AISOC_LLM_MODEL_DEEP=anthropic/claude-3-5-sonnet-latest
+  #                      ANTHROPIC_API_KEY=...   (and clear AISOC_LLM_API_BASE)
+  #   a bigger local     AISOC_LLM_MODEL_DEEP=ollama_chat/llama3.1:8b
+  #                      (pull it first: docker compose exec ollama ollama pull llama3.1:8b)
   #
-  # ── Self-hosted vLLM (OpenAI-compatible) example ──────────────────────────────
-  # - model_name: aisoc-investigation
-  #   litellm_params:
-  #     model: openai/Qwen2.5-32B-Instruct
-  #     api_base: http://vllm:8000/v1
-  #     api_key: os.environ/VLLM_API_KEY
-  #
-  # ── Anthropic example ─────────────────────────────────────────────────────────
-  # - model_name: aisoc-report
-  #   litellm_params:
-  #     model: anthropic/claude-3-5-sonnet-latest
-  #     api_key: os.environ/ANTHROPIC_API_KEY
+  # Per-alias divergence — a different model for one workload only — is the case
+  # that does need an edit: replace that alias's `os.environ/...` with a literal.
 
 # ── Gateway behaviour ─────────────────────────────────────────────────────────
 litellm_settings:
