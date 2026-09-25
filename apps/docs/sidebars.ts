@@ -184,6 +184,7 @@ const sidebars: SidebarsConfig = {
         "compliance/fips-posture",
         "operations/credentials",
         "operations/secrets",
+        "operations/ingest-authentication",
         "operations/airgap",
         "operations/air-gapped",
         "operations/llm-gateway",

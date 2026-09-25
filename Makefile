@@ -24,7 +24,7 @@ PROFILE ?=
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 
 .PHONY: help install up up-full down restart status doctor smoke demo logs clean \
-        bootstrap test test-unit test-integration test-e2e stats papers \
+        bootstrap ingest-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
 help:
@@ -34,6 +34,7 @@ help:
 	@echo "    make up             Start the CORE stack (postgres, kafka, ingest, fusion, api, web)"
 	@echo "    make up-full        Start CORE plus lake, graph, vector, search and enrichment"
 	@echo "    make bootstrap      Create the first administrator and print its password once"
+	@echo "    make ingest-token   Mint the credential POST /v1/ingest/batch requires"
 	@echo "    make smoke          Push one real event through the pipeline and check it becomes an alert"
 	@echo "    make doctor         Diagnose the deployment and say what to fix"
 	@echo ""
@@ -163,10 +164,25 @@ status:
 doctor:
 	@./scripts/doctor.sh $(if $(filter full,$(PROFILE)),--full,)
 
+# The credential POST /v1/ingest/batch requires. Idempotent: an existing
+# active push token is returned rather than a second one being minted, so
+# `smoke` can call it on every run. `make ingest-token ARGS=--rotate`
+# replaces it.
+ingest-token:
+	@$(COMPOSE) run --rm -T api python -m app.scripts.mint_ingest_token $(ARGS)
+
 # The golden pipeline. One real event, through the real spine, observed from
 # outside. This is the only claim of "it works" the project makes.
+#
+# The token is minted first because ingest is authenticated: the endpoint
+# takes a credential that carries its own tenant rather than a header
+# naming one. Minting here keeps `make smoke` a single command.
 smoke:
-	@$(PYTHON) tests/e2e/golden_pipeline/run_golden_pipeline.py
+	@token="$$($(COMPOSE) run --rm -T api python -m app.scripts.mint_ingest_token --quiet)" || { \
+	  echo "Could not mint an ingest token — is the stack up? Try 'make doctor'."; \
+	  exit 1; \
+	}; \
+	AISOC_INGEST_TOKEN="$$token" $(PYTHON) tests/e2e/golden_pipeline/run_golden_pipeline.py
 
 demo:
 	@echo "Loading synthetic demo data. Every row is tagged is_synthetic=true"

@@ -429,6 +429,14 @@ services:
       DATABASE_DSN: postgres://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc?sslmode=disable
       LOG_LEVEL: info
       JWT_SECRET: dev_secret_key_change_in_production
+      # /v1/ingest requires a credential. Two shapes are accepted: a
+      # per-tenant push token minted with `make ingest-token` (resolved
+      # through DATABASE_DSN above), and this shared service token, which
+      # `connectors` presents when it polls on behalf of many tenants.
+      # Empty by default — with it unset the connector-poll path is refused
+      # and only minted tokens work. The same variable must be set on the
+      # `connectors` service. See apps/docs/docs/operations/ingest-authentication.md.
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
       # Graph-at-ingest needs Neo4j, which is a `full`-profile service. It is
       # off in CORE and switched on by the `full` overlay. It used to be

@@ -4,15 +4,24 @@ name: Security
 # (SAST), security-audit.yml (dependency CVEs), and scorecard.yml.
 #
 # Enforcement policy (honest ratchet):
-#   - HARD gate (fails the build): the claim-to-gate matrix ratchet. A new
-#     ungated marketing claim must never merge.
-#   - OBSERVE gates (report, do not fail yet): gitleaks, Semgrep, Trivy,
-#     checkov/tfsec. These scan a ~200k-line pre-existing codebase (with test
-#     fixtures / demo placeholders); we surface findings on every PR and
-#     ratchet them to blocking once a baseline is triaged into
-#     .security/allowlist.yml (gitleaks: .gitleaksignore). Flipping
-#     continue-on-error to false is the tracked Phase 2 continuation.
-#     GitHub native push-protection remains the always-on hard secret gate.
+#   - HARD gates (fail the build):
+#       * the claim-to-gate matrix ratchet — a new ungated marketing claim
+#         must never merge;
+#       * gitleaks — the whole tree was triaged and every finding is either
+#         fixed or recorded in .gitleaksignore with a written reason, so a
+#         new finding is genuinely new;
+#       * Trivy — HIGH/CRITICAL with a fix available, currently zero.
+#   - OBSERVE gates (report, do not fail yet): Semgrep, checkov, tfsec.
+#     These are not observe-mode because nobody has looked. They were run
+#     against this tree and the counts are: Semgrep 92 (35 at ERROR),
+#     checkov 91 failed checks under infra/terraform, tfsec 32 (7 CRITICAL,
+#     5 HIGH). Blocking on 215 untriaged findings would red every pull
+#     request on day one and the first response would be to turn the gate
+#     back off, so each needs its own triage pass first. The count is stated
+#     here rather than left as "we'll get to it" so the size of the
+#     remaining work is visible.
+#
+# GitHub native push-protection remains the always-on hard secret gate.
 
 on:
   pull_request:
@@ -37,40 +46,72 @@ jobs:
       - name: Enforce no new NO GATE rows
         run: python3 scripts/check_claim_gate_matrix.py
 
-  # ── OBSERVE: secret scan (report; ratchet to blocking after triage) ───────
+  # ── HARD: secret scan ─────────────────────────────────────────────────────
   secret-scan:
-    name: Secret scan (gitleaks, observe)
+    name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # `continue-on-error` also covers the install: this is an OBSERVE gate, so
-      # a flaky release download must not turn it into a hard red. Without it a
-      # transient blip here fails the whole job, which is what happened on #614
-      # (install exited 2, the scan step never ran, and the check reported
-      # failure as if a secret had been found).
+      # No `continue-on-error`, on this step or the next. It used to be on
+      # both, and the pairing was the defect rather than the fix: #614 had it
+      # on the scan but not the install, so a flaky download reported a hard
+      # failure with nothing scanned; the correction put it on the install
+      # too, which turned the same blip into a green check with nothing
+      # scanned. For a blocking gate neither is acceptable — an install that
+      # fails has to fail the job, loudly, because "clean" and "did not run"
+      # must never look the same.
       - name: Install gitleaks
-        continue-on-error: true
         run: |
           set -euo pipefail
           VERSION=8.21.2
           # --fail so an HTTP error is not silently written into the tarball and
           # surfaced later as a confusing `tar` error; --retry for the blips.
-          curl -sSL --fail --retry 3 --retry-delay 5 --retry-all-errors \
+          curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors \
             "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
             -o /tmp/gitleaks.tgz
           tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
           sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
-          gitleaks version
-      - name: Scan working tree (respects .gitleaksignore)
-        continue-on-error: true
-        run: |
-          if ! command -v gitleaks >/dev/null 2>&1; then
-            echo "::warning title=secret-scan::gitleaks install failed — working tree NOT scanned this run"
-            exit 0
+          installed="$(gitleaks version)"
+          echo "installed gitleaks $installed"
+          # Pinned: a silently different version scans with different rules,
+          # and the allow-list is fingerprinted against this one.
+          if [ "$installed" != "$VERSION" ]; then
+            echo "::error title=secret-scan::expected gitleaks $VERSION, got '$installed'"
+            exit 1
           fi
-          gitleaks dir . --redact --exit-code 1 --no-banner
+
+      # A clean result only means something if the scanner is reading this
+      # tree. With the allow-list moved aside the triaged findings must
+      # reappear; if they do not, gitleaks is scanning nothing and the run
+      # below would report clean for the wrong reason. This uses the repo's
+      # own known-positive corpus rather than a planted secret, so there is
+      # no synthetic credential in the tree and nothing to clean up.
+      - name: The scanner is actually scanning
+        run: |
+          set -euo pipefail
+          mv .gitleaksignore "${RUNNER_TEMP}/.gitleaksignore"
+          status=0
+          gitleaks dir . --redact --exit-code 1 --no-banner >/dev/null 2>&1 || status=$?
+          mv "${RUNNER_TEMP}/.gitleaksignore" .gitleaksignore
+          if [ "$status" -eq 0 ]; then
+            echo "::error title=secret-scan::gitleaks found nothing with the allow-list removed — it is not scanning this tree, so a clean scan proves nothing"
+            exit 1
+          fi
+          echo "confirmed: the scan reads this tree and the allow-list is load-bearing"
+
+      # Blocking. A finding here is either a real secret — rotate it and
+      # remove it from the source — or a false positive that belongs in
+      # .gitleaksignore with a written reason. Re-adding continue-on-error
+      # is not one of the two options.
+      - name: Scan working tree (respects .gitleaksignore)
+        run: gitleaks dir . --redact --exit-code 1 --no-banner
 
   # ── OBSERVE: SAST beyond CodeQL ───────────────────────────────────────────
+  #
+  # 92 findings against this tree (35 ERROR, 51 WARNING, 3 MEDIUM, 3 INFO),
+  # measured with semgrep 1.86.0 and the five configs below. Too many to
+  # block on before they are triaged, and `--error` fails on any of them, so
+  # this stays report-only with the number written down.
   semgrep:
     name: Semgrep (observe)
     runs-on: ubuntu-latest
@@ -93,22 +134,48 @@ jobs:
             --exclude plans/ \
             services/ apps/ packages/ scripts/
 
-  # ── OBSERVE: filesystem vuln scan (complements dependency SCA) ────────────
+  # ── HARD: filesystem vuln scan (complements dependency SCA) ───────────────
   trivy-fs:
-    name: Trivy filesystem (observe)
+    name: Trivy filesystem
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Install & run Trivy (report-only)
-        continue-on-error: true
+      # Still a pinned binary fetched in a `run:` step rather than the
+      # marketplace action: the action's version tags proved unreliable and
+      # this is the form that has stayed working.
+      #
+      # `set -e` matters now that this blocks — the previous `set -uo
+      # pipefail` let a failed download fall through to a `trivy` that was
+      # not there, and with --exit-code 0 the job reported success either
+      # way. Install failure must fail the job.
+      - name: Install Trivy
         run: |
-          set -uo pipefail
+          set -euo pipefail
           VERSION=0.55.2
-          curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tgz
+          curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors \
+            "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tgz
           tar -xzf /tmp/trivy.tgz -C /tmp trivy
-          /tmp/trivy fs --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs plans --exit-code 0 .
+          /tmp/trivy --version
+
+      # Blocking, at zero findings as of this change. HIGH and CRITICAL only,
+      # and only where a fixed version exists — an unfixable advisory cannot
+      # be actioned by the person whose pull request it reds, and blocking on
+      # one would teach people to bypass the gate rather than fix anything.
+      # A newly published CVE against a pinned dependency will red pull
+      # requests until it is upgraded. That is the intended cost.
+      - name: Scan filesystem for fixable HIGH/CRITICAL
+        run: |
+          set -euo pipefail
+          /tmp/trivy fs --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs plans --exit-code 1 .
 
   # ── OBSERVE: IaC misconfig scan ───────────────────────────────────────────
+  #
+  # checkov 3.2.x reports 91 failed checks against infra/terraform (164
+  # passing); tfsec 1.28.x reports 32 findings there (7 CRITICAL, 5 HIGH,
+  # 2 MEDIUM, 18 LOW). Both stay report-only until those are triaged —
+  # promoting them now would red every pull request over pre-existing
+  # infrastructure defaults that no single change introduced.
   iac-scan:
     name: IaC scan (checkov + tfsec, observe)
     runs-on: ubuntu-latest

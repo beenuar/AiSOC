@@ -19,6 +19,7 @@ import (
 	"github.com/beenuar/aisoc/services/ingest/internal/graph_ws"
 	"github.com/beenuar/aisoc/services/ingest/internal/handler"
 	"github.com/beenuar/aisoc/services/ingest/internal/inbox"
+	"github.com/beenuar/aisoc/services/ingest/internal/ingestauth"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/beenuar/aisoc/services/ingest/internal/server"
@@ -163,42 +164,81 @@ func main() {
 	// to find the matching template. Both are optional in dev (no
 	// DATABASE_DSN means /v1/inbox/* is disabled but /v1/ingest still
 	// works, so the connector path keeps running).
-	var inboxHandler *inbox.Handler
-	if cfg.InboxEnabled && cfg.DatabaseDSN != "" {
+	// One Postgres pool serves two consumers: the inbox token resolver and
+	// the /v1/ingest credential check. It is opened whenever DATABASE_DSN
+	// is set rather than only when the inbox is enabled, because turning
+	// the inbox off must not also remove the ability to authenticate a
+	// connector push.
+	var dbPool *pgxpool.Pool
+	if cfg.DatabaseDSN != "" {
 		poolCtx, poolCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		pool, err := pgxpool.New(poolCtx, cfg.DatabaseDSN)
 		poolCancel()
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to connect to Postgres for inbox; /v1/inbox/* disabled")
+			log.Error().Err(err).
+				Msg("Failed to connect to Postgres; minted ingest tokens cannot be resolved and /v1/inbox/* is disabled")
 		} else {
 			defer pool.Close()
-			store := inbox.NewStore(pool)
-			registry := inbox.NewRegistry()
-			// Embedded first — these ship in the binary and are the set the
-			// service is tested against. The on-disk directory is an operator
-			// override layered on top, and is allowed to be absent.
-			if err := registry.LoadEmbedded(); err != nil {
-				log.Error().Err(err).
-					Msg("Failed to load embedded inbox templates; /v1/inbox/* will return 503 for every template")
-			}
-			if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
-				log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).
-					Msg("Failed to load inbox template overrides from disk")
-			}
-			log.Info().
-				Strs("templates", registry.IDs()).
-				Int64("max_body_bytes", cfg.InboxMaxBodyBytes).
-				Float64("rate_requests_per_second", cfg.InboxRateRequestsPerSecond).
-				Float64("rate_events_per_second", cfg.InboxRateEventsPerSecond).
-				Msg("inbox: universal-capture push paths enabled")
-			inboxHandler = inbox.NewHandler(store, registry, pub, cfg.InboxMaxBodyBytes).
-				WithLimiter(inbox.NewLimiter(
-					cfg.InboxRateRequestsPerSecond,
-					cfg.InboxRateRequestBurst,
-					cfg.InboxRateEventsPerSecond,
-					cfg.InboxRateEventBurst,
-				))
+			dbPool = pool
 		}
+	}
+
+	// /v1/ingest credential check. Before this the endpoint read a tenant
+	// out of a header and authenticated nothing, so anyone who could reach
+	// the port could write alerts into any tenant.
+	var (
+		tokenStore      *inbox.Store
+		tokenResolver   ingestauth.TokenResolver
+		tenantDirectory ingestauth.TenantDirectory
+	)
+	if dbPool != nil {
+		tokenStore = inbox.NewStore(dbPool)
+		tokenResolver = tokenStore
+		tenantDirectory = ingestauth.NewTenantDirectory(dbPool)
+	}
+	auth := ingestauth.New(tokenResolver, tenantDirectory, cfg.ServiceToken, cfg.TenantHeaderKey)
+	h.SetAuthenticator(auth)
+	if auth.Configured() {
+		log.Info().
+			Bool("minted_tokens", tokenResolver != nil).
+			Bool("service_token", cfg.ServiceToken != "").
+			Msg("ingest: /v1/ingest requires an authenticated, tenant-scoped credential")
+	} else {
+		// Loud, and at error: this deployment will refuse every push. A
+		// warning here would be indistinguishable from the ordinary
+		// startup chatter an operator scrolls past.
+		log.Error().
+			Msg("ingest: no credential source configured — /v1/ingest will refuse every request. " +
+				"Set DATABASE_DSN so minted push tokens resolve, or AISOC_SERVICE_TOKEN for service-to-service pushes")
+	}
+
+	var inboxHandler *inbox.Handler
+	if cfg.InboxEnabled && tokenStore != nil {
+		registry := inbox.NewRegistry()
+		// Embedded first — these ship in the binary and are the set the
+		// service is tested against. The on-disk directory is an operator
+		// override layered on top, and is allowed to be absent.
+		if err := registry.LoadEmbedded(); err != nil {
+			log.Error().Err(err).
+				Msg("Failed to load embedded inbox templates; /v1/inbox/* will return 503 for every template")
+		}
+		if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+			log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).
+				Msg("Failed to load inbox template overrides from disk")
+		}
+		log.Info().
+			Strs("templates", registry.IDs()).
+			Int64("max_body_bytes", cfg.InboxMaxBodyBytes).
+			Float64("rate_requests_per_second", cfg.InboxRateRequestsPerSecond).
+			Float64("rate_events_per_second", cfg.InboxRateEventsPerSecond).
+			Msg("inbox: universal-capture push paths enabled")
+		inboxHandler = inbox.NewHandler(tokenStore, registry, pub, cfg.InboxMaxBodyBytes).
+			WithLimiter(inbox.NewLimiter(
+				cfg.InboxRateRequestsPerSecond,
+				cfg.InboxRateRequestBurst,
+				cfg.InboxRateEventsPerSecond,
+				cfg.InboxRateEventBurst,
+			))
 	} else if !cfg.InboxEnabled {
 		log.Info().Msg("inbox: disabled via INBOX_ENABLED=false")
 	} else {

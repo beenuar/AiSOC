@@ -4,15 +4,18 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 	"github.com/beenuar/aisoc/services/ingest/internal/graph"
+	"github.com/beenuar/aisoc/services/ingest/internal/ingestauth"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
-	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,6 +25,15 @@ import (
 // when graph projection is disabled).
 type GraphWriter interface {
 	WriteEvent(ctx context.Context, ev *graph.Event) error
+}
+
+// EventPublisher is the subset of *publisher.Publisher the HTTP path
+// depends on. Declared as an interface for the same reason GraphWriter is:
+// so a request can be driven end to end in a unit test — including which
+// tenant its events were published for — without a Kafka broker.
+type EventPublisher interface {
+	PublishBatch(ctx context.Context, events []*normalizer.NormalizedEvent) error
+	Ready(ctx context.Context) error
 }
 
 // SnapshotApplier mirrors *config_snapshot.Snapshotter.Apply. Defined as
@@ -50,15 +62,16 @@ type SubscriptionStatus struct {
 // Handler holds handler dependencies
 type Handler struct {
 	norm          *normalizer.Normalizer
-	pub           *publisher.Publisher
+	pub           EventPublisher
 	graph         GraphWriter
 	snapshot      SnapshotApplier
 	cfg           *config.Config
+	auth          *ingestauth.Authenticator
 	subscriptions map[string]func() SubscriptionStatus
 }
 
 // New creates a new Handler
-func New(norm *normalizer.Normalizer, pub *publisher.Publisher, cfg *config.Config) *Handler {
+func New(norm *normalizer.Normalizer, pub EventPublisher, cfg *config.Config) *Handler {
 	return &Handler{norm: norm, pub: pub, cfg: cfg, subscriptions: map[string]func() SubscriptionStatus{}}
 }
 
@@ -92,6 +105,17 @@ func (h *Handler) SetSnapshotApplier(s SnapshotApplier) {
 	h.snapshot = s
 }
 
+// SetAuthenticator wires in the /v1/ingest credential check.
+//
+// Unlike the other setters on this type, nil is not a "feature disabled"
+// signal: a nil *ingestauth.Authenticator refuses every request. Ingest is
+// a write path into tenant-owned data, so a wiring regression has to fail
+// closed. There is no flag that turns this off — AISOC_DEV_MODE does not
+// reach it, and tests/test_security_defaults.py exists to keep it that way.
+func (h *Handler) SetAuthenticator(a *ingestauth.Authenticator) {
+	h.auth = a
+}
+
 // IngestRequest is the API payload for submitting events
 type IngestRequest struct {
 	ConnectorID   string                   `json:"connector_id"`
@@ -110,14 +134,45 @@ type IngestResponse struct {
 
 // IngestEvents handles POST /v1/ingest
 func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
-	tenantID := r.Header.Get(h.cfg.TenantHeaderKey)
-	if tenantID == "" {
-		writeError(w, http.StatusBadRequest, "missing tenant ID header")
+	// Authenticate before touching the body. An unauthenticated caller
+	// should not get to spend this process's memory budget, and the
+	// credential is what decides the tenant, so nothing below can run
+	// without it.
+	identity, authErr := h.auth.Authenticate(r.Context(), r)
+	if authErr != nil {
+		writeAuthError(w, r, authErr)
 		return
 	}
 
+	body, ok := h.readIngestBody(w, r)
+	if !ok {
+		return
+	}
+
+	if err := ingestauth.VerifySignature(r, identity, body); err != nil {
+		writeAuthError(w, r, err)
+		return
+	}
+
+	// The tenant header is honoured only where it agrees with what the
+	// credential authorises. Naming another tenant narrows the scope to
+	// nothing and is refused here, rather than reaching into that tenant
+	// — which is precisely what this endpoint used to do for anyone who
+	// could reach the port.
+	tenantUUID, scopeErr := ingestauth.Resolve(identity.Principal, h.auth.DeclaredTenant(r))
+	if scopeErr != nil {
+		log.Warn().
+			Str("subject", sanitizeForLog(identity.Principal.Subject)).
+			Str("requested_tenant", sanitizeForLog(h.auth.DeclaredTenant(r))).
+			Bool("delegated", identity.Principal.Delegated).
+			Msg("ingest: refused a write outside the credential's tenant scope")
+		writeError(w, http.StatusForbidden, scopeErr.Error())
+		return
+	}
+	tenantID := tenantUUID.String()
+
 	var req IngestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
@@ -317,6 +372,61 @@ func degradedSubscriptions(subs map[string]SubscriptionStatus) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// readIngestBody slurps the body under a size cap.
+//
+// The cap is new alongside authentication and belongs with it: MaxBatchSize
+// is only checked after the payload has been decoded, so before this the
+// only thing standing between the endpoint and a multi-gigabyte body was
+// that nobody had sent one.
+func (h *Handler) readIngestBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	limit := h.cfg.IngestMaxBodyBytes
+	if limit <= 0 {
+		limit = 10 * 1024 * 1024
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("body exceeds %d bytes", limit))
+			return nil, false
+		}
+		writeError(w, http.StatusBadRequest, "failed to read request body: "+err.Error())
+		return nil, false
+	}
+	return body, true
+}
+
+// writeAuthError renders an *ingestauth.Error with its own status, and logs
+// the refusal. Anything that is not one of those is reported as 401 rather
+// than leaking an internal message to an unauthenticated caller.
+func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
+	var authErr *ingestauth.Error
+	status, msg := http.StatusUnauthorized, "unauthorized"
+	if errors.As(err, &authErr) {
+		status, msg = authErr.Status, authErr.Msg
+	}
+	log.Warn().
+		Int("status", status).
+		Str("remote_addr", sanitizeForLog(r.RemoteAddr)).
+		Str("path", sanitizeForLog(r.URL.Path)).
+		Msg("ingest: refused an unauthenticated or unauthorized push")
+	writeError(w, status, msg)
+}
+
+// sanitizeForLog strips CR/LF and bounds length inline at the call site.
+// Done inline rather than behind a helper call for the values that matter:
+// the taint tracker does not follow a helper across the boundary, and these
+// values are caller-controlled.
+func sanitizeForLog(v string) string {
+	s := strings.ReplaceAll(strings.ReplaceAll(v, "\r", ""), "\n", " ")
+	if len(s) > 128 {
+		return s[:128]
+	}
+	return s
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

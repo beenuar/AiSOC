@@ -84,11 +84,13 @@ make demo
 
 ## Connect real data
 
-Two ways in. Push, from anything that can make an HTTP request:
+Two ways in. Push, from anything that can make an HTTP request. The tenant
+comes from the credential, not from a header — mint one with
+`make ingest-token` ([how it works](https://beenuar.github.io/AiSOC/docs/operations/ingest-authentication)):
 
 ```bash
 curl -X POST http://localhost:8081/v1/ingest/batch \
-  -H 'Content-Type: application/json' -H 'X-Tenant-ID: <tenant>' \
+  -H 'Content-Type: application/json' -H "Authorization: Bearer $AISOC_INGEST_TOKEN" \
   -d '{"connector_id":"edr-1","connector_type":"crowdstrike","source_format":"json",
        "events":[{"severity":"high","title":"Encoded PowerShell from Office",
                   "host":"WIN-FIN-01","process_name":"powershell.exe"}]}'

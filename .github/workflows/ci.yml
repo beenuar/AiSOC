@@ -435,6 +435,16 @@ jobs:
         run: python3 scripts/check_connector_profiles.py --self-test
       - name: Connector profile drift gate
         run: python3 scripts/check_connector_profiles.py
+      # The same shape one layer over: an inbox template that ships has to be
+      # mintable, and a mintable id has to have a template to apply. Both
+      # directions, because only one of them was ever checked informally and
+      # three templates — ai-runtime, ai-finding and k8s-audit — shipped,
+      # were named in the AI SDK's own setup instructions and in the
+      # Kubernetes connector docs, and could not be minted at all.
+      - name: Inbox template drift gate — self-test
+        run: python3 scripts/check_inbox_templates.py --self-test
+      - name: Inbox template drift gate
+        run: python3 scripts/check_inbox_templates.py
       # Same question one layer up: a connector name has to reach a profile,
       # and a model name has to reach a gateway that defines it. AI triage
       # could not reach a model in the default deployment because
