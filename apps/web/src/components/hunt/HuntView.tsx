@@ -43,6 +43,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { demoFallback } from '@/lib/demoFallback';
 
 // Monaco is heavy and SSR-incompatible; load it client-side only.
 const MonacoEditor = dynamic(
@@ -635,7 +636,18 @@ export function HuntView() {
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [activeSavedHuntId, setActiveSavedHuntId] = useState<string | null>(null);
   const editorRef = useRef<unknown>(null);
-  const [demoMode, setDemoMode] = useState(false);
+  /**
+   * Whether the *backend* said these results are illustrative.
+   *
+   * Deliberately not a demo flag. This used to be `demoMode`, a local
+   * `useState(false)` flipped to `true` by a fetch failure, which made the
+   * page substitute invented telemetry precisely when the backend was
+   * unhealthy — the moment a reader is least able to tell. Whether sample
+   * data may render at all is now `canUseDemoData()`, a property of the
+   * build; this only records that a successful response was self-declared
+   * `source: "sample"`.
+   */
+  const [sampleSource, setSampleSource] = useState(false);
   // Reason the results are not live, surfaced verbatim from the backend so
   // the console never has to guess why it is showing sample data.
   const [sampleNotice, setSampleNotice] = useState<string | null>(null);
@@ -655,17 +667,7 @@ export function HuntView() {
 
   const savedState = useSWR<SavedSearch[]>(
     'hunt.saved',
-    async () => {
-      try {
-        const res = await huntApi.listSaved();
-        return res.searches;
-      } catch (err) {
-        // First-load fallback to demo so the UI is never empty.
-        setDemoMode(true);
-        setSampleNotice('Saved searches could not be loaded from the backend.');
-        throw err;
-      }
-    },
+    async () => (await huntApi.listSaved()).searches,
     {
       revalidateOnFocus: false,
       shouldRetryOnError: false,
@@ -681,12 +683,12 @@ export function HuntView() {
     },
   );
 
-  // If saved-search fetch failed, transparently substitute demo list so the UI
-  // is usable.
-  const savedItems: SavedSearch[] =
-    savedState.data ?? (demoMode ? DEMO_SAVED : []);
-  const savedError =
-    savedState.error && !demoMode ? savedState.error : undefined;
+  // The hosted demo has no backend, so it substitutes a sample list. Every
+  // other deployment shows the error: three saved hunts nobody saved are
+  // indistinguishable from three the tenant did save.
+  const sampleSaved = demoFallback(DEMO_SAVED);
+  const savedItems: SavedSearch[] = savedState.data ?? sampleSaved ?? [];
+  const savedError = sampleSaved ? undefined : savedState.error;
   const savedHuntsItems: SavedHunt[] = savedHuntsState.data ?? [];
   const savedHuntsError = savedHuntsState.error;
 
@@ -732,16 +734,15 @@ export function HuntView() {
       setNlExplanation(explanation || null);
     } catch (err) {
       console.error('NL translate failed', err);
-      toast.error('Could not translate the question — using demo results');
+      toast.error('Could not translate the question');
       setNlSubmittedQuery(cleaned);
       setNlExplanation(null);
     } finally {
       setNlPending(false);
     }
 
-    // Run the hunt regardless of translate outcome — falls back to demo
-    // results internally, which is still useful UX (see component
-    // docstring).
+    // Run the hunt regardless of translate outcome: the editor holds
+    // whatever the translator managed, and a failed run reports itself.
     void runHunt({
       languageOverride: 'esql',
       queryOverride: translatedEsql || query,
@@ -777,24 +778,31 @@ export function HuntView() {
       // generates illustrative events rather than querying the lake, and says
       // so with `source: "sample"` — trusting the status code alone is how a
       // green "Live backend" pill ended up sitting over fabricated telemetry.
-      setDemoMode(
+      setSampleSource(
         (res as { source?: string }).source === 'sample' ||
           Boolean((res as { notice?: string }).notice),
       );
       setSampleNotice((res as { notice?: string }).notice ?? null);
     } catch (err) {
-      // Demo fallback so the page still feels alive without a seeded backend.
-      setResults({
-        total: DEMO_RESULTS.length,
-        took: 42,
-        hits: DEMO_RESULTS,
-      });
-      setDemoMode(true);
-      setSampleNotice(
-        'The hunt backend is unreachable, so these are illustrative sample events rather than results from your telemetry.',
-      );
       setRunError(err);
-      toast('Backend unreachable — showing sample results');
+      const sample = demoFallback(DEMO_RESULTS);
+      if (sample) {
+        // The hosted demo has no lake to query.
+        setResults({ total: sample.length, took: 0, hits: sample });
+        setSampleSource(true);
+        setSampleNotice(
+          'The hunt backend is unreachable, so these are illustrative sample events rather than results from your telemetry.',
+        );
+        return;
+      }
+      // Everywhere else a failed hunt reads as a failed hunt. The old branch
+      // published three detections on named hosts plus `took: 42` — a query
+      // latency for a query that never ran, rendered in the same line as a
+      // real measurement.
+      setResults(null);
+      setSampleSource(false);
+      setSampleNotice(null);
+      toast.error('Hunt failed — no results to show');
     } finally {
       setRunning(false);
     }
@@ -954,7 +962,7 @@ export function HuntView() {
             <span
               className={clsx(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ring-1',
-                demoMode
+                sampleSource
                   ? 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
                   : 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
               )}
@@ -962,12 +970,12 @@ export function HuntView() {
               <span
                 className={clsx(
                   'h-1.5 w-1.5 rounded-full',
-                  demoMode ? 'bg-amber-400' : 'bg-emerald-400 animate-ping-slow',
+                  sampleSource ? 'bg-amber-400' : 'bg-emerald-400 animate-ping-slow',
                 )}
               />
-              {demoMode ? 'Sample data' : 'Live backend'}
+              {sampleSource ? 'Sample data' : 'Live backend'}
             </span>
-            {demoMode && sampleNotice && (
+            {sampleSource && sampleNotice && (
               <p className="mt-1 text-[11px] leading-snug text-amber-300/80">{sampleNotice}</p>
             )}
           </div>
@@ -1172,6 +1180,16 @@ export function HuntView() {
                 <Skeleton className="h-12 w-full rounded-lg" />
                 <Skeleton className="h-12 w-full rounded-lg" />
               </div>
+            ) : runError && !results ? (
+              // A hunt that did not run has no result, empty or otherwise.
+              // Reporting it as "no matches" would read as a clean estate.
+              <ErrorState
+                title="Hunt failed"
+                description="The query was not executed, so nothing here describes your telemetry."
+                error={runError}
+                onRetry={handleRun}
+                className="m-4"
+              />
             ) : !results ? (
               <EmptyState
                 title="Press Run to begin"
@@ -1183,11 +1201,9 @@ export function HuntView() {
                   No matches in the selected window
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {runError
-                    ? 'Backend unreachable — but here is the parsed query so you can refine it.'
-                    : nlSubmittedQuery
-                      ? 'The translator parsed your question (see editor) but found no events. Try a wider time range.'
-                      : 'Either the data is clean, or the query is too tight.'}
+                  {nlSubmittedQuery
+                    ? 'The translator parsed your question (see editor) but found no events. Try a wider time range.'
+                    : 'Either the data is clean, or the query is too tight.'}
                 </p>
               </div>
             ) : (

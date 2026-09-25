@@ -15,8 +15,6 @@
  *
  * Data source: `GET /api/v1/metrics/funnel?period=…` ({@link metricsApi.getFunnel}).
  * Polls every 60 s with stale-while-revalidate.
- *
- * Author: Beenu Arora <beenu@cyble.com>
  */
 
 import useSWR from 'swr';

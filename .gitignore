@@ -51,11 +51,20 @@ coverage.xml
 # uploaded as artefacts — never committed.
 coverage/
 **/coverage/
-# BUT keep app-source route directories literally named `coverage` (e.g. the
-# /tools/coverage page). The rules above are for generated test-coverage output;
-# without this negation the coverage tool page silently drops from the build.
+# BUT keep app-source directories literally named `coverage` (the
+# /tools/coverage route, and `components/coverage/` behind /coverage-advisor).
+# The rules above are for generated test-coverage output; without these
+# negations the coverage tool page silently drops from the build.
+#
+# `components/` was missing here, which is worse than it sounds: the component
+# was tracked because it predates the rule, so nothing looked wrong, but every
+# *new* file beside it — a test especially — was ignored on `git add -A` and
+# never reached CI. A test that cannot be committed is indistinguishable from
+# a test that passes.
 !apps/web/src/app/**/coverage/
 !apps/web/src/app/**/coverage/**
+!apps/web/src/components/coverage/
+!apps/web/src/components/coverage/**
 *.lcov
 
 # IDE
