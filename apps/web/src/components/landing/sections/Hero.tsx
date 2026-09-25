@@ -33,10 +33,15 @@ import { AnimatedGridPattern } from '@/components/magicui/AnimatedGridPattern';
 import { AuroraText } from '@/components/magicui/AuroraText';
 import { cn } from '@/lib/utils';
 import { CONNECTOR_COUNT } from '@/data/connectorCount';
+import {
+  EXECUTABLE_DETECTION_COUNT,
+  PLAYBOOK_PACK_COUNT,
+  PLUGIN_COUNT,
+} from '@/data/corpusStats';
 
 const PROOF_CHIPS: ReadonlyArray<string> = [
   `${CONNECTOR_COUNT} connectors · EDR · SIEM · cloud · IAM · SaaS · VCS · network`,
-  '6,998 detections · 62 playbook packs · 57 plugins',
+  `${EXECUTABLE_DETECTION_COUNT} executable detections · ${PLAYBOOK_PACK_COUNT} playbook packs · ${PLUGIN_COUNT} plugins`,
   'Self-host · Render · Fly.io · Helm · Terraform · air-gap',
 ];
 

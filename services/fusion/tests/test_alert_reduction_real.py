@@ -43,6 +43,17 @@ WINDOW = timedelta(seconds=3600)
 #: comparable, which is the point of keeping both.
 STREAM_SIZE = 1000
 
+#: The figure the docs and the console publish, as a percentage.
+#:
+#: Pinned here, beside the measurement, because the plausible band below is
+#: deliberately wide and would not notice the ratio moving from 33.3 % to
+#: 34.1 % — while every published surface went on quoting the old one. The
+#: band asks "is the correlation still sane"; this asks "is the number we
+#: printed still the number". `scripts/check_alert_reduction_claims.py` reads
+#: this constant and holds every published surface to it, so the chain from
+#: measurement to prose has no hand-copied link in it.
+PUBLISHED_REDUCTION_PCT = 33.3
+
 TACTICS = [
     "initial-access",
     "execution",
@@ -138,6 +149,12 @@ def test_reduction_is_measured_against_the_real_correlation_key() -> None:
     # a useless SOC.
     assert 0.20 <= reduction <= 0.95, (
         f"reduction {reduction:.1%} is outside the plausible band; either correlation stopped grouping or it is collapsing unrelated alerts"
+    )
+
+    assert round(reduction * 100, 1) == PUBLISHED_REDUCTION_PCT, (
+        f"reduction is now {reduction:.1%} but PUBLISHED_REDUCTION_PCT says {PUBLISHED_REDUCTION_PCT} %, "
+        "which is what the benchmark pages print. Update the constant and re-run "
+        "`python3 scripts/check_alert_reduction_claims.py` so the published surfaces move with it."
     )
 
 
