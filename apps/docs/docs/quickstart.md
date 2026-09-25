@@ -4,154 +4,254 @@ sidebar_position: 3
 
 # Quick Start
 
-Four paths to a running AiSOC instance, in increasing order of how much you
-already have installed:
+Three commands take a fresh clone to a running AiSOC that has demonstrably
+processed an event:
 
-0. **Zero-prerequisite bootstrap** — one shell command from a freshly-imaged
-   machine. Installs Docker, Node, pnpm, git, and clones the repo; then runs
-   Path A automatically. See [One-click install](./installation).
-1. **One-shot demo** — `pnpm aisoc:demo` brings up a slim stack from prebuilt
-   GHCR images, seeds canonical demo data, kicks off an investigation, and
-   opens your browser at the live case. Roughly 3-4 minutes on a warm Docker
-   daemon.
-2. **Full development stack** — every microservice (UEBA, Honeytokens, Purple
-   Team, ClickHouse, OpenSearch, Neo4j, Qdrant, MCP, osquery TLS server,
-   Slack bot) for hacking on AiSOC itself.
-3. **Founder-style CLI** — the same dev stack as Path B, but driven entirely
-   through the `aisoc` CLI: `aisoc serve`, `aisoc db upgrade`, `aisoc submit`,
-   `aisoc mcp serve`. Ideal for screen-recording demos and for operators who
-   prefer a single binary over `docker compose` + `alembic` + `curl`.
+```bash
+git clone https://github.com/beenuar/AiSOC.git && cd AiSOC
+cp .env.example .env
+make up
+make smoke
+```
 
-This page covers Paths A, B, and C. If you don't have Docker / Node / pnpm
-yet, or if you just want a guaranteed-clean environment in one command, start
-with [Path 0 (One-click install)](./installation).
+`make up` starts the CORE stack and finishes by creating an administrator.
+`make smoke` posts one real event to the ingest API and follows it through
+Kafka, detection, correlation and Postgres, then reads the resulting alert
+back out of the public API. That second command is the one that matters: a
+console with data in it is not evidence that the pipeline works, and until
+`make smoke` passes you have not seen the product run.
+
+The rest of this page is the same journey with the detail filled in, plus two
+other ways to drive the same services.
+
+| Path | What it is |
+| --- | --- |
+| **A** | The canonical path above — CORE stack, administrator, pipeline proof. |
+| **B** | CORE plus the lake, graph, vector store, search and enrichment, for hacking on AiSOC itself. |
+| **C** | The same services driven through the `aisoc` CLI instead of `make` + `curl`. |
+
+If you have none of the prerequisites below, or you just want a
+guaranteed-clean environment in one command, start with the
+[one-click installer](./installation) — it installs every prerequisite
+idempotently on Linux, macOS and Windows and then runs Path A for you.
 
 ## Prerequisites
 
-| Tool | Minimum version | Required for |
-|------|-----------------|--------------|
-| Docker & Docker Compose | v2.x | Both paths |
-| Node.js | ≥ 20 LTS | Both paths |
-| pnpm | ≥ 8 | Both paths |
-| Python | 3.11+ | Eval harness, dev stack only |
-| Go | 1.25+ | Only if hacking on Go services or plugins |
+| Requirement | Minimum | Needed for |
+|---|---|---|
+| Docker + Compose v2 | v2.x | everything |
+| RAM available to Docker | **6.5 GB** (CORE) · 12 GB (`full`) | `make up` · `make up-full` |
+| Free Docker disk | **~18 GB** | `make up` |
+| `bash` | any | `make up` — its pre-flight port check is a shell script |
+| `python3` | 3.11+ | `make smoke`, `make stats`, the eval harness |
+| Node.js | 22 LTS | `install.sh` / `install.ps1`, and building the web console |
+| pnpm | ≥ 8 | as above |
+| Go | 1.25+ | only if you are hacking on the Go services or plugins |
 
-> If you don't have all of the above, just use the
-> [One-click installer](./installation) — it installs every prerequisite
-> idempotently for Linux, macOS, and Windows, then runs Path A for you.
+Three of those are easy to miss, because nothing names them until the command
+that needs them fails:
 
-## Path A — one-shot demo
+- **`bash`.** `make up` runs `scripts/doctor.sh --ports-only` before it calls
+  compose, so a port conflict is reported against the process holding the
+  port rather than as a `Bind for 0.0.0.0:5432 failed` against whichever
+  container lost the race. It is a hard gate: no bash, no `make up`.
+- **`python3` on the host**, not just in the containers. `make smoke` runs
+  `tests/e2e/golden_pipeline/run_golden_pipeline.py` on your machine, against
+  the stack's published ports. Without it you can start AiSOC but you cannot
+  prove it works.
+- **Free Docker disk.** Below roughly 18 GB the images and volumes do not
+  comfortably fit, and the failure is quiet rather than loud: Kafka corrupts
+  its log directory and *still passes its healthcheck*, so the stack reports
+  green while nothing flows. `make doctor` checks the space you have and says
+  whether it is enough.
 
-```bash
-git clone https://github.com/beenuar/AiSOC.git
-cd AiSOC
-pnpm aisoc:demo
-```
+Windows has no `make`. `install.ps1` runs the same steps natively — see
+[one-click install](./installation).
 
-That single command:
+## Path A — run it, then prove it works
 
-1. Pulls prebuilt images from `ghcr.io/beenuar/*` (≈90s on a warm cache).
-2. Brings up the slim demo profile defined in
-   [`infra/compose/docker-compose.demo.yml`](https://github.com/beenuar/AiSOC/blob/main/infra/compose/docker-compose.demo.yml):
-   `postgres`, `redis`, `kafka`, `api`, `agents`, `realtime`, `web`.
-3. Waits for healthchecks to go green.
-4. Seeds canonical demo data (tenants, users, alerts, IOCs, attack paths).
-5. Kicks off an AI investigation against a seeded case.
-6. Opens your browser at `/cases/<uuid>` so you land on a **live** investigation.
-
-| Step | Approximate time |
-|---|---|
-| `docker compose pull` | ~90s |
-| `docker compose up` + healthchecks | ~60s |
-| Seed canonical data | ~30s |
-| Kick off investigation | ~30s |
-| Total | ~3.5 min |
-
-When you're done:
-
-```bash
-pnpm aisoc:demo:down    # stops the stack and deletes the demo volumes
-pnpm aisoc:demo:logs    # tails logs while the stack is up
-```
-
-The orchestrator script lives at
-[`scripts/aisoc-demo.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-demo.ts).
-
-### Acceptance gate
-
-The buyer-value contract for v1.0 is **clone-to-investigation in ≤ 5 minutes on
-a clean Mac**. We measure it with a dedicated harness:
-
-```bash
-pnpm aisoc:acceptance          # warm start, default 5-minute budget
-pnpm aisoc:acceptance --cold   # prune cached demo images first (true clean clone)
-pnpm aisoc:acceptance --history-only   # print the trend ledger
-```
-
-The harness wraps `aisoc:demo`, enforces the budget, and appends a JSONL entry
-to `.aisoc/acceptance-history.jsonl` per run so regressions are visible across
-commits. Exit codes — `0` pass, `3` over budget, `4` showcase case never
-reached — make it easy to wire into CI without parsing logs. Source:
-[`scripts/aisoc-acceptance.ts`](https://github.com/beenuar/AiSOC/blob/main/scripts/aisoc-acceptance.ts).
-
-## Path B — full development stack
-
-Use this when you want to hack on AiSOC itself, run the eval harness, or
-exercise UEBA / Honeytokens / Purple Team / MCP.
-
-### 1. Clone & configure
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC
 cp .env.example .env
-pnpm install
 ```
 
-Open `.env` and fill in at least one AI provider:
+`.env.example` ships a working `POSTGRES_PASSWORD` (`aisoc_dev_secret`), so
+the database comes up without you touching anything.
+
+**It does not ship a usable `AISOC_CREDENTIAL_KEY`.** The line you copy is:
 
 ```bash
-# AI providers (at least one required)
-OPENAI_API_KEY=sk-...
-# or
-ANTHROPIC_API_KEY=sk-ant-...
-
-# API JWT signing key — generate with: openssl rand -hex 32
-SECRET_KEY=change-me-in-production-at-least-32-chars
-
-# Optional enrichment / feeds / SSO / Purple Team — see .env.example
+AISOC_CREDENTIAL_KEY=replace-me-with-a-freshly-generated-fernet-key
 ```
 
-### 2. Start the full stack
+That placeholder is not a Fernet key, and it is worse than leaving the
+variable empty: an unset key makes the API generate an ephemeral one and warn,
+while a malformed key makes the credential vault raise, so the first request
+that touches a connector secret returns HTTP 500. Generate a real one and
+paste it in before you go near the Connectors page:
 
-Most of the services below are behind a compose profile, so a bare
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Nothing in Path A needs it — the pipeline proof below does not touch the
+vault — so you can also come back to this when you connect your first source.
+Full threat model and rotation procedure:
+[Operations: Credentials](./operations/credentials).
+
+AI triage additionally needs a provider key (`OPENAI_API_KEY` or
+`ANTHROPIC_API_KEY`). Without one the stack still boots and every alert is
+triaged by the deterministic path, and the console labels it as such —
+nothing pretends the AI ran.
+
+### 2. Start the stack
+
+```bash
+make up
+```
+
+This checks the ports first, starts the CORE profile, waits for every
+container to report healthy, and then creates the first administrator. A
+container that exited or is crash-looping fails the wait rather than passing
+it, so `make up` returning 0 means the services are actually up.
+
+```
+  Console:  http://localhost:3000
+  API:      http://localhost:8000/api/docs
+```
+
+### 3. Prove the pipeline works
+
+```bash
+make smoke
+```
+
+```
+[PASS] raw telemetry accepted by ingest
+[PASS] event traversed the spine and became an alert
+[PASS] alert is retrievable by id from the API
+```
+
+The runner POSTs a single suspicious-PowerShell event to
+`http://localhost:8081/v1/ingest/batch` and then observes every stage from
+the outside — Kafka, fusion, detection, promotion, Postgres, and finally the
+public API. It does not insert an alert, stub Kafka or reach into fusion's
+internals, because a test that reaches past a component cannot tell you that
+component works. Each stage reports PASS or FAIL independently, so a break
+names the boundary that broke.
+
+The alert title carries a fresh run id every time, so a re-run cannot pass by
+finding the previous run's alert.
+
+If a stage fails, `make doctor` diagnoses every dependency and prints the
+command that investigates each one.
+
+### 4. Sign in
+
+Open [http://localhost:3000](http://localhost:3000).
+
+There are no default credentials. `make up` runs `make bootstrap`, which
+creates `admin@aisoc.internal` with a password generated on your machine and
+printed once — it is stored nowhere, so copy it when you see it. If the
+terminal has already scrolled away, mint a new one:
+
+```bash
+make bootstrap ARGS=--reset-password
+```
+
+To choose the address, or supply your own password instead:
+
+```bash
+AISOC_ADMIN_EMAIL=you@yourcompany.com make bootstrap
+printf '%s' "$MY_PASSWORD" | docker compose run --rm -T api \
+  python -m app.scripts.bootstrap_admin --password-stdin
+```
+
+The address has to be one the login route accepts. It is validated with the
+same library the API uses, so reserved domains (`.local`, `.test`, `.invalid`,
+`.localhost`) are refused here with an explanation rather than producing an
+account that fails at the login form with a schema error.
+
+The mobile **Responder PWA** lives at
+[http://localhost:3000/responder](http://localhost:3000/responder) — install
+it on your phone via "Add to Home Screen" and sign in with a passkey.
+
+### 5. Look around with synthetic data
+
+```bash
+make demo
+```
+
+Loads a synthetic dataset so the console has something to show before you
+connect a real source. Every row it writes is marked `is_synthetic = true` in
+the database and labelled in the console. It is not a benchmark, a customer,
+or a real incident.
+
+### Day-to-day commands
+
+| Command | What it does |
+| --- | --- |
+| `make status` | every service and its health |
+| `make logs` | follow logs (`SERVICE=fusion` to narrow) |
+| `make doctor` | diagnose every dependency, with the fix for each |
+| `make smoke` | re-run the end-to-end pipeline check |
+| `make down` | stop the stack, keep the data |
+| `make clean` | stop the stack and delete all volumes |
+
+:::caution Not the same thing as `pnpm aisoc:demo`
+`infra/compose/docker-compose.demo.yml` — what `pnpm aisoc:demo` starts — is a
+UI preview over a pre-seeded database. It has no ingest service and no fusion
+service, and it sets `AISOC_DISABLE_KAFKA=true`: everything visible in that
+console came from a seed script writing rows straight into Postgres. Use it to
+look at the interface. Do not use it to decide whether AiSOC works, because it
+cannot answer that question. `make up` is the stack this page, the README and
+CI all mean.
+:::
+
+## Path B — the full stack
+
+Use this when you want to hack on AiSOC itself, run the eval harness, or
+exercise UEBA / Honeytokens / Purple Team / MCP.
+
+```bash
+make up-full
+```
+
+That starts CORE plus the event lake, entity graph, vector store, search and
+enrichment, sets the lake and graph writers on (they target stores that only
+exist in this profile), and waits for every container to report healthy.
+
+### What is in which profile
+
+Most non-CORE services sit behind a compose profile, so a bare
 `docker compose up -d` starts neither UEBA nor Honeytokens nor Purple Team.
-Name the profiles you want:
-
-```bash
-docker compose --profile full --profile extras up -d
-docker compose --profile full --profile extras ps
-```
-
-That starts:
+`make up` and `make up-full` are the supported spellings for the first two
+rows, and additionally wait for health, which a bare `docker compose up -d`
+does not.
 
 | Profile | Services |
 | --- | --- |
-| *(default)* | **PostgreSQL** (5432) · **Redis** (6379) · **Kafka** (9092) · **litellm** (4000, LLM gateway) · **api** (8000, FastAPI core) · **agents** (8001, LangGraph) · **realtime** (8086, Node.js + VAPID Web Push) · **web** (3000) · **fusion** (8003) · **ingest** (8081, Go) |
-| `full` | **ClickHouse** · **OpenSearch** · **Neo4j** · **Qdrant** · **kafka-ui** (8080) · **actions** (8002) · **threatintel** (8005) · **ueba** (8007) · **enrichment** (8080, Go) · **connectors** (8003) |
+| *(default — CORE)* | **postgres** (5432) · **redis** (6379) · **zookeeper** · **kafka** (9092) · **litellm** (4000, LLM gateway) · **ingest-worker** (8081, Go) · **fusion** (8003) · **api** (8000) · **agents** (8001) · **realtime** (8086) · **web** (3000) |
+| `full` | **clickhouse** (8123/9000) · **neo4j** (7474/7687) · **qdrant** (6333) · **opensearch** (9200) · **threatintel** (8005) · **ueba** (8007) · **connectors** (8088) · **enrichment** (8080, Go) · **kafka-ui** (8090) · **actions** (8002) |
 | `extras` | **honeytokens** (8008) · **purple-team** (8006) |
+| `chatops` | **slack-bot** (8009) · **actions** (8002) |
+| `monitoring` | **prometheus** (9091) · **grafana** (3001) · **alertmanager** (9094) · **tempo** (3200) · **otel-collector** (4317/4318) |
 | `osquery` | **osquery-tls** (8091) |
 
-`make up` and `make up-full` are the supported spellings for the first two
-rows and additionally wait for every container to report healthy, which a
-bare `docker compose up -d` does not.
+CORE is 11 services and `full` is 21 — `actions` is in both `full` and
+`chatops`, so it is counted once. Named profiles compose, so
+`docker compose --profile full --profile extras up -d` is valid; it just does
+not wait for health the way `make up-full` does.
 
-**What this gives you about AI.** Every command above starts the CORE
-profile, which includes the `litellm` LLM gateway. AiSOC asks for logical task
-aliases (`aisoc-triage`, `aisoc-investigation`, …) and the gateway is the only
-thing that resolves them, so it has to be running for AI triage to happen at
-all — it was a `full`-profile service until 2026-09, which meant the default
-install could not do AI triage even with the key you just set
+**What this gives you about AI.** Every command above starts the CORE profile,
+which includes the `litellm` LLM gateway. AiSOC asks for logical task aliases
+(`aisoc-triage`, `aisoc-investigation`, …) and the gateway is the only thing
+that resolves them, so it has to be running for AI triage to happen at all —
+it was a `full`-profile service until 2026-09, which meant the default install
+could not do AI triage even with the key you set
 ([ADR-0006](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0006-llm-gateway-in-core.md)).
 
 - **With a provider key** in `.env`: alerts are triaged by the AI, and the
@@ -161,11 +261,7 @@ install could not do AI triage even with the key you just set
   LLM call is made. Every alert is triaged by the deterministic path and the
   console labels it as such. Nothing pretends the AI ran.
 
-Path A above needs no gateway: the demo compose pins every role to a concrete
-provider model, and a concrete pin goes straight to the provider rather than
-through the gateway.
-
-### 3. Database migrations — nothing to run
+### Database migrations — nothing to run
 
 Every schema is applied by the stack itself; there is no manual migration
 step, and there is nothing to remember to run in the right order.
@@ -208,29 +304,7 @@ A service whose chain did not reach head does not serve at all: its
 container exits and `docker compose ps` shows it unhealthy rather than
 running.
 
-The `api` migrations include
-[`008_investigation_ledger.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/008_investigation_ledger.sql)
-(replayable agent decision log) and
-[`009_responder_pwa.sql`](https://github.com/beenuar/AiSOC/blob/main/services/api/migrations/009_responder_pwa.sql)
-(passkeys, on-call rotation, approvals).
-
-### 4. Seed demo data
-
-```bash
-pnpm seed:demo
-```
-
-### 5. Verify
-
-```bash
-pnpm aisoc:doctor
-```
-
-Runs a one-shot health check across ports, containers, demo data, the API,
-and the WebSocket gateway. If anything is red, it tells you exactly what to
-fix.
-
-### 6. Run the public eval harness (optional)
+### Run the public eval harness (optional)
 
 ```bash
 # Run all four substrate eval suites against the bundled 200-incident
@@ -255,48 +329,17 @@ CI on every PR — see
 > [eval harness page](./benchmark) documents exactly what each suite measures
 > and what it doesn't.
 
-### 7. Open the UI
+### Connect your first source in 5 minutes
 
-Visit [http://localhost:3000](http://localhost:3000) and log in with the
-credentials `make up` printed.
+Pointing AiSOC at a live source takes about five minutes per connector and
+zero code changes. Connectors are a `full`-profile service, so start the stack
+with `make up-full`.
 
-There are no default credentials. `make up` runs `make bootstrap`, which
-creates `admin@aisoc.internal` with a password generated on your machine and
-printed once — it is stored nowhere, so copy it when you see it. If the
-terminal has already scrolled away, mint a new one:
-
-```bash
-make bootstrap ARGS=--reset-password
-```
-
-To choose the address or supply your own password instead:
-
-```bash
-AISOC_ADMIN_EMAIL=you@yourcompany.com make bootstrap
-printf '%s' "$MY_PASSWORD" | docker compose run --rm -T api \
-  python -m app.scripts.bootstrap_admin --password-stdin
-```
-
-The address has to be one the login route accepts. It is validated with the
-same library the API uses, so reserved domains (`.local`, `.test`, `.invalid`,
-`.localhost`) are refused here with an explanation rather than producing an
-account that fails at the login form with a schema error.
-
-The mobile **Responder PWA** lives at
-[http://localhost:3000/responder](http://localhost:3000/responder) — install
-it on your phone via "Add to Home Screen" and sign in with a passkey.
-
-### 8. Connect your first source in 5 minutes
-
-The seeded demo data is enough to fly the UI through; pointing AiSOC at a
-live source takes about five minutes per connector and zero code changes:
-
-1. Generate a vault key and put it in `.env` —
-   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-   then set `AISOC_CREDENTIAL_KEY=<that-string>`. In dev the API will
-   bootstrap an ephemeral key if you skip this; in prod the API refuses
-   to start without one. Full threat model and rotation procedure:
-   [Operations: Credentials](./operations/credentials).
+1. Put a real Fernet key in `.env` as `AISOC_CREDENTIAL_KEY` (see
+   [Clone and configure](#1-clone-and-configure) above) — connector
+   credentials are encrypted with it. In development the API will bootstrap
+   an ephemeral key if the variable is *empty*; it will not if the variable
+   holds the placeholder `.env.example` ships.
 2. Restart the `api` and `connectors` services so they pick up the key.
 3. In the console, click **Connectors** → **Add connector**, pick a
    source from the catalog (Microsoft Entra, GCP Cloud Audit, GitHub, …
@@ -318,7 +361,7 @@ Each per-connector page (e.g.
 (Azure AD app, GCP service account, GitHub fine-grained PAT) with exact
 permissions / scopes / role assignments and a troubleshooting section.
 
-### Console Tour
+### Console tour
 
 | Page | URL | Description |
 |------|-----|-------------|
@@ -326,26 +369,27 @@ permissions / scopes / role assignments and a troubleshooting section.
 | Alerts | `/alerts` | Raw signal feed with Ambient Copilot suggestions |
 | Cases | `/cases` | Unified case management |
 | Case workspace | `/cases/<id>` | Evidence timeline + **Investigation Ledger** + attack graph |
-| Detections | `/detections` | Sigma/YARA/KQL rule catalog (800 native + ~6,000 imported, filterable by tier) |
-| Playbooks | `/playbooks` | SOAR automation builder (50+ packs) |
+| Detections | `/detections` | Sigma/YARA/KQL rule catalog, filterable by tier |
+| Playbooks | `/playbooks` | SOAR automation builder |
 | UEBA | `/ueba` | User behavior anomaly timeline |
 | Honeytokens | `/honeytokens` | Deceptive token lifecycle |
 | Purple Team | `/purple-team` | ATT&CK coverage · emulation runs · tabletop |
-| Marketplace | `/marketplace` | 15 plugins + 50+ playbooks + 6,900+ detections (tier-filtered) |
+| Marketplace | `/marketplace` | Plugins, playbooks and detection packs (tier-filtered) |
 | Benchmark | `/benchmark` | Public eval harness — alert reduction + substrate self-consistency gates |
 | Compliance | `/compliance` | SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA |
 | Audit Log | `/audit` | Immutable, tenant-scoped activity ledger |
 | Responder PWA | `/responder` | Mobile passkey-only console for on-call analysts |
 
+Run `make stats` to recount the figures the README publishes — detection
+counts and connector counts are produced from the tree rather than typed in,
+so this page does not restate them.
+
 ## Path C — founder-style CLI
 
-Same backing services as Path B (full dev stack), but every step is one
-`aisoc <verb>` command. This is the path the recorded product demo follows
-and the fastest way to go from "fresh clone" to "alert submitted, agent
-investigating" without remembering the `docker compose` / `alembic` /
-`curl` invocations.
+The same services as Path A and B, driven through `aisoc <verb>` instead of
+`make` + `curl`. This is the path the recorded product demo follows.
 
-### 1. Clone & install the CLI
+### 1. Install the CLI
 
 ```bash
 git clone https://github.com/beenuar/AiSOC.git
@@ -356,9 +400,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e packages/aisoc-cli
 ```
 
-`.env.example` is already wired up with a working `POSTGRES_PASSWORD` and a
-pre-generated dev `AISOC_CREDENTIAL_KEY`. Add at least one AI provider key
-(`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) before continuing.
+Set `AISOC_CREDENTIAL_KEY` to a generated Fernet key as described in
+[Clone and configure](#1-clone-and-configure), and add at least one AI
+provider key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) if you want AI triage.
 
 Confirm the CLI is on PATH:
 
@@ -376,9 +420,8 @@ aisoc serve
 ```
 
 Under the hood this runs `docker compose -f infra/compose/docker-compose.dev.yml up -d`
-against the full dev profile (Postgres, Redis, Kafka, ClickHouse, api,
-agents, fusion, ingest-worker, web, mcp, …). The command resolves the repo
-root automatically, so it works from any subdirectory.
+against the dev profile. The command resolves the repo root automatically, so
+it works from any subdirectory.
 
 Use `aisoc serve --no-detach` if you want to watch the logs inline, or run
 `docker compose ps` separately to confirm every container is healthy.
@@ -427,14 +470,22 @@ A non-zero exit code means the API service rejected the payload or
 isn't reachable; the error message tells you to run `aisoc serve` first
 if the latter.
 
-Why direct-to-API instead of via the ingest spine? The Kafka-based
-detection / correlation pipeline is still wiring up in the demo
-environment, so events POSTed to `/v1/ingest/batch` accept cleanly but
-never become `Alert` rows. The `/api/v1/alerts/submit` endpoint
-short-circuits that gap so the recorded demo's "submit → see in console"
-moment works on a fresh clone today. Production deployments still flow
-events through `services/ingest` → Kafka → fusion → detection; this
-endpoint is for fixtures and tabletop exercises.
+#### `alerts/submit` versus the ingest spine
+
+Both work, and they answer different questions.
+
+`POST /v1/ingest/batch` on the **ingest** service is the production path:
+normalize → Kafka → fusion → detection → correlation → an `Alert` row. That
+is what `make smoke` exercises and what the README uses as its proof, so it is
+the one to use when the question is "does the pipeline work".
+
+`POST /api/v1/alerts/submit` on the **api** service short-circuits that and
+writes the alert directly. It is the right tool for fixtures, tabletop
+exercises and demo scripts, where you want a specific alert to exist without
+waiting on the spine — and it is what the CLI uses so a single fixture lands
+deterministically. It is not a fallback for a broken pipeline: if events sent
+to the ingest spine are not becoming alerts, that is a defect, and
+`make doctor` plus `make smoke` will localise it.
 
 #### Hardening / limits on `POST /api/v1/alerts/submit`
 
@@ -479,17 +530,15 @@ sessions) on the alerts board.
 
 ### 6. Hook your IDE in over MCP (optional)
 
-If you use Cursor, Claude Desktop, or Continue, point them at the local
-MCP server so you can talk to your running AiSOC instance from the editor:
+If your editor speaks MCP, point it at the local MCP server so you can talk to
+your running AiSOC instance from the editor:
 
 ```bash
-# Stand up the MCP server over stdio (Cursor / Claude / Continue)
+# Stand up the MCP server over stdio
 aisoc mcp serve --transport stdio
 
 # Or auto-wire it into a specific IDE config
-aisoc mcp install --host cursor
-aisoc mcp install --host claude
-aisoc mcp install --host continue
+aisoc mcp install --host <editor>
 ```
 
 `aisoc mcp serve` prefers the local TypeScript build at
@@ -516,10 +565,15 @@ sample exports to dogfood your detection content end to end.
 | Apply DB migrations | `aisoc db upgrade` |
 | Submit a sample alert | `aisoc submit examples/alerts/lateral-movement.json` |
 | Run the MCP server over stdio | `aisoc mcp serve --transport stdio` |
-| Wire MCP into Cursor / Claude / Continue | `aisoc mcp install --host <host>` |
+| Wire MCP into an editor | `aisoc mcp install --host <editor>` |
 | Validate a plugin manifest | `aisoc plugin validate plugins/<id>` |
 | Validate a Sigma rule | `aisoc detection validate detections/<id>.yml` |
-| Generate a vault `AISOC_CREDENTIAL_KEY` | `aisoc keygen` |
+| Generate an **Ed25519 plugin-signing** key pair | `aisoc keygen` |
+
+`aisoc keygen` writes `~/.aisoc/signing.key` and `signing.pub` for signing
+plugin manifests. It does **not** generate the vault's
+`AISOC_CREDENTIAL_KEY`, which is a Fernet key — use the `python -c` one-liner
+in [Clone and configure](#1-clone-and-configure) for that.
 
 ## Next Steps
 
@@ -553,6 +607,8 @@ sample exports to dogfood your detection content end to end.
 
 ### Got stuck?
 
-If `pnpm aisoc:demo` failed, healthchecks went red, or migrations didn't run cleanly,
-the [troubleshooting page](./operations/troubleshooting) has runbooks for the most
+Run `make doctor` first — it checks every dependency and prints the command
+that investigates each failure. If `make up` never went healthy or `make
+smoke` failed a stage, the
+[troubleshooting page](./operations/troubleshooting) has runbooks for the most
 common failure modes.
