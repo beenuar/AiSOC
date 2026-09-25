@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.0.0] — 2026-09-25
+
 ### BREAKING
 
 - **`POST /v1/ingest` and `POST /v1/ingest/batch` now require a credential,
@@ -49,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `connectors` if you use pull connectors — without it, connector polling is
   refused, loudly, at startup on one side and per request on the other. Full
   procedure: `apps/docs/docs/operations/ingest-authentication.md`.
+
+- **CORE now needs 8 GB of memory and 20 GB of free disk, up from `~6.5 GB`.**
+  A machine that ran the previous CORE profile may not start this one, and the
+  failure arrives as containers being killed rather than as a message naming
+  the requirement — so this is a prerequisite change to read before upgrading,
+  not a footnote. The cause is that CORE stopped being a profile with nothing
+  to show: `threatintel` and `qdrant` moved in so a fresh `make up` holds real
+  CISA KEV data with no credentials, and `ollama` moved in with its pinned
+  `llama3.2:3b-instruct-q4_K_M` so triage runs against a real model with real
+  token counts. Measured before and after on the same machine: 11 long-running
+  services become 14 plus a one-shot model pull, unique image layers 8.11 GB →
+  16.46 GB, model weights a new 2.02 GB volume, and resident memory for the
+  whole stack 1.72 GiB → 4.84 GiB. Ollama is 9.6 MiB resident when idle and
+  2.96 GiB while serving a request; the requirement is sized against the
+  second. The full table is under **Fixed → Measured, not estimated**.
 
 ### The landing page now shows the product, and points at the repository
 
@@ -280,191 +297,6 @@ invisible to the test suite.
   model answers every time. No hosted provider has been exercised — there is
   still no funded key, and that remains a different claim.
 
-- **`POST /v1/ingest/batch` is documented as unauthenticated**, because on
-  this commit it is: only the inbox webhook paths and the Kubernetes audit
-  webhook carry a token. A comment in `server.go` asserts the opposite and is
-  flagged in the docs rather than quietly relied upon.
-
-### The documented quick start broke the product, and then the product had nothing to show
-
-Every item below passed the existing test suite and failed on a real
-deployment. They are grouped by what a new user actually hit, in the order
-they hit it.
-
-#### Following the README broke the credential vault
-
-- **`.env.example` shipped `AISOC_CREDENTIAL_KEY=replace-me-with-a-freshly-generated-fernet-key`,
-  and `cp .env.example .env` is step two of the quick start.** The vault takes
-  its friendly ephemeral-development-key path only when the key is *empty*; a
-  non-empty invalid key reaches `Fernet()` and raises, which the connector
-  endpoints turn into HTTP 500 `credential vault unavailable`. Nothing failed
-  at boot. So **not** copying the template produced a working vault and
-  following the documented instructions produced a broken one, discovered
-  minutes later at the connector wizard with nothing linking the two.
-
-  Fixed at setup rather than in the vault: `make up` now runs
-  `scripts/ensure_env.py`, which creates `.env` and writes a real random value
-  for `AISOC_CREDENTIAL_KEY`, `SECRET_KEY` and `AISOC_SERVICE_TOKEN`. It is
-  idempotent and never rotates a value an operator already set, and it uses
-  the standard library so it does not put a `pip install` in front of
-  `make up`. Teaching the vault to tolerate a placeholder was the alternative
-  and would have been worse: a deployment whose saved connector credentials
-  silently do not survive a restart. The three secrets now ship **empty** in
-  the template as well, so a hand-copied `.env` degrades to the documented
-  development path instead of a hard 500.
-
-- **`make doctor`'s placeholder check matched neither placeholder the
-  repository shipped.** It grepped
-  `^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$` while the template
-  carried `replace-me-…` and `change-this-…` — a gate built to catch shipped
-  placeholders that was blind to every shipped placeholder, and that reported
-  clean on the one `.env` that broke the vault. The check now delegates to
-  `scripts/check_env_placeholders.py`, and `tests/test_env_placeholder_gate.py`
-  compares the detector against the template in both directions: every
-  non-empty value in `.env.example` must be either recognised as a placeholder
-  or declared in the test as a deliberate working default. A new placeholder
-  cannot be added without one of the two failing.
-
-#### The connector wizard could not complete
-
-Three independent causes, all silent, all fixed:
-
-- **The API was never given the credential it presents to the connectors
-  service.** `_service_token()` reads `AISOC_CONNECTORS_SERVICE_TOKEN` then
-  `AISOC_SERVICE_TOKEN`; compose interpolated the shared token into
-  `connectors`, `ueba`, `honeytokens` and `purple-team` and **not into the one
-  service that has to send it**, and with no `env_file` anywhere a value in
-  `.env` could not reach it by any route. Every catalog call was answered 401
-  and fell back to the bundled copy with `degraded=True`. Measured after the
-  fix: the catalog is `live` with **84** connectors instead of the bundled 26.
-
-- **"Test connection" sent no `Authorization` header at all.** The catalog call
-  beside it had been given one and this one had not, so it was answered 401 on
-  every invocation — and 401 was the one status the ladder did not branch on,
-  so it fell through and returned a body with no `success` key. The wizard
-  reads `result.success`, found it absent, and rendered the bare string
-  **"Connection test failed"** for an internal service-auth misconfiguration,
-  while its own help text promised "Credentials are tested against the
-  upstream API". The upstream API was never reached. It now sends the same
-  headers as the catalog call, branches on 401/403 explicitly, refuses any
-  unhandled 4xx rather than returning it as a verdict, and guarantees a
-  `success` key. An operator now sees: *"connectors service returned HTTP 401
-  to this API's service credential. AiSOC's API could not authenticate to its
-  own connectors service, so your credentials were never sent upstream. Set
-  `AISOC_SERVICE_TOKEN` …"*. The wizard also reads FastAPI's `detail` out of
-  the response body instead of showing only the status line.
-
-- **The connectors service answered 503 to everything on a default stack.**
-  Its `SECRET_KEY` compose default is one of `INSECURE_SECRET_DEFAULTS`, so
-  `resolve_console_secret()` returns `""`; with `AISOC_SERVICE_TOKEN` also
-  blank it has no credential material and fails closed, correctly. The
-  dev-mode escape that exists for exactly that case was set on `actions`,
-  `ueba`, `honeytokens`, `purple-team` and `slack-bot`, and not on
-  `connectors`. Now set — and once `make env` generates a real token, dev mode
-  stops applying at all.
-
-#### CORE had no real data and no AI
-
-- **`services/threatintel` and `qdrant` moved from the `full` profile into
-  CORE.** The CISA Known Exploited Vulnerabilities catalog is authoritative,
-  public and needs no API key, and has been wired as a scheduled handler the
-  whole time in a profile nobody starting out runs. Meanwhile the console
-  shipped a `/threat-intel` page whose endpoint existed in no profile, and that
-  page was recently caught rendering five invented IOCs. The missing feed and
-  the fabrication were one hole. A fresh `make up` now populates the console
-  with **1,723 real KEV entries** within a minute of boot, with no credentials.
-  New: `GET /api/v1/threat-intel/indicators` on the API, proxying a new
-  indicators route on `services/threatintel` backed by Qdrant.
-
-- **A daily feed would not have polled for a day.** `FeedScheduler.register`
-  handed APScheduler an `IntervalTrigger` and nothing else, and an interval
-  trigger schedules its *first* run one whole interval after start — 86400
-  seconds for KEV. A fresh install had a healthy container, a registered feed,
-  a created collection, and an empty page for twenty-four hours, with nothing
-  anywhere reporting a fault. First poll is now jittered into the first twenty
-  seconds.
-
-- **CISA's edge returns 403 to whole networks regardless of user agent.**
-  Observed with curl, httpx and a browser UA. Without a fallback every
-  deployment on such a network gets permanently zero indicators and no error a
-  user would see. The canonical `cisa.gov` URL stays primary; CISA's own
-  `cisagov/kev-data` GitHub repository — same publisher, identical schema — is
-  the fallback, and the log line names which source answered.
-
-- **OpenSearch and Neo4j are no longer required by `threatintel`.** Its
-  lifespan called `os_store.initialize()` with no `try`, which made a
-  `full`-profile store a hard dependency of a CORE service. Both that call and
-  the pipeline's bulk index are best-effort now: with OpenSearch you
-  additionally get full-text IOC search; without it the feeds still write to
-  Qdrant, which is what the console reads.
-
-- **Ollama moved from the air-gapped overlay into CORE**, with its pinned
-  `llama3.2:3b-instruct-q4_K_M` (~2 GB, CPU-only). The gateway had already
-  moved into CORE and the models it pointed at had not, so a default install
-  could route a key nobody had. `make up` now produces real triage verdicts
-  from a real model with real token counts. `litellm` waits on the model pull
-  completing rather than on Ollama being healthy, because a gateway that is up
-  before the weights exist answers the first request — the one a new user
-  makes — with "model not found". The aliases in `infra/litellm/config.yaml`
-  now read their backend from the environment, so moving to a hosted provider
-  is three variables in `.env` rather than an edit to a mounted config file.
-
-- **Every auto-triage run on a default install was dead-lettered.**
-  `record_auto_triage` bound the two cost columns directly while
-  `complete_run` beside it used `COALESCE`; both are `NOT NULL`, and
-  `estimated_cost_usd` is `None` for every run against a local model because
-  there is no list price for `ollama_chat/…`. The UPDATE violated the
-  constraint, the transaction rolled back, the worker retried three times and
-  dead-lettered the alert — a real LLM call, real tokens, and no verdict in
-  the console. Found only because a model shipped in CORE made it the normal
-  case rather than an edge case.
-
-- **A small model that stops mid-JSON no longer loses its verdict.** Measured
-  against the bundled model, triage responses arrive with the closing quote
-  and brace absent and `finish_reason: "stop"` — every field the caller reads
-  present and correct, and the whole response discarded. The parser now closes
-  what the model opened, and nothing more: a fragment too damaged to read
-  still raises, so the deterministic fallback stays reachable rather than a
-  verdict being invented from an empty object. A failed parse now logs a
-  bounded excerpt of what the model actually said, which previously could only
-  be discovered by reproducing the prompt by hand.
-
-#### Other first-run friction
-
-- **`ENVIRONMENT` was a bare literal in `docker-compose.yml`**, so the value
-  `.env.example` documents was ignored and setting `production` changed
-  nothing — including the dev auth bypass in `dev_auth.py`, which could not be
-  switched off from `.env` at all. Now interpolated, along with `LOG_LEVEL`.
-- **`AISOC_CONSOLE_URL` appeared in no `.env.example` entry, no compose
-  service and no doc**, so every deployment that is not a laptop printed the
-  wrong sign-in address beside a password shown exactly once. Now wired and
-  documented.
-- **`python3`, `bash` and the Docker disk requirement were undocumented** while
-  `make smoke` — the README's headline proof — runs a Python script on the
-  host. `make doctor` now checks for both interpreters, and the measured
-  requirements are published.
-- **`handler.go` rendered its over-size error with `string(rune(…))`**, so a
-  limit of 1000 told the caller their batch exceeded a maximum of `Ϩ`.
-- **`apps/docs/docs/operations/security.md` named an init script that does not
-  exist** (`zz_runtime_role_password.sh`; the file is
-  `20_runtime_role_password.sh`).
-
-#### Measured, not estimated
-
-CORE's published figures moved because the footprint was measured before and
-after on the same machine:
-
-| | Before | After |
-|---|---|---|
-| Services | 11 | 14 (plus a one-shot model pull) |
-| Images, unique layers | 8.11 GB | 16.46 GB |
-| Model weights (named volume) | — | 2.02 GB |
-| Resident memory, whole stack | 1.72 GiB | 4.84 GiB |
-
-The README's `~6.5 GB` becomes **8 GB of memory and 20 GB of disk**. Ollama is
-9.6 MiB resident when idle and 2.96 GiB while serving a request; the second
-number is the one the requirement is sized against.
-
 ### Added
 
 - **`RENDER_FALLBACK_EXEMPT` is now checked in both directions.**
@@ -520,56 +352,6 @@ number is the one the requirement is sized against.
   daemon runs out of space. Node 22 and pnpm 8, which the installers require,
   were also unlisted. All are now in the quick-start prerequisites table with
   the command each one gates.
-- **`scripts/generate_corpus_stats.py`** — generates
-  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
-  engine ruleset, the generated detection truth table, and the marketplace
-  index, reconciling all three against each other and refusing to publish if
-  they disagree. Every landing surface imports the constants, so none can
-  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
-  `--self-test` hand-edits the artefact and requires the drift to be caught.
-  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
-  fields, and the UI leads with the executable count.
-- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
-  the way a count can, so the retraction is gated instead. No published
-  surface may assert the legacy harness runs the production grouping; any
-  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
-  suite card may not be declared `kind: 'measurement'`; and every surface
-  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
-  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
-  test asserts against its own measurement — so the chain from measurement
-  to published prose has no hand-copied link. A paragraph that dates or
-  negates the claim is exempt, so the retraction can quote the wording it
-  retracts.
-- **The prerequisites that were required but undocumented.** Beyond Docker and
-  its memory, a first run needs `python3` **on the host** (`make smoke` runs
-  the golden-pipeline script there, so without it you can start AiSOC but
-  cannot prove it works), `bash` (`make up` gates on `scripts/doctor.sh
-  --ports-only` before it calls compose), and roughly 18 GB of free Docker
-  disk — previously implied only by a troubleshooting row noting that Kafka
-  corrupts its log directory and *still passes its healthcheck* when the
-  daemon runs out of space. Node 22 and pnpm 8, which the installers require,
-  were also unlisted. All are now in the quick-start prerequisites table with
-  the command each one gates.
-- **`scripts/generate_corpus_stats.py`** — generates
-  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
-  engine ruleset, the generated detection truth table, and the marketplace
-  index, reconciling all three against each other and refusing to publish if
-  they disagree. Every landing surface imports the constants, so none can
-  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
-  `--self-test` hand-edits the artefact and requires the drift to be caught.
-  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
-  fields, and the UI leads with the executable count.
-- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
-  the way a count can, so the retraction is gated instead. No published
-  surface may assert the legacy harness runs the production grouping; any
-  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
-  suite card may not be declared `kind: 'measurement'`; and every surface
-  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
-  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
-  test asserts against its own measurement — so the chain from measurement
-  to published prose has no hand-copied link. A paragraph that dates or
-  negates the claim is exempt, so the retraction can quote the wording it
-  retracts.
 - **`scripts/check_demo_state_gated.py`** — a CI gate that asks the two
   questions which do not depend on guessing the next syntax. *Is the
   fabricated value reachable?* — every read of a fabricated symbol must have a
@@ -636,27 +418,6 @@ number is the one the requirement is sized against.
   `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
   freshness gate reads only the date — which a refresh keeps current — so a
   row could be two days old and still labelled two majors behind.
-- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
-  list named one compliance page, which is why `ROADMAP.md` drifted with CI
-  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
-  **row total** is compared as well as the GATED/PARTIAL split, and a figure
-  the prose explicitly dates ("the count at that time") is exempt so history
-  need not be rewritten.
-- **`check_scoreboard.py --check` verifies `agent_version` against
-  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
-  freshness gate reads only the date — which a refresh keeps current — so a
-  row could be two days old and still labelled two majors behind.
-- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
-  list named one compliance page, which is why `ROADMAP.md` drifted with CI
-  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
-  **row total** is compared as well as the GATED/PARTIAL split, and a figure
-  the prose explicitly dates ("the count at that time") is exempt so history
-  need not be rewritten.
-- **`check_scoreboard.py --check` verifies `agent_version` against
-  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
-  freshness gate reads only the date — which a refresh keeps current — so a
-  row could be two days old and still labelled two majors behind.
-
 ### Fixed
 
 - **`/customers/example` published a fabricated case study on the public
@@ -1002,152 +763,6 @@ number is the one the requirement is sized against.
 - `EmptyState` accepts a `headingLevel`. `ConnectorsView` renders it directly
   under the page `h1`, so the default `h3` skipped a level and failed
   axe-core's `heading-order` rule.
-- **A retracted benchmark figure was still badged "Real measurement".**
-  `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
-  the harness that produced it groups on four tiers of `(rule_id, host,
-  user)` while the shipping `RawAlert.correlation_key()` groups on
-  `{tenant}:{entity}:{tactic}`, so it does not merely re-implement fusion's
-  grouping, it implements *different* grouping. The retraction reached one
-  surface of five. `BenchmarkResults.tsx` rendered a green **"Real
-  measurement"** badge on `0.753` with a blurb claiming the harness used the
-  production rules, "same logic"; `benchmarks/alert-reduction.md`
-  (`sidebar_position: 1`) called it a "faithful in-harness re-implementation"
-  and headlined 75.3 %; `ComparisonTable.tsx` qualified it as "measured on
-  fixed noisy stream". Two more were found while gating the invariant:
-  `benchmark-methodology.md`, and `benchmark.md` itself, which re-asserted
-  the claim in its own intro blockquote. All five now carry the wording
-  `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
-  figure measured against the key the product actually runs.
-- **The landing page published three different wrong corpus counts.**
-  "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
-  are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
-  community items" (7,155), and `218 rules across 5 categories` on the
-  contributor leaderboard (833 across 6). The 6,998 figure also quoted the
-  imported corpus as the detection capability, presenting quarantined rules
-  as executable.
-- **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
-  128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
-  sentence that tells the reader to recount with the script "rather than
-  trusting a figure quoted in prose — this line has gone stale before".
-  `CLAIM_TO_GATE_MATRIX.md` carried a stale executable-rule figure (939) in
-  a row note. The scoreboard's newest substrate row was labelled `v8.1.1`
-  while `VERSION` read `10.0.0`; it is refreshed from a fresh deterministic
-  run (0.97, unchanged) and now carries the tree's version. The scoreboard
-  keeps its three rows, all `substrate: true`, and no live-LLM row was
-  invented.
-- **The "Design partners" block on the landing page was removed** rather
-  than updated. Four dashed "Partner A–D" chips under the caption
-  "Reference partners onboarding through Q2 2026": placeholders rather than
-  fabricated logos, but four of them assert a partner count nothing in the
-  repository supports, and the window closed in June 2026 while still being
-  advertised as upcoming.
-- **The Windows installer routed evaluators to a stack that cannot answer the
-  question they came to ask.** `install.sh` was changed to bring up the real
-  deployment, create an administrator and verify the pipeline; `install.ps1`
-  was not, and nothing noticed. It handed off to `pnpm aisoc:demo` — a compose
-  file that opens by saying it does not run the AiSOC pipeline, has no ingest
-  service and no fusion service, sets `AISOC_DISABLE_KAFKA=true`, and whose
-  console content comes entirely from a seed script writing rows straight into
-  Postgres — and then printed `AiSOC is up and running.` A Windows user saw a
-  populated console and concluded the platform worked, having never run the
-  platform. `install.ps1` now performs the stages `make up` and `make smoke`
-  perform: a port pre-check that names the process holding a port rather than
-  letting compose fail with `Bind for 0.0.0.0:5432 failed`, `docker compose
-  up -d`, a wait that reads `docker compose ps -a` so an exited or
-  crash-looping container fails rather than passing, `docker compose run --rm
-  -T api python -m app.scripts.bootstrap_admin`, and the golden-pipeline
-  runner. Windows has no `make` and the Makefile's recipes are POSIX shell, so
-  these are native re-implementations of the same commands rather than a
-  `make` call; `tests/test_installer_parity_gate.py` fails the build if the
-  two installers diverge again.
-- **No administrator was created on Windows, and the closing banner said
-  nothing about credentials.** A Windows user either could not sign in at all
-  or signed in to a seeded database and evaluated that as the product. The
-  banner now surfaces the generated password the same way `install.sh` does:
-  printed once, stored nowhere, with the reset command alongside it. It also
-  no longer claims the pipeline was verified when the check was skipped for
-  want of a Python interpreter.
-- **`install.ps1` pointed at an uninstaller that does not exist.** The closing
-  banner named `.\scripts\install\uninstall.ps1`; the file is `uninstall.ps1`
-  at the repository root and has never been anywhere else, so the last
-  instruction the installer gave a Windows user could not work. The parity
-  gate now asserts every `.ps1` path either script tells a user to run is a
-  file in the repository.
-- **`uninstall.ps1` left the whole stack running while reporting success.** It
-  tore down only `infra/compose/docker-compose.demo.yml`, so every CORE
-  container — Postgres still holding 5432 — survived an uninstall that said it
-  was complete. It now brings down the root `docker-compose.yml` project
-  across every optional profile, then the demo project for anyone who ran the
-  older installer.
-- **`install.ps1` installed dependencies nobody tested.** It used
-  `pnpm install --no-frozen-lockfile` where `install.sh` uses
-  `--frozen-lockfile` for the stated reason that a self-hoster's install must
-  not quietly resolve a dependency set CI never saw. It also accepted Node 20
-  where `install.sh` requires 22, the version every workflow tests on and both
-  Node images ship. Both now match, and the gate compares them.
-- **The docs portal contradicted the README on whether the pipeline works.**
-  `quickstart.md` was a pre-v8.2 page built around `pnpm aisoc:demo`; because
-  the scripts it named still exist, nothing errored and it simply took readers
-  to the wrong stack. Three statements were false. It claimed `.env.example`
-  ships "a pre-generated dev `AISOC_CREDENTIAL_KEY`" — it ships a placeholder
-  that is worse than an empty value, because an empty one makes the API
-  generate an ephemeral key and warn while a malformed one makes the
-  credential vault raise, so the first request touching a connector secret
-  returns HTTP 500. It claimed events posted to `/v1/ingest/batch` "accept
-  cleanly but never become `Alert` rows", which is the exact path `make smoke`
-  asserts and the README publishes as its headline proof. And its cheat sheet
-  offered `aisoc keygen` as the way to generate that vault key, when `aisoc
-  keygen` writes an Ed25519 plugin-signing pair to `~/.aisoc/signing.key` and
-  has nothing to do with Fernet. The page is now written around `make up`,
-  `make bootstrap` and `make smoke`, and its compose-profile table was rebuilt
-  from `docker-compose.yml` rather than corrected from the old text — six port
-  numbers and profile memberships were wrong, and two whole profiles were
-  missing.
-- **`installation.md` documented flags that do not exist.** `-SkipDemo`,
-  `AISOC_SKIP_DEMO` and `-AisocDir` are not accepted by either installer; the
-  real spellings are `--no-launch` / `-NoLaunch` and `--clone-dir` /
-  `-CloneDir`. The page also still promised a browser opening on a seeded
-  ransomware case with pre-filled credentials, which no longer happens and for
-  which there are no default credentials.
-- **A retracted benchmark figure was still badged "Real measurement".**
-  `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
-  the harness that produced it groups on four tiers of `(rule_id, host,
-  user)` while the shipping `RawAlert.correlation_key()` groups on
-  `{tenant}:{entity}:{tactic}`, so it does not merely re-implement fusion's
-  grouping, it implements *different* grouping. The retraction reached one
-  surface of five. `BenchmarkResults.tsx` rendered a green **"Real
-  measurement"** badge on `0.753` with a blurb claiming the harness used the
-  production rules, "same logic"; `benchmarks/alert-reduction.md`
-  (`sidebar_position: 1`) called it a "faithful in-harness re-implementation"
-  and headlined 75.3 %; `ComparisonTable.tsx` qualified it as "measured on
-  fixed noisy stream". Two more were found while gating the invariant:
-  `benchmark-methodology.md`, and `benchmark.md` itself, which re-asserted
-  the claim in its own intro blockquote. All five now carry the wording
-  `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
-  figure measured against the key the product actually runs.
-- **The landing page published three different wrong corpus counts.**
-  "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
-  are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
-  community items" (7,155), and `218 rules across 5 categories` on the
-  contributor leaderboard (833 across 6). The 6,998 figure also quoted the
-  imported corpus as the detection capability, presenting quarantined rules
-  as executable.
-- **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
-  128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
-  sentence that tells the reader to recount with the script "rather than
-  trusting a figure quoted in prose — this line has gone stale before".
-  `CLAIM_TO_GATE_MATRIX.md` carried a stale executable-rule figure (939) in
-  a row note. The scoreboard's newest substrate row was labelled `v8.1.1`
-  while `VERSION` read `10.0.0`; it is refreshed from a fresh deterministic
-  run (0.97, unchanged) and now carries the tree's version. The scoreboard
-  keeps its three rows, all `substrate: true`, and no live-LLM row was
-  invented.
-- **The "Design partners" block on the landing page was removed** rather
-  than updated. Four dashed "Partner A–D" chips under the caption
-  "Reference partners onboarding through Q2 2026": placeholders rather than
-  fabricated logos, but four of them assert a partner count nothing in the
-  repository supports, and the window closed in June 2026 while still being
-  advertised as upcoming.
 - **Six console surfaces rendered fabricated security data outside demo mode,
   on a tree where the existing gate reported clean.** The gate recognises
   *shapes* — a bare mock in SWR's `fallbackData`, a mock through a state
@@ -1213,6 +828,185 @@ number is the one the requirement is sized against.
   class as the above: a local `demoMode` flipped by fetch failure. Outside the
   hosted demo the dock now reports that the copilot could not be reached, with
   the error, instead of emitting a reply.
+
+**The documented quick start broke the product, and then the product had
+nothing to show.** Every item below passed the existing test suite and
+failed on a real deployment. They are grouped by what a new user actually
+hit, in the order they hit it.
+
+#### Following the README broke the credential vault
+
+- **`.env.example` shipped `AISOC_CREDENTIAL_KEY=replace-me-with-a-freshly-generated-fernet-key`,
+  and `cp .env.example .env` is step two of the quick start.** The vault takes
+  its friendly ephemeral-development-key path only when the key is *empty*; a
+  non-empty invalid key reaches `Fernet()` and raises, which the connector
+  endpoints turn into HTTP 500 `credential vault unavailable`. Nothing failed
+  at boot. So **not** copying the template produced a working vault and
+  following the documented instructions produced a broken one, discovered
+  minutes later at the connector wizard with nothing linking the two.
+
+  Fixed at setup rather than in the vault: `make up` now runs
+  `scripts/ensure_env.py`, which creates `.env` and writes a real random value
+  for `AISOC_CREDENTIAL_KEY`, `SECRET_KEY` and `AISOC_SERVICE_TOKEN`. It is
+  idempotent and never rotates a value an operator already set, and it uses
+  the standard library so it does not put a `pip install` in front of
+  `make up`. Teaching the vault to tolerate a placeholder was the alternative
+  and would have been worse: a deployment whose saved connector credentials
+  silently do not survive a restart. The three secrets now ship **empty** in
+  the template as well, so a hand-copied `.env` degrades to the documented
+  development path instead of a hard 500.
+
+- **`make doctor`'s placeholder check matched neither placeholder the
+  repository shipped.** It grepped
+  `^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$` while the template
+  carried `replace-me-…` and `change-this-…` — a gate built to catch shipped
+  placeholders that was blind to every shipped placeholder, and that reported
+  clean on the one `.env` that broke the vault. The check now delegates to
+  `scripts/check_env_placeholders.py`, and `tests/test_env_placeholder_gate.py`
+  compares the detector against the template in both directions: every
+  non-empty value in `.env.example` must be either recognised as a placeholder
+  or declared in the test as a deliberate working default. A new placeholder
+  cannot be added without one of the two failing.
+
+#### The connector wizard could not complete
+
+Three independent causes, all silent, all fixed:
+
+- **The API was never given the credential it presents to the connectors
+  service.** `_service_token()` reads `AISOC_CONNECTORS_SERVICE_TOKEN` then
+  `AISOC_SERVICE_TOKEN`; compose interpolated the shared token into
+  `connectors`, `ueba`, `honeytokens` and `purple-team` and **not into the one
+  service that has to send it**, and with no `env_file` anywhere a value in
+  `.env` could not reach it by any route. Every catalog call was answered 401
+  and fell back to the bundled copy with `degraded=True`. Measured after the
+  fix: the catalog is `live` with **84** connectors instead of the bundled 26.
+
+- **"Test connection" sent no `Authorization` header at all.** The catalog call
+  beside it had been given one and this one had not, so it was answered 401 on
+  every invocation — and 401 was the one status the ladder did not branch on,
+  so it fell through and returned a body with no `success` key. The wizard
+  reads `result.success`, found it absent, and rendered the bare string
+  **"Connection test failed"** for an internal service-auth misconfiguration,
+  while its own help text promised "Credentials are tested against the
+  upstream API". The upstream API was never reached. It now sends the same
+  headers as the catalog call, branches on 401/403 explicitly, refuses any
+  unhandled 4xx rather than returning it as a verdict, and guarantees a
+  `success` key. An operator now sees: *"connectors service returned HTTP 401
+  to this API's service credential. AiSOC's API could not authenticate to its
+  own connectors service, so your credentials were never sent upstream. Set
+  `AISOC_SERVICE_TOKEN` …"*. The wizard also reads FastAPI's `detail` out of
+  the response body instead of showing only the status line.
+
+- **The connectors service answered 503 to everything on a default stack.**
+  Its `SECRET_KEY` compose default is one of `INSECURE_SECRET_DEFAULTS`, so
+  `resolve_console_secret()` returns `""`; with `AISOC_SERVICE_TOKEN` also
+  blank it has no credential material and fails closed, correctly. The
+  dev-mode escape that exists for exactly that case was set on `actions`,
+  `ueba`, `honeytokens`, `purple-team` and `slack-bot`, and not on
+  `connectors`. Now set — and once `make env` generates a real token, dev mode
+  stops applying at all.
+
+#### CORE had no real data and no AI
+
+- **`services/threatintel` and `qdrant` moved from the `full` profile into
+  CORE.** The CISA Known Exploited Vulnerabilities catalog is authoritative,
+  public and needs no API key, and has been wired as a scheduled handler the
+  whole time in a profile nobody starting out runs. Meanwhile the console
+  shipped a `/threat-intel` page whose endpoint existed in no profile, and that
+  page was recently caught rendering five invented IOCs. The missing feed and
+  the fabrication were one hole. A fresh `make up` now populates the console
+  with **1,723 real KEV entries** within a minute of boot, with no credentials.
+  New: `GET /api/v1/threat-intel/indicators` on the API, proxying a new
+  indicators route on `services/threatintel` backed by Qdrant.
+
+- **A daily feed would not have polled for a day.** `FeedScheduler.register`
+  handed APScheduler an `IntervalTrigger` and nothing else, and an interval
+  trigger schedules its *first* run one whole interval after start — 86400
+  seconds for KEV. A fresh install had a healthy container, a registered feed,
+  a created collection, and an empty page for twenty-four hours, with nothing
+  anywhere reporting a fault. First poll is now jittered into the first twenty
+  seconds.
+
+- **CISA's edge returns 403 to whole networks regardless of user agent.**
+  Observed with curl, httpx and a browser UA. Without a fallback every
+  deployment on such a network gets permanently zero indicators and no error a
+  user would see. The canonical `cisa.gov` URL stays primary; CISA's own
+  `cisagov/kev-data` GitHub repository — same publisher, identical schema — is
+  the fallback, and the log line names which source answered.
+
+- **OpenSearch and Neo4j are no longer required by `threatintel`.** Its
+  lifespan called `os_store.initialize()` with no `try`, which made a
+  `full`-profile store a hard dependency of a CORE service. Both that call and
+  the pipeline's bulk index are best-effort now: with OpenSearch you
+  additionally get full-text IOC search; without it the feeds still write to
+  Qdrant, which is what the console reads.
+
+- **Ollama moved from the air-gapped overlay into CORE**, with its pinned
+  `llama3.2:3b-instruct-q4_K_M` (~2 GB, CPU-only). The gateway had already
+  moved into CORE and the models it pointed at had not, so a default install
+  could route a key nobody had. `make up` now produces real triage verdicts
+  from a real model with real token counts. `litellm` waits on the model pull
+  completing rather than on Ollama being healthy, because a gateway that is up
+  before the weights exist answers the first request — the one a new user
+  makes — with "model not found". The aliases in `infra/litellm/config.yaml`
+  now read their backend from the environment, so moving to a hosted provider
+  is three variables in `.env` rather than an edit to a mounted config file.
+
+- **Every auto-triage run on a default install was dead-lettered.**
+  `record_auto_triage` bound the two cost columns directly while
+  `complete_run` beside it used `COALESCE`; both are `NOT NULL`, and
+  `estimated_cost_usd` is `None` for every run against a local model because
+  there is no list price for `ollama_chat/…`. The UPDATE violated the
+  constraint, the transaction rolled back, the worker retried three times and
+  dead-lettered the alert — a real LLM call, real tokens, and no verdict in
+  the console. Found only because a model shipped in CORE made it the normal
+  case rather than an edge case.
+
+- **A small model that stops mid-JSON no longer loses its verdict.** Measured
+  against the bundled model, triage responses arrive with the closing quote
+  and brace absent and `finish_reason: "stop"` — every field the caller reads
+  present and correct, and the whole response discarded. The parser now closes
+  what the model opened, and nothing more: a fragment too damaged to read
+  still raises, so the deterministic fallback stays reachable rather than a
+  verdict being invented from an empty object. A failed parse now logs a
+  bounded excerpt of what the model actually said, which previously could only
+  be discovered by reproducing the prompt by hand.
+
+#### Other first-run friction
+
+- **`ENVIRONMENT` was a bare literal in `docker-compose.yml`**, so the value
+  `.env.example` documents was ignored and setting `production` changed
+  nothing — including the dev auth bypass in `dev_auth.py`, which could not be
+  switched off from `.env` at all. Now interpolated, along with `LOG_LEVEL`.
+- **`AISOC_CONSOLE_URL` appeared in no `.env.example` entry, no compose
+  service and no doc**, so every deployment that is not a laptop printed the
+  wrong sign-in address beside a password shown exactly once. Now wired and
+  documented.
+- **`python3`, `bash` and the Docker disk requirement were undocumented** while
+  `make smoke` — the README's headline proof — runs a Python script on the
+  host. `make doctor` now checks for both interpreters, and the measured
+  requirements are published.
+- **`handler.go` rendered its over-size error with `string(rune(…))`**, so a
+  limit of 1000 told the caller their batch exceeded a maximum of `Ϩ`.
+- **`apps/docs/docs/operations/security.md` named an init script that does not
+  exist** (`zz_runtime_role_password.sh`; the file is
+  `20_runtime_role_password.sh`).
+
+#### Measured, not estimated
+
+CORE's published figures moved because the footprint was measured before and
+after on the same machine:
+
+| | Before | After |
+|---|---|---|
+| Services | 11 | 14 (plus a one-shot model pull) |
+| Images, unique layers | 8.11 GB | 16.46 GB |
+| Model weights (named volume) | — | 2.02 GB |
+| Resident memory, whole stack | 1.72 GiB | 4.84 GiB |
+
+The README's `~6.5 GB` becomes **8 GB of memory and 20 GB of disk**. Ollama is
+9.6 MiB resident when idle and 2.96 GiB while serving a request; the second
+number is the one the requirement is sized against.
 
 ### Removed
 
@@ -9711,7 +9505,8 @@ demo profile. Details below.
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v10.0.0...HEAD
+[Unreleased]: https://github.com/beenuar/AiSOC/compare/v11.0.0...HEAD
+[11.0.0]: https://github.com/beenuar/AiSOC/compare/v10.0.0...v11.0.0
 [10.0.0]: https://github.com/beenuar/AiSOC/compare/v9.0.0...v10.0.0
 [9.0.0]: https://github.com/beenuar/AiSOC/compare/v8.1.1...v9.0.0
 [8.1.1]: https://github.com/beenuar/AiSOC/compare/v8.1.0...v8.1.1

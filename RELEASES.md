@@ -2,13 +2,33 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v10.0.0`, released 2026-09-25 — a release about controls that were written and not reachable. Row-level security covered 92 tables and filtered nothing, because every service connected to Postgres as a superuser; fifty-eight routes carried no authentication at all; UEBA reported healthy and could not write an anomaly; AI triage was wired to a gateway both of its resolvers ignored. **It is a major because upgrading requires action** — services now connect as a DML-only `aisoc_app` role. Every product claim is backed by a failing CI test (claim-to-gate matrix: 145 rows — 137 GATED / 8 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v11.0.0`, released 2026-09-25 — a release about the gap between what this project published and what a stranger actually got. Following the documented quick start broke the credential vault; `make up` then reported the stack broken on every machine while it was healthy; and the profile a new user runs had no real data and no model behind it. **It is a major because upgrading requires action on two items** — the ingest API now demands a credential instead of believing a caller-supplied tenant header, and CORE now needs 8 GB of memory and 20 GB of disk. Every product claim is backed by a failing CI test (claim-to-gate matrix: 145 rows — 137 GATED / 8 PARTIAL / 0 NO GATE, counted from the table by `scripts/check_claim_gate_matrix.py`). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `10.0.0`. The **v10.0.0** release (2026-09-25) is an audit of a single shape: a control that exists, is tested, and sits on a path nothing reaches.
+`VERSION` is `11.0.0`. The **v11.0.0** release (2026-09-25) is what a first run actually produced. Most of it was found by bringing the stack up from the documented path and photographing the result, and nearly every item passed the existing test suite while failing on a real deployment.
+
+**Read the BREAKING section of the changelog before upgrading.** Two items need action. `POST /v1/ingest` and `POST /v1/ingest/batch` now require a credential and take the tenant from it; previously they read `X-Tenant-ID`, believed it, and wrote alerts into whatever tenant the caller named. And CORE now needs **8 GB of memory and 20 GB of free disk**, up from `~6.5 GB`, because the threat-intelligence feed, its vector store and a local model moved into it.
+
+**What is measured, and what is not.** A fresh `make up` now runs AI triage against the bundled `llama3.2:3b-instruct-q4_K_M` with no credentials. In a measured run of 19 auto-triages that model returned schema-valid JSON **7 times**; the other 12 fell back to the deterministic path and logged that they had. That ratio is published here, in the README and on the architecture page rather than implied away. **No hosted provider has ever been exercised** — there is still no funded key, and that remains a separate, unmade claim. The npm and PyPI packages are built and packed on every tag and **are still not uploaded**, because no registry credential exists; treat any install command for them as unavailable rather than broken.
+
+**v11.0.0 highlights (September 25, 2026)**
+- **The ingest API authenticated nothing.** It read `X-Tenant-ID`, believed it, and wrote events for whatever tenant the caller named — so anyone who could reach the port could write alerts into any tenant. The comment in `server.go` asserting the endpoint was "token-authenticated per request" had been false since it was written. It is true now: a minted push token or a service token, with `X-Tenant-ID` intersected against what the credential authorises rather than trusted, and no dev-mode bypass.
+- **Following the README broke the credential vault.** `.env.example` shipped a placeholder Fernet key and `cp .env.example .env` is step two of the quick start — but the vault only takes its ephemeral-development path when the key is *empty*, so a placeholder raised and every connector save returned HTTP 500. Not copying the template worked; following the instructions did not, and the failure surfaced minutes later at the connector wizard with nothing linking the two. `make up` now generates real secrets. The `make doctor` check meant to catch shipped placeholders matched neither placeholder the repository shipped.
+- **`make up` could not succeed, ever.** Its wait loop scored any exited container as broken, and the one-shot model pull has always exited by the time `docker compose up -d` returns — so the step whose job is to say whether the stack is healthy reported the opposite on a completely healthy stack.
+- **CORE had no real data and no AI.** The threat-intelligence service and its vector store lived in a profile nobody starting out runs, while the console shipped a page whose endpoint existed in no profile — the missing feed and a recent fabricated-IOC incident were one hole. A fresh `make up` now holds **1,723 real CISA KEV entries** within a minute of boot with no credentials, and Ollama moved in so triage produces real verdicts with real token counts. Along the way: a daily feed that would not have polled for 24 hours, and every auto-triage run on a default install being dead-lettered by a `NOT NULL` cost column.
+- **The marketing site's only picture of the console was invented.** A hand-authored ledger with a named ransomware family, a confidence score, a dollar figure against a named hosted model — none of it labelled a mock, none of it ever having happened. It is replaced by four captures of a running CORE stack, two of them deliberately empty or degraded states. The "design partners" block and a testimonials section advertising a closed window were removed rather than updated, and the footer's hard-coded `v7.3.1` — shipped through seven major releases — now reads the version the release flow bumps.
+- **Nothing in the console rendered the AI verdict.** The agents service triages every fused alert and writes the verdict, score and groundedness back onto the row; the API returned all four fields; the client dropped all four. The product's headline capability was producing tokens, cost and a ledger entry that no surface showed.
+
+The full inventory — 83 entries, including what is knowingly still open — lives under `[11.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v10.0.0 (2026-09-25)
+
+`VERSION` was `10.0.0`. The **v10.0.0** release (2026-09-25) is an audit of a single shape: a control that exists, is tested, and sits on a path nothing reaches.
 
 **Read the BREAKING section of the changelog before upgrading.** Every deployment must act on one item: services connect to Postgres as a DML-only `aisoc_app` role rather than as the schema owner, which is what makes the row-level-security policies filter. The bundled Postgres provisions it on a fresh volume; an existing volume or a managed database does not.
 
@@ -20,7 +40,7 @@ This file mirrors what used to live in the "What's new" section of [`README.md`]
 - **A new user who followed only the README could not log in** — the seeded address was rejected by the login route's own validator before the password was compared, and the committed hash matched no published credential. `make up` now creates an administrator and prints a generated password once.
 - **Costs stopped being invented.** The tracker priced the `aisoc-<role>` *alias* against a table of hosted list prices it does not appear in, so every call fell through a default and a local completion that cost nothing was booked at `$0.000999` — a figure that reached the dashboard, the ledger and the budget circuit breaker. Every cost is now measured, labelled an estimate, or absent.
 
-The full inventory — 188 entries, including what is knowingly still open — lives under `[10.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+The full inventory — 188 entries — lives under `[10.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
