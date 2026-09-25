@@ -22,6 +22,16 @@ interface EmptyStateProps {
    * Defaults to "Planned for v1.1" for the planned-v1.1 variant.
    */
   badge?: string;
+  /**
+   * Heading level for `title`. Defaults to `h3`, which is right when this sits
+   * inside a section that already has an `h2`.
+   *
+   * It is wrong when the nearest heading above is the page `h1` — the level
+   * skip fails axe-core's `heading-order` rule, and a screen-reader user
+   * navigating by heading is told there is a missing section between the page
+   * title and this. `ConnectorsView` is that case.
+   */
+  headingLevel?: 'h2' | 'h3';
 }
 
 const VARIANT_STYLES: Record<EmptyStateVariant, {
@@ -65,6 +75,7 @@ export function EmptyState({
   className,
   variant = 'default',
   badge,
+  headingLevel: Heading = 'h3',
 }: EmptyStateProps) {
   const styles = VARIANT_STYLES[variant];
   const badgeText = badge ?? styles.badgeLabel;
@@ -90,7 +101,7 @@ export function EmptyState({
         </div>
       )}
       {showBadge && <span className={clsx('mb-3', styles.badge)}>{badgeText}</span>}
-      <h3 className="text-base font-semibold text-gray-100">{title}</h3>
+      <Heading className="text-base font-semibold text-gray-100">{title}</Heading>
       {description && (
         <p className="mt-1 max-w-md text-sm text-gray-500">{description}</p>
       )}

@@ -363,6 +363,13 @@ function ConnectorCard({
 export interface ConnectorInstanceListProps {
   connectors: Connector[];
   isLoading?: boolean;
+  /**
+   * The list request failed, so `connectors` is empty because nothing could be
+   * read — not because the tenant has none. Without this the onboarding empty
+   * state ("No connectors yet · Add your first connector") renders over a
+   * tenant's working estate during any API outage.
+   */
+  failed?: boolean;
   testingId?: string | null;
   testResults?: Record<string, boolean | undefined>;
   onTest: (id: string) => void;
@@ -374,6 +381,7 @@ export interface ConnectorInstanceListProps {
 export function ConnectorInstanceList({
   connectors,
   isLoading,
+  failed,
   testingId,
   testResults,
   onTest,
@@ -391,6 +399,18 @@ export function ConnectorInstanceList({
     );
   }
 
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-gray-800/60 bg-gray-900/40 px-4 py-12 text-center">
+        <p className="text-sm text-amber-200/80">The connector list could not be loaded.</p>
+        <p className="text-[11px] text-gray-600">
+          Treat this as unknown rather than as an empty estate — see the message above, and
+          retry from there.
+        </p>
+      </div>
+    );
+  }
+
   if (connectors.length === 0) {
     return (
       <EmptyState
@@ -404,6 +424,9 @@ export function ConnectorInstanceList({
             />
           </svg>
         }
+        // The nearest heading above this is the page `h1`, so the default
+        // `h3` skips a level and fails the axe-core heading-order gate.
+        headingLevel="h2"
         title="No connectors yet"
         description="Connect your first security tool to start ingesting alerts. Credentials are encrypted at rest with the AiSOC vault."
         action={

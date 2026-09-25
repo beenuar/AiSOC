@@ -7,6 +7,139 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Five banners that misdiagnosed their own failure.** Four of them claimed
+  to be showing data they were not showing, which is worse than no banner: the
+  operator now has a confident diagnosis, it is wrong, and they spend the next
+  hour on the service it named. `ConnectorsView` printed "Connectors API
+  unreachable — showing demo instances so you can explore the interface" above
+  a list that is `data?.connectors ?? []` and therefore empty outside the
+  hosted demo, with four stat tiles reading a confident `0` beside it.
+  `RBACView` printed "showing demo roles" while `roles` was `undefined`, which
+  suppressed both the skeleton and the empty state — the banner was the only
+  thing on the page. `PlaybooksView` printed "showing demo playbooks", and a
+  truthy `error` suppressed its empty state too. `EffectivePermissionsView`
+  said "falling back to demo data" when `demoFallback(DEMO_RESULT)` is
+  `undefined` and there is no fallback, over a blank Cytoscape canvas with no
+  explanation at all. And the copilot pill labelled **any** error "Demo mode"
+  on deployments that are not the demo, beside a green "Connected" that
+  asserted connectivity before a single request had been made.
+
+  `lib/failure.ts` generalises the fix already made for the entity-risk queue.
+  Two rules: **name the upstream service only when that service is genuinely
+  at fault** (a 422 is a malformed request from the console and the backend is
+  healthy and saying so; a 401 is an expired session; neither is an outage),
+  and **say the data is unknown, never empty** — an empty list and an
+  unreadable list look identical and mean opposite things. `FailureBanner`
+  carries a retry that re-issues the request, which none of the five had; the
+  copilot surfaces a failed question in the thread with a retry that re-sends
+  it rather than leaving it unanswered under a pill. Two fetchers that threw
+  `new Error('HTTP 404')` and `new Error('Failed to fetch')` now throw
+  `ApiError`, because a status discarded in prose is a status no banner can
+  reason about. Every test asserts on **first paint** as well as the error
+  branch: `data` is `undefined` in both states, so a suite that only drives
+  the error branch never exercises the one a self-hoster sees on every load.
+
+- **Three surfaces that asked for the wrong tenant's data.** `/purple-team`
+  had `const TENANT_ID = '00000000-0000-0000-0000-000000000001'` at module
+  scope and used it for all nine of its requests, so on any deployment with
+  more than one tenant it read another tenant's ATT&CK coverage, drift
+  history, executions and tabletop sessions — and *wrote* into that tenant,
+  since "Capture snapshot" and "Create session" used the same literal.
+  `/honeytokens` had the same literal behind `NEXT_PUBLIC_TENANT_ID`, which is
+  inlined at build time and is therefore one constant for every operator of
+  every tenant. Both now read the active tenant from `TenantProvider`, and
+  every request is `null`-gated on it so nothing is issued against a guess.
+
+- **`/fim` was not tenant-scoped, and its own comment had gone stale.** The
+  component pinned `TENANT_ID = 'default'` and explained that
+  `services/osquery-tls` used a different tenancy model. That service had in
+  fact already been reconciled: its read path resolves a tenant UUID from the
+  caller's credential and lists `'default'` as a *placeholder* meaning "the
+  caller did not name a tenant", precisely because migration `001` seeds that
+  slug and the demo seed renames it to `demo`. What was actually broken: the
+  console sent no credential at all, so there was no scope to resolve; and
+  `/fim/summary` resolved the scope correctly for its total and then filtered
+  its by-action and top-paths breakdowns on the **raw** query parameter, so
+  one card showed three numbers computed against two different tenants. Not a
+  leak — anything out of scope was already refused — but wrong. The client
+  sends the session bearer and no tenant; the endpoint filters every query on
+  the resolved scope. Still unreconciled and now stated rather than implied:
+  node *enrolment* keys `Node.tenant_id` as a `String(64)` defaulting to
+  `"default"`, so a node enrolled with no tenant header writes events under a
+  string no console read can resolve. That is an enrolment-side migration.
+
+  Three contract breaks found while proving the tenancy fix was observable,
+  all of which made the page unusable regardless of tenancy: the summary
+  response never carried `active_nodes` while the card called
+  `.toLocaleString()` on it; the events response is `{items, offset, limit}`
+  and the client read `{events, page, page_size}`; and the client sent
+  `page`/`page_size`/`since` to an endpoint declaring `offset`/`limit` and no
+  `since`, so FastAPI dropped all three — every page showed the same first 100
+  rows and every time window showed the same events.
+
+- **A non-promoted event now leaves a thread to pull.**
+  `promote_normalized_event` returned `None` and the consumer incremented
+  `not_promoted`. The aggregate reached `/metrics`, so an operator could see
+  that events were being dropped and nothing else — not which connector, not
+  what shape, not why. "I connected my SIEM and no alerts appeared" is the
+  first question a new user asks and a counter cannot answer it. The log now
+  names the connector, the OCSF class and category, the severity, which
+  promotion condition was not met, and that the event is in the lake.
+
+  **Volume:** this is the hot path and most ingested telemetry is correctly
+  not promoted, so a line per event would be the platform's highest-volume log
+  and would cost more than the pipeline it describes. A pure time-sampled
+  rollup is wrong the other way — somebody who has just connected a source
+  needs the answer in seconds. So both, split by novelty: the **first** event
+  of each distinct `(connector, class, severity, reason)` shape is explained
+  in full immediately, everything after it is counted into a rollup emitted at
+  most once per 60s (`AISOC_NOT_PROMOTED_ROLLUP_SECONDS`). Steady-state cost
+  is one line per minute regardless of throughput. Tracked shapes are capped
+  so a connector emitting a garbage `class_uid` per event cannot make the
+  sampler a memory leak.
+
+- **`splunk_enterprise` stays non-promoting, and now says so on the event.**
+  The profile maps raw Splunk *search result rows* (`_time`, `src`, `dst`,
+  `user`), not notables, and it stays at `classUID: 4001`: promoting each row
+  of an arbitrary saved search would turn a result set into an alert queue,
+  which is what the `splunk` profile at 2001 already does properly for
+  findings that have passed Splunk's own correlation. Its `severityMap` was
+  literally empty, which was read as the cause of the silence; it was not —
+  severity mapping already falls through to the shared five-tier ladder, so a
+  row carrying `severity: "critical"` scores 5 and promotes. Naming that
+  ladder on the profile changes nothing at runtime and stops the next reader
+  making the same diagnosis. What remains true is that a row with **no**
+  severity field scores 0, and category 4 with severity 0 satisfies neither
+  branch — such an event now carries a `normalization_warnings` entry saying
+  exactly that, which lands in the lake beside it rather than scrolling past
+  in a log. A test pins the two constants against the fusion policy they
+  mirror.
+
+- **Organisation memory reaches the triage prompt.** `active_statements`
+  compiles repeated, tagged analyst disagreement into durable statements; a
+  repo-wide grep returned exactly one match, its own definition. Its write
+  counterpart `record_disagreement` had no caller either, so the memory was
+  neither written nor read and the platform triaged the next identical alert
+  knowing nothing about the last one being overturned. Both ends are wired,
+  because wiring only the read would have been a query against a table nothing
+  populates: `POST /feedback/alert-override` takes an optional `reason_code`
+  from the closed vocabulary, and the agents triage worker reads
+  `GET /feedback/context-statements` into the prompt over HTTP — the API owns
+  the session and the expiry semantics, and a second copy of that SQL would be
+  a second definition of "active". Statements are presented to the model as
+  advisory evidence rather than instructions, because a statement needs two
+  analysts and phrasing it as fact hands anyone who can produce two benign
+  votes a suppression the model obeys. Fails soft, caches for 120s, and
+  `test_organisation_memory_in_prompt.py` proves the claim by capturing the
+  messages handed to the model with and without a recorded disagreement and
+  diffing them.
+
+- `EmptyState` accepts a `headingLevel`. `ConnectorsView` renders it directly
+  under the page `h1`, so the default `h3` skipped a level and failed
+  axe-core's `heading-order` rule.
+
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not

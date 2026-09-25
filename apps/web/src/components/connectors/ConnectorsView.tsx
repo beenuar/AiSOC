@@ -7,12 +7,15 @@
  * depending on state:
  *
  *   - loading  → skeleton tiles
- *   - error    → `ErrorState` with retry
+ *   - error    → `FailureBanner` with retry, over an explicitly-unknown list
  *   - data     → header stats + `ConnectorInstanceList` + add-connector modal
  *
- * Mock data is intentionally gone — the modal can spin up real instances
- * against the backend, so dogfooding the empty state is now both more
- * informative and one click from being populated.
+ * `DEMO_CONNECTORS` is gated behind `demoFallback`, so it populates the hosted
+ * demo and is `undefined` everywhere else. The error banner used to say
+ * "showing demo instances so you can explore the interface" regardless — on a
+ * self-hosted deployment that sentence described a list that was empty, above
+ * four stat tiles reading a confident zero. Both now say the estate is
+ * unknown, which is the only true statement available when the request failed.
  */
 
 import { useMemo, useState } from 'react';
@@ -29,6 +32,8 @@ import { AddConnectorModal } from './AddConnectorModal';
 import { ConnectorInstanceList } from './ConnectorInstanceList';
 import { InboxTokensPanel } from './InboxTokensPanel';
 import { demoFallback } from '@/lib/demoFallback';
+import { FailureBanner } from '@/components/ui/FailureBanner';
+import { describeApiFailure } from '@/lib/failure';
 
 const DEMO_CONNECTORS: Connector[] = [
   {
@@ -130,6 +135,13 @@ export function ConnectorsView() {
     }
     return localStats;
   }, [healthSummary, localStats]);
+
+  // `localStats` is derived from a list that is `[]` whenever the request
+  // failed, so with no health summary to fall back on every tile reads a
+  // confident zero — "Total Connectors 0", "Errors 0" — on a tenant whose
+  // connectors the console simply could not read. Zero connectors and unknown
+  // connectors are opposite findings and both were rendered identically.
+  const countsUnknown = !!error && !healthSummary;
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -261,21 +273,35 @@ export function ConnectorsView() {
               title={stat.tooltip}
               className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4"
             >
-              <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
+              <p
+                className={clsx(
+                  'text-2xl font-bold mb-1',
+                  countsUnknown ? 'text-gray-600' : stat.color,
+                )}
+              >
+                {countsUnknown ? '—' : stat.value}
+              </p>
               <p className="text-xs text-gray-500">{stat.label}</p>
+              {countsUnknown && <p className="text-[10px] text-gray-600 mt-0.5">not measured</p>}
             </div>
           ))}
       </div>
 
       {/* Body */}
       {error && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          Connectors API unreachable — showing demo instances so you can explore the interface.
-        </div>
+        <FailureBanner
+          title="Connectors unavailable"
+          message={describeApiFailure(error, {
+            subject: 'connector list',
+            service: 'connectors service',
+          })}
+          onRetry={() => mutate()}
+        />
       )}
       {(
         <ConnectorInstanceList
           connectors={connectors}
+          failed={!!error}
           isLoading={isLoading && !data}
           testingId={testingId}
           testResults={testResults}

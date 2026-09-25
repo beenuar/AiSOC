@@ -23,10 +23,20 @@ Promotion policy (deterministic, no LLM, documented honestly):
 Events whose ``tenant_id`` is not a UUID are skipped (the alert store keys
 tenants by UUID; a non-UUID tenant header is a mis-configured connector, and
 we log it rather than crash the consumer).
+
+Non-promotion used to be **completely silent**: :func:`promote_normalized_event`
+returned ``None`` and the consumer incremented a ``not_promoted`` counter. The
+aggregate reached ``/metrics``, so an operator could see that events were being
+dropped and nothing else — not which connector, not what shape, not why. "I
+connected my SIEM and no alerts appeared" is the first question a new user asks
+and the counter cannot answer it. See :func:`_note_not_promoted` for what is
+logged and how its volume is bounded.
 """
 
 from __future__ import annotations
 
+import os
+import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -184,6 +194,131 @@ def should_promote(ocsf: dict[str, Any]) -> bool:
     return isinstance(severity_id, int) and severity_id >= _PROMOTE_SEVERITY_FLOOR
 
 
+# ─── Explaining a non-promotion, without drowning the log ────────────────────
+
+#: Seconds between aggregated rollups of everything that was not promoted.
+_ROLLUP_SECONDS = float(os.getenv("AISOC_NOT_PROMOTED_ROLLUP_SECONDS", "60"))
+
+#: Ceiling on distinct shapes tracked at once. The natural cardinality is
+#: (connectors x OCSF classes x 7 severities), which is small; the cap exists
+#: so a connector emitting a garbage `class_uid` per event cannot grow this
+#: without bound.
+_MAX_TRACKED_SHAPES = 500
+
+#: Shapes already explained in full, so the explanation is printed once.
+_explained: set[tuple[str, int | None, int | None, str]] = set()
+#: Occurrences per shape since the last rollup.
+_pending: dict[tuple[str, int | None, int | None, str], int] = {}
+_last_rollup = 0.0
+
+
+def _not_promoted_reason(class_uid: int | None, severity_id: int | None) -> str:
+    """Which promotion condition failed, in a string an operator can act on.
+
+    Both conditions have to fail for an event to land here, so the reason
+    always names the class *and* says what happened to severity — the two are
+    different fixes (a connector profile's `classUID`, or its severity map).
+    """
+    category = class_uid // 1000 if isinstance(class_uid, int) else None
+    class_part = (
+        f"OCSF class {class_uid} is category {category}, not {_FINDINGS_CATEGORY} (Findings)"
+        if category is not None
+        else "OCSF class_uid is absent or not an integer, so the Findings check could not pass"
+    )
+    if not isinstance(severity_id, int):
+        # The single most common cause, and the most actionable: a connector
+        # profile with an empty severity map yields no severity_id at all.
+        sev_part = "and severity_id is absent, so the severity check could not pass either"
+    else:
+        sev_part = f"and severity_id {severity_id} is below the promote floor of {_PROMOTE_SEVERITY_FLOOR}"
+    return f"{class_part}, {sev_part}"
+
+
+def _note_not_promoted(message: dict[str, Any], ocsf: dict[str, Any]) -> None:
+    """Explain a non-promotion once per shape, then count it.
+
+    **Volume decision.** This is the hot path: on a normal tenant the large
+    majority of ingested telemetry is correctly not promoted, so a line per
+    event would be the highest-volume log in the platform and would cost more
+    than the pipeline it describes. A pure time-sampled rollup, though, is
+    wrong in the other direction — somebody who has just connected a source
+    and is watching the logs needs the answer in seconds, not at the end of a
+    window.
+
+    So both, split by novelty: the **first** event of each distinct
+    ``(connector, OCSF class, severity, reason)`` shape is explained
+    immediately and in full, and every subsequent one is counted into a
+    rollup emitted at most once per ``_ROLLUP_SECONDS``. Steady-state cost is
+    therefore one line per minute regardless of throughput, while a
+    newly-misconfigured connector announces itself on its first event.
+
+    No lock: the fusion consumer drives this from a single asyncio task and
+    there is no ``await`` between the reads and writes below, so the
+    sequence is atomic with respect to other events.
+    """
+    global _last_rollup  # noqa: PLW0603 — process-wide sampler, one per worker
+
+    connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
+    severity_raw = ocsf.get("severity_id")
+    severity_id = severity_raw if isinstance(severity_raw, int) else None
+    reason = _not_promoted_reason(class_uid, severity_id)
+    shape = (connector_type or "unknown", class_uid, severity_id, reason)
+
+    if shape not in _explained and len(_explained) < _MAX_TRACKED_SHAPES:
+        _explained.add(shape)
+        logger.info(
+            "promoter.not_promoted",
+            connector_type=connector_type or "unknown",
+            connector_id=str(connector_id) if connector_id else None,
+            ocsf_class_uid=class_uid,
+            ocsf_category=(class_uid // 1000 if isinstance(class_uid, int) else None),
+            severity_id=severity_id,
+            promote_severity_floor=_PROMOTE_SEVERITY_FLOOR,
+            reason=reason,
+            # The event is in the lake either way; this is the pointer to it.
+            event_id=str(message.get("id") or "")[:64] or None,
+            note="archived to the lake, not raised as an alert; further events of this shape are counted in promoter.not_promoted_rollup",
+        )
+
+    if len(_pending) < _MAX_TRACKED_SHAPES or shape in _pending:
+        _pending[shape] = _pending.get(shape, 0) + 1
+
+    now = time.monotonic()
+    if _last_rollup == 0.0:
+        _last_rollup = now
+        return
+    if now - _last_rollup < _ROLLUP_SECONDS or not _pending:
+        return
+
+    top = sorted(_pending.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    logger.info(
+        "promoter.not_promoted_rollup",
+        window_seconds=round(now - _last_rollup, 1),
+        total=sum(_pending.values()),
+        distinct_shapes=len(_pending),
+        top=[
+            {
+                "connector_type": ctype,
+                "ocsf_class_uid": cuid,
+                "severity_id": sev,
+                "reason": why,
+                "count": count,
+            }
+            for (ctype, cuid, sev, why), count in top
+        ],
+    )
+    _pending.clear()
+    _last_rollup = now
+
+
+def reset_not_promoted_state() -> None:
+    """Clear the sampler. Tests only — the state is module-level by design."""
+    global _last_rollup  # noqa: PLW0603 — process-wide sampler, one per worker
+    _explained.clear()
+    _pending.clear()
+    _last_rollup = 0.0
+
+
 def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     """Convert one ``aisoc.raw_events`` message into a RawAlert, or ``None``.
 
@@ -199,6 +334,7 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         return None
 
     if not should_promote(ocsf):
+        _note_not_promoted(message, ocsf)
         return None
 
     tenant_raw = message.get("tenant_id") or ocsf.get("tenant_uid")
