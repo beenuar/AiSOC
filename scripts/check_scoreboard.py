@@ -124,6 +124,32 @@ def _staleness_errors(data: dict, today: date | None = None) -> list[str]:
     ]
 
 
+def _version_errors(data: dict) -> list[str]:
+    """The newest substrate row must name the version in the tree.
+
+    `--refresh` already stamps `agent_version` from `VERSION`, but nothing
+    verified it, so the newest row sat at `v8.1.1` while the tree read
+    `10.0.0` and every check passed. The freshness gate below only reads the
+    *date*, which a refresh keeps current — so a row could be two days old and
+    still be labelled with a version two majors behind, which is the more
+    misleading of the two. Older rows are history and are left alone.
+    """
+    tree = _tree_version()
+    if not tree:
+        return []
+    row = _newest_substrate_row(data)
+    if row is None:
+        return []
+    published = str(row.get("agent_version", ""))
+    if published == tree:
+        return []
+    return [
+        f"the newest substrate row is labelled {published or '(unset)'} but VERSION reads {tree}. "
+        "A reader takes the top row as describing the shipping agent. Run: "
+        "python3 scripts/check_scoreboard.py --refresh"
+    ]
+
+
 def _validate_schema(data: dict) -> list[str]:
     errors: list[str] = []
     try:
@@ -156,7 +182,7 @@ def check() -> int:
         print(f"ERROR: {SCOREBOARD.relative_to(ROOT)} missing", file=sys.stderr)
         return 1
     data = _load()
-    errors = _validate_schema(data) + _validate_honesty(data) + _staleness_errors(data)
+    errors = _validate_schema(data) + _validate_honesty(data) + _staleness_errors(data) + _version_errors(data)
 
     row = _newest_substrate_row(data)
     if row is None:
