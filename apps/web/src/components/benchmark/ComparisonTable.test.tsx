@@ -27,10 +27,14 @@ describe('ComparisonTable', () => {
     expect(screen.queryByText(/every commit/i)).toBeNull();
   });
 
-  it('tags the alert-reduction number as a measurement, not a marketing claim', () => {
+  it('quotes the reduction measured against the correlation key the product runs', () => {
     render(<ComparisonTable />);
 
-    // Substring match — the cell reads "75.3% (measured on fixed noisy stream)".
-    expect(screen.getByText(/75\.3% \(measured/)).toBeInTheDocument();
+    // Substring match — the cell reads
+    // "33.3% (real correlation key, fixed noisy stream)".
+    expect(screen.getByText(/33\.3% \(real correlation key/)).toBeInTheDocument();
+    // The legacy four-tier figure describes an algorithm this product does not
+    // run, so it must not appear in a vendor comparison at all.
+    expect(screen.queryByText(/75\.3/)).toBeNull();
   });
 });

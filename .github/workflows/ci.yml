@@ -368,6 +368,30 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # Same shape, for the detection / marketplace figures. The landing page
+      # carried three different wrong answers to "how many detections" — 6,998
+      # in four places, 7,117 for the marketplace, 218 on the contributor
+      # leaderboard — with no gate on any of them. It also quoted the imported
+      # corpus as the detection capability, while ~85% of it sits under
+      # `_quarantine/` and is never loaded.
+      #
+      # The self-test hand-edits the generated artefact and requires the drift
+      # to be caught, so a green check means the comparison still happens.
+      - name: Corpus stats — self-test
+        run: python3 scripts/generate_corpus_stats.py --self-test
+      - name: Verify detection / marketplace counts are in sync
+        run: python3 scripts/generate_corpus_stats.py --check
+      # Prose cannot be generated the way a count can, so the retraction of
+      # the 75.3% alert-reduction figure is gated instead. `benchmark.md`
+      # withdrew the claim; `BenchmarkResults.tsx` went on rendering a "Real
+      # measurement" badge on it and `benchmarks/alert-reduction.md` went on
+      # calling the harness a faithful re-implementation of production
+      # grouping. A correction that reaches one surface of three is not a
+      # correction.
+      - name: Alert-reduction claims — self-test
+        run: python3 scripts/check_alert_reduction_claims.py --self-test
+      - name: Verify the retracted alert-reduction figure stays retracted
+        run: python3 scripts/check_alert_reduction_claims.py --check
       # The count comes from the registry; so, now, does the console's
       # `ConnectorType` union. It used to be written by hand, which is how ten
       # members came to name nothing the platform ingests — `ibm_qradar`
