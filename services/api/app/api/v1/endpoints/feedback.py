@@ -48,6 +48,7 @@ from sqlalchemy import and_, func, select, update
 from app.api.v1.deps import AuthUser, CurrentUser, DBSession
 from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
 from app.models.alert import Alert
+from app.security.tenant_scope import scoped_tenant_or_403
 from app.services.analyst_feedback import (
     REASON_CODES,
     active_statements,
@@ -445,13 +446,17 @@ async def get_context_statements(
 
     Dual-mode for the same reason ``/alerts/{id}/source-writeback`` is: the
     consumer is the agents service's triage worker, which has no session, and
-    the API owns the tenant-scoped database session. A session caller's tenant
-    comes from the session and the ``tenant_id`` parameter is ignored — taking
-    the client's copy would let any authenticated user read another tenant's
-    memory.
+    the API owns the tenant-scoped database session.
+
+    A session caller's ``tenant_id`` is **intersected** with the session rather
+    than ignored. Ignoring it is safe but dishonest — a caller who names
+    another tenant gets this tenant's memory back under that tenant's name,
+    which is the "silently returns the wrong data" shape rather than a
+    refusal. ``scoped_tenant_or_403`` returns the caller's own tenant when the
+    parameter is absent, honours it when it matches, and 403s otherwise.
     """
     if user is not None:
-        scoped = user.tenant_id
+        scoped = scoped_tenant_or_403(user, tenant_id)
     elif service_token_valid(x_aisoc_service_token):
         if tenant_id is None:
             raise HTTPException(

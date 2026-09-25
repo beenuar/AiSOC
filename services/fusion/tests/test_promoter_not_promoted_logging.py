@@ -157,7 +157,7 @@ class TestTheExplanationIsBounded:
             promote_normalized_event(_unpromotable(class_uid=9000 + i))
 
         assert len(captured.of("promoter.not_promoted")) == promoter._MAX_TRACKED_SHAPES
-        assert len(promoter._pending) <= promoter._MAX_TRACKED_SHAPES
+        assert len(promoter._sampler.pending) <= promoter._MAX_TRACKED_SHAPES
 
     def test_the_rollup_reports_counts_for_everything_after_the_first(self, captured, monkeypatch):
         # Drive the clock rather than sleeping: the rollup interval is 60s.

@@ -122,16 +122,25 @@ class TestContextStatementsAuth:
         assert out.tenant_id == str(TENANT)
         assert out.statements[0].observations == 2
 
-    async def test_a_session_cannot_name_another_tenant(self, _stub_query: list[Any]) -> None:
-        # The parameter is accepted (a service caller needs it) and ignored for
-        # a session. Honouring it would let any authenticated user read another
-        # tenant's organisation memory.
-        await feedback.get_context_statements(
-            user=FakeUser(TENANT),
-            db=object(),
-            tenant_id=OTHER_TENANT,
-            x_aisoc_service_token=None,
-        )
+    async def test_a_session_naming_another_tenant_is_refused(self, _stub_query: list[Any]) -> None:
+        # Refused rather than quietly scoped back to the caller's own tenant.
+        # Returning this tenant's memory in response to a request for another
+        # one is the "silently returns the wrong data" shape; a 403 is not.
+        with pytest.raises(HTTPException) as exc:
+            await feedback.get_context_statements(
+                user=FakeUser(TENANT),
+                db=object(),
+                tenant_id=OTHER_TENANT,
+                x_aisoc_service_token=None,
+            )
+
+        assert exc.value.status_code == 403
+        assert _stub_query == []
+
+    async def test_a_session_may_name_its_own_tenant(self, _stub_query: list[Any]) -> None:
+        # An explicit tenant that matches the session is a legitimate narrowing
+        # and must not be treated as an attack.
+        await feedback.get_context_statements(user=FakeUser(TENANT), db=object(), tenant_id=TENANT, x_aisoc_service_token=None)
 
         assert _stub_query == [TENANT]
 
