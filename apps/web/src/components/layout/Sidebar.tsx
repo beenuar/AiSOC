@@ -244,11 +244,6 @@ const navSections: NavSection[] = [
         icon: <SparklesIcon />,
       },
       {
-        label: 'Investigation Chat',
-        href: '/investigate',
-        icon: <SparklesIcon />,
-      },
-      {
         label: 'Coverage Advisor',
         href: '/coverage-advisor',
         icon: <ShieldIcon />,
