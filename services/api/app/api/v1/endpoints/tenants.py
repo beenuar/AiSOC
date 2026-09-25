@@ -161,9 +161,7 @@ async def delete_my_tenant(
     if not request.dry_run and request.confirm_tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "confirm_tenant_id must match the tenant being deleted. " "This operation is irreversible; run with dry_run=true first."
-            ),
+            detail=("confirm_tenant_id must match the tenant being deleted. This operation is irreversible; run with dry_run=true first."),
         )
 
     report = await delete_tenant(db, tenant_id, dry_run=request.dry_run)

@@ -96,12 +96,7 @@ def _category_for(logsource: dict, upstream_path: Path) -> str:
     if not isinstance(logsource, dict):
         logsource = {}
 
-    candidate = (
-        logsource.get("product")
-        or logsource.get("category")
-        or logsource.get("service")
-        or ""
-    )
+    candidate = logsource.get("product") or logsource.get("category") or logsource.get("service") or ""
     candidate = str(candidate).lower()
     if candidate:
         return normalise_categories(candidate)
@@ -182,10 +177,7 @@ def _convert_rule(
         enabled=quarantine_reason is None,
         tags=tags,
         references=references,
-        logsource={
-            str(k): str(v)
-            for k, v in (logsource.items() if isinstance(logsource, dict) else [])
-        },
+        logsource={str(k): str(v) for k, v in (logsource.items() if isinstance(logsource, dict) else [])},
         detection=detection,
         provenance=provenance,
         output_category=category,

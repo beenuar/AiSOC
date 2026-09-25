@@ -115,8 +115,7 @@ def main() -> int:
         # found no service to hold to the standard, which reads identically
         # to every service meeting it.
         print(
-            f"health-probes: found no FastAPI service under {SERVICES_DIR}. "
-            f"Zero services audited is not zero services missing the probes.",
+            f"health-probes: found no FastAPI service under {SERVICES_DIR}. Zero services audited is not zero services missing the probes.",
             file=sys.stderr,
         )
         return 1
@@ -125,7 +124,7 @@ def main() -> int:
     reference = reference_path.read_bytes() if reference_path.is_file() else None
     if reference is None:
         print(
-            f"health-probes: reference module {reference_path} is missing, so the " f"copies have nothing to be in sync with.",
+            f"health-probes: reference module {reference_path} is missing, so the copies have nothing to be in sync with.",
             file=sys.stderr,
         )
         return 1

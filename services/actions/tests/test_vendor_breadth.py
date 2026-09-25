@@ -88,7 +88,7 @@ class TestEveryExecutorIsBacked:
         """
         factory_name, method = expected
         client_cls = _import(REAL_CLIENTS[factory_name])
-        assert hasattr(client_cls, method), f"{executor_name} calls {method}() which {client_cls.__name__} does " f"not have"
+        assert hasattr(client_cls, method), f"{executor_name} calls {method}() which {client_cls.__name__} does not have"
         assert inspect.iscoroutinefunction(getattr(client_cls, method)), f"{client_cls.__name__}.{method} is not awaitable"
 
     @pytest.mark.parametrize("executor_cls", VENDOR_BREADTH_EXECUTORS, ids=lambda c: c.__name__)
@@ -175,5 +175,5 @@ class TestReversesAreNowReachable:
         declared = CAPABILITY_CONTRACTS[forward].reverse_capability
         assert declared == reverse
         assert reverse in implemented, (
-            f"{forward} declares {reverse} as its reverse and nothing " f"implements it, so the rollback path resolves to nothing"
+            f"{forward} declares {reverse} as its reverse and nothing implements it, so the rollback path resolves to nothing"
         )

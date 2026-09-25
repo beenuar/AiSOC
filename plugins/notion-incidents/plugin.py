@@ -1,4 +1,5 @@
 """Notion incidents sync action plugin for AiSOC."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,9 +37,7 @@ class Plugin:
         if case_url:
             properties["AiSOC Case"] = {"url": case_url}
         if techniques:
-            properties["MITRE"] = {
-                "multi_select": [{"name": t} for t in techniques[:10]]
-            }
+            properties["MITRE"] = {"multi_select": [{"name": t} for t in techniques[:10]]}
         return properties
 
     def _children(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -49,9 +48,7 @@ class Plugin:
             {
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": summary[:1900]}}]
-                },
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": summary[:1900]}}]},
             }
         ]
 
@@ -69,9 +66,7 @@ class Plugin:
         action = payload.get("action", "create_incident_page")
 
         try:
-            async with httpx.AsyncClient(
-                timeout=30.0, base_url=API_BASE, headers=headers
-            ) as client:
+            async with httpx.AsyncClient(timeout=30.0, base_url=API_BASE, headers=headers) as client:
                 if action == "create_incident_page":
                     body = {
                         "parent": {"database_id": database_id},
@@ -106,11 +101,7 @@ class Plugin:
                             {
                                 "object": "block",
                                 "type": "heading_2",
-                                "heading_2": {
-                                    "rich_text": [
-                                        {"type": "text", "text": {"content": "Post-mortem"}}
-                                    ]
-                                },
+                                "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Post-mortem"}}]},
                             },
                             {
                                 "object": "block",

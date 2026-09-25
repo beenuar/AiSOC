@@ -20,8 +20,8 @@ Auto-fixture rules
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import re
+from collections.abc import Iterable
 from typing import Any
 
 # Operator suffixes - kept in sync with scripts/generate_detections.py.
@@ -417,7 +417,7 @@ def build_positive(when: dict[str, Any]) -> dict[str, Any]:
     yield ``path='/tmp/.tar'`` — satisfying both clauses.
     """
     if _has_compound(when):
-        raise ValueError("build_positive cannot auto-generate fixtures for any_of/all_of clauses. " "Pass an explicit positive= to S().")
+        raise ValueError("build_positive cannot auto-generate fixtures for any_of/all_of clauses. Pass an explicit positive= to S().")
     by_field: dict[str, list[tuple[str, Any]]] = {}
     comparisons: list[tuple[str, bool]] = []
     for key, val in when.items():
@@ -453,7 +453,7 @@ def build_negative(
 ) -> dict[str, Any]:
     """Build a synthetic negative by flipping one clause of a flat match_when."""
     if _has_compound(when):
-        raise ValueError("build_negative cannot auto-generate fixtures for any_of/all_of clauses. " "Pass an explicit negative= to S().")
+        raise ValueError("build_negative cannot auto-generate fixtures for any_of/all_of clauses. Pass an explicit negative= to S().")
     neg = build_positive(when)
     target_key: str | None = None
     target_op: str | None = None

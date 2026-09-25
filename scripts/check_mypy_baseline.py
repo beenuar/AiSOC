@@ -498,8 +498,7 @@ def run(root: Path, update: bool = False) -> int:
         if tree not in recorded:
             what = "is checked but" if tree == UNMANAGED_SCOPE else "declares [tool.mypy] but"
             problems.append(
-                f"{tree} {what} has no baseline entry — a scope added "
-                f"without being recorded is a scope nothing checks (config -> baseline)"
+                f"{tree} {what} has no baseline entry — a scope added without being recorded is a scope nothing checks (config -> baseline)"
             )
             continue
         problems += compare(tree, results[tree], recorded[tree])

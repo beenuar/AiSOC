@@ -280,7 +280,7 @@ def _build_envelope() -> EnvelopeCipher | None:
     if mode in ("aws", "kms", "aws-kms"):
         key_id = (settings.AISOC_KMS_KEY_ID or "").strip()
         if not key_id:
-            raise CredentialVaultError("AISOC_CREDENTIAL_ENVELOPE=aws requires AISOC_KMS_KEY_ID " "(a KMS key id, alias or ARN).")
+            raise CredentialVaultError("AISOC_CREDENTIAL_ENVELOPE=aws requires AISOC_KMS_KEY_ID (a KMS key id, alias or ARN).")
         return EnvelopeCipher(AwsKmsKeyManager(key_id))
 
     raise CredentialVaultError(f"AISOC_CREDENTIAL_ENVELOPE={mode!r} is not recognised; expected off, local or aws.")

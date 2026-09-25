@@ -45,7 +45,5 @@ class EnricherPlugin(AiSOCPlugin):
     """Base class for enricher plugins."""
 
     @abstractmethod
-    async def enrich(
-        self, request: EnrichmentRequest, ctx: PluginContext
-    ) -> EnrichmentResult:
+    async def enrich(self, request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:
         """Enrich an indicator and return structured results."""

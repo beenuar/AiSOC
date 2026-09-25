@@ -14,6 +14,7 @@ Commands:
   aisoc mcp install --host <h>      Wire AiSOC into Claude / Cursor / Continue
   aisoc submit <file>               POST an alert/event JSON payload to the AiSOC API
 """
+
 from __future__ import annotations
 
 import base64
@@ -93,8 +94,7 @@ def _render_templates(plugin_type: str, target: Path, substitutions: dict[str, s
     root = _templates_root() / plugin_type
     if not root.is_dir():
         raise click.ClickException(
-            f"No templates bundled for plugin_type='{plugin_type}'. "
-            f"Expected directory: {root}"
+            f"No templates bundled for plugin_type='{plugin_type}'. Expected directory: {root}"
         )
 
     written: list[Path] = []
@@ -112,6 +112,7 @@ def _render_templates(plugin_type: str, target: Path, substitutions: dict[str, s
 
 # ── CLI root ──────────────────────────────────────────────────────────────────
 
+
 @click.group()
 @click.version_option(package_name="aisoc-cli")
 def cli() -> None:
@@ -119,6 +120,7 @@ def cli() -> None:
 
 
 # ── plugin group ──────────────────────────────────────────────────────────────
+
 
 @cli.group()
 def plugin() -> None:
@@ -332,6 +334,7 @@ def plugin_publish(path: str, api_url: str, api_key: str, private_key: str) -> N
 
 # ── detection group ───────────────────────────────────────────────────────────
 
+
 @cli.group()
 def detection() -> None:
     """Detection rule management commands."""
@@ -379,6 +382,7 @@ def detection_validate(file: str, sigma_cli: str) -> None:
 
 
 # ── keygen command ────────────────────────────────────────────────────────────
+
 
 @cli.command()
 @click.option(
@@ -431,6 +435,7 @@ def keygen(output_dir: str) -> None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _load_private_key(path: Path) -> Ed25519PrivateKey:
     pem_data = path.read_bytes()
     key = serialization.load_pem_private_key(pem_data, password=None)
@@ -470,6 +475,7 @@ def _basic_sigma_validate(rule_path: Path) -> None:
 
 # ── Repo / compose helpers ────────────────────────────────────────────────────
 
+
 def _find_repo_root(start: Path | None = None) -> Path:
     """Walk up from ``start`` (default: cwd) looking for a docker-compose root.
 
@@ -480,9 +486,11 @@ def _find_repo_root(start: Path | None = None) -> Path:
     """
     current = (start or Path.cwd()).resolve()
     for candidate in [current, *current.parents]:
-        if (candidate / "docker-compose.yml").exists() or (
-            candidate / "infra" / "compose" / "docker-compose.dev.yml"
-        ).exists() or (candidate / "docker-compose.dev.yml").exists():
+        if (
+            (candidate / "docker-compose.yml").exists()
+            or (candidate / "infra" / "compose" / "docker-compose.dev.yml").exists()
+            or (candidate / "docker-compose.dev.yml").exists()
+        ):
             return candidate
     return current
 
@@ -515,6 +523,7 @@ def _require_docker() -> None:
 
 
 # ── serve command ─────────────────────────────────────────────────────────────
+
 
 @cli.command()
 @click.option(
@@ -550,8 +559,7 @@ def serve(detach: bool, build: bool) -> None:
 
     console.print(
         Panel(
-            f"[bold]cwd:[/bold] {repo_root}\n"
-            f"[bold]cmd:[/bold] {' '.join(cmd)}",
+            f"[bold]cwd:[/bold] {repo_root}\n[bold]cmd:[/bold] {' '.join(cmd)}",
             title="[bold green]aisoc serve[/bold green]",
         )
     )
@@ -561,6 +569,7 @@ def serve(detach: bool, build: bool) -> None:
 
 
 # ── db group ──────────────────────────────────────────────────────────────────
+
 
 @cli.group()
 def db() -> None:
@@ -597,8 +606,7 @@ def db_upgrade(service: str) -> None:
     ]
     console.print(
         Panel(
-            f"[bold]cwd:[/bold] {repo_root}\n"
-            f"[bold]cmd:[/bold] {' '.join(cmd)}",
+            f"[bold]cwd:[/bold] {repo_root}\n[bold]cmd:[/bold] {' '.join(cmd)}",
             title="[bold green]aisoc db upgrade[/bold green]",
         )
     )
@@ -612,6 +620,7 @@ def db_upgrade(service: str) -> None:
 
 
 # ── mcp group ─────────────────────────────────────────────────────────────────
+
 
 @cli.group()
 def mcp() -> None:
@@ -675,8 +684,7 @@ def mcp_serve(transport: str, port: int | None) -> None:
     argv, label = _mcp_argv(repo_root, "serve", extra)
     console.print(
         Panel(
-            f"[bold]cwd:[/bold] {repo_root}\n"
-            f"[bold]cmd:[/bold] {label}",
+            f"[bold]cwd:[/bold] {repo_root}\n[bold]cmd:[/bold] {label}",
             title="[bold green]aisoc mcp serve[/bold green]",
         )
     )
@@ -703,8 +711,7 @@ def mcp_install(host: str) -> None:
 
     console.print(
         Panel(
-            f"[bold]cwd:[/bold] {repo_root}\n"
-            f"[bold]cmd:[/bold] {label}",
+            f"[bold]cwd:[/bold] {repo_root}\n[bold]cmd:[/bold] {label}",
             title="[bold green]aisoc mcp install[/bold green]",
         )
     )
@@ -770,8 +777,7 @@ def _coerce_events(payload: Any) -> tuple[list[dict[str, Any]], dict[str, str]]:
             events = [payload]
     else:
         raise click.ClickException(
-            "Payload must be a JSON object, a list of events, "
-            "or an object with an 'events' list."
+            "Payload must be a JSON object, a list of events, or an object with an 'events' list."
         )
 
     cleaned: list[dict[str, Any]] = []
@@ -944,17 +950,14 @@ def submit(
         sys.exit(1)
 
     if resp.status_code >= 400:
-        console.print(
-            f"[red]AiSOC API returned {resp.status_code}:[/red] {resp.text[:500]}"
-        )
+        console.print(f"[red]AiSOC API returned {resp.status_code}:[/red] {resp.text[:500]}")
         sys.exit(1)
 
     try:
         data = resp.json()
     except ValueError:
         console.print(
-            f"[red]AiSOC API returned non-JSON ({resp.status_code}):[/red] "
-            f"{resp.text[:200]}"
+            f"[red]AiSOC API returned non-JSON ({resp.status_code}):[/red] {resp.text[:200]}"
         )
         sys.exit(1)
 

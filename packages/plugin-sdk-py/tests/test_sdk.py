@@ -19,6 +19,7 @@ from aisoc_plugin_sdk import (
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def ctx() -> PluginContext:
     return PluginContext(
@@ -29,6 +30,7 @@ def ctx() -> PluginContext:
 
 
 # ── Enricher tests ────────────────────────────────────────────────────────────
+
 
 class MockEnricher(EnricherPlugin):
     @property
@@ -66,6 +68,7 @@ def test_enricher_manifest() -> None:
 
 
 # ── Action tests ──────────────────────────────────────────────────────────────
+
 
 class MockAction(ActionPlugin):
     @property
@@ -117,6 +120,7 @@ async def test_action_dry_run(ctx: PluginContext) -> None:
 
 # ── Registry tests ────────────────────────────────────────────────────────────
 
+
 def test_registry_register_and_lookup() -> None:
     registry = PluginRegistry()
     enricher_plugin = MockEnricher()
@@ -139,6 +143,7 @@ def test_registry_unregister() -> None:
 
 
 # ── Decorator tests ───────────────────────────────────────────────────────────
+
 
 @enricher(id="test.fn-enricher", name="Function Enricher")
 async def fn_enricher(request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:

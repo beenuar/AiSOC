@@ -149,7 +149,7 @@ def evaluate(
                 + (
                     "the action cannot be undone, so the platform does not execute it."
                     if impact == ActionImpact.IRREVERSIBLE
-                    else "a human must approve regardless of confidence " f"({score:.0%}) or autonomy tier ({tier})."
+                    else f"a human must approve regardless of confidence ({score:.0%}) or autonomy tier ({tier})."
                 )
             ),
             impact=impact,
@@ -160,7 +160,7 @@ def evaluate(
     if declared_approval == ApprovalRequirement.MANDATORY_HUMAN:
         return ApprovalDecision(
             requirement=ApprovalRequirement.MANDATORY_HUMAN,
-            reason=(f"The action's contract requires a human regardless of confidence " f"({score:.0%}) or autonomy tier ({tier})."),
+            reason=(f"The action's contract requires a human regardless of confidence ({score:.0%}) or autonomy tier ({tier})."),
             impact=impact,
             confidence=score,
             tier=tier,
@@ -170,7 +170,7 @@ def evaluate(
     if ceiling is None:
         return ApprovalDecision(
             requirement=ApprovalRequirement.ANALYST,
-            reason=(f"Autonomy tier {tier} does not auto-execute any action; this is a " f"recommendation for an analyst to approve."),
+            reason=(f"Autonomy tier {tier} does not auto-execute any action; this is a recommendation for an analyst to approve."),
             impact=impact,
             confidence=score,
             tier=tier,
@@ -179,7 +179,7 @@ def evaluate(
     if _impact_rank(impact) > _impact_rank(ceiling):
         return ApprovalDecision(
             requirement=ApprovalRequirement.ANALYST,
-            reason=(f"Autonomy tier {tier} auto-executes up to {ceiling.value} impact; " f"this action is {impact.value}."),
+            reason=(f"Autonomy tier {tier} auto-executes up to {ceiling.value} impact; this action is {impact.value}."),
             impact=impact,
             confidence=score,
             tier=tier,
@@ -201,7 +201,7 @@ def evaluate(
     if score < floor:
         return ApprovalDecision(
             requirement=ApprovalRequirement.ANALYST,
-            reason=(f"Confidence {score:.0%} is below the {floor:.0%} floor for " f"{impact.value}-impact actions."),
+            reason=(f"Confidence {score:.0%} is below the {floor:.0%} floor for {impact.value}-impact actions."),
             impact=impact,
             confidence=score,
             tier=tier,
@@ -210,7 +210,7 @@ def evaluate(
     if declared_approval == ApprovalRequirement.ANALYST:
         return ApprovalDecision(
             requirement=ApprovalRequirement.ANALYST,
-            reason=(f"The action's contract requires analyst approval even at " f"{score:.0%} confidence."),
+            reason=(f"The action's contract requires analyst approval even at {score:.0%} confidence."),
             impact=impact,
             confidence=score,
             tier=tier,

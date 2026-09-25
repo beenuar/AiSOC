@@ -26,6 +26,7 @@ Returns:
     "scanned_bytes": 204800,
   }
 """
+
 from __future__ import annotations
 
 import glob
@@ -35,6 +36,7 @@ from typing import Any
 
 try:
     import yara  # type: ignore
+
     _YARA = True
 except ModuleNotFoundError:
     _YARA = False

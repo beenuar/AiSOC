@@ -69,7 +69,7 @@ class TinesConnector(BaseConnector):
                     "Tines tenant URL",
                     placeholder="https://acme.tines.com",
                     help_text=(
-                        "Your Tines tenant URL, including scheme. For self-hosted " "deployments use the full HTTPS URL of the Rails app."
+                        "Your Tines tenant URL, including scheme. For self-hosted deployments use the full HTTPS URL of the Rails app."
                     ),
                 ),
                 Field(

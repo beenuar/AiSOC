@@ -892,7 +892,7 @@ class PlaybookEngine:
                     shown = ", ".join(f"'{name}'" for name in failed[:3])
                     more = f" and {len(failed) - 3} more" if len(failed) > 3 else ""
                     pr.error = (
-                        f"{len(failed)} of {len(pr.step_results)} steps failed " f"({shown}{more}); the run continued past them by policy"
+                        f"{len(failed)} of {len(pr.step_results)} steps failed ({shown}{more}); the run continued past them by policy"
                     )
                 else:
                     pr.status = RunStatus.COMPLETED

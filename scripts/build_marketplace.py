@@ -294,7 +294,7 @@ def build_detection_item(
     }
     if quarantined:
         item["quarantine_reason"] = data.get("quarantine_reason") or (
-            "imported rule; upstream query language not directly executable " "by the AiSOC engine yet"
+            "imported rule; upstream query language not directly executable by the AiSOC engine yet"
         )
     provenance = data.get("provenance")
     if isinstance(provenance, dict):
@@ -458,7 +458,7 @@ def categories_block(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         {
             "id": "playbooks",
             "label": "Response Playbooks",
-            "description": ("Automated incident-response workflows triggered by " "alerts or manual invocation."),
+            "description": ("Automated incident-response workflows triggered by alerts or manual invocation."),
         },
         {
             "id": "detections",
@@ -597,11 +597,11 @@ def main() -> int:
         rebuilt_no_ts = _strip_generated(serialised)
         if _strip_generated(existing_primary) != rebuilt_no_ts or _strip_generated(existing_public) != rebuilt_no_ts:
             print(
-                "marketplace/index.json is stale. Run: " "pnpm marketplace:build",
+                "marketplace/index.json is stale. Run: pnpm marketplace:build",
                 file=sys.stderr,
             )
             return 1
-        print(f"marketplace/index.json is up to date " f"({index['stats']['total']} items).")
+        print(f"marketplace/index.json is up to date ({index['stats']['total']} items).")
         return 0
 
     write_index(index)

@@ -24,6 +24,7 @@ pip install aisoc-sdk
 import asyncio
 from aisoc_sdk import AiSOCClient
 
+
 async def main():
     async with AiSOCClient(
         base_url="https://your-aisoc.example.com",
@@ -45,6 +46,7 @@ async def main():
             trigger_data={"host_id": "srv-prod-42", "case_id": case.id},
         )
         print("Playbook run:", run.run_id)
+
 
 asyncio.run(main())
 ```

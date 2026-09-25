@@ -145,7 +145,7 @@ def test_every_rail_pivot_resolves_to_a_defined_route(route_patterns):
     assert pivots, "fixture produced no pivots — the gate would pass vacuously"
 
     broken = [(kind, pivot) for kind, pivot in pivots if not _resolves(pivot, route_patterns)]
-    assert not broken, "these pivots 404 — no route in apps/web/src/app matches them: " f"{broken}"
+    assert not broken, f"these pivots 404 — no route in apps/web/src/app matches them: {broken}"
 
 
 def test_the_entity_pivots_target_the_graph_route_that_reads_the_parameter(

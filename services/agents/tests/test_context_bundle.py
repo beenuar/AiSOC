@@ -62,9 +62,7 @@ _BUILD_P95_LATENCY_S = 5.0
 
 def _load_dataset() -> list[dict[str, Any]]:
     if not _DATASET_PATH.exists():
-        raise FileNotFoundError(
-            f"Eval dataset missing at {_DATASET_PATH}. " "Run `python3 scripts/generate_eval_incidents.py` to regenerate."
-        )
+        raise FileNotFoundError(f"Eval dataset missing at {_DATASET_PATH}. Run `python3 scripts/generate_eval_incidents.py` to regenerate.")
     with _DATASET_PATH.open() as f:
         return json.load(f)
 
@@ -263,9 +261,9 @@ class ContextBundleBuildLatencyTests(unittest.TestCase):
 
         report = (
             f"\nContextBundle build latency over {len(incidents)} incidents:\n"
-            f"  mean={mean*1000:.1f}ms  p50={p50*1000:.1f}ms  "
-            f"p95={p95*1000:.1f}ms  p99={p99*1000:.1f}ms  "
-            f"max={max_latency*1000:.1f}ms\n"
+            f"  mean={mean * 1000:.1f}ms  p50={p50 * 1000:.1f}ms  "
+            f"p95={p95 * 1000:.1f}ms  p99={p99 * 1000:.1f}ms  "
+            f"max={max_latency * 1000:.1f}ms\n"
             f"  bundles fully populated: "
             f"{sum(1 for b in bundles if b.build_completed_at is not None)}/{len(bundles)}"
         )
@@ -275,7 +273,7 @@ class ContextBundleBuildLatencyTests(unittest.TestCase):
         self.assertLess(
             p95,
             _BUILD_P95_LATENCY_S,
-            f"ContextBundle p95 {p95*1000:.1f}ms exceeds 5000ms gate",
+            f"ContextBundle p95 {p95 * 1000:.1f}ms exceeds 5000ms gate",
         )
 
     @staticmethod

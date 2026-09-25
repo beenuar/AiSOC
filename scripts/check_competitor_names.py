@@ -329,7 +329,7 @@ def scan_tree(root: Path, config: Config, config_path: Path) -> ScanReport:
     # Which competitor names were seen anywhere at all, and which allow entries
     # actually excused something. Both feed the reverse checks below.
     seen_names: set[str] = set()
-    allow_hits: dict[int, int] = {i: 0 for i in range(len(config.allows))}
+    allow_hits: dict[int, int] = dict.fromkeys(range(len(config.allows)), 0)
 
     for rel in tracked_files(root):
         if rel in SELF_REFERENTIAL or rel.endswith(SKIP_SUFFIXES):

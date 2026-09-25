@@ -128,9 +128,7 @@ MIGRATIONS: tuple[GraphMigration, ...] = (
     ),
     GraphMigration(
         id="002_schema_v1_1_context_depth",
-        description=(
-            "Schema v1.1: identity, asset, cloud, business and threat context " "labels with tenant_id indexes for scoped traversal"
-        ),
+        description=("Schema v1.1: identity, asset, cloud, business and threat context labels with tenant_id indexes for scoped traversal"),
         statements=_V11_CONTEXT,
         tags=("v1.1",),
     ),

@@ -89,6 +89,7 @@ class Investigation:
 # Stage 1 — Detect. "Did something happen?"
 # ---------------------------------------------------------------------------
 
+
 def _stage_detect(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
     t0 = time.perf_counter()
     ledger.append(
@@ -117,6 +118,7 @@ def _stage_detect(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> Non
 # ---------------------------------------------------------------------------
 # Stage 2 — Triage. "Is it real, and how confident are we?"
 # ---------------------------------------------------------------------------
+
 
 def _stage_triage(s: Scenario, ledger: Ledger, r: DeterministicReasoner) -> None:
     t0 = time.perf_counter()
@@ -147,6 +149,7 @@ def _stage_triage(s: Scenario, ledger: Ledger, r: DeterministicReasoner) -> None
 # Stage 3 — Hunt. "Did the same actor touch anything else?"
 # ---------------------------------------------------------------------------
 
+
 def _stage_hunt(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
     t0 = time.perf_counter()
     technique = s.mitre_techniques[0] if s.mitre_techniques else "T0000"
@@ -156,8 +159,7 @@ def _stage_hunt(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
         funnel_stage="hunt",
         action="Pivot from primary entity across the data lake",
         rationale=(
-            "Sweep for the primary entity across the last 24 h of warm-tier"
-            f" events; correlate against MITRE technique {technique}."
+            f"Sweep for the primary entity across the last 24 h of warm-tier events; correlate against MITRE technique {technique}."
         ),
         evidence={
             "pivot_entities": list(s.entities.values()),
@@ -166,7 +168,10 @@ def _stage_hunt(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
             "matches_found": _synthetic_hunt_matches(s.id),
         },
         tool_calls=[
-            {"name": "nl_to_query.translate", "args": {"hypothesis": f"any activity by {next(iter(s.entities.values()), 'actor')} in last 24h"}},
+            {
+                "name": "nl_to_query.translate",
+                "args": {"hypothesis": f"any activity by {next(iter(s.entities.values()), 'actor')} in last 24h"},
+            },
             {"name": "lake.query", "args": {"language": "ES|QL", "row_cap": 1000}},
         ],
         decision="Pivot complete; no additional compromised entities surfaced beyond the alert payload.",
@@ -177,6 +182,7 @@ def _stage_hunt(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
 # ---------------------------------------------------------------------------
 # Stage 4 — Respond. "What do we do about it, and at what blast radius?"
 # ---------------------------------------------------------------------------
+
 
 def _stage_respond(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> None:
     t0 = time.perf_counter()
@@ -211,6 +217,7 @@ def _stage_respond(s: Scenario, ledger: Ledger, _r: DeterministicReasoner) -> No
 # ---------------------------------------------------------------------------
 # Helpers — keep the stage functions readable above.
 # ---------------------------------------------------------------------------
+
 
 def _ms(t0: float) -> int:
     return int((time.perf_counter() - t0) * 1000)
@@ -274,6 +281,7 @@ def _default_actions(s: Scenario) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # High-level orchestrator used by the CLI.
 # ---------------------------------------------------------------------------
+
 
 def run_investigation(scenario: Scenario, *, ledger: Ledger | None = None) -> Ledger:
     """Run the four-stage funnel against ``scenario`` and return the ledger.

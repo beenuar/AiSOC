@@ -1,4 +1,5 @@
 """Tests for aisoc-cli commands."""
+
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -12,7 +13,9 @@ def runner():
 
 
 def test_plugin_scaffold(runner, tmp_path):
-    result = runner.invoke(cli, ["plugin", "scaffold", "test-enricher", "--output-dir", str(tmp_path)])
+    result = runner.invoke(
+        cli, ["plugin", "scaffold", "test-enricher", "--output-dir", str(tmp_path)]
+    )
     assert result.exit_code == 0
     plugin_dir = tmp_path / "test-enricher"
     assert (plugin_dir / "plugin.yaml").exists()
@@ -24,7 +27,9 @@ def test_plugin_scaffold(runner, tmp_path):
 
 def test_plugin_new_alias(runner, tmp_path):
     """``plugin new`` is the canonical name; ``plugin scaffold`` is the alias."""
-    result = runner.invoke(cli, ["plugin", "new", "another-enricher", "--output-dir", str(tmp_path)])
+    result = runner.invoke(
+        cli, ["plugin", "new", "another-enricher", "--output-dir", str(tmp_path)]
+    )
     assert result.exit_code == 0, result.output
     assert (tmp_path / "another-enricher" / "plugin.yaml").exists()
 
@@ -80,9 +85,7 @@ def test_plugin_new_per_type(runner, tmp_path, plugin_type, expected_files):
 
 def test_plugin_new_existing_dir_fails(runner, tmp_path):
     (tmp_path / "dup").mkdir()
-    result = runner.invoke(
-        cli, ["plugin", "new", "dup", "--output-dir", str(tmp_path)]
-    )
+    result = runner.invoke(cli, ["plugin", "new", "dup", "--output-dir", str(tmp_path)])
     assert result.exit_code != 0
     assert "already exists" in result.output
 
@@ -126,6 +129,8 @@ def test_detection_validate_basic(runner, tmp_path):
         "detection": {"selection": {"CommandLine|contains": "malware"}, "condition": "selection"},
     }
     rule_file.write_text(yaml.dump(rule))
-    result = runner.invoke(cli, ["detection", "validate", str(rule_file), "--sigma-cli", "nonexistent-sigma"])
+    result = runner.invoke(
+        cli, ["detection", "validate", str(rule_file), "--sigma-cli", "nonexistent-sigma"]
+    )
     assert result.exit_code == 0
     assert "passed" in result.output

@@ -69,7 +69,7 @@ def test_known_good_is_not_flagged(case):
     excused = gate.excused_names(case["path"], CONFIG.allows)
     found = gate.scan_text(case["path"], case["text"], CONFIG.competitors, excused)
     assert not found, (
-        f"the gate flagged an integration reference ({case['why']}): " f"{case['text']!r} matched {sorted({f.competitor for f in found})}"
+        f"the gate flagged an integration reference ({case['why']}): {case['text']!r} matched {sorted({f.competitor for f in found})}"
     )
 
 

@@ -191,7 +191,7 @@ class TestHasAnyContext:
         bundle = ContextBundle(incident_id=__import__("uuid").uuid4())
         bundle.incident_context = IncidentContextDimensions(partial=True, errors=["graph down"])
         assert not bundle.has_any_context, (
-            "a failed lookup was counted as context; the agent would then " "take the bundle-aware path with nothing in it"
+            "a failed lookup was counted as context; the agent would then take the bundle-aware path with nothing in it"
         )
 
 

@@ -108,7 +108,7 @@ RUNTIMES: dict[str, str] = {
         "resolvers are two answers to 'what does this commit install' — the "
         "same defect as two poetry versions, which this repository already hit"
     ),
-    "python": ("the interpreter the thirteen Python services run on. Their manifests " "declare ^3.11 and every image ships 3.11"),
+    "python": ("the interpreter the thirteen Python services run on. Their manifests declare ^3.11 and every image ships 3.11"),
 }
 
 # ── Declared exemptions ──────────────────────────────────────────────────────
@@ -132,15 +132,14 @@ PNPM_ACTION_EXEMPT: dict[str, str] = {
         "restored store; v4 installs 8.15.1 directly with no switch"
     ),
     ".github/workflows/visual-regression.yml": (
-        "same Playwright container and the same pnpm self-switch; pinning " "`version:` under v6 does not avoid it"
+        "same Playwright container and the same pnpm self-switch; pinning `version:` under v6 does not avoid it"
     ),
 }
 
 # Install paths allowed to resolve outside the lockfile, with the reason.
 UNLOCKED_INSTALL_EXEMPT: dict[str, str] = {
     ".github/workflows/mobile.yml": (
-        "apps/mobile is deliberately outside the root pnpm workspace and "
-        "keeps its own lockfile, so a root lockfile refresh must not red it"
+        "apps/mobile is deliberately outside the root pnpm workspace and keeps its own lockfile, so a root lockfile refresh must not red it"
     ),
 }
 
@@ -1257,9 +1256,7 @@ def check_ship_test_parity(data: Scan) -> list[str]:
             continue
         for version in sorted(shipped - tested):
             where = sorted({p.path for p in data.by_runtime(runtime) if p.role == "ship" and p.version == version})
-            problems.append(
-                f"`{runtime}` {version} is shipped by {', '.join(where)} but no workflow " f"builds or tests on it (ship -> test)"
-            )
+            problems.append(f"`{runtime}` {version} is shipped by {', '.join(where)} but no workflow builds or tests on it (ship -> test)")
         for version in sorted(tested - shipped):
             where = sorted({p.path for p in data.by_runtime(runtime) if p.role == "test" and p.version == version})
             problems.append(
@@ -1278,8 +1275,7 @@ def check_floors(data: Scan) -> list[str]:
             for pin in toolchains:
                 if not at_most(floor.version, pin.version):
                     problems.append(
-                        f"{floor.path} declares `{runtime}` >= {floor.version}, but {pin.path} "
-                        f"installs {pin.version} (floor <= toolchain)"
+                        f"{floor.path} declares `{runtime}` >= {floor.version}, but {pin.path} installs {pin.version} (floor <= toolchain)"
                     )
     return problems
 
@@ -1416,7 +1412,7 @@ def check_published_service_ci(root: Path, data: Scan) -> list[str]:
             )
             continue
         if not (root / dockerfile).is_file() and not (root / target / dockerfile).is_file():
-            problems.append(f"the publish matrix builds `{service}` with dockerfile `{dockerfile}`, which " f"does not exist (CI -> image)")
+            problems.append(f"the publish matrix builds `{service}` with dockerfile `{dockerfile}`, which does not exist (CI -> image)")
         if target not in data.ci_dirs:
             problems.append(
                 f"`{service}` is published as a container image from `{target}`, and no workflow "
@@ -1873,7 +1869,7 @@ def check_pnpm_actions(data: Scan) -> list[str]:
             f"measured reason to PNPM_ACTION_EXEMPT or move it"
         )
     if PNPM_ACTION_VERSION not in {v for _, v in data.pnpm_actions}:
-        problems.append(f"PNPM_ACTION_VERSION is {PNPM_ACTION_VERSION} but no workflow uses it — " f"the declared version is stale")
+        problems.append(f"PNPM_ACTION_VERSION is {PNPM_ACTION_VERSION} but no workflow uses it — the declared version is stale")
     # An exemption for a workflow that no longer sets up pnpm is a comment
     # asserting a constraint nothing is under. Only checked against files the
     # scan actually saw, so an exemption for a workflow outside this tree
@@ -1881,7 +1877,7 @@ def check_pnpm_actions(data: Scan) -> list[str]:
     for path in sorted(PNPM_ACTION_EXEMPT):
         if path in data.files and path not in seen:
             problems.append(
-                f"PNPM_ACTION_EXEMPT names {path}, which no longer sets up pnpm — " f"remove the exemption rather than leaving it to rot"
+                f"PNPM_ACTION_EXEMPT names {path}, which no longer sets up pnpm — remove the exemption rather than leaving it to rot"
             )
     return problems
 
@@ -2003,7 +1999,7 @@ def report(data: Scan) -> None:
 
 def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
     if not (root / ".github" / "workflows").is_dir() or not (root / "services").is_dir():
-        return 1, [f"{root} does not look like the AiSOC repository (no .github/workflows and services/). " f"Pass --repo-root explicitly."]
+        return 1, [f"{root} does not look like the AiSOC repository (no .github/workflows and services/). Pass --repo-root explicitly."]
 
     data = scan(root)
     if not data.pins and not data.installs:

@@ -106,7 +106,7 @@ def main() -> int:
 
     if args.check and ungated:
         print(
-            "\nFAIL: the following services ship tests but are not " "named in .github/workflows/ci.yml:\n  - " + "\n  - ".join(ungated),
+            "\nFAIL: the following services ship tests but are not named in .github/workflows/ci.yml:\n  - " + "\n  - ".join(ungated),
             file=sys.stderr,
         )
         return 1

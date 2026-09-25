@@ -251,23 +251,23 @@ def validate_rule(
         return errors, rule
 
     if rule["severity"] not in VALID_SEVERITIES:
-        errors.append(f"Invalid severity '{rule['severity']}'; must be one of: " f"{', '.join(sorted(VALID_SEVERITIES))}")
+        errors.append(f"Invalid severity '{rule['severity']}'; must be one of: {', '.join(sorted(VALID_SEVERITIES))}")
 
     rule_category = rule.get("category")
     if rule_category and rule_category not in VALID_CATEGORIES:
-        errors.append(f"Invalid category '{rule_category}'; must be one of: " f"{', '.join(sorted(VALID_CATEGORIES))}")
+        errors.append(f"Invalid category '{rule_category}'; must be one of: {', '.join(sorted(VALID_CATEGORIES))}")
 
     expected_category = classification["category"]
     if rule_category and expected_category and rule_category != expected_category:
-        errors.append(f"Rule category '{rule_category}' does not match directory " f"'{expected_category}'")
+        errors.append(f"Rule category '{rule_category}' does not match directory '{expected_category}'")
 
     rule_id = str(rule["id"])
     expected_prefix = classification["id_prefix"]
     if expected_prefix and not rule_id.startswith(expected_prefix):
-        errors.append(f"Rule id '{rule_id}' must start with '{expected_prefix}' " f"(tier: {classification['tier']})")
+        errors.append(f"Rule id '{rule_id}' must start with '{expected_prefix}' (tier: {classification['tier']})")
 
     if rule_id in seen_ids:
-        errors.append(f"Duplicate id '{rule_id}' — already defined in " f"{seen_ids[rule_id]}")
+        errors.append(f"Duplicate id '{rule_id}' — already defined in {seen_ids[rule_id]}")
     else:
         seen_ids[rule_id] = path
 
@@ -290,7 +290,7 @@ def _validate_provenance(rule: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     provenance = rule.get("provenance")
     if not isinstance(provenance, dict):
-        return ["Imported rule is missing required 'provenance' block " "(see tools/detection_import/README.md)"]
+        return ["Imported rule is missing required 'provenance' block (see tools/detection_import/README.md)"]
     for field in REQUIRED_PROVENANCE_FIELDS:
         value = provenance.get(field)
         if value in (None, ""):
@@ -333,7 +333,7 @@ def replay_fixture(rule_path: Path, rule: dict[str, Any], strict: bool) -> list[
 
     spec = _SPEC_BY_KEY.get((category, slug))
     if spec is None:
-        msg = f"no canonical spec found for ({category}, {slug}); " f"hand-authored rule — fixture replay skipped"
+        msg = f"no canonical spec found for ({category}, {slug}); hand-authored rule — fixture replay skipped"
         errors.append(f"WARN: {msg}")
         return errors
 
@@ -447,7 +447,7 @@ def main() -> int:
                 print(f"    {w}")
 
     print(f"\n{'─' * 60}")
-    print(f"Validated {total} rules — {total - failed} passed, {failed} failed, " f"{fixture_warnings} fixture warnings")
+    print(f"Validated {total} rules — {total - failed} passed, {failed} failed, {fixture_warnings} fixture warnings")
     print("  Tiers: " + ", ".join(f"{tier}={count}" for tier, count in sorted(tier_counts.items()) if count > 0))
     if quarantine_count:
         print(f"  Quarantined (parsed-but-disabled): {quarantine_count}")

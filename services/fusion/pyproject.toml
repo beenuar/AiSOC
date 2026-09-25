@@ -45,7 +45,7 @@ black = ">=26.3.1,<27"
 # ruff's formatter output changes between minors, so a contributor whose
 # manifest permits a newer ruff reformats the tree and reds their own PR.
 # Moving this range means reformatting the tree, which is its own change.
-ruff = ">=0.4.4,<0.5"
+ruff = ">=0.16.8,<0.17"
 mypy = ">=1.10,<2"
 
 [build-system]

@@ -39,8 +39,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -388,8 +388,8 @@ def _description_for(spec: dict, category: str) -> str:
     name = spec["name"]
     fp_count = len(spec.get("fp", []))
     plural = "s" if fp_count != 1 else ""
-    fp_clause = f" Watch the {fp_count} documented false-positive case{plural} " f"before tuning." if fp_count else ""
-    return f"AiSOC v1 curated detection. Triggers on the {category} signal " f"described by '{name}'.{fp_clause}"
+    fp_clause = f" Watch the {fp_count} documented false-positive case{plural} before tuning." if fp_count else ""
+    return f"AiSOC v1 curated detection. Triggers on the {category} signal described by '{name}'.{fp_clause}"
 
 
 def _yaml_safe_value(value: Any) -> Any:
@@ -482,7 +482,7 @@ def load_id_lock() -> dict[str, str]:
         return dict(json.loads(ID_LOCK.read_text(encoding="utf-8")))
     except Exception:  # noqa: BLE001 - a corrupt lock must not silently renumber
         raise SystemExit(
-            f"{ID_LOCK} is unreadable. Fix or delete it deliberately — " f"regenerating without it reassigns every rule id."
+            f"{ID_LOCK} is unreadable. Fix or delete it deliberately — regenerating without it reassigns every rule id."
         ) from None
 
 

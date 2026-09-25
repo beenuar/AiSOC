@@ -159,7 +159,7 @@ def gate_readme_line_count() -> list[GateFailure]:
         return [
             GateFailure(
                 "readme-line-count",
-                f"README has {actual} lines; budget is {README_MAX_LINES}. " f"Move detail to apps/docs/ or RELEASES.md.",
+                f"README has {actual} lines; budget is {README_MAX_LINES}. Move detail to apps/docs/ or RELEASES.md.",
             )
         ]
     return []
@@ -321,7 +321,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
         return [
             GateFailure(
                 "sandbox-offline",
-                "packages/aisoc-sandbox/src is missing — the sandbox package " "was deleted or moved. Check phase3-sandbox.",
+                "packages/aisoc-sandbox/src is missing — the sandbox package was deleted or moved. Check phase3-sandbox.",
             )
         ]
     failures: list[GateFailure] = []
@@ -363,7 +363,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
             failures.append(
                 GateFailure(
                     "sandbox-offline",
-                    f"`aisoc-sandbox demo --scenario {scenario}` did not " f"emit valid JSON: {exc}",
+                    f"`aisoc-sandbox demo --scenario {scenario}` did not emit valid JSON: {exc}",
                 )
             )
             continue
@@ -372,7 +372,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
             failures.append(
                 GateFailure(
                     "sandbox-offline",
-                    f"Scenario {scenario} produced {len(steps)} ledger " f"steps; expected exactly 4 (Detect/Triage/Hunt/" f"Respond).",
+                    f"Scenario {scenario} produced {len(steps)} ledger steps; expected exactly 4 (Detect/Triage/Hunt/Respond).",
                 )
             )
     return failures
@@ -529,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-sandbox",
         action="store_true",
-        help="Skip the local aisoc-sandbox offline smoke test (the CI " "matrix runs this independently).",
+        help="Skip the local aisoc-sandbox offline smoke test (the CI matrix runs this independently).",
     )
     args = parser.parse_args(argv)
     failures = _run_all(

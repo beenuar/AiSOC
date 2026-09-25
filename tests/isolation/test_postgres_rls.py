@@ -386,9 +386,7 @@ async def test_the_shipped_role_does_not_bypass_rls() -> None:
     asyncpg = pytest.importorskip("asyncpg")
     conn = await asyncpg.connect(seeded["runtime_dsn"])
     try:
-        row = await conn.fetchrow(
-            "SELECT current_user AS role, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
-        )
+        row = await conn.fetchrow("SELECT current_user AS role, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
         owned = await conn.fetchval(
             """
             SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -430,9 +428,7 @@ async def test_the_owner_still_bypasses_which_is_why_they_are_two_roles() -> Non
     try:
         async with admin.transaction():
             await admin.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
-            owner_sees = await admin.fetchval(
-                "SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B
-            )
+            owner_sees = await admin.fetchval("SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B)
     finally:
         await admin.close()
 
@@ -440,9 +436,7 @@ async def test_the_owner_still_bypasses_which_is_why_they_are_two_roles() -> Non
     try:
         async with runtime.transaction():
             await runtime.execute("SELECT set_config('app.current_tenant_id', $1, true)", str(TENANT_A))
-            runtime_sees = await runtime.fetchval(
-                "SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B
-            )
+            runtime_sees = await runtime.fetchval("SELECT count(*) FROM alerts WHERE tenant_id IN ($1, $2)", TENANT_A, TENANT_B)
     finally:
         await runtime.close()
 
@@ -470,8 +464,7 @@ async def test_every_protected_table_is_seeded_for_both_tenants() -> None:
     seeded = await _seeded()
     assert seeded["tables"], "no RLS-covered tenant table found — the migration chain did not apply"
     assert not seeded["unseedable"], (
-        "these RLS-covered tables could not be seeded, so their isolation assertions "
-        f"would pass vacuously: {seeded['unseedable']}"
+        f"these RLS-covered tables could not be seeded, so their isolation assertions would pass vacuously: {seeded['unseedable']}"
     )
 
 
@@ -569,9 +562,7 @@ async def test_no_policy_reads_a_session_variable_nothing_sets() -> None:
             elif "true" not in rest:
                 would_raise.append(f"{row['tablename']}.{row['policyname']} omits missing_ok, so an unset context raises")
 
-    assert not wrong_variable, (
-        "a policy keyed on a session variable nothing sets returns zero rows forever: " + "; ".join(wrong_variable)
-    )
+    assert not wrong_variable, "a policy keyed on a session variable nothing sets returns zero rows forever: " + "; ".join(wrong_variable)
     assert not would_raise, "; ".join(would_raise)
 
 
@@ -663,9 +654,7 @@ async def test_attack_path_relational_fallback_refuses_another_tenants_case() ->
 
     # Owner connection: this replay needs `SET session_replication_role = replica`,
     # which is superuser-only and which the runtime role must not have.
-    sa_url = (
-        ADMIN_DSN if ADMIN_DSN.startswith("postgresql+") else "postgresql+asyncpg://" + _asyncpg_dsn(ADMIN_DSN).split("://", 1)[1]
-    )
+    sa_url = ADMIN_DSN if ADMIN_DSN.startswith("postgresql+") else "postgresql+asyncpg://" + _asyncpg_dsn(ADMIN_DSN).split("://", 1)[1]
     engine = sqlalchemy_asyncio.create_async_engine(sa_url)
     case_a = uuid.uuid4()
     case_b = uuid.uuid4()

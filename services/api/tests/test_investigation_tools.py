@@ -106,7 +106,7 @@ class TestTenantScoping:
     @pytest.mark.parametrize(("tool", "args"), BACKED_CALLS)
     async def test_user_input_is_bound_not_interpolated(self, captured: list[Any], tool: str, args: dict[str, Any]) -> None:
         """Entity names come from alert payloads, which are untrusted."""
-        injected = {k: "'; DROP TABLE aisoc.raw_events; --" for k in args}
+        injected = dict.fromkeys(args, "'; DROP TABLE aisoc.raw_events; --")
         await dispatch(tool, TENANT, injected)
         sql, params = captured[-1]
         assert "DROP TABLE" not in sql
@@ -122,9 +122,9 @@ class TestUnavailableData:
         # Specifically an ingestion gap, not an argument error. Both set
         # available=False, so asserting only the flag passes for the wrong
         # reason — which is how this test was originally written.
-        assert "not ingested" in (result.reason or "") or "not stored" in (
-            result.reason or ""
-        ), f"{tool} reported unavailable for a reason other than missing data: {result.reason}"
+        assert "not ingested" in (result.reason or "") or "not stored" in (result.reason or ""), (
+            f"{tool} reported unavailable for a reason other than missing data: {result.reason}"
+        )
         assert captured == [], f"{tool} queried the lake for a column that does not exist"
 
     @pytest.mark.parametrize(("tool", "args"), UNBACKED_CALLS)

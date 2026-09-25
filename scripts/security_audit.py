@@ -130,7 +130,7 @@ def load_ignores(path: Path, today: dt.date | None = None) -> list[Ignore]:
 
         if not IGNORE_ID_PATTERN.match(vuln_id):
             raise ValueError(
-                f"Line {line_no}: invalid ID '{vuln_id}' " "(expected CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N)"
+                f"Line {line_no}: invalid ID '{vuln_id}' (expected CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N)"
             )
 
         if not reason:
@@ -138,8 +138,8 @@ def load_ignores(path: Path, today: dt.date | None = None) -> list[Ignore]:
 
         try:
             expiry = dt.date.fromisoformat(expiry_str)
-        except ValueError:
-            raise ValueError(f"Line {line_no}: invalid date '{expiry_str}' (expected YYYY-MM-DD)")
+        except ValueError as exc:
+            raise ValueError(f"Line {line_no}: invalid date '{expiry_str}' (expected YYYY-MM-DD)") from exc
 
         if expiry < today:
             raise ValueError(f"Line {line_no}: ignore for {vuln_id} expired on {expiry_str}")
@@ -443,9 +443,7 @@ def run_pip_audit(repo_root: Path, ignores: list[Ignore]) -> Report:
             if proc.returncode not in (0, 1):
                 # pip-audit returns 1 when vulns found; anything else means
                 # it did not complete, so this service is unscanned too.
-                combined.unscanned.append(
-                    f"{target}: pip-audit exited {proc.returncode} — NOT scanned " f"({proc.stderr[:160].strip()})"
-                )
+                combined.unscanned.append(f"{target}: pip-audit exited {proc.returncode} — NOT scanned ({proc.stderr[:160].strip()})")
                 continue
 
             deps = parse_pip_audit_json(proc.stdout)

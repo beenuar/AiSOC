@@ -131,9 +131,9 @@ STRATEGIES: tuple[Strategy, ...] = (
             "anything followed the suspicious session."
         ),
         plan=(
-            "Pull the account's authentication events and look at the distinct source " "addresses and the intervals between them.",
-            "Check for OAuth consent grants and mailbox rule changes on the account — " "the usual post-compromise steps.",
-            "Build the account's timeline across every source to see what followed " "the suspicious sign-in.",
+            "Pull the account's authentication events and look at the distinct source addresses and the intervals between them.",
+            "Check for OAuth consent grants and mailbox rule changes on the account — the usual post-compromise steps.",
+            "Build the account's timeline across every source to see what followed the suspicious sign-in.",
             "If any host is associated, check what ran on it.",
         ),
         expected_pivots=(
@@ -151,10 +151,10 @@ STRATEGIES: tuple[Strategy, ...] = (
         name="Phishing with a delivered payload",
         applies_when="An email-security or web-proxy alert names a URL, attachment or sender.",
         rationale=(
-            "The question is never whether the mail arrived, it is whether anyone " "acted on it and what happened next on their machine."
+            "The question is never whether the mail arrived, it is whether anyone acted on it and what happened next on their machine."
         ),
         plan=(
-            "Hunt the URL or attachment hash across the fleet to find who else received " "or fetched it.",
+            "Hunt the URL or attachment hash across the fleet to find who else received or fetched it.",
             "For any host that did, list what executed shortly afterwards.",
             "Check outbound connections from those hosts.",
             "Check the recipient account's mailbox for rules added after delivery.",
@@ -199,8 +199,7 @@ STRATEGIES: tuple[Strategy, ...] = (
         name="Lateral movement between hosts",
         applies_when="An alert shows authentication or remote execution from one internal host to another.",
         rationale=(
-            "Lateral movement is a path, and a path is only visible by walking it. "
-            "The useful output is the set of hosts touched, in order."
+            "Lateral movement is a path, and a path is only visible by walking it. The useful output is the set of hosts touched, in order."
         ),
         plan=(
             "Pull the account's authentication events to enumerate the hosts it reached.",

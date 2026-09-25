@@ -16,6 +16,7 @@ depends on the relationship between values rather than any one of them.
 ```python
 from aisoc_detections import rule
 
+
 @rule(
     id="ssh-key-added-outside-change-window",
     severity="high",

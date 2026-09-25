@@ -68,7 +68,7 @@ def test_inserting_a_rule_does_not_renumber_the_others(categories: dict, lock: d
     resolved, newly = generate_detections.assign_ids(mutated)
 
     moved = {k: (lock[k], resolved[k]) for k in lock if resolved.get(k) != lock[k]}
-    assert not moved, f"inserting one rule moved {len(moved)} existing ids: " f"{list(moved.items())[:3]}"
+    assert not moved, f"inserting one rule moved {len(moved)} existing ids: {list(moved.items())[:3]}"
     assert newly == ["network/zzz-test-inserted-first"]
 
 
@@ -236,9 +236,7 @@ def test_committed_yaml_ids_match_the_lock(committed_yaml: list[dict], lock: dic
     )
 
 
-def test_an_id_names_the_same_rule_in_the_engine_and_the_catalogue(
-    engine_rules: list[dict], committed_yaml: list[dict]
-) -> None:
+def test_an_id_names_the_same_rule_in_the_engine_and_the_catalogue(engine_rules: list[dict], committed_yaml: list[dict]) -> None:
     """The user-visible property, stated directly.
 
     An analyst takes a rule id off an alert (stamped by the engine) and looks

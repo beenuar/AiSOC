@@ -61,15 +61,11 @@ def _hook_output(line: str) -> str:
     """Run the real hook over a message containing `line`."""
     import tempfile
 
-    with tempfile.NamedTemporaryFile(
-        "w", suffix=".msg", delete=False, encoding="utf-8"
-    ) as fh:
+    with tempfile.NamedTemporaryFile("w", suffix=".msg", delete=False, encoding="utf-8") as fh:
         fh.write(f"chore: fixture subject\n\nbody line that must survive\n\n{line}\n")
         path = Path(fh.name)
     try:
-        subprocess.run(
-            ["sh", str(_HOOK), str(path)], capture_output=True, text=True, cwd=_REPO
-        )
+        subprocess.run(["sh", str(_HOOK), str(path)], capture_output=True, text=True, cwd=_REPO)
         return path.read_text(encoding="utf-8")
     finally:
         path.unlink(missing_ok=True)
@@ -100,9 +96,7 @@ def test_hook_and_gate_agree() -> None:
         flagged = gate.is_attribution(sample)
         stripped = sample not in _hook_output(sample)
         if flagged != stripped:
-            disagreements.append(
-                f"{sample!r}: gate flagged={flagged}, hook stripped={stripped}"
-            )
+            disagreements.append(f"{sample!r}: gate flagged={flagged}, hook stripped={stripped}")
     assert not disagreements, "hook and gate disagree:\n  " + "\n  ".join(disagreements)
 
 

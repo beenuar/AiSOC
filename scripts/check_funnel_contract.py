@@ -76,7 +76,7 @@ def response_fields() -> set[str]:
         body = _function_body(source, name)
         if not body:
             print(
-                f"  warning: {name} not found in metrics.py; the contract may be " f"checked against an incomplete field list",
+                f"  warning: {name} not found in metrics.py; the contract may be checked against an incomplete field list",
                 file=sys.stderr,
             )
             continue
@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     fields = response_fields()
     if not fields:
         print(
-            "funnel-contract: parsed zero response fields; the gate would pass " "vacuously",
+            "funnel-contract: parsed zero response fields; the gate would pass vacuously",
             file=sys.stderr,
         )
         return 2
@@ -106,13 +106,13 @@ def main(argv: list[str] | None = None) -> int:
     if undocumented:
         print("FUNNEL CONTRACT GATE FAILED:", file=sys.stderr)
         print(
-            f"  {len(undocumented)} field(s) returned by /metrics/funnel are not " f"documented in apps/docs/docs/console/funnel-kpis.md:",
+            f"  {len(undocumented)} field(s) returned by /metrics/funnel are not documented in apps/docs/docs/console/funnel-kpis.md:",
             file=sys.stderr,
         )
         for field in undocumented:
             print(f"    {field}", file=sys.stderr)
         print(
-            "  These are the numbers operators use to tell whether the automation " "is working. An undocumented one is an unchecked one.",
+            "  These are the numbers operators use to tell whether the automation is working. An undocumented one is an unchecked one.",
             file=sys.stderr,
         )
         return 1

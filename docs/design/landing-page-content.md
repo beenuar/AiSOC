@@ -208,6 +208,7 @@
   ```python
   from app.connectors.base import BaseConnector, ConnectorSchema, Field
 
+
   class MyConnector(BaseConnector):
       connector_id = "my-saas"
       connector_category = "saas"

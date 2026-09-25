@@ -131,14 +131,13 @@ def test_reduction_is_measured_against_the_real_correlation_key() -> None:
     incidents = group_by_real_key(stream)
     reduction = 1 - (incidents / len(stream))
 
-    print(f"\n[eval] alert reduction (real correlation_key): " f"{len(stream)} alerts -> {incidents} incidents = {reduction:.1%}")
+    print(f"\n[eval] alert reduction (real correlation_key): {len(stream)} alerts -> {incidents} incidents = {reduction:.1%}")
 
     # Bounded on both sides. A floor alone would be satisfied by a key that
     # collapses everything into one incident, which is 99.9% reduction and
     # a useless SOC.
     assert 0.20 <= reduction <= 0.95, (
-        f"reduction {reduction:.1%} is outside the plausible band; either "
-        f"correlation stopped grouping or it is collapsing unrelated alerts"
+        f"reduction {reduction:.1%} is outside the plausible band; either correlation stopped grouping or it is collapsing unrelated alerts"
     )
 
 

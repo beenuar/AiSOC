@@ -16,7 +16,9 @@ def write_manifest(tmp_path: Path, content: str) -> None:
 
 
 def test_load_manifest_valid(tmp_path: Path) -> None:
-    write_manifest(tmp_path, """
+    write_manifest(
+        tmp_path,
+        """
         id: myorg.test-enricher
         name: Test Enricher
         version: 1.2.3
@@ -26,7 +28,8 @@ def test_load_manifest_valid(tmp_path: Path) -> None:
         tags:
           - test
           - enricher
-    """)
+    """,
+    )
     manifest = load_manifest(tmp_path)
     assert manifest.id == "myorg.test-enricher"
     assert manifest.version == "1.2.3"
@@ -46,24 +49,31 @@ def test_load_manifest_invalid_yaml(tmp_path: Path) -> None:
 
 
 def test_load_manifest_invalid_schema(tmp_path: Path) -> None:
-    write_manifest(tmp_path, """
+    write_manifest(
+        tmp_path,
+        """
         id: test.plugin
         name: Test
         version: 1.0.0
         plugin_type: invalid_type
-    """)
+    """,
+    )
     with pytest.raises(PluginLoadError, match="Invalid manifest"):
         load_manifest(tmp_path)
 
 
 def test_load_plugin_from_directory(tmp_path: Path) -> None:
-    write_manifest(tmp_path, """
+    write_manifest(
+        tmp_path,
+        """
         id: test.loader-enricher
         name: Loader Enricher
         version: 1.0.0
         plugin_type: enricher
-    """)
-    (tmp_path / "plugin.py").write_text(textwrap.dedent("""
+    """,
+    )
+    (tmp_path / "plugin.py").write_text(
+        textwrap.dedent("""
         from aisoc_plugin_sdk import (
             EnricherPlugin, PluginManifest, PluginContext,
             EnrichmentRequest, EnrichmentResult,
@@ -87,30 +97,37 @@ def test_load_plugin_from_directory(tmp_path: Path) -> None:
 
         def create_plugin() -> _Plugin:
             return _Plugin()
-    """))
+    """)
+    )
 
     plugin = load_plugin_from_directory(tmp_path)
     assert plugin.manifest.id == "test.loader-enricher"
 
 
 def test_load_plugin_missing_entry_point(tmp_path: Path) -> None:
-    write_manifest(tmp_path, """
+    write_manifest(
+        tmp_path,
+        """
         id: test.no-entry
         name: No Entry
         version: 1.0.0
         plugin_type: action
-    """)
+    """,
+    )
     with pytest.raises(PluginLoadError, match="plugin.py"):
         load_plugin_from_directory(tmp_path)
 
 
 def test_load_plugin_missing_factory(tmp_path: Path) -> None:
-    write_manifest(tmp_path, """
+    write_manifest(
+        tmp_path,
+        """
         id: test.no-factory
         name: No Factory
         version: 1.0.0
         plugin_type: action
-    """)
+    """,
+    )
     (tmp_path / "plugin.py").write_text("# no create_plugin here\n")
     with pytest.raises(PluginLoadError, match="create_plugin"):
         load_plugin_from_directory(tmp_path)

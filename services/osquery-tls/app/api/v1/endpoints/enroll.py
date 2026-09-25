@@ -77,7 +77,7 @@ async def enroll(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "node_invalid": True,
-                "reason": (f"tenant {tenant_ref!r} does not resolve to a known tenant; " "set X-AiSOC-Tenant to the tenant UUID or slug"),
+                "reason": (f"tenant {tenant_ref!r} does not resolve to a known tenant; set X-AiSOC-Tenant to the tenant UUID or slug"),
             },
         )
 

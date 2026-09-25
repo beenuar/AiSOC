@@ -113,7 +113,7 @@ class TestTenantScoping:
                 # tenant-scoped, never a global label.
                 for var, label in _bound_variables(line).items():
                     assert label not in GLOBAL_LABELS, (
-                        f"{name}: variable-length pattern binds global label " f"{label} as {var!r}; that node can bridge tenants"
+                        f"{name}: variable-length pattern binds global label {label} as {var!r}; that node can bridge tenants"
                     )
 
     def test_null_tenant_is_not_treated_as_readable(self) -> None:
@@ -127,9 +127,9 @@ class TestTenantScoping:
                 assert "labels(" in cypher, name
         # MITRE vocabulary and public intel are shared; tenant data is not.
         assert "Technique" in GLOBAL_LABELS and "ThreatActor" in GLOBAL_LABELS
-        assert not any(
-            label in GLOBAL_LABELS for label in ("Employee", "Application", "CloudAccount", "Secret", "IOC")
-        ), "a tenant-scoped label was exempted from scoping"
+        assert not any(label in GLOBAL_LABELS for label in ("Employee", "Application", "CloudAccount", "Secret", "IOC")), (
+            "a tenant-scoped label was exempted from scoping"
+        )
 
     async def test_tenant_id_is_bound_as_a_parameter(self) -> None:
         """Interpolating it would make the predicate injectable."""

@@ -87,7 +87,7 @@ def test_every_mapped_vendor_produces_only_executor_keys():
     # Sanity sweep: translated keys must all be prefixed/executor-vocabulary,
     # never raw connector field names (which executors ignore -> simulation).
     for vendor, mapping in VENDOR_CREDENTIAL_MAP.items():
-        fake_auth = {field: "v" for field in mapping}
+        fake_auth = dict.fromkeys(mapping, "v")
         out = resolve_params(vendor, fake_auth)
         assert set(out) == set(mapping.values()), vendor
 

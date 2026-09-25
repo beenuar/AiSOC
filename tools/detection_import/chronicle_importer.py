@@ -44,9 +44,7 @@ logger = logging.getLogger(__name__)
 
 CHRONICLE_REPO_URL = "https://github.com/chronicle/detection-rules.git"
 CHRONICLE_LICENSE = "Apache-2.0"
-CHRONICLE_LICENSE_URL = (
-    "https://github.com/chronicle/detection-rules/blob/main/LICENSE"
-)
+CHRONICLE_LICENSE_URL = "https://github.com/chronicle/detection-rules/blob/main/LICENSE"
 
 # Chronicle ships rules under ``rules/<vendor>/...``. Each ``.yaral`` file
 # is a single rule.
@@ -134,9 +132,7 @@ def _convert_rule(
     description = meta.get("description") or title
     severity = map_severity(meta.get("severity") or meta.get("priority"))
     references_raw = meta.get("reference") or meta.get("references") or ""
-    references = [
-        ref.strip() for ref in re.split(r"[\s,]+", references_raw) if ref.strip()
-    ]
+    references = [ref.strip() for ref in re.split(r"[\s,]+", references_raw) if ref.strip()]
 
     techniques = _extract_techniques(meta)
     category = _category_for(upstream_path)

@@ -100,9 +100,7 @@ class AiSOCClient:
             {"content": note},
         )
 
-    async def update_case_severity(
-        self, case_id: str, severity: str
-    ) -> dict[str, Any]:
+    async def update_case_severity(self, case_id: str, severity: str) -> dict[str, Any]:
         """Set case severity. ``severity`` must be one of: low, medium, high, critical."""
         return await self._patch(
             f"/api/v1/cases/{case_id}",

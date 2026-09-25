@@ -239,7 +239,7 @@ class UEBAKafkaConsumer:
         raw = getattr(msg, "value", msg)
 
         LOG.error(
-            "UEBA handler failed; event dead-lettered and the subscription kept. " "topic=%s partition=%s offset=%s error=%s: %s",
+            "UEBA handler failed; event dead-lettered and the subscription kept. topic=%s partition=%s offset=%s error=%s: %s",
             topic,
             partition,
             offset,

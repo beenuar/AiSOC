@@ -43,7 +43,10 @@ def test_the_source_tree_has_a_template_for_every_plugin_type() -> None:
     assert EXPECTED_TYPES <= present, f"missing template dirs: {sorted(EXPECTED_TYPES - present)}"
 
 
-@pytest.mark.skipif(importlib.util.find_spec("build") is None, reason="python -m build is required to build the wheel")
+@pytest.mark.skipif(
+    importlib.util.find_spec("build") is None,
+    reason="python -m build is required to build the wheel",
+)
 def test_templates_reach_the_wheel(tmp_path: Path) -> None:
     """Build the real wheel and look inside it.
 
@@ -67,10 +70,14 @@ def test_templates_reach_the_wheel(tmp_path: Path) -> None:
     assert wheels, "no wheel was produced"
 
     in_wheel = {
-        name[len("aisoc_cli/templates/") :] for name in zipfile.ZipFile(wheels[-1]).namelist() if name.startswith("aisoc_cli/templates/") and name.endswith(".tmpl")
+        name[len("aisoc_cli/templates/") :]
+        for name in zipfile.ZipFile(wheels[-1]).namelist()
+        if name.startswith("aisoc_cli/templates/") and name.endswith(".tmpl")
     }
     missing = _source_templates() - in_wheel
-    assert not missing, f"{len(missing)} template(s) are in the source tree but not the wheel: {sorted(missing)[:5]}"
+    assert not missing, (
+        f"{len(missing)} template(s) are in the source tree but not the wheel: {sorted(missing)[:5]}"
+    )
 
     # And no duplicates, which is the failure that blocked the build.
     names = [n for n in zipfile.ZipFile(wheels[-1]).namelist() if n.startswith("aisoc_cli/")]

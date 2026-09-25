@@ -29,7 +29,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install test deps
-        run: pip install --quiet pytest "ruff>=0.4.4,<0.5"
+        run: pip install --quiet pytest "ruff>=0.16.8,<0.17"
       - name: Run the detection fixture suite
         working-directory: packages/aisoc-detections
         run: python -m aisoc_detections.runner detections

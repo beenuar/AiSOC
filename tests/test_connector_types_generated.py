@@ -51,9 +51,9 @@ def payload(inputs: dict) -> dict:
 # Committed output is current
 # --------------------------------------------------------------------------
 def test_committed_outputs_match_generation(payload: dict) -> None:
-    assert TS_OUT.read_text(encoding="utf-8") == gct.render_typescript(
-        payload
-    ), f"{gct.TS_OUT_REL} is stale. Run `python3 scripts/generate_connector_types.py` and commit the result."
+    assert TS_OUT.read_text(encoding="utf-8") == gct.render_typescript(payload), (
+        f"{gct.TS_OUT_REL} is stale. Run `python3 scripts/generate_connector_types.py` and commit the result."
+    )
     assert JSON_OUT.read_text(encoding="utf-8") == gct.render_json(payload)
 
 

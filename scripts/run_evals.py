@@ -82,8 +82,10 @@ sys.path.insert(0, str(_AGENTS_ROOT))
 # don't have the full agent dev dependency stack (pydantic, langgraph, ...).
 from eval_telemetry import (  # type: ignore  # noqa: E402
     DEFAULT_INCIDENTS_PATH,
-    DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
     compute_per_investigation_telemetry,
+)
+from eval_telemetry import (  # noqa: E402  # same reason as the import above
+    DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
 )
 
 # Wet-eval shim (T5.5). Dry-run path is stdlib-only; live path imports the
@@ -798,12 +800,12 @@ def main() -> None:
     parser.add_argument(
         "--telemetry-model",
         default=_TELEMETRY_DEFAULT_MODEL,
-        help=("Model name to apply against the rate card when computing the " "per-investigation USD projection. Default: gpt-4o."),
+        help=("Model name to apply against the rate card when computing the per-investigation USD projection. Default: gpt-4o."),
     )
     parser.add_argument(
         "--no-telemetry-records",
         action="store_true",
-        help=("Drop the per-incident telemetry array from the JSON report. " "Aggregate + per-template stats are always kept."),
+        help=("Drop the per-incident telemetry array from the JSON report. Aggregate + per-template stats are always kept."),
     )
     parser.add_argument(
         "--wet",
@@ -916,13 +918,11 @@ def main() -> None:
             print(f"  Incidents:      {wet_block['incidents']}")
             print(f"  Templates:      {wet_block['templates']}")
             lat = wet_block["latency_seconds"]
-            print(f"  Latency (s):    p50={lat['p50']:.2f}  p95={lat['p95']:.2f}  " f"p99={lat['p99']:.2f}  mean={lat['mean']:.2f}")
+            print(f"  Latency (s):    p50={lat['p50']:.2f}  p95={lat['p95']:.2f}  p99={lat['p99']:.2f}  mean={lat['mean']:.2f}")
             tot = wet_block["tokens"]["total"]
-            print(f"  Tokens / inv:   mean={tot['mean']:.0f}  median={tot['median']:.0f}  " f"p95={tot['p95']:.0f}  p99={tot['p99']:.0f}")
+            print(f"  Tokens / inv:   mean={tot['mean']:.0f}  median={tot['median']:.0f}  p95={tot['p95']:.0f}  p99={tot['p99']:.0f}")
             usd = wet_block["usd"]
-            print(
-                f"  USD / inv:      mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  " f"p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}"
-            )
+            print(f"  USD / inv:      mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}")
             print(f"  MITRE accuracy: {wet_block['mitre_accuracy']:.4f}")
             if wet_block.get("warnings"):
                 print("-" * 78)
@@ -1065,17 +1065,14 @@ def main() -> None:
         print(f"  Incidents:     {pi['incidents']}  Templates: {pi['templates']}")
         print("-" * 78)
         tok = pi["tokens_per_investigation"]
-        print(
-            f"  Tokens / investigation:  mean={tok['mean']:.0f}  median={tok['median']:.0f}  " f"p95={tok['p95']:.0f}  p99={tok['p99']:.0f}"
-        )
+        print(f"  Tokens / investigation:  mean={tok['mean']:.0f}  median={tok['median']:.0f}  p95={tok['p95']:.0f}  p99={tok['p99']:.0f}")
         print(f"      prompt mean={tok['prompt_mean']:.0f}    completion mean={tok['completion_mean']:.0f}")
         usd = pi["usd_per_investigation"]
         print(
-            f"  USD / investigation:     mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  "
-            f"p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}"
+            f"  USD / investigation:     mean=${usd['mean']:.5f}  median=${usd['median']:.5f}  p95=${usd['p95']:.5f}  p99=${usd['p99']:.5f}"
         )
         lat = pi["latency_per_investigation_ms"]
-        print(f"  Latency (ms / inv):      p50={lat['p50']:.4f}  p95={lat['p95']:.4f}  " f"p99={lat['p99']:.4f}  (substrate-only path)")
+        print(f"  Latency (ms / inv):      p50={lat['p50']:.4f}  p95={lat['p95']:.4f}  p99={lat['p99']:.4f}  (substrate-only path)")
         print("=" * 78)
         try:
             rel = args.out.relative_to(_REPO_ROOT)
@@ -1092,7 +1089,7 @@ def main() -> None:
             mark = "PASS" if suite["passed"] else "FAIL"
             lower_is_better = bool(suite.get("details", {}).get("lower_is_better"))
             comparator = "<=" if lower_is_better else ">="
-            print(f"  [{mark}] {name:<28} {suite['metric']:<28} " f"{suite['value']:.3f}  (target {comparator} {suite['target']:.2f})")
+            print(f"  [{mark}] {name:<28} {suite['metric']:<28} {suite['value']:.3f}  (target {comparator} {suite['target']:.2f})")
             tpl = suite.get("per_template")
             if tpl:
                 tpl_mark = "PASS" if tpl["passed"] else "FAIL"
@@ -1125,7 +1122,7 @@ def main() -> None:
             tok = pi.get("tokens_per_investigation", {})
             usd = pi.get("usd_per_investigation", {})
             lat = pi.get("latency_per_investigation_ms", {})
-            print(f"  Per-investigation budget (deterministic substrate, " f"model={pi.get('model', '?')})")
+            print(f"  Per-investigation budget (deterministic substrate, model={pi.get('model', '?')})")
             print(
                 f"    tokens   mean={tok.get('mean', 0):.0f}  median={tok.get('median', 0):.0f}  "
                 f"p95={tok.get('p95', 0):.0f}  p99={tok.get('p99', 0):.0f}"

@@ -117,7 +117,7 @@ class InsightTile(BaseModel):
         )
     )
     previous_value: float = Field(
-        description=("Value of the same metric over the immediately preceding " "window of equal length. Used to compute the delta.")
+        description=("Value of the same metric over the immediately preceding window of equal length. Used to compute the delta.")
     )
     delta_pct: float | None = Field(
         default=None,

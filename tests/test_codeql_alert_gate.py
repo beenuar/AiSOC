@@ -27,7 +27,7 @@ import ast
 import importlib.util
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -98,7 +98,7 @@ def _run(data: dict, now: datetime, *, alerts_checked: bool = True) -> set[str]:
 # The gate bites
 # --------------------------------------------------------------------------
 def test_clean_ref_passes() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert _run(_clean(now), now) == set()
 
 
@@ -109,7 +109,7 @@ def test_note_severity_alert_is_caught() -> None:
     `security_severity_level` (both of these were `None`), would have printed
     OK for the entire window in which the invariant was false.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["open_alerts"] = [gate._alert(896, "py/print-during-import", "note", "scripts/validate_playbooks.py")]
     assert "open-alert" in _run(data, now)
@@ -117,7 +117,7 @@ def test_note_severity_alert_is_caught() -> None:
 
 @pytest.mark.parametrize("severity", ["note", "warning", "error"])
 def test_every_severity_is_gated(severity: str) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["open_alerts"] = [gate._alert(1, "py/some-rule", severity, "scripts/x.py")]
     assert "open-alert" in _run(data, now)
@@ -125,7 +125,7 @@ def test_every_severity_is_gated(severity: str) -> None:
 
 def test_unanalyzed_ref_is_not_a_clean_ref() -> None:
     """Zero alerts because nothing ran is the vacuous pass, not a pass."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["analyses"] = []
     assert "no-analysis" in _run(data, now)
@@ -133,7 +133,7 @@ def test_unanalyzed_ref_is_not_a_clean_ref() -> None:
 
 def test_stale_analysis_is_caught() -> None:
     """`main` can be stale-green: a frozen scan leaves a frozen alert list."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     for analysis in data["analyses"]:
         analysis["created_at"] = (now - timedelta(days=gate.DEFAULT_MAX_ANALYSIS_AGE_DAYS + 1)).isoformat().replace("+00:00", "Z")
@@ -141,7 +141,7 @@ def test_stale_analysis_is_caught() -> None:
 
 
 def test_language_dropped_from_analysis_is_caught() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["analyses"] = data["analyses"][:-1]
     assert "language-not-analyzed" in _run(data, now)
@@ -153,7 +153,7 @@ def test_mixed_codeql_action_pins_are_caught() -> None:
     Dependabot splitting those three across separate PRs produces exactly this
     state, and it removes the analysis rather than the findings.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["workflow"] = dict(data["workflow"])
     data["workflow"]["action_versions"] = dict(data["workflow"]["action_versions"])
@@ -162,7 +162,7 @@ def test_mixed_codeql_action_pins_are_caught() -> None:
 
 
 def test_pr_only_scan_is_caught() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["workflow"] = dict(data["workflow"])
     data["workflow"]["push_branches"] = []
@@ -171,7 +171,7 @@ def test_pr_only_scan_is_caught() -> None:
 
 def test_offline_mode_claims_no_alert_verdict() -> None:
     """`--offline` must abstain, not quietly report a clean alert count."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     data["open_alerts"] = [gate._alert(1, "py/some-rule", "error", "scripts/x.py")]
     assert "open-alert" not in _run(data, now, alerts_checked=False)
@@ -183,7 +183,7 @@ def test_analysis_of_a_different_commit_is_not_this_commit() -> None:
     Unpinned, the gate reads the alert list left by the *previous* commit and
     calls the incoming one clean before anything has looked at it.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     data = _clean(now)
     for analysis in data["analyses"]:
         analysis["commit_sha"] = "a" * 40
@@ -204,7 +204,7 @@ def test_analysis_of_a_different_commit_is_not_this_commit() -> None:
 
 def test_wait_times_out_into_a_failure_not_a_pass(monkeypatch: pytest.MonkeyPatch) -> None:
     """A bounded wait that gives up must hand back an unanalyzed verdict."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     languages = _clean(now)["workflow"]["languages"]
     monkeypatch.setattr(
         gate,

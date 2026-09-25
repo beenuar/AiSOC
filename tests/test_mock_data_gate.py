@@ -129,9 +129,7 @@ def test_the_three_older_patterns_alone_would_have_missed_the_bypass(tmp_path):
 
 
 def test_an_empty_fallback_passes(tmp_path):
-    fixed = GATED_THEN_BYPASSED.replace(
-        "data?.indicators ?? MOCK_INDICATORS", "data?.indicators ?? []"
-    )
+    fixed = GATED_THEN_BYPASSED.replace("data?.indicators ?? MOCK_INDICATORS", "data?.indicators ?? []")
     root = _tree(tmp_path, "components/threat-intel/View.tsx", fixed)
     assert gate.scan(root) == []
 
@@ -216,11 +214,7 @@ const ROWS = [
         ),
         (
             "decorative svg coordinates",
-            "const nodes = [\n"
-            "  { x: 10, y: 20, delay: 0 },\n"
-            "  { x: 30, y: 45, delay: 1 },\n"
-            "  { x: 55, y: 70, delay: 2 },\n"
-            "];\n",
+            "const nodes = [\n  { x: 10, y: 20, delay: 0 },\n  { x: 30, y: 45, delay: 1 },\n  { x: 55, y: 70, delay: 2 },\n];\n",
         ),
         (
             "pricing copy",

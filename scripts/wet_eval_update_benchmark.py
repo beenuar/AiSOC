@@ -68,29 +68,29 @@ def _by_family(block: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _aggregate_latency_row(block: dict[str, Any]) -> str:
     lat = block["latency_seconds"]
-    return f"| Aggregate (all 200)        |  {lat['p50']:.2f} |  {lat['p95']:.2f} | " f" {lat['p99']:.2f} | 200 |"
+    return f"| Aggregate (all 200)        |  {lat['p50']:.2f} |  {lat['p95']:.2f} |  {lat['p99']:.2f} | 200 |"
 
 
 def _family_latency_row(label: str, fam: dict[str, Any]) -> str:
-    return f"| {label:<26} |  {fam['latency_p50_s']:.2f} |  {fam['latency_p95_s']:.2f} | " f" {fam['latency_p99_s']:.2f} | {fam['n']:>3} |"
+    return f"| {label:<26} |  {fam['latency_p50_s']:.2f} |  {fam['latency_p95_s']:.2f} |  {fam['latency_p99_s']:.2f} | {fam['n']:>3} |"
 
 
 def _aggregate_tokens_row(block: dict[str, Any]) -> str:
     tot = block["tokens"]["total"]
-    return f"| Aggregate (all 200)        | {tot['mean']:>5.0f} | {tot['median']:>6.0f} | " f"{tot['p95']:>4.0f} | 200 |"
+    return f"| Aggregate (all 200)        | {tot['mean']:>5.0f} | {tot['median']:>6.0f} | {tot['p95']:>4.0f} | 200 |"
 
 
 def _family_tokens_row(label: str, fam: dict[str, Any]) -> str:
-    return f"| {label:<26} | {fam['tokens_mean']:>5.0f} | {fam['tokens_median']:>6.0f} | " f"{fam['tokens_p95']:>4.0f} | {fam['n']:>3} |"
+    return f"| {label:<26} | {fam['tokens_mean']:>5.0f} | {fam['tokens_median']:>6.0f} | {fam['tokens_p95']:>4.0f} | {fam['n']:>3} |"
 
 
 def _aggregate_usd_row(block: dict[str, Any]) -> str:
     usd = block["usd"]
-    return f"| Aggregate (all 200)        | ${usd['mean']:.5f} | ${usd['median']:.5f} | " f"${usd['p95']:.5f} | 200 |"
+    return f"| Aggregate (all 200)        | ${usd['mean']:.5f} | ${usd['median']:.5f} | ${usd['p95']:.5f} | 200 |"
 
 
 def _family_usd_row(label: str, fam: dict[str, Any]) -> str:
-    return f"| {label:<26} | ${fam['usd_mean']:.5f} | ${fam['usd_median']:.5f} | " f"${fam['usd_p95']:.5f} | {fam['n']:>3} |"
+    return f"| {label:<26} | ${fam['usd_mean']:.5f} | ${fam['usd_median']:.5f} | ${fam['usd_p95']:.5f} | {fam['n']:>3} |"
 
 
 def _build_rows(
@@ -169,7 +169,7 @@ def _rewrite(md_text: str, block: dict[str, Any]) -> tuple[str, dict[str, int]]:
     """
     lines = md_text.splitlines()
     out: list[str] = []
-    stats: dict[str, int] = {h: 0 for h in _TABLE_HEADINGS}
+    stats: dict[str, int] = dict.fromkeys(_TABLE_HEADINGS, 0)
 
     i = 0
     while i < len(lines):
@@ -226,7 +226,7 @@ def _rewrite(md_text: str, block: dict[str, Any]) -> tuple[str, dict[str, int]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description=("Substitute the wet-eval placeholder cells in benchmark.md " "with the numbers from a wet-eval JSON block."),
+        description=("Substitute the wet-eval placeholder cells in benchmark.md with the numbers from a wet-eval JSON block."),
     )
     parser.add_argument(
         "--wet-block",
@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         args.benchmark_md.write_text(new_text)
 
     if args.print_summary:
-        print(f"[wet-eval-md] mode={block.get('mode')} " f"model={block.get('model')} incidents={block.get('incidents')}")
+        print(f"[wet-eval-md] mode={block.get('mode')} model={block.get('model')} incidents={block.get('incidents')}")
         for heading, replaced in stats.items():
             print(f"  {heading}: {replaced} rows replaced")
 

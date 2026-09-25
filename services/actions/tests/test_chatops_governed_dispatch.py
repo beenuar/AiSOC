@@ -89,7 +89,7 @@ def test_a_simulation_still_wins_over_running() -> None:
 @pytest.mark.parametrize("vendor", ["slack", "teams"])
 def test_chatops_verify_resolves_through_governed_dispatch(vendor: str) -> None:
     assert registry.get_executor(vendor, "chatops_verify") is not None, (
-        f"{vendor}/chatops_verify does not resolve, so the only route to a working " f"executor is the ungoverned ActionType endpoint."
+        f"{vendor}/chatops_verify does not resolve, so the only route to a working executor is the ungoverned ActionType endpoint."
     )
 
 

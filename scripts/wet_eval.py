@@ -400,7 +400,7 @@ def _live_records(
         try:
             result = agent.investigate(inc)  # type: ignore[attr-defined]
         except Exception as exc:  # pragma: no cover - defensive.
-            warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; " "skipping.")
+            warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; skipping.")
             continue
         latency_s = time.perf_counter() - t0
 
@@ -684,7 +684,7 @@ def compute_wet_eval(
     else:
         records, warnings, degraded = _live_records(incidents_path, model=model, limit=limit)
         if require_live and degraded:
-            raise RuntimeError("require_live=True but the live path fell back to substrate " "numbers:\n  - " + "\n  - ".join(warnings))
+            raise RuntimeError("require_live=True but the live path fell back to substrate numbers:\n  - " + "\n  - ".join(warnings))
         # Degrade-cleanly: if the live path could not produce records
         # we re-tag the report as ``dry_run`` so consumers don't think
         # they're looking at real numbers.
@@ -692,7 +692,7 @@ def compute_wet_eval(
             if require_live:
                 raise RuntimeError("require_live=True but the live agent produced zero records.")
             warnings.append(
-                "Live agent path produced zero records. Re-tagging as " "dry_run with synthesised shape to keep the report well-" "formed."
+                "Live agent path produced zero records. Re-tagging as dry_run with synthesised shape to keep the report well-formed."
             )
             records = _dry_run_records(incidents_path, model=model)
             mode = "dry_run"

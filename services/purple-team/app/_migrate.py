@@ -189,7 +189,7 @@ def apply_chain() -> int:
 
     if not expected.issubset(applied):
         print(
-            f"migrate: chain did not reach head. At {sorted(applied)}, head is " f"{sorted(expected)}. Refusing to start.",
+            f"migrate: chain did not reach head. At {sorted(applied)}, head is {sorted(expected)}. Refusing to start.",
             file=sys.stderr,
         )
         return 1

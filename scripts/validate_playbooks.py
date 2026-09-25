@@ -135,7 +135,7 @@ def main() -> int:
         if pb is None:
             continue
         if pb.id in seen_ids:
-            all_errors.append(f"{rel}: duplicate playbook id '{pb.id}' " f"(also in {seen_ids[pb.id].relative_to(ROOT)})")
+            all_errors.append(f"{rel}: duplicate playbook id '{pb.id}' (also in {seen_ids[pb.id].relative_to(ROOT)})")
         else:
             seen_ids[pb.id] = fp
         # Category is the parent dir name relative to packs/v1.

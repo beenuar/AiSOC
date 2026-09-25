@@ -41,7 +41,7 @@ aisoc = AiSocAiClient(
 aisoc.tool_call(
     "search_tickets",
     on_behalf_of="alice@example.com",
-    arguments={"query": "billing"},   # keys are sent, values are not
+    arguments={"query": "billing"},  # keys are sent, values are not
 )
 
 aisoc.model_call("gpt-4o", prompt=prompt, response=answer, prompt_tokens=412)

@@ -187,9 +187,9 @@ def test_graph_freshness_p95_under_2s() -> None:
             start = time.monotonic()
             _ingest_event(httpx, event, tenant)
             deadline = start + P95_LATENCY_BUDGET_S * 2
-            assert _query_neo4j_for_resource(
-                driver, arn, deadline
-            ), f"Resource {arn} never appeared in graph within {deadline - start:.2f}s"
+            assert _query_neo4j_for_resource(driver, arn, deadline), (
+                f"Resource {arn} never appeared in graph within {deadline - start:.2f}s"
+            )
             latencies.append(time.monotonic() - start)
     finally:
         driver.close()

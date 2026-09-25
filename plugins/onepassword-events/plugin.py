@@ -18,6 +18,7 @@ Payload shape:
     "limit": 100
   }
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -74,23 +75,17 @@ class Plugin:
                     _FEED_PATHS["signinattempts"],
                     json={
                         "limit": 1,
-                        "start_time": (
-                            datetime.now(UTC) - timedelta(minutes=5)
-                        ).isoformat(),
+                        "start_time": (datetime.now(UTC) - timedelta(minutes=5)).isoformat(),
                     },
                 )
                 return {"connected": resp.status_code in (200, 401)}
 
             if action == "fetch_events":
                 config = context.get("config") or {}
-                feeds = payload.get("feed_list") or config.get(
-                    "feeds", ["signinattempts", "itemusages", "auditevents"]
-                )
+                feeds = payload.get("feed_list") or config.get("feeds", ["signinattempts", "itemusages", "auditevents"])
                 if isinstance(feeds, str):
                     feeds = [feeds]
-                since = payload.get("since") or (
-                    datetime.now(UTC) - timedelta(minutes=15)
-                ).isoformat()
+                since = payload.get("since") or (datetime.now(UTC) - timedelta(minutes=15)).isoformat()
                 limit = int(payload.get("limit", 200))
 
                 results: dict[str, list[dict[str, Any]]] = {}

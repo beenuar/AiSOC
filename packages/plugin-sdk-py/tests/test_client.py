@@ -32,9 +32,11 @@ def _make_transport(responses: dict[str, tuple[int, dict]]) -> httpx.MockTranspo
 
 @pytest.mark.asyncio
 async def test_get_case(ctx: PluginContext) -> None:
-    transport = _make_transport({
-        "GET /api/v1/cases/case-1": (200, {"id": "case-1", "title": "Test Case"}),
-    })
+    transport = _make_transport(
+        {
+            "GET /api/v1/cases/case-1": (200, {"id": "case-1", "title": "Test Case"}),
+        }
+    )
     async with AiSOCClient(ctx) as client:
         client._http = httpx.AsyncClient(
             base_url=ctx.api_base_url,
@@ -48,9 +50,11 @@ async def test_get_case(ctx: PluginContext) -> None:
 
 @pytest.mark.asyncio
 async def test_add_case_note(ctx: PluginContext) -> None:
-    transport = _make_transport({
-        "POST /api/v1/cases/case-1/notes": (201, {"id": "note-1", "content": "hello"}),
-    })
+    transport = _make_transport(
+        {
+            "POST /api/v1/cases/case-1/notes": (201, {"id": "note-1", "content": "hello"}),
+        }
+    )
     async with AiSOCClient(ctx) as client:
         client._http = httpx.AsyncClient(
             base_url=ctx.api_base_url,
@@ -63,9 +67,11 @@ async def test_add_case_note(ctx: PluginContext) -> None:
 
 @pytest.mark.asyncio
 async def test_patch_indicator(ctx: PluginContext) -> None:
-    transport = _make_transport({
-        "PATCH /api/v1/indicators/ind-1": (200, {"id": "ind-1", "enrichments": {"geo": "US"}}),
-    })
+    transport = _make_transport(
+        {
+            "PATCH /api/v1/indicators/ind-1": (200, {"id": "ind-1", "enrichments": {"geo": "US"}}),
+        }
+    )
     async with AiSOCClient(ctx) as client:
         client._http = httpx.AsyncClient(
             base_url=ctx.api_base_url,

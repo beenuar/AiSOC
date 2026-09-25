@@ -12,18 +12,20 @@ A detection is a `.py` module with a `rule(event) -> bool` and metadata:
 ```python
 ID = "py-okta-mfa-fatigue"
 TITLE = "Okta MFA fatigue (push bombing)"
-SEVERITY = "high"          # info | low | medium | high | critical
+SEVERITY = "high"  # info | low | medium | high | critical
 MITRE = ["T1621"]
 DESCRIPTION = "Many MFA push challenges to one user in a short window."
 
+
 def rule(event: dict) -> bool:
     return event.get("eventType") == "user.mfa.attempt" and event.get("attempts", 0) >= 5
+
 
 # Optional: def title(event) -> str, def dedup(event) -> str
 
 TESTS = [
     {"name": "fires on 6 attempts", "event": {"eventType": "user.mfa.attempt", "attempts": 6}, "expect": True},
-    {"name": "quiet on 1 attempt",  "event": {"eventType": "user.mfa.attempt", "attempts": 1}, "expect": False},
+    {"name": "quiet on 1 attempt", "event": {"eventType": "user.mfa.attempt", "attempts": 1}, "expect": False},
 ]
 ```
 

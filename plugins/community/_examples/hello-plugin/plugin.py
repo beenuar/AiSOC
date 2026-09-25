@@ -57,14 +57,9 @@ class HelloPlugin(EnricherPlugin):
         # configured hash algorithm so we can reuse it from enrich().
         self._algorithm = (ctx.config.get("algorithm") or "sha256").lower()
         if self._algorithm not in hashlib.algorithms_guaranteed:
-            raise ValueError(
-                f"Unsupported hash algorithm: {self._algorithm!r}. "
-                f"Pick one of: {sorted(hashlib.algorithms_guaranteed)}"
-            )
+            raise ValueError(f"Unsupported hash algorithm: {self._algorithm!r}. Pick one of: {sorted(hashlib.algorithms_guaranteed)}")
 
-    async def enrich(
-        self, request: EnrichmentRequest, ctx: PluginContext
-    ) -> EnrichmentResult:
+    async def enrich(self, request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:
         # Hash the indicator value with the configured algorithm. This is
         # deterministic and offline, so the same input always yields the same
         # enrichment — perfect for a tutorial and for snapshot tests.

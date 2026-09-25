@@ -244,10 +244,10 @@ def _assert_tenant_scoped(executed: list[tuple[str, dict[str, Any]]], tenant_id:
                 if (name == "tenant_id" or name.startswith("tenant_id_")) and value == tenant_id
             ]
             assert matching, (
-                f"no bound tenant_id parameter matches caller's tenant in SQL: {sql}; " f"params={params}; expected_tenant={tenant_id}"
+                f"no bound tenant_id parameter matches caller's tenant in SQL: {sql}; params={params}; expected_tenant={tenant_id}"
             )
             saw_tenant_scoped_read = True
-    assert saw_tenant_scoped_read, "no alerts statement was tenant-scoped; " "every alerts read/write must mention tenant_id"
+    assert saw_tenant_scoped_read, "no alerts statement was tenant-scoped; every alerts read/write must mention tenant_id"
 
 
 # ────────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 """Datadog incidents/signals connector plugin for AiSOC."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -46,15 +47,11 @@ class Plugin:
 
             if action == "list_incidents":
                 params = {"page[size]": payload.get("limit", 50)}
-                data = await self._get(
-                    f"{base}/api/v2/incidents", headers, params=params
-                )
+                data = await self._get(f"{base}/api/v2/incidents", headers, params=params)
                 return {"incidents": data.get("data", [])}
 
             if action == "list_signals":
-                since = payload.get("since") or (
-                    datetime.now(UTC) - timedelta(hours=1)
-                ).isoformat()
+                since = payload.get("since") or (datetime.now(UTC) - timedelta(hours=1)).isoformat()
                 params = {
                     "filter[from]": since,
                     "page[limit]": payload.get("limit", 50),
@@ -67,9 +64,7 @@ class Plugin:
                 return {"signals": data.get("data", [])}
 
             if action == "fetch_events":
-                feeds = (context.get("config") or {}).get(
-                    "feeds", ["incidents", "security_signals"]
-                )
+                feeds = (context.get("config") or {}).get("feeds", ["incidents", "security_signals"])
                 events: list[dict[str, Any]] = []
                 if "incidents" in feeds:
                     inc = await self._get(f"{base}/api/v2/incidents", headers)
@@ -77,9 +72,7 @@ class Plugin:
                         item["_aisoc_feed"] = "incidents"
                         events.append(item)
                 if "security_signals" in feeds:
-                    since = payload.get("since") or (
-                        datetime.now(UTC) - timedelta(hours=1)
-                    ).isoformat()
+                    since = payload.get("since") or (datetime.now(UTC) - timedelta(hours=1)).isoformat()
                     sigs = await self._get(
                         f"{base}/api/v2/security_monitoring/signals",
                         headers,

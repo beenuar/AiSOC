@@ -74,8 +74,8 @@ auto-close the alert; everything else escalates into the right
 ```python
 from app.agents import TriageAgent
 
-await TriageAgent.auto_triage(state)            # LLM-based classification
-await TriageAgent.heuristic_triage(state)       # offline / air-gapped path
+await TriageAgent.auto_triage(state)  # LLM-based classification
+await TriageAgent.heuristic_triage(state)  # offline / air-gapped path
 
 # Capability dispatch — sub-agents are addressed by name, not by class:
 await TriageAgent.analyse(state, capability="phishing")
@@ -116,13 +116,11 @@ top-level four agents.
 from app.agents import HuntAgent
 
 # Hunt-as-Code
-engine = HuntAgent.engine()                    # → app.hunt.HuntEngine
-corpus = HuntAgent.corpus()                    # → loaded HuntCorpus
+engine = HuntAgent.engine()  # → app.hunt.HuntEngine
+corpus = HuntAgent.corpus()  # → loaded HuntCorpus
 
 # Natural-language hunt
-result = HuntAgent.translate(
-    "show me failed logins from 10.0.0.1 in the last 2 hours"
-)
+result = HuntAgent.translate("show me failed logins from 10.0.0.1 in the last 2 hours")
 result.esql, result.kql, result.spl, result.explanation
 ```
 

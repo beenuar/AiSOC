@@ -285,7 +285,7 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     "n1",
                     "Notify user via email",
                     "email",
-                    message="Suspicious sign-in from {{alert.source_ip}} blocked. " "Reset your password.",
+                    message="Suspicious sign-in from {{alert.source_ip}} blocked. Reset your password.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
                 gate_human_approval("approve", next_true="reset"),
@@ -322,7 +322,7 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     "n1",
                     "DM user on Slack",
                     "slack",
-                    message="We've challenged your sign-in due to repeated MFA prompts. " "Approve only if you initiated.",
+                    message="We've challenged your sign-in due to repeated MFA prompts. Approve only if you initiated.",
                     webhook_env="SLACK_USER_WEBHOOK",
                 ),
                 gate_human_approval("approve", next_true="reset-mfa"),
@@ -356,7 +356,7 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     "n1",
                     "Page identity team",
                     "pagerduty",
-                    message="Credential stuffing from {{alert.source_ip}}: " "{{context.impacted_user_count}} users reset.",
+                    message="Credential stuffing from {{alert.source_ip}}: {{context.impacted_user_count}} users reset.",
                     service_env="PD_IDENTITY_KEY",
                 ),
                 ticket("t1", "Open ATO ticket", "P1", "Credential stuffing: {{alert.source_ip}}"),
@@ -384,7 +384,7 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call",
                     "pagerduty",
-                    message="Session theft suspected for {{alert.user}}. " "Tokens revoked, host {{alert.host}} isolated.",
+                    message="Session theft suspected for {{alert.user}}. Tokens revoked, host {{alert.host}} isolated.",
                     service_env="PD_SOC_KEY",
                 ),
                 ticket("t1", "Open P1 ATO ticket", "P1", "Session token theft: {{alert.user}}"),
@@ -394,7 +394,7 @@ def build_account_takeover() -> list[dict[str, Any]]:
             pid="ato-suspicious-oauth-grant-v1",
             name="ATO: Suspicious OAuth Grant — Revoke & Investigate",
             description=(
-                "Triggered when a user grants a new OAuth scope to an unfamiliar " "third-party app. Revokes the grant and investigates."
+                "Triggered when a user grants a new OAuth scope to an unfamiliar third-party app. Revokes the grant and investigates."
             ),
             category=cat,
             severity=["medium", "high"],
@@ -412,12 +412,10 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     "n1",
                     "Notify user",
                     "email",
-                    message="Removed OAuth grant for {{alert.oauth_client_app_name}}. " "Re-add only if intentional.",
+                    message="Removed OAuth grant for {{alert.oauth_client_app_name}}. Re-add only if intentional.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
-                ticket(
-                    "t1", "Open OAuth-abuse ticket", "P3", "Suspicious OAuth grant: {{alert.user}} -> " "{{alert.oauth_client_app_name}}"
-                ),
+                ticket("t1", "Open OAuth-abuse ticket", "P3", "Suspicious OAuth grant: {{alert.user}} -> {{alert.oauth_client_app_name}}"),
             ],
         ),
     ]
@@ -430,7 +428,7 @@ def build_ransomware() -> list[dict[str, Any]]:
             pid="ransomware-host-isolate-v1",
             name="Ransomware: Host Isolation & Snapshot",
             description=(
-                "Immediate host isolation, disk snapshot for forensics, page on-call. " "Standard first-response for endpoint ransomware."
+                "Immediate host isolation, disk snapshot for forensics, page on-call. Standard first-response for endpoint ransomware."
             ),
             category=cat,
             severity=["critical"],
@@ -444,7 +442,7 @@ def build_ransomware() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call (SEV1)",
                     "pagerduty",
-                    message="RANSOMWARE: {{alert.host}} isolated. " "Snapshot {{context.snapshot_id}} taken.",
+                    message="RANSOMWARE: {{alert.host}} isolated. Snapshot {{context.snapshot_id}} taken.",
                     service_env="PD_RANSOMWARE_KEY",
                 ),
                 ticket("t1", "Open SEV1 ticket", "P1", "RANSOMWARE: {{alert.host}}"),
@@ -454,8 +452,7 @@ def build_ransomware() -> list[dict[str, Any]]:
             pid="ransomware-shadow-copy-deletion-v1",
             name="Ransomware: Shadow Copy Deletion Detected",
             description=(
-                "Triggered on `vssadmin delete shadows` or wmic shadowcopy delete. "
-                "Pre-encryption signal — isolate fast and verify backups."
+                "Triggered on `vssadmin delete shadows` or wmic shadowcopy delete. Pre-encryption signal — isolate fast and verify backups."
             ),
             category=cat,
             severity=["critical"],
@@ -468,7 +465,7 @@ def build_ransomware() -> list[dict[str, Any]]:
                     "n1",
                     "Notify backup team",
                     "slack",
-                    message="Shadow-copy deletion on {{alert.host}}. " "Last backup: {{context.last_backup_at}}.",
+                    message="Shadow-copy deletion on {{alert.host}}. Last backup: {{context.last_backup_at}}.",
                     webhook_env="SLACK_BACKUP_WEBHOOK",
                 ),
                 ticket("t1", "Open ransomware ticket", "P1", "Shadow copies deleted: {{alert.host}}"),
@@ -498,7 +495,7 @@ def build_ransomware() -> list[dict[str, Any]]:
                     "n1",
                     "Page storage and on-call",
                     "pagerduty",
-                    message="File-server ransomware: {{alert.host}}. " "SMB egress blocked.",
+                    message="File-server ransomware: {{alert.host}}. SMB egress blocked.",
                     service_env="PD_STORAGE_KEY",
                 ),
                 ticket("t1", "Open SEV1 ticket", "P1", "File-server ransomware: {{alert.host}}"),
@@ -523,17 +520,17 @@ def build_ransomware() -> list[dict[str, Any]]:
                     "n1",
                     "Notify SOC",
                     "slack",
-                    message="C2 {{alert.dst_ip}} blocked. " "Host {{alert.host}} isolated.",
+                    message="C2 {{alert.dst_ip}} blocked. Host {{alert.host}} isolated.",
                     webhook_env="SLACK_SOC_WEBHOOK",
                 ),
-                ticket("t1", "Open C2 ticket", "P1", "Ransomware C2: {{alert.host}} -> " "{{alert.dst_ip}}"),
+                ticket("t1", "Open C2 ticket", "P1", "Ransomware C2: {{alert.host}} -> {{alert.dst_ip}}"),
             ],
         ),
         make_playbook(
             pid="ransomware-public-exposure-v1",
             name="Ransomware: Internet-Exposed Asset Containment",
             description=(
-                "Triggered when a host with public exposure shows ransomware " "indicators. Pulls the asset off the internet immediately."
+                "Triggered when a host with public exposure shows ransomware indicators. Pulls the asset off the internet immediately."
             ),
             category=cat,
             severity=["critical"],
@@ -547,7 +544,7 @@ def build_ransomware() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call (SEV1)",
                     "pagerduty",
-                    message="Internet-exposed host {{alert.host}} pulled off-net. " "Ransomware suspected.",
+                    message="Internet-exposed host {{alert.host}} pulled off-net. Ransomware suspected.",
                     service_env="PD_RANSOMWARE_KEY",
                 ),
                 ticket("t1", "Open SEV1 ticket", "P1", "Ransomware on exposed host: {{alert.host}}"),
@@ -583,7 +580,7 @@ def build_bec() -> list[dict[str, Any]]:
                     "n1",
                     "Notify finance team",
                     "slack",
-                    message="BEC rule removed for {{alert.user}}. " "Validate any vendor changes in the last 7d.",
+                    message="BEC rule removed for {{alert.user}}. Validate any vendor changes in the last 7d.",
                     webhook_env="SLACK_FINANCE_WEBHOOK",
                 ),
                 ticket("t1", "Open BEC ticket", "P2", "BEC inbox rule: {{alert.user}}"),
@@ -592,7 +589,7 @@ def build_bec() -> list[dict[str, Any]]:
         make_playbook(
             pid="bec-vendor-payment-redirect-v1",
             name="BEC: Vendor Payment Redirect — Freeze",
-            description=("Triggered when a vendor banking detail change happens via email. " "Freezes pending payments and pages CFO."),
+            description=("Triggered when a vendor banking detail change happens via email. Freezes pending payments and pages CFO."),
             category=cat,
             severity=["critical"],
             tags=["bec", "finance", "mitre.t1565.001"],
@@ -615,8 +612,7 @@ def build_bec() -> list[dict[str, Any]]:
             pid="bec-impersonation-domain-v1",
             name="BEC: Impersonation Domain Quarantine",
             description=(
-                "Triggered when an inbound email originates from a domain that "
-                "look-alikes an executive or vendor. Quarantines and blocks."
+                "Triggered when an inbound email originates from a domain that look-alikes an executive or vendor. Quarantines and blocks."
             ),
             category=cat,
             severity=["high"],
@@ -651,8 +647,7 @@ def build_bec() -> list[dict[str, Any]]:
             pid="bec-conditional-access-bypass-v1",
             name="BEC: Conditional Access Policy Bypass",
             description=(
-                "Triggered when a BEC-related sign-in succeeds from a region "
-                "that should be blocked by Conditional Access. Restores policy."
+                "Triggered when a BEC-related sign-in succeeds from a region that should be blocked by Conditional Access. Restores policy."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -692,7 +687,7 @@ def build_bec() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call",
                     "pagerduty",
-                    message="Refresh-token theft suspected for {{alert.user}}. " "Tokens revoked.",
+                    message="Refresh-token theft suspected for {{alert.user}}. Tokens revoked.",
                     service_env="PD_SOC_KEY",
                 ),
                 ticket("t1", "Open BEC token ticket", "P1", "BEC token theft: {{alert.user}}"),
@@ -731,7 +726,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
         make_playbook(
             pid="insider-resignation-data-access-v1",
             name="Insider: Resignation + Sensitive Access",
-            description=("Triggered when a user with a recent resignation flag accesses " "sensitive data. Read-only mode and HR audit."),
+            description=("Triggered when a user with a recent resignation flag accesses sensitive data. Read-only mode and HR audit."),
             category=cat,
             severity=["medium", "high"],
             tags=["insider", "hr", "mitre.t1530"],
@@ -748,7 +743,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
                     "n1",
                     "Notify HR + manager",
                     "slack",
-                    message="Resigning user {{alert.user}} accessed sensitive data. " "Read-only enforced.",
+                    message="Resigning user {{alert.user}} accessed sensitive data. Read-only enforced.",
                     webhook_env="SLACK_HR_WEBHOOK",
                 ),
                 ticket("t1", "Open exit-risk ticket", "P2", "Exit risk: {{alert.user}}", queue="hr"),
@@ -758,8 +753,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
             pid="insider-privilege-misuse-v1",
             name="Insider: Privilege Misuse",
             description=(
-                "Triggered when a privileged account performs actions outside its "
-                "approved JIT window. Revokes privilege and pages HR-Sec."
+                "Triggered when a privileged account performs actions outside its approved JIT window. Revokes privilege and pages HR-Sec."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -776,7 +770,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
                     "n1",
                     "Page HR-Sec",
                     "pagerduty",
-                    message="Privilege misuse by {{alert.user}} ({{alert.role}}). " "Role revoked.",
+                    message="Privilege misuse by {{alert.user}} ({{alert.role}}). Role revoked.",
                     service_env="PD_HRSEC_KEY",
                 ),
                 ticket("t1", "Open privilege-misuse ticket", "P1", "Privilege misuse: {{alert.user}}", queue="hr"),
@@ -806,7 +800,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
                     "n1",
                     "Page eng-leadership",
                     "pagerduty",
-                    message="Source-code exfil suspected from {{alert.user}} " "to {{alert.dst_host}}.",
+                    message="Source-code exfil suspected from {{alert.user}} to {{alert.dst_host}}.",
                     service_env="PD_ENG_LEAD_KEY",
                 ),
                 ticket("t1", "Open exfil ticket", "P1", "Source-code exfil: {{alert.user}}"),
@@ -816,7 +810,7 @@ def build_insider_risk() -> list[dict[str, Any]]:
             pid="insider-after-hours-access-v1",
             name="Insider: Anomalous After-Hours Access",
             description=(
-                "Triggered when a user accesses sensitive systems outside their " "normal pattern. Step-up MFA and log for HR review."
+                "Triggered when a user accesses sensitive systems outside their normal pattern. Step-up MFA and log for HR review."
             ),
             category=cat,
             severity=["medium"],
@@ -856,7 +850,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
             pid="cloud-iam-overpriv-v1",
             name="Cloud: Over-Privileged IAM — Detach & Review",
             description=(
-                "Triggered when IAM Access Analyzer flags an over-privileged role. " "Detaches the policy and opens an owner-review ticket."
+                "Triggered when IAM Access Analyzer flags an over-privileged role. Detaches the policy and opens an owner-review ticket."
             ),
             category=cat,
             severity=["medium", "high"],
@@ -873,7 +867,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
                     "n1",
                     "Notify role owner",
                     "slack",
-                    message="Policy {{alert.policy}} detached from {{alert.role}}. " "Re-add only the minimum needed.",
+                    message="Policy {{alert.policy}} detached from {{alert.role}}. Re-add only the minimum needed.",
                     webhook_env="SLACK_CLOUD_WEBHOOK",
                 ),
                 ticket("t1", "Owner-review ticket", "P3", "IAM over-priv: {{alert.role}}"),
@@ -906,7 +900,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
         make_playbook(
             pid="cloud-mfa-disabled-root-v1",
             name="Cloud: Root Account MFA Disabled",
-            description=("Triggered when root MFA is disabled. Re-enables MFA and pages " "the cloud-platform owner immediately."),
+            description=("Triggered when root MFA is disabled. Re-enables MFA and pages the cloud-platform owner immediately."),
             category=cat,
             severity=["critical"],
             tags=["cloud", "iam", "mfa", "mitre.t1556"],
@@ -917,7 +911,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
                     "n1",
                     "Page platform-owner",
                     "pagerduty",
-                    message="Root MFA was disabled — re-enabled. Investigate " "{{alert.actor}}.",
+                    message="Root MFA was disabled — re-enabled. Investigate {{alert.actor}}.",
                     service_env="PD_PLATFORM_KEY",
                 ),
                 ticket("t1", "Open root-MFA ticket", "P1", "Root MFA disabled by {{alert.actor}}"),
@@ -926,7 +920,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
         make_playbook(
             pid="cloud-cloudtrail-disabled-v1",
             name="Cloud: CloudTrail Disabled — Re-enable",
-            description=("Triggered when a CloudTrail trail is stopped. Restarts trail " "and audits API calls in the dark window."),
+            description=("Triggered when a CloudTrail trail is stopped. Restarts trail and audits API calls in the dark window."),
             category=cat,
             severity=["critical"],
             tags=["cloud", "aws", "logging", "mitre.t1562.008"],
@@ -963,7 +957,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
         make_playbook(
             pid="cloud-rds-public-v1",
             name="Cloud: RDS Instance Publicly Accessible",
-            description=("Triggered when an RDS instance toggles to publicly accessible. " "Removes public access and audits."),
+            description=("Triggered when an RDS instance toggles to publicly accessible. Removes public access and audits."),
             category=cat,
             severity=["high", "critical"],
             tags=["cloud", "aws", "rds", "mitre.t1190"],
@@ -984,7 +978,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
             pid="cloud-gke-anonymous-v1",
             name="Cloud: GKE Cluster Anonymous Auth",
             description=(
-                "Triggered when GKE cluster is configured to allow anonymous " "Kubernetes API access. Disables anonymous and audits."
+                "Triggered when GKE cluster is configured to allow anonymous Kubernetes API access. Disables anonymous and audits."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -1005,7 +999,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
         make_playbook(
             pid="cloud-azure-blob-public-v1",
             name="Cloud: Azure Blob Container Public",
-            description=("Triggered when an Azure Storage container is set to public. " "Reverts to private and audits."),
+            description=("Triggered when an Azure Storage container is set to public. Reverts to private and audits."),
             category=cat,
             severity=["high"],
             tags=["cloud", "azure", "storage", "mitre.t1530"],
@@ -1030,7 +1024,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
         make_playbook(
             pid="cloud-cross-account-trust-v1",
             name="Cloud: Unexpected Cross-Account Trust",
-            description=("Triggered when a role trust policy adds an external account ID " "not on the allow-list. Revokes and audits."),
+            description=("Triggered when a role trust policy adds an external account ID not on the allow-list. Revokes and audits."),
             category=cat,
             severity=["critical"],
             tags=["cloud", "aws", "iam", "mitre.t1078.004"],
@@ -1046,7 +1040,7 @@ def build_cloud_misconfig() -> list[dict[str, Any]]:
                     "n1",
                     "Page cloud-sec",
                     "pagerduty",
-                    message="Cross-account trust to {{alert.external_account}} removed " "from {{alert.role}}.",
+                    message="Cross-account trust to {{alert.external_account}} removed from {{alert.role}}.",
                     service_env="PD_CLOUD_KEY",
                 ),
                 ticket("t1", "Open cross-account ticket", "P1", "Cross-account trust: {{alert.role}}"),
@@ -1062,8 +1056,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
             pid="exfil-large-upload-v1",
             name="Exfil: Large Outbound Upload",
             description=(
-                "Triggered when a host uploads >X GB to a non-corporate destination "
-                "in a short window. Blocks destination and investigates."
+                "Triggered when a host uploads >X GB to a non-corporate destination in a short window. Blocks destination and investigates."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -1082,7 +1075,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
                     "n1",
                     "Notify SOC",
                     "slack",
-                    message="Large upload {{alert.bytes_out}} from {{alert.host}} " "to {{alert.dst_host}} blocked.",
+                    message="Large upload {{alert.bytes_out}} from {{alert.host}} to {{alert.dst_host}} blocked.",
                     webhook_env="SLACK_SOC_WEBHOOK",
                 ),
                 ticket("t1", "Open exfil ticket", "P2", "Large upload: {{alert.host}}"),
@@ -1105,14 +1098,14 @@ def build_data_exfil() -> list[dict[str, Any]]:
                     "Send to DLP review queue",
                     url="${DLP_URL}/review",
                     method="POST",
-                    body_template=('{"host":"{{alert.host}}",' '"file":"{{alert.file_name}}",' '"dst":"{{alert.dst_host}}"}'),
+                    body_template=('{"host":"{{alert.host}}","file":"{{alert.file_name}}","dst":"{{alert.dst_host}}"}'),
                 ),
                 investigate("inv", "Investigate archive content", focus="forensics"),
                 notify(
                     "n1",
                     "Notify user's manager",
                     "email",
-                    message="Archive upload by {{alert.user}} to {{alert.dst_host}} " "queued for DLP review.",
+                    message="Archive upload by {{alert.user}} to {{alert.dst_host}} queued for DLP review.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
                 ticket("t1", "Open DLP ticket", "P3", "Archive egress: {{alert.user}}"),
@@ -1121,7 +1114,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
         make_playbook(
             pid="exfil-dns-tunneling-v1",
             name="Exfil: DNS Tunneling",
-            description=("Triggered by high-entropy DNS query length on a host. Sinkholes " "the suspect domain and isolates the host."),
+            description=("Triggered by high-entropy DNS query length on a host. Sinkholes the suspect domain and isolates the host."),
             category=cat,
             severity=["critical"],
             tags=["exfil", "dns", "mitre.t1071.004"],
@@ -1140,7 +1133,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call",
                     "pagerduty",
-                    message="DNS tunneling {{alert.host}} -> {{alert.dns_query}} " "sinkholed and isolated.",
+                    message="DNS tunneling {{alert.host}} -> {{alert.dns_query}} sinkholed and isolated.",
                     service_env="PD_SOC_KEY",
                 ),
                 ticket("t1", "Open DNS-tunnel ticket", "P1", "DNS tunneling: {{alert.host}}"),
@@ -1150,8 +1143,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
             pid="exfil-personal-cloud-v1",
             name="Exfil: Personal Cloud Storage Upload",
             description=(
-                "Triggered when corporate data uploads to a personal cloud "
-                "(personal Drive, Dropbox, iCloud). Blocks dest, manager notify."
+                "Triggered when corporate data uploads to a personal cloud (personal Drive, Dropbox, iCloud). Blocks dest, manager notify."
             ),
             category=cat,
             severity=["medium", "high"],
@@ -1169,7 +1161,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
                     "n1",
                     "Notify user's manager",
                     "email",
-                    message="Personal-cloud upload by {{alert.user}} to " "{{alert.dst_host}} blocked.",
+                    message="Personal-cloud upload by {{alert.user}} to {{alert.dst_host}} blocked.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
                 ticket("t1", "Open exfil ticket", "P3", "Personal cloud: {{alert.user}}"),
@@ -1179,7 +1171,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
             pid="exfil-removable-media-v1",
             name="Exfil: Sensitive Data to Removable Media",
             description=(
-                "Triggered when a sensitive file is written to a USB volume. " "Blocks USB writes via EDR policy and opens a ticket."
+                "Triggered when a sensitive file is written to a USB volume. Blocks USB writes via EDR policy and opens a ticket."
             ),
             category=cat,
             severity=["medium"],
@@ -1191,7 +1183,7 @@ def build_data_exfil() -> list[dict[str, Any]]:
                     "n1",
                     "Notify user's manager",
                     "email",
-                    message="Sensitive write to USB by {{alert.user}}. " "Host USB now read-only.",
+                    message="Sensitive write to USB by {{alert.user}}. Host USB now read-only.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
                 ticket("t1", "Open USB-exfil ticket", "P3", "USB exfil: {{alert.user}}"),
@@ -1207,8 +1199,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
             pid="lateral-psexec-detected-v1",
             name="Lateral: PsExec / Remote Service Creation",
             description=(
-                "Triggered by remote service creation patterns indicative of "
-                "PsExec / Impacket. Isolates target and source, investigates."
+                "Triggered by remote service creation patterns indicative of PsExec / Impacket. Isolates target and source, investigates."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -1221,7 +1212,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call",
                     "pagerduty",
-                    message="PsExec lateral {{alert.src_host}} -> {{alert.dst_host}}. " "Both isolated.",
+                    message="PsExec lateral {{alert.src_host}} -> {{alert.dst_host}}. Both isolated.",
                     service_env="PD_SOC_KEY",
                 ),
                 ticket("t1", "Open lateral ticket", "P1", "PsExec lateral: {{alert.src_host}} -> {{alert.dst_host}}"),
@@ -1230,9 +1221,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
         make_playbook(
             pid="lateral-rdp-spray-v1",
             name="Lateral: RDP Spray",
-            description=(
-                "Triggered when one host opens RDP to >N hosts in <T window. " "Blocks the source IP, isolates host, investigates."
-            ),
+            description=("Triggered when one host opens RDP to >N hosts in <T window. Blocks the source IP, isolates host, investigates."),
             category=cat,
             severity=["high"],
             tags=["lateral", "rdp", "mitre.t1021.001"],
@@ -1248,7 +1237,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
             pid="lateral-kerberoasting-v1",
             name="Lateral: Kerberoasting",
             description=(
-                "Triggered by abnormal SPN-ticket request volume from a single " "user. Resets impacted service-account credentials."
+                "Triggered by abnormal SPN-ticket request volume from a single user. Resets impacted service-account credentials."
             ),
             category=cat,
             severity=["high"],
@@ -1276,7 +1265,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
         make_playbook(
             pid="lateral-pass-the-hash-v1",
             name="Lateral: Pass-The-Hash",
-            description=("Triggered by NTLM relay / PTH detection. Disables the user " "and isolates source + destination."),
+            description=("Triggered by NTLM relay / PTH detection. Disables the user and isolates source + destination."),
             category=cat,
             severity=["critical"],
             tags=["lateral", "ad", "mitre.t1550.002"],
@@ -1289,7 +1278,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
                     "n1",
                     "Page on-call",
                     "pagerduty",
-                    message="PTH detected: {{alert.user}} {{alert.src_host}} -> " "{{alert.dst_host}}. Account disabled.",
+                    message="PTH detected: {{alert.user}} {{alert.src_host}} -> {{alert.dst_host}}. Account disabled.",
                     service_env="PD_SOC_KEY",
                 ),
                 ticket("t1", "Open PTH ticket", "P1", "PTH: {{alert.user}}"),
@@ -1312,7 +1301,7 @@ def build_lateral_movement() -> list[dict[str, Any]]:
                     "Apply network segmentation rule",
                     url="${FW_URL}/policy/segment",
                     method="POST",
-                    body_template=('{"src":"{{alert.src_host}}",' '"dst_domain":"{{alert.dst_domain}}"}'),
+                    body_template=('{"src":"{{alert.src_host}}","dst_domain":"{{alert.dst_domain}}"}'),
                 ),
                 investigate("inv", "Investigate cross-domain movement", focus="forensics"),
                 notify(
@@ -1335,8 +1324,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
             pid="supply-malicious-npm-v1",
             name="Supply Chain: Malicious npm Package",
             description=(
-                "Triggered when a published npm package matches a known-bad list. "
-                "Blocks installs at registry-mirror, audits org installs."
+                "Triggered when a published npm package matches a known-bad list. Blocks installs at registry-mirror, audits org installs."
             ),
             category=cat,
             severity=["high", "critical"],
@@ -1348,7 +1336,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "Add package to mirror block-list",
                     url="${REGISTRY_URL}/policy/block",
                     method="POST",
-                    body_template=('{"ecosystem":"npm",' '"package":"{{alert.package_name}}",' '"version":"{{alert.package_version}}"}'),
+                    body_template=('{"ecosystem":"npm","package":"{{alert.package_name}}","version":"{{alert.package_version}}"}'),
                 ),
                 http(
                     "audit-installs",
@@ -1361,7 +1349,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "n1",
                     "Page eng-sec",
                     "pagerduty",
-                    message="Malicious npm {{alert.package_name}} blocked. " "{{context.install_count}} installs found.",
+                    message="Malicious npm {{alert.package_name}} blocked. {{context.install_count}} installs found.",
                     service_env="PD_ENGSEC_KEY",
                 ),
                 ticket("t1", "Open supply-chain ticket", "P1", "Malicious npm: {{alert.package_name}}"),
@@ -1370,9 +1358,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
         make_playbook(
             pid="supply-pypi-typosquat-v1",
             name="Supply Chain: PyPI Typosquat",
-            description=(
-                "Triggered when a typosquat package is observed in CI installs. " "Pulls install lock to canonical name and audits."
-            ),
+            description=("Triggered when a typosquat package is observed in CI installs. Pulls install lock to canonical name and audits."),
             category=cat,
             severity=["high"],
             tags=["supply-chain", "pypi", "mitre.t1195"],
@@ -1382,7 +1368,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "Block typosquat at mirror",
                     url="${REGISTRY_URL}/policy/block",
                     method="POST",
-                    body_template=('{"ecosystem":"pypi",' '"package":"{{alert.package_name}}"}'),
+                    body_template=('{"ecosystem":"pypi","package":"{{alert.package_name}}"}'),
                 ),
                 http(
                     "audit",
@@ -1395,7 +1381,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "n1",
                     "Notify eng team",
                     "slack",
-                    message="PyPI typosquat {{alert.package_name}} blocked. " "{{context.repo_count}} repos affected.",
+                    message="PyPI typosquat {{alert.package_name}} blocked. {{context.repo_count}} repos affected.",
                     webhook_env="SLACK_ENG_WEBHOOK",
                 ),
                 ticket("t1", "Open typosquat ticket", "P2", "PyPI typosquat: {{alert.package_name}}"),
@@ -1418,7 +1404,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "Pin Action to last-known-good SHA",
                     url="${CI_URL}/actions/pin",
                     method="POST",
-                    body_template=('{"action":"{{alert.action}}",' '"sha":"{{alert.lkg_sha}}"}'),
+                    body_template=('{"action":"{{alert.action}}","sha":"{{alert.lkg_sha}}"}'),
                 ),
                 http("audit", "List workflows using this Action", url="${CI_URL}/workflows?action={{alert.action}}", method="GET"),
                 investigate("inv", "Investigate Action compromise", focus="cloud"),
@@ -1456,7 +1442,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
                     "n1",
                     "Notify procurement + sec",
                     "slack",
-                    message="Vendor {{alert.vendor}} breach. IPs blocked. " "Review contracts and integrations.",
+                    message="Vendor {{alert.vendor}} breach. IPs blocked. Review contracts and integrations.",
                     webhook_env="SLACK_PROCUREMENT_WEBHOOK",
                 ),
                 ticket("t1", "Open vendor-breach ticket", "P1", "Vendor breach: {{alert.vendor}}", queue="procurement"),
@@ -1466,8 +1452,7 @@ def build_supply_chain() -> list[dict[str, Any]]:
             pid="supply-iac-drift-v1",
             name="Supply Chain: IaC Drift Detected",
             description=(
-                "Triggered when production infra deviates from IaC source of "
-                "truth in a security-relevant way. Reverts to declared state."
+                "Triggered when production infra deviates from IaC source of truth in a security-relevant way. Reverts to declared state."
             ),
             category=cat,
             severity=["medium", "high"],
@@ -1500,7 +1485,7 @@ def build_ddos() -> list[dict[str, Any]]:
         make_playbook(
             pid="ddos-volumetric-l3-v1",
             name="DDoS: Volumetric L3/L4",
-            description=("Triggered by volumetric flood detection at edge. Engages " "scrubbing provider and pages on-call."),
+            description=("Triggered by volumetric flood detection at edge. Engages scrubbing provider and pages on-call."),
             category=cat,
             severity=["critical"],
             tags=["ddos", "network", "mitre.t1498"],
@@ -1526,7 +1511,7 @@ def build_ddos() -> list[dict[str, Any]]:
         make_playbook(
             pid="ddos-app-layer-l7-v1",
             name="DDoS: Application Layer L7",
-            description=("Triggered by anomalous L7 request rate or pattern. Engages " "WAF rate-limit rule and challenge-page."),
+            description=("Triggered by anomalous L7 request rate or pattern. Engages WAF rate-limit rule and challenge-page."),
             category=cat,
             severity=["high", "critical"],
             tags=["ddos", "waf", "mitre.t1498.001"],
@@ -1536,7 +1521,7 @@ def build_ddos() -> list[dict[str, Any]]:
                     "Apply WAF rate-limit",
                     url="${WAF_URL}/rate-limit",
                     method="POST",
-                    body_template=('{"target":"{{alert.target}}",' '"rps":{{alert.threshold_rps}}}'),
+                    body_template=('{"target":"{{alert.target}}","rps":{{alert.threshold_rps}}}'),
                 ),
                 http(
                     "challenge",
@@ -1559,9 +1544,7 @@ def build_ddos() -> list[dict[str, Any]]:
         make_playbook(
             pid="ddos-amplification-dns-v1",
             name="DDoS: DNS Amplification",
-            description=(
-                "Triggered when an inbound spike of crafted DNS queries hits " "an authoritative server. Sinkholes spoofed sources."
-            ),
+            description=("Triggered when an inbound spike of crafted DNS queries hits an authoritative server. Sinkholes spoofed sources."),
             category=cat,
             severity=["high"],
             tags=["ddos", "dns", "mitre.t1498.002"],
@@ -1578,7 +1561,7 @@ def build_ddos() -> list[dict[str, Any]]:
                     "n1",
                     "Notify network team",
                     "slack",
-                    message="DNS amplification mitigated. " "{{context.sinkholed_count}} sources sinkholed.",
+                    message="DNS amplification mitigated. {{context.sinkholed_count}} sources sinkholed.",
                     webhook_env="SLACK_NETWORK_WEBHOOK",
                 ),
                 ticket("t1", "Open DNS-amp ticket", "P2", "DNS amplification: {{alert.target}}"),
@@ -1587,7 +1570,7 @@ def build_ddos() -> list[dict[str, Any]]:
         make_playbook(
             pid="ddos-syn-flood-v1",
             name="DDoS: SYN Flood",
-            description=("Triggered by SYN flood pattern at edge. Enables SYN cookies " "and increases backend capacity."),
+            description=("Triggered by SYN flood pattern at edge. Enables SYN cookies and increases backend capacity."),
             category=cat,
             severity=["high", "critical"],
             tags=["ddos", "network", "mitre.t1498"],
@@ -1598,7 +1581,7 @@ def build_ddos() -> list[dict[str, Any]]:
                     "Scale backend capacity",
                     url="${PLATFORM_URL}/scale",
                     method="POST",
-                    body_template=('{"target":"{{alert.target}}",' '"replicas":"+50%"}'),
+                    body_template=('{"target":"{{alert.target}}","replicas":"+50%"}'),
                 ),
                 investigate("inv", "Investigate flood", focus="forensics"),
                 notify(
@@ -1696,7 +1679,7 @@ def main() -> int:
         playbooks = fn()
 
         if len(playbooks) != expected[cat]:
-            raise SystemExit(f"category {cat}: expected {expected[cat]} playbooks, " f"got {len(playbooks)}")
+            raise SystemExit(f"category {cat}: expected {expected[cat]} playbooks, got {len(playbooks)}")
 
         for pb in playbooks:
             if pb["id"] in seen_ids:

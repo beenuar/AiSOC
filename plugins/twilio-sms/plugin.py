@@ -1,4 +1,5 @@
 """Twilio SMS notifier action plugin for AiSOC."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -44,28 +45,20 @@ class Plugin:
 
         try:
             if action == "send_sms":
-                to_number = payload.get("to") or (
-                    config.get("default_recipients") or [None]
-                )[0]
+                to_number = payload.get("to") or (config.get("default_recipients") or [None])[0]
                 if not to_number:
                     return {"error": "`to` recipient is required"}
-                result = await self._send(
-                    account_sid, auth_token, from_number, to_number, body
-                )
+                result = await self._send(account_sid, auth_token, from_number, to_number, body)
                 return {"action": action, "ok": True, "sid": result.get("sid")}
 
             if action == "bulk_send":
-                recipients = payload.get("recipients") or config.get(
-                    "default_recipients"
-                )
+                recipients = payload.get("recipients") or config.get("default_recipients")
                 if not recipients:
                     return {"error": "no recipients configured"}
                 results = []
                 for to_number in recipients:
                     try:
-                        r = await self._send(
-                            account_sid, auth_token, from_number, to_number, body
-                        )
+                        r = await self._send(account_sid, auth_token, from_number, to_number, body)
                         results.append({"to": to_number, "sid": r.get("sid")})
                     except httpx.HTTPError as exc:
                         results.append({"to": to_number, "error": str(exc)})

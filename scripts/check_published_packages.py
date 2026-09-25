@@ -107,7 +107,7 @@ def main() -> int:
     if published and claims_unpublished:
         print("PUBLISHED-PACKAGES GATE FAILED:", file=sys.stderr)
         print(
-            f"  - README still says {UNPUBLISHED_CLAIM!r}, but these are live: " f"{', '.join(published)}.",
+            f"  - README still says {UNPUBLISHED_CLAIM!r}, but these are live: {', '.join(published)}.",
             file=sys.stderr,
         )
         print(
@@ -119,8 +119,7 @@ def main() -> int:
     if not published and not claims_unpublished:
         print("PUBLISHED-PACKAGES GATE FAILED:", file=sys.stderr)
         print(
-            f"  - Nothing is on npm or PyPI, and the README no longer says "
-            f"{UNPUBLISHED_CLAIM!r}. A reader following it will hit a 404.",
+            f"  - Nothing is on npm or PyPI, and the README no longer says {UNPUBLISHED_CLAIM!r}. A reader following it will hit a 404.",
             file=sys.stderr,
         )
         return 1

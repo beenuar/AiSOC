@@ -108,7 +108,7 @@ class NetskopeConnector(BaseConnector):
             "severity": sev,
             "title": raw.get("alert_name") or f"Netskope {alert_type or 'alert'}",
             "description": (
-                f"alert_type={raw.get('alert_type')}; " f"app={raw.get('app')}; action={raw.get('action')}; " f"policy={raw.get('policy')}"
+                f"alert_type={raw.get('alert_type')}; app={raw.get('app')}; action={raw.get('action')}; policy={raw.get('policy')}"
             ),
             "external_id": str(raw.get("_id") or raw.get("alert_id") or ""),
             "username": raw.get("user"),

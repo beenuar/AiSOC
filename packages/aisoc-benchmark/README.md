@@ -24,6 +24,7 @@ not look like ours.
 ```python
 from aisoc_benchmark import AgentVerdict, BenchmarkIncident
 
+
 class MyAgent:
     name = "my-product"
     version = "2.1"
@@ -31,10 +32,10 @@ class MyAgent:
     async def investigate(self, incident: BenchmarkIncident) -> AgentVerdict:
         result = await my_platform.triage(incident.as_dict())
         return AgentVerdict(
-            disposition=result.verdict,            # malicious|suspicious|benign|unknown
+            disposition=result.verdict,  # malicious|suspicious|benign|unknown
             confidence=result.confidence,
             techniques=result.attack_techniques,
-            cited_indicators=result.indicators,    # graded against the evidence
+            cited_indicators=result.indicators,  # graded against the evidence
             proposed_actions=result.actions,
             narrative=result.summary,
         )

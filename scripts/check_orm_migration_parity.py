@@ -859,7 +859,7 @@ def main() -> int:
         print(f"\nFAIL: {len(findings)} ORM/migration disagreement(s):", file=sys.stderr)
         for finding in findings:
             print(
-                f"  [{finding['kind']}] {finding['service']}: {finding['table']}.{finding['column']}\n" f"      {finding['detail']}",
+                f"  [{finding['kind']}] {finding['service']}: {finding['table']}.{finding['column']}\n      {finding['detail']}",
                 file=sys.stderr,
             )
         print(

@@ -157,9 +157,7 @@ def matrix_problems(text: str, agreed: str) -> list[str]:
     if shipped is None:
         problems.append(f"{MATRIX_WORKFLOW} has no matrix leg labelled `{SHIPPED_LABEL}`")
     elif normalise(shipped) != agreed:
-        problems.append(
-            f"{MATRIX_WORKFLOW} tests the shipped rewriter against {shipped}, but the declared pin is {agreed}"
-        )
+        problems.append(f"{MATRIX_WORKFLOW} tests the shipped rewriter against {shipped}, but the declared pin is {agreed}")
 
     forward = legs.get(FORWARD_LABEL)
     if forward is None:
@@ -321,9 +319,7 @@ def main() -> int:
         else:
             locked_version = match.group("version")
             if agreed_so_far is not None and not satisfies(locked_version, agreed_so_far):
-                problems.append(
-                    f"{RESOLVED_FILE} resolved sqlglot {locked_version}, outside the declared {agreed_so_far}"
-                )
+                problems.append(f"{RESOLVED_FILE} resolved sqlglot {locked_version}, outside the declared {agreed_so_far}")
 
     stray = scan_for_unregistered()
     if stray:

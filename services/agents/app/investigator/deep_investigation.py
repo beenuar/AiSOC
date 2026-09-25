@@ -127,7 +127,7 @@ class DeepInvestigationResult:
         out: list[str] = []
         if self.error:
             # A failed investigation must not read as a completed one.
-            out.append(f"Deep investigation did not complete ({self.error}). " f"Findings below are from the deterministic path only.")
+            out.append(f"Deep investigation did not complete ({self.error}). Findings below are from the deterministic path only.")
             return out
 
         if self.narrative:
@@ -148,10 +148,10 @@ class DeepInvestigationResult:
                 "Treat them as unknown rather than clear."
             )
         if self.truncated:
-            out.append(f"Investigation hit its {MAX_ITERATIONS}-step cap; the line of enquiry " f"was not exhausted.")
+            out.append(f"Investigation hit its {MAX_ITERATIONS}-step cap; the line of enquiry was not exhausted.")
         if self.over_budget:
             out.append(
-                f"Investigation exceeded its {BUDGET_SECONDS:.0f}s budget and was cut " f"short; conclusions are based on partial evidence."
+                f"Investigation exceeded its {BUDGET_SECONDS:.0f}s budget and was cut short; conclusions are based on partial evidence."
             )
         return out
 

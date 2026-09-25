@@ -285,8 +285,7 @@ RATCHET: dict[str, str] = {
         "appends AND tenant_id = :tenant_id, and that assembled statement is scored on its own"
     ),
     "services/api/app/workers/retention_purge.py::build_alert_count_sql::alerts": (
-        "same fragment shape as build_alert_purge_sql: _purge_alerts concatenates the tenant predicate onto it "
-        "before executing"
+        "same fragment shape as build_alert_purge_sql: _purge_alerts concatenates the tenant predicate onto it before executing"
     ),
     "services/api/app/api/v1/endpoints/investigations.py::_fetch_model_costs::aisoc_run_costs": (
         "deliberate: the agents service writes whatever tenant_id string the request carried, so the run_id (tenant-bound in "

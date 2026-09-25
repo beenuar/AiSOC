@@ -17,6 +17,7 @@ Payload shape:
 The official `snowflake-connector-python` package is required.
 This plugin gracefully degrades if the dependency is missing.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -48,17 +49,10 @@ class Plugin:
 
     async def run(self, payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         if not _SF:
-            return {
-                "error": (
-                    "snowflake-connector-python not installed; "
-                    "run `pip install snowflake-connector-python`"
-                )
-            }
+            return {"error": ("snowflake-connector-python not installed; run `pip install snowflake-connector-python`")}
 
         action = payload.get("action", "fetch_logins")
-        since = payload.get("since") or (
-            datetime.now(UTC) - timedelta(minutes=15)
-        ).isoformat()
+        since = payload.get("since") or (datetime.now(UTC) - timedelta(minutes=15)).isoformat()
         limit = int(payload.get("limit", 500))
 
         try:
@@ -86,10 +80,7 @@ class Plugin:
                         """,
                         (since,),
                     )
-                    rows = [
-                        {desc[0].lower(): val for desc, val in zip(cursor.description, row)}
-                        for row in cursor.fetchall()
-                    ]
+                    rows = [{desc[0].lower(): val for desc, val in zip(cursor.description, row)} for row in cursor.fetchall()]
                     return {"action": action, "since": since, "events": rows}
                 if action == "fetch_queries":
                     cursor.execute(
@@ -104,10 +95,7 @@ class Plugin:
                         """,
                         (since,),
                     )
-                    rows = [
-                        {desc[0].lower(): val for desc, val in zip(cursor.description, row)}
-                        for row in cursor.fetchall()
-                    ]
+                    rows = [{desc[0].lower(): val for desc, val in zip(cursor.description, row)} for row in cursor.fetchall()]
                     return {"action": action, "since": since, "events": rows}
                 return {"error": f"Unknown action: {action}"}
             finally:

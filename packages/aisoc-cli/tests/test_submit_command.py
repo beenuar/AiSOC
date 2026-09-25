@@ -17,6 +17,7 @@ We use ``httpx.MockTransport`` to intercept the HTTP call without standing
 up a real API. If these tests break, the quickstart video desyncs from the
 CLI.
 """
+
 from __future__ import annotations
 
 import json
@@ -412,9 +413,7 @@ def test_submit_real_lateral_movement_fixture(
         monkeypatch,
         lambda _: httpx.Response(
             201,
-            json=_ok_alert_response(
-                title="User login to Okta", severity="medium"
-            ),
+            json=_ok_alert_response(title="User login to Okta", severity="medium"),
         ),
     )
 

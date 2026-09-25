@@ -35,10 +35,7 @@ from .scenarios import available_scenarios, emit_scenario_index, load_scenario
 
 
 _PROG = "aisoc-sandbox"
-_DESCRIPTION = (
-    "Run an AiSOC agent investigation offline in under 30 seconds. "
-    "No Docker, no API key, no network."
-)
+_DESCRIPTION = "Run an AiSOC agent investigation offline in under 30 seconds. No Docker, no API key, no network."
 
 
 def _build_parser() -> argparse.ArgumentParser:

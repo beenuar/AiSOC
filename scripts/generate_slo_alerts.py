@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not covered:
         print(
-            "slo-alerts: no service with an SLO is scraped, so no alert could " "reference an objective",
+            "slo-alerts: no service with an SLO is scraped, so no alert could reference an objective",
             file=sys.stderr,
         )
         return 1
@@ -235,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         if not OUTPUT.exists():
             print(
-                f"SLO ALERT GATE FAILED: {OUTPUT.relative_to(REPO_ROOT)} is " f"missing.\n  Run: python3 scripts/generate_slo_alerts.py",
+                f"SLO ALERT GATE FAILED: {OUTPUT.relative_to(REPO_ROOT)} is missing.\n  Run: python3 scripts/generate_slo_alerts.py",
                 file=sys.stderr,
             )
             return 1
@@ -249,9 +249,9 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"slo-alerts: OK — {len(covered)} service(s) alert against their " f"declared objectives")
+        print(f"slo-alerts: OK — {len(covered)} service(s) alert against their declared objectives")
         if uncovered:
-            print(f"  no alerts for {len(uncovered)} service(s) with an SLO but no " f"/metrics: {', '.join(uncovered)}")
+            print(f"  no alerts for {len(uncovered)} service(s) with an SLO but no /metrics: {', '.join(uncovered)}")
         return 0
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

@@ -119,6 +119,7 @@ CRITICAL: dict[str, str] = {
     ),
 }
 
+
 # ── Extras are part of a dependency's identity ───────────────────────────────
 #
 # `sqlalchemy` and `sqlalchemy[asyncio]` are two different dependency sets, and
@@ -305,14 +306,29 @@ class Scan:
 
 # ── Parsing each kind of install path ────────────────────────────────────────
 
-_REQUIREMENT = re.compile(
-    r"""^["']?(?P<name>[A-Za-z][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>[<>=!~][^"'\s]*)?["']?$"""
-)
+_REQUIREMENT = re.compile(r"""^["']?(?P<name>[A-Za-z][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>[<>=!~][^"'\s]*)?["']?$""")
 
 # Shell words that appear inside a `pip install` line and are not packages.
 _NOT_PACKAGES = {
-    "pip", "python", "python3", "-m", "set", "eux", "-e", "echo", "if", "then",
-    "else", "fi", "true", "&&", "||", ";", ".", "install", "poetry",
+    "pip",
+    "python",
+    "python3",
+    "-m",
+    "set",
+    "eux",
+    "-e",
+    "echo",
+    "if",
+    "then",
+    "else",
+    "fi",
+    "true",
+    "&&",
+    "||",
+    ";",
+    ".",
+    "install",
+    "poetry",
 }
 
 
@@ -473,9 +489,7 @@ def parse_manifest(path: Path, rel: str, service: str | None) -> list[Declaratio
 def parse_lock(path: Path, rel: str, service: str | None) -> list[Declaration]:
     """Resolved versions out of a poetry.lock, as `==` declarations."""
     found: list[Declaration] = []
-    for name, version in re.findall(
-        r'^name = "([^"]+)"\nversion = "([^"]+)"', path.read_text(encoding="utf-8"), re.MULTILINE
-    ):
+    for name, version in re.findall(r'^name = "([^"]+)"\nversion = "([^"]+)"', path.read_text(encoding="utf-8"), re.MULTILINE):
         found.append(Declaration(canonical(name), f"=={version}", rel, "lock", service, f"{name} {version}"))
     return found
 
@@ -596,12 +610,8 @@ def check_agreement(data: Scan) -> list[str]:
                 f"that permits every release ever published. Why it matters: {reason}"
             )
         if len(ranges) > 1:
-            detail = "; ".join(
-                f"[{spec}] {', '.join(sorted({d.path for d in found}))}" for spec, found in sorted(ranges.items())
-            )
-            problems.append(
-                f"`{package}` is pinned {len(ranges)} different ways: {detail}. Why it matters: {reason}"
-            )
+            detail = "; ".join(f"[{spec}] {', '.join(sorted({d.path for d in found}))}" for spec, found in sorted(ranges.items()))
+            problems.append(f"`{package}` is pinned {len(ranges)} different ways: {detail}. Why it matters: {reason}")
     return problems
 
 
@@ -716,8 +726,7 @@ def check_locks_satisfy(data: Scan) -> list[str]:
             resolved = declaration.spec.lstrip("=")
             if not satisfies(resolved, agreed):
                 problems.append(
-                    f"{declaration.path} resolved `{package}` {resolved}, which is outside "
-                    f"the declared range {agreed} (lock -> agreement)"
+                    f"{declaration.path} resolved `{package}` {resolved}, which is outside the declared range {agreed} (lock -> agreement)"
                 )
     return problems
 
@@ -792,10 +801,7 @@ def check_matrix_brackets(root: Path, data: Scan) -> list[str]:
     if leg is None:
         return ["reproducible-builds.yml has no fastapi matrix leg labelled `floor`"]
     if lower is None or not same_version(leg.group(1), lower):
-        return [
-            f"reproducible-builds.yml tests the floor at fastapi {leg.group(1)}, "
-            f"but the manifests declare a lower bound of {lower}"
-        ]
+        return [f"reproducible-builds.yml tests the floor at fastapi {leg.group(1)}, but the manifests declare a lower bound of {lower}"]
     return []
 
 
@@ -836,10 +842,7 @@ def check_coverage(root: Path, data: Scan) -> list[str]:
 
 def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
     if not (root / ".github" / "workflows").is_dir() or not (root / "services").is_dir():
-        return 1, [
-            f"{root} does not look like the AiSOC repository (no .github/workflows and services/). "
-            f"Pass --repo-root explicitly."
-        ]
+        return 1, [f"{root} does not look like the AiSOC repository (no .github/workflows and services/). Pass --repo-root explicitly."]
 
     data = scan(root)
     if not data.declarations:
@@ -873,8 +876,7 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
         locked = sorted({d.spec.lstrip("=") for d in found if d.kind == "lock"})
         print(
             f"  {package}: {len(found)} declarations across {len({d.path for d in found})} files"
-            f" — range {', '.join(ranges) or 'none'}"
-            + (f", locked {', '.join(locked)}" if locked else "")
+            f" — range {', '.join(ranges) or 'none'}" + (f", locked {', '.join(locked)}" if locked else "")
         )
     for package, rule in sorted(EXTRAS.items()):
         found = data.by_package(package)
@@ -882,10 +884,7 @@ def run(root: Path, verbose: bool = False) -> tuple[int, list[str]]:
             continue
         with_extra = {d.path for d in found if rule.extra in d.extras}
         without = {d.path for d in found if d.kind in {"ci", "image", "manifest"} and rule.extra not in d.extras}
-        print(
-            f"  {package}[{rule.extra}]: declared by {len(with_extra)} paths, "
-            f"{len(without)} name `{package}` without it"
-        )
+        print(f"  {package}[{rule.extra}]: declared by {len(with_extra)} paths, {len(without)} name `{package}` without it")
     if verbose:
         for rel in data.files:
             print(f"    scanned {rel}")
@@ -914,18 +913,15 @@ def _fixture(root: Path) -> None:
         encoding="utf-8",
     )
     (service / "poetry.lock").write_text(
-        '[[package]]\nname = "fastapi"\nversion = "0.141.1"\n\n'
-        '[[package]]\nname = "cryptography"\nversion = "50.0.1"\n',
+        '[[package]]\nname = "fastapi"\nversion = "0.141.1"\n\n[[package]]\nname = "cryptography"\nversion = "50.0.1"\n',
         encoding="utf-8",
     )
     (service / "Dockerfile").write_text(
-        "FROM python:3.11-slim\nRUN pip install poetry==2.4.1\n"
-        "RUN poetry install --only main --no-root\n",
+        "FROM python:3.11-slim\nRUN pip install poetry==2.4.1\nRUN poetry install --only main --no-root\n",
         encoding="utf-8",
     )
     (root / ".github" / "workflows" / "ci.yml").write_text(
-        'name: CI\njobs:\n  t:\n    steps:\n'
-        '      - run: pip install "fastapi>=0.117,<0.142" "cryptography>=46,<51"\n',
+        'name: CI\njobs:\n  t:\n    steps:\n      - run: pip install "fastapi>=0.117,<0.142" "cryptography>=46,<51"\n',
         encoding="utf-8",
     )
 
@@ -966,9 +962,7 @@ def self_test() -> int:
 
     def drift_unscanned_path(root: Path) -> None:
         (root / "extra").mkdir()
-        (root / "extra" / "Dockerfile").write_text(
-            'FROM python:3.11-slim\nRUN pip install "fastapi>=0.111,<0.112"\n', encoding="utf-8"
-        )
+        (root / "extra" / "Dockerfile").write_text('FROM python:3.11-slim\nRUN pip install "fastapi>=0.111,<0.112"\n', encoding="utf-8")
 
     def drift_inside_a_folded_run_block(root: Path) -> None:
         """The syntax `integration.yml` uses, which the first parser could not read."""

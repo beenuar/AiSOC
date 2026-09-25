@@ -97,10 +97,7 @@ def run(selected: list[str] | None = None) -> dict[str, int]:
         known = {s.name for s in SOURCES}
         unknown = [name for name in selected if name not in known]
         if unknown:
-            raise ValueError(
-                f"Unknown source(s): {', '.join(unknown)}. "
-                f"Known: {', '.join(sorted(known))}"
-            )
+            raise ValueError(f"Unknown source(s): {', '.join(unknown)}. Known: {', '.join(sorted(known))}")
 
     results: dict[str, int] = {}
     for source in SOURCES:
@@ -126,10 +123,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--source",
         action="append",
         dest="sources",
-        help=(
-            "Only run the named source. Repeatable. "
-            "Defaults to running every source."
-        ),
+        help=("Only run the named source. Repeatable. Defaults to running every source."),
     )
     parser.add_argument(
         "--list",

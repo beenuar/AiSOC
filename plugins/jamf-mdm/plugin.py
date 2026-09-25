@@ -17,6 +17,7 @@ Payload shape:
     "wipe_token": "manager"     # required for wipe_device
   }
 """
+
 from __future__ import annotations
 
 import time

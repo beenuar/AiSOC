@@ -23,6 +23,7 @@ pip install aisoc-plugin-sdk
 ```python
 from aisoc_plugin_sdk import enricher, EnrichmentRequest, EnrichmentResult, PluginContext
 
+
 @enricher(id="myorg.virustotal", name="VirusTotal Enricher", author="myorg")
 async def vt_enrich(request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:
     # call VirusTotal API here …
@@ -38,7 +39,14 @@ async def vt_enrich(request: EnrichmentRequest, ctx: PluginContext) -> Enrichmen
 ### Response Action (class style)
 
 ```python
-from aisoc_plugin_sdk import ActionPlugin, ActionRequest, ActionResult, PluginManifest, PluginContext
+from aisoc_plugin_sdk import (
+    ActionPlugin,
+    ActionRequest,
+    ActionResult,
+    PluginManifest,
+    PluginContext,
+)
+
 
 class BlockIPAction(ActionPlugin):
     @property
@@ -56,11 +64,11 @@ class BlockIPAction(ActionPlugin):
     async def execute(self, request: ActionRequest, ctx: PluginContext) -> ActionResult:
         ip = request.params.get("ip")
         if request.dry_run:
-            return ActionResult(action_id=request.action_id, success=True, dry_run=True,
-                                summary=f"Would block {ip}")
+            return ActionResult(
+                action_id=request.action_id, success=True, dry_run=True, summary=f"Would block {ip}"
+            )
         # … firewall API call …
-        return ActionResult(action_id=request.action_id, success=True,
-                            summary=f"Blocked {ip}")
+        return ActionResult(action_id=request.action_id, success=True, summary=f"Blocked {ip}")
 ```
 
 ### Connector

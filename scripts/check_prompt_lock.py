@@ -25,6 +25,8 @@ from gate_toolkit import repo_root, self_test_if_requested
 self_test_if_requested(__file__)
 
 ROOT = repo_root()
+
+
 def _load_prompt_registry_module():
     """Load prompt_registry.py by path so we don't trigger app/llm/__init__.py
     (which imports contract → structlog). This gate runs in the dep-light lint

@@ -284,8 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-logs",
         action="store_true",
-        help="Skip log collection. Logs are redacted, but skipping is available "
-        "for deployments where even redacted log text cannot leave.",
+        help="Skip log collection. Logs are redacted, but skipping is available for deployments where even redacted log text cannot leave.",
     )
     args = parser.parse_args(argv)
 
@@ -295,9 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         args.out.write_text(payload + "\n", encoding="utf-8")
         print(f"support bundle written to {args.out} ({len(payload)} bytes)")
-        print(
-            "Review it before sending. Redaction is thorough but a bundle is the " "most concentrated configuration a deployment produces."
-        )
+        print("Review it before sending. Redaction is thorough but a bundle is the most concentrated configuration a deployment produces.")
     else:
         print(payload)
     return 0

@@ -46,7 +46,7 @@ def test_the_readme_points_at_the_url_the_app_mounts() -> None:
 
     for path in advertised:
         assert path in {docs_url, app.openapi_url, app.redoc_url, "/health"}, (
-            f"README advertises http://localhost:8000{path}, which the app does not serve " f"(docs are at {docs_url})"
+            f"README advertises http://localhost:8000{path}, which the app does not serve (docs are at {docs_url})"
         )
 
 

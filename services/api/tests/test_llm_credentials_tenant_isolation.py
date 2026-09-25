@@ -147,9 +147,7 @@ def _assert_tenant_scoped(executed: list[tuple[str, dict[str, Any]]], tenant_id:
         matching = [
             (name, value) for name, value in params.items() if (name == "tenant_id" or name.startswith("tenant_id_")) and value == tenant_id
         ]
-        assert matching, (
-            f"no bound tenant_id parameter matches caller's tenant in SQL: {sql}; " f"params={params}; expected_tenant={tenant_id}"
-        )
+        assert matching, f"no bound tenant_id parameter matches caller's tenant in SQL: {sql}; params={params}; expected_tenant={tenant_id}"
     assert saw_credentials_query, "expected at least one query against tenant_llm_credentials"
 
 
@@ -315,9 +313,9 @@ async def test_delete_credential_scopes_select_and_delete_by_tenant() -> None:
     # Belt-and-braces: confirm the second statement is a DELETE.
     delete_sql, _ = db.executed[1]
     normalized = re.sub(r"\s+", " ", delete_sql).lower()
-    assert normalized.startswith(
-        "delete from tenant_llm_credentials"
-    ), f"second statement must be a DELETE FROM tenant_llm_credentials: {delete_sql}"
+    assert normalized.startswith("delete from tenant_llm_credentials"), (
+        f"second statement must be a DELETE FROM tenant_llm_credentials: {delete_sql}"
+    )
 
 
 @pytest.mark.asyncio

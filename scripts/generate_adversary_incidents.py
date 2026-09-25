@@ -561,10 +561,8 @@ def main() -> None:
             f"medium={report['buckets']['medium']}, "
             f"light={report['buckets']['light']}"
         )
-        print(
-            f"  Defender catch rate:      {report['defender_correct']}" f"/{report['incidents']} = {report['defender_accuracy'] * 100:.1f}%"
-        )
-        print(f"  Defender lost-everything: " f"{report['defender_lost_all_tactics']} incidents")
+        print(f"  Defender catch rate:      {report['defender_correct']}/{report['incidents']} = {report['defender_accuracy'] * 100:.1f}%")
+        print(f"  Defender lost-everything: {report['defender_lost_all_tactics']} incidents")
         print()
         print("  Tactics most-lost under mutation:")
         for t, n in sorted(report["per_tactic_lost"].items(), key=lambda kv: kv[1], reverse=True)[:8]:

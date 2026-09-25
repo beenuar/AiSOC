@@ -55,7 +55,7 @@ def build_lake_purge_sql(tenant_id: uuid.UUID, days: int) -> str:
     days = _clamp(days)
     tid = str(tenant_id)
     # tenant_id is a UUID (validated by type); days is an int literal.
-    return "ALTER TABLE aisoc.raw_events DELETE " f"WHERE tenant_id = '{tid}' AND event_time < now() - INTERVAL {days} DAY"
+    return f"ALTER TABLE aisoc.raw_events DELETE WHERE tenant_id = '{tid}' AND event_time < now() - INTERVAL {days} DAY"
 
 
 def build_alert_purge_sql(days: int) -> tuple[str, dict[str, int]]:

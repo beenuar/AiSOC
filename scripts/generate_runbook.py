@@ -442,7 +442,7 @@ def main() -> None:
         filename = f"{spec.id}-{spec.slug}.md"
 
         if args.dry_run:
-            print(f"\n{'='*60}\n{filename}\n{'='*60}\n")
+            print(f"\n{'=' * 60}\n{filename}\n{'=' * 60}\n")
             print(md)
         else:
             outfile = output_dir / filename

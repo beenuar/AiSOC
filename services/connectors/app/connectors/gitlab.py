@@ -171,9 +171,7 @@ class GitLabConnector(BaseConnector):
                     return {
                         "success": False,
                         "connector": self.connector_id,
-                        "error": (
-                            f"Group reachable but audit-events probe failed: " f"HTTP {audit_resp.status_code}: {audit_resp.text[:200]}"
-                        ),
+                        "error": (f"Group reachable but audit-events probe failed: HTTP {audit_resp.status_code}: {audit_resp.text[:200]}"),
                     }
                 audit_available = audit_resp.status_code == 200
 
@@ -323,7 +321,7 @@ class GitLabConnector(BaseConnector):
             "external_id": str(raw.get("id") or ""),
             "title": action or "GitLab audit event",
             "description": (
-                f"actor={actor}; action={action}; " f"entity_type={raw.get('entity_type', '')}; " f"entity_id={raw.get('entity_id', '')}"
+                f"actor={actor}; action={action}; entity_type={raw.get('entity_type', '')}; entity_id={raw.get('entity_id', '')}"
             ),
             "severity": severity,
             "actor": actor,
@@ -362,9 +360,7 @@ class GitLabConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": f"finding-{raw.get('uuid') or raw.get('id') or ''}",
             "title": raw.get("name") or f"GitLab security finding ({scanner})",
-            "description": (
-                f"project={project}; " f"scanner={scanner}; " f"identifier={identifier_value}; " f"state={raw.get('state', '')}"
-            ),
+            "description": (f"project={project}; scanner={scanner}; identifier={identifier_value}; state={raw.get('state', '')}"),
             "severity": severity,
             "actor": "gitlab-security",
             "actor_email": None,

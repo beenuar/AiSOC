@@ -100,7 +100,7 @@ async def _create_schema() -> None:
         logger.info("Neo4j graph migrations applied: %s", ", ".join(applied))
     if pending:
         logger.error(
-            "Neo4j graph migrations still pending after startup: %s — " "graph-backed features may be degraded",
+            "Neo4j graph migrations still pending after startup: %s — graph-backed features may be degraded",
             ", ".join(pending),
         )
     else:

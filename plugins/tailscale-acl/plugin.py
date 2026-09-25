@@ -19,6 +19,7 @@ Payload shape:
     "acl": "<HuJSON string>"   # for update_acl
   }
 """
+
 from __future__ import annotations
 
 from typing import Any

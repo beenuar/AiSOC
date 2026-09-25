@@ -64,15 +64,10 @@ _SEVERITY_TIERS = {"info", "low", "medium", "high", "critical"}
 def _validate(payload: dict[str, Any], *, source: str) -> Scenario:
     missing = [k for k in ("id", "title") if k not in payload]
     if missing:
-        raise ValueError(
-            f"Scenario {source!r} is missing required keys: {', '.join(missing)}"
-        )
+        raise ValueError(f"Scenario {source!r} is missing required keys: {', '.join(missing)}")
     sev = payload.get("severity", "medium")
     if sev not in _SEVERITY_TIERS:
-        raise ValueError(
-            f"Scenario {source!r} severity={sev!r} must be one of "
-            f"{sorted(_SEVERITY_TIERS)}"
-        )
+        raise ValueError(f"Scenario {source!r} severity={sev!r} must be one of {sorted(_SEVERITY_TIERS)}")
     return Scenario(
         id=str(payload["id"]),
         title=str(payload["title"]),
@@ -89,11 +84,7 @@ def available_scenarios() -> list[str]:
     """Return the IDs of every bundled scenario, sorted."""
 
     pkg = resources.files("aisoc_sandbox").joinpath("scenarios")
-    return sorted(
-        p.name.removesuffix(".json")
-        for p in pkg.iterdir()
-        if p.name.endswith(".json")
-    )
+    return sorted(p.name.removesuffix(".json") for p in pkg.iterdir() if p.name.endswith(".json"))
 
 
 def load_scenario(scenario_id: str | None = None, *, file: str | None = None) -> Scenario:
@@ -118,9 +109,7 @@ def load_scenario(scenario_id: str | None = None, *, file: str | None = None) ->
 
     sid = scenario_id or "lateral-movement"
     if sid not in available_scenarios():
-        raise ValueError(
-            f"Unknown scenario {sid!r}. Available: {', '.join(available_scenarios())}"
-        )
+        raise ValueError(f"Unknown scenario {sid!r}. Available: {', '.join(available_scenarios())}")
     pkg = resources.files("aisoc_sandbox").joinpath("scenarios", f"{sid}.json")
     with pkg.open("r", encoding="utf-8") as fp:
         return _validate(json.load(fp), source=f"<bundled:{sid}>")

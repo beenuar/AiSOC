@@ -141,9 +141,9 @@ def test_migration_046_adds_expected_columns_idempotently():
 
 def test_migration_046_drops_legacy_rule_content_not_null_guarded():
     sql = MIGRATION_046.read_text(encoding="utf-8")
-    assert re.search(
-        r"ALTER COLUMN\s+rule_content\s+DROP NOT NULL", sql, re.IGNORECASE
-    ), "046 must drop the legacy rule_content NOT NULL so ORM inserts succeed"
+    assert re.search(r"ALTER COLUMN\s+rule_content\s+DROP NOT NULL", sql, re.IGNORECASE), (
+        "046 must drop the legacy rule_content NOT NULL so ORM inserts succeed"
+    )
     # Guarded so the create_all lineage (no rule_content column) doesn't error.
     assert "information_schema.columns" in sql
 
@@ -153,7 +153,7 @@ def test_detection_rules_lineage_covers_model():
     lineage_cols = _lineage_columns("detection_rules")
     missing = model_cols - lineage_cols
     assert not missing, (
-        "detection_rules migration lineage is missing model columns " f"{sorted(missing)} — a reconciling migration is required (see #492)"
+        f"detection_rules migration lineage is missing model columns {sorted(missing)} — a reconciling migration is required (see #492)"
     )
 
 
@@ -162,5 +162,5 @@ def test_cases_lineage_covers_model():
     lineage_cols = _lineage_columns("cases")
     missing = model_cols - lineage_cols
     assert not missing, (
-        "cases migration lineage is missing model columns " f"{sorted(missing)} — a reconciling migration is required (see #492)"
+        f"cases migration lineage is missing model columns {sorted(missing)} — a reconciling migration is required (see #492)"
     )

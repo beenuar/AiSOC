@@ -97,7 +97,7 @@ def check_runners_exist() -> list[str]:
         source = _read(runner)
         for symbol in REQUIRED_SYMBOLS:
             if not re.search(rf"^(?:async def |def |){symbol}\b", source, re.M):
-                errors.append(f"{store}: runner does not expose {symbol}; the three " f"runners are meant to share one interface")
+                errors.append(f"{store}: runner does not expose {symbol}; the three runners are meant to share one interface")
     return errors
 
 
@@ -108,7 +108,7 @@ def check_runners_are_called() -> list[str]:
         if not runner.exists():
             continue
         if not caller.exists():
-            errors.append(f"{store}: expected call site {caller.relative_to(REPO_ROOT)} " f"does not exist")
+            errors.append(f"{store}: expected call site {caller.relative_to(REPO_ROOT)} does not exist")
             continue
         source = _read(caller)
         if symbol not in source:
@@ -130,9 +130,7 @@ def check_startup_reachability() -> list[str]:
             continue
         # Called, not merely defined or imported.
         if not re.search(rf"\b{symbol}\s*\(", source):
-            errors.append(
-                f"{store}: {symbol} is never invoked in " f"{path.relative_to(REPO_ROOT)}, so migrations do not run at " f"startup"
-            )
+            errors.append(f"{store}: {symbol} is never invoked in {path.relative_to(REPO_ROOT)}, so migrations do not run at startup")
     return errors
 
 
@@ -155,7 +153,7 @@ def check_ids_are_append_only() -> list[str]:
         if len(ids) != len(set(ids)):
             errors.append(f"{store}: duplicate migration ids")
         if ids != sorted(ids):
-            errors.append(f"{store}: migration ids are not in order ({', '.join(ids)}); " f"the runner applies them in declaration order")
+            errors.append(f"{store}: migration ids are not in order ({', '.join(ids)}); the runner applies them in declaration order")
     return errors
 
 
@@ -170,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    print(f"store-migrations: OK — {len(RUNNERS)} stores have a runner, each " f"wired into a startup path")
+    print(f"store-migrations: OK — {len(RUNNERS)} stores have a runner, each wired into a startup path")
     return 0
 
 

@@ -246,7 +246,7 @@ async def purge_graph(tenant_id: uuid.UUID, *, dry_run: bool) -> StoreResult:
     try:
         async with neo4j_session() as session:
             counted = await session.run(
-                f"MATCH (n) WHERE n.tenant_id = $t AND NOT n:{labels} " "RETURN count(n) AS c",
+                f"MATCH (n) WHERE n.tenant_id = $t AND NOT n:{labels} RETURN count(n) AS c",
                 t=str(tenant_id),
             )
             record = await counted.single()
@@ -257,7 +257,7 @@ async def purge_graph(tenant_id: uuid.UUID, *, dry_run: bool) -> StoreResult:
                 # transaction is how a Neo4j offboarding runs out of heap.
                 while True:
                     deleted = await session.run(
-                        f"MATCH (n) WHERE n.tenant_id = $t AND NOT n:{labels} " "WITH n LIMIT 10000 DETACH DELETE n RETURN count(n) AS c",
+                        f"MATCH (n) WHERE n.tenant_id = $t AND NOT n:{labels} WITH n LIMIT 10000 DETACH DELETE n RETURN count(n) AS c",
                         t=str(tenant_id),
                     )
                     row = await deleted.single()

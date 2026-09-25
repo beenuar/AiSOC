@@ -75,7 +75,7 @@ class TestSubstrateExtraction:
         assert pb.steps[0].type == StepType.INVESTIGATE
 
     def test_steps_emit_in_prompt_order(self) -> None:
-        prompt = "When a high-severity alert fires, enrich the entity, " "isolate the host, then notify the SOC and create a ticket."
+        prompt = "When a high-severity alert fires, enrich the entity, isolate the host, then notify the SOC and create a ticket."
         pb = draft_from_nl_substrate(prompt)
         types = _step_types(pb)
         # Each verb should appear once, in prompt order.
@@ -151,7 +151,7 @@ class TestSubstrateExtraction:
 class TestSchemaValidity:
     def test_substrate_draft_passes_pydantic(self) -> None:
         pb = draft_from_nl_substrate(
-            "When a high-severity alert fires, enrich the entity, " "isolate the host, notify the SOC, create a ticket"
+            "When a high-severity alert fires, enrich the entity, isolate the host, notify the SOC, create a ticket"
         )
         # Round-trip via the Pydantic model — this is the contract the
         # editor consumes.

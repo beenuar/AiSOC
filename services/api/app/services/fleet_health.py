@@ -186,7 +186,7 @@ def assess_connector(row: Any, *, now: datetime | None = None) -> ConnectorHealt
         return ConnectorHealth(
             **base,
             state=HealthState.FAILED,
-            reason=(f"OAuth refresh has failed {oauth_failures} times. The grant was " f"most likely revoked; reconnect rather than wait."),
+            reason=(f"OAuth refresh has failed {oauth_failures} times. The grant was most likely revoked; reconnect rather than wait."),
             seconds_since_sync=elapsed,
             missed_intervals=missed,
         )
@@ -196,9 +196,7 @@ def assess_connector(row: Any, *, now: datetime | None = None) -> ConnectorHealt
             **base,
             state=HealthState.FAILED,
             reason=(
-                f"No successful poll in {_humanise(elapsed)} "
-                f"({missed:g} missed intervals). Alerts from this source have "
-                f"stopped arriving."
+                f"No successful poll in {_humanise(elapsed)} ({missed:g} missed intervals). Alerts from this source have stopped arriving."
             ),
             seconds_since_sync=elapsed,
             missed_intervals=missed,
@@ -208,7 +206,7 @@ def assess_connector(row: Any, *, now: datetime | None = None) -> ConnectorHealt
         return ConnectorHealth(
             **base,
             state=HealthState.DEGRADED,
-            reason=(f"{error_count} consecutive poll errors. Syncing recently but " f"not cleanly."),
+            reason=(f"{error_count} consecutive poll errors. Syncing recently but not cleanly."),
             seconds_since_sync=elapsed,
             missed_intervals=missed,
         )
@@ -217,7 +215,7 @@ def assess_connector(row: Any, *, now: datetime | None = None) -> ConnectorHealt
         return ConnectorHealth(
             **base,
             state=HealthState.DEGRADED,
-            reason=(f"Last poll {_humanise(elapsed)} ago against a " f"{_humanise(interval)} cadence ({missed:g} missed intervals)."),
+            reason=(f"Last poll {_humanise(elapsed)} ago against a {_humanise(interval)} cadence ({missed:g} missed intervals)."),
             seconds_since_sync=elapsed,
             missed_intervals=missed,
         )

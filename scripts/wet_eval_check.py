@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         "--status-out",
         type=Path,
         default=None,
-        help=("Write a JSON status file to this path so the workflow can " "branch on ``should_run``. If omitted, only stdout is used."),
+        help=("Write a JSON status file to this path so the workflow can branch on ``should_run``. If omitted, only stdout is used."),
     )
     args = parser.parse_args(argv)
 
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     is_live = has_all and not args.dry_run
 
     if args.dry_run:
-        reason = "dry-run mode: status reported as no-op. The workflow will " "not dispatch the live wet eval."
+        reason = "dry-run mode: status reported as no-op. The workflow will not dispatch the live wet eval."
     elif missing:
         reason = (
             "Missing required secret(s): " + ", ".join(missing) + ". This is expected on forks and first-run CI; configure them "
@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
             "`apps/docs/docs/operations/secrets.md`."
         )
     else:
-        reason = "All required secrets are present. Proceeding to the live " "wet-eval run."
+        reason = "All required secrets are present. Proceeding to the live wet-eval run."
 
     status = {
         "should_run": bool(is_live),
@@ -170,9 +170,9 @@ def _self_test() -> int:
     """
     cases = [
         ("no secrets configured: the workflow must not dispatch", {}, False, False),
-        ("both secrets present: the workflow dispatches", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, False, True),
+        ("both secrets present: the workflow dispatches", dict.fromkeys(_REQUIRED_SECRETS_FOR_LIVE_RUN, "x"), False, True),
         ("one secret missing: still no dispatch", {_REQUIRED_SECRETS_FOR_LIVE_RUN[0]: "x"}, False, False),
-        ("dry-run overrides present secrets", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, True, False),
+        ("dry-run overrides present secrets", dict.fromkeys(_REQUIRED_SECRETS_FOR_LIVE_RUN, "x"), True, False),
     ]
     ok = True
     saved = {name: os.environ.get(name) for name in _REQUIRED_SECRETS_FOR_LIVE_RUN}
