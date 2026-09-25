@@ -52,14 +52,85 @@ class TestDeclarationsMatchReality:
                 continue
             assert contract.verification_gap.strip(), f"{capability} is {contract.impact.value} impact with no probe and no stated reason"
 
+    def test_every_dispatchable_verb_either_probes_or_says_why_not(self) -> None:
+        """Widened from HIGH/SEVERE to every verb a probe could be written for.
+
+        Eleven of the fourteen response verbs the playbook engine bridges had
+        no probe. That failed *safe* — the verifier returns UNVERIFIED naming
+        the missing verifier — so nothing was being certified falsely. What it
+        did not do was distinguish the three answers that absence can have:
+
+        * nobody has written it yet;
+        * the vendor exposes no read-back;
+        * there is nothing to read back, because the action changes nothing
+          or because the response genuinely is the confirmation.
+
+        Those are the same silence, and the first one is the only one that is
+        a gap. Requiring a sentence turns the next one into a decision
+        somebody made in review, which is the whole reason the field exists.
+
+        Scoped to capabilities with an ``ActionType`` because probes are keyed
+        on it — see the sibling test for the ones that structurally cannot
+        have one.
+        """
+        dispatchable = {a.value for a in ActionType}
+        silent = [
+            capability
+            for capability, contract in CAPABILITY_CONTRACTS.items()
+            if capability in dispatchable and not contract.has_verification_probe and not contract.verification_gap.strip()
+        ]
+        assert silent == [], (
+            f"no probe and no reason recorded for: {sorted(silent)}. "
+            f"Write the reason — 'the vendor exposes no read-back', 'the "
+            f"response is the confirmation', 'a read changes nothing' are all "
+            f"answers; saying nothing is not."
+        )
+
+    def test_a_capability_with_no_action_type_cannot_claim_a_probe(self) -> None:
+        """Probes are keyed on ``ActionType``, so a verb without one is
+        unverifiable by construction rather than by vendor limitation.
+
+        The dispatcher already reports this honestly at runtime. Asserting it
+        here stops a contract from *declaring* a probe the verifier could
+        never reach, which would be a claim with nothing behind it.
+        """
+        dispatchable = {a.value for a in ActionType}
+        for capability, contract in CAPABILITY_CONTRACTS.items():
+            if capability in dispatchable:
+                continue
+            assert not contract.has_verification_probe, (
+                f"{capability} declares a verification probe and has no ActionType to key one on, so nothing can ever run it"
+            )
+
     def test_unverifiable_actions_are_not_automatic(self) -> None:
-        """Unverifiable means not autonomous, whatever the confidence."""
+        """Unverifiable means not autonomous, whatever the confidence.
+
+        The waiver below MODERATE is not a blanket one. It exists for the
+        case where the response genuinely *is* the confirmation — a created
+        ticket returns the identifier the vendor allocated, and it could not
+        allocate one without creating the record — so an automatic verb that
+        takes the waiver has to say which case it is in. ``run_av_scan`` is
+        why: it is LOW and automatic and Defender replies ``Pending``, so the
+        response is the one thing it certainly is not, and a blanket waiver
+        let it ship with nothing checking a sweep had run.
+        """
         for capability, contract in CAPABILITY_CONTRACTS.items():
             if contract.approval != ApprovalRequirement.AUTOMATIC:
                 continue
-            if contract.impact in (ActionImpact.READ_ONLY, ActionImpact.LOW):
-                # A created ticket returns its own id; the response is the
-                # confirmation.
+            if contract.has_verification_probe:
+                continue
+            if contract.impact is ActionImpact.READ_ONLY:
+                # Not a waiver. A read leaves nothing behind, so there is no
+                # effect for a probe to find — a property of the tier rather
+                # than a judgement about a particular verb, asserted once
+                # here instead of restated on each of them.
+                continue
+            if contract.impact is ActionImpact.LOW:
+                assert contract.verification_gap.strip(), (
+                    f"{capability} is automatic at {contract.impact.value} impact and takes the "
+                    f"'the response is the confirmation' waiver without saying so. State it on "
+                    f"the contract, or give the verb a probe."
+                )
                 continue
             assert contract.has_verification_probe, (
                 f"{capability} is automatic at {contract.impact.value} impact with nothing checking the effect"
