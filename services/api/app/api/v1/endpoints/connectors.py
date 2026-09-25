@@ -607,7 +607,14 @@ async def _proxy_test_connection(
         logger.error(
             "connectors_service.test.service_auth_rejected status=%s connector_type=%s",
             resp.status_code,
-            _safe_connector_type(connector_type),
+            # Sanitised inline rather than through `_safe_connector_type`.
+            # CodeQL's taint tracker does not follow the helper across the
+            # function boundary but does recognise this replace chain, so the
+            # helper form raises py/log-injection (#924) on a value that was
+            # already `_CONNECTOR_TYPE_RE`-validated at the top of this
+            # function. Inline keeps the property visible to the scanner and
+            # to the next reader.
+            str(connector_type).replace("\r", "").replace("\n", " ")[:100],
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
