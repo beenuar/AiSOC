@@ -1,40 +1,46 @@
 name: Public papers (regenerate PDFs)
 
-# Phase 4.3 — closes the "CI does not yet rebuild PDFs automatically"
-# TODO that has been sitting in apps/web/public/papers/README.md since
-# v8.0.
+# Renders every white paper to PDF so a markdown change that breaks
+# rendering is caught, and reports any committed PDF that is older than
+# its source.
 #
-# Triggers:
-#   * On every push to main that touches a paper's markdown source.
-#   * On every PR that touches a paper's source — we only build & upload
-#     in PR mode (no commit-back) so reviewers can preview the rendered
-#     PDF from the workflow artifacts.
-#   * Manually via workflow_dispatch.
+# This workflow does not commit anything. It used to push refreshed PDFs
+# straight to main, which stopped being possible when main became
+# branch-protected: the push is rejected with GH006 and the run fails.
+# Because the commit-back step was skipped on pull requests, it passed on
+# every branch and failed only on main, so the breakage was invisible to
+# anyone opening a PR. Redirecting it to open a pull request instead is
+# not available either — this repository has Actions set to read-only
+# permissions with PR creation disabled.
 #
-# Output:
-#   * Always: `papers-pdf-${{ github.sha }}` artifact bundle.
-#   * On push to main only: a follow-up commit `chore: refresh public
-#     paper PDFs [skip ci]` if any rendered PDF differs from what's
-#     checked in. We never amend; we add a fresh commit.
+# So staleness is reported rather than repaired, and refreshing a PDF is
+# a local `make papers` followed by a commit. The check compares the
+# digest of each markdown source against the digest recorded when its PDF
+# was last rendered, held in apps/web/public/papers/render-manifest.json.
+# It deliberately does not compare PDF bytes: WeasyPrint stamps a
+# creation timestamp into its output and glyph metrics depend on the
+# host's installed fonts, so two correct renders of one source differ.
 
 on:
   push:
     branches: [main]
     paths:
       - "apps/web/content/papers/**.md"
+      - "apps/web/public/papers/render-manifest.json"
       - "scripts/render_white_paper.py"
       - "Makefile"
       - ".github/workflows/papers.yml"
   pull_request:
     paths:
       - "apps/web/content/papers/**.md"
+      - "apps/web/public/papers/render-manifest.json"
       - "scripts/render_white_paper.py"
       - "Makefile"
       - ".github/workflows/papers.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: papers-${{ github.ref }}
@@ -46,19 +52,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          # We need full history so the auto-commit step's `git push`
-          # has a sane base to diff against.
-          fetch-depth: 0
-          # The auto-commit step pushes back to main, so the
-          # GITHUB_TOKEN persisted on the checkout must be the writeable
-          # one (default true).
-          persist-credentials: true
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+
+      # Ahead of the gate, so a staleness check that has stopped detecting
+      # anything cannot report the tree clean.
+      - name: The staleness check still detects what it claims to
+        run: python3 scripts/render_white_paper.py --self-test
+
+      # Runs before anything is rendered. `make papers` rewrites the
+      # manifest, so checking afterwards would compare the tree against
+      # itself and pass whatever the committed PDFs contain.
+      - name: Every committed PDF is current with its source
+        run: python3 scripts/render_white_paper.py --check
 
       # WeasyPrint needs Pango / Cairo / GLib at the system level — the
       # same native deps that services/api/Dockerfile installs. Pinning
@@ -72,55 +81,39 @@ jobs:
             libcairo2 libgdk-pixbuf-2.0-0 \
             libffi-dev shared-mime-info fonts-inter
 
+      # Upper-bounded so a major release cannot change rendering without
+      # someone choosing it. The exact version is not pinned because
+      # nothing compares rendered bytes.
       - name: Install render_white_paper Python deps
         run: |
           python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet 'markdown>=3.5' 'weasyprint>=60'
+          python -m pip install --quiet 'markdown>=3.5,<4' 'weasyprint>=60,<70'
 
       - name: Render every paper (make papers)
         run: make papers
 
-      - name: Diff rendered PDFs vs. tree
-        id: diff
+      - name: Every source produced a PDF
         run: |
           set -euo pipefail
-          if git diff --quiet -- 'apps/web/public/papers/*.pdf'; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No paper PDFs changed."
-          else
-            echo "changed=true"  >> "$GITHUB_OUTPUT"
-            echo "::notice::The following PDFs changed and will be committed:"
-            git diff --name-only -- 'apps/web/public/papers/*.pdf'
+          missing=0
+          for src in apps/web/content/papers/*.md; do
+            name="$(basename "${src%.md}")"
+            case "$name" in _*) continue ;; esac
+            if [ ! -s "apps/web/public/papers/$name.pdf" ]; then
+              echo "::error::$src rendered no PDF at apps/web/public/papers/$name.pdf"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "$missing paper(s) failed to render."
+            exit 1
           fi
+          echo "Every paper source rendered to a non-empty PDF."
 
-      - name: Upload rendered PDFs as artifact (always)
+      - name: Upload rendered PDFs as artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: papers-pdf-${{ github.sha }}
           path: apps/web/public/papers/*.pdf
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
-
-      # Only push back on main — never on PRs (we cannot trust PRs from
-      # forks with write tokens, and even for same-repo PRs the right
-      # surface is the artifact + a manual rebase).
-      - name: Commit refreshed PDFs back to main
-        if: |
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          steps.diff.outputs.changed == 'true'
-        env:
-          GIT_AUTHOR_NAME: aisoc-papers-bot
-          GIT_AUTHOR_EMAIL: papers-bot@tryaisoc.com
-          GIT_COMMITTER_NAME: aisoc-papers-bot
-          GIT_COMMITTER_EMAIL: papers-bot@tryaisoc.com
-        run: |
-          set -euo pipefail
-          git add apps/web/public/papers/*.pdf
-          git commit -m "chore(papers): refresh rendered PDFs from $(git rev-parse --short HEAD) [skip ci]"
-          # If the underlying ref has moved while we were rendering,
-          # rebase onto the new HEAD. The PDF output is deterministic
-          # for a given markdown source, so re-rendering on the new
-          # base would produce the same bytes — a rebase is safe.
-          git pull --rebase origin main
-          git push origin HEAD:main
