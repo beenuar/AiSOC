@@ -20,8 +20,19 @@ import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { ServerConfig } from "../src/config.js";
-import { install } from "../src/installers/index.js";
+import { parseArgs, resolveConfig, type ServerConfig } from "../src/config.js";
+import { install as rawInstall, resolveEntryPath } from "../src/installers/index.js";
+
+/**
+ * A stand-in for this build's `dist/index.js`. Pinned rather than resolved so
+ * assertions don't depend on where the repo happens to be checked out — and
+ * so a test can never pass by accident on a machine where the real path
+ * contains `node_modules`.
+ */
+const SOURCE_ENTRY = "/opt/aisoc/services/mcp/dist/index.js";
+
+const install: typeof rawInstall = (opts) =>
+  rawInstall({ entryPath: SOURCE_ENTRY, ...opts });
 
 let tmpDir: string;
 
@@ -54,8 +65,8 @@ describe("install (real write)", () => {
     expect(written).toEqual({
       mcpServers: {
         aisoc: {
-          command: "npx",
-          args: ["-y", "@aisoc/mcp", "serve"],
+          command: "node",
+          args: ["/opt/aisoc/services/mcp/dist/index.js", "serve"],
           env: {
             AISOC_URL: "https://aisoc.example.com",
             AISOC_API_KEY: "aisoc_test_key",
@@ -92,7 +103,7 @@ describe("install (real write)", () => {
     const written = JSON.parse(fs.readFileSync(configPath, "utf8"));
     expect(written.editor).toEqual({ theme: "dark" });
     expect(written.mcpServers.someOther).toEqual({ command: "true" });
-    expect(written.mcpServers.aisoc.command).toBe("npx");
+    expect(written.mcpServers.aisoc.command).toBe("node");
   });
 
   it("is idempotent: a second identical install reports no change", () => {
@@ -198,19 +209,64 @@ describe("install host=cody (no file write)", () => {
   });
 });
 
-describe("buildServerSnippet shape", () => {
-  it("always uses npx -y so users don't need a global install", () => {
-    const result = install({
+describe("launcher selection", () => {
+  const snippetFor = (
+    over: Partial<Parameters<typeof install>[0]>,
+  ): Record<string, unknown> =>
+    install({
       host: "claude",
       cfg: baseCfg,
       configPath: path.join(tmpDir, "claude.json"),
       dryRun: true,
-    });
-    expect(result.snippet.command).toBe("npx");
-    expect(result.snippet.args).toEqual(["-y", "@aisoc/mcp", "serve"]);
+      ...over,
+    }).snippet;
+
+  it("defaults a source build to a direct node invocation of this checkout", () => {
+    // The regression this pins: `npx -y @aisoc/mcp` was written
+    // unconditionally, so installing from a monorepo build produced a config
+    // that parsed and reported success but could never start — @aisoc/mcp is
+    // not on npm, so `npx` 404s inside the host at launch time.
+    const snippet = snippetFor({});
+    expect(snippet.command).toBe("node");
+    expect(snippet.args).toEqual([SOURCE_ENTRY, "serve"]);
   });
 
-  it("propagates the verbose flag into AISOC_VERBOSE", () => {
+  it("defaults to npx when running from an installed package", () => {
+    const snippet = snippetFor({
+      entryPath: "/home/u/.npm/_npx/abc/node_modules/@aisoc/mcp/dist/index.js",
+    });
+    expect(snippet.command).toBe("npx");
+    expect(snippet.args).toEqual(["-y", "@aisoc/mcp", "serve"]);
+  });
+
+  it("honours an explicit --launcher override in both directions", () => {
+    expect(snippetFor({ launcher: "npx" }).command).toBe("npx");
+
+    const forcedNode = snippetFor({
+      launcher: "node",
+      entryPath: "/home/u/node_modules/@aisoc/mcp/dist/index.js",
+    });
+    expect(forcedNode.command).toBe("node");
+    expect(forcedNode.args).toEqual([
+      "/home/u/node_modules/@aisoc/mcp/dist/index.js",
+      "serve",
+    ]);
+  });
+
+  it("writes an absolute entry path, since the host launches from an arbitrary cwd", () => {
+    const args = snippetFor({ launcher: "node" }).args as string[];
+    expect(path.isAbsolute(args[0])).toBe(true);
+  });
+
+  it("resolveEntryPath points at dist/index.js, not at this module", () => {
+    // `install` is reached from `dist/installers/index.js` at runtime, so the
+    // entry is one directory up. Getting this wrong would write a config
+    // pointing at a file with no shebang and no CLI.
+    expect(path.basename(resolveEntryPath())).toBe("index.js");
+    expect(path.basename(path.dirname(resolveEntryPath()))).not.toBe("installers");
+  });
+
+  it("propagates the verbose flag under the name resolveConfig actually reads", () => {
     const cfgVerbose: ServerConfig = { ...baseCfg, verbose: true };
     const result = install({
       host: "claude",
@@ -218,8 +274,13 @@ describe("buildServerSnippet shape", () => {
       configPath: path.join(tmpDir, "claude.json"),
       dryRun: true,
     });
-    expect((result.snippet.env as Record<string, string>).AISOC_VERBOSE).toBe(
-      "1",
-    );
+    const env = result.snippet.env as Record<string, string>;
+    // Asserted against the consumer rather than against a second copy of the
+    // producer's own spelling: the previous test pinned AISOC_VERBOSE, which
+    // `resolveConfig` never reads, so it passed while the feature was dead.
+    expect(env.AISOC_MCP_VERBOSE).toBe("1");
+    expect(
+      resolveConfig(parseArgs([]), env as unknown as NodeJS.ProcessEnv).verbose,
+    ).toBe(true);
   });
 });

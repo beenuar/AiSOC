@@ -39,6 +39,7 @@
   "files": [
     "dist",
     "src",
+    "server.json",
     "README.md"
   ],
   "scripts": {

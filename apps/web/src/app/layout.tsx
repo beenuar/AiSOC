@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { themeBootstrapScript } from '@/components/theme/themeScript';
 import { docs } from '@/lib/docs';
 import { DISCOVERY_KEYWORDS, getPublicSiteUrl } from '@/lib/site';
+import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -50,11 +51,11 @@ export const metadata: Metadata = {
     locale: 'en_US',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
         alt: 'AiSOC — open-source AI SOC platform for security operations teams',
-        type: 'image/svg+xml',
+        type: 'image/png',
       },
     ],
   },
@@ -126,7 +127,7 @@ const jsonLd = {
       installUrl: docs('quickstart'),
       releaseNotes: 'https://github.com/beenuar/AiSOC/releases',
       featureList: [
-        'Click-and-connect 26 security sources (EDR, SIEM, cloud, IAM, SaaS) with encrypted credential vault',
+        `Click-and-connect ${CONNECTOR_COUNT} security sources (EDR, SIEM, cloud, IAM, SaaS) with encrypted credential vault`,
         'Real-time threat detection and alert fusion',
         'Entity risk-based alerting (RBA) queue',
         'Autonomous alert triage agent with confidence-scored verdicts',
@@ -144,7 +145,7 @@ const jsonLd = {
         'STIX 2.1 / TAXII 2.1 publishing and air-gap deployment configuration',
         'Self-hosted deployment with Docker Compose',
       ],
-      screenshot: `${siteUrl}/og-image.svg`,
+      screenshot: `${siteUrl}/og-image.png`,
     },
     {
       '@type': 'WebSite',

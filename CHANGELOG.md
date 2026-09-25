@@ -50,6 +50,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused, loudly, at startup on one side and per request on the other. Full
   procedure: `apps/docs/docs/operations/ingest-authentication.md`.
 
+### Discoverability: the machine-readable surface, and an installer that wrote a config nothing could start
+
+A project an AI agent cannot read accurately is a project it will describe
+inaccurately, and the one-command install that was supposed to be the easy
+path did not work at all.
+
+- **`aisoc-mcp install` wrote `npx -y @aisoc/mcp serve` unconditionally, from
+  every source build.** `@aisoc/mcp` is not on npm — the release workflow packs
+  it on every tag and the upload is blocked on registry credentials — so the
+  installer's output was a config file that parsed, wrote cleanly, reported
+  success, and could never launch. The host surfaced "server failed to start"
+  with no reason, at the point the user had already decided to adopt it. The
+  existing test asserted the broken behaviour verbatim ("always uses `npx -y`
+  so users don't need a global install"), so a full suite proved it.
+
+  `install` now resolves a launcher: from a monorepo build it writes
+  `node <absolute path to dist/index.js> serve`, from an installed package it
+  writes the `npx` form, and `--launcher node|npx|auto` forces either. Forcing
+  `npx` today prints why it will not start. Verified end to end by launching
+  the generated config and completing an MCP handshake against it.
+
+- **`install --verbose` wrote `AISOC_VERBOSE` while the server reads
+  `AISOC_MCP_VERBOSE`,** so the one setting whose entire purpose is diagnosing
+  a misbehaving server was dead in every installed config. Its test asserted
+  the producer's own spelling rather than checking the consumer reads it; the
+  replacement runs the written environment back through `resolveConfig`.
+
+- **`llms.txt` and `llms-full.txt`** now publish at the documentation root, the
+  convention LLM-backed tools fetch instead of scraping a rendered navigation
+  tree. Both are **generated** by `scripts/generate_llms_txt.py` from the
+  artefacts that already own each figure — the connector registry and the
+  detection truth table — because a summary written *for* machine readers is
+  the worst place for a hand-typed count to rot, and this repository has
+  published 47 connectors against a real 84 before. `--check` is a CI gate and
+  the generator carries a self-test proving it refuses an empty tree.
+
+- **The documentation site's Open Graph card was undecodable.**
+  `img/aisoc-social-card.png` held 277 bytes of SVG, so every crawler was
+  served `image/png` with SVG bytes and rendered no image at all; `favicon.ico`
+  had the same defect. Both are now real PNGs rendered from committed SVG
+  sources by `apps/web/scripts/render-og-images.mjs`.
+
+- **The marketing Open Graph card named the commercial parent.** It read
+  "Built by Cyble" and "Free forever" beneath a stale "v3 milestone" pill —
+  on the open-source project's card, which a self-hoster shares when linking
+  their own deployment. Rewritten without any of the three, and the metadata
+  now points at a PNG: Slack, LinkedIn, Facebook and X all decline to render
+  an SVG `og:image`, so the previous `og-image.svg` produced no card anywhere.
+  The landing page's OG description also sent readers to a commercial hostname;
+  removed.
+
+- **schema.org `SoftwareApplication` and `WebSite` markup** on the docs site,
+  carrying only independently checkable assertions — MIT licence, genuinely
+  zero price, canonical repository. No `aggregateRating` or `review`, because
+  no such data exists. The marketing site's existing markup hard-coded
+  "26 security sources" and now reads the generated `CONNECTOR_COUNT`.
+
+- **`services/mcp/server.json`**, an MCP registry manifest validated against
+  the published `2025-12-11` schema. It deliberately declares **no `packages`
+  entry** — optional in the schema — so a directory listing sends a reader to
+  the source rather than to an install command that would 404.
+  `tests/registry.test.ts` asserts the manifest and the README's
+  "ready, unpublished" line can only change together.
+
+- The MCP README and `docs/integrations/mcp.md` promised npm publication "in
+  v8.0" three major versions after v8.0 shipped, claimed 50 tests against a
+  real 124, and asserted an audit trail that `services/mcp/src/telemetry.ts`
+  already documents as untrue — `audit_middleware` records no row for any of
+  the ten read tools. Corrected, along with the competitor-framed "moat" line.
+
+
 ### The documented quick start broke the product, and then the product had nothing to show
 
 Every item below passed the existing test suite and failed on a real

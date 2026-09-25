@@ -82,14 +82,14 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   openGraph: {
     title: 'AiSOC — open-source AI Security Operations Center',
-    description: `Four agents, ${CONNECTOR_COUNT} connectors, a public benchmark, and air-gap on a flag. Self-host the full stack under MIT, or join the managed waitlist at tryaisoc.com.`,
+    description: `Four agents, ${CONNECTOR_COUNT} connectors, a public benchmark, and air-gap on a flag. Self-host the full stack under MIT.`,
     url: siteUrl,
     siteName: 'AiSOC',
     type: 'website',
     locale: 'en_US',
     images: [
       {
-        url: '/og-image.svg',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
         alt: `AiSOC — open-source AI SOC with four specialised agents and ${CONNECTOR_COUNT} connectors`,
@@ -100,7 +100,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AiSOC — open-source AI Security Operations Center',
     description: `Four agents. ${CONNECTOR_COUNT} connectors. A public benchmark. Air-gap on a flag. MIT-licensed.`,
-    images: ['/og-image.svg'],
+    images: ['/og-image.png'],
   },
 };
 

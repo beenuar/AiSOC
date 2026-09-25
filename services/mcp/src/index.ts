@@ -22,7 +22,13 @@ import process from "node:process";
 import { type ParsedArgs, parseArgs, packageVersion, resolveConfig, makeLogger } from "./config.js";
 import { runDoctor, printDoctorReport } from "./doctor.js";
 import { runServer } from "./server.js";
-import { install, knownConfigPaths, type Host } from "./installers/index.js";
+import {
+  install,
+  knownConfigPaths,
+  resolveEntryPath,
+  type Host,
+  type Launcher,
+} from "./installers/index.js";
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
@@ -106,6 +112,10 @@ async function cmdInstall(args: ParsedArgs): Promise<void> {
         "",
         "  --aisoc-url <url>          AiSOC API base URL (default http://localhost:8081)",
         "  --api-key <token>          API key to embed (or set AISOC_API_KEY)",
+        "  --launcher <auto|node|npx> How the host should start the server. Default auto:",
+        "                             `node <abs path>` from a monorepo build, `npx` from",
+        "                             an installed package. `npx` only resolves once",
+        "                             @aisoc/mcp is published.",
         "  --dry-run                  Show what would be written without changing files",
         "  --list-paths               Print where each host's config lives, as JSON",
         "",
@@ -115,15 +125,37 @@ async function cmdInstall(args: ParsedArgs): Promise<void> {
     return;
   }
 
+  const launcherFlag = String(args.flags.launcher ?? "auto").toLowerCase();
+  if (!isLauncher(launcherFlag)) {
+    process.stderr.write(
+      `install failed: --launcher must be one of auto, node, npx (got ${launcherFlag || "empty"}).\n`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+
   const cfg = resolveConfig(args);
   const dryRun = args.flags["dry-run"] === true;
   let result;
   try {
-    result = install({ host: hostFlag, cfg, dryRun });
+    result = install({ host: hostFlag, cfg, dryRun, launcher: launcherFlag });
   } catch (err) {
     process.stderr.write(`install failed: ${(err as Error).message}\n`);
     process.exitCode = 1;
     return;
+  }
+
+  // Say which launcher was chosen and why. An `npx` entry written from a
+  // source build is the one failure mode that looks like success right up
+  // until the host tries to start it, so make the choice visible here
+  // rather than leaving the user to read the JSON.
+  if (result.snippet.command === "npx") {
+    process.stderr.write(
+      "note: wrote an `npx -y @aisoc/mcp` entry. That resolves only after the\n" +
+        "      package is published to npm; publication is blocked on registry\n" +
+        "      credentials. Re-run with `--launcher node` to point the host at\n" +
+        `      this build directly (${resolveEntryPath()}).\n`,
+    );
   }
 
   if (dryRun) {
@@ -142,6 +174,10 @@ function isHost(s: string): s is Host {
   return s === "claude" || s === "cursor" || s === "cody" || s === "continue";
 }
 
+function isLauncher(s: string): s is Launcher {
+  return s === "auto" || s === "node" || s === "npx";
+}
+
 // ---------------------------------------------------------------------------
 // help
 // ---------------------------------------------------------------------------
@@ -152,7 +188,8 @@ function printHelp(): void {
       "@aisoc/mcp — connect AiSOC to MCP-aware assistants",
       "",
       "Usage:",
-      "  npx @aisoc/mcp <command> [options]",
+      "  node dist/index.js <command> [options]   # monorepo source build (works today)",
+      "  npx -y @aisoc/mcp <command> [options]    # once published to npm",
       "",
       "Commands:",
       "  serve              Run the stdio MCP server (default).",
@@ -168,10 +205,19 @@ function printHelp(): void {
       "  --timeout <ms>         Per-request timeout. Env: AISOC_TIMEOUT_MS. Default 20000.",
       "  --verbose              Log lifecycle events to stderr.",
       "",
+      "Install options:",
+      "  --host <h>             claude | cursor | continue | cody",
+      "  --launcher <l>         auto (default) | node | npx. `auto` writes a direct",
+      "                         `node <abs path>` entry from a source build and `npx`",
+      "                         from an installed package. @aisoc/mcp is not yet on",
+      "                         npm — publication is blocked on registry credentials.",
+      "  --dry-run              Print the config entry instead of writing it.",
+      "  --list-paths           Print each host's config location as JSON.",
+      "",
       "Examples:",
-      "  npx @aisoc/mcp install --host claude --aisoc-url https://aisoc.acme.corp --api-key aisoc_xxxx",
-      "  AISOC_URL=https://aisoc.acme.corp AISOC_API_KEY=aisoc_xxxx npx @aisoc/mcp doctor",
-      "  npx @aisoc/mcp serve   # invoked by the host, not by you",
+      "  node dist/index.js install --host claude --aisoc-url https://aisoc.acme.corp --api-key aisoc_xxxx",
+      "  AISOC_URL=https://aisoc.acme.corp AISOC_API_KEY=aisoc_xxxx node dist/index.js doctor",
+      "  node dist/index.js serve   # invoked by the host, not by you",
       "",
     ].join("\n"),
   );
