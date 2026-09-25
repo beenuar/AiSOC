@@ -20,6 +20,7 @@ the whole design problem:
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator
 
 import pytest
 from app.services import promoter
@@ -45,7 +46,7 @@ class _CapturingLogger:
 
 
 @pytest.fixture
-def captured(monkeypatch: pytest.MonkeyPatch) -> _CapturingLogger:
+def captured(monkeypatch: pytest.MonkeyPatch) -> Iterator[_CapturingLogger]:
     log = _CapturingLogger()
     monkeypatch.setattr(promoter, "logger", log)
     reset_not_promoted_state()

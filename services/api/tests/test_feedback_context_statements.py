@@ -18,21 +18,24 @@ from typing import Any
 
 import pytest
 from app.api.v1.endpoints import feedback
+from app.models.alert import Alert
 from fastapi import HTTPException
 
 TENANT = uuid.UUID("77777777-7777-7777-7777-777777777777")
 OTHER_TENANT = uuid.UUID("99999999-9999-9999-9999-999999999999")
 
 
-class FakeAlert:
-    """Only the attributes `_statement_context` reads."""
+def alert(**kw: Any) -> Alert:
+    """A transient `Alert`, not a stand-in for one.
 
-    def __init__(self, **kw: Any) -> None:
-        self.rule_id = kw.get("rule_id")
-        self.rule_name = kw.get("rule_name")
-        self.affected_hosts = kw.get("affected_hosts", [])
-        self.affected_users = kw.get("affected_users", [])
-        self.raw_event = kw.get("raw_event", {})
+    The first version of this helper was a hand-written fake carrying the five
+    attributes `_statement_context` reads, which is exactly how the bug it
+    tests got written: the API's `Alert` has no `hostname` or `username`
+    columns — it denormalises into `affected_hosts` / `affected_users` and
+    keeps process and hash only inside `raw_event` — and a fake that defines
+    whatever the code asks for can never say so.
+    """
+    return Alert(**kw)
 
 
 class FakeUser:
@@ -48,13 +51,13 @@ class TestStatementContext:
         # denormalises into `affected_hosts` / `affected_users`. Reading
         # attributes that do not exist would have raised on every tagged
         # override.
-        ctx = feedback._statement_context(FakeAlert(affected_hosts=["BACKUP01"], affected_users=["svc_backup"]))
+        ctx = feedback._statement_context(alert(affected_hosts=["BACKUP01"], affected_users=["svc_backup"]))
 
         assert ctx["hostname"] == "BACKUP01"
         assert ctx["user_name"] == "svc_backup"
 
     def test_falls_back_to_the_raw_event_when_the_lists_are_empty(self) -> None:
-        ctx = feedback._statement_context(FakeAlert(raw_event={"hostname": "WEB-02", "user": "root"}))
+        ctx = feedback._statement_context(alert(raw_event={"hostname": "WEB-02", "user": "root"}))
 
         assert ctx["hostname"] == "WEB-02"
         assert ctx["user_name"] == "root"
@@ -62,19 +65,19 @@ class TestStatementContext:
     def test_recovers_the_process_and_hash_a_binary_scope_needs(self) -> None:
         # `binary`-scoped reasons (known_admin_tool, business_application) key
         # on the process or hash, and neither is a column.
-        ctx = feedback._statement_context(FakeAlert(raw_event={"process_name": "powershell.exe", "sha256": "a" * 64}))
+        ctx = feedback._statement_context(alert(raw_event={"process_name": "powershell.exe", "sha256": "a" * 64}))
 
         assert ctx["process_name"] == "powershell.exe"
         assert ctx["hash_sha256"] == "a" * 64
 
     def test_carries_the_rule_identity_a_rule_scope_needs(self) -> None:
-        ctx = feedback._statement_context(FakeAlert(rule_id="RULE-1", rule_name="Suspicious PowerShell"))
+        ctx = feedback._statement_context(alert(rule_id="RULE-1", rule_name="Suspicious PowerShell"))
 
         assert ctx["rule_id"] == "RULE-1"
         assert ctx["rule_name"] == "Suspicious PowerShell"
 
     def test_an_empty_alert_yields_nulls_rather_than_raising(self) -> None:
-        ctx = feedback._statement_context(FakeAlert())
+        ctx = feedback._statement_context(alert())
 
         assert set(ctx) == {
             "rule_id",
@@ -87,7 +90,7 @@ class TestStatementContext:
         assert all(v is None for v in ctx.values())
 
     def test_non_string_values_are_ignored_not_stringified(self) -> None:
-        ctx = feedback._statement_context(FakeAlert(affected_hosts=[None, 42, "REAL-HOST"], raw_event={"process_name": {"x": 1}}))
+        ctx = feedback._statement_context(alert(affected_hosts=[None, 42, "REAL-HOST"], raw_event={"process_name": {"x": 1}}))
 
         assert ctx["hostname"] == "REAL-HOST"
         assert ctx["process_name"] is None
