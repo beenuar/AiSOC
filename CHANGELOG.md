@@ -7,7 +7,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/generate_corpus_stats.py`** — generates
+  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
+  engine ruleset, the generated detection truth table, and the marketplace
+  index, reconciling all three against each other and refusing to publish if
+  they disagree. Every landing surface imports the constants, so none can
+  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
+  `--self-test` hand-edits the artefact and requires the drift to be caught.
+  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
+  fields, and the UI leads with the executable count.
+- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
+  the way a count can, so the retraction is gated instead. No published
+  surface may assert the legacy harness runs the production grouping; any
+  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
+  suite card may not be declared `kind: 'measurement'`; and every surface
+  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
+  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
+  test asserts against its own measurement — so the chain from measurement
+  to published prose has no hand-copied link. A paragraph that dates or
+  negates the claim is exempt, so the retraction can quote the wording it
+  retracts.
+
+- **The playbook parity gate now reads every declaration of the step
+  vocabulary, wherever it is.** `scripts/check_playbook_schema_parity.py`
+  compared the engine against `packages/types/src/playbook.ts` and never
+  opened `apps/web`; naming the editor's file here would have fixed that file
+  and left the next one free. The TypeScript half is a scan: every `.ts` and
+  `.tsx` file in the tree is parsed for literal collections of step-type
+  names, and any collection overlapping the engine's vocabulary must either
+  match it exactly or be a recorded subset with a reason, checked in both
+  directions so an exemption that stops being needed fails the build. The
+  editor's execution annotations are compared against the schema's
+  `x-aisoc-execution` in both directions as well, so a surface cannot tell an
+  author a step will run when the contract says it will not. `--list` prints
+  what the scan credited, not only what it flagged, and the gate refuses to
+  report agreement when it finds no declaration at all.
+
+  Against `origin/main` it reports 56 disagreements across all five
+  vocabularies; against this tree it credits five declarations, each complete.
+
+  Two limits are stated rather than left implicit: a collection overlapping
+  the vocabulary by fewer than two members is not treated as one, and a list
+  derived at runtime is not a literal and is not seen — which is the shape the
+  gate wants, because a derived list cannot drift. A file the reader cannot
+  parse to the end is never silently skipped: it is checked for step-type
+  names in its raw bytes first, and the gate refuses the tree if it finds any.
+
+- **A WCAG AA sweep over all twenty-two inspector forms.** The labels in
+  `SchemaForm` and `StepInspector` sat beside their controls with no
+  association, requiredness was an `aria-hidden` asterisk, help text was
+  unreferenced, and the error summary named fields it could not be reached
+  from. Controls now carry ids, labels `htmlFor`, `aria-required`,
+  `aria-invalid` and `aria-describedby`; errors are reported per field as well
+  as in the summary; the condition and params groups are fieldsets. The sweep
+  also caught `<ul role="alert">`, which is not an allowed role for a list and
+  left its items without a list parent.
+
+### Changed
+
+- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
+  list named one compliance page, which is why `ROADMAP.md` drifted with CI
+  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
+  **row total** is compared as well as the GATED/PARTIAL split, and a figure
+  the prose explicitly dates ("the count at that time") is exempt so history
+  need not be rewritten.
+- **`check_scoreboard.py --check` verifies `agent_version` against
+  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
+  freshness gate reads only the date — which a refresh keeps current — so a
+  row could be two days old and still labelled two majors behind.
+
 ### Fixed
+
+- **A retracted benchmark figure was still badged "Real measurement".**
+  `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
+  the harness that produced it groups on four tiers of `(rule_id, host,
+  user)` while the shipping `RawAlert.correlation_key()` groups on
+  `{tenant}:{entity}:{tactic}`, so it does not merely re-implement fusion's
+  grouping, it implements *different* grouping. The retraction reached one
+  surface of five. `BenchmarkResults.tsx` rendered a green **"Real
+  measurement"** badge on `0.753` with a blurb claiming the harness used the
+  production rules, "same logic"; `benchmarks/alert-reduction.md`
+  (`sidebar_position: 1`) called it a "faithful in-harness re-implementation"
+  and headlined 75.3 %; `ComparisonTable.tsx` qualified it as "measured on
+  fixed noisy stream". Two more were found while gating the invariant:
+  `benchmark-methodology.md`, and `benchmark.md` itself, which re-asserted
+  the claim in its own intro blockquote. All five now carry the wording
+  `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
+  figure measured against the key the product actually runs.
+- **The landing page published three different wrong corpus counts.**
+  "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
+  are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
+  community items" (7,155), and `218 rules across 5 categories` on the
+  contributor leaderboard (833 across 6). The 6,998 figure also quoted the
+  imported corpus as the detection capability, presenting quarantined rules
+  as executable.
+- **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
+  128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
+  sentence that tells the reader to recount with the script "rather than
+  trusting a figure quoted in prose — this line has gone stale before".
+  `CLAIM_TO_GATE_MATRIX.md` carried a stale executable-rule figure (939) in
+  a row note. The scoreboard's newest substrate row was labelled `v8.1.1`
+  while `VERSION` read `10.0.0`; it is refreshed from a fresh deterministic
+  run (0.97, unchanged) and now carries the tree's version. The scoreboard
+  keeps its three rows, all `substrate: true`, and no live-LLM row was
+  invented.
+- **The "Design partners" block on the landing page was removed** rather
+  than updated. Four dashed "Partner A–D" chips under the caption
+  "Reference partners onboarding through Q2 2026": placeholders rather than
+  fabricated logos, but four of them assert a partner count nothing in the
+  repository supports, and the window closed in June 2026 while still being
+  advertised as upcoming.
 
 - **The playbook editor could author nine of the engine's twenty-two step
   types, and the build was green.** `apps/web/src/components/playbooks/types.ts`
@@ -52,43 +163,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the registry now. `packHelpers.ts` mapped step types to integration
   badges as a `Record<string, …>` covering eighteen of twenty-two, so a
   playbook built from the other four claimed to use no integrations at all.
-
-### Added
-
-- **The playbook parity gate now reads every declaration of the step
-  vocabulary, wherever it is.** `scripts/check_playbook_schema_parity.py`
-  compared the engine against `packages/types/src/playbook.ts` and never
-  opened `apps/web`; naming the editor's file here would have fixed that file
-  and left the next one free. The TypeScript half is a scan: every `.ts` and
-  `.tsx` file in the tree is parsed for literal collections of step-type
-  names, and any collection overlapping the engine's vocabulary must either
-  match it exactly or be a recorded subset with a reason, checked in both
-  directions so an exemption that stops being needed fails the build. The
-  editor's execution annotations are compared against the schema's
-  `x-aisoc-execution` in both directions as well, so a surface cannot tell an
-  author a step will run when the contract says it will not. `--list` prints
-  what the scan credited, not only what it flagged, and the gate refuses to
-  report agreement when it finds no declaration at all.
-
-  Against `origin/main` it reports 56 disagreements across all five
-  vocabularies; against this tree it credits five declarations, each complete.
-
-  Two limits are stated rather than left implicit: a collection overlapping
-  the vocabulary by fewer than two members is not treated as one, and a list
-  derived at runtime is not a literal and is not seen — which is the shape the
-  gate wants, because a derived list cannot drift. A file the reader cannot
-  parse to the end is never silently skipped: it is checked for step-type
-  names in its raw bytes first, and the gate refuses the tree if it finds any.
-
-- **A WCAG AA sweep over all twenty-two inspector forms.** The labels in
-  `SchemaForm` and `StepInspector` sat beside their controls with no
-  association, requiredness was an `aria-hidden` asterisk, help text was
-  unreferenced, and the error summary named fields it could not be reached
-  from. Controls now carry ids, labels `htmlFor`, `aria-required`,
-  `aria-invalid` and `aria-describedby`; errors are reported per field as well
-  as in the summary; the condition and params groups are fieldsets. The sweep
-  also caught `<ul role="alert">`, which is not an allowed role for a list and
-  left its items without a list parent.
 
 ## [10.0.0] — 2026-09-25
 

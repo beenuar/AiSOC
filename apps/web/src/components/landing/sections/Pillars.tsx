@@ -12,9 +12,10 @@
  *     pointer event so the card reads as "active" without redrawing
  *     its body.
  *
- * Each card carries a stat strip (e.g. "6,998 public detection rules")
+ * Each card carries a stat strip (e.g. "833 executable detection rules")
  * with `tnum`-enabled mono digits and a single CTA link that opens the
- * corresponding repo file.
+ * corresponding repo file. Corpus figures come from `corpusStats.ts`
+ * (`scripts/generate_corpus_stats.py`), never typed by hand.
  */
 
 import Link from 'next/link';
@@ -22,6 +23,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, GitGraph, ScrollText, Sparkles, Boxes } from 'lucide-react';
 import type { ComponentType, SVGProps } from 'react';
 import { GlowingEffect } from '@/components/aceternity/GlowingEffect';
+import { EXECUTABLE_DETECTION_COUNT } from '@/data/corpusStats';
 import { docs } from '@/lib/docs';
 import { cn } from '@/lib/utils';
 
@@ -43,8 +45,8 @@ const PILLARS: ReadonlyArray<Pillar> = [
     title: 'Open source and transparent',
     body:
       'MIT-licensed agent, public detection corpus, reproducible benchmark — every claim on this page maps to a file in the repo.',
-    stat: '6,998',
-    statLabel: 'public detection rules',
+    stat: String(EXECUTABLE_DETECTION_COUNT),
+    statLabel: 'executable detection rules',
     href: 'https://github.com/beenuar/AiSOC/blob/main/LICENSE',
     linkLabel: 'Read the LICENSE',
   },
