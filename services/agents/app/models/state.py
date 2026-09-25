@@ -64,6 +64,12 @@ class InvestigationState(BaseModel):
     alert_summary: str = ""
     raw_alert: dict[str, Any] = Field(default_factory=dict)
 
+    # Durable statements compiled from repeated analyst disagreement for this
+    # tenant (services/api analyst_feedback). Carried on the state rather than
+    # fetched inside the agent so the network read happens once per alert on
+    # the worker's own timeline, and so a test can set it directly.
+    organisation_memory: list[dict[str, Any]] = Field(default_factory=list)
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)

@@ -8,14 +8,26 @@ import { getFimEvents, getFimSummary } from '@/lib/osquery-api';
 import { FimSummaryCards } from './FimSummaryCards';
 import { FimEventsTable } from './FimEventsTable';
 
-// Deliberately *not* `NEXT_PUBLIC_TENANT_ID`. `services/osquery-tls` types its
-// tenant as a plain string and enrols nodes under the literal "default" when no
-// `X-AiSOC-Tenant` header is supplied, so this surface is keyed on that
-// service's own convention rather than on the platform tenant UUID the rest of
-// the console uses. Reading the shared env var here would send a UUID that
-// matches no enrolled node. The two tenancy models need reconciling in
-// osquery-tls; until then this is pinned so it cannot drift silently.
-const TENANT_ID = 'default';
+// This page used to pin `const TENANT_ID = 'default'` with a comment saying
+// osquery-tls had a different tenancy model and the two needed reconciling.
+// The reconciliation had in fact already happened on the service side: its
+// read path resolves a tenant UUID from the caller's credential
+// (`app/security/tenant_scope.py`) and treats a `tenant_id` parameter as a
+// filter intersected with that scope, never as a selector. The literal
+// `'default'` is even named there as a placeholder meaning "the caller did not
+// name a tenant" — precisely because migration 001 seeds that *slug* and the
+// demo seed renames it to `demo`, so the string matches nothing anywhere.
+//
+// What was left, and is fixed here and in `lib/osquery-api.ts`: the console
+// sent no credential at all, so the service had no scope to resolve. There is
+// consequently no tenant for this component to hold — the session decides, and
+// an operator switching tenants in the TopBar gets a new token scope with it.
+//
+// Still not reconciled, and deliberately left: node *enrolment* keys
+// `Node.tenant_id` as `String(64)` defaulting to the literal `"default"`, so a
+// node enrolled without an `X-AiSOC-Tenant-ID` header writes events under a
+// tenant string no console read can ever resolve to. That is an enrolment-side
+// migration in osquery-tls, not a console fix.
 
 const PAGE_SIZE = 25;
 
@@ -58,14 +70,7 @@ export function FimDashboard() {
   const sinceISO = sinceToISO(since);
 
   // Events feed
-  const eventsKey = [
-    'fim-events',
-    TENANT_ID,
-    page,
-    action,
-    pathPrefix,
-    sinceISO,
-  ];
+  const eventsKey = ['fim-events', page, action, pathPrefix, sinceISO];
   const {
     data: eventsData,
     error: eventsError,
@@ -74,7 +79,6 @@ export function FimDashboard() {
     eventsKey,
     () =>
       getFimEvents({
-        tenant_id: TENANT_ID,
         page,
         page_size: PAGE_SIZE,
         action: action || undefined,
@@ -88,14 +92,14 @@ export function FimDashboard() {
   );
 
   // Summary cards
-  const summaryKey = ['fim-summary', TENANT_ID, sinceISO];
+  const summaryKey = ['fim-summary', sinceISO];
   const {
     data: summaryData,
     error: summaryError,
     isLoading: summaryLoading,
   } = useSWR<FimSummary>(
     summaryKey,
-    () => getFimSummary({ tenant_id: TENANT_ID, since: sinceISO }),
+    () => getFimSummary({ since: sinceISO }),
     {
       onError: () => toast.error('Failed to load FIM summary'),
       refreshInterval: 60_000,

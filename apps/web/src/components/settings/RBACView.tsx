@@ -4,6 +4,8 @@ import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { demoFallback } from '@/lib/demoFallback';
+import { FailureBanner } from '@/components/ui/FailureBanner';
+import { describeApiFailure, jsonFetcher } from '@/lib/failure';
 
 interface Permission {
   id: string;
@@ -21,11 +23,9 @@ interface Role {
   permissions: Permission[];
 }
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  });
+// Throws `ApiError`, so the banner below can tell a 403 (this operator cannot
+// read roles) from a 500 (the API is broken) from a 422 (the console is).
+const fetcher = jsonFetcher;
 
 const CATEGORY_COLORS: Record<string, string> = {
   cases: 'bg-blue-500/20 text-blue-300',
@@ -253,7 +253,11 @@ const MOCK_ROLES: Role[] = [
 ];
 
 export function RBACView() {
-  const { data: roles, error: rolesError } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher, {
+  const {
+    data: roles,
+    error: rolesError,
+    mutate: reloadRoles,
+  } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher, {
     fallbackData: demoFallback(MOCK_ROLES),
   });
   const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher, {
@@ -284,10 +288,23 @@ export function RBACView() {
         </button>
       </div>
 
+      {/* `roles` is `undefined` on failure outside the hosted demo, which
+          suppressed both the skeleton below and the empty state under it — so
+          "showing demo roles" was, literally, the only thing on the page. */}
       {rolesError && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          RBAC API unreachable — showing demo roles so you can explore access control.
-        </div>
+        <>
+          <FailureBanner
+            title="Roles unavailable"
+            message={describeApiFailure(rolesError, { subject: 'role list' })}
+            onRetry={() => reloadRoles()}
+          />
+          <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-gray-800/60 bg-gray-900/40 px-4 py-12 text-center">
+            <p className="text-sm text-amber-200/80">The role list could not be loaded.</p>
+            <p className="text-[11px] text-gray-600">
+              Treat this as unknown rather than as a tenant with no roles defined.
+            </p>
+          </div>
+        </>
       )}
 
       {!roles && !rolesError && (
