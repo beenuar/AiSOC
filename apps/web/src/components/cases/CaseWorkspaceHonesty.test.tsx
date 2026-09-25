@@ -130,9 +130,9 @@ const FABRICATED_INVESTIGATION_STRINGS = [
 function expectNoFabrication(names: string[]) {
   for (const name of names) {
     expect(
-      screen.queryAllByText(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')),
+      document.body.textContent ?? '',
       `"${name}" is fabricated case data and must not render outside demo mode`,
-    ).toHaveLength(0);
+    ).not.toContain(name);
   }
 }
 

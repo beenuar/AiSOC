@@ -98,9 +98,9 @@ const FABRICATED_SAVED = [
 function expectNoFabrication(names: string[]) {
   for (const name of names) {
     expect(
-      screen.queryAllByText(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')),
+      document.body.textContent ?? '',
       `"${name}" is fabricated telemetry and must not render outside demo mode`,
-    ).toHaveLength(0);
+    ).not.toContain(name);
   }
 }
 
