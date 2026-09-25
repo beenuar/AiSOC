@@ -677,6 +677,35 @@ Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
+## v10.0 — Shipped (2026-09-25)
+
+An audit of one shape: a control that exists, is tested, and sits on a path
+nothing reaches. Row-level security covered 92 tables and filtered nothing,
+because every service connected to Postgres as a superuser. Fifty-eight routes
+across four services carried no authentication at all, and thirty more let the
+caller name the tenant they were reading. UEBA reported healthy and could not
+write a baseline or an anomaly. AI triage was wired to a gateway that both of
+its resolvers had been deliberately written to ignore.
+
+**A major because upgrading requires action.** Services now connect as a
+DML-only `aisoc_app` role rather than as the schema owner, which is what makes
+those 92 policies filter; an existing data volume or a managed database must be
+migrated deliberately. Also breaking: the `/mssp/*` payloads dropped fields
+that described fabricated data and now refuse a non-member, two executor-less
+`ActionType` members were removed, `CostTracker.total_cost_usd` is gone, and
+the published `aisoc-web:latest` image no longer carries demo mode — the demo
+build moved to its own tag.
+
+Two published figures were re-measured rather than restated: CORE is 11
+services (the LLM gateway moved into it) and `full` is 21, not 30. The quick
+start now ends by creating an administrator and printing a generated password
+once, because the credential pair the documentation published was wrong in
+three independent ways.
+
+Full inventory under `[10.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## v9.0 — Shipped (2026-09-23)
 
 Ten waves of one audit question: what in this tree exists, is tested, and has

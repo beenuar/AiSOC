@@ -7,7 +7,7 @@
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-9.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-10.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
@@ -69,7 +69,7 @@ Open **http://localhost:3000** and sign in with the credentials `make up`
 printed (API docs at **http://localhost:8000/api/docs**).
 
 Something wrong? `make doctor` checks every dependency and tells you what to
-run next. Requires Docker with ~6 GB of RAM.
+run next. Requires Docker with ~6.5 GB of RAM.
 
 ## Try it without connecting anything
 
@@ -119,8 +119,6 @@ response.
 
 ## Deployment profiles
 
-One architecture, three profiles of it.
-
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
 | **core** | `make up` | 11 | ~6.5 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console, plus the LLM gateway |
@@ -130,13 +128,15 @@ One architecture, three profiles of it.
 CORE is not a cut-down toy — it is the smallest deployment that takes a real
 event and produces a real alert.
 
-**What CORE can and cannot do about AI.** The LLM gateway ships in CORE, so
-AI triage works as soon as you put a provider key in `.env` — no profile
-change and no second command. Until you do, there is no AI: every alert is
-triaged by the deterministic path, the console says so, and no LLM call is
-made. That is the honest default, not a degraded one. The gateway is also
-what reports what a call cost, so a CORE install's cost figures are measured
-rather than estimated. Reasoning:
+**What CORE can and cannot do about AI.** The LLM gateway ships in CORE, so a
+provider key in `.env` reaches a model with no profile change and no second
+command. That route is proven against a **local** model — one real completion,
+measured, through Ollama on an operator's own hardware. **No hosted provider
+has ever been exercised**: this project has no funded key, so its published
+per-model rows read *not measured* rather than zero. Until you supply a key
+there is no AI — every alert takes the deterministic path and the console says
+so. The gateway is also the only thing that can report what a call cost, so an
+unmeasured cost renders as absent, never as `$0.00`. Reasoning:
 [ADR-0006](docs/decisions/0006-llm-gateway-in-core.md).
 
 ## Real vs synthetic data
@@ -184,12 +184,12 @@ so. They do not fabricate a verdict.
 | Detection engine (833 executable rules) | Stable | Fixture replay + unit | Yes |
 | Alert correlation into incidents | Stable | Unit | Yes |
 | REST API + web console | Stable | Unit + integration | Yes |
-| AI triage + Investigation Ledger | Beta | Unit + substrate eval | Yes, copilot mode |
+| AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Scheduled connectors | Beta | Contract tests | `full` profile |
-| UEBA | Beta | Unit | `full` profile |
+| UEBA | Beta | Unit + live migration round-trip | `full` profile |
 | Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
 
 ## What AiSOC is not
@@ -240,8 +240,8 @@ Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plu
 [plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
 [contributing](CONTRIBUTING.md)
 
-Every number in this README is produced by `scripts/project_stats.py` and
-checked in CI, so a figure cannot drift from the tree without a red build.
+The connector and detection-rule counts here are recounted from the tree by
+`scripts/project_stats.py`, which CI fails if this README disagrees with it.
 
 ## Roadmap · Contributing · License
 

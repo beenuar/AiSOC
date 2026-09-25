@@ -251,9 +251,14 @@ One architecture, three profiles of it — not three architectures.
 
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 10 | ~6 GB | Ingest → detect → correlate → alert → triage → console. The full alerting pipeline. |
-| **full** | `make up-full` | 30 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, connectors, LLM gateway. |
-| **demo** | `make up && make demo` | 10 | ~6 GB | Core plus clearly-labelled synthetic data. |
+| **core** | `make up` | 11 | ~6.5 GB | Ingest → detect → correlate → alert → triage → console, plus the LLM gateway. The full alerting pipeline. |
+| **full** | `make up-full` | 21 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, connectors. |
+| **demo** | `make up && make demo` | 11 | ~6.5 GB | Core plus clearly-labelled synthetic data. |
+
+The LLM gateway moved into CORE this release, so a provider key works without
+a profile change. `full` is 21 services, not the 30 published here previously:
+30 is `full` plus the `monitoring`, `chatops`, `extras` and `osquery`
+profiles, which `make up-full` does not start.
 
 CORE is not a toy. It is the smallest deployment that can take a real event
 and produce a real alert, which is the thing the product is for.
