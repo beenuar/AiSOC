@@ -533,9 +533,13 @@ def _render_fallback_exempt(rel_path: str, matched: str) -> bool:
     return any(rel_path.endswith(suffix) and const in matched for (suffix, const) in RENDER_FALLBACK_EXEMPT)
 
 
-def _literal_body(lines: list[str], start: int) -> str:
-    """Lines from `start` to the bracket that closes the literal."""
-    opener = "[" if MODULE_LITERAL.match(lines[start]).group(2) == "[" else "{"
+def _literal_body(lines: list[str], start: int, opener: str) -> str:
+    """Lines from `start` to the bracket that closes the literal.
+
+    `opener` is passed rather than re-derived: the caller has just matched it,
+    and matching a second time invites the reader to wonder what happens when
+    the second match fails.
+    """
     closer = "]" if opener == "[" else "}"
     depth = 0
     body: list[str] = []
@@ -629,7 +633,7 @@ def find_inline_records(root: pathlib.Path) -> list[Record]:
             match = MODULE_LITERAL.match(line)
             if not match or match.group(1) in EXEMPT_NAMES:
                 continue
-            body = _literal_body(lines, number)
+            body = _literal_body(lines, number, match.group(2))
             if not _looks_fabricated(body):
                 continue
             declared = range(number, number + body.count("\n") + 1)
