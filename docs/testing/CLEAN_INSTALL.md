@@ -28,7 +28,7 @@ make smoke
 | Stage | Result |
 |---|---|
 | Clone | pass |
-| `make up` — CORE profile, 10 services | pass |
+| `make up` — CORE profile, 14 long-running services | pass |
 | Postgres accepting connections, 92 tables | pass |
 | Kafka broker answering admin requests | pass |
 | `api`, `ingest-worker`, `fusion` healthy | pass |

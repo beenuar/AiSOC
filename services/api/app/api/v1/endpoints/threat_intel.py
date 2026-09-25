@@ -137,7 +137,15 @@ class FeedIndicatorsResponse(BaseModel):
     """
 
     indicators: list[dict[str, Any]]
+    #: Indicators in the caller's scope, per the upstream store's own count.
     total: int
+    #: Indicators carried by this response. ``total`` is the catalogue,
+    #: ``shown`` is the page — the console renders "N of M" and used to render
+    #: the page size as the catalogue.
+    shown: int = 0
+    #: Upstream narrowed inside a bounded scan window, so ``shown`` is a lower
+    #: bound on the matches that exist.
+    bounded: bool = False
     source: str
     degraded: bool = False
     reason: str = ""
@@ -214,6 +222,8 @@ async def list_feed_indicators(
     return FeedIndicatorsResponse(
         indicators=indicators,
         total=int(body.get("total") or len(indicators)),
+        shown=int(body.get("shown") or len(indicators)),
+        bounded=bool(body.get("bounded")),
         source=str(body.get("source") or "threatintel"),
     )
 

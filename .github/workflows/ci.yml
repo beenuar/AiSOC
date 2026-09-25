@@ -1077,6 +1077,11 @@ jobs:
   #   * `prometheus-client` is required by `threatintel.actors.
   #     attribution` at module-import time; without it the test
   #     collector aborts before running a single test.
+  #   * `qdrant-client` is required by `threatintel.api.indicators`
+  #     for the same reason. The base package is enough — the
+  #     `fastembed` extra the service pins is imported lazily inside
+  #     `QdrantStore._embed`, and pulling it here would add onnxruntime
+  #     to every cell in the matrix.
   #   * `apscheduler` is required by `connectors.scheduler` at
   #     module-import time; same import-aborted-the-collector issue.
   #   * `slack-bolt` pulls `aiohttp` transitively — both must be
@@ -1137,6 +1142,7 @@ jobs:
             'apscheduler>=3.10,<4' \
             'slack-bolt>=1.18,<2' \
             'prometheus-client>=0.20,<0.24' \
+            'qdrant-client>=1.9,<2' \
             'opentelemetry-instrumentation-fastapi>=0.45b0' \
             'sqlalchemy[asyncio]>=2,<3' \
             'aiosqlite>=0.19,<0.22' \

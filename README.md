@@ -20,19 +20,24 @@
 
 ## What AiSOC does
 
-```
-   Your security tools  (EDR, cloud, identity, network, SIEM)
-             |
-   ┌─────────v────────────────────────────────────────────────┐
-   │  normalize -> detect -> correlate -> investigate -> respond  │
-   └─────────|────────────────────────────────────────────────┘
-             v
-   SOC analyst: one incident, with the evidence and the reasoning
-```
-
-An alert arrives. AiSOC works out whether it matters, groups it with related
-signals, investigates it with an AI agent whose every prompt and tool call is
+Telemetry arrives from your security tools. AiSOC normalizes it, runs 833
+executable detection rules over it, groups what fires into incidents,
+investigates each one with an AI agent whose every prompt and tool call is
 recorded, and proposes an action. A human approves before anything executes.
+
+## What it looks like running
+
+Real captures from a stack brought up with `make up` and fed through the
+ingest API below — no seeded rows, no demo mode, no mockups. The events were
+authored to be representative; everything downstream of them is the product
+doing its job. ([what is real in each shot](apps/web/public/screenshots/README.md))
+
+| | |
+|---|---|
+| <img src="apps/web/public/screenshots/alerts-queue.png" alt="Alerts queue" /> | <img src="apps/web/public/screenshots/ai-triage-verdict.png" alt="AI triage verdict in the Investigation Rail" /> |
+| **Alerts** — each attributed to the connector that fed it. | **Automated triage** — the bundled local model's verdict, confidence and rationale, verbatim. |
+| <img src="apps/web/public/screenshots/threat-intel-kev.png" alt="Threat intelligence page showing CISA KEV entries" /> | <img src="apps/web/public/screenshots/soc-operations.png" alt="SOC operations dashboard with honest empty states" /> |
+| **Threat intelligence** — 1,725 real CISA KEV entries, minutes after boot, with no API key. | **SOC operations** — with nothing connected yet, and it says so rather than showing a placeholder. |
 
 ## Quick start
 
@@ -69,19 +74,13 @@ $ make smoke
 Open **http://localhost:3000** and sign in with the credentials `make up`
 printed (API docs at **http://localhost:8000/api/docs**). Deploying somewhere
 that is not your laptop? Set `AISOC_CONSOLE_URL` in `.env` so the printed
-address is the one people browse to.
-
-Something wrong? `make doctor` checks every dependency and says what to run next.
+address is the one people browse to. Something wrong? `make doctor`.
 
 ## Try it without connecting anything
 
-```bash
-make demo
-```
-
-> **The demo dataset is synthetic.** It shows the pipeline shape, not real
-> activity. Every row is marked `is_synthetic = true` in the database and
-> labelled in the console. It is not a benchmark, a customer, or an incident.
+`make demo` loads a dataset. **It is synthetic**: it shows the pipeline shape,
+not real activity. Every row is marked `is_synthetic = true` in the database
+and labelled in the console. It is not a benchmark, a customer, or an incident.
 
 ## Connect real data
 
@@ -101,21 +100,21 @@ vendor-specific normalization and live setup docs include Splunk, Microsoft
 Sentinel, Elastic, CrowdStrike, Okta, AWS (GuardDuty / CloudTrail / Security
 Hub), Wiz, and Kubernetes audit logs — full list in the
 [connector docs](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage).
-A connector without a vendor profile still ingests through a generic mapping
-that resolves host, user and source IP from the usual spellings, so the alert
-is pivotable either way.
+Without a vendor profile a connector still ingests through a generic mapping
+that resolves host, user and source IP from the usual spellings.
 
 ## How it works
 
-See **[docs/architecture/README.md](docs/architecture/README.md)** — it walks
-one event through the whole system and every box in its diagrams links to the
-code that implements it.
-
-The short version: ingest normalizes to a common shape → Kafka carries it →
-fusion runs 833 executable detection rules and decides what becomes an alert →
-correlation groups related alerts into one incident → an agent investigates
-and writes its reasoning to the Investigation Ledger → a human approves any
+Ingest normalizes to a common shape and Kafka carries it. Then
+fusion runs 833 executable detection rules and decides what becomes an alert,
+correlation groups related alerts into one incident, an agent investigates and
+writes its reasoning to the Investigation Ledger, and a human approves any
 response.
+
+Both **[docs/architecture/README.md](docs/architecture/README.md)** and the
+[docs portal](https://beenuar.github.io/AiSOC/docs/architecture) walk that path
+one step at a time, and every box in every diagram links to the code that
+implements it.
 
 ## Deployment profiles
 
@@ -131,12 +130,13 @@ alert, and **it needs no credentials to do either** — for two reasons.
 **The model ships with the gateway.** Ollama runs a pinned ~2 GB
 `llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up`
 produces real triage verdicts with real token counts in the Investigation
-Ledger — not a stub. A 3B quantized model is not a frontier model; to upgrade,
-set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP` and an
-empty `AISOC_LLM_API_BASE` in `.env`, then `make up` again. **No hosted
-provider has ever been exercised here** — there is no funded key, so per-model
-rows read *not measured* rather than zero, and an unmeasured cost renders as
-absent, never `$0.00`. ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
+Ledger — not a stub. It is also not a frontier model, and the difference shows:
+in a measured run of 19 auto-triages it returned schema-valid output 7 times,
+and the other 12 fell back to the deterministic path, which the rail labels.
+To upgrade, set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP`
+and an empty `AISOC_LLM_API_BASE`. **No hosted provider has ever been exercised
+here** — there is no funded key, so per-model rows read *not measured* rather
+than zero. ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
 
 **One real external feed ships too.** `services/threatintel` polls the
 [CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
@@ -157,9 +157,10 @@ This matters more than any feature, so it is stated plainly.
 | **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
 
 **Production never silently falls back to synthetic data.** When a backend is
-unreachable the console shows an error, not an invented investigation. That
-was not always true — see [the reality audit](docs/audit/REPOSITORY_REALITY.md)
-for the five places it was wrong and how each was fixed.
+unreachable the console names the failure, not an invented investigation — and
+an unmeasured figure reads *not measured*, never `0`. That was not always true;
+see [the reality audit](docs/audit/REPOSITORY_REALITY.md) for where it was
+wrong and how each case was fixed.
 
 ## AI agents
 
@@ -175,13 +176,12 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
   contained is demoted to human review rather than auto-closed.
 - **A prompt is validated before it is sent.** Raw logs, OCSF payloads and
   secret-shaped values are refused, not redacted after the fact.
-- **Nothing executes without a human.** Response actions are proposed. An
-  approver must hold the required permission tier and must not be the person
-  who requested the action.
+- **Nothing executes without a human.** An approver must hold the required
+  permission tier and must not be the person who requested the action.
 
-CORE's bundled local model means agents reason for real out of the box. If no
-model is reachable at all they run a deterministic offline path and say so —
-they never fabricate a verdict.
+The bundled model means agents reason for real out of the box. When it returns
+something the schema rejects, triage falls back to a deterministic path and the
+rail shows which one answered — it never fabricates a verdict.
 
 ## Project maturity
 
@@ -203,8 +203,7 @@ they never fabricate a verdict.
 
 - **Not a drop-in SIEM replacement.** It correlates and investigates; it does
   not replace long-term log retention and compliance search.
-- **Not able to see telemetry you have not connected.** There is no magic
-  discovery.
+- **Not able to see telemetry you have not connected.** There is no discovery.
 - **Not autonomous by default.** Response requires explicit policy
   authorization and a human approver.
 - **Demo incidents are not real incidents**, and benchmark corpora are not
@@ -214,21 +213,20 @@ they never fabricate a verdict.
 
 ## Troubleshooting
 
-`make doctor` diagnoses the deployment and prints the command to run next. It
-checks the host tools, free memory and disk in the Docker VM, every port, each
-datastore by querying it rather than by asking whether its container is up, and
-whether `.env` still holds template placeholders. The six failures it is most
-often right about — and what each one actually means — are tabulated under
+`make doctor` checks the host tools, memory and disk in the Docker VM, every
+port, each datastore by querying it rather than by asking whether its container
+is up, and whether `.env` still holds placeholders — then prints the command to
+run next. The six failures it is most often right about are tabulated under
 [Installation → Troubleshooting](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
 
 ## Security
 
-Secrets live in `.env`, are generated per deployment, and are never committed;
-connector credentials are encrypted at rest with a per-deployment key. Tenant
-isolation is enforced at the query layer in every store, not by convention.
-RBAC gates every mutating route. Prompts are validated before they leave the
-deployment, and the default install never sends one anywhere — the model runs
-beside it. Report vulnerabilities via [SECURITY.md](SECURITY.md).
+Secrets are generated per deployment and never committed; connector credentials
+are encrypted at rest. Services connect to Postgres as a DML-only role, so the
+row-level-security policies actually apply to them, and tenant isolation is
+enforced at the query layer in every store. RBAC gates every mutating route,
+ingest is authenticated, and the default install sends no prompt anywhere —
+the model runs beside it. Report issues via [SECURITY.md](SECURITY.md).
 
 ## Developing
 

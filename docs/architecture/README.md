@@ -113,15 +113,17 @@ flowchart LR
         agt["services/agents<br/>Python · :8084"]
         web["apps/web<br/>Next.js · :3000"]
         llm["litellm<br/>LLM gateway · :4000"]
+        oll["ollama<br/>llama3.2:3b · :11434"]
+        ti["services/threatintel<br/>Python · :8005"]
+        qd[("Qdrant<br/>IOC + actor vectors")]
     end
 
     subgraph full ["full profile — optional"]
         ch[("ClickHouse<br/>event lake")]
         neo[("Neo4j<br/>entity graph")]
-        qd[("Qdrant<br/>embeddings")]
+        os[("OpenSearch<br/>full-text IOC search")]
         enr["services/enrichment"]
         conn["services/connectors"]
-        ti["services/threatintel"]
     end
 
     conn -.->|"polls vendors"| ing
@@ -137,10 +139,13 @@ flowchart LR
     agt --> pg
     agt -->|"aisoc-&lt;role&gt; alias"| llm
     api --> llm
+    llm --> oll
     api --> pg
     api -.-> ch
     api -.-> neo
-    ti -.-> qd
+    ti -->|"CISA KEV"| qd
+    ti -.-> os
+    api --> ti
     web --> api
     web --> rt
 ```
@@ -151,16 +156,17 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph req ["Required"]
+    subgraph req ["CORE"]
         pg["PostgreSQL<br/><br/>alerts · incidents · cases<br/>users · tenants · detection rules<br/>audit log · investigation ledger"]
         rds["Redis<br/><br/>correlation windows<br/>dedup keys<br/>investigation run state"]
-        kaf["Kafka<br/><br/>aisoc.raw_events<br/>aisoc.alerts.fused"]
+        kaf["Kafka<br/><br/>aisoc.raw_events<br/>aisoc.alerts.fused<br/>aisoc.alerts.dlq"]
+        qd["Qdrant<br/><br/>IOC and actor vectors<br/>backs the Threat Intelligence page"]
     end
 
     subgraph opt ["Optional (full profile)"]
         ch["ClickHouse<br/><br/>every normalized event<br/>backs /lake/sql and hunt"]
         neo["Neo4j<br/><br/>entity graph<br/>blast radius"]
-        qd["Qdrant<br/><br/>IOC and actor embeddings"]
+        os["OpenSearch<br/><br/>full-text IOC and actor search"]
     end
 ```
 
@@ -172,14 +178,17 @@ flowchart TB
 | **Redis** | Correlation needs expiring keys at event rate; TTL semantics and throughput are the point. | No correlation; every alert becomes its own incident. |
 | **Kafka** | Decouples producers from consumers and lets a slow consumer fall behind without dropping events or blocking ingest. | No spine; fusion, realtime and agents would each need a direct call from ingest. |
 | **ClickHouse** | Columnar scans over hundreds of millions of events. Postgres cannot do this at cost. | No event lake, no hunting over raw telemetry. **Alerting is unaffected.** |
-| **Neo4j** | Multi-hop traversal ("what else did this identity touch") is a join explosion in SQL. | No graph context or blast radius. Alerting unaffected. |
-| **Qdrant** | Vector similarity for IOC and actor matching. | No semantic threat-intel matching. |
-| **OpenSearch** | Full-text and structured search over the threat-intel corpus — `threatintel-iocs` and `threatintel-actors`. | `services/threatintel` cannot start: it indexes into OpenSearch in its lifespan, without a fallback. |
+| **Neo4j** | Multi-hop traversal ("what else did this identity touch") is a join explosion in SQL. | No graph context or blast radius. `/graph` reports the failure rather than drawing an invented graph. Alerting unaffected. |
+| **Qdrant** | Vector similarity for IOC and actor matching, and the read path the console's Threat Intelligence page is served from. | No threat-intel page. It is in CORE for that reason, and because it is by a wide margin the cheapest of the four stores — 245 MB of image, ~79 MiB resident. |
+| **OpenSearch** | Full-text and structured search over the threat-intel corpus — `threatintel-iocs` and `threatintel-actors`. | Feeds still write to Qdrant and the page still works; full-text IOC search is unavailable and `services/threatintel` logs that it is. |
 
 **Who reads OpenSearch, precisely:** only `services/threatintel`. This page
 previously said nothing read it at all, which came from checking
 `services/api` — which genuinely holds no OpenSearch client — and stopping
-there. See the correction in
+there. It also said `services/threatintel` *could not start* without it; that
+was true when the lifespan called `os_store.initialize()` with no `try`, and
+is no longer — both that call and the pipeline's bulk index are best-effort,
+which is what let the service move into CORE. See the corrections in
 [the reality audit](../audit/REPOSITORY_REALITY.md).
 
 ---
