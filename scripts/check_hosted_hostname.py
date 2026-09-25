@@ -124,7 +124,6 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "apps/web/fly.toml": (4, _MANAGED_DEPLOY),
     "scripts/demo-public.sh": (3, _MANAGED_DEPLOY),
     "scripts/adoption_snapshot.py": (1, _MANAGED_DEPLOY),
-    ".github/workflows/papers.yml": (2, _MANAGED_DEPLOY),
     ".github/FUNDING.yml": (1, _MANAGED_DEPLOY),
     ".github/ISSUE_TEMPLATE/benchmark_submission.yml": (2, _MANAGED_DEPLOY),
     "apps/web/e2e/demo/screencast.spec.ts": (1, _MANAGED_DEPLOY),

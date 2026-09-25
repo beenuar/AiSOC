@@ -572,6 +572,40 @@ number is the one the requirement is sized against.
 
 ### Fixed
 
+- **The `Public papers (regenerate PDFs)` workflow could never succeed on
+  `main`, and its design hid that from everyone opening a PR.** Its final step
+  pushed refreshed PDFs directly to `main`, which stopped being possible when
+  `main` became branch-protected — the push is rejected with
+  `GH006: Protected branch update failed`. Because that step is skipped on pull
+  requests, the workflow passed on every branch and failed only on `main`, so
+  contributors saw green while `main` carried a permanently red workflow.
+  Redirecting it to open a pull request instead is not available either: this
+  repository has Actions set to read-only permissions with pull-request
+  creation disabled.
+
+  It now reports staleness rather than repairing it, and `make papers` plus a
+  commit is the documented refresh path. The check compares each markdown
+  source's SHA-256 against the digest recorded when its PDF was last rendered
+  (`apps/web/public/papers/render-manifest.json`, written by `make papers`).
+  It deliberately does **not** compare PDF bytes — the workflow's own comment
+  asserted the render was deterministic, and it is not: WeasyPrint stamps a
+  creation timestamp into its output and glyph metrics depend on the host's
+  installed fonts, so two correct renders of one source differ and a byte
+  comparison would fail for reasons unrelated to staleness. Each of the five
+  conditions it claims to catch — edited source, missing PDF, unrecorded
+  render, orphaned manifest entry, and no sources at all — was verified by
+  reproducing it and requiring a non-zero exit. The run also now fails if any
+  source renders no PDF, which nothing previously checked.
+
+  Two things fell out of the change. `apps/web/public/papers/README.md` told
+  readers "you no longer have to run the renderer locally before opening a PR"
+  and described the commit-back step as current behaviour; both were false and
+  are corrected. And the removed step set a commercial email domain as the
+  commit author inside the open-source repository, so its `check_hosted_hostname.py`
+  allow-list entry went with it — caught by that gate's own staleness check,
+  which reported an exemption recording two occurrences in a file that now has
+  none.
+
 - **`check_mock_data_gated.py` reported "All sample-data fallbacks are gated
   behind demo mode." on a tree carrying nine of them.** Each gap was confirmed
   by running the gate's own patterns against the live lines rather than by

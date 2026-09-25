@@ -28,6 +28,8 @@ is already part of the AiSOC build profile for the API service.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -35,6 +37,16 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SRC_DIR = REPO_ROOT / "apps" / "web" / "content" / "papers"
 DEFAULT_OUT_DIR = REPO_ROOT / "apps" / "web" / "public" / "papers"
+
+# Records the digest of each markdown source at the moment its PDF was
+# rendered, so `--check` can tell a stale PDF from a current one.
+#
+# The digest is taken over the *source markdown*, never the rendered PDF.
+# WeasyPrint stamps a creation timestamp into its output and glyph metrics
+# depend on which fonts the host happens to have installed, so two correct
+# renders of one source do not produce equal bytes. A PDF byte comparison
+# would therefore fail for reasons that have nothing to do with staleness.
+MANIFEST_PATH = DEFAULT_OUT_DIR / "render-manifest.json"
 
 PRINT_CSS = """
 @page {
@@ -249,6 +261,28 @@ def _discover() -> list[tuple[Path, Path]]:
     return pairs
 
 
+def _source_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_manifest() -> dict[str, str]:
+    if not MANIFEST_PATH.exists():
+        return {}
+    try:
+        loaded = json.loads(MANIFEST_PATH.read_text())
+    except json.JSONDecodeError:
+        return {}
+    sources = loaded.get("sources")
+    return sources if isinstance(sources, dict) else {}
+
+
+def _record_rendered(sources: dict[str, str]) -> None:
+    """Merge digests for the papers just rendered into the manifest."""
+    merged = {**_read_manifest(), **sources}
+    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST_PATH.write_text(json.dumps({"sources": dict(sorted(merged.items()))}, indent=2) + "\n")
+
+
 def _render_all() -> None:
     pairs = _discover()
     if not pairs:
@@ -259,6 +293,52 @@ def _render_all() -> None:
         return
     for src, dst in pairs:
         _render_one(src, dst)
+    _record_rendered({src.name: _source_digest(src) for src, _ in pairs})
+
+
+def _check() -> int:
+    """Report papers whose PDF is missing or older than its source.
+
+    Needs no rendering stack, so it runs anywhere python does.
+    """
+    pairs = _discover()
+    if not pairs:
+        print(
+            f"[render_white_paper] refusing to pass: no markdown sources under {DEFAULT_SRC_DIR}",
+            file=sys.stderr,
+        )
+        return 1
+
+    manifest = _read_manifest()
+    problems: list[str] = []
+
+    for src, pdf in pairs:
+        if not pdf.exists():
+            problems.append(f"{pdf.relative_to(REPO_ROOT)} does not exist")
+            continue
+        recorded = manifest.get(src.name)
+        if recorded is None:
+            problems.append(f"{src.name} has a PDF but no recorded render")
+        elif recorded != _source_digest(src):
+            problems.append(f"{src.name} changed since its PDF was rendered")
+
+    known = {src.name for src, _ in pairs}
+    for orphan in sorted(set(manifest) - known):
+        problems.append(f"{orphan} is recorded but its source is gone")
+
+    if problems:
+        print("[render_white_paper] rendered PDFs are out of date:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        print(
+            "\nRun `make papers` and commit the result. CI cannot refresh them for\n"
+            "you: main is branch-protected, so a workflow cannot push to it.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"[render_white_paper] {len(pairs)} paper(s) up to date with their sources")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,15 +356,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=("Render every paper under apps/web/content/papers/. Default when neither --input nor --output is supplied."),
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=("Report papers whose PDF is missing or older than its source. Renders nothing."),
+    )
     args = parser.parse_args(argv)
 
+    if args.check and (args.input or args.output or args.all):
+        parser.error("--check renders nothing, so it takes no other arguments")
     if args.input and not args.output:
         parser.error("--output is required when --input is supplied")
     if args.output and not args.input:
         parser.error("--input is required when --output is supplied")
 
+    if args.check:
+        return _check()
+
     if args.input and args.output:
-        _render_one(Path(args.input), Path(args.output))
+        source = Path(args.input)
+        _render_one(source, Path(args.output))
+        # Keep the manifest honest when a single paper is rendered in place,
+        # so the next --check does not report a paper that was just refreshed.
+        if source.resolve().parent == DEFAULT_SRC_DIR:
+            _record_rendered({source.name: _source_digest(source)})
     else:
         _render_all()
     return 0
