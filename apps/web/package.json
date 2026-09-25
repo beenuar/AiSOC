@@ -62,7 +62,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@playwright/test": "^1.63.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.6.1",
     "axe-core": "^4.11.4",
     "eslint": "^9.39.0",
