@@ -25,12 +25,12 @@ import {
   ClipboardList,
   CloudCog,
   Code2,
-  DollarSign,
   FileCog,
   KeyRound,
+  LockKeyhole,
   Network,
   PlugZap,
-  Receipt,
+  Repeat2,
   ScrollText,
   ShieldHalf,
   Sigma,
@@ -81,7 +81,7 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
       {
         icon: ScrollText,
         title: 'Investigation Ledger.',
-        body: 'Replayable, step-by-step record of every agent decision per case.',
+        body: 'Every prompt, tool call, citation, verdict, token count and cost, replayable step by step.',
       },
       {
         icon: Network,
@@ -126,8 +126,8 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
       },
       {
         icon: CloudCog,
-        title: 'SOAR exec.',
-        body: 'Blast-radius gated playbook execution with full rollback.',
+        title: 'Verified response.',
+        body: 'The executor probes the vendor to confirm the action landed. A capability whose effect cannot be verified is never eligible for automatic execution.',
       },
     ],
   },
@@ -141,6 +141,16 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
         body: 'EDR · SIEM · cloud · IAM · SaaS · VCS · network.',
       },
       {
+        icon: Repeat2,
+        title: 'Two-way SIEM writeback.',
+        body: 'The agent\u2019s disposition goes back onto the source finding, joined on the vendor\u2019s own id. Execution is off by default; dry run reports what it would have written.',
+      },
+      {
+        icon: LockKeyhole,
+        title: 'Authenticated ingest, isolated tenants.',
+        body: 'The tenant comes from a minted ingest credential, never from a header. Row-level security is live on 83 tables and services connect as a DML-only role, so the policies apply to them.',
+      },
+      {
         icon: Boxes,
         title: 'Marketplace.',
         body: `${MARKETPLACE_ITEM_COUNT.toLocaleString('en-US')} indexed items — detections, playbooks, plugins.`,
@@ -151,19 +161,9 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
         body: 'Python, TypeScript, Go — build a connector in 50 lines.',
       },
       {
-        icon: DollarSign,
-        title: 'MCP server.',
-        body: 'Use AiSOC from Claude, Cursor, Continue, Cody — 13 tools.',
-      },
-      {
         icon: TerminalSquare,
-        title: 'Cursor extension.',
-        body: 'Investigate alerts without leaving your editor.',
-      },
-      {
-        icon: Receipt,
-        title: 'Cost telemetry.',
-        body: 'Per-call tokens and USD captured in the run ledger.',
+        title: 'MCP server and editor extension.',
+        body: 'Thirteen tools, so an assistant can read alerts, cases and the decision ledger without leaving your editor.',
       },
     ],
   },

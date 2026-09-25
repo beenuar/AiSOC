@@ -4,9 +4,14 @@
  * Footer — `footer` section from §6.16.
  *
  * Five-column link grid (Product · Resources · Company · Legal ·
- * Status & GitHub) plus a bottom row with the copyright, the social
- * icons (GitHub, Discord, X) and the static VERSION (`7.3.1` today —
- * sourced from /VERSION at build time once the metadata pass lands).
+ * GitHub & community) plus a bottom row with the copyright, the social
+ * icons (GitHub, Discord, X) and the version.
+ *
+ * The version was the string `'7.3.1'`, typed here and never touched again —
+ * seven major releases stale, and the most visible "this project is dead"
+ * signal a footer can emit. It now reads `apps/web/package.json`, which the
+ * release flow bumps, exactly as `components/layout/Sidebar.tsx` does for the
+ * console.
  *
  * No fancy motion. The page closes on the FinalCta band — the footer
  * is informational chrome.
@@ -14,6 +19,7 @@
 
 import type { ReactElement, SVGProps } from 'react';
 import Link from 'next/link';
+import packageJson from '../../../../package.json';
 import { GithubMark } from './icons';
 import { docs } from '@/lib/docs';
 
@@ -110,7 +116,7 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
   },
 ];
 
-const VERSION = '7.3.1';
+const VERSION = packageJson.version;
 
 function isExternal(href: string) {
   return /^https?:\/\//.test(href);

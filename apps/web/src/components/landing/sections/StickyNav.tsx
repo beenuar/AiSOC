@@ -39,8 +39,18 @@ import { cn } from '@/lib/utils';
 // pages where they exist; `Product` / `Solutions` / `Connectors` still
 // anchor into the landing-page sections because those have no
 // dedicated page yet.
+/**
+ * The nav's call to action is the repository, on every marketing page.
+ *
+ * It used to be "Open dashboard", pointing at the maintainers' hosted host.
+ * That is the wrong destination twice over: the conversion this project wants
+ * is a clone, and an open-source landing page should not hand a self-hoster
+ * another deployment's hostname as the product's front door.
+ */
+const REPO_URL = 'https://github.com/beenuar/AiSOC';
+
 const NAV_LINKS: ReadonlyArray<{ label: string; href: string }> = [
-  { label: 'Product', href: '/#solution' },
+  { label: 'Product', href: '/#product' },
   { label: 'Solutions', href: '/#pillars' },
   { label: 'Connectors', href: '/#connectors' },
   { label: 'Benchmark', href: '/benchmark' },
@@ -110,32 +120,25 @@ export function StickyNav() {
         </ul>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <a
-            href="https://github.com/beenuar/AiSOC"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Star AiSOC on GitHub"
-            className="inline-flex items-center gap-2 rounded-md border border-velvet-border bg-velvet-surface-raised/60 px-3 py-1.5 text-sm font-medium text-velvet-content-secondary transition-colors duration-150 ease-landing-out-quart hover:border-velvet-emerald/40 hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
-          >
-            <GithubMark className="h-3.5 w-3.5" />
-            <span aria-hidden="true">Star on GitHub</span>
-          </a>
           <Link
-            href="/pricing"
+            href={docs('quickstart')}
             className="rounded-md px-3 py-1.5 text-sm font-medium text-velvet-content-secondary transition-colors duration-150 ease-landing-out-quart hover:text-velvet-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
-            Self-host
+            Quickstart
           </Link>
-          <Link
-            href="https://tryaisoc.com/dashboard"
-            className="group inline-flex items-center gap-1 rounded-md bg-velvet-emerald-cta px-4 py-1.5 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="group inline-flex items-center gap-2 rounded-md bg-velvet-emerald-cta px-4 py-1.5 text-sm font-semibold text-velvet-content-primary shadow-[0_1px_0_rgba(255,255,255,0.18)_inset] transition-[filter,box-shadow] duration-200 ease-landing-out-quart hover:brightness-110 motion-safe:hover:shadow-glow-emerald-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-velvet-emerald-mint focus-visible:ring-offset-2 focus-visible:ring-offset-velvet-surface-base"
           >
-            Open dashboard
+            <GithubMark className="h-3.5 w-3.5" />
+            Star on GitHub
             <ArrowRight
               className="h-3.5 w-3.5 transition-transform duration-200 ease-landing-out-quart group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
               aria-hidden="true"
             />
-          </Link>
+          </a>
         </div>
 
         <button
@@ -176,21 +179,21 @@ export function StickyNav() {
           ))}
         </ul>
         <div className="flex gap-2 px-4 pb-4">
-          <a
-            href="https://github.com/beenuar/AiSOC"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href={docs('quickstart')}
+            onClick={() => setOpen(false)}
             className="flex-1 rounded-md border border-velvet-border bg-velvet-surface-raised/60 px-3 py-2 text-center text-sm font-medium text-velvet-content-secondary"
           >
-            Self-host
-          </a>
-          <Link
-            href="https://tryaisoc.com/dashboard"
-            onClick={() => setOpen(false)}
+            Quickstart
+          </Link>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
             className="flex-1 rounded-md bg-velvet-emerald-cta px-3 py-2 text-center text-sm font-semibold text-velvet-content-primary motion-safe:shadow-glow-emerald-sm"
           >
-            Open dashboard
-          </Link>
+            Star on GitHub
+          </a>
         </div>
       </div>
     </header>

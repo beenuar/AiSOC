@@ -50,6 +50,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused, loudly, at startup on one side and per request on the other. Full
   procedure: `apps/docs/docs/operations/ingest-authentication.md`.
 
+### The landing page now shows the product, and points at the repository
+
+- **The only place the marketing site claimed to show the console was an
+  invented one.** `DemoEmbed` drew a hand-authored Investigation Ledger: an
+  incident id, a named ransomware family, `confidence 0.93`, `$0.084` spent
+  against a named hosted model, "4 hosts · 2 users", "step 14 of 32". None of
+  it was labelled as a mock and none of it had ever happened. It is replaced
+  by `ProductTour`, four captures of a running CORE stack taken from
+  `apps/web/public/screenshots/`: the local model's triage verdict, 1,725
+  live CISA KEV entries, the degraded graph view naming its own `API 503`,
+  and an operations dashboard on a tenant with nothing connected. Two of the
+  four are deliberately empty or degraded states. The section lede carries
+  the distinction the manifest records — the security events were authored
+  and pushed through the documented ingest API; normalization, detection,
+  promotion, correlation and triage were performed by the running services,
+  no row was seeded, and none of it is a real intrusion.
+
+- **The fold had no picture of the product and its primary button pointed at
+  the maintainers' hosted host.** The hero is rebuilt left-aligned around a
+  real capture of the dashboard — chosen because its mean-time-to-resolve
+  reads *not measured · no cases closed* — with the repository as the primary
+  call to action and the two commands that reproduce the screenshot below it.
+  The same substitution lands in the site-wide nav and the closing band, so
+  the destination on every marketing page is now the source. Four entries
+  were **dropped** from `scripts/check_hosted_hostname.py` rather than
+  renumbered, because the occurrences are gone rather than reduced.
+
+- **`Testimonials` was an empty state that asserted a programme.** It
+  headlined "What teams say after their first month" over an offer to onboard
+  reference partners "through Q2 2026" — a window that had closed. Replaced
+  by `HonestLimits`, which states six limitations against the artefacts that
+  measure them, including the one the page most wanted to skip: the bundled
+  3B model returned schema-valid triage output **7 times in a measured run of
+  19**, and the other 12 fell back to the deterministic path.
+
+- **Four landing-page claims were stale or unsupported against the tree.**
+  The FAQ answered "what runs in production today?" with beta deployments
+  through reference partners, which nothing supports; quoted a `cryptography`
+  floor three majors behind what the services declare; described the
+  retracted alert-reduction suite as "a real measurement"; and named managed
+  data-residency regions. The benchmark band published *Sub-minute p50* as a
+  metric when `mtc_p50_seconds` is null on every scoreboard row — it now
+  reads **not measured**, with the reason. The open-source band told visitors
+  to run `pnpm aisoc:demo`, which loads the synthetic dataset, so the three
+  commands a reader was given produced the one thing this project asks them
+  not to mistake for the product working; it is `make up && make smoke`. The
+  footer had shipped `v7.3.1` hard-coded through seven major releases and now
+  reads the version the release flow bumps. The visible FAQ and the
+  `FAQPage` JSON-LD were corrected together, and the structured data's
+  hand-typed "69 ship in the box" now reads the generated connector count.
+
+- **Capabilities the site had never mentioned** are on it: verified response
+  (the executor probes the vendor rather than trusting an HTTP 200),
+  authenticated ingest with the tenant resolved from the credential,
+  row-level security on 83 tables behind a DML-only runtime role, two-way
+  SIEM writeback of agent dispositions, and the cost and token telemetry in
+  the ledger.
+
 ### Discoverability: the machine-readable surface, and an installer that wrote a config nothing could start
 
 A project an AI agent cannot read accurately is a project it will describe
