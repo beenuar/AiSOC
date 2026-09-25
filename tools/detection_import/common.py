@@ -37,7 +37,7 @@ The native AiSOC schema (``detections/cloud/...`` etc.) uses ``match_when``
 blocks tied to ``RawAlert`` fields and is fixture-tested.  Imported rules keep
 the upstream ``detection`` block untouched so we can advertise honest
 attribution; the engine evaluates them through a Sigma-compat interpreter at
-runtime (see ``services/fusion/detection_engine.py``).
+runtime (see ``services/fusion/app/services/detection_engine.py``).
 """
 
 from __future__ import annotations

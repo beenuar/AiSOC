@@ -2,8 +2,8 @@
 
 Vendored byte-identical into each Python service that needs it, following the
 same convention as ``app/core/cors.py`` and ``app/security/service_auth.py``.
-Keep the copies in sync — ``scripts/check_vendored_tenant_scope.py`` fails the
-build if they drift.
+Keep the copies in sync — ``scripts/sync_vendored_tenant_scope.py --check``
+fails the build if they drift.
 
 Why this exists
 ---------------
@@ -51,8 +51,9 @@ Configuration
 ``AISOC_DEV_MODE``
     When set and *no* credential material is configured at all, requests
     resolve to the demo tenant so a local ``docker compose up`` works. This is
-    the single canonical dev-mode flag; ``tests/test_security_defaults.py``
-    asserts no shortcut is reachable when it is unset.
+    the single canonical dev-mode flag;
+    ``services/api/tests/test_security_defaults.py`` asserts no shortcut is
+    reachable when it is unset.
 """
 
 from __future__ import annotations

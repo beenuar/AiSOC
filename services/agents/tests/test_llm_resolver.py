@@ -114,7 +114,7 @@ def _reset_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 class TestEnvBaseline:
     """Verify the resolver speaks the same env-var dialect as the API
-    service's status endpoint (``services/api/.../llm_status.py``).
+    service's status endpoint (``services/api/app/api/v1/endpoints/llm_status.py``).
     """
 
     def test_empty_env_returns_blank_triple(self) -> None:

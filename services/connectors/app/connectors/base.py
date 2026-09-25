@@ -40,7 +40,8 @@ if TYPE_CHECKING:
 # CONTAIN / REMEDIATE / TICKET / AUDIT). Adding a new capability:
 #   1. Add the enum member here.
 #   2. Update the relevant connectors' ``capabilities()`` classmethod.
-#   3. Update ``test_capabilities`` in ``services/connectors/tests/test_capabilities.py``.
+#   3. Keep ``test_every_declared_capability_is_a_valid_verb`` in
+#      ``services/connectors/tests/test_conformance.py`` passing.
 #
 # Per-instance downscoping happens in the API layer: an operator can store an
 # ``allowed_capabilities`` whitelist on a ``Connector`` row and the agent

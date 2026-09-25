@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A gate that reads the one place a dead path could get in.** A comment is
+  the only prose no check in this tree opens: `check_repo_self_links.py`
+  reads markdown and matches `github.com` URLs, lychee resolves links, and
+  neither looks inside source files — which is where most cross-file
+  references in this repository actually live. That is how
+  `docker-compose.yml` came to name
+  `docs/architecture/decisions/0001-llm-gateway-in-core.md`, a path with no
+  directory behind it, and survive every gate. `scripts/check_comment_paths.py`
+  reads comments in fourteen languages plus Python docstrings and asserts
+  that every repository path they name exists.
+  The corpus was measured before the gate was written, because a naive
+  version would have been mostly noise: of **3,092** path-shaped strings in
+  non-markdown comments, most are MIME types, MCP method names
+  (`tools/call`), Splunk REST routes (`services/search/jobs`), container
+  images or URL routes. Three structural filters — a known file extension, a
+  first segment that names something at the top of this repository, and not
+  a URL / template / glob / gitignored artefact — cut that to **1,251**
+  claims about this tree, resolved against the repository root *and* each
+  ancestor of the referring file (a comment in `services/agents/tests/`
+  saying `tests/conftest.py` means the one beside it).
+  Extension-less directory references are **deliberately not checked** and
+  the gate says so in its own output: 286 resolve and 52 do not, and
+  hand-classifying the 52 put genuine rot at roughly one in five, which is
+  the precision at which a gate gets ignored.
+  Ten exceptions are recorded, each with a reason and each verified in both
+  directions — an entry whose path now resolves, or which no longer appears
+  in any comment, fails the build rather than sitting there.
+
+### Fixed
+
+- **A consumer that retried a permanent failure in silence, forever.** The
+  `graph_ws` broadcaster in `services/ingest` could not die the way the UEBA
+  consumer did — its loop `continue`s past an error — but it answered every
+  error the same way: a flat 50ms sleep with the error discarded. Against a
+  broker that was never coming back that is twenty reconnect attempts a
+  second behind a container reporting `running`, restarts 0 and `/health`
+  200, with no line in any log and no counter anywhere. Not a silent death;
+  a permanent failure wearing the costume of a transient one.
+  Most of those errors never reached the loop at all. `kafka.NewReader`
+  falls back to a **silent logger** when `ErrorLogger` is nil, and with a
+  `GroupID` set the consumer group's dial, join and rebalance failures are
+  reported *only* through it — `ReadMessage` stays blocked — so the single
+  most likely permanent fault, an unreachable or misnamed broker, was
+  discarded inside the library. `ErrorLogger` is now wired.
+  Errors are classified into what the loop can do about them: **transient**
+  (retry, with exponential backoff capped at 30s instead of a flat 50ms),
+  **permanent** (the loop stops, because a loop over a fault no retry can
+  clear turns a misconfiguration into indefinite churn — the same reasoning
+  the UEBA consumer records), and **poison** (one undecodable envelope,
+  counted and skipped without backing off a healthy subscription). A fourth
+  state is a duration rather than a class: a `no such host` can be a startup
+  race for a few seconds and a variable nobody set for ever, so it is
+  reported as transient and then, after two minutes, as *not resolving* —
+  the point at which the operator's next move stops being "wait".
+  Permanence is decided by an enumerated set of protocol codes, not by
+  negating `kafka.Error.Temporary()`: `REBALANCE_IN_PROGRESS` is
+  non-retriable in the protocol's sense and happens on every deploy, so
+  deriving the set that way would have stopped the consumer on a routine
+  rebalance. A test walks the entire error table in both directions.
+- **Readiness that reported on the process and not on the subscription.**
+  Ingest's `/readyz` now names every registered background subscription and
+  its state, in the healthy case too, so a 200 says what was checked rather
+  than only that nothing was wrong. The verdict stays keyed on the publish
+  path deliberately: unlike the Python services, consuming is not ingest's
+  job, and failing readiness for an opt-in WebSocket fan-out would pull the
+  pipeline's front door out of the load balancer to fix a broadcast. The
+  surface that depends on the subscription reports on it directly —
+  `/v1/graph_ws/stream` answers 503 with the reason instead of completing a
+  handshake onto a socket that will stay silent — and
+  `aisoc_graph_ws_source_attached` / `_errors_total` / `_not_resolving` are
+  the alertable signals.
+- **Two scheduler loops that logged that a tick failed and never what.**
+  `retention_purge` and `hunt_scheduler` logged `err=%s` with
+  `type(exc).__name__` and nothing else: `err=ProgrammingError` every thirty
+  seconds says a tick failed, never why, and never whether waiting is the
+  right response. Both now report the sanitised message and escalate from
+  `warning` to `error` once the run of failures has outlived a transient
+  explanation.
+- **Twenty-two dead paths in comments and docstrings**, found by the new
+  gate on its first run. Among them: cost provenance pointing at migration
+  `055` when the file is `063`; the Wazuh severity table pointing at
+  `apps/docs/connectors/` instead of `apps/docs/docs/connectors/`; eight
+  copies of the vendored `tenant_scope.py` pointing at a
+  `check_vendored_tenant_scope.py` that is spelled `sync_`; eleven files
+  pointing at a root-level `tests/test_security_defaults.py` that lives
+  under `services/api/`; and three separate pointers at CI checks that had
+  never been written, one of which `check_action_contract.py` already
+  documented as fictional in its own docstring.
+- **A load generator that could tick forever and send nothing.**
+  `services/demo-producer` silently `continue`d when `http.NewRequestWithContext`
+  failed, which only happens for a malformed URL — the one error in that
+  loop no retry can clear. It now says so and stops.
+
 ### Changed
 
 - **`sqlglot` moved to the 30 line across all eight declarations, and the

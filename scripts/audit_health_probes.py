@@ -84,8 +84,8 @@ def audit_service(svc: str, reference: bytes | None) -> tuple[bool, bool, bool, 
     tree would have left the other twelve serving the older contract, and a
     probe that answers differently per service is worse than one that is
     wrong everywhere — it makes a fleet-wide readiness answer unreadable.
-    The docstring also pointed at ``scripts/sync_health_module.py``, which
-    does not exist in this tree.
+    The docstring also pointed at a sync script under ``scripts/`` that was
+    never written, so the sync it promised had no implementation either.
     """
     base = SERVICES_DIR / svc / "app"
     module = base / "_health.py"

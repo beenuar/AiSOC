@@ -2,7 +2,7 @@
 """Keep ``services/api/app/_vendor/llm_contract_rules.py`` in lockstep with its source.
 
 The reversible pseudonymizer lives canonically under
-``services/agents/app/privacy/llm_contract_rules.py``. The public-replay publish flow in
+``services/agents/app/llm/contract_rules.py``. The public-replay publish flow in
 the API service (``services/api/app/services/replay_redaction.py``) reuses it to
 strip customer PII before a ledger snapshot is served at ``/r/<slug>``. Because
 the ``aisoc-api`` Docker image is built with ``services/api`` as its build

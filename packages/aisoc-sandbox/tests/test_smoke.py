@@ -3,7 +3,7 @@
 If any of these fail, `pip install aisoc-sandbox && aisoc-sandbox demo`
 no longer works on a clean machine — which is the only contract that
 matters for this package. The CI gate that runs this suite on a Linux
-+ macOS matrix (see `.github/workflows/sandbox-smoke.yml`) is the
++ macOS matrix (see the `sandbox-offline` job in `.github/workflows/readme-gates.yml`) is the
 authoritative trust signal for the `pip install` path.
 """
 

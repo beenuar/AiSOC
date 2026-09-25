@@ -30,6 +30,15 @@ type KafkaSourceConfig struct {
 	// kafka.FirstOffset or kafka.LastOffset; defaults to LastOffset
 	// because the WS contract is "live tail, no replay".
 	StartOffset int64
+
+	// Health receives every failure this source notices, including the
+	// ones kafka-go reports to its own error logger instead of returning
+	// from ReadMessage. Pass the same *SourceState to graph_ws.New so the
+	// loop and the reader agree about the state of the subscription.
+	//
+	// Nil is allowed and still logs — a source whose errors go nowhere is
+	// the defect this exists to close — but the counters are dropped.
+	Health *SourceState
 }
 
 // KafkaSource is the production EnvelopeSource. It owns a kafka.Reader
@@ -59,13 +68,27 @@ func NewKafkaSource(cfg KafkaSourceConfig) (*KafkaSource, error) {
 	if start == 0 {
 		start = kafka.LastOffset
 	}
+	brokers := splitCSV(cfg.Brokers)
+	if len(brokers) == 0 {
+		return nil, fmt.Errorf("graph_ws: kafka brokers required")
+	}
 	rd := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:     splitCSV(cfg.Brokers),
+		Brokers:     brokers,
 		Topic:       cfg.Topic,
 		GroupID:     group,
 		StartOffset: start,
 		MinBytes:    1,
 		MaxBytes:    10 * 1024 * 1024,
+		// Without this the reader falls back to a silent logger (reader.go
+		// `withErrorLogger`), and with a GroupID set that is where every
+		// dial, join, and rebalance failure goes — ReadMessage stays
+		// blocked and returns nothing. So the single most likely permanent
+		// fault, a broker that is unreachable or misnamed, was discarded
+		// inside the library before this package could see it. An
+		// unreachable broker now says so.
+		ErrorLogger: kafka.LoggerFunc(func(format string, args ...interface{}) {
+			cfg.Health.ObserveReaderError(fmt.Sprintf(format, args...))
+		}),
 	})
 	return &KafkaSource{reader: rd}, nil
 }
@@ -78,7 +101,11 @@ func (k *KafkaSource) Next(ctx context.Context) (graph.GraphUpdate, error) {
 	}
 	var env graph.GraphUpdate
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
-		return graph.GraphUpdate{}, fmt.Errorf("graph_ws: decode envelope: %w", err)
+		// Poison, not a source failure: this envelope is unreadable and the
+		// next one may be fine. Backing the subscription off for a malformed
+		// message would report a broken topic where there is a broken
+		// producer.
+		return graph.GraphUpdate{}, Poison(fmt.Errorf("graph_ws: decode envelope: %w", err))
 	}
 	if env.TenantID == "" {
 		for _, h := range msg.Headers {

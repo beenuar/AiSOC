@@ -49,6 +49,7 @@ from app.db.clickhouse import execute_lake_query
 from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.services.retention import _clamp, build_lake_purge_sql, resolve_policy
+from app.workers._tick_failures import TickFailures
 
 logger = logging.getLogger("aisoc.retention_purge")
 
@@ -268,6 +269,7 @@ async def run_forever() -> None:
             "retention_purge is in dry-run: policies are evaluated and the row counts "
             "logged, but nothing is deleted. Set RETENTION_WORKER_DRY_RUN=false to arm it."
         )
+    failures = TickFailures("retention_purge", logger)
     try:
         while True:
             try:
@@ -275,7 +277,9 @@ async def run_forever() -> None:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("retention_purge tick failed err=%s", type(exc).__name__)
+                failures.record_failure(exc)
+            else:
+                failures.record_success()
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         logger.info("retention_purge stopped")

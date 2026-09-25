@@ -1,0 +1,87 @@
+name: Comment paths
+
+# A comment is the one place no other gate reads.
+#
+# `docker-compose.yml` carried a reference to an ADR under
+# `docs/architecture/decisions/`, a path with no directory behind it. Two
+# workstreams tripped over it within an hour and it
+# had survived every check in the tree: `check_repo_self_links.py` opens
+# markdown and matches github.com URLs, lychee resolves links, and neither
+# looks at the prose inside source files — which is where most cross-file
+# references in this repository actually live.
+#
+# Separate from link-check.yml on purpose. That workflow's path filter is
+# markdown-only and its docs-tree job runs lychee over the whole portal; this
+# one has to trigger on source changes, and making link-check do that would
+# put a multi-minute network crawl on every code PR.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/*.py'
+      - '**/*.go'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.sh'
+      - '**/*.sql'
+      - '**/*.tf'
+      - '**/*.toml'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/Dockerfile'
+      - 'scripts/check_comment_paths.py'
+      - '.github/workflows/comment-paths.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.py'
+      - '**/*.go'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/*.sh'
+      - '**/*.sql'
+      - '**/*.tf'
+      - '**/*.toml'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/Dockerfile'
+      - 'scripts/check_comment_paths.py'
+      - '.github/workflows/comment-paths.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comment-paths-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  comment-paths:
+    name: Comment paths · repo paths in comments must exist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history is not needed, but the gate resolves its root through
+      # `git rev-parse` and lists the corpus with `git ls-files`, so it has to
+      # run inside a real checkout rather than an unpacked archive.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      # Before the gate, not after: a gate whose own detection has broken
+      # reports a clean tree for the same reason a clean tree does.
+      - name: Prove the gate still detects what it claims to
+        run: python3 scripts/check_comment_paths.py --self-test
+
+      - name: Every repository path named in a comment exists
+        run: python3 scripts/check_comment_paths.py

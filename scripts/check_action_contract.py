@@ -667,11 +667,11 @@ def _ratchet(name: str, baseline: dict[str, str], resolved_set: set[str]) -> lis
 def check_capability_mirror() -> list[str]:
     """The actions mirror must match the connectors Capability enum.
 
-    capabilities.py documents a CI check at
-    ``services/actions/tests/test_capability_mirror.py`` that compares the two
-    sets. No such file exists, so the mirror it describes has never been
-    verified — which is how four reverse verbs the action contracts name
-    ended up missing from both.
+    capabilities.py used to document this check as a test file under
+    ``services/actions/tests`` that had never been written, so the mirror it
+    described had never been verified — which is how four reverse verbs the
+    action contracts name ended up missing from both. This function is the
+    check; capabilities.py now points at it.
     """
     import importlib.util
 

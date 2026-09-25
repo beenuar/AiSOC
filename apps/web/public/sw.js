@@ -288,7 +288,8 @@ self.addEventListener('sync', (event) => {
 async function replayQueuedApprovals() {
   // Approval mutations made while offline are stored in IndexedDB by the
   // /responder views; on reconnection we drain the queue here. The actual
-  // queue impl lives in apps/web/src/lib/responder/offlineQueue.ts.
+  // queue impl lives in apps/web/src/lib/pwa.ts (queueApproval /
+  // listQueuedApprovals over the 'pending-approvals' IndexedDB store).
   const clients = await self.clients.matchAll();
   clients.forEach((c) => c.postMessage({ type: 'sync-approvals' }));
 }

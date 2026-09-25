@@ -67,7 +67,7 @@ logger = structlog.get_logger()
 # ``info | low | medium | high | critical`` ladder. Level 15 is the only
 # tier Wazuh explicitly documents as "critical / attack" so we surface it
 # at the AiSOC ``critical`` band; levels 12-14 stay at ``high``. The
-# matching operator-facing table lives in ``apps/docs/connectors/wazuh.md``
+# matching operator-facing table lives in ``apps/docs/docs/connectors/wazuh.md``
 # so SOC analysts can predict what they will see. Boundaries are inclusive
 # on the lower end.
 # ---------------------------------------------------------------------------

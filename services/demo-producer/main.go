@@ -233,7 +233,14 @@ func runProducer(ctx context.Context, wg *sync.WaitGroup, profile connectorProfi
 			}
 			req, err := http.NewRequestWithContext(ctx, "POST", opts.ingestURL, bytes.NewReader(body))
 			if err != nil {
-				continue
+				// A malformed URL never becomes a well-formed one, so this
+				// is the one error in this loop that retrying cannot clear.
+				// Silently continuing produced a producer that ticked
+				// forever and sent nothing, which is the shape this loop
+				// must never have again.
+				fmt.Fprintf(os.Stderr, "[%s] cannot build a request for %q: %v — this will not resolve; fix --ingest-url\n",
+					profile.id, opts.ingestURL, err)
+				return
 			}
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Tenant-ID", opts.tenant)

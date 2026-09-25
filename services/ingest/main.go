@@ -214,16 +214,36 @@ func main() {
 	var graphWSServer *graph_ws.Server
 	var graphWSBroker *graph_ws.Broadcaster
 	if cfg.GraphWSEnabled {
+		// One state object shared by the source and the broadcaster: the
+		// errors kafka-go reports to its own logger and the ones the consume
+		// loop sees are the same subscription failing, and splitting them
+		// across two records is how half of them stay invisible.
+		graphWSHealth := graph_ws.NewSourceState(cfg.GraphUpdatesTopic, 0)
 		src, err := graph_ws.NewKafkaSource(graph_ws.KafkaSourceConfig{
 			Brokers: cfg.KafkaBrokers,
 			Topic:   cfg.GraphUpdatesTopic,
 			GroupID: cfg.GraphWSGroupID,
+			Health:  graphWSHealth,
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("graph_ws: disabled (Kafka source init failed)")
 		} else {
-			graphWSBroker = graph_ws.New(src, graph_ws.Options{BufferSize: cfg.GraphWSSubscriberBuffer})
+			graphWSBroker = graph_ws.New(src, graph_ws.Options{
+				BufferSize: cfg.GraphWSSubscriberBuffer,
+				Health:     graphWSHealth,
+			})
 			graphWSServer = graph_ws.NewServer(graphWSBroker)
+			// /readyz names this subscription and its state. A consumer
+			// detached from its topic behind a 200 that never mentions it is
+			// indistinguishable from an idle one.
+			h.RegisterSubscription("graph_ws", func() handler.SubscriptionStatus {
+				health := graphWSBroker.Health()
+				return handler.SubscriptionStatus{
+					Attached:     health.Attached,
+					NotResolving: health.NotResolving,
+					Detail:       health.Reason(),
+				}
+			})
 			log.Info().
 				Str("topic", cfg.GraphUpdatesTopic).
 				Int("buffer", cfg.GraphWSSubscriberBuffer).
