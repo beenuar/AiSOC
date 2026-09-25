@@ -1016,7 +1016,6 @@ number is the one the requirement is sized against.
   held it for a whitelist it could never match. It now carries the LOW entry
   its own contract asks for ("classified the same as create_notable_event"),
   and `blast_radius.py` fails closed like its three siblings.
-=======
 
 ### Removed
 
