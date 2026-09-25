@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 import uuid
@@ -47,6 +48,14 @@ REALTIME_HTTP = "http://localhost:8086"
 REALTIME_WS = "ws://localhost:8086"
 TENANT = "00000000-0000-0000-0000-000000000001"
 
+#: /v1/ingest is authenticated and the tenant is derived from the
+#: credential, so this test has to hold one like any other pusher. The
+#: workflow mints it with `python -m app.scripts.mint_ingest_token` and
+#: exports it here. Required rather than optional: an unauthenticated
+#: fallback would mean the spine test stopped exercising the path a real
+#: push takes.
+INGEST_TOKEN = os.environ.get("AISOC_INGEST_TOKEN", "").strip()
+
 HEALTH_BUDGET_S = 300
 SPINE_BUDGET_S = 180
 REPOST_INTERVAL_S = 20
@@ -54,6 +63,24 @@ REPOST_INTERVAL_S = 20
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def ingest_headers() -> dict[str, str]:
+    """Credential plus the tenant the credential is expected to cover.
+
+    The tenant header is not authority — the ingest service intersects it
+    with the token's own scope — but sending it keeps this test honest
+    about which tenant it believes it is writing for.
+    """
+    if not INGEST_TOKEN:
+        raise SystemExit(
+            "AISOC_INGEST_TOKEN is unset. /v1/ingest requires a credential; mint one with\n"
+            "  docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet"
+        )
+    return {
+        "X-Tenant-ID": TENANT,
+        "Authorization": f"Bearer {INGEST_TOKEN}",
+    }
 
 
 async def wait_healthy(client: httpx.AsyncClient) -> None:
@@ -107,7 +134,7 @@ async def post_event(client: httpx.AsyncClient, title: str) -> None:
     r = await client.post(
         f"{INGEST}/v1/ingest/batch",
         json=event_payload(title),
-        headers={"X-Tenant-ID": TENANT},
+        headers=ingest_headers(),
         timeout=10,
     )
     r.raise_for_status()
@@ -142,7 +169,7 @@ async def post_detection_event(client: httpx.AsyncClient) -> None:
     r = await client.post(
         f"{INGEST}/v1/ingest/batch",
         json=payload,
-        headers={"X-Tenant-ID": TENANT},
+        headers=ingest_headers(),
         timeout=10,
     )
     r.raise_for_status()

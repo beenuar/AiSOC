@@ -61,6 +61,10 @@ router = APIRouter(prefix="/inbox", tags=["inbox"])
 # UI's "preferred display order" so the wizard can iterate this list
 # directly.
 ALLOWED_TEMPLATE_IDS: tuple[str, ...] = (
+    # Direct push to /v1/ingest. Unlike every other entry this one names a
+    # credential purpose rather than a payload mapping — see the note above
+    # ``connector-push`` in ``_TEMPLATE_CATALOG``.
+    "connector-push",
     # P0 templates from the plan
     "generic-json",
     "pagerduty",
@@ -74,6 +78,19 @@ ALLOWED_TEMPLATE_IDS: tuple[str, ...] = (
     "cef-syslog",
     "splunk-hec",
     "email-forwarded",
+    # AI estate. Both templates shipped with the feature and both are what
+    # packages/aisoc-ai-sdk tells users to mint, but neither was ever added
+    # here — so the documented setup for the AI-estate feature returned 400
+    # and the SDK had no reachable endpoint to point at.
+    "ai-runtime",
+    "ai-finding",
+    # Kubernetes apiserver audit, inbox path. The dedicated route
+    # POST /v1/ingest/k8s-audit/{tenant_id} is preferred and is what the
+    # connector docs lead with, but both those docs and
+    # plugins/kubernetes-audit/plugin.yaml describe this token as the
+    # supported fallback for control planes that cannot set a custom header
+    # in audit-webhook kubeconfig. It could not be minted either.
+    "k8s-audit",
     # Bidirectional ITSM (Workstream 8) — inbound Jira / ServiceNow webhooks.
     # Tokens minted with this template terminate at
     # /api/v1/inbox/itsm/{tenant_token}/{connector_instance_id} on services/api
@@ -211,6 +228,25 @@ class InboxTemplateInfo(BaseModel):
 # kept here (not in the YAML) because the YAML is parsed by the Go
 # service and we don't want a cross-service schema dependency.
 _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
+    # Not a payload mapping. A connector-push token is the credential for
+    # ``POST /v1/ingest[/batch]``, which normalizes through the ingest
+    # service's connector profiles rather than through a template, so there
+    # is deliberately no ``connector-push.yaml`` on disk —
+    # ``scripts/check_inbox_templates.py`` records that exemption.
+    #
+    # The route is pinned to this template id for the same reason
+    # ``/v1/inbox/cef`` is pinned to ``cef-syslog``: an inbox token is
+    # pasted into a third party's webhook configuration, so minting one for
+    # PagerDuty must not also hand PagerDuty a general ingest credential
+    # for the tenant.
+    "connector-push": {
+        "label": "Direct ingest API (curl, scripts, agents)",
+        "description": (
+            "Credential for POST /v1/ingest/batch. Use it to push telemetry "
+            "from a script, an agent, or any tool that can make an HTTP request."
+        ),
+        "category": "generic",
+    },
     "generic-json": {
         "label": "Generic JSON",
         "description": ("Forward arbitrary JSON. Best effort field mapping; use a specific template below if your vendor is listed."),
@@ -267,6 +303,31 @@ _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
         "label": "Forwarded email",
         "description": ("Inbound webhook from Mailgun / SES routing rules. Useful for vendors that only deliver alerts via email."),
         "category": "email",
+    },
+    "ai-runtime": {
+        "label": "AI runtime activity",
+        "description": (
+            "Model calls, tool invocations and MCP requests from your AI estate. "
+            "Emitted by packages/aisoc-ai-sdk. Routine activity lands in the lake for hunting."
+        ),
+        "category": "ai",
+    },
+    "ai-finding": {
+        "label": "AI guardrail finding",
+        "description": (
+            "Prompt injection, excessive agency, sensitive-data egress and other "
+            "guardrail hits. Always promoted to an alert, so mint this separately from ai-runtime."
+        ),
+        "category": "ai",
+    },
+    "k8s-audit": {
+        "label": "Kubernetes audit (webhook fallback)",
+        "description": (
+            "Apiserver audit events over the inbox. Prefer "
+            "POST /v1/ingest/k8s-audit/<tenant_id>; use this only when the "
+            "control plane cannot set a custom header."
+        ),
+        "category": "cloud",
     },
     "itsm-inbound": {
         "label": "Inbound ITSM (Jira / ServiceNow)",

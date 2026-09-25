@@ -244,6 +244,12 @@ func runProducer(ctx context.Context, wg *sync.WaitGroup, profile connectorProfi
 			}
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Tenant-ID", opts.tenant)
+			// /v1/ingest derives the tenant from the credential and only
+			// intersects the header above with it, so without a token every
+			// batch is refused with 401.
+			if opts.token != "" {
+				req.Header.Set("Authorization", "Bearer "+opts.token)
+			}
 			resp, err := client.Do(req)
 			if err != nil {
 				if ctx.Err() == nil {
@@ -260,6 +266,7 @@ func runProducer(ctx context.Context, wg *sync.WaitGroup, profile connectorProfi
 type options struct {
 	ingestURL string
 	tenant    string
+	token     string
 	rate      int
 	batch     int
 	duration  time.Duration
@@ -269,6 +276,7 @@ func main() {
 	var opts options
 	flag.StringVar(&opts.ingestURL, "ingest-url", envDefault("INGEST_URL", "http://localhost:8001/v1/ingest"), "Ingest service ingest endpoint")
 	flag.StringVar(&opts.tenant, "tenant", envDefault("TENANT_ID", "00000000-0000-0000-0000-000000000001"), "Tenant ID header")
+	flag.StringVar(&opts.token, "token", envDefault("AISOC_INGEST_TOKEN", ""), "Ingest credential (mint with `make ingest-token`); /v1/ingest refuses requests without one")
 	flag.IntVar(&opts.rate, "rate", 4, "Batches per second per connector")
 	flag.IntVar(&opts.batch, "batch", 5, "Events per batch")
 	flag.DurationVar(&opts.duration, "duration", 0, "How long to run (0 = forever)")

@@ -131,6 +131,34 @@ jobs:
             exit 1
           }
 
+      # /v1/ingest/batch is authenticated, so the pipeline test has to hold a
+      # credential like any other caller. Minted through the shipped command
+      # rather than inserted into Postgres, so this step also covers the path
+      # an operator follows.
+      - name: Mint the ingest credential the pipeline test needs
+        run: |
+          set -euo pipefail
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_ingest_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_INGEST_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # Re-running must return the same token rather than leaving a trail of
+      # live credentials nobody revokes. `make smoke` calls this on every run.
+      - name: Minting is idempotent
+        run: |
+          set -euo pipefail
+          again="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
+          echo "::add-mask::$again"
+          if [ "$again" != "$AISOC_INGEST_TOKEN" ]; then
+            echo "::error::a second mint returned a different token"
+            exit 1
+          fi
+          echo "confirmed: a second mint reused the existing push token"
+
       - name: Golden pipeline — one real event end to end
         run: python3 tests/e2e/golden_pipeline/run_golden_pipeline.py
 
