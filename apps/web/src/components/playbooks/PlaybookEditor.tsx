@@ -24,21 +24,16 @@ import { PlaybookFlowCanvas } from './PlaybookFlowCanvas';
 import { StepInspector } from './StepInspector';
 import type { Playbook, PlaybookStep, StepType } from './types';
 import { STEP_TYPE_META } from './stepColors';
-import { defaultParamsFor } from './stepSchemas';
+import { AUTHORABLE_STEP_TYPES, defaultParamsFor } from './stepSchemas';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { useHistoryState } from '@/hooks/useHistoryState';
 
-const STEP_TYPES: StepType[] = [
-  'enrich',
-  'investigate',
-  'notify',
-  'block_ip',
-  'isolate_host',
-  'create_ticket',
-  'close_case',
-  'http',
-  'condition',
-];
+/**
+ * What the palette offers. Derived from the registry, and filtered on
+ * whether the engine can run the type rather than on its name — a step the
+ * engine fails closed is not something to hand somebody a button for.
+ */
+const STEP_TYPES: readonly StepType[] = AUTHORABLE_STEP_TYPES;
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);

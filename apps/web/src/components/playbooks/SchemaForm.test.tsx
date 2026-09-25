@@ -53,7 +53,7 @@ import {
 } from './stepSchemas';
 
 describe('SchemaForm — rendering', () => {
-  it('renders all required fields with required asterisks', () => {
+  it('marks required fields as required on the control, not just visually', () => {
     const onChange = vi.fn();
     render(
       <SchemaForm
@@ -63,12 +63,17 @@ describe('SchemaForm — rendering', () => {
       />,
     );
 
-    // Both fields on block_ip are required.
-    expect(screen.getByText(/IP address field/i)).toBeInTheDocument();
-    expect(screen.getByText(/Duration \(seconds\)/i)).toBeInTheDocument();
-    // Two asterisks for two required fields.
-    const asterisks = screen.getAllByText('*');
-    expect(asterisks).toHaveLength(2);
+    // Both fields on block_ip are required. Found by label, which also
+    // asserts the label is associated with its control — it used to be a
+    // `<label>` sitting next to the input with no `htmlFor`, so a screen
+    // reader announced an unnamed text box.
+    for (const label of [/IP address field/i, /Duration \(seconds\)/i]) {
+      const control = screen.getByLabelText(label);
+      expect(control).toBeInTheDocument();
+      // The requiredness has to reach assistive technology. An `aria-hidden`
+      // asterisk is a cue for sighted users only.
+      expect(control).toHaveAttribute('aria-required', 'true');
+    }
   });
 
   it('renders a select with the configured options', () => {
@@ -109,12 +114,19 @@ describe('SchemaForm — rendering', () => {
         schema={STEP_SCHEMAS.block_ip}
         value={{}}
         onChange={vi.fn()}
-        validationErrors={['IP address field is required.']}
+        validationErrors={[
+          { key: 'ip_field', message: 'IP address field is required.' },
+        ]}
       />,
     );
     expect(
       screen.getByRole('alert'),
     ).toHaveTextContent(/IP address field is required/i);
+    // The error is also reachable from the control it belongs to, which a
+    // summary list at the foot of the form is not.
+    expect(screen.getByLabelText(/IP address field/i)).toHaveAccessibleDescription(
+      /IP address field is required/i,
+    );
   });
 
   it('warns about extra params not modelled by the schema', () => {

@@ -560,15 +560,22 @@ async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any]
         from app.clients.osctrl_client import OsctrlClient  # noqa: PLC0415
         from app.clients.osquery_allowlist import AllowlistError  # noqa: PLC0415
     except ModuleNotFoundError as exc:
+        # Raised, not returned. A returned dict leaves ``step_status`` at
+        # SUCCESS, so every live query in the shipped agents image — where
+        # these clients are always absent — was reported as a step that ran
+        # while nothing had been asked of any endpoint. That is the same
+        # defect the missing-handler branch above exists to remove, and it
+        # became reachable from the console the moment the editor could
+        # author this step type.
+        #
+        # Permanent because the module will not appear between attempt one
+        # and attempt four: the image either ships the clients or it does not.
         logger.error("playbook.osquery_clients_unavailable: %s", exc)
-        return {
-            "error": (
-                "osquery_live_query is not executable in the agents service: the "
-                "osquery backend clients ship in services/actions. Run this step "
-                "through the actions service, or remove it from the playbook."
-            ),
-            "partial": True,
-        }
+        raise PermanentStepFailure(
+            "osquery_live_query is not executable in the agents service: the "
+            "osquery backend clients ship in services/actions. Run this step "
+            "through the actions service, or remove it from the playbook."
+        ) from exc
 
     backend: str = step.params.get("backend", "osctrl")
     target_hosts: list[str] = step.params.get("target_hosts") or [context.get("host_id") or context.get("host", "")]

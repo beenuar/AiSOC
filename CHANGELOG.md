@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The playbook editor could author nine of the engine's twenty-two step
+  types, and the build was green.** `apps/web/src/components/playbooks/types.ts`
+  declared its own nine-member `StepType` union under a header comment
+  claiming it mirrored `services/agents/app/playbook/models.py`, which
+  declares twenty-two. The registry behind every form is keyed
+  `Record<StepType, StepSchema>`, so exhaustiveness was satisfied against the
+  *local* union and thirteen missing forms compiled cleanly; had it imported
+  the union from `packages/types`, `Record` would have failed with thirteen
+  missing keys. None of the fourteen files in the directory imported the
+  published package. It now re-exports `StepType` from `@aisoc/types`, and the
+  compiler named the gap.
+
+  The thirteen forms are built: `block_ioc`, `osquery_live_query`,
+  `disable_user`, `reset_password`, `revoke_session`, `force_mfa`,
+  `kill_process`, `quarantine_file`, `run_av_scan`, `run_script`,
+  `search_siem`, `create_notable_event`, and `approval`. Each collects what
+  its executor in `services/actions` reads, and each governed verb's target
+  field is keyed on the name `engine._resolve_target` actually looks for, so a
+  saved step carries its own target rather than depending on the alert context
+  happening to hold one. Nothing collects a credential — those are resolved
+  per tenant from the connector vault at dispatch — and nothing offers a
+  `dry_run` control, because the bridge does not read one.
+
+  `approval` is presented, never offered. The engine records it in
+  `_UNBRIDGEABLE` with a full reason, so the palette and the type dropdown
+  filter on `execution !== 'unimplemented'` rather than on its name, an
+  existing `approval` step still renders so an imported playbook can be read
+  and fixed, and the inspector states that the engine fails the step closed
+  and the run stops there.
+
+- **`osquery_live_query` reported SUCCESS while running nothing.** Its handler
+  returned an error dict when the osquery backend clients could not be
+  imported — which is always, in the shipped agents image, because those
+  clients live in `services/actions` — and a returned dict leaves the step
+  status at SUCCESS. Reachable from the console the moment the editor could
+  author the type, so it now raises `PermanentStepFailure` and fails closed.
+
+- **Three more partial vocabularies in the same directory.** `stepColors.ts`
+  held a second nine-entry `Record<StepType, …>`; `StepInspector` and
+  `PlaybookEditor` each hard-coded a nine-member array. All three are derived
+  from the registry now. `packHelpers.ts` mapped step types to integration
+  badges as a `Record<string, …>` covering eighteen of twenty-two, so a
+  playbook built from the other four claimed to use no integrations at all.
+
+### Added
+
+- **The playbook parity gate now reads every declaration of the step
+  vocabulary, wherever it is.** `scripts/check_playbook_schema_parity.py`
+  compared the engine against `packages/types/src/playbook.ts` and never
+  opened `apps/web`; naming the editor's file here would have fixed that file
+  and left the next one free. The TypeScript half is a scan: every `.ts` and
+  `.tsx` file in the tree is parsed for literal collections of step-type
+  names, and any collection overlapping the engine's vocabulary must either
+  match it exactly or be a recorded subset with a reason, checked in both
+  directions so an exemption that stops being needed fails the build. The
+  editor's execution annotations are compared against the schema's
+  `x-aisoc-execution` in both directions as well, so a surface cannot tell an
+  author a step will run when the contract says it will not. `--list` prints
+  what the scan credited, not only what it flagged, and the gate refuses to
+  report agreement when it finds no declaration at all.
+
+  Against `origin/main` it reports 56 disagreements across all five
+  vocabularies; against this tree it credits five declarations, each complete.
+
+  Two limits are stated rather than left implicit: a collection overlapping
+  the vocabulary by fewer than two members is not treated as one, and a list
+  derived at runtime is not a literal and is not seen — which is the shape the
+  gate wants, because a derived list cannot drift. A file the reader cannot
+  parse to the end is never silently skipped: it is checked for step-type
+  names in its raw bytes first, and the gate refuses the tree if it finds any.
+
+- **A WCAG AA sweep over all twenty-two inspector forms.** The labels in
+  `SchemaForm` and `StepInspector` sat beside their controls with no
+  association, requiredness was an `aria-hidden` asterisk, help text was
+  unreferenced, and the error summary named fields it could not be reached
+  from. Controls now carry ids, labels `htmlFor`, `aria-required`,
+  `aria-invalid` and `aria-describedby`; errors are reported per field as well
+  as in the summary; the condition and params groups are fieldsets. The sweep
+  also caught `<ul role="alert">`, which is not an allowed role for a list and
+  left its items without a list parent.
+
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not
