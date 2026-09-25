@@ -111,6 +111,14 @@ CRITICAL: dict[str, str] = {
         "manifest permits a newer ruff than CI installs reformats the tree and "
         "reds their own PR with no dependency change in the diff"
     ),
+    "mypy": (
+        "`scripts/check_mypy_baseline.py` is a ratchet keyed on (tree, file, "
+        "error code), and a mypy major does not merely add findings — it moves "
+        "them. 1.20.2 and 2.3.1 disagree about 35 entries over this tree, so "
+        "two mypy versions are two different answers to whether the baseline "
+        "is intact, and a contributor whose manifest permits one CI does not "
+        "install cannot reproduce the gate they are asked to keep green"
+    ),
     "poetry": (
         "the resolver that turns a manifest into an installed version set. "
         "Two resolvers are two answers to 'what does this commit install', "
