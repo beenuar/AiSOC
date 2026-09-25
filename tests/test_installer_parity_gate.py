@@ -89,8 +89,7 @@ def test_windows_installer_does_not_hand_off_to_the_demo_stack() -> None:
 def test_windows_installer_starts_the_real_stack() -> None:
     code = "\n".join(_code_lines(_read(INSTALL_PS1)))
     assert "'compose', 'up', '-d'" in code or "docker compose up -d" in code, (
-        "install.ps1 must start the deployment defined by the root "
-        "docker-compose.yml, the same one `make up` starts."
+        "install.ps1 must start the deployment defined by the root docker-compose.yml, the same one `make up` starts."
     )
 
 
@@ -124,23 +123,18 @@ def test_windows_installer_creates_the_first_administrator() -> None:
     product.
     """
     module = "app.scripts.bootstrap_admin"
-    assert module in _makefile_recipe("bootstrap"), (
-        f"`make bootstrap` no longer runs {module}; update this gate and install.ps1 together"
-    )
+    assert module in _makefile_recipe("bootstrap"), f"`make bootstrap` no longer runs {module}; update this gate and install.ps1 together"
     code = "\n".join(_code_lines(_read(INSTALL_PS1)))
     assert module in code, f"install.ps1 never runs {module}, so no administrator is created"
     assert "docker compose run --rm -T api" in code, (
-        "install.ps1 must create the administrator the same way `make bootstrap` "
-        "does — a one-shot `docker compose run --rm -T api`"
+        "install.ps1 must create the administrator the same way `make bootstrap` does — a one-shot `docker compose run --rm -T api`"
     )
 
 
 def test_windows_installer_runs_the_golden_pipeline() -> None:
-    """"The containers started" is not "the application works"."""
+    """ "The containers started" is not "the application works"."""
     runner = "tests/e2e/golden_pipeline/run_golden_pipeline.py"
-    assert runner in _makefile_recipe("smoke"), (
-        f"`make smoke` no longer runs {runner}; update this gate and install.ps1 together"
-    )
+    assert runner in _makefile_recipe("smoke"), f"`make smoke` no longer runs {runner}; update this gate and install.ps1 together"
     code = "\n".join(_code_lines(_read(INSTALL_PS1)))
     windows_runner = runner.replace("/", "\\")
     assert (runner in code) or (windows_runner in code), (
@@ -167,9 +161,7 @@ def test_both_installers_require_the_same_node_major() -> None:
     install_node = re.search(r"function Install-Node \{(.*?)\n\}", ps1, re.DOTALL)
     assert install_node, "install.ps1 has no Install-Node function"
     ps1_majors = {int(m) for m in re.findall(r"\$major -ge (\d+)", install_node.group(1))}
-    assert ps1_majors == sh_majors, (
-        f"install.sh requires Node {sorted(sh_majors)} and install.ps1 requires {sorted(ps1_majors)}"
-    )
+    assert ps1_majors == sh_majors, f"install.sh requires Node {sorted(sh_majors)} and install.ps1 requires {sorted(ps1_majors)}"
 
 
 # ── Paths the scripts tell a user to run ────────────────────────────────────
@@ -184,16 +176,8 @@ _PS1_PATH = re.compile(r"\.\\([A-Za-z0-9_\\\-./]+\.ps1)")
 @pytest.mark.parametrize("script", [INSTALL_PS1, UNINSTALL_PS1], ids=lambda p: p.name)
 def test_referenced_powershell_paths_exist(script: Path) -> None:
     text = _read(script)
-    missing = sorted(
-        {
-            candidate
-            for candidate in _PS1_PATH.findall(text)
-            if not (REPO / candidate.replace("\\", "/")).is_file()
-        }
-    )
-    assert not missing, (
-        f"{script.name} tells the user to run files that are not in the repository: {missing}"
-    )
+    missing = sorted({candidate for candidate in _PS1_PATH.findall(text) if not (REPO / candidate.replace("\\", "/")).is_file()})
+    assert not missing, f"{script.name} tells the user to run files that are not in the repository: {missing}"
 
 
 def test_windows_uninstaller_tears_down_the_stack_the_installer_starts() -> None:
@@ -202,6 +186,5 @@ def test_windows_uninstaller_tears_down_the_stack_the_installer_starts() -> None
     complete."""
     code = "\n".join(_code_lines(_read(UNINSTALL_PS1)))
     assert "'docker-compose.yml'" in code or '"docker-compose.yml"' in code, (
-        "uninstall.ps1 never brings down the root docker-compose.yml project, "
-        "which is the one install.ps1 starts."
+        "uninstall.ps1 never brings down the root docker-compose.yml project, which is the one install.ps1 starts."
     )

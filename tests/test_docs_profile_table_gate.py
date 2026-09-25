@@ -95,9 +95,7 @@ def test_no_documented_profile_is_invented() -> None:
     compose = _compose_profiles()
     documented = _documented_profiles()
     invented = sorted(set(documented) - set(compose))
-    assert not invented, (
-        f"the quick-start table lists profiles docker-compose.yml does not define: {invented}"
-    )
+    assert not invented, f"the quick-start table lists profiles docker-compose.yml does not define: {invented}"
 
 
 @pytest.mark.parametrize("profile", sorted(_compose_profiles()))
@@ -120,7 +118,7 @@ def test_documented_host_ports_match_compose() -> None:
     actual: dict[str, set[str]] = {}
     for name, cfg in services.items():
         published = set()
-        for mapping in ((cfg or {}).get("ports") or []):
+        for mapping in (cfg or {}).get("ports") or []:
             match = re.match(r"^(?:[\d.]+:)?(\d+):", str(mapping))
             if match:
                 published.add(match.group(1))
@@ -133,8 +131,5 @@ def test_documented_host_ports_match_compose() -> None:
         for name, ports in entry.findall(cells[1]):
             claimed = set(ports.split("/"))
             if name in actual and claimed - actual[name]:
-                wrong.append(
-                    f"{name}: table says {sorted(claimed)}, compose publishes "
-                    f"{sorted(actual[name]) or 'no host port'}"
-                )
+                wrong.append(f"{name}: table says {sorted(claimed)}, compose publishes {sorted(actual[name]) or 'no host port'}")
     assert not wrong, "quick-start table publishes host ports the compose file does not:\n  " + "\n  ".join(wrong)
