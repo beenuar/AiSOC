@@ -10,7 +10,7 @@ Workspace rule we adhere to: numbers produced by this harness are
 **substrate** (deterministic, no LLM) unless the runner is invoked
 with ``--mode wet``. Substrate numbers are a fidelity floor of the
 loader-and-rule pipeline; they are not a claim of agent accuracy.
-The methodology page (``apps/docs/docs/benchmark-fidelity.md``)
+The methodology page (``apps/docs/docs/benchmark-methodology.md``)
 spells out the substrate-vs-wet distinction in detail.
 
 The full datasets are not redistributed in this repo. See

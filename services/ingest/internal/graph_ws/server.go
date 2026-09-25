@@ -77,6 +77,19 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Refuse rather than complete a handshake onto a socket that will stay
+	// silent. A client connected to a broadcaster whose source is detached
+	// gets an open connection and no envelopes, which looks exactly like a
+	// quiet estate — the same indistinguishability that made the consumer
+	// defect invisible in the first place. The endpoint that depends on the
+	// subscription is the right place to report on it, and 503 with the
+	// reason lets a caller retry or escalate instead of waiting forever.
+	if health := s.broker.Health(); !health.Healthy() {
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "graph_ws unavailable: "+health.Reason(), http.StatusServiceUnavailable)
+		return
+	}
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "websocket not supported", http.StatusInternalServerError)
@@ -284,9 +297,16 @@ var (
 
 // String returns a one-line summary of broadcaster state. Used by
 // the `/internal/graph_ws/stats` debug endpoint.
+//
+// Source state is included because subscriber and drop counts describe the
+// fan-out only: both read identically whether the topic is quiet or the
+// consumer is detached from it.
 func (s *Server) String() string {
-	return fmt.Sprintf("graph_ws: subscribers=%d dropped=%d",
+	health := s.broker.Health()
+	return fmt.Sprintf("graph_ws: subscribers=%d dropped=%d attached=%t not_resolving=%t",
 		s.broker.SubscriberCount(),
 		s.broker.DroppedDeliveries(),
+		health.Attached,
+		health.NotResolving,
 	)
 }

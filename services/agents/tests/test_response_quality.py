@@ -34,8 +34,8 @@ regression floor, AND per-template macro mean ≥ 0.75 across the ~55
 distinct templates. The per-template gate is the regression-signal-
 preserving metric: with ~3-4 duplicates per template, a single broken
 template moves per-case mean by ~0.5% but per-template mean by ~1.5%
-(addressing the dilution concern raised in
-`docs/research/dataset-design-notes.md`).
+(addressing the dilution concern that duplicate templates would otherwise
+hide a single broken one).
 
 See `apps/docs/docs/benchmark.md` for what each suite actually measures.
 

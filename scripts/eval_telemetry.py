@@ -110,9 +110,9 @@ _SYSTEM_PROMPT_TOKENS = 800
 # field which mirrors the typical "first-pass context bundle" shape.
 _TELEMETRY_EVENTS_PER_PROMPT = 5
 
-# Completion-budget anchor (tokens). Tuned against the report-template shape
-# in ``services/agents/app/investigator/report_template.md`` — a typical
-# substrate report at medium severity sits around this length.
+# Completion-budget anchor (tokens). Tuned against the report shape
+# ``services/agents/app/investigator/report_writer_agent.py`` produces — a
+# typical substrate report at medium severity sits around this length.
 _COMPLETION_BASE_TOKENS = 800
 
 # Severity scaling for completion length. Higher-severity incidents get

@@ -80,6 +80,7 @@ from app.services.event_warehouse import (
     resolve_provider,
     resolve_tenant_warehouse,
 )
+from app.workers._tick_failures import TickFailures
 
 try:
     from croniter import croniter  # type: ignore[import-untyped]
@@ -465,6 +466,7 @@ async def run_forever() -> None:
     """Tick the scheduler until cancelled. Owned by the API ``lifespan``."""
     interval = max(int(getattr(settings, "HUNT_SCHEDULER_POLL_INTERVAL_SECONDS", 30)), 5)
     logger.info("hunt_scheduler started interval=%ds", interval)
+    failures = TickFailures("hunt_scheduler", logger)
     try:
         while True:
             try:
@@ -474,10 +476,9 @@ async def run_forever() -> None:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning(
-                    "hunt_scheduler tick failed err=%s",
-                    type(exc).__name__,
-                )
+                failures.record_failure(exc)
+            else:
+                failures.record_success()
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         logger.info("hunt_scheduler stopped")

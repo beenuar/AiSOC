@@ -276,11 +276,11 @@ CREATE INDEX IF NOT EXISTS aisoc_run_costs_tenant_run
     ON aisoc_run_costs (tenant_id, run_id);
 """
 
-#: Cost provenance, added by ``services/api/migrations/055_cost_provenance.sql``.
+#: Cost provenance, added by ``services/api/migrations/063_cost_provenance.sql``.
 #: Applied here too because this writer has to run against a database whose
 #: migrations it does not own, and a write that silently drops the provenance
 #: columns would leave every new row indistinguishable from the pre-provenance
-#: rows it exists to separate. Idempotent, and a no-op where 055 already ran.
+#: rows it exists to separate. Idempotent, and a no-op where 063 already ran.
 _RUN_COSTS_PROVENANCE_DDL = """
 ALTER TABLE aisoc_run_costs
     ADD COLUMN IF NOT EXISTS measured_cost_usd    DOUBLE PRECISION NOT NULL DEFAULT 0,

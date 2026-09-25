@@ -2,8 +2,8 @@
 #
 # These thresholds gate the substrate harness in CI. They are NOT a
 # claim about live agent (wet) accuracy on these datasets — see
-# apps/docs/docs/benchmark-fidelity.md for the substrate-vs-wet
-# distinction. Wet numbers are produced manually and copied into
+# apps/docs/docs/benchmark-methodology.md (§3, "Substrate vs. wet eval")
+# for the distinction. Wet numbers are produced manually and copied into
 # apps/docs/docs/benchmark.md.
 #
 # Methodology:

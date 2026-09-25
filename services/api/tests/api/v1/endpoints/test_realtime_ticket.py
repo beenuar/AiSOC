@@ -17,7 +17,7 @@ These tests pin the API half of that contract so it cannot silently regress:
   shared secret is unconfigured in prod.
 
 The Node-side signature/aud/exp verification is pinned separately in
-``services/realtime/src/auth.test.ts``. The claim shape here must stay in sync
+``services/realtime/test/auth.test.ts``. The claim shape here must stay in sync
 with ``RealtimeClaims`` / ``verifyRealtimeTicket`` there.
 
 AiSOC — open-source AI Security Operations Center (MIT License)

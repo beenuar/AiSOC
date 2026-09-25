@@ -98,8 +98,8 @@ function formatDurationSeconds(secs: number | null | undefined): string {
 /**
  * Tailwind classes for the three rendered freshness states.
  *
- * Centralised so the legend in docs/connectors/freshness-slos.md can
- * mirror these exact swatches. ``unknown`` deliberately has no row —
+ * Centralised so every surface rendering a freshness badge reads the
+ * same three swatches. ``unknown`` deliberately has no row —
  * we don't render that variant so a freshly-saved connector with no
  * events yet looks clean instead of being painted gray "stale."
  */

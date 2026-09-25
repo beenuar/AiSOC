@@ -14,7 +14,7 @@ importing because:
 Adding a capability:
   1. Add it to ``Capability`` in ``services/connectors/app/connectors/base.py``.
   2. Add the same string here.
-  3. CI check (``services/actions/tests/test_capability_mirror.py``)
+  3. CI check (``scripts/check_action_contract.py``, ``check_capability_mirror``)
      compares the two sets and fails the build if they drift.
 
 Plugins MAY register executors for capabilities outside this set — we

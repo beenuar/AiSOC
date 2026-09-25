@@ -400,9 +400,9 @@ def main() -> int:
     for path in yaml_files:
         rel = path.relative_to(ROOT)
 
-        # Skip the meta/index files at the top of detections/, e.g.
-        # detections/coverage.yaml, that aren't rule files. Those live
-        # directly under detections/ with no category dir.
+        # Skip any meta/index file at the top of detections/ that is not a
+        # rule file. A rule lives under a category directory; anything
+        # directly under detections/ with no category dir is not one.
         try:
             rel_under = path.relative_to(DETECTIONS_DIR)
         except ValueError:

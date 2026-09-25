@@ -81,6 +81,10 @@ type Broadcaster struct {
 
 	dropped atomic.Uint64
 
+	// health is shared with the source, so an error the Kafka reader
+	// swallows internally and an error the loop sees land in one place.
+	health *SourceState
+
 	stopCh chan struct{}
 	doneCh chan struct{}
 }
@@ -90,6 +94,20 @@ type Options struct {
 	// BufferSize overrides subscriberBufferDefault. Zero falls back
 	// to the default; negative is rejected at construction.
 	BufferSize int
+
+	// Health is the failure state shared with the EnvelopeSource. Pass the
+	// same *SourceState given to NewKafkaSource so the reader's internal
+	// dial and rebalance failures are counted alongside the loop's. Nil
+	// creates a private one, which is the right default for a fake source
+	// in a test.
+	Health *SourceState
+
+	// Topic names the subscription in logs and metrics when Health is nil.
+	Topic string
+
+	// StuckAfter overrides how long a transient failure may persist before
+	// it is reported as not resolving. Only consulted when Health is nil.
+	StuckAfter time.Duration
 }
 
 // New constructs a broadcaster wired to src. Call Start to begin
@@ -99,13 +117,28 @@ func New(src EnvelopeSource, opts Options) *Broadcaster {
 	if buf <= 0 {
 		buf = subscriberBufferDefault
 	}
+	health := opts.Health
+	if health == nil {
+		health = NewSourceState(opts.Topic, opts.StuckAfter)
+	}
 	return &Broadcaster{
 		src:         src,
 		subscribers: make(map[uint64]*Subscriber),
 		bufferSize:  buf,
+		health:      health,
 		stopCh:      make(chan struct{}),
 		doneCh:      make(chan struct{}),
 	}
+}
+
+// Health reports the state of the subscription: attached or not, how long it
+// has been failing, and whether the failure is one a retry can clear.
+//
+// Read by the /readyz probe and by the WebSocket upgrade handler, which
+// refuses a connection it could not serve rather than completing a handshake
+// onto a socket that will stay silent.
+func (b *Broadcaster) Health() SourceHealth {
+	return b.health.Health()
 }
 
 // Start launches the consumer goroutine. It returns immediately; the
@@ -204,8 +237,28 @@ func (b *Broadcaster) DroppedDeliveries() uint64 {
 	return b.dropped.Load()
 }
 
+// consumeLoop pulls envelopes from the source and fans them out.
+//
+// What it used to do with an error was `continue` after a flat 50ms, with
+// the error discarded. The loop survived, which is why this was not the
+// UEBA defect — but a broker that was never coming back produced twenty
+// silent reconnects a second behind a container reporting healthy, which is
+// the same thing an operator cannot see. Every error now lands in
+// SourceState: classified, counted, logged at a level that matches what can
+// be done about it, and backed off in proportion to how long it has lasted.
+//
+// A permanent failure ends the loop rather than retrying it. That follows
+// the UEBA consumer's reasoning: a loop over a fault no retry can clear
+// turns a misconfiguration into indefinite churn, and churn reads as
+// ordinary. The honest report is the error in the log, the detached state on
+// /readyz, and a 503 from the WebSocket route — not a reconnect counter
+// climbing forever.
 func (b *Broadcaster) consumeLoop(ctx context.Context) {
 	defer close(b.doneCh)
+	b.health.MarkAttached()
+	reason := "stopped"
+	defer func() { b.health.MarkDetached(reason) }()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -216,16 +269,23 @@ func (b *Broadcaster) consumeLoop(ctx context.Context) {
 		}
 		env, err := b.src.Next(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
+			// A cancelled context is the operator stopping the service. It
+			// is not a fault and must not be counted as one, or every clean
+			// shutdown would leave a failure as the last thing recorded.
+			if ctx.Err() != nil || isContextError(err) {
 				return
 			}
-			select {
-			case <-b.stopCh:
+			class, wait := b.health.RecordFailure(err)
+			if class == ClassPermanent {
+				reason = "permanent source failure: " + err.Error()
 				return
-			case <-time.After(50 * time.Millisecond):
+			}
+			if !sleepFor(ctx, b.stopCh, wait) {
+				return
 			}
 			continue
 		}
+		b.health.RecordMessage()
 		b.dispatch(env)
 	}
 }

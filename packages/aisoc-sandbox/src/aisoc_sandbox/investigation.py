@@ -13,7 +13,7 @@ is the CLI's high-level entry point.
 The "LLM" used here is :class:`DeterministicReasoner`, a tiny
 template-driven stub. The real agents call out to OpenAI / Anthropic /
 Ollama via LiteLLM with a guarded prompt contract — see
-``services/agents/app/services/llm_safety.py``. The sandbox does not
+``services/api/app/services/llm_safety.py``. The sandbox does not
 make any network calls.
 """
 

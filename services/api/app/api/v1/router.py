@@ -96,7 +96,7 @@ api_router.include_router(alert_explain.router)
 api_router.include_router(alert_writeback.router)
 api_router.include_router(cases.router)
 # Attack-chain timeline (T3.3 — v8.0 parallel team plan).
-# Backs apps/web/src/app/(app)/cases/[id]/attack-chain/page.tsx with a
+# Backs the attack-chain view in apps/web/src/components/cases/CaseWorkspace.tsx with a
 # ranked timeline (graph-distance + temporal proximity + risk overlap)
 # of every alert that shares an entity with the case's seed alert,
 # plus the side-by-side entity graph the right column renders.

@@ -31,7 +31,7 @@ Configuration
     When set and no token is configured, requests are allowed through so a
     local ``docker compose up`` still works. This mirrors the single canonical
     dev-mode flag used across the platform; it is asserted off in production by
-    ``tests/test_security_defaults.py``.
+    ``services/api/tests/test_security_defaults.py``.
 """
 
 from __future__ import annotations

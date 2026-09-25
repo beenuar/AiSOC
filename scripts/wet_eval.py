@@ -21,10 +21,10 @@ Two modes
 Stdlib-only contract
 --------------------
 The dry-run code path is **stdlib-only** so it runs in a bare-Python CI
-shell. That's what the workflow's preflight uses to validate the report
-shape on every push, and what
-``services/agents/tests/test_wet_eval_harness.py`` exercises. Live mode
-imports the agent stack lazily and degrades cleanly if it can't.
+shell. That's what the ``preflight`` job in
+``.github/workflows/wet-eval.yml`` uses to validate the report shape on
+every push. Live mode imports the agent stack lazily and degrades cleanly
+if it can't.
 
 Output shape
 ------------
