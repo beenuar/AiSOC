@@ -143,7 +143,11 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "apps/web/src/app/(marketing)/customers/[slug]/page.tsx": (1, _MARKETING),
     "apps/web/src/app/(marketing)/mesh/page.tsx": (1, _MARKETING),
     "apps/web/src/app/why-open-source/page.tsx": (1, _MARKETING),
-    "apps/web/src/app/page.tsx": (1, _MARKETING),
+    # `apps/web/src/app/page.tsx` used to sit here for one occurrence: the
+    # landing page's Open Graph description ended "join the managed waitlist
+    # at tryaisoc.com". An OG description is what a crawler quotes when the
+    # open-source project is shared, so that one reached far further than a
+    # marketing paragraph. It was removed rather than exempted.
     "apps/web/src/app/not-found.tsx": (1, _MARKETING),
     "apps/web/src/app/r/[slug]/opengraph-image.tsx": (1, _MARKETING),
     "apps/web/src/app/api/badge/[kind]/route.ts": (1, _MARKETING),
