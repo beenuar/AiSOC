@@ -23,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which is the reason those overrides are scoped to named parents rather than
   applied workspace-wide.
 
+- **Three more root-workspace bumps landed as one lockfile change.**
+  `@testing-library/user-event` 14.6.4 → 14.6.7, `autoprefixer` 10.5.2 →
+  10.6.1 and `zustand` 5.0.14 → 5.0.15, regenerated once from the three
+  manifests together: 19 insertions against 22 deletions, versus 636
+  insertions across the three individual proposals. The only transitive
+  movement is `caniuse-lite` 1.0.30001803 → 1.0.30001810, which
+  `autoprefixer` carries as a data table. Verified on the merged result
+  rather than on the three green ticks, because none of these three has a CI
+  job that exercises what it changes beyond the shared web gates:
+  `pnpm install --frozen-lockfile`, `eslint .` (0 errors), `tsc --noEmit`,
+  `vitest run --coverage` (62.17% statements, gate green), `next build` and
+  `storybook build` all pass.
+
 ### Fixed
 
 - **Dependabot proposed Expo SDK 57 packages for an SDK 54 app, from an entry
@@ -51,6 +64,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not use `eslint-plugin-react`, and `typescript-eslint@8.70.1` already
   accepts `eslint@^10`, so the family is grouped rather than held: it can
   move whenever all of it arrives in one reviewable pull request.
+
+- **The root entry's holds are written per dependency name, so a breaking
+  major of anything not already on the list still arrives as an ordinary
+  weekly bump.** `vitest` 4.1.11 → 5.0.1 was the demonstration. Every
+  `ignore` in that entry names a specific package someone had already been
+  burned by — `eslint`, `typescript`, `storybook`, `@storybook/*` — and
+  nothing holds majors as a class, so "stop proposing breaking majors"
+  described four names rather than a rule. Measured on the proposal: all 59
+  test files and all 615 tests passed, then the run failed with 59 unhandled
+  rejections reading `TypeError: Expected string coverage payload, received
+  object` from `V8CoverageProvider.onAfterSuiteRun`, and a coverage report of
+  `All files | 0 | 0 | 0 | 0`. vitest 5 changed the V8 coverage payload
+  shape and `@vitest/coverage-v8` stayed on 4.1.10, because its own manifest
+  range was still satisfied and it peer-requires `vitest` at an *exact*
+  version rather than a range. Separately, the root `pnpm.overrides` pins
+  `@vitest/mocker` to `>=4.1.11 <5` while `vitest@5.0.1` depends on
+  `@vitest/mocker@5.0.1`, so the override wins silently and the proposal's
+  lockfile carries a vitest 5 runtime with a vitest 4 mocker. Held at the
+  major for `vitest` and `@vitest/*`, and grouped within the major so the
+  exact-version peer pair stops drifting — `pnpm install` on the current
+  lockfile already reports `unmet peer @vitest/coverage-v8@4.1.11: found
+  4.1.10`, which is survivable inside a major and is why nobody had noticed.
+
+- **`update-types: ["version-update:semver-major"]` cannot hold a 0.x
+  dependency, so the Storybook hold covered every member of the family
+  except the one that needed it.** For a pre-1.0 package the breaking change
+  arrives in the minor slot, and `@storybook/test-runner` is the only
+  pre-1.0 member: 0.23.0 declares
+  `peerDependencies: { storybook: "^0.0.0-0 || ^8.2.0 || ^9.0.0" }` and
+  0.24.5 declares `"^0.0.0-0 || ^10.0.0 || … || ^11.0.0-0"`. Its version line
+  is independent of Storybook's the way the Expo packages' are, but its peer
+  tracks the Storybook major exactly, so 0.24 is the Storybook 10 line of
+  the package and installs against this workspace's `storybook@9.1.20` as an
+  unsatisfied peer. Nothing in CI could catch it — no workflow runs
+  `test-storybook`, and the only Storybook job runs `build-storybook`, which
+  never loads the runner — so the proposal was green on all 22 required
+  checks while migrating the whole jest tree 29 → 30 underneath it. The
+  minor channel is now held for that package alongside the family's major.
 
 - **The `services/api` pip entry had no holds, against two ratchet gates.**
   `ruff` is declared in fourteen files (a count

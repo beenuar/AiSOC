@@ -50,6 +50,17 @@ updates:
         # (and merge it back into `dev-tooling`) once
         # `eslint-plugin-react` is ESLint-10-compatible.
         patterns: ["eslint*", "@typescript-eslint/*"]
+      vitest:
+        # `@vitest/coverage-v8` peer-requires `vitest` at the *exact* same
+        # version, not a range — `@vitest/coverage-v8@4.1.10` declares
+        # `peerDependencies: { vitest: "4.1.10" }`. Ungrouped, dependabot
+        # proposes whichever one's manifest range is exceeded first and the
+        # pair drifts; `pnpm install` on this lockfile already reports
+        # `vitest 4.1.11 -> ✕ unmet peer @vitest/coverage-v8@4.1.11: found
+        # 4.1.10`. Within a major that is survivable, which is exactly why it
+        # went unnoticed. Grouping them means the next in-major bump is one
+        # pull request that moves both or neither.
+        patterns: ["vitest", "@vitest/*"]
     ignore:
       # Hold `eslint` on v9: ESLint 10 removed the `context.getFilename()`
       # API that `eslint-plugin-react` (bundled via `eslint-config-next`)
@@ -73,6 +84,59 @@ updates:
       - dependency-name: "storybook"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@storybook/*"
+        update-types: ["version-update:semver-major"]
+      # `@storybook/test-runner` needs its *minor* channel held too, and the
+      # reason is a property of the rule shape rather than of this package:
+      # `update-types: ["version-update:semver-major"]` cannot hold a 0.x
+      # dependency, because for 0.x the breaking change arrives in the minor
+      # slot. It is the only pre-1.0 member of the family, so the
+      # `@storybook/*` rule above covered every other member and silently
+      # covered nothing on this one.
+      #
+      # Measured on the 0.23.0 -> 0.24.5 proposal: 0.23.0 declares
+      # `peerDependencies: { storybook: "^0.0.0-0 || ^8.2.0 || ^9.0.0" }` and
+      # 0.24.5 declares `"^0.0.0-0 || ^10.0.0 || ... || ^11.0.0-0"`. Its
+      # version line is independent of Storybook's, the way the Expo entry
+      # below describes, but its *peer* tracks the Storybook major exactly —
+      # so 0.24 is the Storybook 10 line of this package and installs against
+      # this workspace's `storybook@9.1.20` as an unsatisfied peer.
+      #
+      # Nothing in CI can catch that: no workflow runs `test-storybook`, and
+      # the only Storybook job runs `pnpm build-storybook`, which never loads
+      # the runner. The proposal was green on all 22 required checks while
+      # migrating the whole jest tree 29 -> 30 underneath it. Lift this with
+      # the rest of the family in the Storybook 10 migration.
+      - dependency-name: "@storybook/test-runner"
+        update-types: ["version-update:semver-minor"]
+      # Hold `vitest` and `@vitest/*` on v4. The group above keeps the family
+      # together inside a major; the major itself needs more than a group,
+      # because two of the three things it breaks are not dependency edges
+      # dependabot can move.
+      #
+      # Measured on the 4.1.11 -> 5.0.1 proposal, which reached CI: all 59
+      # test files and all 615 tests PASSED, and then the run failed with 59
+      # unhandled rejections reading `TypeError: Expected string coverage
+      # payload, received object` out of `V8CoverageProvider.onAfterSuiteRun`,
+      # and a coverage report of `All files | 0 | 0 | 0 | 0`. vitest 5 changed
+      # the shape of the V8 coverage payload, `@vitest/coverage-v8` stayed on
+      # 4.1.10 because its own manifest range was still satisfied, and the
+      # required `Web — Vitest smoke tests + coverage gate` is what caught it.
+      # A reader skimming "615 passed" would not have.
+      #
+      # The second break is a resolution decision this file cannot express:
+      # the root `pnpm.overrides` pins `@vitest/mocker` to `>=4.1.11 <5`,
+      # while `vitest@5.0.1` depends on `@vitest/mocker@5.0.1`. The override
+      # wins silently, so the proposal's lockfile carries a vitest 5 runtime
+      # with a vitest 4 mocker.
+      #
+      # Moving to vitest 5 therefore means one commit that bumps `vitest` and
+      # `@vitest/coverage-v8` in lockstep, raises the `@vitest/mocker`
+      # override past 5, and re-verifies the two plugins that peer-depend on
+      # vitest (`vitest-axe`, `@testing-library/jest-dom`). That is a
+      # migration, not a dependency bump.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
         update-types: ["version-update:semver-major"]
 
   # ── apps/mobile ──────────────────────────────────────────────
