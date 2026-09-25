@@ -197,3 +197,22 @@ export function useTenant(): TenantContextValue {
   }
   return ctx;
 }
+
+/**
+ * The active tenant's UUID, or `null` when it is not resolved yet.
+ *
+ * For surfaces that pass `tenant_id` explicitly in a query string rather than
+ * relying on the `X-Tenant-Id` header that `lib/api.ts` attaches. Two of them
+ * had `const TENANT_ID = '00000000-0000-0000-0000-000000000001'` hardcoded at
+ * module scope, which on any deployment with more than one tenant asks for
+ * somebody else's data and renders whatever comes back as the operator's own.
+ *
+ * `null` is load-bearing: SWR treats a null key as "do not fetch", so a
+ * tenant-scoped request waits for the tenant instead of guessing one. Guessing
+ * is the failure being removed — note that the literal string `'default'` is
+ * not a safe guess either, since the demo seed renames that slug to `demo` and
+ * it then matches neither a UUID nor a slug, silently returning nothing.
+ */
+export function useTenantId(): string | null {
+  return useTenant().current?.id ?? null;
+}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
@@ -818,5 +819,133 @@ func TestConnectorTypeCanonicalTargetsAreDeclaredAndUnshadowed(t *testing.T) {
 		if _, ok := connectorTypeAliases[alternate]; ok {
 			t.Errorf("%q is in both connectorTypeAliases and connectorTypeCanonical; one of them is dead", alternate)
 		}
+	}
+}
+
+// --------------------------------------------------------------------------
+// Non-promotable events say so, on the event
+// --------------------------------------------------------------------------
+
+// The fusion promoter's policy, restated here as data. If either constant in
+// normalizer.go drifts from services/fusion/app/services/promoter.py, the
+// warning starts describing a rule the platform does not run.
+func TestUnpromotableWarningMatchesFusionPolicy(t *testing.T) {
+	if findingsCategory != 2 {
+		t.Errorf("findingsCategory = %d; promoter.py pins _FINDINGS_CATEGORY = 2", findingsCategory)
+	}
+	if promoteSeverityFloor != 4 {
+		t.Errorf("promoteSeverityFloor = %d; promoter.py pins _PROMOTE_SEVERITY_FLOOR = 4", promoteSeverityFloor)
+	}
+
+	cases := []struct {
+		name      string
+		classUID  int
+		severity  interface{}
+		wantWarns bool
+	}{
+		{"finding class always promotes", 2001, 0, false},
+		{"finding class promotes even at severity 0", 2004, 0, false},
+		{"category 4 with high severity promotes on severity", 4001, 4, false},
+		{"category 4 with critical severity promotes on severity", 4001, 5, false},
+		{"category 4 with medium severity cannot promote", 4001, 3, true},
+		{"category 4 with no severity cannot promote", 4001, 0, true},
+		{"category 6 API activity with no severity cannot promote", 6003, 0, true},
+		{"a non-int severity is treated as absent", 4001, nil, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := unpromotableWarning(tc.classUID, tc.severity)
+			if tc.wantWarns && got == "" {
+				t.Errorf("class %d severity %v can never alert, but carried no warning", tc.classUID, tc.severity)
+			}
+			if !tc.wantWarns && got != "" {
+				t.Errorf("class %d severity %v is promotable, but was warned about: %s", tc.classUID, tc.severity, got)
+			}
+		})
+	}
+}
+
+// The specific event the audit named: a splunk_enterprise row with no severity
+// field at all. It stays unpromoted — that is the decision, raw search rows are
+// not findings — but it no longer leaves without saying why.
+func TestSplunkEnterpriseRowWithoutSeverityExplainsItself(t *testing.T) {
+	n := newTestNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID:   "conn-se",
+		ConnectorType: "splunk_enterprise",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload: map[string]interface{}{
+			"_time": "2026-09-23T00:00:00Z",
+			"src":   "10.0.0.1",
+			"user":  "svc_backup",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if got := ev.OcsfEvent["severity_id"]; got != 0 {
+		t.Errorf("severity_id = %v, want 0 — this test is about the no-severity case", got)
+	}
+	var found string
+	for _, w := range ev.NormalizationWarnings {
+		if strings.HasPrefix(w, "not promotable") {
+			found = w
+		}
+	}
+	if found == "" {
+		t.Fatalf("no 'not promotable' warning on an event that can never alert; warnings=%v", ev.NormalizationWarnings)
+	}
+	for _, want := range []string{"category 4", "not 2 (Findings)", "below the promote floor", "event lake"} {
+		if !strings.Contains(found, want) {
+			t.Errorf("warning does not mention %q; got: %s", want, found)
+		}
+	}
+}
+
+// A splunk_enterprise row that *does* carry a severity string maps through the
+// shared five-tier ladder and promotes on the severity branch. The profile's
+// map used to be literally empty, which was read as the cause of the silence;
+// the fallback already covered this, and naming the ladder keeps it covered
+// without a reader having to find the fallback 150 lines away.
+func TestSplunkEnterpriseCriticalRowStillPromotes(t *testing.T) {
+	n := newTestNormalizer()
+	ev, err := n.Normalize(&RawEvent{
+		ConnectorID:   "conn-se",
+		ConnectorType: "splunk_enterprise",
+		TenantID:      "11111111-1111-1111-1111-111111111111",
+		ReceivedAt:    "2026-09-23T00:00:00Z",
+		Payload:       map[string]interface{}{"src": "10.0.0.1", "severity": "critical"},
+	})
+	if err != nil {
+		t.Fatalf("normalize: %v", err)
+	}
+	if got := ev.OcsfEvent["severity_id"]; got != 5 {
+		t.Errorf("severity_id = %v, want 5 (critical must not collapse into high)", got)
+	}
+	for _, w := range ev.NormalizationWarnings {
+		if strings.Contains(w, "not promotable") {
+			t.Errorf("a critical row is promotable on the severity branch, but was warned about: %s", w)
+		}
+	}
+}
+
+// splunk_enterprise stays at 4001 on purpose. If somebody promotes it to a
+// Findings class, every row of an arbitrary saved search becomes an alert —
+// which is what the `splunk` profile exists to do properly, for notables.
+func TestSplunkEnterpriseIsNotAFindingClass(t *testing.T) {
+	se, ok := connectorProfiles["splunk_enterprise"]
+	if !ok {
+		t.Fatal("splunk_enterprise profile is gone; packages/types still declares the type")
+	}
+	if se.classUID/1000 == findingsCategory {
+		t.Errorf("splunk_enterprise is class %d (a Findings class): raw search rows would all become alerts", se.classUID)
+	}
+	sp, ok := connectorProfiles["splunk"]
+	if !ok {
+		t.Fatal("splunk profile is missing; notables would fall to the generic fallback")
+	}
+	if sp.classUID/1000 != findingsCategory {
+		t.Errorf("splunk is class %d; a notable has already passed Splunk's correlation and must always promote", sp.classUID)
 	}
 }
