@@ -10,7 +10,11 @@ name: Security
 #       * gitleaks — the whole tree was triaged and every finding is either
 #         fixed or recorded in .gitleaksignore with a written reason, so a
 #         new finding is genuinely new;
-#       * Trivy — HIGH/CRITICAL with a fix available, currently zero.
+#       * Trivy — HIGH/CRITICAL with a fix available, currently zero. It
+#         was reporting zero before this too, but for the wrong reason:
+#         the pinned release had been deleted upstream, so the download
+#         404'd, the scan ran a binary that was not there, and
+#         continue-on-error turned the whole thing green.
 #   - OBSERVE gates (report, do not fail yet): Semgrep, checkov, tfsec.
 #     These are not observe-mode because nobody has looked. They were run
 #     against this tree and the counts are: Semgrep 92 (35 at ERROR),
@@ -144,17 +148,24 @@ jobs:
       # marketplace action: the action's version tags proved unreliable and
       # this is the form that has stayed working.
       #
-      # `set -e` matters now that this blocks — the previous `set -uo
-      # pipefail` let a failed download fall through to a `trivy` that was
-      # not there, and with --exit-code 0 the job reported success either
-      # way. Install failure must fail the job.
+      # `set -e` and `--fail` matter now that this blocks. The previous
+      # `set -uo pipefail` with no `--fail` wrote the 404 body into the
+      # tarball, `tar` failed, and the scan then invoked a `trivy` that did
+      # not exist — which `continue-on-error` reported as success. That is
+      # not hypothetical: the pin was 0.55.2 and **Trivy had deleted that
+      # release**, so this job downloaded nothing and scanned nothing while
+      # reporting green. Upstream prunes old releases, so a pin here rots on
+      # their schedule rather than ours; when it 404s, move it to a tag that
+      # still exists and re-measure before trusting the result.
       - name: Install Trivy
         run: |
           set -euo pipefail
-          VERSION=0.55.2
-          curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors \
-            "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" \
-            -o /tmp/trivy.tgz
+          VERSION=0.74.0
+          url="https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz"
+          if ! curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors "$url" -o /tmp/trivy.tgz; then
+            echo "::error title=trivy::could not download $url — Trivy prunes old releases, so check whether v${VERSION} still exists and bump the pin"
+            exit 1
+          fi
           tar -xzf /tmp/trivy.tgz -C /tmp trivy
           /tmp/trivy --version
 

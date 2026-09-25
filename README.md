@@ -85,8 +85,8 @@ make demo
 ## Connect real data
 
 Two ways in. Push, from anything that can make an HTTP request. The tenant
-comes from the credential, not from a header — mint one with
-`make ingest-token` ([how it works](https://beenuar.github.io/AiSOC/docs/operations/ingest-authentication)):
+comes from the credential, not from a header, so mint one first with
+`make ingest-token`:
 
 ```bash
 curl -X POST http://localhost:8081/v1/ingest/batch \
