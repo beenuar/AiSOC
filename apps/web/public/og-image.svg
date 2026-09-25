@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Source for og-image.png, the Open Graph / Twitter card for the console and
+  marketing surfaces.
+
+  Three things this file must not do, each of which it previously did:
+
+    * name the commercial parent ("Built by Cyble"). This is the open-source
+      project's card; a self-hoster sharing a link to their own deployment
+      must not advertise somebody else's company.
+    * promise "Free forever". MIT is a licence, not a pricing commitment, and
+      the repository forbids marketing claims nothing supports.
+    * carry a version or milestone ("v3 milestone"). Crawlers cache a card for
+      a long time and no gate can regenerate it, so anything datable rots.
+
+  Regenerate the PNG after editing (see scripts/render_og_images.mjs). The PNG
+  is what the metadata points at: Slack, LinkedIn, Facebook and X all decline
+  to render an SVG og:image.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
-  <title>AiSOC  Open-source AI Security Operations Center</title>
+  <title>AiSOC - open-source AI Security Operations Center</title>
   <defs>
     <linearGradient id="ogBg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#05080f"/>
@@ -52,23 +70,15 @@
   <!-- Wordmark + tagline -->
   <g font-family="Inter, system-ui, sans-serif" fill="#f8fafc">
     <text x="430" y="248" font-size="116" font-weight="800" letter-spacing="-3.5">AiSOC</text>
-    <text x="432" y="298" font-size="22" font-weight="500" fill="#94a3b8" letter-spacing="3.6">OPEN-SOURCE " AI-NATIVE " MIT</text>
-    <text x="432" y="368" font-size="34" font-weight="600" fill="#cbd5f5">The AI Security Operations Center</text>
-    <text x="432" y="408" font-size="22" font-weight="400" fill="#94a3b8">Real-time detection ù MITRE ATT&amp;CK-aware ù Autonomous triage</text>
+    <text x="432" y="298" font-size="22" font-weight="500" fill="#94a3b8" letter-spacing="3.6">OPEN SOURCE &#183; MIT LICENSED</text>
+    <text x="432" y="372" font-size="34" font-weight="600" fill="#cbd5f5">AI Security Operations Center</text>
+    <text x="432" y="414" font-size="22" font-weight="400" fill="#94a3b8">Alert fusion &#183; agent triage &#183; replayable investigation ledger</text>
   </g>
 
-  <!-- Tag pill -->
-  <g transform="translate(432,470)">
-    <rect width="220" height="46" rx="23" fill="rgba(59,130,246,0.16)" stroke="rgba(96,165,250,0.55)" stroke-width="1.5"/>
-    <circle cx="26" cy="23" r="6" fill="#22c55e"/>
-    <circle cx="26" cy="23" r="6" fill="none" stroke="rgba(34,197,94,0.45)" stroke-width="6"/>
-    <text x="48" y="30" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="600" fill="#dbeafe">Live ù v3 milestone</text>
-  </g>
-
-  <!-- Footer Cyble -->
-  <g transform="translate(432,548)" font-family="Inter, system-ui, sans-serif">
+  <!-- Footer -->
+  <g transform="translate(432,520)" font-family="Inter, system-ui, sans-serif">
     <text x="0" y="0" font-size="20" fill="#64748b">github.com/beenuar/AiSOC</text>
-    <text x="320" y="0" font-size="20" fill="#64748b">Built by Cyble ù Free forever</text>
+    <text x="0" y="36" font-size="20" fill="#64748b">Self-hostable &#183; runs with no API keys</text>
   </g>
 
   <!-- subtle perimeter -->

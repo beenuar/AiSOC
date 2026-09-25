@@ -35,8 +35,11 @@ submissions, each of which has its own template.
 The fastest way to see the product is the
 [Codespaces quickstart](https://codespaces.new/beenuar/AiSOC?quickstart=1) —
 zero local install, runs in your browser, and drives the real stack rather
-than a hosted screenshot of it. Offline and even quicker:
-`pip install aisoc-sandbox && aisoc-sandbox demo`.
+than a hosted screenshot of it. Offline and even quicker, from a clone:
+`pip install -e packages/aisoc-sandbox && aisoc-sandbox demo`. (`aisoc-sandbox` is
+built and packed on every tag but not published to PyPI — the upload is
+blocked on registry credentials — so the from-source path is the one that
+works today.)
 
 ## 4. File a bug
 

@@ -18,10 +18,27 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { ServerConfig } from "../config.js";
 
 export type Host = "claude" | "cursor" | "cody" | "continue";
+
+/**
+ * How the host should start us.
+ *
+ * `npx` resolves `@aisoc/mcp` from a public registry. That entry is only
+ * launchable once the package is actually published, and today it is not:
+ * `release.yml` builds and packs on every tag but the upload is blocked on
+ * registry credentials. Writing it unconditionally produced a config file
+ * that parsed, installed cleanly, reported success — and could never start,
+ * because `npx` would 404 at launch time inside the host, where the user
+ * sees "server failed" and no reason.
+ *
+ * `node` points at this checkout's own `dist/index.js` by absolute path,
+ * which is what actually works from a monorepo build.
+ */
+export type Launcher = "auto" | "npx" | "node";
 
 export interface InstallOptions {
   host: Host;
@@ -30,6 +47,10 @@ export interface InstallOptions {
   configPath?: string;
   /** If true, print what we would do without writing. */
   dryRun?: boolean;
+  /** Launcher to write. Defaults to `auto` (detect source build vs installed package). */
+  launcher?: Launcher;
+  /** Override the resolved entry-point path (used by tests). */
+  entryPath?: string;
 }
 
 export interface InstallResult {
@@ -49,7 +70,7 @@ export interface InstallResult {
  * with the same arguments is a no-op (returns `changed: false`).
  */
 export function install(opts: InstallOptions): InstallResult {
-  const snippet = buildServerSnippet(opts.cfg);
+  const snippet = buildServerSnippet(opts.cfg, opts.launcher ?? "auto", opts.entryPath);
   switch (opts.host) {
     case "claude":
       return installToJsonConfig({
@@ -108,23 +129,63 @@ export function install(opts: InstallOptions): InstallResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Produce the per-server JSON entry. We launch via `npx @aisoc/mcp serve`
- * so the user never has to install us globally — they update by `npx`
- * picking up the latest. URL/key/timeout/verbose flow in via env to keep
- * the command line short and the secret out of `ps`.
+ * Absolute path to this build's `dist/index.js` — the file with the shebang
+ * that `bin.aisoc-mcp` points at. We resolve it from our own module URL
+ * rather than from `process.cwd()` or `process.argv[1]`: the host launches
+ * the config we write from an arbitrary working directory, and `argv[1]`
+ * is the shim path when invoked through a `bin` symlink.
  */
-function buildServerSnippet(cfg: ServerConfig): Record<string, unknown> {
+export function resolveEntryPath(): string {
+  // This module lives at `dist/installers/index.js`; the entry is one up.
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "index.js");
+}
+
+/**
+ * True when this copy was resolved out of a package install rather than a
+ * monorepo build, which is the only situation where `npx @aisoc/mcp` can
+ * find something to run.
+ */
+function isInstalledPackage(entryPath: string): boolean {
+  return entryPath.split(path.sep).includes("node_modules");
+}
+
+/**
+ * Produce the per-server JSON entry.
+ *
+ * URL/key/timeout/verbose flow in via env rather than argv to keep the secret
+ * out of `ps`. The command itself depends on where this copy came from — see
+ * {@link Launcher} for why writing `npx` unconditionally was wrong.
+ */
+function buildServerSnippet(
+  cfg: ServerConfig,
+  launcher: Launcher,
+  entryPathOverride?: string,
+): Record<string, unknown> {
   const env: Record<string, string> = { AISOC_URL: cfg.aisocUrl };
   if (cfg.apiKey) env.AISOC_API_KEY = cfg.apiKey;
   if (cfg.timeoutMs && cfg.timeoutMs !== 20_000) {
     env.AISOC_TIMEOUT_MS = String(cfg.timeoutMs);
   }
-  if (cfg.verbose) env.AISOC_VERBOSE = "1";
-  return {
-    command: "npx",
-    args: ["-y", "@aisoc/mcp", "serve"],
-    env,
-  };
+  // `resolveConfig` reads AISOC_MCP_VERBOSE. This wrote AISOC_VERBOSE, so
+  // `install --verbose` produced a host config whose verbose flag the server
+  // never looked at — the one setting whose whole purpose is diagnosing a
+  // server that is misbehaving.
+  if (cfg.verbose) env.AISOC_MCP_VERBOSE = "1";
+
+  const entryPath = entryPathOverride ?? resolveEntryPath();
+  const resolved: Exclude<Launcher, "auto"> =
+    launcher === "auto" ? (isInstalledPackage(entryPath) ? "npx" : "node") : launcher;
+
+  switch (resolved) {
+    case "npx":
+      return { command: "npx", args: ["-y", "@aisoc/mcp", "serve"], env };
+    case "node":
+      return { command: "node", args: [entryPath, "serve"], env };
+    default: {
+      const exhaustive: never = resolved;
+      throw new Error(`unhandled launcher: ${String(exhaustive)}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

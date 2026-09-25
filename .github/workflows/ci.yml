@@ -413,6 +413,16 @@ jobs:
         run: python3 scripts/check_alert_reduction_claims.py --self-test
       - name: Verify the retracted alert-reduction figure stays retracted
         run: python3 scripts/check_alert_reduction_claims.py --check
+      # `llms.txt` is the machine-first summary crawlers and LLM-backed tools
+      # read instead of the rendered docs nav, so a stale figure there is
+      # consumed with no human in the loop to sanity-check it. It is generated
+      # from the same artefacts that own each number — the connector registry
+      # and the detection truth table — and this fails when the committed file
+      # no longer matches them.
+      - name: llms.txt generator — self-test
+        run: python3 scripts/generate_llms_txt.py --self-test
+      - name: Verify llms.txt matches its source artefacts
+        run: python3 scripts/generate_llms_txt.py --check
       # The count comes from the registry; so, now, does the console's
       # `ConnectorType` union. It used to be written by hand, which is how ten
       # members came to name nothing the platform ingests — `ibm_qradar`

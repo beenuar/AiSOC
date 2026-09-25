@@ -22,10 +22,10 @@ This package collapses the boot time to **< 5 seconds** and the disk footprint t
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC && pip install -e packages/aisoc-sandbox
 
-# v8.1+ (once aisoc-sandbox lands on PyPI):
-pip install aisoc-sandbox
-# or, for one-off use without polluting your site-packages:
-pipx run aisoc-sandbox demo
+# Once published to PyPI (ready, unpublished — the upload is blocked on
+# registry credentials, which is an account action, not a code change):
+#   pip install aisoc-sandbox
+#   pipx run aisoc-sandbox demo
 ```
 
 Python 3.10+ on Linux / macOS / Windows. Zero runtime dependencies.
