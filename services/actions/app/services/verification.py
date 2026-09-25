@@ -31,7 +31,7 @@ from typing import Any
 import structlog
 
 from app.clients.factories import _entra_client, _mde_client, _okta_client
-from app.executors.endpoint import INVESTIGATION_PACKAGE_ACTION, _cs_client
+from app.executors.endpoint import AV_SCAN_ACTION, INVESTIGATION_PACKAGE_ACTION, _cs_client
 from app.executors.siem import _ack_vendor, _qradar_client, _splunk_client
 from app.models.action import ActionType
 from app.services.disposition_writeback import WritebackAction, plan_writeback
@@ -88,6 +88,68 @@ async def _probe_isolate(target: str, params: dict[str, Any]) -> bool | None:
     if status is None:
         return None
     return status.lower() in _CONTAINED_STATES
+
+
+async def _probe_kill_process(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm a process is gone by reading the host's process table.
+
+    ``kill_process`` is one of three disruptive endpoint verbs whose success
+    was inferred from RTR accepting the command. RTR accepting a ``kill`` and
+    the process being dead are different facts: the agent may be offline, the
+    PID may have been recycled, the process may be protected.
+
+    Only the CrowdStrike arm is readable. The SentinelOne arm targets
+    binaries by hash through the management plane and exposes no process
+    listing, so it answers indeterminate — the same shape as
+    :func:`_probe_block_ip`, where only AWS security groups can be re-read.
+
+    A PID is required. Without one there is no question to ask, and guessing
+    from ``process_name`` would confirm the wrong thing on a host running two
+    copies of it.
+    """
+    cs = _cs_client(params)
+    if cs is None:
+        return None
+    pid = params.get("pid")
+    if pid is None:
+        return None
+    try:
+        pid_int = int(pid)
+    except (TypeError, ValueError):
+        return None
+
+    device_id = await cs.get_device_id(target)
+    if not device_id:
+        return None
+    running = await cs.is_process_running(device_id, pid_int)
+    return None if running is None else not running
+
+
+async def _probe_quarantine_file(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm a quarantined file is actually gone from the host.
+
+    ``QuarantineFileExecutor`` issues an RTR ``rm``, so the effect to confirm
+    is the file's absence at that path. Reading it back is the difference
+    between "RTR accepted a delete" and "the binary is no longer there to be
+    run again".
+
+    SentinelOne's arm is a different action — it fetches the file into the
+    forensics vault rather than removing it — so its absence is not the
+    effect and this reports indeterminate rather than probing for the wrong
+    thing.
+    """
+    cs = _cs_client(params)
+    if cs is None:
+        return None
+    file_path = params.get("file_path")
+    if not isinstance(file_path, str) or not file_path.strip():
+        return None
+
+    device_id = await cs.get_device_id(target)
+    if not device_id:
+        return None
+    still_there = await cs.path_exists(device_id, file_path)
+    return None if still_there is None else not still_there
 
 
 async def _probe_block_ip(target: str, params: dict[str, Any]) -> bool | None:
@@ -222,6 +284,58 @@ async def _probe_capture_forensics(target: str, params: dict[str, Any]) -> bool 
     return bool(await mde.get_investigation_package_uri(str(action_id)))
 
 
+async def _probe_run_av_scan(target: str, params: dict[str, Any]) -> bool | None:
+    """Confirm an AV scan actually ran, not merely that one was requested.
+
+    Defender queues a machine action and replies ``Pending`` immediately, so
+    the executor's own response is the clearest possible case of "the API
+    accepted the request" standing in for an effect. This reads the action's
+    terminal state instead, on the same three outcomes as
+    :func:`_probe_capture_forensics`:
+
+    * ``Succeeded`` → True.
+    * ``Failed`` / ``TimeOut`` / ``Cancelled`` → False, a real alarm: the
+      responder believes the host was swept and it was not.
+    * ``Pending`` / ``InProgress`` → None. A full scan takes minutes, so the
+      immediate post-dispatch probe lands here almost every time, and "not
+      finished" is not "did not happen".
+
+    Unlike the forensics probe there is no artefact to fetch afterwards. A
+    clean sweep produces nothing, so absence of findings is the expected
+    result and cannot be part of the check — ``Succeeded`` is the whole
+    claim, and it is the claim Defender is actually making.
+
+    The SentinelOne arm returns no action id and exposes no equivalent read,
+    so it answers indeterminate rather than borrowing Defender's.
+    """
+    mde = _mde_client(params)
+    if mde is None:
+        return None
+
+    action_id = params.get("mde_action_id")
+    if not action_id:
+        machine = await mde.find_machine(target)
+        if not machine or not machine.get("id"):
+            return None
+        actions = await mde.list_machine_actions(str(machine["id"]), AV_SCAN_ACTION, limit=5)
+        if not actions:
+            return None
+        action_id = actions[0].get("id")
+        if not action_id:
+            return None
+
+    action = await mde.get_machine_action(str(action_id))
+    if not action:
+        return None
+
+    status = str(action.get("status") or "").lower()
+    logger.info("verification.run_av_scan.read", target=target, mde_action_id=str(action_id), mde_status=status)
+
+    if status in _MDE_ACTION_TERMINAL_FAILURES:
+        return False
+    return True if status == _MDE_ACTION_SUCCEEDED else None
+
+
 async def _probe_allow_ip(target: str, params: dict[str, Any]) -> bool | None:
     """Confirm an IP block was actually removed.
 
@@ -343,6 +457,12 @@ _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.UPDATE_ALERT_DISPOSITION: _probe_alert_disposition,
     ActionType.ACK_ALERT: _probe_ack_alert,
     ActionType.SUPPRESS_ALERT: _probe_suppress_alert,
+    # The disruptive endpoint verbs. Their success was inferred from RTR or
+    # Defender accepting the request, which is the claim this module exists
+    # to separate from the effect.
+    ActionType.KILL_PROCESS: _probe_kill_process,
+    ActionType.QUARANTINE_FILE: _probe_quarantine_file,
+    ActionType.RUN_AV_SCAN: _probe_run_av_scan,
 }
 
 

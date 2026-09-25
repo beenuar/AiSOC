@@ -41,7 +41,14 @@ class BlastRadiusGate:
         - APPROVED: safe to execute automatically
         - AWAITING_APPROVAL: requires human approval before execution
         """
-        blast_radius = ACTION_BLAST_RADIUS.get(request.action_type, BlastRadius.MEDIUM)
+        # Fails closed to HIGH, matching the three tier gates that read the
+        # same table. It used to fall back to MEDIUM, which is exactly
+        # `_AUTO_EXECUTE_LIMIT` — so a verb nobody had classified landed on
+        # the permissive side of the limit here and on the restrictive side
+        # everywhere else. `update_alert_disposition` was that verb.
+        # `test_approval_doors_agree.py` now requires an explicit entry for
+        # every member, so this default should never decide anything again.
+        blast_radius = ACTION_BLAST_RADIUS.get(request.action_type, BlastRadius.HIGH)
 
         # Check if action type always requires approval
         if request.action_type in APPROVAL_REQUIRED_ACTIONS:

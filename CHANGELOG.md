@@ -435,6 +435,30 @@ number is the one the requirement is sized against.
   also caught `<ul role="alert">`, which is not an allowed role for a list and
   left its items without a list parent.
 
+- **Verification probes for the disruptive endpoint verbs.** `kill_process`
+  and `quarantine_file` had their success inferred from CrowdStrike RTR
+  accepting a command; both now read the effect back over the read-only tier
+  of the same batch API — the process table for the PID, the path for the
+  removed file. Absence is only trusted when the output can be recognised as
+  what it claims to be, so an unparseable `ps` listing is indeterminate
+  rather than "the process is gone", and only a line's first column is read
+  as a PID so a surviving child does not report its dead parent as alive.
+  `run_av_scan` joins them because it is automatic and Defender replies
+  `Pending` the moment it queues the sweep: it reads the machine action's
+  terminal state, and says indeterminate while the scan is still running.
+
+- **Every verb with an `ActionType` now either declares a probe or records
+  why it has none.** Eleven bridged response verbs had neither, which failed
+  safe but made three different situations look the same: nobody wrote it,
+  the vendor exposes no read-back, and there is nothing to read back. The
+  eight without probes now state which — including `reset_password`, where
+  the obvious candidate read is the *wrong* one rather than a missing one
+  (the executor issues a recovery link, so `passwordChanged` moves later and
+  only if the user follows it, and a probe watching it would report FAILED
+  for every correct reset). The below-MODERATE waiver must now name itself,
+  because `run_av_scan` had been taking it silently.
+
+
 
 - **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
   list named one compliance page, which is why `ROADMAP.md` drifted with CI
@@ -466,6 +490,14 @@ number is the one the requirement is sized against.
   `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
   freshness gate reads only the date — which a refresh keeps current — so a
   row could be two days old and still labelled two majors behind.
+
+- `tests/test_approval_doors_agree.py` gates the invariant rather than the
+  instance: both live doors swept over every capability, autonomy tier and
+  confidence band, asserting the same answer to "did a vendor get touched
+  without a human". Structural checks alongside it fail a door that imports
+  the raw matrix or branches on a specific impact tier, which is the shape a
+  re-introduced bypass has. Against the previous tree it reports five
+  disagreements across 345 combinations.
 
 ### Fixed
 
@@ -949,6 +981,42 @@ number is the one the requirement is sized against.
   class as the above: a local `demoMode` flipped by fetch failure. Outside the
   hosted demo the dock now reports that the copilot could not be reached, with
   the error, instead of emitting a reply.
+
+- **A pure read sat in the analyst approval queue, because the two dispatch
+  doors graded the same verb differently.** `search_siem` declares
+  `read_only` impact and `automatic` approval, and the contract gate's own
+  rule is that a read requiring approval "is either mis-classified or is not
+  actually a read". At the default autonomy tier `POST /actions` returned
+  `awaiting_approval` for it while `POST /live-actions/dispatch` executed it.
+  The dispatcher's docstring says its contract block exists so that a verb is
+  not "graded differently depending on which door it came through", and that
+  is precisely what was happening.
+
+  The cause was one table entry, not a missing bypass.
+  `TIER_MAX_AUTOMATIC["L1"]` was `None`, meaning "auto-executes nothing",
+  while `maturity.py` defines L1 as "MINIMAL blast-radius actions are
+  automatic" and `_AUTO_ALLOWED_AT_TIER` gives it `{MINIMAL}` — which
+  `_IMPACT_BLAST` equates with READ_ONLY impact. The registry door had grown
+  a local READ_ONLY short-circuit to route around it; the legacy door had
+  not. L1 now reads `READ_ONLY`, and only reads move: every impact above it
+  still outranks the ceiling and still returns ANALYST, exactly as the `None`
+  branch did. L0 keeps `None`, which now means one thing only — observe, not
+  even a read.
+
+  With the ceiling correct the bypass is unnecessary, so it is gone.
+  `approval_matrix.evaluate_contract()` takes a contract whole and is the
+  single entry both doors call, which removes the per-door unpacking that let
+  them drift in the first place.
+
+- **`update_alert_disposition` had no `ACTION_BLAST_RADIUS` entry**, found by
+  the new cross-door sweep rather than reported. Four readers of that table
+  supplied two different fallbacks — `blast_radius.py` to MEDIUM, which is
+  exactly `_AUTO_EXECUTE_LIMIT`, and the three tier gates to HIGH — so the
+  legacy door auto-executed the disposition writeback while the registry door
+  held it for a whitelist it could never match. It now carries the LOW entry
+  its own contract asks for ("classified the same as create_notable_event"),
+  and `blast_radius.py` fails closed like its three siblings.
+=======
 
 ### Removed
 

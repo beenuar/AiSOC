@@ -95,10 +95,50 @@ class TestConfidence:
 
 
 class TestTiers:
-    @pytest.mark.parametrize("tier", ["L0", "L1"])
-    def test_observe_and_recommend_tiers_execute_nothing(self, tier: str) -> None:
-        decision = evaluate(impact=ActionImpact.READ_ONLY, declared_approval=AUTO, confidence=1.0, tier=tier)
+    @pytest.mark.parametrize("impact", list(ActionImpact))
+    def test_the_observe_tier_executes_nothing_at_all(self, impact: ActionImpact) -> None:
+        """L0 is the one tier whose ceiling is ``None``, and it means it.
+
+        Widened from READ_ONLY alone to every impact: ``None`` now has
+        exactly one meaning in ``TIER_MAX_AUTOMATIC`` and this is the
+        assertion of it. ``maturity.py`` defines L0 as "all actions routed to
+        the approval queue" and ``_AUTO_ALLOWED_AT_TIER`` gives it the empty
+        set.
+        """
+        decision = evaluate(impact=impact, declared_approval=AUTO, confidence=1.0, tier="L0")
         assert not decision.can_auto_execute
+
+    def test_the_notify_tier_reads_and_does_not_act(self) -> None:
+        """L1 used to gate a pure read, and that was the defect.
+
+        This test replaces one that asserted the opposite. It was not a
+        posture being relaxed — it contradicted the ladder it claimed to
+        encode. ``maturity.py``: "L1 — Notify: MINIMAL blast-radius actions
+        are automatic", and ``_AUTO_ALLOWED_AT_TIER[L1_NOTIFY]`` is
+        ``{MINIMAL}``, which ``dispatcher._IMPACT_BLAST`` equates with
+        READ_ONLY impact. The module docstring above opens by naming "an IOC
+        enrichment stuck in an approval queue because the tier is low" as a
+        failure mode, and the contract gate calls a read that needs approval
+        mis-classified. Three statements of the same rule, and the table said
+        otherwise at the default tier.
+
+        Both halves are pinned here, where the old test pinned neither
+        correctly: a read runs, and nothing above a read does.
+        """
+        assert evaluate(impact=ActionImpact.READ_ONLY, declared_approval=AUTO, confidence=1.0, tier="L1").can_auto_execute
+        for impact in (ActionImpact.LOW, ActionImpact.MODERATE, ActionImpact.HIGH):
+            decision = evaluate(impact=impact, declared_approval=AUTO, confidence=1.0, tier="L1")
+            assert not decision.can_auto_execute, f"L1 must not auto-execute {impact.value} impact"
+
+    def test_a_read_whose_contract_wants_an_analyst_still_gets_one(self) -> None:
+        """The tier ceiling moved; the contract's own floor did not.
+
+        READ_ONLY + ANALYST is a legal declaration — the contract gate only
+        forbids READ_ONLY + MANDATORY_HUMAN/PROHIBITED — so the ceiling change
+        must not swallow it.
+        """
+        decision = evaluate(impact=ActionImpact.READ_ONLY, declared_approval=ANALYST, confidence=1.0, tier="L4")
+        assert decision.requirement is ANALYST
 
     def test_l2_reads_but_does_not_act(self) -> None:
         assert evaluate(impact=ActionImpact.READ_ONLY, declared_approval=AUTO, confidence=1.0, tier="L2").can_auto_execute
