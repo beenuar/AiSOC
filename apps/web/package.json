@@ -39,7 +39,7 @@
     "next-mdx-remote": "^6.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-hot-toast": "^2.4.1",
+    "react-hot-toast": "^2.6.1",
     "recharts": "^3.9.2",
     "swr": "^2.5.0",
     "tailwind-merge": "^3.6.0",
