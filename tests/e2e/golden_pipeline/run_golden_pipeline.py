@@ -22,12 +22,22 @@ Usage
 
     python3 tests/e2e/golden_pipeline/run_golden_pipeline.py
 
-Environment (all optional; defaults match `docker compose up`):
+Environment:
 
-    AISOC_INGEST_URL   default http://localhost:8081
-    AISOC_API_URL      default http://localhost:8000
-    AISOC_TENANT_ID    default the seeded canonical tenant
+    AISOC_INGEST_TOKEN    required — the credential /v1/ingest/batch needs.
+                          `make smoke` mints it for you; by hand it is
+                          `docker compose run --rm -T api \
+                               python -m app.scripts.mint_ingest_token --quiet`
+    AISOC_INGEST_URL      default http://localhost:8081
+    AISOC_API_URL         default http://localhost:8000
+    AISOC_TENANT_ID       default the seeded canonical tenant
     AISOC_GOLDEN_TIMEOUT  seconds to wait for the alert (default 90)
+
+The token is required rather than optional, and there is no unauthenticated
+fallback. /v1/ingest/batch used to accept anything that named a tenant, and
+this test was one of the callers relying on that. Letting it keep working
+without a credential would mean the gate no longer exercises the path a real
+push takes.
 
 Exit code is 0 only when every stage passes.
 """
@@ -47,6 +57,7 @@ INGEST_URL = os.environ.get("AISOC_INGEST_URL", "http://localhost:8081").rstrip(
 API_URL = os.environ.get("AISOC_API_URL", "http://localhost:8000").rstrip("/")
 TENANT_ID = os.environ.get("AISOC_TENANT_ID", "00000000-0000-0000-0000-000000000001")
 TIMEOUT_SECONDS = int(os.environ.get("AISOC_GOLDEN_TIMEOUT", "90"))
+INGEST_TOKEN = os.environ.get("AISOC_INGEST_TOKEN", "").strip()
 
 #: Unique per run so a re-run cannot pass by finding the previous run's alert
 #: — the failure mode that makes an end-to-end test permanently green.
@@ -72,11 +83,19 @@ class Report:
         return all(ok for _, ok, _ in self.stages)
 
 
-def _request(method: str, url: str, body: dict | None = None, timeout: float = 20.0) -> tuple[int, str]:
+def _request(
+    method: str,
+    url: str,
+    body: dict | None = None,
+    timeout: float = 20.0,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, str]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     req.add_header("X-Tenant-ID", TENANT_ID)
+    for name, value in (headers or {}).items():
+        req.add_header(name, value)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed local URLs
             return resp.status, resp.read().decode("utf-8", "replace")
@@ -130,8 +149,36 @@ def main() -> int:
     if not r.record("api service is reachable", status == 200, f"HTTP {status}" if status != 200 else ""):
         return _finish(r)
 
-    # ── 2. Raw telemetry is accepted ─────────────────────────────────────
+    # ── 2. Raw telemetry is accepted, with a credential ──────────────────
+    if not r.record(
+        "an ingest credential is available",
+        bool(INGEST_TOKEN),
+        "" if INGEST_TOKEN else "AISOC_INGEST_TOKEN is unset",
+    ):
+        print("\n  /v1/ingest/batch requires a credential. Mint one:")
+        print("    docker compose run --rm -T api python -m app.scripts.mint_ingest_token")
+        print("  then re-run, or just use `make smoke`, which does both.")
+        return _finish(r)
+
+    # The same push with no credential must be refused. This lives in the
+    # golden pipeline, not only in the Go unit tests, because it is the one
+    # check that observes the deployed service from outside — and because
+    # the happy path below would go on passing if authentication were
+    # removed tomorrow.
     status, body = _request("POST", f"{INGEST_URL}/v1/ingest/batch", golden_event(), timeout=30)
+    r.record(
+        "an unauthenticated push is refused",
+        status in (401, 403),
+        f"HTTP {status} {body[:100]}",
+    )
+
+    status, body = _request(
+        "POST",
+        f"{INGEST_URL}/v1/ingest/batch",
+        golden_event(),
+        timeout=30,
+        headers={"Authorization": f"Bearer {INGEST_TOKEN}"},
+    )
     accepted = 0
     if status == 200:
         try:
@@ -143,6 +190,9 @@ def main() -> int:
         status == 200 and accepted == 1,
         f"HTTP {status} {body[:140]}",
     ):
+        if status in (401, 403):
+            print("\n  The credential was refused. Mint a current one:")
+            print("    docker compose run --rm -T api python -m app.scripts.mint_ingest_token --rotate")
         # The single most common cause, worth naming rather than making the
         # reader search: the broker refuses the first publish when the topic
         # does not exist and cannot be auto-created.

@@ -295,3 +295,101 @@ class CrowdStrikeRTRClient:
             )
             resp.raise_for_status()
             return {"device_id": device_id, "action": "run_script", "response": resp.json()}
+
+    async def _read_only_command(self, device_id: str, base_command: str, command_string: str) -> str | None:
+        """Run an RTR *read* command and return this host's stdout.
+
+        ``/real-time-response/combined/batch-command/v1`` is the read-only
+        tier of the same batch API the containment commands above use —
+        ``ls``, ``ps``, ``cat``, ``netstat``. It is a separate endpoint from
+        ``batch-active-responder-command`` (``kill``, ``rm``) and
+        ``batch-admin-command`` (``runscript``) precisely because it cannot
+        change anything, so a verification path can hold read scope only.
+
+        Returns ``None`` — never ``""`` — for every way this can fail to
+        produce an answer: no session, a non-200, a host missing from the
+        batch response, or a command the agent reported incomplete. The
+        callers treat ``None`` as indeterminate, and an empty string is a
+        real result (``ls`` on a path that is gone), so collapsing the two
+        would turn "could not ask" into evidence.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                await self._ensure_token(client)
+                batch_id = await self._init_rtr_session(client, device_id)
+                resp = await client.post(
+                    f"{self._base_url}/real-time-response/combined/batch-command/v1",
+                    headers=self._auth_headers(),
+                    json={
+                        "base_command": base_command,
+                        "batch_id": batch_id,
+                        "command_string": command_string,
+                        "optional_hosts": [device_id],
+                    },
+                )
+                if resp.status_code != 200:
+                    logger.warning(
+                        "crowdstrike.read_only_command.http_error",
+                        device_id=device_id,
+                        base_command=base_command,
+                        status=resp.status_code,
+                    )
+                    return None
+                host = (resp.json().get("combined", {}).get("resources", {}) or {}).get(device_id)
+                if not isinstance(host, dict):
+                    return None
+                if host.get("complete") is False:
+                    # The agent is offline or still working. Not an answer.
+                    return None
+                stdout = host.get("stdout")
+                return stdout if isinstance(stdout, str) else None
+        except Exception as exc:  # noqa: BLE001 - indeterminate, never a false confirmation
+            logger.warning(
+                "crowdstrike.read_only_command.failed",
+                device_id=device_id,
+                base_command=base_command,
+                error=str(exc),
+            )
+            return None
+
+    async def is_process_running(self, device_id: str, pid: int) -> bool | None:
+        """Whether ``pid`` still appears in the host's process table.
+
+        The read-back for ``kill_process``, whose own response says only that
+        RTR accepted a ``kill``. ``None`` means the question could not be
+        answered.
+
+        Absence is only trusted when the output looks like a process table —
+        at least one line whose first column is a number. If RTR returns
+        something this cannot parse, no PID is found, and reporting that as
+        "the process is gone" would confirm a kill from output we did not
+        understand. Only the first column is matched, so a surviving child
+        listing the dead PID as its parent does not read as the process
+        itself.
+        """
+        stdout = await self._read_only_command(device_id, "ps", "ps")
+        if stdout is None:
+            return None
+
+        first_columns = [line.split()[0] for line in stdout.splitlines() if line.split()]
+        numeric = [column for column in first_columns if column.isdigit()]
+        if not numeric:
+            logger.warning("crowdstrike.is_process_running.unparsed", device_id=device_id)
+            return None
+        return str(pid) in numeric
+
+    async def path_exists(self, device_id: str, path: str) -> bool | None:
+        """Whether ``path`` still resolves on the host.
+
+        The read-back for ``quarantine_file``, which is implemented as an RTR
+        ``rm``: the effect to confirm is the file's absence.
+
+        ``ls`` on a path that is gone returns an error and no stdout, so an
+        empty listing is the confirmation. That makes the empty string
+        load-bearing, which is why ``_read_only_command`` distinguishes it
+        from ``None``.
+        """
+        stdout = await self._read_only_command(device_id, "ls", f"ls '{path}'")
+        if stdout is None:
+            return None
+        return bool(stdout.strip())

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`POST /v1/ingest` and `POST /v1/ingest/batch` now require a credential,
+  and the tenant comes from the credential rather than from the
+  `X-Tenant-ID` header.** The endpoint the README tells users to push
+  telemetry to, and the one `make smoke` exercises, authenticated nothing:
+  it read `X-Tenant-ID`, believed it, and wrote events for whatever tenant
+  the caller named. Anyone who could reach the port could write alerts into
+  any tenant by typing that tenant's UUID. Compose binds the port to
+  `127.0.0.1`, which contains it locally, but ingesting real telemetry means
+  exposing it and nothing said so at the moment the operator did. The
+  comment at `services/ingest/internal/server/server.go` asserting that
+  "`/v1/ingest` is token-authenticated per request" had been false since it
+  was written; it is true now.
+
+  Rather than invent a second mechanism this extends the one the service
+  already had. `/v1/inbox/*` resolves a minted token from
+  `tenant_inbox_tokens` to a tenant, with optional HMAC-SHA256 over
+  `X-Signature`; `/v1/ingest` now resolves the same kind of token, pinned to
+  a new `connector-push` template exactly as `/v1/inbox/cef` is pinned to
+  `cef-syslog` — an inbox token is pasted into a third party's webhook
+  config, so minting one for PagerDuty must not also hand PagerDuty a
+  general ingest credential. A second shape covers AiSOC's own services:
+  `services/connectors` polls on behalf of many tenants and cannot hold a
+  per-tenant token, so it presents `AISOC_SERVICE_TOKEN` and declares the
+  tenant on `X-Tenant-ID`, which is then checked against the tenants table
+  before it becomes a scope.
+
+  `X-Tenant-ID` is still read and is never authority. It is **intersected**
+  with what the credential authorises, so naming an outside tenant narrows
+  to nothing and is refused rather than reaching out — the same
+  intersection-only rule `app/security/tenant_scope.py` already implements
+  for the Python services, ported to Go in
+  `services/ingest/internal/ingestauth`. There is no dev-mode bypass:
+  `AISOC_DEV_MODE` does not reach this path, and an ingest service that
+  cannot verify a credential answers 503 rather than accepting the write.
+
+  **Every deployment must act.** Mint a push token per external pusher with
+  `make ingest-token`, and set `AISOC_SERVICE_TOKEN` on both `ingest` and
+  `connectors` if you use pull connectors — without it, connector polling is
+  refused, loudly, at startup on one side and per request on the other. Full
+  procedure: `apps/docs/docs/operations/ingest-authentication.md`.
+
 ### Discoverability: the machine-readable surface, and an installer that wrote a config nothing could start
 
 A project an AI agent cannot read accurately is a project it will describe
@@ -76,6 +119,7 @@ path did not work at all.
   real 124, and asserted an audit trail that `services/mcp/src/telemetry.ts`
   already documents as untrue — `audit_middleware` records no row for any of
   the ten read tools. Corrected, along with the competitor-framed "moat" line.
+
 
 ### The documented quick start broke the product, and then the product had nothing to show
 
@@ -259,6 +303,29 @@ number is the one the requirement is sized against.
 
 ### Added
 
+- `make ingest-token` / `python -m app.scripts.mint_ingest_token` mints the
+  push credential for a fresh deployment, the role `bootstrap_admin` plays
+  for the console login. Idempotent — a second run returns the same token
+  rather than leaving a trail of live credentials nobody revokes.
+- `connector-push`, `ai-runtime`, `ai-finding` and `k8s-audit` are now
+  mintable inbox templates. The last three already shipped as YAML and were
+  named in the AI SDK's own setup instructions and in the Kubernetes
+  connector docs, but none was in `ALLOWED_TEMPLATE_IDS`, so the documented
+  setup for the AI-estate feature returned 400 and the templates were
+  unreachable.
+- `scripts/check_inbox_templates.py` compares shipped templates against
+  mintable ids **in both directions**, plus the console catalog, and carries
+  a `--self-test` that injects drift in each direction and requires the gate
+  to catch it. A one-directional check would have printed OK throughout the
+  defect above.
+- The golden pipeline asserts that an unauthenticated push is refused, not
+  only that an authenticated one succeeds — the happy path would go on
+  passing if authentication were removed.
+- `/v1/ingest` now bounds the request body (`INGEST_MAX_BODY_BYTES`, 10 MiB
+  default). `MAX_BATCH_SIZE` only counts events after the payload is
+  decoded, so nothing bounded the decode itself.
+
+
 - **`RENDER_FALLBACK_EXEMPT` is now checked in both directions.**
   `ALLOWED_ILLUSTRATIVE` had a staleness check from the start and this list
   had none, so an exemption could outlive the code it excused and go on
@@ -302,6 +369,29 @@ number is the one the requirement is sized against.
   to published prose has no hand-copied link. A paragraph that dates or
   negates the claim is exempt, so the retraction can quote the wording it
   retracts.
+
+### Changed
+
+- **gitleaks and Trivy are blocking gates.** All five scanners in
+  `security.yml` carried `continue-on-error`, so a new finding never redded
+  a pull request. Gitleaks found 35 findings on its first real run; every
+  one was triaged and recorded in `.gitleaksignore` with a written reason —
+  detection rule-id maps, osquery and redaction test fixtures, placeholder
+  PEMs, a published AWS example key, a FIPS-197 test vector, and a
+  `YOUR_TOKEN` doc placeholder. Four of the six entries the allow-list
+  already held had rotted through line drift and were suppressing nothing.
+  Trivy reports zero fixable HIGH/CRITICAL and blocks at that.
+
+  Semgrep (92 findings, 35 at ERROR), checkov (91 failed checks) and tfsec
+  (32, of which 7 CRITICAL) stay in observe mode. The counts are now written
+  into the workflow so the remaining work is visible rather than implied.
+
+  The secret-scan job also fails when the scanner cannot install, instead of
+  reporting clean, and proves it is reading the tree before trusting a clean
+  result: with the allow-list moved aside the triaged findings must
+  reappear. "Clean" and "did not run" previously looked identical.
+
+
 - **The prerequisites that were required but undocumented.** Beyond Docker and
   its memory, a first run needs `python3` **on the host** (`make smoke` runs
   the golden-pipeline script there, so without it you can start AiSOC but
@@ -416,7 +506,30 @@ number is the one the requirement is sized against.
   also caught `<ul role="alert">`, which is not an allowed role for a list and
   left its items without a list parent.
 
-### Changed
+- **Verification probes for the disruptive endpoint verbs.** `kill_process`
+  and `quarantine_file` had their success inferred from CrowdStrike RTR
+  accepting a command; both now read the effect back over the read-only tier
+  of the same batch API — the process table for the PID, the path for the
+  removed file. Absence is only trusted when the output can be recognised as
+  what it claims to be, so an unparseable `ps` listing is indeterminate
+  rather than "the process is gone", and only a line's first column is read
+  as a PID so a surviving child does not report its dead parent as alive.
+  `run_av_scan` joins them because it is automatic and Defender replies
+  `Pending` the moment it queues the sweep: it reads the machine action's
+  terminal state, and says indeterminate while the scan is still running.
+
+- **Every verb with an `ActionType` now either declares a probe or records
+  why it has none.** Eleven bridged response verbs had neither, which failed
+  safe but made three different situations look the same: nobody wrote it,
+  the vendor exposes no read-back, and there is nothing to read back. The
+  eight without probes now state which — including `reset_password`, where
+  the obvious candidate read is the *wrong* one rather than a missing one
+  (the executor issues a recovery link, so `passwordChanged` moves later and
+  only if the user follows it, and a probe watching it would report FAILED
+  for every correct reset). The below-MODERATE waiver must now name itself,
+  because `run_av_scan` had been taking it silently.
+
+
 
 - **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
   list named one compliance page, which is why `ROADMAP.md` drifted with CI
@@ -448,6 +561,14 @@ number is the one the requirement is sized against.
   `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
   freshness gate reads only the date — which a refresh keeps current — so a
   row could be two days old and still labelled two majors behind.
+
+- `tests/test_approval_doors_agree.py` gates the invariant rather than the
+  instance: both live doors swept over every capability, autonomy tier and
+  confidence band, asserting the same answer to "did a vendor get touched
+  without a human". Structural checks alongside it fail a door that imports
+  the raw matrix or branches on a specific impact tier, which is the shape a
+  re-introduced bypass has. Against the previous tree it reports five
+  disagreements across 345 combinations.
 
 ### Fixed
 
@@ -932,6 +1053,41 @@ number is the one the requirement is sized against.
   hosted demo the dock now reports that the copilot could not be reached, with
   the error, instead of emitting a reply.
 
+- **A pure read sat in the analyst approval queue, because the two dispatch
+  doors graded the same verb differently.** `search_siem` declares
+  `read_only` impact and `automatic` approval, and the contract gate's own
+  rule is that a read requiring approval "is either mis-classified or is not
+  actually a read". At the default autonomy tier `POST /actions` returned
+  `awaiting_approval` for it while `POST /live-actions/dispatch` executed it.
+  The dispatcher's docstring says its contract block exists so that a verb is
+  not "graded differently depending on which door it came through", and that
+  is precisely what was happening.
+
+  The cause was one table entry, not a missing bypass.
+  `TIER_MAX_AUTOMATIC["L1"]` was `None`, meaning "auto-executes nothing",
+  while `maturity.py` defines L1 as "MINIMAL blast-radius actions are
+  automatic" and `_AUTO_ALLOWED_AT_TIER` gives it `{MINIMAL}` — which
+  `_IMPACT_BLAST` equates with READ_ONLY impact. The registry door had grown
+  a local READ_ONLY short-circuit to route around it; the legacy door had
+  not. L1 now reads `READ_ONLY`, and only reads move: every impact above it
+  still outranks the ceiling and still returns ANALYST, exactly as the `None`
+  branch did. L0 keeps `None`, which now means one thing only — observe, not
+  even a read.
+
+  With the ceiling correct the bypass is unnecessary, so it is gone.
+  `approval_matrix.evaluate_contract()` takes a contract whole and is the
+  single entry both doors call, which removes the per-door unpacking that let
+  them drift in the first place.
+
+- **`update_alert_disposition` had no `ACTION_BLAST_RADIUS` entry**, found by
+  the new cross-door sweep rather than reported. Four readers of that table
+  supplied two different fallbacks — `blast_radius.py` to MEDIUM, which is
+  exactly `_AUTO_EXECUTE_LIMIT`, and the three tier gates to HIGH — so the
+  legacy door auto-executed the disposition writeback while the registry door
+  held it for a whitelist it could never match. It now carries the LOW entry
+  its own contract asks for ("classified the same as create_notable_event"),
+  and `blast_radius.py` fails closed like its three siblings.
+
 ### Removed
 
 - **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
@@ -987,6 +1143,7 @@ number is the one the requirement is sized against.
   from the registry now. `packHelpers.ts` mapped step types to integration
   badges as a `Record<string, …>` covering eighteen of twenty-two, so a
   playbook built from the other four claimed to use no integrations at all.
+
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not

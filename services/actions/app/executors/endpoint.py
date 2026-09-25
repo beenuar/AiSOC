@@ -515,6 +515,12 @@ class RunScriptExecutor(BaseExecutor):
 #: the executor and the verification probe cannot look for different things.
 INVESTIGATION_PACKAGE_ACTION = "CollectInvestigationPackage"
 
+#: The MDE machine-action type an antivirus sweep produces, for the same
+#: reason. ``DefenderClient.run_av_scan`` posts to ``/runAntiVirusScan`` and
+#: returns the queued action's id; this is what that action is called when
+#: the verification probe has to find it by type instead.
+AV_SCAN_ACTION = "RunAntiVirusScan"
+
 
 class CaptureForensicsExecutor(BaseExecutor):
     """Acquire a forensic evidence package from a host.

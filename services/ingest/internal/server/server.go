@@ -86,10 +86,18 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 	// Allow-list is resolved from AISOC_CORS_ORIGINS (canonical) / CORS_ORIGINS
 	// (legacy) with a safe default that covers local dev only; deployed
 	// origins are expected to set the env var.
-	// AllowCredentials stays false here — /v1/ingest is token-authenticated
-	// per request, not session-cookie-authenticated, so we don't need the
-	// browser to attach cookies cross-origin and we keep the spec-mandated
-	// rejection of "*"+credentials safely impossible.
+	// AllowCredentials stays false here. Every route on this service is
+	// authenticated by a credential the caller presents per request — a
+	// minted push token or a service token on /v1/ingest, an inbox token
+	// on /v1/inbox/*, the shared secret on /v1/ingest/k8s-audit — and
+	// never by a session cookie, so the browser has no reason to attach
+	// one cross-origin and the spec-mandated rejection of
+	// "*"+credentials stays safely impossible.
+	//
+	// This comment previously asserted that /v1/ingest was
+	// token-authenticated per request. It was not: the handler read a
+	// caller-supplied X-Tenant-ID header and checked nothing. The claim
+	// is true as of the credential check in internal/ingestauth.
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   resolveCORSOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},

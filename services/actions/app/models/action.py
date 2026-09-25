@@ -135,6 +135,15 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     # because there's a documented unsuppress path in every vendor.
     ActionType.ACK_ALERT: BlastRadius.MINIMAL,
     ActionType.SUPPRESS_ALERT: BlastRadius.LOW,
+    # The one member that had no entry, which meant it had no single blast
+    # radius: four call sites read this table with two different fallbacks,
+    # `blast_radius.py` to MEDIUM and the three tier gates to HIGH. So the
+    # legacy door auto-executed the writeback while the registry door held it
+    # for a whitelist it could never match — the same verb, two grades,
+    # decided by a default nobody chose. LOW is what its own contract asks
+    # for: "classified the same as create_notable_event ... it changes a
+    # queue item, not an estate", and create_notable_event is LOW.
+    ActionType.UPDATE_ALERT_DISPOSITION: BlastRadius.LOW,
 }
 
 # Actions that require explicit human approval

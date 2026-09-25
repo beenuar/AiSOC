@@ -24,6 +24,22 @@ type Config struct {
 	JWTSecret       string
 	MetricsPort     int
 
+	// /v1/ingest authentication.
+	//
+	// ServiceToken is the shared secret a trusted AiSOC service presents
+	// when it pushes on behalf of many tenants (services/connectors polls
+	// every tenant's connectors from one process). It identifies a
+	// service, not a tenant, so a caller using it must also declare the
+	// tenant it is acting for; see internal/ingestauth. Empty means the
+	// service-token path is unavailable and only minted per-tenant push
+	// tokens are accepted — there is no configuration that accepts an
+	// unauthenticated push.
+	ServiceToken string
+	// IngestMaxBodyBytes caps a single /v1/ingest body. MaxBatchSize only
+	// bounds the event count *after* the payload is decoded, so this is
+	// what bounds the decode itself.
+	IngestMaxBodyBytes int64
+
 	// Shodan enrichment
 	ShodanAPIKey          string
 	ShodanEnrichEnabled   bool
@@ -170,6 +186,12 @@ func Load() (*Config, error) {
 		TenantHeaderKey: getEnv("TENANT_HEADER_KEY", "X-Tenant-ID"),
 		JWTSecret:       getEnv("JWT_SECRET", ""),
 		MetricsPort:     mustGetEnvInt("METRICS_PORT", 9090),
+
+		// Per-service override wins over the shared platform token, the
+		// same precedence app.security.tenant_scope.resolve_service_token
+		// applies on the Python side.
+		ServiceToken:       getEnvFallback("AISOC_INGEST_SERVICE_TOKEN", "AISOC_SERVICE_TOKEN", ""),
+		IngestMaxBodyBytes: int64(mustGetEnvInt("INGEST_MAX_BODY_BYTES", 10*1024*1024)),
 
 		// Shodan
 		ShodanAPIKey:          getEnv("SHODAN_API_KEY", ""),
