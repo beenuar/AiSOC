@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
@@ -174,6 +175,60 @@ def _build_alert_context(state: InvestigationState) -> str:
     return wrap_untrusted("\n".join(parts), label="alert_telemetry")
 
 
+def _close_truncated_json(fragment: str) -> str:
+    """Close an object the model started and did not finish.
+
+    Small local models stop mid-object more or less routinely — with
+    ``finish_reason: "stop"``, not a token limit, so there is nothing to raise
+    by giving them more room. Measured against the model CORE ships
+    (``llama3.2:3b-instruct-q4_K_M``), a triage response arrived as::
+
+        {
+          "verdict": "true_positive",
+          "confidence": 0.8,
+          "rationale": "…uncertainty remains due to the lack of IOCs.
+
+    with the closing quote and brace simply absent. Every field the caller
+    reads was present and correct; the response was discarded and the alert
+    fell through to deterministic triage.
+
+    This closes any open string and any unclosed brackets, and does nothing
+    else. It cannot invent a field: a fragment that never reached ``verdict``
+    still parses to an object without one, and the caller's
+    ``normalize_disposition(..., default=TRUE_POSITIVE)`` fails safe to the
+    conservative verdict exactly as it does for a malformed response today.
+    """
+    in_string = False
+    escaped = False
+    stack: list[str] = []
+    for ch in fragment:
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\" and in_string:
+            escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]" and stack:
+            stack.pop()
+
+    repaired = fragment
+    if in_string:
+        # Drop a dangling escape before closing, or the quote is consumed by it.
+        if escaped:
+            repaired = repaired[:-1]
+        repaired += '"'
+    # A trailing comma or bare key left by the cut is not recoverable; strip it.
+    repaired = re.sub(r",\s*$", "", repaired)
+    return repaired + "".join(reversed(stack))
+
+
 def _parse_llm_response(text: str) -> dict[str, Any]:
     """Extract the JSON verdict from the LLM response, tolerating markdown fences."""
     cleaned = text.strip()
@@ -189,6 +244,10 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
         end = cleaned.rfind("}") + 1
         if start >= 0 and end > start:
             data = json.loads(cleaned[start:end])
+        elif start >= 0:
+            # An object was opened and never closed. Repair once, then give up
+            # and let the caller fall back to deterministic triage.
+            data = json.loads(_close_truncated_json(cleaned[start:]))
         else:
             raise
 
@@ -253,7 +312,15 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # Issue #571: do NOT swallow + return a null-verdict RUNNING state.
         # Raise a typed error so the caller falls back to deterministic triage
         # (or marks the alert needs_review) instead of completing with no verdict.
-        logger.error("Auto-triage LLM call failed", error=str(exc))
+        #
+        # The response excerpt is logged with it. A parse failure whose message
+        # is a character offset into text nobody kept is not diagnosable: the
+        # only way to find out what a model actually emitted was to reproduce
+        # the prompt by hand against the gateway. Bounded at 400 characters,
+        # and it is the model's own words about an alert this service already
+        # logs the summary of.
+        excerpt = str(locals().get("raw_text") or "")[:400].replace("\n", "\\n")
+        logger.error("Auto-triage LLM call failed", error=str(exc), response_excerpt=excerpt)
         state.add_finding(f"Auto-triage LLM error: {exc}")
         _metrics["total_processed"] += 1
         raise AutoTriageError(str(exc)) from exc

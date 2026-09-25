@@ -197,6 +197,15 @@ class Settings(BaseSettings):
     CONNECTORS_SERVICE_URL: str = "http://connectors:8003"
     CONNECTORS_SERVICE_TIMEOUT_SECONDS: float = 15.0
 
+    # Internal URL of ``services/threatintel``, which polls the public feeds
+    # (CISA KEV needs no key) and holds what they collected. The console's
+    # /threat-intel page reads through ``GET /threat-intel/indicators`` here;
+    # empty disables the proxy and that route reports it rather than rendering
+    # an empty list, because an empty list and an absent service look the same
+    # to a reader and call for different things.
+    THREATINTEL_SERVICE_URL: str = "http://threatintel:8005"
+    THREATINTEL_SERVICE_TIMEOUT_SECONDS: float = 10.0
+
     # Public ingest base URL — surfaced in the wizard's "Reveal push URL"
     # response so operators get a copy-pasteable curl example. Empty
     # falls back to a relative path; production deployments should

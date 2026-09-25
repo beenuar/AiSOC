@@ -83,6 +83,25 @@ else
   pass "docker compose v2 available"
 fi
 
+# Docker is not the only host requirement and the other two were undocumented.
+# `make smoke` — the README's headline proof — is a Python script run on the
+# host, not in a container, and `make up` generates `.env` with another one. An
+# operator without python3 gets a traceback from the command the quick start
+# tells them to trust.
+if have python3; then
+  pass "python3 available ($(python3 --version 2>&1 | awk '{print $2}'))"
+else
+  fail "python3 is not installed — make smoke and make env run on the host" "https://www.python.org/downloads/ (3.9+; CI uses 3.11)"
+fi
+
+# Every script under scripts/ has a bash shebang and uses bash-only syntax.
+# macOS ships bash 3.2, which is enough for all of them.
+if have bash; then
+  pass "bash available"
+else
+  fail "bash is not installed — every script under scripts/ needs it" "install bash from your package manager"
+fi
+
 # Skipped under --ports-only: `make up` runs that mode as a pre-flight, and the
 # disk probe starts a container. Advisories about free space do not belong in
 # the path between typing `make up` and the stack starting.
@@ -189,11 +208,32 @@ fi
 head2 "Configuration"
 if [ -f .env ]; then
   pass ".env present"
-  if grep -qE '^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$' .env 2>/dev/null; then
-    warn ".env has unset or placeholder secrets" "./install.sh regenerates them, or edit .env by hand"
+  # Delegated to scripts/check_env_placeholders.py rather than grepped here.
+  # The grep this replaced was
+  #   ^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$
+  # which matched neither placeholder the repository actually shipped, so the
+  # one check built to catch them reported clean on the exact .env that broke
+  # the vault. A detector and the file it inspects cannot be two hand-kept
+  # lists; tests/test_env_placeholder_gate.py now compares them.
+  if have python3; then
+    if placeholders="$(python3 scripts/check_env_placeholders.py .env 2>/dev/null)" && [ -z "${placeholders##*OK*}" ]; then
+      pass ".env has no placeholder values"
+    else
+      fail ".env still contains template placeholders:"$'\n'"$(printf '%s\n' "$placeholders" | sed 's/^/    /')" \
+           "make env   # generates real values for the secrets that need them"
+    fi
+  else
+    warn "cannot check .env for placeholders: python3 is not installed" "install python3 — make smoke and make env need it too"
+  fi
+  # A generated secret that is still empty is not fatal (the vault falls back
+  # to an ephemeral development key) but it does mean saved connector
+  # credentials will not survive a restart, which is worth saying out loud.
+  if have python3 && ! python3 scripts/ensure_env.py --check >/dev/null 2>&1; then
+    warn ".env has generated secrets that are still unset — connector credentials will not survive a restart" \
+         "make env"
   fi
 else
-  warn ".env not found — compose will fall back to built-in dev defaults" "cp .env.example .env"
+  warn ".env not found — compose will fall back to built-in dev defaults" "make env"
 fi
 
 # ── 4. Datastores — probed, not just 'running' ──────────────────────────────

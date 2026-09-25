@@ -87,7 +87,18 @@ class ThreatIntelPipeline:
             return {"total": len(iocs), "new": 0, "duplicate": duplicates}
 
         # --- Write to storage sinks ---
-        indexed = await self._os.bulk_index_iocs(new_iocs)
+        #
+        # Every sink is best-effort, OpenSearch included. It was the one
+        # unguarded call here, which made a store that ships in the `full`
+        # profile a hard requirement of a service that now runs in CORE: an
+        # exception from it aborted the batch before Qdrant — the CORE store,
+        # and the one the console reads through — was written at all. A feed
+        # that can reach one of its sinks should write to that one.
+        indexed = 0
+        try:
+            indexed = await self._os.bulk_index_iocs(new_iocs)
+        except Exception as exc:
+            logger.warning("OpenSearch IOC index failed", error=str(exc))
 
         try:
             await self._qdrant.upsert_iocs(new_iocs)
@@ -119,7 +130,11 @@ class ThreatIntelPipeline:
         if not actors:
             return {"total": 0, "new": 0}
 
-        indexed = await self._os.bulk_index_actors(actors)
+        indexed = 0
+        try:
+            indexed = await self._os.bulk_index_actors(actors)
+        except Exception as exc:
+            logger.warning("OpenSearch actor index failed", error=str(exc))
 
         try:
             await self._qdrant.upsert_actors(actors)
