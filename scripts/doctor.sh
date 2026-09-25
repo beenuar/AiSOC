@@ -109,22 +109,29 @@ if [ "$PORTS_ONLY" = "0" ] && docker info >/dev/null 2>&1; then
   # Disk exhaustion inside the Docker VM corrupts Kafka's log dir and the
   # broker then reports healthy while refusing every request. That exact
   # failure cost hours, so it is checked before anything else.
+  #
+  # The thresholds are measured, not guessed: CORE is 16.5GB of unique image
+  # layers plus a 2GB model volume, so 20GB is the floor at which a first
+  # `make up` completes with room for Postgres, Kafka and Qdrant to grow.
   avail_raw="$(docker run --rm --entrypoint sh alpine:3 -c 'df -P /' 2>/dev/null | awk 'NR==2{print $4}')"
   if [ -n "${avail_raw:-}" ]; then
     avail_gb=$((avail_raw / 1024 / 1024))
     if [ "$avail_gb" -lt 5 ]; then
       fail "docker has ${avail_gb}GB free — Kafka will corrupt its log dir below ~2GB" "docker system prune -af && docker volume prune -f"
-    elif [ "$avail_gb" -lt 15 ]; then
-      warn "docker has ${avail_gb}GB free (15GB+ recommended for the full profile)" "docker system prune -af"
+    elif [ "$avail_gb" -lt 20 ]; then
+      warn "docker has ${avail_gb}GB free — CORE needs ~20GB (16.5GB of images plus a 2GB model)" "docker system prune -af"
     else
       pass "docker disk space: ${avail_gb}GB free"
     fi
   fi
 
+  # CORE measured 4.84GiB resident with the local model loaded, so 8GB is the
+  # floor rather than the old 6: the model is mapped in on first inference and
+  # the ollama container grows to roughly the model size while serving.
   mem_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
   mem_gb=$((mem_bytes / 1024 / 1024 / 1024))
-  if [ "$mem_gb" -gt 0 ] && [ "$mem_gb" -lt 6 ]; then
-    fail "docker has ${mem_gb}GB RAM — CORE needs 6GB, full needs 12GB" "raise the memory limit in Docker Desktop → Settings → Resources"
+  if [ "$mem_gb" -gt 0 ] && [ "$mem_gb" -lt 8 ]; then
+    fail "docker has ${mem_gb}GB RAM — CORE needs 8GB (the bundled local model reaches ~3GB while answering), full needs 12GB" "raise the memory limit in Docker Desktop → Settings → Resources"
   elif [ "$mem_gb" -gt 0 ]; then
     pass "docker memory: ${mem_gb}GB"
   fi
