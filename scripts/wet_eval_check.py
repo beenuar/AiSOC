@@ -170,9 +170,9 @@ def _self_test() -> int:
     """
     cases = [
         ("no secrets configured: the workflow must not dispatch", {}, False, False),
-        ("both secrets present: the workflow dispatches", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, False, True),
+        ("both secrets present: the workflow dispatches", dict.fromkeys(_REQUIRED_SECRETS_FOR_LIVE_RUN, "x"), False, True),
         ("one secret missing: still no dispatch", {_REQUIRED_SECRETS_FOR_LIVE_RUN[0]: "x"}, False, False),
-        ("dry-run overrides present secrets", {n: "x" for n in _REQUIRED_SECRETS_FOR_LIVE_RUN}, True, False),
+        ("dry-run overrides present secrets", dict.fromkeys(_REQUIRED_SECRETS_FOR_LIVE_RUN, "x"), True, False),
     ]
     ok = True
     saved = {name: os.environ.get(name) for name in _REQUIRED_SECRETS_FOR_LIVE_RUN}

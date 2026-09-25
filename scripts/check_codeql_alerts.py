@@ -65,7 +65,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -459,7 +459,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"check_codeql_alerts: FAILED to read its inputs: {exc}", file=sys.stderr)
         return 2
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     failures = evaluate(
         open_alerts=data["open_alerts"],
         analyses=data["analyses"],
@@ -582,7 +582,7 @@ def self_test(root: Path) -> int:
     anywhere in this gate makes case 1 fail here rather than on the security
     page months later.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         base = _clean_fixture(root, now)
     except GateError as exc:

@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`ruff` moved to the 0.16 line across all fourteen declarations, the tree
+  was reformatted under it, and the lint gate stopped ending at `services/`.**
+  The bump alone reds every open pull request, because `ruff format --check`
+  is a hard gate on the required `Python — Lint & Type-check` job and 0.16
+  formats differently from 0.4.10. So the migration is the reformat. Measured
+  under 0.16.9 (what the range resolves today, and byte-identical to 0.16.8 on
+  both format and lint): **218 files reformatted**, 862 insertions against
+  1075 deletions, almost all of it collapsing calls that 0.4.10 wrapped and
+  0.16 fits inside the 140-column limit. It is its own commit with no other
+  change in it.
+
+  All fourteen declarations now read `>=0.16.8,<0.17` — seven manifests
+  (`services/{api,fusion,osquery-tls}`, `packages/{aisoc-cli,aisoc-detections,
+  plugin-sdk-py,sdk-py}`), three workflows (`ci.yml`, `ai-sdk.yml`,
+  `python-detections.yml`), `.devcontainer/Dockerfile`, and the three
+  `poetry.lock` files that resolve it, now at 0.16.9.
+
+  The three lint findings 0.16 reports on `services/` are fixed rather than
+  suppressed: two `C420` dict comprehensions become `dict.fromkeys` (both
+  values are string literals, so the shared-value hazard the rule exists
+  around does not apply), and one `UP031` percent-format becomes an f-string
+  in a chunker test that counts characters — all three rewrites asserted
+  equal to the originals before the change was kept.
+
+  **Scope.** The gate read `ruff check services/`, which left `scripts/` —
+  every CI gate in this repository, the code the rest of its claims are
+  verified by — linted by nothing at all. That is the same gap
+  `check_mypy_baseline.py` closed with its unmanaged scope, and it is closed
+  the same way here: lint now covers `services/ scripts/ tests/ tools/`, the
+  trees the repo-root `ruff.toml` governs that nothing else lints, and
+  `ruff format --check .` covers the whole repository because formatting has
+  no semantic content and `.` needs no edit when a tree is added. That
+  surfaced 17 real findings outside `services/`, each fixed at the source: two
+  `B007` loops switched to `.values()`, a `B904` re-raise in
+  `security_audit.py` now chains `from exc` so the original traceback
+  survives, two `E402` imports that genuinely follow a `sys.path` mutation
+  carry a reason next to the marker, and two over-length lines were wrapped.
+
+  Two exclusions, both named rather than implied. `plans/` is excluded in
+  `ruff.toml`: it is the archived prototype subtree `codeql.yml` and
+  `check_mypy_baseline.py` already exclude and the project rules forbid
+  editing, and it holds 844 lint findings and ~280 unformatted files — they
+  are excluded because they cannot be fixed, which is not the same as being
+  clean. `E501` is ignored for `scripts/detection_specs.py` and
+  `scripts/detection_specs_part2.py`: both open their rule table with
+  `# fmt: off`, so the formatter is already opted out of that layout by a
+  deliberate decision, and all 199 long lines there are single dict or string
+  literals — 72 positive fixtures, 66 negative fixtures, 50 `match_when`
+  clauses, 11 descriptions. Two named data modules, not `scripts/`; exactly
+  one long line elsewhere under it needed wrapping.
+
+  `packages/` and `plugins/` stay outside the lint gate on purpose and the
+  gap is a number rather than a shrug: 91 findings and 2 respectively. Two of
+  the five packages are already linted by their own workflows under their own
+  configs, and bringing the three published SDKs under this gate means
+  behaviour-touching fixes — `subprocess.run` check semantics, blind
+  `except Exception` handling, `zip(strict=)` — that belong in a change
+  reviewed as such rather than in a formatter migration.
+
 - **`sqlglot` moved to the 30 line across all eight declarations, and the
   forward-compatibility matrix leg was rewritten so it can still reach past
   the pin.** The bump itself was never the work: a single-path proposal moved

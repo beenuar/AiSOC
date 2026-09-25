@@ -138,8 +138,8 @@ def load_ignores(path: Path, today: dt.date | None = None) -> list[Ignore]:
 
         try:
             expiry = dt.date.fromisoformat(expiry_str)
-        except ValueError:
-            raise ValueError(f"Line {line_no}: invalid date '{expiry_str}' (expected YYYY-MM-DD)")
+        except ValueError as exc:
+            raise ValueError(f"Line {line_no}: invalid date '{expiry_str}' (expected YYYY-MM-DD)") from exc
 
         if expiry < today:
             raise ValueError(f"Line {line_no}: ignore for {vuln_id} expired on {expiry_str}")

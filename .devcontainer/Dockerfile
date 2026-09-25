@@ -104,7 +104,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 # The previous pipx approach installed to `/root/.local/bin/`, which is
 # unreadable by `node` (uid 1000) and broke the cold-start KPI probe.
 RUN python3.11 -m pip install --break-system-packages --no-cache-dir \
-        uv "ruff>=0.4.4,<0.5"
+        uv "ruff>=0.16.8,<0.17"
 
 # ─── pnpm via corepack ──────────────────────────────────────────────────────
 RUN corepack enable \

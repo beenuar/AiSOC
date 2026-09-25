@@ -51,3 +51,16 @@ extend-immutable-calls = [
 # Test fixtures intentionally bind names they don't reference (e.g. a
 # helper that builds a plugin on disk for side effects only).
 "services/*/tests/**/*.py" = ["B008"]
+
+# The 200-rule curated detection corpus, as a data table. Both modules open
+# their table with `# fmt: off`, so the formatter is already opted out of this
+# layout by a decision somebody made deliberately; E501 is the linter asking
+# the same question and getting a different answer. 199 lines exceed 140
+# columns and every one is a single dict or string literal — 72 positive
+# fixtures, 66 negative fixtures, 50 `match_when` clauses and 11 rule
+# descriptions — where the width is one row of a corpus rather than a nested
+# expression. Two named data modules, not `scripts/`: every other file under
+# it is linted at 140 like the rest of the tree, and exactly one line
+# elsewhere needed wrapping to get there.
+"scripts/detection_specs.py" = ["E501"]
+"scripts/detection_specs_part2.py" = ["E501"]

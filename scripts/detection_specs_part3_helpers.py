@@ -20,8 +20,8 @@ Auto-fixture rules
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import re
+from collections.abc import Iterable
 from typing import Any
 
 # Operator suffixes - kept in sync with scripts/generate_detections.py.

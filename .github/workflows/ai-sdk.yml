@@ -41,7 +41,7 @@ jobs:
         # The SDK itself has zero dependencies on purpose — it must not drag a
         # transport library into a customer's dependency resolution — so only
         # the test tooling is installed here.
-        run: pip install --quiet pytest "ruff>=0.4.4,<0.5"
+        run: pip install --quiet pytest "ruff>=0.16.8,<0.17"
       - name: Verify the package declares no runtime dependencies
         working-directory: packages/aisoc-ai-sdk
         run: |

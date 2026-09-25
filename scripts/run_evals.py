@@ -82,8 +82,10 @@ sys.path.insert(0, str(_AGENTS_ROOT))
 # don't have the full agent dev dependency stack (pydantic, langgraph, ...).
 from eval_telemetry import (  # type: ignore  # noqa: E402
     DEFAULT_INCIDENTS_PATH,
-    DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
     compute_per_investigation_telemetry,
+)
+from eval_telemetry import (  # noqa: E402  # same reason as the import above
+    DEFAULT_MODEL as _TELEMETRY_DEFAULT_MODEL,
 )
 
 # Wet-eval shim (T5.5). Dry-run path is stdlib-only; live path imports the

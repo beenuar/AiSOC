@@ -46,8 +46,9 @@ import html
 import json
 import subprocess
 import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
@@ -337,7 +338,7 @@ def _render_provenance(report: dict[str, Any], report_path: Path) -> str:
             f"| Dataset SHA-256 | `{dataset_sha}` |",
             f"| Eval mode | `{mode}` |",
             f"| Source report | `{report_path.relative_to(_REPO_ROOT) if report_path.is_relative_to(_REPO_ROOT) else report_path}` |",
-            f"| Renderer | `scripts/render_eval_charts.py` |",
+            "| Renderer | `scripts/render_eval_charts.py` |",
             "",
             "These fields are pulled from the JSON report and the local",
             "checkout. They appear in the [benchmark provenance footer](../../../apps/docs/docs/benchmark.md#provenance)",

@@ -106,7 +106,7 @@ class TestTenantScoping:
     @pytest.mark.parametrize(("tool", "args"), BACKED_CALLS)
     async def test_user_input_is_bound_not_interpolated(self, captured: list[Any], tool: str, args: dict[str, Any]) -> None:
         """Entity names come from alert payloads, which are untrusted."""
-        injected = {k: "'; DROP TABLE aisoc.raw_events; --" for k in args}
+        injected = dict.fromkeys(args, "'; DROP TABLE aisoc.raw_events; --")
         await dispatch(tool, TENANT, injected)
         sql, params = captured[-1]
         assert "DROP TABLE" not in sql

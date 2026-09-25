@@ -671,7 +671,7 @@ def select_curated(
     for r in eligible:
         for fid in r.families:
             per_family[fid].append(r)
-    for fid, lst in per_family.items():
+    for lst in per_family.values():
         lst.sort(key=lambda r: (-r.quality_score, r.rule_id))
 
     selected: dict[str, Rule] = {}
@@ -816,7 +816,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("")
     lines.append("| Family | Count | Target | Covered |")
     lines.append("|---|---|---|---|")
-    for fid, info in manifest["families"].items():
+    for info in manifest["families"].values():
         check = "✅" if info["covered"] else "❌"
         lines.append(f"| **{info['label']}** | {info['count']} | ≥ {info['min_target']} | {check} |")
     lines.append("")

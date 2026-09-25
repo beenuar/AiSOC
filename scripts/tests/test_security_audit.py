@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+
+# Import the module under test
+import sys
 import textwrap
 from pathlib import Path
 
 import pytest
-
-# Import the module under test
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import security_audit
@@ -30,7 +30,6 @@ from security_audit import (
     run_pip_audit,
     run_pnpm_audit,
 )
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -39,8 +39,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 

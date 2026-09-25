@@ -59,7 +59,8 @@ STORES: tuple[StoreCoverage, ...] = (
     StoreCoverage(
         "kafka",
         "container_gated",
-        "per-tenant envelope filter (graph_ws); live-replay test_live_stores.py::test_kafka_subscriber_A_never_receives_B (isolation-live.yml)",
+        "per-tenant envelope filter (graph_ws); live-replay "
+        "test_live_stores.py::test_kafka_subscriber_A_never_receives_B (isolation-live.yml)",
     ),
 )
 

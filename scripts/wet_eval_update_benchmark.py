@@ -169,7 +169,7 @@ def _rewrite(md_text: str, block: dict[str, Any]) -> tuple[str, dict[str, int]]:
     """
     lines = md_text.splitlines()
     out: list[str] = []
-    stats: dict[str, int] = {h: 0 for h in _TABLE_HEADINGS}
+    stats: dict[str, int] = dict.fromkeys(_TABLE_HEADINGS, 0)
 
     i = 0
     while i < len(lines):
