@@ -44,7 +44,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.
 - **Phase E (prove it):** E1 CI-gated benchmark scoreboard tied to a deterministic live-agent MITRE-accuracy run.
 
-The claim-to-gate matrix stands at **142 rows — 134 GATED / 8 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 8 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. The six lettered deferrals are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md).
+The claim-to-gate matrix stands at **143 rows — 135 GATED / 8 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 8 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. The six lettered deferrals are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md).
 
 ## v4.0 — Shipped
 
