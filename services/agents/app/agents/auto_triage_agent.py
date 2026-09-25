@@ -34,6 +34,7 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.context.organisation_memory import render_for_prompt
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
@@ -141,7 +142,15 @@ def set_threshold(value: float) -> float:
 
 
 def _build_alert_context(state: InvestigationState) -> str:
-    """Serialise the alert into a compact string the LLM can reason over."""
+    """Serialise the alert into a compact string the LLM can reason over.
+
+    ``state.organisation_memory`` is prepended, outside the untrusted-evidence
+    fence, because it is not evidence: it is the tenant's own compiled record
+    of what analysts have repeatedly said is normal here. It is still
+    sanitised and length-capped — the statements interpolate alert-derived
+    values like a process name, so they are tenant-authored but not
+    operator-typed.
+    """
     raw = state.raw_alert
     parts = [
         f"Alert Summary: {sanitize_text(state.alert_summary)}",
@@ -172,7 +181,12 @@ def _build_alert_context(state: InvestigationState) -> str:
         extras = {k: raw[k] for k in sorted(extra_keys)[:10]}
         parts.append("Additional fields (summary, not raw JSON):\n" + format_extra_fields_for_llm(extras))
 
-    return wrap_untrusted("\n".join(parts), label="alert_telemetry")
+    telemetry = wrap_untrusted("\n".join(parts), label="alert_telemetry")
+
+    memory = render_for_prompt(state.organisation_memory)
+    if not memory:
+        return telemetry
+    return f"{sanitize_text(memory)}\n\n{telemetry}"
 
 
 def _close_truncated_json(fragment: str) -> str:

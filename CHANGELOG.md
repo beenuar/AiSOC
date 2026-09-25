@@ -187,6 +187,52 @@ The README's `~6.5 GB` becomes **8 GB of memory and 20 GB of disk**. Ollama is
 9.6 MiB resident when idle and 2.96 GiB while serving a request; the second
 number is the one the requirement is sized against.
 
+### Added
+
+- **`scripts/generate_corpus_stats.py`** — generates
+  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
+  engine ruleset, the generated detection truth table, and the marketplace
+  index, reconciling all three against each other and refusing to publish if
+  they disagree. Every landing surface imports the constants, so none can
+  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
+  `--self-test` hand-edits the artefact and requires the drift to be caught.
+  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
+  fields, and the UI leads with the executable count.
+- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
+  the way a count can, so the retraction is gated instead. No published
+  surface may assert the legacy harness runs the production grouping; any
+  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
+  suite card may not be declared `kind: 'measurement'`; and every surface
+  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
+  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
+  test asserts against its own measurement — so the chain from measurement
+  to published prose has no hand-copied link. A paragraph that dates or
+  negates the claim is exempt, so the retraction can quote the wording it
+  retracts.
+- **The prerequisites that were required but undocumented.** Beyond Docker and
+  its memory, a first run needs `python3` **on the host** (`make smoke` runs
+  the golden-pipeline script there, so without it you can start AiSOC but
+  cannot prove it works), `bash` (`make up` gates on `scripts/doctor.sh
+  --ports-only` before it calls compose), and roughly 18 GB of free Docker
+  disk — previously implied only by a troubleshooting row noting that Kafka
+  corrupts its log directory and *still passes its healthcheck* when the
+  daemon runs out of space. Node 22 and pnpm 8, which the installers require,
+  were also unlisted. All are now in the quick-start prerequisites table with
+  the command each one gates.
+
+### Changed
+
+- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
+  list named one compliance page, which is why `ROADMAP.md` drifted with CI
+  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
+  **row total** is compared as well as the GATED/PARTIAL split, and a figure
+  the prose explicitly dates ("the count at that time") is exempt so history
+  need not be rewritten.
+- **`check_scoreboard.py --check` verifies `agent_version` against
+  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
+  freshness gate reads only the date — which a refresh keeps current — so a
+  row could be two days old and still labelled two majors behind.
+
 ### Fixed
 
 - **A retracted benchmark figure was still badged "Real measurement".**
@@ -228,42 +274,205 @@ number is the one the requirement is sized against.
   fabricated logos, but four of them assert a partner count nothing in the
   repository supports, and the window closed in June 2026 while still being
   advertised as upcoming.
+- **The Windows installer routed evaluators to a stack that cannot answer the
+  question they came to ask.** `install.sh` was changed to bring up the real
+  deployment, create an administrator and verify the pipeline; `install.ps1`
+  was not, and nothing noticed. It handed off to `pnpm aisoc:demo` — a compose
+  file that opens by saying it does not run the AiSOC pipeline, has no ingest
+  service and no fusion service, sets `AISOC_DISABLE_KAFKA=true`, and whose
+  console content comes entirely from a seed script writing rows straight into
+  Postgres — and then printed `AiSOC is up and running.` A Windows user saw a
+  populated console and concluded the platform worked, having never run the
+  platform. `install.ps1` now performs the stages `make up` and `make smoke`
+  perform: a port pre-check that names the process holding a port rather than
+  letting compose fail with `Bind for 0.0.0.0:5432 failed`, `docker compose
+  up -d`, a wait that reads `docker compose ps -a` so an exited or
+  crash-looping container fails rather than passing, `docker compose run --rm
+  -T api python -m app.scripts.bootstrap_admin`, and the golden-pipeline
+  runner. Windows has no `make` and the Makefile's recipes are POSIX shell, so
+  these are native re-implementations of the same commands rather than a
+  `make` call; `tests/test_installer_parity_gate.py` fails the build if the
+  two installers diverge again.
+- **No administrator was created on Windows, and the closing banner said
+  nothing about credentials.** A Windows user either could not sign in at all
+  or signed in to a seeded database and evaluated that as the product. The
+  banner now surfaces the generated password the same way `install.sh` does:
+  printed once, stored nowhere, with the reset command alongside it. It also
+  no longer claims the pipeline was verified when the check was skipped for
+  want of a Python interpreter.
+- **`install.ps1` pointed at an uninstaller that does not exist.** The closing
+  banner named `.\scripts\install\uninstall.ps1`; the file is `uninstall.ps1`
+  at the repository root and has never been anywhere else, so the last
+  instruction the installer gave a Windows user could not work. The parity
+  gate now asserts every `.ps1` path either script tells a user to run is a
+  file in the repository.
+- **`uninstall.ps1` left the whole stack running while reporting success.** It
+  tore down only `infra/compose/docker-compose.demo.yml`, so every CORE
+  container — Postgres still holding 5432 — survived an uninstall that said it
+  was complete. It now brings down the root `docker-compose.yml` project
+  across every optional profile, then the demo project for anyone who ran the
+  older installer.
+- **`install.ps1` installed dependencies nobody tested.** It used
+  `pnpm install --no-frozen-lockfile` where `install.sh` uses
+  `--frozen-lockfile` for the stated reason that a self-hoster's install must
+  not quietly resolve a dependency set CI never saw. It also accepted Node 20
+  where `install.sh` requires 22, the version every workflow tests on and both
+  Node images ship. Both now match, and the gate compares them.
+- **The docs portal contradicted the README on whether the pipeline works.**
+  `quickstart.md` was a pre-v8.2 page built around `pnpm aisoc:demo`; because
+  the scripts it named still exist, nothing errored and it simply took readers
+  to the wrong stack. Three statements were false. It claimed `.env.example`
+  ships "a pre-generated dev `AISOC_CREDENTIAL_KEY`" — it ships a placeholder
+  that is worse than an empty value, because an empty one makes the API
+  generate an ephemeral key and warn while a malformed one makes the
+  credential vault raise, so the first request touching a connector secret
+  returns HTTP 500. It claimed events posted to `/v1/ingest/batch` "accept
+  cleanly but never become `Alert` rows", which is the exact path `make smoke`
+  asserts and the README publishes as its headline proof. And its cheat sheet
+  offered `aisoc keygen` as the way to generate that vault key, when `aisoc
+  keygen` writes an Ed25519 plugin-signing pair to `~/.aisoc/signing.key` and
+  has nothing to do with Fernet. The page is now written around `make up`,
+  `make bootstrap` and `make smoke`, and its compose-profile table was rebuilt
+  from `docker-compose.yml` rather than corrected from the old text — six port
+  numbers and profile memberships were wrong, and two whole profiles were
+  missing.
+- **`installation.md` documented flags that do not exist.** `-SkipDemo`,
+  `AISOC_SKIP_DEMO` and `-AisocDir` are not accepted by either installer; the
+  real spellings are `--no-launch` / `-NoLaunch` and `--clone-dir` /
+  `-CloneDir`. The page also still promised a browser opening on a seeded
+  ransomware case with pre-filled credentials, which no longer happens and for
+  which there are no default credentials.
 
-### Added
+- **Five banners that misdiagnosed their own failure.** Four of them claimed
+  to be showing data they were not showing, which is worse than no banner: the
+  operator now has a confident diagnosis, it is wrong, and they spend the next
+  hour on the service it named. `ConnectorsView` printed "Connectors API
+  unreachable — showing demo instances so you can explore the interface" above
+  a list that is `data?.connectors ?? []` and therefore empty outside the
+  hosted demo, with four stat tiles reading a confident `0` beside it.
+  `RBACView` printed "showing demo roles" while `roles` was `undefined`, which
+  suppressed both the skeleton and the empty state — the banner was the only
+  thing on the page. `PlaybooksView` printed "showing demo playbooks", and a
+  truthy `error` suppressed its empty state too. `EffectivePermissionsView`
+  said "falling back to demo data" when `demoFallback(DEMO_RESULT)` is
+  `undefined` and there is no fallback, over a blank Cytoscape canvas with no
+  explanation at all. And the copilot pill labelled **any** error "Demo mode"
+  on deployments that are not the demo, beside a green "Connected" that
+  asserted connectivity before a single request had been made.
 
-- **`scripts/generate_corpus_stats.py`** — generates
-  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
-  engine ruleset, the generated detection truth table, and the marketplace
-  index, reconciling all three against each other and refusing to publish if
-  they disagree. Every landing surface imports the constants, so none can
-  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
-  `--self-test` hand-edits the artefact and requires the drift to be caught.
-  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
-  fields, and the UI leads with the executable count.
-- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
-  the way a count can, so the retraction is gated instead. No published
-  surface may assert the legacy harness runs the production grouping; any
-  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
-  suite card may not be declared `kind: 'measurement'`; and every surface
-  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
-  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
-  test asserts against its own measurement — so the chain from measurement
-  to published prose has no hand-copied link. A paragraph that dates or
-  negates the claim is exempt, so the retraction can quote the wording it
-  retracts.
+  `lib/failure.ts` generalises the fix already made for the entity-risk queue.
+  Two rules: **name the upstream service only when that service is genuinely
+  at fault** (a 422 is a malformed request from the console and the backend is
+  healthy and saying so; a 401 is an expired session; neither is an outage),
+  and **say the data is unknown, never empty** — an empty list and an
+  unreadable list look identical and mean opposite things. `FailureBanner`
+  carries a retry that re-issues the request, which none of the five had; the
+  copilot surfaces a failed question in the thread with a retry that re-sends
+  it rather than leaving it unanswered under a pill. Two fetchers that threw
+  `new Error('HTTP 404')` and `new Error('Failed to fetch')` now throw
+  `ApiError`, because a status discarded in prose is a status no banner can
+  reason about. Every test asserts on **first paint** as well as the error
+  branch: `data` is `undefined` in both states, so a suite that only drives
+  the error branch never exercises the one a self-hoster sees on every load.
 
-### Changed
+- **Three surfaces that asked for the wrong tenant's data.** `/purple-team`
+  had `const TENANT_ID = '00000000-0000-0000-0000-000000000001'` at module
+  scope and used it for all nine of its requests, so on any deployment with
+  more than one tenant it read another tenant's ATT&CK coverage, drift
+  history, executions and tabletop sessions — and *wrote* into that tenant,
+  since "Capture snapshot" and "Create session" used the same literal.
+  `/honeytokens` had the same literal behind `NEXT_PUBLIC_TENANT_ID`, which is
+  inlined at build time and is therefore one constant for every operator of
+  every tenant. Both now read the active tenant from `TenantProvider`, and
+  every request is `null`-gated on it so nothing is issued against a guess.
 
-- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
-  list named one compliance page, which is why `ROADMAP.md` drifted with CI
-  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
-  **row total** is compared as well as the GATED/PARTIAL split, and a figure
-  the prose explicitly dates ("the count at that time") is exempt so history
-  need not be rewritten.
-- **`check_scoreboard.py --check` verifies `agent_version` against
-  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
-  freshness gate reads only the date — which a refresh keeps current — so a
-  row could be two days old and still labelled two majors behind.
+- **`/fim` was not tenant-scoped, and its own comment had gone stale.** The
+  component pinned `TENANT_ID = 'default'` and explained that
+  `services/osquery-tls` used a different tenancy model. That service had in
+  fact already been reconciled: its read path resolves a tenant UUID from the
+  caller's credential and lists `'default'` as a *placeholder* meaning "the
+  caller did not name a tenant", precisely because migration `001` seeds that
+  slug and the demo seed renames it to `demo`. What was actually broken: the
+  console sent no credential at all, so there was no scope to resolve; and
+  `/fim/summary` resolved the scope correctly for its total and then filtered
+  its by-action and top-paths breakdowns on the **raw** query parameter, so
+  one card showed three numbers computed against two different tenants. Not a
+  leak — anything out of scope was already refused — but wrong. The client
+  sends the session bearer and no tenant; the endpoint filters every query on
+  the resolved scope. Still unreconciled and now stated rather than implied:
+  node *enrolment* keys `Node.tenant_id` as a `String(64)` defaulting to
+  `"default"`, so a node enrolled with no tenant header writes events under a
+  string no console read can resolve. That is an enrolment-side migration.
+
+  Three contract breaks found while proving the tenancy fix was observable,
+  all of which made the page unusable regardless of tenancy: the summary
+  response never carried `active_nodes` while the card called
+  `.toLocaleString()` on it; the events response is `{items, offset, limit}`
+  and the client read `{events, page, page_size}`; and the client sent
+  `page`/`page_size`/`since` to an endpoint declaring `offset`/`limit` and no
+  `since`, so FastAPI dropped all three — every page showed the same first 100
+  rows and every time window showed the same events.
+
+- **A non-promoted event now leaves a thread to pull.**
+  `promote_normalized_event` returned `None` and the consumer incremented
+  `not_promoted`. The aggregate reached `/metrics`, so an operator could see
+  that events were being dropped and nothing else — not which connector, not
+  what shape, not why. "I connected my SIEM and no alerts appeared" is the
+  first question a new user asks and a counter cannot answer it. The log now
+  names the connector, the OCSF class and category, the severity, which
+  promotion condition was not met, and that the event is in the lake.
+
+  **Volume:** this is the hot path and most ingested telemetry is correctly
+  not promoted, so a line per event would be the platform's highest-volume log
+  and would cost more than the pipeline it describes. A pure time-sampled
+  rollup is wrong the other way — somebody who has just connected a source
+  needs the answer in seconds. So both, split by novelty: the **first** event
+  of each distinct `(connector, class, severity, reason)` shape is explained
+  in full immediately, everything after it is counted into a rollup emitted at
+  most once per 60s (`AISOC_NOT_PROMOTED_ROLLUP_SECONDS`). Steady-state cost
+  is one line per minute regardless of throughput. Tracked shapes are capped
+  so a connector emitting a garbage `class_uid` per event cannot make the
+  sampler a memory leak.
+
+- **`splunk_enterprise` stays non-promoting, and now says so on the event.**
+  The profile maps raw Splunk *search result rows* (`_time`, `src`, `dst`,
+  `user`), not notables, and it stays at `classUID: 4001`: promoting each row
+  of an arbitrary saved search would turn a result set into an alert queue,
+  which is what the `splunk` profile at 2001 already does properly for
+  findings that have passed Splunk's own correlation. Its `severityMap` was
+  literally empty, which was read as the cause of the silence; it was not —
+  severity mapping already falls through to the shared five-tier ladder, so a
+  row carrying `severity: "critical"` scores 5 and promotes. Naming that
+  ladder on the profile changes nothing at runtime and stops the next reader
+  making the same diagnosis. What remains true is that a row with **no**
+  severity field scores 0, and category 4 with severity 0 satisfies neither
+  branch — such an event now carries a `normalization_warnings` entry saying
+  exactly that, which lands in the lake beside it rather than scrolling past
+  in a log. A test pins the two constants against the fusion policy they
+  mirror.
+
+- **Organisation memory reaches the triage prompt.** `active_statements`
+  compiles repeated, tagged analyst disagreement into durable statements; a
+  repo-wide grep returned exactly one match, its own definition. Its write
+  counterpart `record_disagreement` had no caller either, so the memory was
+  neither written nor read and the platform triaged the next identical alert
+  knowing nothing about the last one being overturned. Both ends are wired,
+  because wiring only the read would have been a query against a table nothing
+  populates: `POST /feedback/alert-override` takes an optional `reason_code`
+  from the closed vocabulary, and the agents triage worker reads
+  `GET /feedback/context-statements` into the prompt over HTTP — the API owns
+  the session and the expiry semantics, and a second copy of that SQL would be
+  a second definition of "active". Statements are presented to the model as
+  advisory evidence rather than instructions, because a statement needs two
+  analysts and phrasing it as fact hands anyone who can produce two benign
+  votes a suppression the model obeys. Fails soft, caches for 120s, and
+  `test_organisation_memory_in_prompt.py` proves the claim by capturing the
+  messages handed to the model with and without a recorded disagreement and
+  diffing them.
+
+- `EmptyState` accepts a `headingLevel`. `ConnectorsView` renders it directly
+  under the page `h1`, so the default `h3` skipped a level and failed
+  axe-core's `heading-order` rule.
 
 ## [10.0.0] — 2026-09-25
 

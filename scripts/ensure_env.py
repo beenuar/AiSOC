@@ -56,7 +56,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_env_placeholders import is_placeholder, parse_env
-from gate_toolkit import repo_root
+from gate_toolkit import repo_root, self_test_if_requested
+
+# `--check` is a verdict, so it answers `--self-test` like every other verdict
+# in this tree: over a repository with no content there is neither a `.env` nor
+# a template to copy one from, and the only honest answer is to refuse.
+self_test_if_requested(__file__)
 
 
 def _fernet_key() -> str:
