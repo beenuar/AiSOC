@@ -3,16 +3,21 @@
 /**
  * Proof / logo strip — `proof-strip` from §6.2 of the brief.
  *
- * Renders two horizontal rows:
+ * Renders one horizontal row: "Built on the open-source stack you already
+ * trust" — six line-art brand wordmarks (LangGraph, Apache Kafka, Neo4j,
+ * PostgreSQL, Qdrant, Ollama) inside a Marquee, paused on hover/focus. Each
+ * names a dependency a reader can verify in the tree.
  *
- *   1. "Built on the open-source stack you already trust" — six line-art
- *      brand wordmarks (LangGraph, Apache Kafka, Neo4j, PostgreSQL,
- *      Qdrant, Ollama) inside a Marquee, paused on hover/focus.
- *
- *   2. "Design partners" — four greyed partner-outline pills that read
- *      "Reference partners onboarding through Q2 2026", matching the
- *      content doc's empty-state treatment until real customer logos
- *      are licensed.
+ * A "Design partners" block used to sit below it: four dashed "Partner A–D"
+ * chips under the caption "Reference partners onboarding through Q2 2026".
+ * It was removed rather than updated. The chips were placeholders rather than
+ * fabricated logos, but four of them assert a partner count nothing in this
+ * repository supports, and the date had already lapsed — a window that closed
+ * in June 2026 was still being advertised as upcoming. An empty-state that
+ * implies four partners is a weaker version of a fabricated logo wall, not a
+ * neutral absence, so the honest rendering of "no design partners yet" is to
+ * render nothing. Restore the section when there are named partners who have
+ * agreed to be named.
  *
  * The Marquee primitive (`MagicUI`) already collapses to a static row
  * under `prefers-reduced-motion` via the `animate-marquee` keyframe
@@ -34,13 +39,6 @@ const STACK_WORDMARKS: ReadonlyArray<{
   { name: 'Qdrant', caption: 'Vector store' },
   { name: 'Ollama', caption: 'Local LLM' },
 ];
-
-const PARTNER_PLACEHOLDERS = [
-  'Partner A',
-  'Partner B',
-  'Partner C',
-  'Partner D',
-] as const;
 
 function StackWordmark({ name, caption }: { name: string; caption: string }) {
   return (
@@ -92,31 +90,6 @@ export function ProofStrip() {
           </Marquee>
         </div>
 
-        <div className="mt-10 flex flex-col items-center gap-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-velvet-content-tertiary">
-            Design partners
-          </p>
-          <ul
-            aria-label="Reference partners onboarding through Q2 2026"
-            className="flex flex-wrap items-center justify-center gap-2 sm:gap-3"
-          >
-            {PARTNER_PLACEHOLDERS.map((partner) => (
-              <li
-                key={partner}
-                className="inline-flex items-center gap-2 rounded-full border border-dashed border-velvet-border bg-velvet-surface-raised/30 px-4 py-1.5 text-xs font-medium text-velvet-content-tertiary"
-              >
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-1.5 w-1.5 rounded-full bg-velvet-content-tertiary/40"
-                />
-                {partner}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-velvet-content-tertiary">
-            Reference partners onboarding through Q2 2026
-          </p>
-        </div>
       </div>
     </section>
   );

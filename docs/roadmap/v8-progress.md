@@ -49,8 +49,10 @@ migration runners for all three non-Postgres stores), recursive investigation
 contract, and a SOC-agent benchmark a third party can run against their own
 agent.
 
-Claim-to-gate matrix: **108 rows — 99 GATED / 9 PARTIAL / 0 NO GATE**. Recount
-with `python3 scripts/check_claim_gate_matrix.py`; do not quote a remembered
+Claim-to-gate matrix **at the v8.0 cut**: 108 rows — 99 GATED / 9 PARTIAL /
+0 NO GATE. That is a record of where v8.0 landed, not the current tally; the
+matrix has grown since. Recount with
+`python3 scripts/check_claim_gate_matrix.py`; do not quote a remembered
 figure.
 
 Of the twelve hardening phases, **Phase 4 is the only one unchecked, and
