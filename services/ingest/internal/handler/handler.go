@@ -111,7 +111,8 @@ func (h *Handler) SetSnapshotApplier(s SnapshotApplier) {
 // signal: a nil *ingestauth.Authenticator refuses every request. Ingest is
 // a write path into tenant-owned data, so a wiring regression has to fail
 // closed. There is no flag that turns this off — AISOC_DEV_MODE does not
-// reach it, and tests/test_security_defaults.py exists to keep it that way.
+// reach it, and services/api/tests/test_security_defaults.py exists to keep
+// it that way.
 func (h *Handler) SetAuthenticator(a *ingestauth.Authenticator) {
 	h.auth = a
 }
