@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decoded, so nothing bounded the decode itself.
 
 
+
 - **`scripts/generate_corpus_stats.py`** — generates
   `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
   engine ruleset, the generated detection truth table, and the marketplace
@@ -116,6 +117,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reporting clean, and proves it is reading the tree before trusting a clean
   result: with the allow-list moved aside the triaged findings must
   reappear. "Clean" and "did not run" previously looked identical.
+
+
+- **The prerequisites that were required but undocumented.** Beyond Docker and
+  its memory, a first run needs `python3` **on the host** (`make smoke` runs
+  the golden-pipeline script there, so without it you can start AiSOC but
+  cannot prove it works), `bash` (`make up` gates on `scripts/doctor.sh
+  --ports-only` before it calls compose), and roughly 18 GB of free Docker
+  disk — previously implied only by a troubleshooting row noting that Kafka
+  corrupts its log directory and *still passes its healthcheck* when the
+  daemon runs out of space. Node 22 and pnpm 8, which the installers require,
+  were also unlisted. All are now in the quick-start prerequisites table with
+  the command each one gates.
 
 
 - **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
@@ -170,6 +183,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fabricated logos, but four of them assert a partner count nothing in the
   repository supports, and the window closed in June 2026 while still being
   advertised as upcoming.
+- **The Windows installer routed evaluators to a stack that cannot answer the
+  question they came to ask.** `install.sh` was changed to bring up the real
+  deployment, create an administrator and verify the pipeline; `install.ps1`
+  was not, and nothing noticed. It handed off to `pnpm aisoc:demo` — a compose
+  file that opens by saying it does not run the AiSOC pipeline, has no ingest
+  service and no fusion service, sets `AISOC_DISABLE_KAFKA=true`, and whose
+  console content comes entirely from a seed script writing rows straight into
+  Postgres — and then printed `AiSOC is up and running.` A Windows user saw a
+  populated console and concluded the platform worked, having never run the
+  platform. `install.ps1` now performs the stages `make up` and `make smoke`
+  perform: a port pre-check that names the process holding a port rather than
+  letting compose fail with `Bind for 0.0.0.0:5432 failed`, `docker compose
+  up -d`, a wait that reads `docker compose ps -a` so an exited or
+  crash-looping container fails rather than passing, `docker compose run --rm
+  -T api python -m app.scripts.bootstrap_admin`, and the golden-pipeline
+  runner. Windows has no `make` and the Makefile's recipes are POSIX shell, so
+  these are native re-implementations of the same commands rather than a
+  `make` call; `tests/test_installer_parity_gate.py` fails the build if the
+  two installers diverge again.
+- **No administrator was created on Windows, and the closing banner said
+  nothing about credentials.** A Windows user either could not sign in at all
+  or signed in to a seeded database and evaluated that as the product. The
+  banner now surfaces the generated password the same way `install.sh` does:
+  printed once, stored nowhere, with the reset command alongside it. It also
+  no longer claims the pipeline was verified when the check was skipped for
+  want of a Python interpreter.
+- **`install.ps1` pointed at an uninstaller that does not exist.** The closing
+  banner named `.\scripts\install\uninstall.ps1`; the file is `uninstall.ps1`
+  at the repository root and has never been anywhere else, so the last
+  instruction the installer gave a Windows user could not work. The parity
+  gate now asserts every `.ps1` path either script tells a user to run is a
+  file in the repository.
+- **`uninstall.ps1` left the whole stack running while reporting success.** It
+  tore down only `infra/compose/docker-compose.demo.yml`, so every CORE
+  container — Postgres still holding 5432 — survived an uninstall that said it
+  was complete. It now brings down the root `docker-compose.yml` project
+  across every optional profile, then the demo project for anyone who ran the
+  older installer.
+- **`install.ps1` installed dependencies nobody tested.** It used
+  `pnpm install --no-frozen-lockfile` where `install.sh` uses
+  `--frozen-lockfile` for the stated reason that a self-hoster's install must
+  not quietly resolve a dependency set CI never saw. It also accepted Node 20
+  where `install.sh` requires 22, the version every workflow tests on and both
+  Node images ship. Both now match, and the gate compares them.
+- **The docs portal contradicted the README on whether the pipeline works.**
+  `quickstart.md` was a pre-v8.2 page built around `pnpm aisoc:demo`; because
+  the scripts it named still exist, nothing errored and it simply took readers
+  to the wrong stack. Three statements were false. It claimed `.env.example`
+  ships "a pre-generated dev `AISOC_CREDENTIAL_KEY`" — it ships a placeholder
+  that is worse than an empty value, because an empty one makes the API
+  generate an ephemeral key and warn while a malformed one makes the
+  credential vault raise, so the first request touching a connector secret
+  returns HTTP 500. It claimed events posted to `/v1/ingest/batch` "accept
+  cleanly but never become `Alert` rows", which is the exact path `make smoke`
+  asserts and the README publishes as its headline proof. And its cheat sheet
+  offered `aisoc keygen` as the way to generate that vault key, when `aisoc
+  keygen` writes an Ed25519 plugin-signing pair to `~/.aisoc/signing.key` and
+  has nothing to do with Fernet. The page is now written around `make up`,
+  `make bootstrap` and `make smoke`, and its compose-profile table was rebuilt
+  from `docker-compose.yml` rather than corrected from the old text — six port
+  numbers and profile memberships were wrong, and two whole profiles were
+  missing.
+- **`installation.md` documented flags that do not exist.** `-SkipDemo`,
+  `AISOC_SKIP_DEMO` and `-AisocDir` are not accepted by either installer; the
+  real spellings are `--no-launch` / `-NoLaunch` and `--clone-dir` /
+  `-CloneDir`. The page also still promised a browser opening on a seeded
+  ransomware case with pre-filled credentials, which no longer happens and for
+  which there are no default credentials.
 
 ## [10.0.0] — 2026-09-25
 
