@@ -64,7 +64,7 @@
     "@playwright/test": "^1.63.0",
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.6.1",
-    "axe-core": "^4.11.4",
+    "axe-core": "^4.13.0",
     "eslint": "^9.39.0",
     "eslint-config-next": "16.3.5",
     "http-server": "^14.1.1",
