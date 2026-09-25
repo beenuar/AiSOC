@@ -36,12 +36,12 @@ satisfied with thirteen forms missing, so the compiler was quiet and the gate
 was looking somewhere else. The one step type an operator could actually
 click was the one nothing checked.
 
-Naming ``apps/web/.../stepSchemas.ts`` here would fix that file and leave the
-next one free. So the TypeScript half is a **scan**: every ``.ts``/``.tsx``
-file in the tree is parsed for collections of step-type literals, and any
-collection that overlaps the engine's vocabulary is required either to match
-it exactly or to be a recorded subset with a reason. A sixth vocabulary is a
-failing build wherever somebody puts it.
+Naming ``apps/web/src/components/playbooks/stepSchemas.ts`` here would fix
+that file and leave the next one free. So the TypeScript half is a **scan**:
+every ``.ts``/``.tsx`` file in the tree is parsed for collections of step-type
+literals, and any collection that overlaps the engine's vocabulary is required
+either to match it exactly or to be a recorded subset with a reason. A sixth
+vocabulary is a failing build wherever somebody puts it.
 
 What the scan credits, and what it cannot see
 ---------------------------------------------
@@ -871,9 +871,9 @@ def compare(reg: Registries, *, recorded_subsets: dict[str, str] | None = None) 
 
     for vocabulary in reg.ts_vocabularies:
         recorded = recorded_subsets.get(vocabulary.ref)
-        missing = reg.model_step_types - vocabulary.members
+        omitted = reg.model_step_types - vocabulary.members
         invented = vocabulary.members - reg.model_step_types
-        if not missing and not invented:
+        if not omitted and not invented:
             if recorded:
                 errors.append(
                     f"a recorded subset lists {vocabulary.ref} as deliberate and it now declares the "
@@ -882,7 +882,7 @@ def compare(reg: Registries, *, recorded_subsets: dict[str, str] | None = None) 
             continue
         if recorded and not invented:
             continue
-        for member in sorted(missing):
+        for member in sorted(omitted):
             errors.append(
                 f"{vocabulary.ref} ({vocabulary.kind}, line {vocabulary.line}) omits step type {member!r} that "
                 f"`StepType` implements — a vocabulary that is a subset of the engine's is a verb the product "
