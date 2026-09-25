@@ -20,22 +20,49 @@
            reuses it (if you ran .\install.ps1 from inside a clone).
         5. Creates a .env from .env.example so the first boot has sane
            defaults.
-        6. Runs `pnpm install` to fetch the orchestrator's Node deps.
-        7. Hands off to `pnpm aisoc:demo`, which pulls prebuilt images,
-           brings up the slim demo profile, seeds the showcase ransomware
-           case, and opens your browser at the case ledger view.
+        6. Runs `pnpm install --frozen-lockfile` to fetch the workspace's
+           Node deps.
+        7. Starts the CORE stack with `docker compose up -d` and waits for
+           every container to report healthy.
+        8. Creates the first administrator and prints its generated password
+           once.
+        9. Pushes one real event through the pipeline and verifies it comes
+           back out of the API as an alert.
+
+    Steps 7-9 are what `make up` and `make smoke` do on Linux and macOS.
+    They are re-implemented here rather than invoked because Windows has no
+    `make`, and the Makefile's recipes are POSIX shell (`seq`, `awk`,
+    `./scripts/doctor.sh`) that GNU Make on Windows would hand to cmd.exe.
+    The commands underneath are identical — `docker compose up -d`,
+    `docker compose run --rm -T api python -m app.scripts.bootstrap_admin`,
+    `python tests/e2e/golden_pipeline/run_golden_pipeline.py` — so the two
+    installers start the same stack and prove it the same way. Anything that
+    changes in the Makefile's `up`, `bootstrap` or `smoke` targets has to
+    change here too; `tests/test_installer_parity_gate.py` fails the build
+    if it does not.
+
+    What this script does NOT do is hand off to `pnpm aisoc:demo`. That
+    starts a different compose file with no ingest service, no fusion
+    service and Kafka disabled, whose only content is a seed script writing
+    rows straight into Postgres. It is a UI preview, not a deployment, and
+    an evaluator who saw a populated console there would conclude the
+    platform worked without ever having run it.
 
 .PARAMETER NoInstall
     Skip the dependency-install phase (use what's on PATH).
 
 .PARAMETER NoLaunch
-    Set everything up but don't run pnpm aisoc:demo at the end.
+    Set everything up but don't start the stack, create the administrator
+    or run the pipeline check.
 
 .PARAMETER NoPull
-    Forwarded to aisoc:demo to skip image pull.
+    Accepted for backwards compatibility and ignored with a warning.
+    `docker compose up -d` only pulls images it does not already have, so
+    there is no pull step left to skip.
 
 .PARAMETER Rebuild
-    Forwarded to aisoc:demo to build images from source.
+    Build the service images from source instead of using the published
+    ones (`docker compose up -d --build`).
 
 .PARAMETER CloneDir
     Where to clone the repo when running as a one-liner. Default:
@@ -72,13 +99,14 @@
     .\install.ps1 -CloneDir D:\code\aisoc -NoLaunch
 
 .NOTES
-    Exit codes:
-        0  success — demo stack is up and your browser opened
+    Exit codes (the same set install.sh uses, for the same conditions):
+        0  success — the stack is up and a real event reached the API
         1  prerequisite install failed
         2  Docker Desktop refused to come up / WSL2 not enabled
-        3  pnpm aisoc:demo failed (stack didn't boot or seed)
+        3  the stack did not start, or a container never became healthy
         4  preflight checks failed (machine doesn't meet minimums)
-        5  git clone failed (network / branch / disk)
+        5  git clone failed (network / branch / disk), or the pipeline
+           check failed — the stack started but no event became an alert
 
     Tested on:
         - Windows 11 23H2 (x64 + ARM64)
@@ -506,10 +534,15 @@ function Test-DockerDaemon {
 
 function Install-Node {
     $major = Get-CommandMajorVersion -Name 'node'
+    # Node 22, the version every workflow tests on and both Node images ship.
+    # Accepting 20 here handed a self-hoster a different runtime from the one
+    # the project builds and tests against, and Node 20 left security support
+    # in April 2026. install.sh requires the same major.
+    #
     # $null on the LHS is the PowerShell idiom — putting $null on the right
     # unboxes the LHS if it's an array, which Get-CommandMajorVersion can
     # technically return if Select-Object -First 1 misbehaves.
-    if (($null -ne $major) -and ($major -ge 20)) {
+    if (($null -ne $major) -and ($major -ge 22)) {
         Write-Ok "node already installed: $((& node --version))"
         return
     }
@@ -517,7 +550,12 @@ function Install-Node {
     if (-not (Test-CommandExists node)) {
         Stop-WithError "node was installed via winget but isn't on PATH. Open a new PowerShell window and re-run this script."
     }
-    Write-Ok "node installed: $((& node --version))"
+    $major = Get-CommandMajorVersion -Name 'node'
+    if (($null -ne $major) -and ($major -lt 22)) {
+        Write-Warn "Installed Node version ($((& node --version))) is older than 22; AiSOC may misbehave."
+    } else {
+        Write-Ok "node installed: $((& node --version))"
+    }
 }
 
 # ─── Step 4: pnpm 8+ via corepack ─────────────────────────────────────────
@@ -683,9 +721,19 @@ function Install-Workspace {
     Write-Info "Installing JS workspace deps (pnpm install)..."
     Push-Location $RepoRoot
     try {
-        & pnpm install --prefer-offline --no-frozen-lockfile
+        # `--frozen-lockfile`, the same flag CI, the web image and install.sh
+        # use. Without it a self-hoster's install is free to resolve a
+        # dependency set nobody tested, which is the one thing an installer
+        # must not do quietly.
+        & pnpm install --prefer-offline --frozen-lockfile
         if ($LASTEXITCODE -ne 0) {
-            Stop-WithError "pnpm install failed."
+            Stop-WithError @"
+pnpm install failed.
+
+If it reported a lockfile mismatch, your checkout's package.json and
+pnpm-lock.yaml disagree — re-clone, or run:
+  git checkout pnpm-lock.yaml
+"@
         }
     } finally {
         Pop-Location
@@ -693,52 +741,366 @@ function Install-Workspace {
     Write-Ok "pnpm dependencies installed."
 }
 
-function Start-Demo {
+# The host ports CORE publishes, as service + container port, in the same
+# order and with the same owners scripts/doctor.sh checks under --ports-only.
+$script:CorePortSpecs = @(
+    @{ Port = 5432; Service = 'postgres';      ContainerPort = 5432 },
+    @{ Port = 6379; Service = 'redis';         ContainerPort = 6379 },
+    @{ Port = 9092; Service = 'kafka';         ContainerPort = 9092 },
+    @{ Port = 8000; Service = 'api';           ContainerPort = 8000 },
+    @{ Port = 8081; Service = 'ingest-worker'; ContainerPort = 8080 },
+    @{ Port = 3000; Service = 'web';           ContainerPort = 3000 }
+)
+
+# The host port this deployment's own container publishes for a service, or
+# $null. Asking compose is what distinguishes "someone else has 5432" from
+# "our own postgres has 5432" — re-running the installer against a running
+# stack must not be reported as a conflict with itself.
+function Get-ComposePublishedPort {
+    param([Parameter(Mandatory)][string]$Service, [Parameter(Mandatory)][int]$ContainerPort)
+    $mapped = & docker compose port $Service $ContainerPort 2>$null | Select-Object -Last 1
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($mapped)) { return $null }
+    $tail = ("$mapped" -split ':')[-1]
+    $parsed = 0
+    if ([int]::TryParse($tail.Trim(), [ref]$parsed)) { return $parsed }
+    return $null
+}
+
+function Test-PortBusy {
+    param([Parameter(Mandatory)][int]$Port)
+    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+        # Throws rather than returning empty when nothing is listening.
+        try { $null = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop; return $true }
+        catch { return $false }
+    }
+    # Get-NetTCPConnection is absent from PowerShell 7 builds without the
+    # Windows compatibility modules. netstat ships with every Windows.
+    $hit = & netstat -ano -p TCP 2>$null |
+        Select-String -Pattern 'LISTENING' |
+        Select-String -Pattern (":{0}\s" -f $Port)
+    return [bool]$hit
+}
+
+# Names whatever is holding a port. "Something else has it" is only
+# actionable if the operator can tell what, so this reports a container name
+# when Docker published the port and the listening process otherwise.
+function Get-PortHolder {
+    param([Parameter(Mandatory)][int]$Port)
+    if (Test-CommandExists docker) {
+        $name = & docker ps --filter "publish=$Port" --format '{{.Names}}' 2>$null | Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($name)) { return "container $name" }
+    }
+    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+        try {
+            $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop | Select-Object -First 1
+            if ($null -ne $conn) {
+                $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+                if ($null -ne $proc) { return "$($proc.ProcessName) (pid $($conn.OwningProcess))" }
+                return "pid $($conn.OwningProcess)"
+            }
+        } catch {
+            # Fall through to the generic answer below.
+        }
+    }
+    return 'an unidentified process'
+}
+
+# Names a port conflict before compose hits it. `docker compose up` reports a
+# clash as `Bind for 0.0.0.0:5432 failed: port is already allocated` against
+# whichever container lost the race, which names neither the process holding
+# the port nor what to do about it — and arrives after half the stack has
+# already started.
+function Test-CorePortsFree {
+    $conflicts = @()
+    foreach ($spec in $script:CorePortSpecs) {
+        $ours = Get-ComposePublishedPort -Service $spec.Service -ContainerPort $spec.ContainerPort
+        if (($null -ne $ours) -and ($ours -eq $spec.Port)) {
+            Write-Ok "port $($spec.Port) in use by aisoc $($spec.Service)"
+        } elseif ($null -ne $ours) {
+            # Already remapped. The canonical port being busy is then
+            # irrelevant, and failing on it would send the operator off to
+            # fix something that is working.
+            Write-Ok "aisoc $($spec.Service) is published on $ours (not the default $($spec.Port))"
+        } elseif (Test-PortBusy -Port $spec.Port) {
+            $conflicts += "port $($spec.Port) is held by $(Get-PortHolder -Port $spec.Port) — aisoc $($spec.Service) needs it"
+        } else {
+            Write-Log "port $($spec.Port) free"
+        }
+    }
+    if ($conflicts.Count -eq 0) { return }
+    Write-Host ''
+    foreach ($conflict in $conflicts) { Write-Err $conflict }
+    Write-Host ''
+    Write-Err 'Not starting: the ports above are taken by something else.'
+    Write-Err 'Stop that process, or edit the host port in docker-compose.yml.'
+    Write-Err "(A docker-compose.override.yml needs 'ports: !override' — a plain"
+    Write-Err ' override appends, leaving the conflicting binding in place.)'
+    exit 3
+}
+
+# Waits on the services that declare a healthcheck, and refuses to call a
+# stack up while any container is dead.
+#
+# Reading `ps` without `-a` cannot see an *exited* container at all, and a
+# *restarting* one reports no health, so both are invisible to the obvious
+# loop and the stack gets declared up with services crash-looping behind it.
+# A container that is not running is the one thing a wait loop must never
+# score as success.
+function Wait-StackHealthy {
+    Write-Host ''
+    Write-Info 'Waiting for services to become healthy...'
+    $pending = @()
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        $lines = @(& docker compose ps -a --format '{{.Service}} {{.State}} {{.Health}}' 2>$null)
+        $broken = @()
+        $pending = @()
+        foreach ($line in $lines) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $parts = @("$line".Trim() -split '\s+')
+            if ($parts.Count -lt 2) { continue }
+            $state  = $parts[1]
+            $health = if ($parts.Count -ge 3) { $parts[2] } else { '' }
+            if (($state -in @('exited', 'dead', 'restarting')) -or ($health -eq 'unhealthy')) {
+                $broken += $parts[0]
+            } elseif ($health -eq 'starting') {
+                $pending += $parts[0]
+            }
+        }
+        if ($broken.Count -gt 0) {
+            Write-Host ''
+            Write-Err "These services are not running: $($broken -join ' ')"
+            foreach ($service in $broken) { Write-Err "  docker compose logs $service" }
+            exit 3
+        }
+        # An empty listing is not health — compose reported success but there
+        # is nothing to be healthy, so keep waiting rather than pass.
+        if (($lines.Count -gt 0) -and ($pending.Count -eq 0)) {
+            Write-Ok 'Every service reports healthy.'
+            return
+        }
+        Start-Sleep -Seconds 3
+    }
+    Write-Host ''
+    if ($pending.Count -gt 0) {
+        Write-Err "Still not healthy after 3 minutes: $($pending -join ' ')"
+    } else {
+        Write-Err 'No containers are running 3 minutes after compose reported success.'
+    }
+    Write-Err 'Inspect them with:  docker compose ps -a'
+    exit 3
+}
+
+function Start-Stack {
     if ($NoLaunch) {
-        Write-Info "-NoLaunch: skipping pnpm aisoc:demo. To start the stack later:"
-        Write-Info "  cd $RepoRoot; pnpm aisoc:demo"
+        Write-Info '-NoLaunch: not starting the stack. To start it later:'
+        Write-Info "  cd $RepoRoot"
+        Write-Info '  docker compose up -d'
+        Write-Info '  docker compose run --rm -T api python -m app.scripts.bootstrap_admin'
+        Write-Info '  python tests\e2e\golden_pipeline\run_golden_pipeline.py'
+        Write-Info 'Or simply re-run this installer without -NoLaunch.'
         return
     }
-    Write-Section 'Launching AiSOC demo stack'
-    Write-Info "Handing off to 'pnpm aisoc:demo' — this will pull images, start the"
-    Write-Info "stack, seed the showcase ransomware case, and open your browser."
+    Write-Section 'Starting AiSOC (CORE profile)'
+    Write-Info 'Starting the CORE stack: postgres, redis, kafka, the LLM gateway,'
+    Write-Info 'ingest, fusion, api, agents, realtime and the web console.'
+    Write-Info ''
+    Write-Info "This is the same stack 'make up' starts on Linux and macOS and the"
+    Write-Info 'same one CI tests. It runs the real pipeline: an event you send is'
+    Write-Info 'normalized, placed on the event spine, evaluated against the'
+    Write-Info 'detection corpus, correlated and written as an alert.'
     Write-Host ''
-
-    $demoArgs = @()
-    if ($NoPull)  { $demoArgs += '--no-pull' }
-    if ($Rebuild) { $demoArgs += '--rebuild' }
 
     Push-Location $RepoRoot
     try {
-        if ($demoArgs.Count -gt 0) {
-            & pnpm aisoc:demo @demoArgs
-        } else {
-            & pnpm aisoc:demo
-        }
+        Test-CorePortsFree
+
+        $composeArgs = @('compose', 'up', '-d')
+        if ($Rebuild) { $composeArgs += '--build' }
+        & docker @composeArgs
         if ($LASTEXITCODE -ne 0) {
-            Stop-WithError "pnpm aisoc:demo exited non-zero." 3
+            Stop-WithError "'docker compose up -d' exited non-zero. Run 'docker compose ps -a' to see which service failed." 3
+        }
+        Wait-StackHealthy
+    } finally {
+        Pop-Location
+    }
+}
+
+# ─── Step 8: the first administrator ──────────────────────────────────────
+#
+# Creates the first administrator and prints its password once. Idempotent:
+# a second run reports the existing account and changes nothing, which is why
+# this runs unconditionally after every start.
+#
+# Failure here is reported but does not fail the install. The stack is
+# genuinely running at this point, and aborting over an account the operator
+# can create with one more command would be the wrong signal — but it must
+# say so, because silence would leave them at a login form with no credential
+# and no explanation.
+function New-AdminAccount {
+    if ($NoLaunch) { return }
+    Write-Section 'Creating the first administrator'
+    Push-Location $RepoRoot
+    try {
+        # Output is deliberately neither captured nor suppressed: the
+        # generated password is printed here, once, and stored nowhere.
+        & docker compose run --rm -T api python -m app.scripts.bootstrap_admin
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ''
+            Write-Warn 'Could not create the administrator — the stack is up, but you cannot sign in yet.'
+            Write-Warn 'Find out why, then try again:'
+            Write-Warn '  docker compose logs api'
+            Write-Warn '  docker compose run --rm -T api python -m app.scripts.bootstrap_admin'
         }
     } finally {
         Pop-Location
     }
 }
 
+# ─── Step 9: post-install verification ────────────────────────────────────
+#
+# "The containers started" is not "the application works", and this installer
+# used to print a success banner purely because the handoff exited 0. A user
+# whose pipeline was broken was told everything was fine.
+#
+# The golden pipeline posts one real event and follows it through Kafka,
+# fusion, detection and Postgres, then reads the alert back from the API. If
+# that fails, the install has failed, whatever the containers say.
+
+# Only set once an event has actually come back out of the API. The closing
+# banner reads this rather than assuming, because the check can legitimately
+# be skipped (no interpreter) and a banner that claims it ran anyway is the
+# defect the check exists to catch.
+$script:PipelineVerified = $false
+
+# Windows spells python at least three ways and ships a Microsoft Store stub
+# called `python.exe` that is not an interpreter, so the version output is
+# checked rather than the name.
+function Resolve-Python {
+    $candidates = @(
+        @{ Exe = 'python3'; Prefix = @() },
+        @{ Exe = 'python';  Prefix = @() },
+        @{ Exe = 'py';      Prefix = @('-3') }
+    )
+    foreach ($candidate in $candidates) {
+        if (-not (Test-CommandExists $candidate.Exe)) { continue }
+        try {
+            $probeArgs = @($candidate.Prefix) + @('--version')
+            # Deliberately not `| Select-Object -First 1`: that stops the
+            # pipeline before the native command finishes, so $LASTEXITCODE is
+            # never assigned — and under Set-StrictMode *reading* an unassigned
+            # $LASTEXITCODE throws, which the catch below would swallow into
+            # "no interpreter" for every candidate. The installer would then
+            # skip the pipeline check on every machine, silently.
+            $out = (& $candidate.Exe @probeArgs 2>&1 | Out-String)
+            $code = if (Test-Path Variable:LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+            # The version string is the real test. Windows ships a Microsoft
+            # Store stub named python.exe that prints a "not found" notice
+            # instead of a version, and it is on PATH by default.
+            if (($code -eq 0) -and ($out -match 'Python\s+3\.')) { return $candidate }
+        } catch {
+            # Not a usable interpreter; try the next spelling.
+        }
+    }
+    return $null
+}
+
+function Invoke-SmokeTest {
+    if ($NoLaunch) { return }
+    Write-Section 'Verifying the pipeline end to end'
+
+    $runner = Join-Path $RepoRoot 'tests\e2e\golden_pipeline\run_golden_pipeline.py'
+    if (-not (Test-Path $runner)) {
+        Write-Warn "Golden pipeline runner not found at $runner — skipping verification."
+        return
+    }
+
+    $python = Resolve-Python
+    if ($null -eq $python) {
+        Write-Warn 'No Python 3 interpreter on PATH — skipping pipeline verification.'
+        Write-Warn 'Install one, then verify manually:'
+        Write-Warn '  winget install --id Python.Python.3.12'
+        Write-Warn '  python tests\e2e\golden_pipeline\run_golden_pipeline.py'
+        return
+    }
+
+    $rc = 1
+    Push-Location $RepoRoot
+    try {
+        $runnerArgs = @($python.Prefix) + @($runner)
+        & $python.Exe @runnerArgs
+        $rc = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+
+    if ($rc -eq 0) {
+        $script:PipelineVerified = $true
+        Write-Ok 'Pipeline verified: a real event became a retrievable alert.'
+        return
+    }
+
+    Write-Host ''
+    Write-Err 'The stack started, but a real event did not become an alert.'
+    Write-Err 'This is a genuine failure, not a warning: AiSOC is not working yet.'
+    Write-Err ''
+    Write-Err 'Diagnose it with:'
+    Write-Err '    docker compose ps -a'
+    Write-Err '    docker compose logs fusion'
+    Write-Err ''
+    Write-Err 'Then re-run the check:'
+    Write-Err "    $($python.Exe) tests\e2e\golden_pipeline\run_golden_pipeline.py"
+    exit 5
+}
+
 # ─── Final banner ─────────────────────────────────────────────────────────
 
 function Write-SuccessBanner {
+    if ($NoLaunch) {
+        Write-Host ''
+        Write-Host 'Prerequisites installed and the repository is ready.' -ForegroundColor Green
+        Write-Host 'The stack was not started (-NoLaunch).' -ForegroundColor DarkGray
+        Write-Host ''
+        return
+    }
+
+    $adminEmail = if ([string]::IsNullOrWhiteSpace($env:AISOC_ADMIN_EMAIL)) { 'admin@aisoc.internal' } else { $env:AISOC_ADMIN_EMAIL }
+
     Write-Host ''
-    Write-Host 'AiSOC is up and running.' -ForegroundColor Green
+    if ($script:PipelineVerified) {
+        Write-Host 'AiSOC is up and running, and a real event reached the API.' -ForegroundColor Green
+    } else {
+        # The pipeline check was skipped, so the stack being healthy is all
+        # that is actually known. Saying more would be the exact failure this
+        # verification step exists to prevent.
+        Write-Host 'AiSOC is up and every service reports healthy.' -ForegroundColor Green
+        Write-Host 'The end-to-end pipeline check did not run — see the note above.' -ForegroundColor Yellow
+    }
     Write-Host ''
     Write-Host '  Web console:    http://localhost:3000'
-    Write-Host '  Showcase case:  http://localhost:3000/cases/INC-RT-001?tab=ledger'
     Write-Host '  API + Swagger:  http://localhost:8000/api/docs'
     Write-Host '  Realtime WS:    ws://localhost:8086'
     Write-Host ''
+    Write-Host "  Sign in as:     $adminEmail"
+    Write-Host '  The password was printed above, once, when the administrator was'
+    Write-Host '  created. It is not stored anywhere. Lost it? Mint a new one with the'
+    Write-Host '  reset command below.'
+    Write-Host ''
     Write-Host "Useful commands (run from $RepoRoot):" -ForegroundColor DarkGray
-    Write-Host '  pnpm aisoc:doctor                          # health-check the stack'
-    Write-Host '  pnpm aisoc:demo:logs                       # tail logs'
-    Write-Host '  pnpm aisoc:demo:down                       # stop everything and wipe demo data'
-    Write-Host '  .\scripts\install\uninstall.ps1            # full uninstall'
+    Write-Host '  docker compose ps                          # every service and its health'
+    Write-Host '  docker compose logs -f --tail=200          # follow logs (add a service name to narrow)'
+    Write-Host '  python tests\e2e\golden_pipeline\run_golden_pipeline.py'
+    Write-Host '                                             # re-run the end-to-end pipeline check'
+    Write-Host '  docker compose run --rm -T api python -m app.scripts.bootstrap_admin --reset-password'
+    Write-Host '                                             # mint a new administrator password'
+    Write-Host '  docker compose run --rm -e AISOC_ALLOW_SEED=1 api python -m app.scripts.seed_demo'
+    Write-Host '                                             # load clearly-labelled synthetic data'
+    Write-Host '  docker compose down                        # stop the stack, keep your data'
+    Write-Host '  docker compose down -v                     # stop the stack and delete all volumes'
+    Write-Host '  .\uninstall.ps1                            # full uninstall (containers + images + repo)'
+    Write-Host ''
+    Write-Host 'The demo dataset is synthetic. Every row is marked is_synthetic=true' -ForegroundColor DarkGray
+    Write-Host 'and labelled in the console. See "Real vs synthetic data" in README.md.' -ForegroundColor DarkGray
     Write-Host ''
 }
 
@@ -790,6 +1152,16 @@ function Invoke-Main {
 
     Write-Section 'AiSOC One-Click Installer (Windows)'
 
+    if ($NoPull) {
+        # Kept as a parameter so an existing invocation does not become a
+        # parameter-binding error, but it no longer means anything: the
+        # installer starts the stack with `docker compose up -d`, which pulls
+        # only the images it does not already have. Saying so is better than
+        # accepting the flag and silently ignoring it.
+        Write-Warn '-NoPull no longer applies: the stack starts with `docker compose up -d`,'
+        Write-Warn 'which pulls only images that are missing. The flag is ignored.'
+    }
+
     Test-WindowsVersion
 
     # Preflight before we touch anything. In Diagnose mode this is also
@@ -827,7 +1199,9 @@ function Invoke-Main {
     Resolve-Repo
     Initialize-EnvFile
     Install-Workspace
-    Start-Demo
+    Start-Stack
+    New-AdminAccount
+    Invoke-SmokeTest
     Write-SuccessBanner
 }
 

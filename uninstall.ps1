@@ -3,11 +3,11 @@
     AiSOC — Uninstaller for Windows.
 
 .DESCRIPTION
-    Tears down whatever install.ps1 + `pnpm aisoc:demo` brought up, in
-    decreasing levels of aggressiveness:
+    Tears down whatever install.ps1 brought up, in decreasing levels of
+    aggressiveness:
 
-        default          Stop the demo stack and delete its named volumes.
-                         (Equivalent to: pnpm aisoc:demo:down)
+        default          Stop the stack and delete its named volumes.
+                         (Equivalent to: docker compose down -v)
         -RemoveImages    Also remove ghcr.io/beenuar/aisoc-* images
                          (saves ~2-3 GB of disk).
         -RemoveNodeModules
@@ -23,7 +23,7 @@
               winget uninstall --id OpenJS.NodeJS.LTS
               winget uninstall --id Docker.DockerDesktop
         - Touch any other Docker containers, images, or volumes outside the
-          aisoc-demo project. We're surgical here.
+          AiSOC compose projects. We're surgical here.
 
 .PARAMETER RemoveImages
     Also remove the ghcr.io/beenuar/aisoc-* container images.
@@ -103,10 +103,10 @@ function Confirm-Action {
 }
 
 # ─── Locate the AiSOC repo ──────────────────────────────────────────────────
-# We need the path to infra/compose/docker-compose.demo.yml so `docker compose down -v` can
-# resolve project resources cleanly. Prefer the directory two levels above
-# this script (script lives in <repo>/scripts/install/), then fall back to
-# the canonical $env:USERPROFILE\aisoc.
+# We need the repo root so `docker compose down -v` can resolve project
+# resources cleanly. Prefer the directory this script lives in (the repo
+# root, alongside install.ps1), then fall back to the canonical
+# $env:USERPROFILE\aisoc, then the current directory.
 
 function Find-RepoRoot {
     # The uninstaller lives at the repo root, alongside install.ps1.
@@ -146,7 +146,7 @@ if (-not $RepoRoot) {
     }
 }
 
-# ─── Step 1: stop the demo stack ────────────────────────────────────────────
+# ─── Step 1: stop the stack ─────────────────────────────────────────────────
 
 function Test-DockerReachable {
     # PowerShell native commands don't throw on non-zero exit, so try/catch
@@ -157,7 +157,7 @@ function Test-DockerReachable {
     return ($LASTEXITCODE -eq 0)
 }
 
-function Stop-DemoStack {
+function Stop-AiSOCStack {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Write-Warn "docker not on PATH; skipping compose down."
         return
@@ -168,14 +168,45 @@ function Stop-DemoStack {
     }
     if (-not $RepoRoot) { return }
 
-    Write-Info "Stopping AiSOC demo stack and removing its volumes..."
+    # Two compose projects, because two things can have been started.
+    #
+    # install.ps1 brings up the deployment defined by the root
+    # docker-compose.yml. Tearing down only infra/compose/docker-compose.demo.yml —
+    # which is what this did while install.ps1 still handed off to
+    # `pnpm aisoc:demo` — left every CORE container running, Postgres still
+    # holding 5432, under a banner that said the uninstall was complete.
+    #
+    # The demo file is still torn down afterwards so that anyone who ran the
+    # older installer, or `pnpm aisoc:demo` directly, is cleaned up too. A
+    # project that was never started exits non-zero here, which is not a
+    # failure and is reported as a note rather than a warning.
+    $projects = @(
+        @{ Label = 'AiSOC stack';      File = 'docker-compose.yml';                    Required = $true  },
+        @{ Label = 'AiSOC demo stack'; File = 'infra/compose/docker-compose.demo.yml'; Required = $false }
+    )
+
     Push-Location $RepoRoot
     try {
-        docker compose -f infra/compose/docker-compose.demo.yml down -v --remove-orphans
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "compose down exited with code $LASTEXITCODE; some resources may not have been cleaned up."
-        } else {
-            Write-Ok "Demo stack stopped, named volumes deleted."
+        foreach ($project in $projects) {
+            if (-not (Test-Path (Join-Path $RepoRoot $project.File))) { continue }
+            Write-Info "Stopping $($project.Label) and removing its volumes..."
+            # Every optional profile is named so containers started by
+            # `--profile full` (and friends) come down too; compose only acts
+            # on profiles it was told about, so omitting them leaves the lake,
+            # graph and monitoring containers behind.
+            docker compose -f $project.File `
+                --profile full --profile monitoring --profile chatops `
+                --profile extras --profile osquery `
+                down -v --remove-orphans
+            if ($LASTEXITCODE -ne 0) {
+                if ($project.Required) {
+                    Write-Warn "compose down exited with code $LASTEXITCODE; some resources may not have been cleaned up."
+                } else {
+                    Write-Info "  (nothing to remove for $($project.Label))"
+                }
+            } else {
+                Write-Ok "$($project.Label) stopped, named volumes deleted."
+            }
         }
     } finally {
         Pop-Location
@@ -322,7 +353,7 @@ function Remove-RepoClone {
 # ─── Main ───────────────────────────────────────────────────────────────────
 
 Write-Section "AiSOC Uninstaller"
-Stop-DemoStack
+Stop-AiSOCStack
 Remove-AiSOCImages
 Remove-NodeModulesTrees
 Remove-RepoClone
