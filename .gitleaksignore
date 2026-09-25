@@ -72,7 +72,11 @@ render.yaml:generic-api-key:132
 # it, so it needs a key. The value is the AES-128 test vector published in
 # FIPS-197 — a well-known constant rather than a secret — and it protects an
 # ephemeral MinIO bucket in the runner that holds one probe table.
-.github/workflows/integration.yml:generic-api-key:591
+#
+# Line 591 until the ingest-credential mint step was added above it in the
+# same job — which is the drift described at the top of this file, caught by
+# the gate on the very change that documented it.
+.github/workflows/integration.yml:generic-api-key:606
 
 # Connector setup doc showing the curl an operator runs to check their Orca
 # credential. The value is the literal placeholder "YOUR_TOKEN".
