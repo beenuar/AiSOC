@@ -147,11 +147,28 @@ _ports:
 # "Full profile up." with OpenSearch OOM-killed and threatintel in a crash
 # loop. A container that is not running is the one thing a wait loop must
 # never score as success.
+#
+# `exited` alone is not that thing, though, and reading it as such broke the
+# documented command on every machine. `ollama-pull` is a one-shot: it fetches
+# the model and exits 0, and `litellm` waits on
+# `service_completed_successfully`, so by the time `docker compose up -d`
+# returns the puller has *always* exited. `make up` therefore ended in
+# "These services are not running: ollama-pull" on the first run and every
+# run after it — a stack that was entirely healthy, reported as broken, by
+# the step whose job is to say whether it is healthy. The exit code is what
+# separates the two cases: 0 is a one-shot that did its job, anything else is
+# a container that died.
+#
+# The fields are `|`-separated rather than space-separated because a service
+# with no healthcheck prints an *empty* Health, and awk's default splitting
+# collapses the run of whitespace — so `ollama-pull exited  0` parsed as three
+# fields with the exit code in $$3 and nothing in $$4, and the new exit-code
+# test read an empty string on exactly the row it was written for.
 _wait:
 	@for i in $$(seq 1 60); do \
-	  status=$$($(COMPOSE) $(PROFILE_ARG) ps -a --format '{{.Service}} {{.State}} {{.Health}}' 2>/dev/null); \
-	  pending=$$(echo "$$status" | awk '$$3=="starting"{print $$1}'); \
-	  broken=$$(echo "$$status" | awk '$$2=="exited"||$$2=="dead"||$$2=="restarting"||$$3=="unhealthy"{print $$1}'); \
+	  status=$$($(COMPOSE) $(PROFILE_ARG) ps -a --format '{{.Service}}|{{.State}}|{{.Health}}|{{.ExitCode}}' 2>/dev/null); \
+	  pending=$$(echo "$$status" | awk -F'|' '$$3=="starting"{print $$1}'); \
+	  broken=$$(echo "$$status" | awk -F'|' '($$2=="exited"&&$$4!="0")||$$2=="dead"||$$2=="restarting"||$$3=="unhealthy"{print $$1}'); \
 	  if [ -n "$$broken" ]; then \
 	    echo ""; \
 	    echo "These services are not running: $$broken"; \

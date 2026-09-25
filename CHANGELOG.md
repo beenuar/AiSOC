@@ -121,6 +121,112 @@ path did not work at all.
   the ten read tools. Corrected, along with the competitor-framed "moat" line.
 
 
+### `make up` reported the stack broken on every machine, and four published numbers were wrong
+
+Found by bringing the stack up from the documented path and photographing the
+result. Each of these was visible within minutes of a real first run and
+invisible to the test suite.
+
+- **`make up` could not succeed, ever.** Its `_wait` loop scored any container
+  in state `exited` as broken, and `ollama-pull` is a one-shot: it fetches the
+  model, exits 0, and `litellm` waits on `service_completed_successfully`, so
+  by the time `docker compose up -d` returns the puller has *always* exited.
+  The documented command therefore ended in `These services are not running:
+  ollama-pull` against a completely healthy stack — the step whose job is to
+  say whether the stack is healthy, reporting the opposite. Fixed by reading
+  `{{.ExitCode}}` and treating `exited 0` as a one-shot that did its job.
+  The first attempt at that fix did not work either, for a reason worth
+  recording: a service with no healthcheck prints an *empty* `Health`, and
+  awk's default whitespace splitting collapses the run, so `ollama-pull
+  exited  0` parsed as three fields with the exit code in `$3` — the new test
+  read an empty `$4` on exactly the row it was written for. The fields are
+  `|`-separated now.
+
+- **Four of the ten shipped ingest profiles rendered their vendor twice.**
+  `product_label()` deduplicated the vendor/product join on exact equality, so
+  `crowdstrike` + `crowdstrike` collapsed but `Okta` + `Okta System Log` did
+  not. The alert queue, the Investigation Rail and every entity chip read
+  "Okta Okta System Log", "Splunk Splunk Enterprise", "Kubernetes Kubernetes
+  Audit" and "Email Forwarded Email". A part another part already contains is
+  dropped now, on word boundaries so "AWS" is not swallowed by a product
+  called "Lawsuit Monitor", and the new test reads the pairs *out of the Go
+  normalizer* rather than restating them — the previous tests passed every
+  hand-written case while four shipped profiles were wrong, because none of
+  them asked the normalizer what it actually declares.
+
+- **The Threat Intelligence page published its own page length as the size of
+  the catalogue.** With 1,725 CISA KEV entries collected, Qdrant held 1,725,
+  the API answered `total: 400` (the size of its bounded scan window) and the
+  console's headline card read **100** (its page). Three answers to one
+  question, the two published ones both wrong, and the page presenting the
+  smallest as the corpus. `total` is now the store's own count, `shown` is the
+  page, and a narrowed query is marked `bounded` so a caller knows the match
+  was made inside a window.
+
+- **`Added Today` on that same page was the literal `3`, hard-coded**, on
+  every deployment including ones that had never ingested an indicator. The
+  comment four lines above it describes removing an invented IOC list for
+  exactly this reason and names this counter while doing so; the counter
+  survived. Replaced with figures the page can support — the store's count,
+  the page's count, and two counts explicitly labelled *of shown*. The
+  sample-data gate did not catch it and could not: it scans module-scope
+  fabricated-record literals, and this was a scalar inside JSX.
+
+- **Nothing in the console rendered the AI verdict.** `services/agents`
+  triages every fused alert and writes `ai_score`, `ai_summary`,
+  `triage_groundedness` and `triage_ungrounded` back onto the row; the API
+  returns all four; `normalizeAlert` dropped all four on the floor. The
+  product's headline capability was producing tokens, cost and a ledger entry
+  that no surface showed. The Investigation Rail's Details view now carries an
+  **Automated triage** section rendering the verdict, the confidence, the
+  rationale *verbatim* — so a reader can tell the model's own text from the
+  deterministic fallback — and groundedness as **not assessed** when the
+  column is null, never as 0.
+
+### Real screenshots, and an architecture doc that follows one event
+
+- **Every committed screenshot is now a capture of a running stack.** The
+  24 MB `screenshots/` tree was a marketing redesign from an older product and
+  no longer resembled it; the four tiles under
+  `apps/web/public/screenshots/` were SVG placeholders. Both are replaced by
+  16 PNGs (844 KB total) taken from a CORE stack brought up with `make up`,
+  fed through the documented ingest API, holding 1,725 real CISA KEV entries
+  and a real local-model verdict. `apps/web/public/screenshots/README.md`
+  states what is real in each one and what was authored — the security events
+  were written by hand; everything downstream of them is the product working.
+  **None was taken in demo mode.**
+
+- **`apps/docs/docs/architecture.md` is organised around what happens when
+  AiSOC receives one security event** — eleven numbered steps from the two
+  ingest doors through normalization, the spine, detection, enrichment,
+  promotion, correlation, alerting, AI triage, the ledger, approval and
+  verified response — instead of the component inventory it was. Every box in
+  every diagram links to the directory that implements it, and all 31 source
+  links were checked to resolve. It also records what the previous version got
+  wrong: ports (the page listed host ports as though services addressed each
+  other on them), `50 vendors` against 84, `200+` detection rules against 833
+  executable, and five packages still promised "in v8.0" two releases later.
+
+- **Measured figures, re-read rather than carried forward.** CORE is 14
+  long-running services plus a one-shot model pull; `full` is 22. The playbook
+  palette offers **21** of the engine's 22 step types — `approval` is withheld
+  because the engine is a single-threaded index walk with no pause or resume.
+  Row-level security is live on 83 tables under 84 policies, and the runtime
+  role holds `SELECT / INSERT / UPDATE / DELETE` and no DDL.
+
+- **The local model's triage output is now described honestly.** In a measured
+  run of 19 auto-triages on a CORE stack the bundled
+  `llama3.2:3b-instruct-q4_K_M` returned schema-valid JSON 7 times; the other
+  12 fell back to the deterministic path and logged that they had. The README
+  and the architecture page both publish that ratio rather than implying the
+  model answers every time. No hosted provider has been exercised — there is
+  still no funded key, and that remains a different claim.
+
+- **`POST /v1/ingest/batch` is documented as unauthenticated**, because on
+  this commit it is: only the inbox webhook paths and the Kubernetes audit
+  webhook carry a token. A comment in `server.go` asserts the opposite and is
+  flagged in the docs rather than quietly relied upon.
+
 ### The documented quick start broke the product, and then the product had nothing to show
 
 Every item below passed the existing test suite and failed on a real
@@ -303,29 +409,6 @@ number is the one the requirement is sized against.
 
 ### Added
 
-- `make ingest-token` / `python -m app.scripts.mint_ingest_token` mints the
-  push credential for a fresh deployment, the role `bootstrap_admin` plays
-  for the console login. Idempotent — a second run returns the same token
-  rather than leaving a trail of live credentials nobody revokes.
-- `connector-push`, `ai-runtime`, `ai-finding` and `k8s-audit` are now
-  mintable inbox templates. The last three already shipped as YAML and were
-  named in the AI SDK's own setup instructions and in the Kubernetes
-  connector docs, but none was in `ALLOWED_TEMPLATE_IDS`, so the documented
-  setup for the AI-estate feature returned 400 and the templates were
-  unreachable.
-- `scripts/check_inbox_templates.py` compares shipped templates against
-  mintable ids **in both directions**, plus the console catalog, and carries
-  a `--self-test` that injects drift in each direction and requires the gate
-  to catch it. A one-directional check would have printed OK throughout the
-  defect above.
-- The golden pipeline asserts that an unauthenticated push is refused, not
-  only that an authenticated one succeeds — the happy path would go on
-  passing if authentication were removed.
-- `/v1/ingest` now bounds the request body (`INGEST_MAX_BODY_BYTES`, 10 MiB
-  default). `MAX_BATCH_SIZE` only counts events after the payload is
-  decoded, so nothing bounded the decode itself.
-
-
 - **`RENDER_FALLBACK_EXEMPT` is now checked in both directions.**
   `ALLOWED_ILLUSTRATIVE` had a staleness check from the start and this list
   had none, so an exemption could outlive the code it excused and go on
@@ -369,29 +452,6 @@ number is the one the requirement is sized against.
   to published prose has no hand-copied link. A paragraph that dates or
   negates the claim is exempt, so the retraction can quote the wording it
   retracts.
-
-### Changed
-
-- **gitleaks and Trivy are blocking gates.** All five scanners in
-  `security.yml` carried `continue-on-error`, so a new finding never redded
-  a pull request. Gitleaks found 35 findings on its first real run; every
-  one was triaged and recorded in `.gitleaksignore` with a written reason —
-  detection rule-id maps, osquery and redaction test fixtures, placeholder
-  PEMs, a published AWS example key, a FIPS-197 test vector, and a
-  `YOUR_TOKEN` doc placeholder. Four of the six entries the allow-list
-  already held had rotted through line drift and were suppressing nothing.
-  Trivy reports zero fixable HIGH/CRITICAL and blocks at that.
-
-  Semgrep (92 findings, 35 at ERROR), checkov (91 failed checks) and tfsec
-  (32, of which 7 CRITICAL) stay in observe mode. The counts are now written
-  into the workflow so the remaining work is visible rather than implied.
-
-  The secret-scan job also fails when the scanner cannot install, instead of
-  reporting clean, and proves it is reading the tree before trusting a clean
-  result: with the allow-list moved aside the triaged findings must
-  reappear. "Clean" and "did not run" previously looked identical.
-
-
 - **The prerequisites that were required but undocumented.** Beyond Docker and
   its memory, a first run needs `python3` **on the host** (`make smoke` runs
   the golden-pipeline script there, so without it you can start AiSOC but
@@ -506,30 +566,7 @@ number is the one the requirement is sized against.
   also caught `<ul role="alert">`, which is not an allowed role for a list and
   left its items without a list parent.
 
-- **Verification probes for the disruptive endpoint verbs.** `kill_process`
-  and `quarantine_file` had their success inferred from CrowdStrike RTR
-  accepting a command; both now read the effect back over the read-only tier
-  of the same batch API — the process table for the PID, the path for the
-  removed file. Absence is only trusted when the output can be recognised as
-  what it claims to be, so an unparseable `ps` listing is indeterminate
-  rather than "the process is gone", and only a line's first column is read
-  as a PID so a surviving child does not report its dead parent as alive.
-  `run_av_scan` joins them because it is automatic and Defender replies
-  `Pending` the moment it queues the sweep: it reads the machine action's
-  terminal state, and says indeterminate while the scan is still running.
-
-- **Every verb with an `ActionType` now either declares a probe or records
-  why it has none.** Eleven bridged response verbs had neither, which failed
-  safe but made three different situations look the same: nobody wrote it,
-  the vendor exposes no read-back, and there is nothing to read back. The
-  eight without probes now state which — including `reset_password`, where
-  the obvious candidate read is the *wrong* one rather than a missing one
-  (the executor issues a recovery link, so `passwordChanged` moves later and
-  only if the user follows it, and a probe watching it would report FAILED
-  for every correct reset). The below-MODERATE waiver must now name itself,
-  because `run_av_scan` had been taking it silently.
-
-
+### Changed
 
 - **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
   list named one compliance page, which is why `ROADMAP.md` drifted with CI
@@ -561,14 +598,6 @@ number is the one the requirement is sized against.
   `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
   freshness gate reads only the date — which a refresh keeps current — so a
   row could be two days old and still labelled two majors behind.
-
-- `tests/test_approval_doors_agree.py` gates the invariant rather than the
-  instance: both live doors swept over every capability, autonomy tier and
-  confidence band, asserting the same answer to "did a vendor get touched
-  without a human". Structural checks alongside it fail a door that imports
-  the raw matrix or branches on a specific impact tier, which is the shape a
-  re-introduced bypass has. Against the previous tree it reports five
-  disagreements across 345 combinations.
 
 ### Fixed
 
@@ -1053,51 +1082,7 @@ number is the one the requirement is sized against.
   hosted demo the dock now reports that the copilot could not be reached, with
   the error, instead of emitting a reply.
 
-- **A pure read sat in the analyst approval queue, because the two dispatch
-  doors graded the same verb differently.** `search_siem` declares
-  `read_only` impact and `automatic` approval, and the contract gate's own
-  rule is that a read requiring approval "is either mis-classified or is not
-  actually a read". At the default autonomy tier `POST /actions` returned
-  `awaiting_approval` for it while `POST /live-actions/dispatch` executed it.
-  The dispatcher's docstring says its contract block exists so that a verb is
-  not "graded differently depending on which door it came through", and that
-  is precisely what was happening.
-
-  The cause was one table entry, not a missing bypass.
-  `TIER_MAX_AUTOMATIC["L1"]` was `None`, meaning "auto-executes nothing",
-  while `maturity.py` defines L1 as "MINIMAL blast-radius actions are
-  automatic" and `_AUTO_ALLOWED_AT_TIER` gives it `{MINIMAL}` — which
-  `_IMPACT_BLAST` equates with READ_ONLY impact. The registry door had grown
-  a local READ_ONLY short-circuit to route around it; the legacy door had
-  not. L1 now reads `READ_ONLY`, and only reads move: every impact above it
-  still outranks the ceiling and still returns ANALYST, exactly as the `None`
-  branch did. L0 keeps `None`, which now means one thing only — observe, not
-  even a read.
-
-  With the ceiling correct the bypass is unnecessary, so it is gone.
-  `approval_matrix.evaluate_contract()` takes a contract whole and is the
-  single entry both doors call, which removes the per-door unpacking that let
-  them drift in the first place.
-
-- **`update_alert_disposition` had no `ACTION_BLAST_RADIUS` entry**, found by
-  the new cross-door sweep rather than reported. Four readers of that table
-  supplied two different fallbacks — `blast_radius.py` to MEDIUM, which is
-  exactly `_AUTO_EXECUTE_LIMIT`, and the three tier gates to HIGH — so the
-  legacy door auto-executed the disposition writeback while the registry door
-  held it for a whitelist it could never match. It now carries the LOW entry
-  its own contract asks for ("classified the same as create_notable_event"),
-  and `blast_radius.py` fails closed like its three siblings.
-
 ### Removed
-
-- **The empty blog section on the documentation site.** The classic preset
-  enabled the blog plugin while no `apps/docs/blog` directory has ever
-  existed, so the published site served an empty index at `/AiSOC/blog` at
-  HTTP 200, listed it in the sitemap, and advertised it from both the navbar
-  and the footer. Dropping the footer entry left the "More" column holding
-  only a duplicate of the GitHub link already in the navbar, so that link
-  moved to "Community" and the column went with it. The three long-form posts
-  under `apps/web/content/blog` are a different surface and are unaffected.
 
 - **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
   threat-intel replies ("VirusTotal: 14/87 engines flagged malicious",
@@ -1152,7 +1137,6 @@ number is the one the requirement is sized against.
   from the registry now. `packHelpers.ts` mapped step types to integration
   badges as a `Record<string, …>` covering eighteen of twenty-two, so a
   playbook built from the other four claimed to use no integrations at all.
-
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not

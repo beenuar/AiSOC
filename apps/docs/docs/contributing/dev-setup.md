@@ -153,7 +153,7 @@ The other Python services (`fusion`, `actions`, `threatintel`, `ueba`,
 virtualenv and run `uvicorn app.main:app --reload --port <port>`.
 The canonical port mapping is in
 [`docker-compose.yml`](https://github.com/beenuar/AiSOC/blob/main/docker-compose.yml)
-and the [Architecture](../architecture#service-responsibilities) page.
+and the [service map](../architecture/overview#service-map) page.
 
 ## 7. Run tests
 

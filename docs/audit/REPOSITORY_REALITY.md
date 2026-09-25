@@ -218,7 +218,7 @@ Stated rather than guessed:
 ## Reproducing this audit
 
 ```bash
-make up          # CORE profile: 10 services
+make up          # CORE profile: 14 long-running services (+ a one-shot model pull)
 make doctor      # every dependency probed, not just "running"
 make smoke       # one real event through the real pipeline
 make stats       # recount every published figure from the tree

@@ -245,6 +245,10 @@ export function ThreatIntelView() {
   // "3 Added Today" counter on a tenant that had never ingested one.
   const allIndicators = data?.indicators ?? [];
 
+  // The store's count, not this page's length. Falls back to the page length
+  // only when the API omits the field, which is the pre-`shown` contract.
+  const totalCollected = data?.total ?? allIndicators.length;
+
   const indicators = allIndicators.filter((ioc) => {
     if (typeFilter !== 'all' && ioc.type !== typeFilter) return false;
     if (
@@ -275,13 +279,22 @@ export function ThreatIntelView() {
         </p>
       </div>
 
-      {/* Stats */}
+      {/* Stats
+       *
+       * Every figure here is either the store's own count or a count of the
+       * rows on screen, and each card says which. It previously published
+       * neither: "Total IOCs" was the length of one page — 100, against 1,725
+       * collected — and "Added Today" was the literal `3`, hard-coded, on
+       * every deployment including ones that had never ingested an indicator.
+       * The comment above `allIndicators` describes removing the invented IOC
+       * list for exactly that reason; the counter the same paragraph names
+       * survived it. */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total IOCs', value: allIndicators.length, color: 'text-blue-400' },
-          { label: 'Malicious', value: allIndicators.filter(i => i.malicious).length, color: 'text-red-400' },
-          { label: 'High Confidence', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
-          { label: 'Added Today', value: 3, color: 'text-green-400' },
+          { label: 'Indicators collected', value: totalCollected, color: 'text-blue-400' },
+          { label: 'Shown below', value: allIndicators.length, color: 'text-gray-200' },
+          { label: 'Malicious (of shown)', value: allIndicators.filter(i => i.malicious).length, color: 'text-red-400' },
+          { label: 'High confidence (of shown)', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
             <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
@@ -330,7 +343,11 @@ export function ThreatIntelView() {
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-300">Indicators of Compromise</h3>
-          <span className="text-xs text-gray-500">{indicators.length} indicators</span>
+          <span className="text-xs text-gray-500">
+            {totalCollected > indicators.length
+              ? `${indicators.length.toLocaleString()} of ${totalCollected.toLocaleString()} indicators`
+              : `${indicators.length.toLocaleString()} indicators`}
+          </span>
         </div>
         {indicators.length === 0 ? (
           // WS-F5 — TI feeds rarely have a true "no IOCs ever" state in

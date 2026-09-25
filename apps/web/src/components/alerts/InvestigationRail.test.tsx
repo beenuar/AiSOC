@@ -378,6 +378,82 @@ describe('InvestigationRail — header', () => {
 
 // ─── Loaded rail — narrative ─────────────────────────────────────────────────
 
+describe('InvestigationRail — automated triage section', () => {
+  // `services/agents` triages every fused alert and writes the verdict back
+  // onto the row. `normalizeAlert` dropped `ai_score`, `ai_summary` and
+  // `triage_groundedness`, so the one output of the AI the product leads with
+  // was metered, persisted, and rendered by nothing.
+  it('renders the verdict, the confidence and the rationale verbatim', () => {
+    swrState.data = buildAlert({
+      disposition: 'true_positive',
+      aiScore: 0.8,
+      aiSummary:
+        'LLM auto-triage verdict: true_positive · LLM confidence: 0.80 · Rationale: mass rename to .locked on the finance share.',
+    });
+    renderDetails();
+
+    const section = screen.getByText('Automated triage').closest('section')!;
+    expect(within(section).getByText('true positive')).toBeInTheDocument();
+    expect(within(section).getByText(/confidence 80\/100/)).toBeInTheDocument();
+    // Verbatim: the `LLM auto-triage verdict:` prefix is how a reader tells
+    // the model's own text from the deterministic fallback's.
+    expect(within(section).getByText(/LLM auto-triage verdict: true_positive/)).toBeInTheDocument();
+  });
+
+  it('says groundedness was not assessed rather than showing it as zero', () => {
+    // The deterministic path never scores groundedness, and the column is
+    // nullable for that reason. Rendering null as 0% would read as a verdict
+    // that cited nothing real — the opposite of what happened.
+    swrState.data = buildAlert({
+      disposition: 'likely_benign' as Alert['disposition'],
+      aiScore: 0.25,
+      aiSummary: 'high-severity keyword match in alert text · hostname present',
+      triageGroundedness: null,
+    });
+    renderDetails();
+
+    const section = screen.getByText('Automated triage').closest('section')!;
+    expect(within(section).getByText(/groundedness not assessed/)).toBeInTheDocument();
+    expect(within(section).queryByText(/groundedness 0%/)).toBeNull();
+  });
+
+  it('renders a real groundedness score when one was assessed', () => {
+    swrState.data = buildAlert({ aiScore: 0.9, aiSummary: 'verdict', triageGroundedness: 0.75 });
+    renderDetails();
+
+    expect(
+      within(screen.getByText('Automated triage').closest('section')!).getByText(/groundedness 75%/),
+    ).toBeInTheDocument();
+  });
+
+  it('names indicators the verdict cited but the evidence never held', () => {
+    swrState.data = buildAlert({
+      aiScore: 0.6,
+      aiSummary: 'verdict',
+      triageUngrounded: ['198.51.100.9', 'evil.example'],
+    });
+    renderDetails();
+
+    const section = screen.getByText('Automated triage').closest('section')!;
+    expect(within(section).getByText(/198\.51\.100\.9, evil\.example/)).toBeInTheDocument();
+  });
+
+  it('distinguishes "not triaged yet" from "nothing to show"', () => {
+    // Absent and pending are different facts, and only one of them is a
+    // reason to go and look at the agents service. Rendering nothing said
+    // neither.
+    swrState.data = buildAlert({
+      disposition: null,
+      aiScore: undefined,
+      aiSummary: undefined,
+    });
+    renderDetails();
+
+    expect(screen.getByText('Automated triage')).toBeInTheDocument();
+    expect(screen.getByText(/not triaged yet/i)).toBeInTheDocument();
+  });
+});
+
 describe('InvestigationRail — narrative section', () => {
   it('renders the narrative when present', () => {
     swrState.data = buildAlert();

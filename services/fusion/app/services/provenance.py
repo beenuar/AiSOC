@@ -15,6 +15,7 @@ connector *instance* id is what downstream resolution actually keys on.
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -28,12 +29,32 @@ def _parse_uuid(value: Any) -> uuid.UUID | None:
         return None
 
 
+def _says_the_same_thing(whole: str, part: str) -> bool:
+    """Whether ``part`` already appears inside ``whole`` as whole words.
+
+    Word boundaries, not a plain substring test: "AWS" must not be swallowed
+    by a product called "Lawsuit Monitor", and the join exists to name a
+    vendor, not to pattern-match one.
+    """
+    return re.search(rf"(?<!\w){re.escape(part)}(?!\w)", whole, re.IGNORECASE) is not None
+
+
 def product_label(ocsf: dict[str, Any]) -> str | None:
     """Vendor + product, deduplicated.
 
     Most connectors set `vendor_name` and `name` to the same string, so a
     naive join produced `connector_type = "crowdstrike crowdstrike"` on every
     alert. Verified on a live stack.
+
+    Exact equality was not enough. Four of the ten profiles in
+    `services/ingest/internal/normalizer/normalizer.go` name the vendor inside
+    the product — `Okta` / `Okta System Log`, `Splunk` / `Splunk Enterprise`,
+    `Kubernetes` / `Kubernetes Audit`, `Email` / `Forwarded Email` — so the
+    alert queue, the Investigation Rail and every entity chip read "Okta Okta
+    System Log". Observed on a live CORE stack against real pushed telemetry.
+    A part that another part already says is dropped; the longer one wins,
+    which leaves "CrowdStrike Falcon" and "AWS Security Hub" untouched because
+    neither names the other.
 
     This is the single implementation. `promoter._source()` delegates here;
     there used to be two copies of the join and only one of them was fixed,
@@ -51,7 +72,12 @@ def product_label(ocsf: dict[str, Any]) -> str | None:
         if any(cleaned.lower() == seen.lower() for seen in parts):
             continue
         parts.append(cleaned)
-    return " ".join(parts) or None
+    kept = [
+        part
+        for index, part in enumerate(parts)
+        if not any(len(other) > len(part) and _says_the_same_thing(other, part) for other in parts[:index] + parts[index + 1 :])
+    ]
+    return " ".join(kept) or None
 
 
 #: Retained so existing imports keep working.

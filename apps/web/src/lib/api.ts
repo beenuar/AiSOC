@@ -674,6 +674,29 @@ export interface Alert {
   relatedEntities?: RelatedEntity[];
   miniTimeline?: MiniTimelineEvent[];
   recommendedActions?: RecommendedAction[];
+  // ─── Automated triage ────────────────────────────────────────────────────
+  //
+  // `services/agents` auto-triages every fused alert and writes the verdict
+  // back onto the row (`ledger.persist_auto_triage`). The API has returned
+  // `ai_score` / `ai_summary` / `triage_groundedness` on every alert since,
+  // and this mapper dropped all three — so the one output of the AI the
+  // product leads with was metered, persisted, and rendered nowhere.
+  /** 0–1 confidence the triage run reported. Distinct from `confidenceScore`,
+   *  which is fusion's detection confidence and has nothing to do with the
+   *  agent. */
+  aiScore?: number;
+  /** The verdict's rationale, as written by whichever path produced it. The
+   *  model's own text is prefixed `LLM auto-triage verdict:`; the
+   *  deterministic fallback reads as a description of the signals it matched.
+   *  Rendered verbatim so the reader can tell them apart. */
+  aiSummary?: string;
+  /** Fraction of the verdict's cited indicators that appear in the evidence.
+   *  `null`/absent means *not assessed* — the deterministic path never scores
+   *  groundedness, and rendering that as 0 would read as "wholly unsupported".
+   */
+  triageGroundedness?: number | null;
+  /** Indicators the verdict cited that the evidence never contained. */
+  triageUngrounded?: string[];
 }
 
 /**
@@ -894,6 +917,16 @@ function normalizeAlert(raw: unknown): Alert {
     relatedEntities,
     miniTimeline,
     recommendedActions,
+    aiScore: pickNum('ai_score', 'aiScore'),
+    aiSummary: pickStr('ai_summary', 'aiSummary'),
+    // `?? null` and not `?? undefined`: the column is nullable because NULL
+    // means "not assessed", and collapsing that into absent loses the
+    // distinction the schema comment exists to preserve.
+    triageGroundedness:
+      typeof (r.triage_groundedness ?? r.triageGroundedness) === 'number'
+        ? ((r.triage_groundedness ?? r.triageGroundedness) as number)
+        : null,
+    triageUngrounded: pickArr<string>('triage_ungrounded', 'triageUngrounded'),
   };
 }
 
@@ -3003,8 +3036,11 @@ export const threatIntelApi = {
       body: JSON.stringify({ iocs }),
     }),
 
+  // `total` is the store's count of indicators in scope; `shown` is how many
+  // this response carries. They are different numbers and the console renders
+  // both — it used to render the page length as the catalogue size.
   list: (filters: { type?: IndicatorType; tag?: string; q?: string } = {}) =>
-    request<{ indicators: ThreatIndicator[]; total: number }>(
+    request<{ indicators: ThreatIndicator[]; total: number; shown?: number; bounded?: boolean }>(
       '/api/v1/threat-intel/indicators',
       { params: filters as Record<string, string> },
     ),

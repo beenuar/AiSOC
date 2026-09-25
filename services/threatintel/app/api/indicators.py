@@ -75,7 +75,26 @@ class Indicator(BaseModel):
 
 class IndicatorListResponse(BaseModel):
     indicators: list[Indicator]
+    #: How many indicators are in the caller's scope, from the store's own
+    #: count — not how many this response carries, and not how many the scan
+    #: window happened to reach.
+    #:
+    #: It used to be ``len(indicators)`` after post-filtering, i.e. the size of
+    #: the bounded scan window. With 1,725 KEV entries collected, the store
+    #: held 1,725, this field said 400 and the console's headline card said
+    #: 100 — three different answers to one question, the two published ones
+    #: both wrong, and the page presenting the smallest as the corpus.
     total: int
+    #: How many indicators this response carries. Distinct from ``total`` on
+    #: purpose: the console needs to say "100 of 1,725" rather than implying
+    #: a page is the catalogue.
+    shown: int = 0
+    #: True when ``type`` / ``tag`` / ``q`` narrowed the result, in which case
+    #: the match was made inside the bounded scan window rather than across
+    #: the whole collection — so ``shown`` is a lower bound on the matches
+    #: that exist. Published rather than hidden because a search that silently
+    #: reads part of the corpus is the kind of thing that gets believed.
+    bounded: bool = False
     #: Which store answered. The console has no other way to tell "no
     #: indicators collected yet" from "the store is not there", and the two
     #: call for different things from the reader.
@@ -108,6 +127,26 @@ def _qdrant(request: Request) -> AsyncQdrantClient:
     if client is None:
         raise HTTPException(status_code=503, detail="vector store is not configured on this deployment")
     return client
+
+
+async def _scope_total(client: AsyncQdrantClient, scope: Any, *, fallback: int) -> int:
+    """How many indicators are in the caller's scope, asked of the store.
+
+    The scan above is deliberately bounded, so counting its results answers
+    "how many did I look at", which is not the question the console is asking.
+    Qdrant can answer the real one directly.
+
+    A count failure falls back to the window size rather than raising: the
+    indicators themselves were read successfully, and losing the whole list
+    over a secondary count would turn a wrong number into no page at all.
+    """
+    try:
+        result = await client.count(collection_name=IOC_COLLECTION, count_filter=scope, exact=True)
+    except Exception as exc:  # noqa: BLE001 — any count failure degrades to the window size
+        logger.warning("threatintel.indicators.count_failed", error=type(exc).__name__)
+        return fallback
+    count = getattr(result, "count", None)
+    return int(count) if isinstance(count, int) else fallback
 
 
 @router.get("/indicators", response_model=IndicatorListResponse)
@@ -152,7 +191,7 @@ async def list_indicators(
         message = str(exc)
         if "not found" in message.lower() or "doesn't exist" in message.lower():
             logger.info("threatintel.indicators.collection_absent", collection=IOC_COLLECTION)
-            return IndicatorListResponse(indicators=[], total=0, source="qdrant")
+            return IndicatorListResponse(indicators=[], total=0, shown=0, source="qdrant")
         logger.warning("threatintel.indicators.read_failed", error=type(exc).__name__)
         raise HTTPException(
             status_code=503,
@@ -161,6 +200,7 @@ async def list_indicators(
 
     indicators = [_to_indicator(p.payload or {}) for p in points if p.payload]
 
+    bounded = bool(ioc_type or tag or q)
     if ioc_type:
         indicators = [i for i in indicators if i.type == ioc_type]
     if tag:
@@ -169,5 +209,6 @@ async def list_indicators(
         needle = q.lower()
         indicators = [i for i in indicators if needle in i.value.lower() or needle in (i.description or "").lower()]
 
-    total = len(indicators)
-    return IndicatorListResponse(indicators=indicators[:limit], total=total, source="qdrant")
+    page = indicators[:limit]
+    total = await _scope_total(client, scope, fallback=len(indicators))
+    return IndicatorListResponse(indicators=page, total=total, shown=len(page), bounded=bounded, source="qdrant")

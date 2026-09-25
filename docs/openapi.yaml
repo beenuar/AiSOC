@@ -20238,6 +20238,14 @@ components:
         total:
           type: integer
           title: Total
+        shown:
+          type: integer
+          title: Shown
+          default: 0
+        bounded:
+          type: boolean
+          title: Bounded
+          default: false
         source:
           type: string
           title: Source
