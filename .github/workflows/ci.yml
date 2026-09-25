@@ -339,6 +339,18 @@ jobs:
       # fetched at all. This gate fails the build if that shape reappears.
       - name: Verify sample data is gated behind demo mode
         run: python scripts/check_mock_data_gated.py
+      # The check above recognises the *shapes* that carried fabricated data:
+      # a bare mock in `fallbackData`, a mock through a state setter, a mock
+      # behind `??`. Each was added after a specific escape, so each knows only
+      # the syntax that got past it last time. `SLADashboard.tsx` wrote the
+      # same defect as a ternary one line below a correctly-gated
+      # `demoFallback(...)` and nothing matched, so 847 alerts and a 42.5m MTTR
+      # rendered on first paint and on error, on every deployment. This gate
+      # asks the two questions that do not depend on guessing the next syntax:
+      # is the fabricated value reachable with no gate in scope, and does a
+      # component decide for itself that it is a demo?
+      - name: Verify no fabricated data is reachable without the demo gate
+        run: python scripts/check_demo_state_gated.py
       # Same story for the correlation-narrative builder. It lives canonically
       # in `services/fusion/app/services/narrative.py` (called at fusion time
       # to populate `FusedAlert.narrative`) and is mirrored into

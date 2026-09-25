@@ -154,18 +154,29 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
   const [severityFilter, setSeverityFilter] = useState<Case['severity'] | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  const fallback: CasesResponse = initialCases ?? {
+  // Real server-rendered cases are not sample data, and the gate that
+  // withholds one must not withhold the other. Folding both into a single
+  // `fallback` and passing that through `demoFallback` returned `undefined`
+  // outside the hosted demo *regardless of whether SSR data was supplied* —
+  // so the server fetch in `cases/page.tsx` was made, awaited and discarded
+  // on every non-demo deployment, which is the flash of empty content the
+  // prop exists to prevent.
+  const sampleCases = demoFallback<CasesResponse>({
     cases: MOCK_CASES,
     total: MOCK_CASES.length,
     page: 1,
     pageSize: MOCK_CASES.length,
-  };
+  });
 
   const { data: casesData, isLoading } = useSWR(
     ['cases', statusFilter, severityFilter],
     () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
     {
-      fallbackData: demoFallback(fallback),
+      fallbackData: initialCases ?? sampleCases,
+      // Supplying `fallbackData` is enough to stop SWR revalidating on mount,
+      // which would turn the SSR snapshot into what the view permanently
+      // shows rather than its first paint.
+      revalidateOnMount: true,
     }
   );
 

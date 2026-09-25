@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Six console surfaces rendered fabricated security data outside demo mode,
+  on a tree where the existing gate reported clean.** The gate recognises
+  *shapes* — a bare mock in SWR's `fallbackData`, a mock through a state
+  setter, a mock behind `??`. Each was added after a specific escape, so each
+  knows only the syntax that got past it last time.
+
+  `SLADashboard.tsx` wrote the same defect as a ternary. Line 446 passed
+  `fallbackData: demoFallback(MOCK_SLA_METRICS)`, which is correct and which
+  the gate accepted; line 457 then read `isValidMetrics ? rawMetrics :
+  MOCK_SLA_METRICS`. Outside the hosted demo `demoFallback` returns
+  `undefined`, so the test is falsy on **first paint as much as on error**,
+  and 847 alerts, 23 breaches, a 2.7% breach rate and a 42.5-minute MTTR
+  rendered in both states, identically, on every deployment. The disclosure
+  banner fired only on `metricsError`, so during loading the invented figures
+  appeared with nothing saying so.
+
+  The worst of the six was `CaseWorkspace.tsx`. A failed case load rendered
+  `buildDemoCase(caseId)`, which copies the route param, so the invention did
+  not present as sample data — it presented *as the case the analyst had
+  opened*, with an invented title, assignee, four linked alert ids, three
+  ATT&CK techniques and a five-event timeline including "Auto-investigation
+  completed". Separately, a failed `casesApi.investigate` was caught and
+  turned into `status: 'completed'` carrying recon IOCs (`192.168.1.105`,
+  `c2.evil-corp.io`), a forensic root cause at 0.88 confidence drawn as a
+  progress bar, three containment actions and a four-entry agent audit log.
+  The structured panels carried no caveat of their own; only a transient
+  toast did, and it is gone by the time anyone reads the verdict. This is the
+  `AlertDetailView` catch-block defect from v10.0.0, surviving in a second
+  file. And `updateStatus` mutated the SWR cache optimistically and, on
+  failure, toasted "writes disabled" without rolling back, so the workspace
+  showed a status the database did not have.
+
+  `HuntView.tsx` had no demo gate at all: its `demoMode` was a local
+  `useState(false)` flipped by **fetch failure**, so it substituted three
+  detections on named hosts with encoded-PowerShell command lines precisely
+  when the backend was unhealthy — when a reader is least equipped to notice.
+  It also published `took: 42`, a query latency for a query that never ran,
+  in the same line as a real measurement.
+
+  `CoverageAdvisorView.tsx` was fabricated end to end, with no API call
+  anywhere in the file: fifteen invented ATT&CK verdicts whose recommendation
+  column asserted deployment state it could not know ("Existing PowerShell &
+  Bash rules active"), four headline cards computed from them so "Coverage
+  50%" and "Critical Gaps 5" were byte-identical everywhere, and one button
+  that raised `toast.success('Detection rule draft created')` and created
+  nothing. It now reads `GET /api/v1/detection/coverage`.
+
+- **`/coverage-advisor` reports what that endpoint can actually support.**
+  The endpoint returns one cell per technique *at least one rule references*,
+  so a technique nobody has written a rule for never appears and a percentage
+  over those cells is not coverage of ATT&CK — on a tenant with three rules it
+  would read 100%. The page therefore reports the fraction, names its own
+  blind spot in the body copy, and publishes no coverage score. "Covered"
+  means *enabled*: a technique whose only rules are switched off gets its own
+  status and a link to those rules, because a disabled rule detects exactly as
+  much as no rule. The `ROADMAP.md` and `apps/docs/docs/architecture.md`
+  claims that it "ranks technique gaps by adversary prevalence" were corrected
+  — no prevalence data exists anywhere in the tree.
+
+- **The server fetch on `/cases` was discarded on every non-demo
+  deployment.** `initialCases` is documented as server-rendered data that
+  avoids a flash of mock content. It was folded into the same object as
+  `MOCK_CASES` and the whole thing passed through `demoFallback(fallback)`,
+  which returns `undefined` outside the hosted demo *regardless of whether
+  real SSR data was supplied* — so the round-trip in `cases/page.tsx` was
+  made, awaited and thrown away. Real SSR data is not sample data, and the
+  gate that withholds one must not withhold the other.
+
+- **`CopilotDock` answered a failed request with an assistant turn.** Same
+  class as the above: a local `demoMode` flipped by fetch failure. Outside the
+  hosted demo the dock now reports that the copilot could not be reached, with
+  the error, instead of emitting a reply.
+
+### Removed
+
+- **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
+  threat-intel replies ("VirusTotal: 14/87 engines flagged malicious",
+  "Associated campaigns: APT-42"), a fixed context sidebar, no API call for
+  the chat, and imported by no file. One import from being live, which is the
+  `MitreStrip.tsx` precedent exactly. It also embedded a personal email
+  address in OSS source; the same string in `FunnelKpiBar.tsx` was removed
+  too. `/investigate` already permanently redirects to `/hunt`, and the
+  multi-turn copilot is `CopilotDock` and `/copilot`, so the docs line naming
+  this component was corrected rather than the component wired.
+
+### Added
+
+- **`scripts/check_demo_state_gated.py`** — a CI gate that asks the two
+  questions which do not depend on guessing the next syntax. *Is the
+  fabricated value reachable?* — every read of a fabricated symbol must have a
+  gate in scope, so `cond ? x : MOCK` fails and so does whatever replaces it.
+  *Does the component decide for itself that it is a demo?* — no component may
+  hold demo/sample **mode** in local state, because state derived from a fetch
+  failure fabricates exactly when the backend is unhealthy.
+
+  It treats three things as fabricated: a `MOCK_*`/`DEMO_*`-style constant; a
+  factory that builds one (the constant convention could not see
+  `buildDemoCase`); and any constant assembled out of either (`EASMView`
+  declared `const SUMMARY = { totalAssets: MOCK_ASSETS.length, … }`, carrying
+  the fabrication under a name the convention does not cover). It accepts the
+  four ways this tree legitimately gates — the read's own bracket-balanced
+  statement, an enclosing `if`, an early return, and a local derived from the
+  gate — but **not** a bare mention of the gate elsewhere in the file, which
+  is the hole `SLADashboard` fell through. Its `KNOWN_UNGATED` ratchet is
+  empty and checked in both directions; a gate seeded with its own exceptions
+  has never been true.
+
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not

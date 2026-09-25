@@ -18,12 +18,26 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { copilotApi, type CopilotMessage } from '@/lib/api';
+import { canUseDemoData } from '@/lib/demoFallback';
 
 const QUICK_PROMPTS = [
   'Summarize critical alerts in the last 24h.',
   'Investigate the host most at risk right now.',
   'Which detection rules are noisiest this week?',
 ];
+
+/** What the dock says when the copilot could not be reached. */
+function unavailableReply(error: unknown): CopilotMessage {
+  const detail = error instanceof Error ? error.message : 'the request did not complete';
+  return {
+    id: `err-${Date.now()}`,
+    role: 'assistant',
+    content:
+      `The copilot could not be reached, so there is no answer to give.\n\n` +
+      `\`${detail}\`\n\nTry again once the service is back.`,
+    createdAt: new Date().toISOString(),
+  };
+}
 
 function demoReply(prompt: string, page: string): CopilotMessage {
   const content =
@@ -48,7 +62,13 @@ export function CopilotDock() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [demoMode, setDemoMode] = useState(false);
+  /**
+   * Whether the *last request* failed. Not a demo flag: this was `demoMode`,
+   * local state flipped to `true` by a fetch failure, which let a component
+   * decide for itself that the deployment was a demo. Whether a sample reply
+   * may render is `canUseDemoData()`, a property of the build.
+   */
+  const [offline, setOffline] = useState(false);
   const pathname = usePathname() ?? '/';
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -109,10 +129,14 @@ export function CopilotDock() {
       });
       setConversationId(res.conversationId);
       setMessages((prev) => [...prev, res.reply]);
-      setDemoMode(false);
-    } catch {
-      setMessages((prev) => [...prev, demoReply(trimmed, pathname)]);
-      setDemoMode(true);
+      setOffline(false);
+    } catch (err) {
+      // The hosted demo has no LLM behind it and says so in the reply body.
+      // Everywhere else the failure is reported as a failure: an assistant
+      // turn that reads like an answer is worse than no answer.
+      const sample = canUseDemoData() ? demoReply(trimmed, pathname) : null;
+      setMessages((prev) => [...prev, sample ?? unavailableReply(err)]);
+      setOffline(true);
     } finally {
       setSending(false);
     }
@@ -170,7 +194,7 @@ export function CopilotDock() {
                 <div>
                   <p className="text-sm font-semibold text-white">AI Copilot</p>
                   <p className="text-[11px] text-slate-400">
-                    {demoMode ? 'Demo mode (offline)' : 'Connected'}
+                    {offline ? 'Copilot unavailable' : 'Connected'}
                   </p>
                 </div>
               </div>

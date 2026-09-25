@@ -194,8 +194,8 @@ SOAR platforms drove this release.
 
 ### New console pages (`apps/web/src/components/`)
 
-- [x] `/investigate` — conversational, multi-turn investigation copilot
-- [x] `/coverage-advisor` — MITRE ATT&CK gap ranking by adversary prevalence
+- [x] `/investigate` — redirects to `/hunt`; the multi-turn copilot is `CopilotDock` and `/copilot`
+- [x] `/coverage-advisor` — ATT&CK techniques your rules reference, ranked by enabled coverage (not by adversary prevalence)
 - [x] `/shifts` — analyst shift-handoff dashboard
 - [x] `/easm` — External Attack Surface Management
 - [x] `/mssp` — MSSP executive dashboard
