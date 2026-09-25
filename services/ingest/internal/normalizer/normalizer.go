@@ -122,6 +122,29 @@ var connectorProfiles = map[string]connectorProfile{
 			"High": 4, "Medium": 3, "Low": 2, "Informational": 1,
 		},
 	},
+	// splunk_enterprise — raw Splunk *search result rows* (`_time`, `src`,
+	// `dst`, `user`), not notables. It stays at 4001 Network Activity, which
+	// means the fusion promoter does not promote it on class, and that is the
+	// correct outcome rather than an oversight: a saved search can return any
+	// rows at all, and promoting each one would turn a search result set into
+	// an alert queue. A Splunk finding that has already passed Splunk's own
+	// correlation arrives as connector type `splunk` at 2001 below, and is
+	// always promoted.
+	//
+	// The severity map was literally empty. That changed nothing at runtime —
+	// severity mapping already falls through to `_canonicalSeverityMap`, so a
+	// row carrying `severity: "critical"` scores 5 and promotes on the
+	// severity branch — but an empty map reads as an omission, and it was
+	// diagnosed as one. Naming the shared ladder makes the profile state what
+	// it does.
+	//
+	// What remains true: a row with **no** severity field at all scores
+	// severity_id 0, and category 4 with severity 0 satisfies neither
+	// promotion branch. Such an event is archived to the lake and never
+	// alerts. That is intended, and it is no longer silent — the event
+	// carries a `normalization_warnings` entry saying so (see
+	// `unpromotableWarning`), and fusion logs the first occurrence of each
+	// shape (`promoter.not_promoted`).
 	"splunk_enterprise": {
 		product:   OcsfProduct{Name: "Splunk Enterprise", VendorName: "Splunk"},
 		classUID:  4001,
@@ -132,7 +155,7 @@ var connectorProfiles = map[string]connectorProfile{
 			"dst":   "dst_endpoint.ip",
 			"user":  "actor.user.name",
 		},
-		severityMap: map[string]int{},
+		severityMap: _canonicalSeverityMap,
 	},
 	// splunk — connector type emitted by SplunkConnector (#528). Its
 	// fetch_alerts already returns a canonical envelope (external_id / title /
@@ -541,6 +564,45 @@ func genericProfile(connectorType string) connectorProfile {
 	}
 }
 
+// Mirrors the fusion promotion policy in
+// services/fusion/app/services/promoter.py: OCSF category 2 (Findings) is
+// always promoted, and anything else needs severity_id >= 4.
+//
+// Duplicated rather than shared because the two services do not share a
+// runtime, and kept honest by TestUnpromotableWarningMatchesFusionPolicy,
+// which walks the same table the Python constants describe.
+const (
+	findingsCategory     = 2
+	promoteSeverityFloor = 4
+)
+
+// unpromotableWarning describes, on the event itself, why this event can never
+// become an alert — or returns "" when it can.
+//
+// The gap this closes: an operator connects a source, telemetry flows into the
+// lake, no alert ever appears, and nothing anywhere says why. The fusion
+// promoter now logs the first event of each shape, but that is one service
+// away from the person reading their connector's output; this rides on the
+// envelope, lands in the lake beside the event, and survives in storage rather
+// than scrolling past in a log.
+//
+// Deliberately narrow: only events failing **both** promotion branches get a
+// warning, so routine informational telemetry that is *meant* to stay in the
+// lake and has a severity does not acquire one.
+func unpromotableWarning(classUID int, severityID interface{}) string {
+	if classUID/1000 == findingsCategory {
+		return ""
+	}
+	sev, ok := severityID.(int)
+	if ok && sev >= promoteSeverityFloor {
+		return ""
+	}
+	return fmt.Sprintf(
+		"not promotable to an alert: OCSF class %d is category %d, not %d (Findings), and severity_id %d is below the promote floor of %d; this event is archived to the event lake only",
+		classUID, classUID/1000, findingsCategory, sev, promoteSeverityFloor,
+	)
+}
+
 func canonicalProfile(connectorType string) connectorProfile {
 	classUID, className := 2001, "Security Finding"
 	if override, ok := canonicalClassByConnector[connectorType]; ok {
@@ -674,6 +736,11 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	} else {
 		ocsf["severity_id"] = 0
 		ocsf["severity"] = "Unknown"
+	}
+
+	// An event that provably cannot become an alert says so, on the event.
+	if w := unpromotableWarning(profile.classUID, ocsf["severity_id"]); w != "" {
+		warnings = append(warnings, w)
 	}
 
 	// Set metadata

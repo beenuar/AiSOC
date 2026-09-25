@@ -14,20 +14,46 @@ Pipeline
 3. ``GET  /feedback/overrides`` — lists every override the agent has
    "learned" for this tenant.
 4. ``GET  /feedback/summary`` — counts of dispositions for the FPR card.
+5. ``GET  /feedback/context-statements`` — the organisation memory compiled
+   from tagged disagreements, which the triage prompt reads.
+
+Organisation memory (``app/services/analyst_feedback.py``)
+----------------------------------------------------------
+``reason`` on an override is free text, and the module next door exists
+because free text does not generalise: nobody queries it, and the next
+identical alert is triaged knowing nothing about the last one being
+overturned. That module compiles a **closed** reason vocabulary into durable,
+readable statements — "PowerShell launched by svc_backup on BACKUP01 is
+expected during the 02:00 backup window".
+
+It had no callers. Not one: ``record_disagreement`` was never invoked, so the
+table stayed empty, and ``active_statements`` was never read, so an empty
+table was never noticed. Both ends are wired here — the optional
+``reason_code`` on an override writes, and ``/context-statements`` reads —
+because wiring only the read would have been a query against a table nothing
+populates, which is the same defect wearing a different hat.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, CurrentUser, DBSession
+from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
 from app.models.alert import Alert
+from app.security.tenant_scope import scoped_tenant_or_403
+from app.services.analyst_feedback import (
+    REASON_CODES,
+    active_statements,
+    record_disagreement,
+)
 from app.services.memory_poisoning import plan_redisposition
 from app.services.override_learning import (
     apply_redisposition,
@@ -52,6 +78,45 @@ _VALID_VERDICTS = {
 }
 
 
+def _statement_context(alert: Alert) -> dict[str, Any]:
+    """The facts a compiled statement is allowed to name.
+
+    Scoping is the whole point of the taxonomy: a `binary`-scoped reason keys
+    on the process, an `entity`-scoped one on the principal or host, a
+    `rule`-scoped one on the rule. Handing over a thin context produces
+    "PowerShell is expected", which is a suppression waiting to hide an
+    incident rather than a fact.
+
+    The alert row denormalises host and user into `affected_hosts` /
+    `affected_users` lists and carries process and hash only inside
+    `raw_event`, so both are read here rather than assumed to be columns.
+    """
+    raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+
+    def _from_raw(*keys: str) -> str | None:
+        for key in keys:
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()[:256]
+        return None
+
+    def _first(values: object) -> str | None:
+        if isinstance(values, list):
+            for value in values:
+                if isinstance(value, str) and value.strip():
+                    return value.strip()[:256]
+        return None
+
+    return {
+        "rule_id": alert.rule_id,
+        "rule_name": alert.rule_name,
+        "hostname": _first(alert.affected_hosts) or _from_raw("hostname", "host"),
+        "user_name": _first(alert.affected_users) or _from_raw("username", "user"),
+        "process_name": _from_raw("process_name", "process", "image", "exe"),
+        "hash_sha256": _from_raw("sha256", "file_hash"),
+    }
+
+
 def _coerce_uuid(value: str, field: str) -> uuid.UUID:
     try:
         return uuid.UUID(value)
@@ -70,6 +135,17 @@ class AlertOverrideRequest(BaseModel):
         description="Analyst's verdict: true_positive | benign_true_positive | false_positive | benign | escalate",
     )
     reason: str | None = Field(None, description="Optional free-text justification")
+    reason_code: str | None = Field(
+        None,
+        description=(
+            "Optional code from the closed disagreement vocabulary "
+            "(known_admin_tool, approved_pentest, expected_service_account, "
+            "known_scanner, business_application, bad_detection_logic, "
+            "missing_context, true_positive_confirmed). Supplying one lets the "
+            "platform compile durable organisation memory from repeated "
+            "disagreement; free text alone cannot generalise."
+        ),
+    )
 
 
 class RedispositionCandidateModel(BaseModel):
@@ -94,6 +170,10 @@ class AlertOverrideResponse(BaseModel):
     redisposition_capped: bool = False
     redisposition_quarantined: bool = False
     redisposition_total_matched: int = 0
+    #: The organisation-memory statement this disagreement completed, if it
+    #: crossed the corroboration threshold. ``None`` means recorded but not yet
+    #: trusted — one analyst calling one alert benign is an opinion.
+    context_statement: str | None = None
 
 
 @router.post("/alert-override", response_model=AlertOverrideResponse)
@@ -108,6 +188,13 @@ async def submit_alert_override(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"corrected_verdict must be one of: {', '.join(sorted(_VALID_VERDICTS))}",
+        )
+    if payload.reason_code is not None and payload.reason_code not in REASON_CODES:
+        # Refused rather than silently ignored: an analyst who mistypes a code
+        # would otherwise believe they had taught the platform something.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"reason_code must be one of: {', '.join(sorted(REASON_CODES))}",
         )
     alert_uuid = _coerce_uuid(payload.alert_id, "alert_id")
 
@@ -161,6 +248,35 @@ async def submit_alert_override(
             payload.corrected_verdict,
         )
 
+    # Structured disagreement, when the analyst tagged one. Fails soft: the
+    # override itself is already committed above and is the operator-visible
+    # outcome, so a memory-compilation problem must not turn a successful
+    # correction into a 500.
+    statement_text: str | None = None
+    if payload.reason_code:
+        try:
+            statement = await record_disagreement(
+                db,
+                tenant_id=user.tenant_id,
+                alert_id=alert_uuid,
+                ai_disposition=payload.original_verdict,
+                analyst_disposition=payload.corrected_verdict,
+                reason_code=payload.reason_code,
+                analyst_id=str(user.user_id),
+                context=_statement_context(alert),
+                note=payload.reason or "",
+            )
+            await db.commit()
+            statement_text = statement.statement if statement else None
+        except Exception as exc:  # noqa: BLE001 — never fail a recorded override
+            await db.rollback()
+            logger.warning(
+                "analyst.disagreement_not_recorded",
+                tenant_id=str(user.tenant_id),
+                reason_code=payload.reason_code,
+                error=str(exc),
+            )
+
     logger.info(
         "analyst.override",
         tenant_id=str(user.tenant_id),
@@ -184,6 +300,7 @@ async def submit_alert_override(
         redisposition_capped=plan.capped if plan else False,
         redisposition_quarantined=plan.quarantined if plan else False,
         redisposition_total_matched=plan.total_matched if plan else 0,
+        context_statement=statement_text,
     )
 
 
@@ -301,4 +418,70 @@ async def get_override_summary(
         benign_true_positive_corrections=counts["benign_true_positive"],
         benign_corrections=counts["benign"],
         escalate_corrections=counts["escalate"],
+    )
+
+
+class ContextStatementModel(BaseModel):
+    statement: str
+    reason_code: str
+    scope: str
+    scope_value: str
+    observations: int
+    expires_at: str | None = None
+
+
+class ContextStatementsResponse(BaseModel):
+    tenant_id: str
+    statements: list[ContextStatementModel]
+
+
+@router.get("/context-statements", response_model=ContextStatementsResponse)
+async def get_context_statements(
+    user: Annotated[CurrentUser | None, Depends(optional_user)],
+    db: DBSession,
+    tenant_id: uuid.UUID | None = None,
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> ContextStatementsResponse:
+    """Unexpired organisation memory for a tenant.
+
+    Dual-mode for the same reason ``/alerts/{id}/source-writeback`` is: the
+    consumer is the agents service's triage worker, which has no session, and
+    the API owns the tenant-scoped database session.
+
+    A session caller's ``tenant_id`` is **intersected** with the session rather
+    than ignored. Ignoring it is safe but dishonest — a caller who names
+    another tenant gets this tenant's memory back under that tenant's name,
+    which is the "silently returns the wrong data" shape rather than a
+    refusal. ``scoped_tenant_or_403`` returns the caller's own tenant when the
+    parameter is absent, honours it when it matches, and 403s otherwise.
+    """
+    if user is not None:
+        scoped = scoped_tenant_or_403(user, tenant_id)
+    elif service_token_valid(x_aisoc_service_token):
+        if tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="a service caller must name the tenant it is acting for",
+            )
+        scoped = tenant_id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="a session or a valid service token is required",
+        )
+
+    rows = await active_statements(db, scoped)
+    return ContextStatementsResponse(
+        tenant_id=str(scoped),
+        statements=[
+            ContextStatementModel(
+                statement=str(r["statement"]),
+                reason_code=str(r["reason_code"]),
+                scope=str(r["scope"]),
+                scope_value=str(r["scope_value"] or ""),
+                observations=int(r["observations"] or 0),
+                expires_at=r["expires_at"].isoformat() if r.get("expires_at") else None,
+            )
+            for r in rows
+        ],
     )
