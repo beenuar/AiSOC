@@ -925,9 +925,39 @@ jobs:
         # `sqlalchemy` installed it by accident and this list passed for
         # months without declaring what it depended on. SQLAlchemy 2.1.0
         # dropped that clause, the unbounded install re-resolved onto it, and
-        # the import died at collection. Bounding the range is the second half:
-        # unbounded, any upstream release lands here before anyone reads it.
-        run: pip install --quiet pydantic pydantic-settings pytest pytest-asyncio structlog redis aioredis "fastapi>=0.117,<0.142" httpx aiokafka asyncpg clickhouse-driver pyyaml "cryptography>=46,<51" "sqlalchemy[asyncio]>=2,<3"
+        # the import died at collection.
+        #
+        # Bounding the rest is that second half, done. Twelve packages here
+        # named no version at all, which is the same defect the `sqlalchemy`
+        # outage was: an unbounded install resolves whatever upstream shipped
+        # this morning, and the first anyone hears of it is a red `main` on a
+        # pull request that changed nothing. Every bound below is the range the
+        # three services under test declare, so this job installs what they
+        # ship rather than what PyPI happens to be serving:
+        #
+        #   pydantic / pydantic-settings / structlog / aioredis / aiokafka /
+        #   asyncpg / clickhouse-driver  — services/fusion, which is the
+        #                                  tightest of the three.
+        #   pytest / pytest-asyncio      — services/fusion's dev group; the
+        #                                  other two leave them unbounded.
+        #   pyyaml                       — services/purple-team, and
+        #                                  services/api agrees.
+        #   redis                        — services/fusion, *with* the
+        #                                  `[hiredis]` extra it declares. The
+        #                                  bare name here was the sqlalchemy
+        #                                  shape again: an install path
+        #                                  dropping an extra the manifest asks
+        #                                  for installs a smaller set than
+        #                                  ships.
+        #   httpx                        — see below. The three did not agree.
+        run: >-
+          pip install --quiet
+          "pydantic>=2.5,<3" "pydantic-settings>=2.1,<3"
+          "pytest>=9.0.3,<10" "pytest-asyncio>=1.0,<2"
+          "structlog>=24.1,<25" "redis[hiredis]>=5.0.1,<6" "aioredis>=2.0.1,<3"
+          "fastapi>=0.117,<0.142" "httpx>=0.27,<0.29" "aiokafka>=0.10,<0.11"
+          "asyncpg>=0.29,<0.30" "clickhouse-driver>=0.2.6,<0.3" "pyyaml>=6,<7"
+          "cryptography>=46,<51" "sqlalchemy[asyncio]>=2,<3"
       - name: Install pytest-cov (Phase 2.2 coverage gate)
         run: pip install --quiet 'pytest-cov>=4,<7'
       # Phase 2.2 — every wave-1 service now has a measured coverage
