@@ -677,6 +677,38 @@ Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
+## v11.0 — Shipped (2026-09-25)
+
+What a first run actually produced. Most of this was found by bringing the
+stack up from the documented path and photographing the result, and nearly
+every item passed the existing test suite while failing on a real deployment.
+Following the README broke the credential vault, because `cp .env.example .env`
+wrote a placeholder the vault treats as fatal while treating *empty* as fine.
+`make up` then reported the stack broken on every machine, scoring the one-shot
+model pull's normal exit as a dead container. And the profile a new user runs
+had no real data and no model behind it, which is also why the console's threat
+page had recently been caught rendering invented indicators: the missing feed
+and the fabrication were one hole.
+
+**A major because upgrading requires action on two items.** `POST /v1/ingest`
+and `POST /v1/ingest/batch` now require a credential and take the tenant from
+it, where they previously read `X-Tenant-ID` and believed it — so anyone who
+could reach the port could write alerts into any tenant. And CORE now needs
+**8 GB of memory and 20 GB of free disk**, up from `~6.5 GB`, because the
+threat-intelligence feed, its vector store and a local model moved into it.
+
+Re-measured rather than restated: CORE is 14 long-running services plus a
+one-shot model pull and `full` is 22; resident memory for the whole stack went
+1.72 GiB → 4.84 GiB. A fresh `make up` now holds 1,723 real CISA KEV entries
+within a minute of boot with no credentials, and runs triage against a bundled
+3B model — which returned schema-valid JSON **7 times in a measured run of 19**,
+the other 12 falling back to the deterministic path. No hosted provider has
+been exercised; there is still no funded key.
+
+Full inventory under `[11.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## v10.0 — Shipped (2026-09-25)
 
 An audit of one shape: a control that exists, is tested, and sits on a path
