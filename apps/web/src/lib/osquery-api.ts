@@ -3,7 +3,17 @@
  *
  * All requests are issued to `/api/v1/osquery/*` — Next.js proxies that
  * to OSQUERY_TLS_HOST via the rewrite in next.config.js.
+ *
+ * Tenancy: the service resolves the tenant from the caller's credential
+ * (`app/security/tenant_scope.py`), and a `tenant_id` parameter only narrows
+ * *within* that scope. This client therefore sends the session bearer token
+ * and does **not** send a tenant — there is no tenant the console could name
+ * that the credential does not already imply, and the one it used to name was
+ * the literal `'default'`, which that module lists as a placeholder meaning
+ * "the caller did not name a tenant".
  */
+
+import { AUTH_TOKEN_KEY } from '@/lib/api';
 
 const OSQUERY_BASE =
   (process.env.NEXT_PUBLIC_OSQUERY_TLS_URL ?? '') + '/api/v1/osquery';
@@ -52,18 +62,24 @@ export interface FimSummary {
 }
 
 export interface FimEventsParams {
-  tenant_id: string;
   page?: number;
   page_size?: number;
   action?: string;
   path_prefix?: string;
-  node_key?: string;
+  hostname?: string;
   since?: string; // ISO-8601
 }
 
 export interface FimSummaryParams {
-  tenant_id: string;
   since?: string; // ISO-8601
+}
+
+/** Wire shape of `GET /fim/events`. The service paginates by offset/limit. */
+interface FimEventPageWire {
+  total: number;
+  offset: number;
+  limit: number;
+  items: FimEvent[];
 }
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -75,7 +91,15 @@ async function get<T>(path: string, params?: Record<string, string | number | un
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
   }
-  const res = await fetch(url.toString());
+  const headers: Record<string, string> = {};
+  // Without this the service resolves an empty principal and refuses the read
+  // with a 403, because `require_console_or_service_auth` has nothing to scope
+  // by. The page has never sent it.
+  const token =
+    typeof window !== 'undefined' ? window.localStorage.getItem(AUTH_TOKEN_KEY) : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url.toString(), { headers });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`osquery-api ${res.status}: ${text}`);
@@ -85,11 +109,24 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 
 // ─── FIM endpoints ────────────────────────────────────────────────────────────
 
-export function getFimEvents(params: FimEventsParams): Promise<FimEventsPage> {
-  const { tenant_id, ...rest } = params;
-  return get<FimEventsPage>('/fim/events', { tenant_id, ...rest });
+export async function getFimEvents(params: FimEventsParams = {}): Promise<FimEventsPage> {
+  const { page = 1, page_size = 100, ...rest } = params;
+  // `page`/`page_size` were sent as-is to an endpoint that declares
+  // `offset`/`limit`, so FastAPI dropped both: every page rendered the same
+  // first 100 rows while the pager counted upward.
+  const wire = await get<FimEventPageWire>('/fim/events', {
+    ...rest,
+    limit: page_size,
+    offset: (page - 1) * page_size,
+  });
+  return {
+    events: wire.items,
+    total: wire.total,
+    page,
+    page_size,
+  };
 }
 
-export function getFimSummary(params: FimSummaryParams): Promise<FimSummary> {
+export function getFimSummary(params: FimSummaryParams = {}): Promise<FimSummary> {
   return get<FimSummary>('/fim/summary', { ...params });
 }

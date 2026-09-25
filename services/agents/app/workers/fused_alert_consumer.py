@@ -45,6 +45,7 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
+from app.context.organisation_memory import fetch_statements
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
 from app.graph.runner import default_budget, run_escalation
@@ -456,6 +457,13 @@ class FusedAlertTriageWorker:
         else:
             cfg = await self._resolve_tenant_llm(state.tenant_id)
             use_llm = decision.use_llm and not is_deterministic_mode() and cfg is not None
+            if use_llm:
+                # What analysts have repeatedly taught this tenant's platform,
+                # read once here rather than inside the agent so the round trip
+                # is on the worker's timeline and is skipped entirely when no
+                # LLM call is going to happen. Never raises; an empty list just
+                # means the prompt is what it was before.
+                state.organisation_memory = await fetch_statements(str(state.tenant_id))
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
