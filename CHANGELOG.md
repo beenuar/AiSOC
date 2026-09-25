@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/generate_corpus_stats.py`** — generates
+  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
+  engine ruleset, the generated detection truth table, and the marketplace
+  index, reconciling all three against each other and refusing to publish if
+  they disagree. Every landing surface imports the constants, so none can
+  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
+  `--self-test` hand-edits the artefact and requires the drift to be caught.
+  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
+  fields, and the UI leads with the executable count.
+
+- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
+  the way a count can, so the retraction is gated instead. No published
+  surface may assert the legacy harness runs the production grouping; any
+  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
+  suite card may not be declared `kind: 'measurement'`; and every surface
+  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
+  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
+  test asserts against its own measurement — so the chain from measurement
+  to published prose has no hand-copied link. A paragraph that dates or
+  negates the claim is exempt, so the retraction can quote the wording it
+  retracts.
+
+- **The prerequisites that were required but undocumented.** Beyond Docker and
+  its memory, a first run needs `python3` **on the host** (`make smoke` runs
+  the golden-pipeline script there, so without it you can start AiSOC but
+  cannot prove it works), `bash` (`make up` gates on `scripts/doctor.sh
+  --ports-only` before it calls compose), and roughly 18 GB of free Docker
+  disk — previously implied only by a troubleshooting row noting that Kafka
+  corrupts its log directory and *still passes its healthcheck* when the
+  daemon runs out of space. Node 22 and pnpm 8, which the installers require,
+  were also unlisted. All are now in the quick-start prerequisites table with
+  the command each one gates.
+
+- **Verification probes for the disruptive endpoint verbs.** `kill_process`
+  and `quarantine_file` had their success inferred from CrowdStrike RTR
+  accepting a command; both now read the effect back over the read-only tier
+  of the same batch API — the process table for the PID, the path for the
+  removed file. Absence is only trusted when the output can be recognised as
+  what it claims to be, so an unparseable `ps` listing is indeterminate
+  rather than "the process is gone", and only a line's first column is read
+  as a PID so a surviving child does not report its dead parent as alive.
+  `run_av_scan` joins them because it is automatic and Defender replies
+  `Pending` the moment it queues the sweep: it reads the machine action's
+  terminal state, and says indeterminate while the scan is still running.
+
+- **Every verb with an `ActionType` now either declares a probe or records
+  why it has none.** Eleven bridged response verbs had neither, which failed
+  safe but made three different situations look the same: nobody wrote it,
+  the vendor exposes no read-back, and there is nothing to read back. The
+  eight without probes now state which — including `reset_password`, where
+  the obvious candidate read is the *wrong* one rather than a missing one
+  (the executor issues a recovery link, so `passwordChanged` moves later and
+  only if the user follows it, and a probe watching it would report FAILED
+  for every correct reset). The below-MODERATE waiver must now name itself,
+  because `run_av_scan` had been taking it silently.
+
+### Changed
+
+- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
+  list named one compliance page, which is why `ROADMAP.md` drifted with CI
+  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
+  **row total** is compared as well as the GATED/PARTIAL split, and a figure
+  the prose explicitly dates ("the count at that time") is exempt so history
+  need not be rewritten.
+
+- **`check_scoreboard.py --check` verifies `agent_version` against
+  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
+  freshness gate reads only the date — which a refresh keeps current — so a
+  row could be two days old and still labelled two majors behind.
+
+- `tests/test_approval_doors_agree.py` gates the invariant rather than the
+  instance: both live doors swept over every capability, autonomy tier and
+  confidence band, asserting the same answer to "did a vendor get touched
+  without a human". Structural checks alongside it fail a door that imports
+  the raw matrix or branches on a specific impact tier, which is the shape a
+  re-introduced bypass has. Against the previous tree it reports five
+  disagreements across 345 combinations.
+
 ### Fixed
 
 - **A retracted benchmark figure was still badged "Real measurement".**
@@ -25,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the claim in its own intro blockquote. All five now carry the wording
   `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
   figure measured against the key the product actually runs.
+
 - **The landing page published three different wrong corpus counts.**
   "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
   are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
@@ -32,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contributor leaderboard (833 across 6). The 6,998 figure also quoted the
   imported corpus as the detection capability, presenting quarantined rules
   as executable.
+
 - **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
   128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
   sentence that tells the reader to recount with the script "rather than
@@ -42,12 +124,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run (0.97, unchanged) and now carries the tree's version. The scoreboard
   keeps its three rows, all `substrate: true`, and no live-LLM row was
   invented.
+
 - **The "Design partners" block on the landing page was removed** rather
   than updated. Four dashed "Partner A–D" chips under the caption
   "Reference partners onboarding through Q2 2026": placeholders rather than
   fabricated logos, but four of them assert a partner count nothing in the
   repository supports, and the window closed in June 2026 while still being
   advertised as upcoming.
+
+- **The Windows installer routed evaluators to a stack that cannot answer the
+  question they came to ask.** `install.sh` was changed to bring up the real
+  deployment, create an administrator and verify the pipeline; `install.ps1`
+  was not, and nothing noticed. It handed off to `pnpm aisoc:demo` — a compose
+  file that opens by saying it does not run the AiSOC pipeline, has no ingest
+  service and no fusion service, sets `AISOC_DISABLE_KAFKA=true`, and whose
+  console content comes entirely from a seed script writing rows straight into
+  Postgres — and then printed `AiSOC is up and running.` A Windows user saw a
+  populated console and concluded the platform worked, having never run the
+  platform. `install.ps1` now performs the stages `make up` and `make smoke`
+  perform: a port pre-check that names the process holding a port rather than
+  letting compose fail with `Bind for 0.0.0.0:5432 failed`, `docker compose
+  up -d`, a wait that reads `docker compose ps -a` so an exited or
+  crash-looping container fails rather than passing, `docker compose run --rm
+  -T api python -m app.scripts.bootstrap_admin`, and the golden-pipeline
+  runner. Windows has no `make` and the Makefile's recipes are POSIX shell, so
+  these are native re-implementations of the same commands rather than a
+  `make` call; `tests/test_installer_parity_gate.py` fails the build if the
+  two installers diverge again.
+
+- **No administrator was created on Windows, and the closing banner said
+  nothing about credentials.** A Windows user either could not sign in at all
+  or signed in to a seeded database and evaluated that as the product. The
+  banner now surfaces the generated password the same way `install.sh` does:
+  printed once, stored nowhere, with the reset command alongside it. It also
+  no longer claims the pipeline was verified when the check was skipped for
+  want of a Python interpreter.
+
+- **`install.ps1` pointed at an uninstaller that does not exist.** The closing
+  banner named `.\scripts\install\uninstall.ps1`; the file is `uninstall.ps1`
+  at the repository root and has never been anywhere else, so the last
+  instruction the installer gave a Windows user could not work. The parity
+  gate now asserts every `.ps1` path either script tells a user to run is a
+  file in the repository.
+
+- **`uninstall.ps1` left the whole stack running while reporting success.** It
+  tore down only `infra/compose/docker-compose.demo.yml`, so every CORE
+  container — Postgres still holding 5432 — survived an uninstall that said it
+  was complete. It now brings down the root `docker-compose.yml` project
+  across every optional profile, then the demo project for anyone who ran the
+  older installer.
+
+- **`install.ps1` installed dependencies nobody tested.** It used
+  `pnpm install --no-frozen-lockfile` where `install.sh` uses
+  `--frozen-lockfile` for the stated reason that a self-hoster's install must
+  not quietly resolve a dependency set CI never saw. It also accepted Node 20
+  where `install.sh` requires 22, the version every workflow tests on and both
+  Node images ship. Both now match, and the gate compares them.
+
+- **The docs portal contradicted the README on whether the pipeline works.**
+  `quickstart.md` was a pre-v8.2 page built around `pnpm aisoc:demo`; because
+  the scripts it named still exist, nothing errored and it simply took readers
+  to the wrong stack. Three statements were false. It claimed `.env.example`
+  ships "a pre-generated dev `AISOC_CREDENTIAL_KEY`" — it ships a placeholder
+  that is worse than an empty value, because an empty one makes the API
+  generate an ephemeral key and warn while a malformed one makes the
+  credential vault raise, so the first request touching a connector secret
+  returns HTTP 500. It claimed events posted to `/v1/ingest/batch` "accept
+  cleanly but never become `Alert` rows", which is the exact path `make smoke`
+  asserts and the README publishes as its headline proof. And its cheat sheet
+  offered `aisoc keygen` as the way to generate that vault key, when `aisoc
+  keygen` writes an Ed25519 plugin-signing pair to `~/.aisoc/signing.key` and
+  has nothing to do with Fernet. The page is now written around `make up`,
+  `make bootstrap` and `make smoke`, and its compose-profile table was rebuilt
+  from `docker-compose.yml` rather than corrected from the old text — six port
+  numbers and profile memberships were wrong, and two whole profiles were
+  missing.
+
+- **`installation.md` documented flags that do not exist.** `-SkipDemo`,
+  `AISOC_SKIP_DEMO` and `-AisocDir` are not accepted by either installer; the
+  real spellings are `--no-launch` / `-NoLaunch` and `--clone-dir` /
+  `-CloneDir`. The page also still promised a browser opening on a seeded
+  ransomware case with pre-filled credentials, which no longer happens and for
+  which there are no default credentials.
 
 - **A pure read sat in the analyst approval queue, because the two dispatch
   doors graded the same verb differently.** `search_siem` declares
@@ -83,73 +241,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   held it for a whitelist it could never match. It now carries the LOW entry
   its own contract asks for ("classified the same as create_notable_event"),
   and `blast_radius.py` fails closed like its three siblings.
-
-### Added
-
-- **`scripts/generate_corpus_stats.py`** — generates
-  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
-  engine ruleset, the generated detection truth table, and the marketplace
-  index, reconciling all three against each other and refusing to publish if
-  they disagree. Every landing surface imports the constants, so none can
-  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
-  `--self-test` hand-edits the artefact and requires the drift to be caught.
-  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
-  fields, and the UI leads with the executable count.
-- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
-  the way a count can, so the retraction is gated instead. No published
-  surface may assert the legacy harness runs the production grouping; any
-  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
-  suite card may not be declared `kind: 'measurement'`; and every surface
-  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
-  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
-  test asserts against its own measurement — so the chain from measurement
-  to published prose has no hand-copied link. A paragraph that dates or
-  negates the claim is exempt, so the retraction can quote the wording it
-  retracts.
-
-- **Verification probes for the disruptive endpoint verbs.** `kill_process`
-  and `quarantine_file` had their success inferred from CrowdStrike RTR
-  accepting a command; both now read the effect back over the read-only tier
-  of the same batch API — the process table for the PID, the path for the
-  removed file. Absence is only trusted when the output can be recognised as
-  what it claims to be, so an unparseable `ps` listing is indeterminate
-  rather than "the process is gone", and only a line's first column is read
-  as a PID so a surviving child does not report its dead parent as alive.
-  `run_av_scan` joins them because it is automatic and Defender replies
-  `Pending` the moment it queues the sweep: it reads the machine action's
-  terminal state, and says indeterminate while the scan is still running.
-
-- **Every verb with an `ActionType` now either declares a probe or records
-  why it has none.** Eleven bridged response verbs had neither, which failed
-  safe but made three different situations look the same: nobody wrote it,
-  the vendor exposes no read-back, and there is nothing to read back. The
-  eight without probes now state which — including `reset_password`, where
-  the obvious candidate read is the *wrong* one rather than a missing one
-  (the executor issues a recovery link, so `passwordChanged` moves later and
-  only if the user follows it, and a probe watching it would report FAILED
-  for every correct reset). The below-MODERATE waiver must now name itself,
-  because `run_av_scan` had been taking it silently.
-
-### Changed
-
-- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
-  list named one compliance page, which is why `ROADMAP.md` drifted with CI
-  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
-  **row total** is compared as well as the GATED/PARTIAL split, and a figure
-  the prose explicitly dates ("the count at that time") is exempt so history
-  need not be rewritten.
-- **`check_scoreboard.py --check` verifies `agent_version` against
-  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
-  freshness gate reads only the date — which a refresh keeps current — so a
-  row could be two days old and still labelled two majors behind.
-
-- `tests/test_approval_doors_agree.py` gates the invariant rather than the
-  instance: both live doors swept over every capability, autonomy tier and
-  confidence band, asserting the same answer to "did a vendor get touched
-  without a human". Structural checks alongside it fail a door that imports
-  the raw matrix or branches on a specific impact tier, which is the shape a
-  re-introduced bypass has. Against the previous tree it reports five
-  disagreements across 345 combinations.
 
 ## [10.0.0] — 2026-09-25
 
