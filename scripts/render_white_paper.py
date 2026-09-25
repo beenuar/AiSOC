@@ -32,9 +32,16 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# sibling imports it.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_main  # noqa: E402
+
+REPO_ROOT = repo_root()
 DEFAULT_SRC_DIR = REPO_ROOT / "apps" / "web" / "content" / "papers"
 DEFAULT_OUT_DIR = REPO_ROOT / "apps" / "web" / "public" / "papers"
 
@@ -265,6 +272,18 @@ def _source_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _display(path: Path) -> str:
+    """Repository-relative where possible, absolute where not.
+
+    The gate-contract harness and ``--self-test`` both point this script at a
+    tree outside ``REPO_ROOT``, where ``relative_to`` raises.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _read_manifest() -> dict[str, str]:
     if not MANIFEST_PATH.exists():
         return {}
@@ -314,7 +333,7 @@ def _check() -> int:
 
     for src, pdf in pairs:
         if not pdf.exists():
-            problems.append(f"{pdf.relative_to(REPO_ROOT)} does not exist")
+            problems.append(f"{_display(pdf)} does not exist")
             continue
         recorded = manifest.get(src.name)
         if recorded is None:
@@ -341,6 +360,58 @@ def _check() -> int:
     return 0
 
 
+def _injected_defect_cases() -> list[tuple[str, bool]]:
+    """Plant each defect ``--check`` claims to catch and require a refusal.
+
+    The control case matters as much as the rest: a gate that refused
+    everything would "detect" all four defects and be useless, so a
+    well-formed paper is required to pass.
+    """
+    global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH
+
+    def plant(root: Path, *, pdf: bool, recorded: str | None, orphan: bool) -> None:
+        # Without this, the assignments below bind locals to `plant` and every
+        # case silently grades the real tree instead of the planted one.
+        global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH
+
+        src_dir, out_dir = root / "content", root / "public"
+        src_dir.mkdir(parents=True)
+        out_dir.mkdir(parents=True)
+        source = src_dir / "paper.md"
+        source.write_text("# a paper\n")
+        if pdf:
+            (out_dir / "paper.pdf").write_bytes(b"%PDF-1.7 not a real render\n")
+        entries: dict[str, str] = {}
+        if recorded == "match":
+            entries["paper.md"] = _source_digest(source)
+        elif recorded == "stale":
+            entries["paper.md"] = "0" * 64
+        if orphan:
+            entries["deleted.md"] = "0" * 64
+        DEFAULT_SRC_DIR, DEFAULT_OUT_DIR = src_dir, out_dir
+        MANIFEST_PATH = out_dir / "render-manifest.json"
+        MANIFEST_PATH.write_text(json.dumps({"sources": entries}) + "\n")
+
+    cases: list[tuple[str, dict[str, object], bool]] = [
+        ("a paper whose PDF matches its recorded source passes", {"pdf": True, "recorded": "match", "orphan": False}, True),
+        ("a source edited since its PDF was rendered is refused", {"pdf": True, "recorded": "stale", "orphan": False}, False),
+        ("a source with no PDF at all is refused", {"pdf": False, "recorded": "match", "orphan": False}, False),
+        ("a PDF with no recorded render is refused", {"pdf": True, "recorded": None, "orphan": False}, False),
+        ("a recorded paper whose source is gone is refused", {"pdf": True, "recorded": "match", "orphan": True}, False),
+    ]
+
+    saved = (DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH)
+    results: list[tuple[str, bool]] = []
+    try:
+        for description, shape, should_pass in cases:
+            with tempfile.TemporaryDirectory() as tmp:
+                plant(Path(tmp), **shape)  # type: ignore[arg-type]
+                results.append((description, (_check() == 0) is should_pass))
+    finally:
+        DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH = saved
+    return results
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -361,7 +432,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=("Report papers whose PDF is missing or older than its source. Renders nothing."),
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help=("Prove --check still detects each defect it claims to, then exit. Renders nothing."),
+    )
     args = parser.parse_args(argv)
+
+    if args.self_test:
+        return self_test_main(Path(__file__).name, ["--check"], extra=_injected_defect_cases())
 
     if args.check and (args.input or args.output or args.all):
         parser.error("--check renders nothing, so it takes no other arguments")

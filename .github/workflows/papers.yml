@@ -58,6 +58,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Ahead of the gate, so a staleness check that has stopped detecting
+      # anything cannot report the tree clean.
+      - name: The staleness check still detects what it claims to
+        run: python3 scripts/render_white_paper.py --self-test
+
       # Runs before anything is rendered. `make papers` rewrites the
       # manifest, so checking afterwards would compare the tree against
       # itself and pass whatever the committed PDFs contain.

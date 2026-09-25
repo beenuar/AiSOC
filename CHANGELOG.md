@@ -593,9 +593,19 @@ number is the one the requirement is sized against.
   installed fonts, so two correct renders of one source differ and a byte
   comparison would fail for reasons unrelated to staleness. Each of the five
   conditions it claims to catch — edited source, missing PDF, unrecorded
-  render, orphaned manifest entry, and no sources at all — was verified by
-  reproducing it and requiring a non-zero exit. The run also now fails if any
-  source renders no PDF, which nothing previously checked.
+  render, orphaned manifest entry, and no sources at all — is now asserted by
+  a `--self-test` that runs as its own CI step ahead of the gate, so a check
+  that has stopped detecting anything cannot report the tree clean. Each rule
+  was then removed in turn to confirm the self-test fails without it. The run
+  also fails if any source renders no PDF, which nothing previously checked.
+
+  Adding a verdict mode made this script a gate, which `check_gate_contract.py`
+  then judged by the same contract as the other 85: it reported that the script
+  derived its repository root from `__file__` rather than asking git, and that
+  it declared no self-test. Both are fixed. The control case in that self-test
+  earned its place immediately — a nested helper assigned to the module paths
+  without a `global` declaration, so all five cases silently graded the real
+  tree, and only the case that *expects* a pass revealed it.
 
   Two things fell out of the change. `apps/web/public/papers/README.md` told
   readers "you no longer have to run the renderer locally before opening a PR"
