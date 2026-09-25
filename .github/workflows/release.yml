@@ -24,15 +24,98 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
-      - name: Extract changelog section
+      # The body is written to a file and handed to the action by path. It used
+      # to travel through a step output into an action *input*, which becomes a
+      # process argument — and v10.0.0's section is 263,761 characters, so the
+      # runner died with `Argument list too long` before the API was reached.
+      # Because docker-push, npm-publish and pypi-publish all `needs: release`,
+      # one oversized note skipped every image and every package in the
+      # release: the whole publish, lost to a shell limit.
+      #
+      # GitHub separately caps a release body at 125,000 characters, which that
+      # same section exceeds on its own, so length has to be handled rather
+      # than merely passed differently. An over-long note is cut at a top-level
+      # bullet boundary so it never ends mid-sentence, and it says in the body
+      # that it was cut, how many entries are missing and where the complete
+      # text is. A note silently missing half its entries is the failure this
+      # repository keeps auditing for; a truncation that announces itself is
+      # not that. Sections are ordered BREAKING first, so what survives a cut
+      # is the part an upgrader has to read.
+      - name: Build release body
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
+          set -euo pipefail
           CLEAN="${VERSION#v}"
-          BODY=$(awk "/^## \[${CLEAN}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          echo "BODY<<EOF" >> $GITHUB_OUTPUT
-          echo "$BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          awk -v v="$CLEAN" '
+            $0 ~ "^## \\[" v "\\]" {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "::error::CHANGELOG.md has no [${CLEAN}] section, so the release body would be empty."
+            exit 1
+          fi
+          CLEAN="$CLEAN" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          LIMIT = 125_000   # GitHub's hard cap on a release body.
+          MARGIN = 2_000    # Room for the truncation notice itself.
+
+          path = Path("release-body.md")
+          body = path.read_text(encoding="utf-8")
+          if len(body) <= LIMIT:
+              print(f"release body: {len(body)} characters, within GitHub's {LIMIT}")
+              raise SystemExit(0)
+
+          # Split on the boundaries a reader recognises, so a cut lands between
+          # entries rather than inside one.
+          blocks: list[str] = []
+          current: list[str] = []
+          for line in body.splitlines(keepends=True):
+              if current and (line.startswith("- ") or line.startswith("### ")):
+                  blocks.append("".join(current))
+                  current = [line]
+              else:
+                  current.append(line)
+          if current:
+              blocks.append("".join(current))
+
+          kept: list[str] = []
+          used = 0
+          stopped = False
+          dropped = 0
+          for block in blocks:
+              if not stopped and used + len(block) <= LIMIT - MARGIN:
+                  kept.append(block)
+                  used += len(block)
+              else:
+                  stopped = True
+                  dropped += block.lstrip().startswith("- ")
+
+          # A single entry larger than the whole budget would leave nothing.
+          if not kept:
+              kept = [body[: LIMIT - MARGIN].rsplit("\n", 1)[0] + "\n"]
+          # Do not end on a section header with nothing under it.
+          while len(kept) > 1 and kept[-1].lstrip().startswith("### "):
+              kept.pop()
+
+          url = f"https://github.com/{os.environ['REPOSITORY']}/blob/{os.environ['VERSION']}/CHANGELOG.md"
+          notice = (
+              f"\n---\n\n**This note is truncated.** The `[{os.environ['CLEAN']}]` section is "
+              f"{len(body):,} characters and a GitHub release body holds {LIMIT:,}, so "
+              f"{dropped} further entries are not shown above. The complete section — every "
+              f"entry, in the same order — is in [`CHANGELOG.md` at this tag]({url}).\n"
+          )
+          path.write_text("".join(kept).rstrip("\n") + "\n" + notice, encoding="utf-8")
+          print(
+              f"release body: {len(body)} characters truncated to "
+              f"{len(path.read_text(encoding='utf-8'))}; {dropped} entries omitted"
+          )
+          PY
 
       # Reproducible source tarball — excludes the .git directory but keeps
       # everything a user needs to build / inspect the release contents
@@ -74,7 +157,7 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           name: "AiSOC ${{ steps.version.outputs.VERSION }}"
-          body: ${{ steps.changelog.outputs.BODY }}
+          body_path: release-body.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
