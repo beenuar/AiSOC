@@ -222,12 +222,27 @@ jobs:
       # one is stopped. Cheap, and it runs against the live service.
       - name: An unauthenticated push is refused
         run: |
-          set -euo pipefail
-          code="$(curl -s -o /tmp/unauth.json -w '%{http_code}' \
+          set -uo pipefail
+          # The stack was started asynchronously, so wait for ingest to
+          # answer before concluding anything about what it answers. Without
+          # this the probe raced the boot and curl exited 56 (connection
+          # closed) — which is neither a refusal nor an acceptance.
+          for _ in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8081/health || echo 000)" = "200" ] && break
+            sleep 5
+          done
+          if [ "$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8081/health || echo 000)" != "200" ]; then
+            echo "::error::ingest never became reachable, so the refusal could not be checked"
+            docker compose logs --tail=60 --no-color ingest-worker || true
+            exit 1
+          fi
+
+          code="$(curl -s -o /tmp/unauth.json -m 20 -w '%{http_code}' \
             -X POST http://localhost:8081/v1/ingest/batch \
             -H 'Content-Type: application/json' \
             -H 'X-Tenant-ID: 00000000-0000-0000-0000-000000000001' \
-            -d '{"connector_id":"unauth","connector_type":"crowdstrike_falcon","source_format":"json","events":[{"severity":"critical","title":"unauthenticated probe"}]}')"
+            -d '{"connector_id":"unauth","connector_type":"crowdstrike_falcon","source_format":"json","events":[{"severity":"critical","title":"unauthenticated probe"}]}' \
+            || echo 000)"
           if [ "$code" != "401" ] && [ "$code" != "403" ]; then
             echo "::error::an unauthenticated push to /v1/ingest returned $code, expected 401/403"
             cat /tmp/unauth.json || true
@@ -628,11 +643,24 @@ jobs:
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_ENDPOINT_URL: http://localhost:9000
       AWS_DEFAULT_REGION: us-east-1
-      # Backups are encrypted by default. A CI key is fine: the bucket is
-      # ephemeral and holds nothing but the probe table.
-      BACKUP_ENCRYPTION_KEY: 2b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfe
+      # Backups are encrypted by default, so this job needs a key. Declared
+      # empty here and generated per run by the step below: the key only has
+      # to survive one backup → restore cycle against an ephemeral MinIO
+      # bucket holding a single probe table, so nothing needs it to be
+      # stable, and a committed 64-hex constant is a secret-shaped literal
+      # that the blocking secret scan has to carry a line-keyed exemption
+      # for. That exemption broke twice in one pull request as unrelated
+      # edits shifted the line. Generating it removes the finding instead of
+      # allow-listing a moving target.
+      BACKUP_ENCRYPTION_KEY: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Generate this run's backup encryption key
+        run: |
+          set -euo pipefail
+          key="$(openssl rand -hex 32)"
+          echo "::add-mask::$key"
+          echo "BACKUP_ENCRYPTION_KEY=$key" >> "$GITHUB_ENV"
       - name: Nothing under the disaster-recovery path changed
         if: needs.changes.outputs.backup != 'true'
         run: |

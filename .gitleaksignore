@@ -68,15 +68,11 @@ scripts/detection_specs_part2.py:jwt:1111
 render.yaml:generic-api-key:78
 render.yaml:generic-api-key:132
 
-# The disaster-recovery integration job encrypts its backup before uploading
-# it, so it needs a key. The value is the AES-128 test vector published in
-# FIPS-197 — a well-known constant rather than a secret — and it protects an
-# ephemeral MinIO bucket in the runner that holds one probe table.
-#
-# Line 591 until the ingest-credential mint step was added above it in the
-# same job — which is the drift described at the top of this file, caught by
-# the gate on the very change that documented it.
-.github/workflows/integration.yml:generic-api-key:606
+# The disaster-recovery job's BACKUP_ENCRYPTION_KEY used to be a committed
+# 64-hex constant and needed an entry here. It is generated per run now, so
+# there is nothing to exempt — which is the better outcome whenever it is
+# available. The entry was invalidated twice in one pull request by
+# unrelated edits shifting its line, which is what prompted the change.
 
 # Connector setup doc showing the curl an operator runs to check their Orca
 # credential. The value is the literal placeholder "YOUR_TOKEN".
