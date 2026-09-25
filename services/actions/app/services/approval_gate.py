@@ -45,7 +45,7 @@ import structlog
 from app.live_actions.capability_contracts import contract_for_action_type
 from app.live_actions.contract import ApprovalRequirement
 from app.models.action import ActionRequest, ActionStatus, BlastRadius
-from app.services.approval_matrix import evaluate as evaluate_matrix
+from app.services.approval_matrix import evaluate_contract
 
 logger = structlog.get_logger()
 
@@ -103,9 +103,15 @@ async def apply_matrix(
         )
         return status, reason
 
-    decision = evaluate_matrix(
-        impact=contract.impact,
-        declared_approval=contract.approval,
+    # The same shared grading the registry door runs. This used to unpack the
+    # contract into `evaluate`'s arguments here, and the dispatcher unpacked
+    # it again over there — two call sites, and only one of them grew a
+    # read-only bypass when the matrix's L1 ceiling turned out to gate reads.
+    # `search_siem` is read_only/automatic and came back `awaiting_approval`
+    # through this door at the default tier while executing through the
+    # other. One function now answers for both.
+    decision = evaluate_contract(
+        contract=contract,
         confidence=request.confidence,
         tier=await _resolve_tier(request.tenant_id),
     )

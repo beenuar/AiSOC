@@ -125,22 +125,37 @@ class TestTheTierIsHonoured:
         assert after == ActionStatus.APPROVED
 
     @pytest.mark.asyncio
-    async def test_a_read_runs_at_l2_where_it_did_not_at_l1(self, monkeypatch: pytest.MonkeyPatch):
+    async def test_a_read_needs_no_confidence_at_any_acting_tier(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("AISOC_MATURITY_TIER", "L2")
         after, _ = await _gated(_request(ActionType.SEARCH_SIEM, confidence=0.0))
 
         assert after == ActionStatus.APPROVED
 
     @pytest.mark.asyncio
-    async def test_the_default_tier_executes_nothing(self, monkeypatch: pytest.MonkeyPatch):
-        """L1 is notify-only, which is the platform's copilot-default posture.
-        This is a real tightening of POST /actions, which was tier-unaware."""
+    async def test_the_default_tier_reads_without_asking_and_acts_only_with_permission(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """L1 is notify-only, and a query is not an act.
+
+        This replaces a test that asserted ``search_siem`` reached the
+        approval queue here. It did, and that was the bug: ``search_siem``
+        declares ``read_only`` impact and ``automatic`` approval, and the
+        contract gate's own rule is that a read requiring approval "is either
+        mis-classified or is not actually a read". The registry door executed
+        it at the same tier, so one verb had two grades.
+
+        The notify-only posture is asserted in the same test rather than
+        deleted with the defect, because that posture is real: a
+        state-changing verb must still queue here.
+        """
         monkeypatch.delenv("AISOC_MATURITY_TIER", raising=False)
-        request = _request(ActionType.SEARCH_SIEM, confidence=1.0)
 
-        after, reason = await _gated(request)
+        read, _ = await _gated(_request(ActionType.SEARCH_SIEM, confidence=1.0))
+        assert read == ActionStatus.APPROVED
 
-        assert after == ActionStatus.AWAITING_APPROVAL
+        act, reason = await _gated(_request(ActionType.CREATE_TICKET, confidence=1.0))
+        assert act == ActionStatus.AWAITING_APPROVAL
         assert "L1" in reason
 
 
