@@ -63,7 +63,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@playwright/test": "^1.63.0",
     "@vitest/coverage-v8": "^4.1.10",
-    "autoprefixer": "^10.5.2",
+    "autoprefixer": "^10.6.1",
     "axe-core": "^4.11.4",
     "eslint": "^9.39.0",
     "eslint-config-next": "16.3.5",
