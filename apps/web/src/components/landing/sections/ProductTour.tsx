@@ -233,8 +233,15 @@ export function ProductTour() {
           </Caption>
         </figure>
 
+        {/*
+          Eleven, not twelve: the directory holds sixteen captures, four are
+          the figures above and `dashboard.png` is the one in the fold. A page
+          whose argument is that its numbers are recounted from the tree does
+          not get to round one of its own. Recount against
+          `apps/web/public/screenshots/` when a capture is added or removed.
+        */}
         <p className="mt-14 max-w-2xl text-sm leading-relaxed text-velvet-content-tertiary lg:mt-16">
-          Twelve more captures, including the connector catalogue, the hunt
+          Eleven more captures, including the connector catalogue, the hunt
           workbench and the playbook step palette, are in the repository
           alongside the manifest that says what each one contains.{' '}
           <Link
