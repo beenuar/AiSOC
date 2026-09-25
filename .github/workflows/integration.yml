@@ -161,14 +161,38 @@ jobs:
       - name: Install test dependencies
         run: pip install --quiet httpx websockets
 
+      # /v1/ingest is authenticated and the tenant is derived from the
+      # credential, so the spine test has to hold one.
+      #
+      # It uses the service-token shape rather than a minted per-tenant
+      # token because this job deliberately runs the published API image
+      # (only fusion and ingest are built from source), so the mint command
+      # may not exist in it. That is not a workaround: the two shapes are
+      # both real, the golden pipeline covers the minted-token path against
+      # an API built from source, and this covers the delegated path that
+      # services/connectors uses — including the tenant check, since the
+      # ingest service validates the declared tenant against the tenants
+      # table before it becomes a scope.
       - name: Seed environment file
         run: |
+          set -euo pipefail
           cp .env.example .env
           if grep -q '^AISOC_VERSION=' .env; then
             sed -i "s|^AISOC_VERSION=.*|AISOC_VERSION=${AISOC_VERSION}|" .env
           else
             printf '\nAISOC_VERSION=%s\n' "${AISOC_VERSION}" >> .env
           fi
+
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          # Written into .env so compose substitutes it into the ingest and
+          # connectors services; exported so the spine test presents it.
+          sed -i "s|^AISOC_SERVICE_TOKEN=.*|AISOC_SERVICE_TOKEN=${token}|" .env
+          grep -q "^AISOC_SERVICE_TOKEN=${token}$" .env || {
+            echo "::error::AISOC_SERVICE_TOKEN was not written into .env — check that .env.example still declares it"
+            exit 1
+          }
+          echo "AISOC_INGEST_TOKEN=${token}" >> "$GITHUB_ENV"
 
       - name: Pre-pull published images
         run: docker compose pull --ignore-pull-failures --quiet || true
@@ -193,20 +217,23 @@ jobs:
           AISOC_GRAPH_ENABLED: "true"
         run: docker compose --profile full up -d
 
-      # /v1/ingest is authenticated and the tenant comes from the
-      # credential, so the spine test holds one like any other pusher.
-      # Minted through the shipped command rather than inserted into
-      # Postgres, so this also covers the path an operator follows.
-      - name: Mint the ingest credential the spine test needs
+      # The credential must be refused when it is absent, or the spine test
+      # passing tells us only that a push works — not that an unauthenticated
+      # one is stopped. Cheap, and it runs against the live service.
+      - name: An unauthenticated push is refused
         run: |
           set -euo pipefail
-          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
-          if [ -z "$token" ]; then
-            echo "::error::mint_ingest_token printed nothing"
+          code="$(curl -s -o /tmp/unauth.json -w '%{http_code}' \
+            -X POST http://localhost:8081/v1/ingest/batch \
+            -H 'Content-Type: application/json' \
+            -H 'X-Tenant-ID: 00000000-0000-0000-0000-000000000001' \
+            -d '{"connector_id":"unauth","connector_type":"crowdstrike_falcon","source_format":"json","events":[{"severity":"critical","title":"unauthenticated probe"}]}')"
+          if [ "$code" != "401" ] && [ "$code" != "403" ]; then
+            echo "::error::an unauthenticated push to /v1/ingest returned $code, expected 401/403"
+            cat /tmp/unauth.json || true
             exit 1
           fi
-          echo "::add-mask::$token"
-          echo "AISOC_INGEST_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "confirmed: /v1/ingest refused an unauthenticated push with $code"
 
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py
