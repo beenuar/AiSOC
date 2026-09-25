@@ -67,11 +67,23 @@ class FusionWorker:
         self._consumer: AIOKafkaConsumer | None = None
         self._producer: AIOKafkaProducer | None = None
         self._running = False
+        self._attached = False
         self._flush_task: asyncio.Task | None = None
 
     @property
     def engine(self) -> FusionEngine:
         return self._engine
+
+    @property
+    def attached(self) -> bool:
+        """Whether the consume loop is currently iterating the subscription.
+
+        ``_running`` is a request ("keep going"); this is an observation ("it
+        is going"). Readiness needs the second one: the worker was started as
+        a fire-and-forget task and ``/readyz`` latched to 200 next to it, so a
+        loop that exited left the service reporting ready forever.
+        """
+        return self._attached
 
     async def start(self) -> None:
         topics = [settings.kafka_topic_alerts_raw]
@@ -155,27 +167,44 @@ class FusionWorker:
         consumer = self._consumer
         if consumer is None:  # pragma: no cover — unreachable via start()
             raise RuntimeError("fusion consume loop started before the Kafka consumer")
-        async for msg in consumer:
-            if not self._running:
-                break
-            try:
-                await self._process_message(msg.value, topic=msg.topic)
-            except Exception as exc:
-                _METRICS["errors"] += 1
-                logger.error("Failed to process message", error=str(exc), exc_info=True)
-            else:
-                # At-least-once: commit only after the message is handled
-                # (validated + laked + promoted, or dead-lettered). A crash
-                # before this line re-delivers the in-flight message on restart
-                # instead of losing it. Commit failure => reprocess on restart.
+        # Attached for as long as this loop is iterating; read by the
+        # readiness probe app/main.py registers. Cleared in the ``finally`` so
+        # every exit path reports the same way, including one that raises.
+        self._attached = True
+        try:
+            async for msg in consumer:
+                if not self._running:
+                    break
                 try:
-                    await consumer.commit()
-                except Exception as commit_exc:  # noqa: BLE001
-                    logger.warning("fusion.commit_failed", error=str(commit_exc))
-            # Flush any stale lake batch so archival isn't stranded during a
-            # low-traffic window (batch fills by size OR age).
-            if self._lake is not None:
-                await self._lake.flush_if_stale()
+                    await self._process_message(msg.value, topic=msg.topic)
+                except Exception as exc:
+                    _METRICS["errors"] += 1
+                    logger.error("Failed to process message", error=str(exc), exc_info=True)
+                else:
+                    # At-least-once: commit only after the message is handled
+                    # (validated + laked + promoted, or dead-lettered). A crash
+                    # before this line re-delivers the in-flight message on restart
+                    # instead of losing it. Commit failure => reprocess on restart.
+                    try:
+                        await consumer.commit()
+                    except Exception as commit_exc:  # noqa: BLE001
+                        logger.warning("fusion.commit_failed", error=str(commit_exc))
+                # Flush any stale lake batch so archival isn't stranded during a
+                # low-traffic window (batch fills by size OR age).
+                #
+                # Guarded, because this await sat outside the per-message
+                # try/except: a ClickHouse outage raising here left the
+                # ``async for`` entirely and stopped fusion consuming, with the
+                # archive fault reported as nothing at all. Archival falling
+                # behind must not cost the alert path.
+                if self._lake is not None:
+                    try:
+                        await self._lake.flush_if_stale()
+                    except Exception as flush_exc:  # noqa: BLE001 — the lake is not the alert path
+                        _METRICS["errors"] += 1
+                        logger.error("fusion.lake_flush_failed", error=str(flush_exc), exc_info=True)
+        finally:
+            self._attached = False
 
     async def _dead_letter(
         self,

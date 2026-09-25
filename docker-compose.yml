@@ -55,6 +55,8 @@ volumes:
   postgres_data:
   redis_data:
   kafka_data:
+  zookeeper_data:
+  zookeeper_log:
   clickhouse_data:
   opensearch_data:
   qdrant_data:
@@ -123,6 +125,23 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    # Kafka keeps its cluster id in `kafka_data`, which IS persisted, and
+    # takes the authoritative one from ZooKeeper, which was not. So the
+    # second `up` on a kept volume generated a fresh cluster id and the
+    # broker refused to join it:
+    #
+    #   InconsistentClusterIdException: The Cluster ID <new> doesn't match
+    #   stored clusterId Some(<old>) in meta.properties
+    #
+    # `make down && make up` — documented as "stop the stack, keep the data"
+    # — therefore could not bring Kafka back, and every service that depends
+    # on it stayed in `created`. Only `make clean`, which deletes the data,
+    # recovered. Persisting both halves of the pair is the fix; persisting
+    # neither would also be consistent, but it would discard the event log
+    # on every restart.
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     networks:
       - aisoc
     healthcheck:
@@ -616,8 +635,15 @@ services:
         condition: service_healthy
     # Host port 8007 was previously colliding with the `ueba` service's
     # 127.0.0.1:8007 binding; remapped to 8091 here. UEBA still owns 8007.
+    #
+    # The container side was 8007 too, and nothing has ever listened there:
+    # this service's Dockerfile runs uvicorn on 9001 and EXPOSEs 9001. The
+    # published port therefore resolved to a closed socket, and because the
+    # service had no healthcheck either, the container still read as
+    # `running`. Found by adding the healthcheck below and watching it sit
+    # at `starting` against a port with no server on it.
     ports:
-      - "127.0.0.1:8091:8007"
+      - "127.0.0.1:8091:9001"
     profiles:
       - osquery
     environment:
@@ -628,10 +654,25 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
       # The ingest service is registered as `ingest-worker` in this compose
       # file; the previous `http://ingest:8080` would not resolve via DNS.
       AISOC_INGEST_BASE_URL: http://ingest-worker:8080
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:9001/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     networks:
       - aisoc
     restart: unless-stopped
@@ -794,12 +835,27 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       REDIS_URL: redis://:redis_dev_secret@redis:6379/8
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CLICKHOUSE_URL: http://aisoc:clickhouse_dev_secret@clickhouse:8123/aisoc
       CORE_API_URL: http://api:8000
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8004/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     networks:
       - aisoc
     restart: unless-stopped
@@ -832,11 +888,26 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       REDIS_URL: redis://:redis_dev_secret@redis:6379/9
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CORE_API_URL: http://api:8000
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8005/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     networks:
       - aisoc
     restart: unless-stopped
@@ -867,11 +938,26 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       REDIS_URL: redis://:redis_dev_secret@redis:6379/10
       CORE_API_URL: http://api:8000
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8006/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     networks:
       - aisoc
     restart: unless-stopped

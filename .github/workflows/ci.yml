@@ -556,6 +556,32 @@ jobs:
       - name: Verify FastAPI services install /livez + /readyz probes (Phase 2.6)
         run: python scripts/audit_health_probes.py --check
 
+      # A column a model declares and no migration creates is not a latent
+      # problem: SQLAlchemy names every mapped column in its SELECT, so the
+      # first query against that table fails. `ueba_entity_baselines`
+      # declared `peer_group_id`, migration 0001 never created it, and UEBA
+      # could not write a baseline or an anomaly on any deployment while its
+      # container reported healthy throughout. Gated for the four services
+      # that own their schema through alembic and therefore have no
+      # `create_all` fallback; `--all` reports the rest as advisory.
+      #
+      # The self-test runs first, and deliberately: it injects one of each
+      # kind of drift into a scratch tree, so a parser that has quietly
+      # stopped matching cannot report the repository clean.
+      - name: Verify ORM columns exist in migrations (both directions)
+        run: |
+          python3 scripts/check_orm_migration_parity.py --self-test
+          python3 scripts/check_orm_migration_parity.py --check
+
+      # The four alembic chains have to be invoked by something. They were
+      # not: every container command was a plain `uvicorn`, so the
+      # documented quickstart booted two services with no tables and no RLS
+      # policies while reporting success at every step.
+      - name: Verify the alembic services run their chain on the way up
+        run: |
+          python3 scripts/check_service_migration_bootstrap.py --self-test
+          python3 scripts/check_service_migration_bootstrap.py --check
+
       # Phase 4.2 — every managed-mode tenant manifest under
       # `infra/fly/managed/tenants/*.yaml` must parse, carry the
       # required fields (slug, display_name, base_domain, contact_email,

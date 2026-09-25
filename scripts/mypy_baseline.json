@@ -510,10 +510,6 @@
     "tests/test_event_warehouse_registry.py": {
       "arg-type": 3
     },
-    "tests/test_health_probes.py": {
-      "misc": 6,
-      "valid-type": 1
-    },
     "tests/test_hunts_tenant_isolation.py": {
       "misc": 1
     },

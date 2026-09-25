@@ -530,6 +530,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the view holds no graph at **first paint**, so a future `fallbackData` (which
   disables revalidation, making a mock permanent rather than provisional)
   fails the build.
+- **`scripts/check_orm_migration_parity.py` — a column a model declares and
+  no migration creates now fails the build.** Structural on both sides
+  (Python `ast` over the models and the alembic revisions, plus the raw SQL
+  those revisions and `services/api/migrations/*.sql` execute) and in both
+  directions: `missing-in-migration`, `missing-in-model`,
+  `type-narrower-in-migration`, `type-family-mismatch`, and
+  `no-migration-source` for a mapped table no migration mentions at all —
+  which is the finding that exists because pairing nothing produces zero
+  findings, and zero findings over zero comparisons prints the same word as
+  a clean result. `--credits` enumerates what each verdict was *based on*
+  for the same reason.
+
+  Scoped structurally rather than by a list: a service that calls
+  `metadata.create_all` builds its tables from the models, so a column no
+  migration creates is created anyway. `services/api` is the one such
+  service and is reported as advisory with its count printed, not hidden.
+  The four alembic-managed services have no such fallback, which is exactly
+  why UEBA's missing column was fatal.
+
+  Verified non-vacuous against the tree as it was: it reports all three of
+  the real UEBA defects. The `type-family-mismatch` kind exists *because*
+  an earlier version reported only two of them — a length comparison could
+  not see `UUID` against `String(64)`, since neither side declared a length
+  the other contradicted.
+
+- **`scripts/check_service_migration_bootstrap.py` — a migration chain
+  nothing invokes is not a migration chain.** Asserts every service with an
+  `alembic.ini` ships `app/_migrate.py`, keeps it byte-identical to the
+  others, runs it from its `CMD`/`ENTRYPOINT` (matched on the command lines,
+  so a mention in a comment does not count), and carries both an owner DSN
+  and a compose healthcheck. The other direction too: a service shipping
+  the module with no chain to apply would exit 1 on every start.
+
+- **`scripts/audit_health_probes.py` now checks the thirteen copies of
+  `app/_health.py` are identical.** The module's own docstring claimed they
+  were kept in sync and nothing verified it — they happened to be, so the
+  claim was true by luck. It also pointed at `scripts/sync_health_module.py`,
+  which does not exist in this tree.
 
 - **Every test file in the tree is now executed by a workflow, and a gate
   holds it that way in both directions.** 63 were executed by nothing at all:
@@ -2040,6 +2078,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before the gate in CI and injects nine defects — a dropped connector, a
   renamed one, a class that never registers, a deleted artefact, an unhooked
   consumer, an empty corpus — requiring each to be caught.
+- **UEBA could never write a baseline or an anomaly, and said it was
+  healthy the whole time.** Three separate defects on one code path, each
+  reached by the first scoreable event rather than by some rare branch:
+
+  - `EntityBaseline.peer_group_id` was declared by the model and created by
+    no migration. SQLAlchemy names every mapped column in its `SELECT`, so
+    the first database call `score_event` makes raised
+    `UndefinedColumnError`.
+  - `ueba_peer_groups.id` was created `UUID DEFAULT gen_random_uuid()` and
+    declared `String(64)`, while `PeerGroupService` writes group names like
+    `dept:engineering` into it — `InvalidTextRepresentation` on insert. The
+    column follows the model, because the model matches the data.
+  - `ueba_anomalies.event_type` was 64 characters wide against a model
+    declaring 128, so an event type between the two lengths passed every
+    test and failed at insert time.
+
+  Fixed in `services/ueba/alembic/versions/0004_baseline_peer_group_and_column_parity.py`.
+
+- **And with the schema right, the baseline still could not accumulate.**
+  `_welford_update` edited the per-feature dictionary in place. Its caller
+  passes a *shallow* copy of `EntityBaseline.feature_stats`, so the object
+  being edited was the one SQLAlchemy had loaded from the column; by the
+  time the caller assigned the result back, old and new compared equal and
+  SQLAlchemy left the column out of the `UPDATE` — a `JSON`/`JSONB` column
+  has no change tracking unless wrapped in `MutableDict`. Measured on a
+  live stack: 36 events for one entity, every one processed without error,
+  and the stored baseline frozen at `count: 1` while `window_end` advanced
+  on every one. No entity could reach `min_baseline_samples` (30), so
+  `compute_z_score` returned `None` forever and no anomaly was ever scored.
+  The service logged `features_unscoreable` 36 times, which reads as "too
+  quiet to score" rather than as a bug. The updater now returns new
+  dictionaries and mutates nothing.
+
+- **A UEBA handler exception killed the subscription silently.** The
+  consume loop had no `except` at all: the first event that raised left the
+  `async for`, the `finally` stopped the consumer, and the exception went
+  into a task held in a module global — so it was never
+  garbage-collected, asyncio never emitted "Task exception was never
+  retrieved", and nothing was logged. The container stayed `running` with
+  restarts 0 and `/health` answered a hardcoded 200, permanently.
+
+  The policy is now the one `services/fusion` and `services/agents` already
+  follow: **log loudly, dead-letter, and keep the subscription.** A single
+  unprocessable event must not stop the stream. Refused events go to
+  `aisoc_dead_letters` — the table fusion already writes and
+  `GET /api/v1/health/dead-letters` already reads, with its per-reason
+  breakdown — rather than to a second dead-letter path nobody would know to
+  check.
+
+- **`/readyz` reported that a consumer task had been *created*, not that it
+  was running.** Three services created theirs as a fire-and-forget
+  `asyncio.create_task` and called `mark_ready()` on the next line
+  (`ueba`, `fusion`, `agents`). `app/_health.py` gains
+  `register_subscription(app, name, probe)`; `/readyz` evaluates every
+  registered probe per request and answers 503 naming the detached ones.
+  `/livez` deliberately still does not consult them — wiring a detached
+  consumer into liveness makes an orchestrator restart a pod over a fault a
+  restart cannot fix. Each of the three also gained a done-callback that
+  retrieves and logs its task's outcome, and UEBA's `/health` now carries
+  `attached`, the processed / failed / dead-lettered counters and the last
+  error instead of a hardcoded `{"status": "ok"}`.
+
+- **The same audit across every other consumer.** `services/fusion`'s
+  `_consume_loop` guarded `_process_message` but left
+  `lake.flush_if_stale()` outside the guard, so a ClickHouse outage raising
+  there would have ended the loop with the archive fault reported as
+  nothing; it is now guarded and the alert path survives it.
+  `services/agents`' `_process_with_retry` was already total, and the loop
+  now guards it anyway rather than depending on a callee staying that way.
+  `services/realtime` logged "Kafka consumer failed to start (will retry)"
+  and never retried — kafkajs reports a dead consumer through its `CRASH`
+  event, not by rejecting the promise, so a consumer that died after a
+  successful start stayed recorded as attached for the life of the process.
+  Both of its consumers now run under a supervisor with bounded backoff,
+  and `/health` answers 503 listing any detached topic instead of a
+  hardcoded `status: 'healthy'`.
+
+- **Nothing invoked the four alembic chains.** `honeytokens`,
+  `osquery-tls`, `purple-team` and `ueba` own their schemas through
+  alembic; every container command was a plain `uvicorn`, so the documented
+  quickstart booted them with empty schemas and none of their
+  row-level-security policies. Each image now runs `python -m app._migrate`
+  before its server: it applies the chain as the owner credential, takes a
+  shared transaction-scoped advisory lock so four chains starting at once
+  queue instead of deadlocking, reads the applied revision back, and
+  refuses to start the server unless it matches head. An exit code is not
+  evidence — `alembic upgrade head` exits 0 when it applies nothing, which
+  is exactly what happened when the chains shared one version table. All
+  four also gained a compose healthcheck; they had none, which is why a
+  container that had done nothing still read as `running`.
+
+- **`docker compose down && docker compose up` could not bring Kafka back.**
+  `kafka_data` is a named volume and ZooKeeper had none, so the second `up`
+  on kept data generated a fresh cluster id and the broker refused it with
+  `InconsistentClusterIdException`. `make down && make up` — documented as
+  "stop the stack, keep the data" — therefore left every Kafka-dependent
+  service in `created`, and only `make clean`, which deletes the data,
+  recovered. ZooKeeper now persists `/var/lib/zookeeper/data` and `/log`.
+
+- **`osquery-tls` published a container port nothing listened on.** Compose
+  mapped `127.0.0.1:8091:8007` while the service runs uvicorn on 9001. With
+  no healthcheck either, the container read as `running` against a closed
+  socket. Found by adding the healthcheck and watching it never leave
+  `starting`.
+
+- **`docker-compose.override.yml` was committed.** Its own header reads
+  "untracked, never committed": it is a QA port remap that moved PostgreSQL
+  to 55432 and ClickHouse to 58123/59000, contradicting every port the
+  documentation quotes. Removed.
 
 - **Two more gates were exempt from the empty-corpus rule only by accident.**
   `check_route_auth.py` and `check_tenant_query_predicates.py` did not exit 0

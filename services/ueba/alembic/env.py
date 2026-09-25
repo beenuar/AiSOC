@@ -157,9 +157,27 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+#: Serialises the four chains that share one database against each other.
+#:
+#: They are started simultaneously by ``docker compose up``, and while each
+#: now owns its own version table, they do not own their own *database*: the
+#: legacy-version probe below reads a table a sibling may be creating, and
+#: ``000N_runtime_role_grants`` issues ``GRANT`` statements that take
+#: catalog locks on ``pg_class``. Two chains arriving together deadlocked
+#: rather than queued.
+#:
+#: ``pg_advisory_xact_lock`` and not the session form: it is released by the
+#: commit or rollback that ends the upgrade, so a chain that dies mid-apply
+#: cannot leave the other three waiting on a lock nobody holds a connection
+#: for. The key is an arbitrary constant, shared by every chain on purpose —
+#: the point is mutual exclusion, not per-chain exclusion.
+MIGRATION_LOCK_KEY = 0x4149_5354
+
+
 def do_run_migrations(connection):  # type: ignore[no-untyped-def]
     context.configure(connection=connection, target_metadata=target_metadata, version_table=VERSION_TABLE)
     with context.begin_transaction():
+        connection.execute(sa.text("SELECT pg_advisory_xact_lock(:key)"), {"key": MIGRATION_LOCK_KEY})
         # Inside ``begin_transaction()``, not before it. Alembic's
         # ``begin_transaction`` is a no-op when the connection is *already* in a
         # transaction, and in SQLAlchemy 2.0 any execute on a plain ``connect()``
