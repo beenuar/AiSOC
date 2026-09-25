@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 
 import pytest
-
 from app.workers._tick_failures import TickFailures
 
 

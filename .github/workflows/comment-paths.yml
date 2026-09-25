@@ -2,9 +2,9 @@ name: Comment paths
 
 # A comment is the one place no other gate reads.
 #
-# `docker-compose.yml` carried a reference to
-# `docs/architecture/decisions/0001-llm-gateway-in-core.md`, a path with no
-# directory behind it. Two workstreams tripped over it within an hour and it
+# `docker-compose.yml` carried a reference to an ADR under
+# `docs/architecture/decisions/`, a path with no directory behind it. Two
+# workstreams tripped over it within an hour and it
 # had survived every check in the tree: `check_repo_self_links.py` opens
 # markdown and matches github.com URLs, lychee resolves links, and neither
 # looks at the prose inside source files — which is where most cross-file

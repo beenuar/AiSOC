@@ -3,11 +3,11 @@
 
 Why this exists as a separate gate
 ----------------------------------
-``docker-compose.yml`` carried a reference to
-``docs/architecture/decisions/0001-llm-gateway-in-core.md`` — a path with no
-directory behind it. Two workstreams tripped over it within an hour, and it
-had survived every check in the tree, because **a comment is the one place
-no gate reads**. ``check_repo_self_links.py`` opens markdown and matches
+``docker-compose.yml`` carried a reference to an ADR under
+``docs/architecture/decisions/`` — a path with no directory behind it. Two
+workstreams tripped over it within an hour, and it had survived every check
+in the tree, because **a comment is the one place no gate reads**.
+``check_repo_self_links.py`` opens markdown and matches
 ``github.com/...`` URLs; lychee resolves links; nothing had ever looked at
 the prose inside source files, which is where most cross-file references in
 this repository actually live.
@@ -43,8 +43,8 @@ claims about this tree:
 
 A path is then resolved against the repository root *and* against each
 ancestor of the file that mentions it, because a comment in
-``services/agents/tests/`` saying ``tests/conftest.py`` means the one beside
-it, not one at the root.
+``services/agents/tests/`` naming a ``conftest.py`` under ``tests/`` means
+the one beside it, not one at the root.
 
 Measured blind spot, accepted on purpose
 ----------------------------------------
@@ -384,8 +384,8 @@ def resolve(ref: Reference, known: frozenset[str]) -> str | None:
     """The path this reference names, or None.
 
     Tried against the repository root first and then against each ancestor of
-    the referring file, because ``tests/conftest.py`` in a comment inside
-    ``services/agents/tests/`` means the one beside it.
+    the referring file, because a ``tests/`` path named in a comment inside
+    ``services/agents/tests/`` means the file beside it.
     """
     if ref.token in known:
         return ref.token
@@ -557,7 +557,7 @@ def self_test() -> int:
     """
     # Mirrors the real tree closely enough to be meaningful: `tests` is a
     # top-level directory in this repository, which is what lets a
-    # package-relative `tests/conftest.py` be examined at all.
+    # package-relative conftest reference be examined at all.
     toplevel = frozenset({"docs", "services", "apps", "scripts", "tests"})
     known = frozenset(
         {
