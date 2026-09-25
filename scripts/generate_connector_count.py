@@ -241,10 +241,10 @@ def main(argv: list[str]) -> int:
     if args.check:
         json_existing = json.loads(JSON_OUT.read_text(encoding="utf-8")) if JSON_OUT.exists() else None
         if json_existing != payload:
-            drift.append(f"{JSON_OUT.relative_to(REPO_ROOT)}: regenerate with" " `python3 scripts/generate_connector_count.py`")
+            drift.append(f"{JSON_OUT.relative_to(REPO_ROOT)}: regenerate with `python3 scripts/generate_connector_count.py`")
         ts_existing = TS_OUT.read_text(encoding="utf-8") if TS_OUT.exists() else ""
         if ts_existing != render_typescript(payload):
-            drift.append(f"{TS_OUT.relative_to(REPO_ROOT)}: regenerate with" " `python3 scripts/generate_connector_count.py`")
+            drift.append(f"{TS_OUT.relative_to(REPO_ROOT)}: regenerate with `python3 scripts/generate_connector_count.py`")
     else:
         write_outputs(payload)
 
@@ -256,7 +256,7 @@ def main(argv: list[str]) -> int:
             print(f"  - {line}", file=sys.stderr)
         return 1
 
-    print(f"connector-count OK — {count} registered, {len(payload['categories'])}" " categories")
+    print(f"connector-count OK — {count} registered, {len(payload['categories'])} categories")
     return 0
 
 

@@ -90,7 +90,7 @@ _V1_BASELINE = ("CREATE DATABASE IF NOT EXISTS aisoc",)
 MIGRATIONS: tuple[LakeMigration, ...] = (
     LakeMigration(
         id="001_baseline",
-        description=("Records the 001_init.sql baseline as applied. Creates nothing an " "existing deployment does not already have."),
+        description=("Records the 001_init.sql baseline as applied. Creates nothing an existing deployment does not already have."),
         statements=_V1_BASELINE,
         tags=("baseline",),
     ),
@@ -109,7 +109,7 @@ async def _execute(client: Any, sql: str, params: dict[str, Any] | None = None) 
         return await client.execute(sql, params or {})
     if hasattr(client, "command"):
         return await client.command(sql)
-    raise TypeError(f"{type(client).__name__} exposes neither execute() nor command(); " f"the lake migration runner cannot drive it")
+    raise TypeError(f"{type(client).__name__} exposes neither execute() nor command(); the lake migration runner cannot drive it")
 
 
 async def applied_ids(client: Any) -> set[str]:
@@ -143,7 +143,7 @@ async def applied_ids(client: Any) -> set[str]:
 async def _record(client: Any, migration: LakeMigration, statements: int) -> None:
     await _execute(
         client,
-        f"INSERT INTO {MIGRATION_TABLE} " "(migration_id, description, applied_at, statements) VALUES",
+        f"INSERT INTO {MIGRATION_TABLE} (migration_id, description, applied_at, statements) VALUES",
         {
             "migration_id": migration.id,
             "description": migration.description,

@@ -280,9 +280,7 @@ def judge(schema: Schema) -> list[str]:
         for setting in settings:
             guc = setting.group("name")
             if guc != CANONICAL_GUC:
-                problems.append(
-                    f"{where} reads {guc!r}; nothing in the tree sets that, so the policy returns zero rows forever"
-                )
+                problems.append(f"{where} reads {guc!r}; nothing in the tree sets that, so the policy returns zero rows forever")
             elif "true" not in setting.group("rest").lower():
                 problems.append(
                     f"{where} calls current_setting({guc!r}) without missing_ok, so an unbound session raises "
@@ -403,9 +401,7 @@ def downgrade():
     op.execute("ALTER TABLE t DISABLE ROW LEVEL SECURITY")
 '''
 
-_ALEMBIC_BAD = _ALEMBIC_GOOD.replace(
-    "OR (NULLIF(current_setting('app.current_tenant_id', true), '')) IS NULL)", ")"
-)
+_ALEMBIC_BAD = _ALEMBIC_GOOD.replace("OR (NULLIF(current_setting('app.current_tenant_id', true), '')) IS NULL)", ")")
 
 
 def self_test() -> list[str]:

@@ -83,8 +83,8 @@ UNAVAILABLE_DATA: dict[str, str] = {
         "but no parent_process_name or process_guid. An EDR connector that emits "
         "process lineage (CrowdStrike, Defender, SentinelOne) would populate it."
     ),
-    "mailbox_activity": ("Mailbox events are not ingested. Connect a Microsoft 365 or Google " "Workspace audit connector."),
-    "oauth_grants": ("OAuth consent grants are not ingested. Connect an Entra ID or Okta " "system-log connector."),
+    "mailbox_activity": ("Mailbox events are not ingested. Connect a Microsoft 365 or Google Workspace audit connector."),
+    "oauth_grants": ("OAuth consent grants are not ingested. Connect an Entra ID or Okta system-log connector."),
     "persistence": (
         "Persistence mechanisms (run keys, scheduled tasks, launch agents, cron) "
         "are not stored as a distinct data class. An EDR or osquery connector "
@@ -175,7 +175,7 @@ async def _run(
         return ToolResult(
             tool=tool,
             available=False,
-            reason=f"Lake query failed ({type(exc).__name__}). This is a lookup failure, " f"not an absence of evidence.",
+            reason=f"Lake query failed ({type(exc).__name__}). This is a lookup failure, not an absence of evidence.",
             query_description=description,
         )
 

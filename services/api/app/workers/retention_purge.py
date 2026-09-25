@@ -96,9 +96,7 @@ def build_lake_count_sql(tenant_id: uuid.UUID, days: int) -> str:
     """
     days = _clamp(days)
     return (
-        "SELECT count() FROM aisoc.raw_events "
-        f"WHERE tenant_id = '{uuid.UUID(str(tenant_id))}' "
-        f"AND event_time < now() - INTERVAL {days} DAY"
+        f"SELECT count() FROM aisoc.raw_events WHERE tenant_id = '{uuid.UUID(str(tenant_id))}' AND event_time < now() - INTERVAL {days} DAY"
     )
 
 
@@ -127,9 +125,7 @@ async def _load_policies(db: AsyncSession) -> list[tuple[uuid.UUID, dict[str, in
     assumed.
     """
     await assert_cross_tenant_session(db, "retention purge policy load")
-    rows = await db.execute(
-        text("SELECT tenant_id, raw_events_days, alerts_days, audit_days " "FROM retention_policies ORDER BY tenant_id")
-    )
+    rows = await db.execute(text("SELECT tenant_id, raw_events_days, alerts_days, audit_days FROM retention_policies ORDER BY tenant_id"))
     out: list[tuple[uuid.UUID, dict[str, int]]] = []
     for row in rows.mappings():
         out.append(
@@ -183,7 +179,7 @@ async def _purge_alerts(db: AsyncSession, tenant_id: uuid.UUID, days: int, *, dr
         return doomed
 
     await db.execute(
-        text("DELETE FROM alerts WHERE tenant_id = :tenant_id " "AND created_at < now() - make_interval(days => :days)"),
+        text("DELETE FROM alerts WHERE tenant_id = :tenant_id AND created_at < now() - make_interval(days => :days)"),
         params_with_tenant,
     )
     return doomed

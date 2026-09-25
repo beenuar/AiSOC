@@ -314,7 +314,7 @@ def render(schema, human: str) -> str:
     # from a missing comma — the reader cannot tell three list items from
     # one, and neither can a reviewer.
     step_pick = f"1. In the console, go to **Connectors → Add connector** and pick **{title}**."
-    step_test = "2. Fill in the fields above and run **Test connection**. " "The test is read-only and does not save anything."
+    step_test = "2. Fill in the fields above and run **Test connection**. The test is read-only and does not save anything."
     step_save = (
         "3. Save. Polling starts on a jittered schedule within about a minute; "
         "the connector row shows `last_sync` once the first poll completes."
@@ -569,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         if undocumented_fields:
             print(
-                f"CONNECTOR DOC GATE FAILED: {len(undocumented_fields)} hand-written " f"page(s) omit a required or secret field:",
+                f"CONNECTOR DOC GATE FAILED: {len(undocumented_fields)} hand-written page(s) omit a required or secret field:",
                 file=sys.stderr,
             )
             for connector_id, fields in undocumented_fields:
@@ -601,7 +601,7 @@ def main(argv: list[str] | None = None) -> int:
             for connector_id, tags in mdx_breaks:
                 print(f"  {connector_id}: {', '.join(tags[:4])}", file=sys.stderr)
             print(
-                "  Wrap them in backticks. Generated pages do this " "automatically; a hand-written page has to.",
+                "  Wrap them in backticks. Generated pages do this automatically; a hand-written page has to.",
                 file=sys.stderr,
             )
         if missing or drifted or undocumented_fields or mdx_breaks or not sidebar_ok:
@@ -613,7 +613,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    print(f"connector-docs: {len(schemas)} connectors, {written} page(s) written, " f"{hand_written_seen} hand-written page(s) left alone")
+    print(f"connector-docs: {len(schemas)} connectors, {written} page(s) written, {hand_written_seen} hand-written page(s) left alone")
     return 0
 
 

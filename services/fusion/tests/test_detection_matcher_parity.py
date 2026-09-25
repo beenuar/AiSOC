@@ -124,9 +124,9 @@ def test_vendored_derived_fields_match_canonical():
         ({"user_name": "x"}, {"a_eq_b"}),
     ]
     for event, wanted in cases:
-        assert vendored.enrich(dict(event), set(wanted)) == canonical.enrich(
-            dict(event), set(wanted)
-        ), f"vendored and canonical enrich disagree on {event}"
+        assert vendored.enrich(dict(event), set(wanted)) == canonical.enrich(dict(event), set(wanted)), (
+            f"vendored and canonical enrich disagree on {event}"
+        )
 
 
 def test_vendored_requested_fields_match_canonical():

@@ -337,7 +337,7 @@ async def _import_applications(session: Any, tenant_id: str, records: list[Any],
             report.reject(
                 "application",
                 str(app_id),
-                f"data_classification {record['data_classification']!r} is not one of " f"{DATA_CLASSIFICATION}",
+                f"data_classification {record['data_classification']!r} is not one of {DATA_CLASSIFICATION}",
             )
             continue
 
@@ -403,5 +403,5 @@ async def _import_applications(session: Any, tenant_id: str, records: list[Any],
                 report.reject(
                     "application_host",
                     f"{app_id}:{host}",
-                    "no Resource node matches this host; it is in the CMDB but has not " "been seen in any ingested event",
+                    "no Resource node matches this host; it is in the CMDB but has not been seen in any ingested event",
                 )

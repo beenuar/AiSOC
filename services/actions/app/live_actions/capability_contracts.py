@@ -521,7 +521,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         approval=ApprovalRequirement.AUTOMATIC,
         reversal=Reversal.MANUAL_ONLY,
         required_permission=_TICKET,
-        note=("A message cannot be unsent, but paging the wrong channel is " "embarrassment rather than impact."),
+        note=("A message cannot be unsent, but paging the wrong channel is embarrassment rather than impact."),
     ),
 }
 

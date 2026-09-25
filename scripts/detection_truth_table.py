@@ -119,8 +119,7 @@ def _engine_rule_ids() -> set[str]:
     """
     if not RULESET.exists():
         print(
-            f"WARNING: {RULESET.relative_to(ROOT)} is missing — run "
-            "scripts/export_detection_ruleset.py. Reporting zero executable rules.",
+            f"WARNING: {RULESET.relative_to(ROOT)} is missing — run scripts/export_detection_ruleset.py. Reporting zero executable rules.",
             file=sys.stderr,
         )
         return set()
@@ -276,7 +275,7 @@ def render_markdown(c: Counts) -> str:
     lines.append("| tier | on disk | executable | enabled but not loaded |")
     lines.append("|------|--------:|-----------:|-----------------------:|")
     for tier in sorted(c.by_tier):
-        lines.append(f"| {tier} | {c.by_tier[tier]} | {c.executable_by_tier.get(tier, 0)} " f"| {c.not_loaded_by_tier.get(tier, 0)} |")
+        lines.append(f"| {tier} | {c.by_tier[tier]} | {c.executable_by_tier.get(tier, 0)} | {c.not_loaded_by_tier.get(tier, 0)} |")
     lines.append("")
     lines.append("## Why rules are non-executable")
     lines.append("")

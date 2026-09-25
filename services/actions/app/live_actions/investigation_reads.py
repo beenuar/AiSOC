@@ -138,8 +138,7 @@ class CrowdStrikeGetHost(LiveActionExecutor):
                 self,
                 request,
                 LiveActionStatus.SUCCEEDED,
-                f"{target}: {device.get('platform') or 'unknown platform'}, "
-                f"containment {device.get('containment_status') or 'unknown'}",
+                f"{target}: {device.get('platform') or 'unknown platform'}, containment {device.get('containment_status') or 'unknown'}",
                 details={"found": True, **device},
             )
         except Exception as exc:  # noqa: BLE001 - a vendor error is FAILED, never empty
@@ -235,7 +234,7 @@ class DefenderGetHost(LiveActionExecutor):
                 self,
                 request,
                 LiveActionStatus.SUCCEEDED,
-                f"{target}: risk {machine.get('riskScore') or 'unknown'}, " f"health {machine.get('healthStatus') or 'unknown'}",
+                f"{target}: risk {machine.get('riskScore') or 'unknown'}, health {machine.get('healthStatus') or 'unknown'}",
                 details={
                     "found": True,
                     "device_id": machine.get("id"),

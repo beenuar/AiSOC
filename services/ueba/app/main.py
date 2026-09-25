@@ -106,7 +106,7 @@ def _log_consumer_exit(task: asyncio.Task) -> None:  # type: ignore[type-arg]
         )
         return
     LOG.error(
-        "UEBA Kafka consumer task died: %s: %s. The subscription is gone and no further " "events will be scored; /readyz now reports 503.",
+        "UEBA Kafka consumer task died: %s: %s. The subscription is gone and no further events will be scored; /readyz now reports 503.",
         type(exc).__name__,
         exc,
         exc_info=exc,

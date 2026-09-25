@@ -98,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         "--status-out",
         type=Path,
         default=None,
-        help=("Write a JSON status file to this path so the workflow can " "branch on ``should_run``. If omitted, only stdout is used."),
+        help=("Write a JSON status file to this path so the workflow can branch on ``should_run``. If omitted, only stdout is used."),
     )
     args = parser.parse_args(argv)
 
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     is_live = has_all and not args.dry_run
 
     if args.dry_run:
-        reason = "dry-run mode: status reported as no-op. The workflow will " "not dispatch the live wet eval."
+        reason = "dry-run mode: status reported as no-op. The workflow will not dispatch the live wet eval."
     elif missing:
         reason = (
             "Missing required secret(s): " + ", ".join(missing) + ". This is expected on forks and first-run CI; configure them "
@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
             "`apps/docs/docs/operations/secrets.md`."
         )
     else:
-        reason = "All required secrets are present. Proceeding to the live " "wet-eval run."
+        reason = "All required secrets are present. Proceeding to the live wet-eval run."
 
     status = {
         "should_run": bool(is_live),

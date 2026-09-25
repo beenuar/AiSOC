@@ -333,6 +333,7 @@ Implement four things:
 ```python
 from .base import BaseConnector, ConnectorSchema, Field, OAuthHints
 
+
 class MyConnector(BaseConnector):
     connector_category = "saas"  # one of: edr, siem, cloud, iam, saas, vcs, network
 
@@ -351,14 +352,11 @@ class MyConnector(BaseConnector):
             default_poll_interval_seconds=300,
         )
 
-    async def test_connection(self) -> dict:
-        ...  # one cheap auth-checking call; return {"ok": bool, "message": str, ...}
+    async def test_connection(self) -> dict: ...  # one cheap auth-checking call; return {"ok": bool, "message": str, ...}
 
-    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict]:
-        ...  # raw vendor JSON, no normalization
+    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict]: ...  # raw vendor JSON, no normalization
 
-    def normalize(self, raw_event: dict) -> dict:
-        ...  # OCSF-aligned shape; severity ∈ {"info","low","medium","high"}
+    def normalize(self, raw_event: dict) -> dict: ...  # OCSF-aligned shape; severity ∈ {"info","low","medium","high"}
 ```
 
 Field types are `text`, `secret`, `select` (with `options`), `textarea`,

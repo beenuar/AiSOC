@@ -56,7 +56,7 @@ def check_strategies(errors: list[str]) -> None:
     if len(STRATEGIES) < 5:
         _fail(
             errors,
-            f"only {len(STRATEGIES)} strategies defined; the library is meant to " f"cover the kill chains the corpus fires on",
+            f"only {len(STRATEGIES)} strategies defined; the library is meant to cover the kill chains the corpus fires on",
         )
 
     seen_pivots: set[str] = set()
@@ -68,8 +68,7 @@ def check_strategies(errors: list[str]) -> None:
         if strategy.min_pivots < 2:
             _fail(
                 errors,
-                f"strategy {strategy.id!r} has min_pivots={strategy.min_pivots}; "
-                f"a single tool call is enrichment, not an investigation",
+                f"strategy {strategy.id!r} has min_pivots={strategy.min_pivots}; a single tool call is enrichment, not an investigation",
             )
         if strategy.min_pivots > len(strategy.expected_pivots):
             _fail(
@@ -116,7 +115,7 @@ def check_tool_coverage(errors: list[str]) -> None:
         if len(tool.description) < 40:
             _fail(
                 errors,
-                f"tool {tool.name!r} has a {len(tool.description)}-character " f"description; the model selects on this",
+                f"tool {tool.name!r} has a {len(tool.description)}-character description; the model selects on this",
             )
 
 
@@ -217,15 +216,14 @@ def check_corpus(errors: list[str], corpus_path: Path) -> None:
     if shallow:
         _fail(
             errors,
-            f"{len(shallow)}/{len(runs)} investigations did not reach their "
-            f"strategy's pivot floor:\n    " + "\n    ".join(shallow[:10]),
+            f"{len(shallow)}/{len(runs)} investigations did not reach their strategy's pivot floor:\n    " + "\n    ".join(shallow[:10]),
         )
 
     over = [r for r in runs if r.get("over_budget")]
     if len(over) > len(runs) * 0.1:
         _fail(
             errors,
-            f"{len(over)}/{len(runs)} investigations exceeded their time budget; " f"the pivot chain is too slow to run on the hot path",
+            f"{len(over)}/{len(runs)} investigations exceeded their time budget; the pivot chain is too slow to run on the hot path",
         )
 
 

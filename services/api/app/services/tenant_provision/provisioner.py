@@ -218,7 +218,7 @@ async def _allocate_slug(
         if await _slug_is_available(db, candidate):
             return candidate
 
-    raise SlugCollisionError(f"could not allocate a unique slug for '{company_name}' after " f"{_SLUG_RETRY_LIMIT} attempts")
+    raise SlugCollisionError(f"could not allocate a unique slug for '{company_name}' after {_SLUG_RETRY_LIMIT} attempts")
 
 
 def generate_credential_key() -> tuple[str, str]:
@@ -487,7 +487,7 @@ async def _persist_provisioning_columns(
     """
     try:
         await db.execute(
-            text("UPDATE tenants " "SET provisioned_from_waitlist_id = :wl_id, " "    provisioned_at = :pa " "WHERE id = :tid"),
+            text("UPDATE tenants SET provisioned_from_waitlist_id = :wl_id,     provisioned_at = :pa WHERE id = :tid"),
             {
                 "wl_id": waitlist_entry_id,
                 "pa": provisioned_at,

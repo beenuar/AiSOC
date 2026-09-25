@@ -72,7 +72,7 @@ def check_yaml(schema: dict, dest: Path) -> bool:
 
     if existing != schema:
         print(
-            f"{dest.relative_to(REPO_ROOT)} is out of date.\n" "    Run: python scripts/export_openapi.py  then commit the result.",
+            f"{dest.relative_to(REPO_ROOT)} is out of date.\n    Run: python scripts/export_openapi.py  then commit the result.",
             file=sys.stderr,
         )
         return False

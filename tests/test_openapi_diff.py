@@ -221,18 +221,14 @@ def test_allow_breaking_without_changelog_evidence_is_an_argument_error(tmp_path
 def test_approved_break_passes_when_the_changelog_records_it(tmp_path):
     old, new = _breaking_pair(tmp_path)
     base_cl, head_cl = _changelogs(tmp_path, _CHANGELOG_WITH_NOTE)
-    rc = od.main(
-        ["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)]
-    )
+    rc = od.main(["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)])
     assert rc == 0
 
 
 def test_approved_break_is_refused_when_the_changelog_says_nothing(tmp_path):
     old, new = _breaking_pair(tmp_path)
     base_cl, head_cl = _changelogs(tmp_path, _CHANGELOG_BASE)
-    rc = od.main(
-        ["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)]
-    )
+    rc = od.main(["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)])
     assert rc == 1
 
 
@@ -244,9 +240,7 @@ def test_an_inherited_note_does_not_excuse_a_later_break(tmp_path):
     head_cl = tmp_path / "CHANGELOG.md"
     base_cl.write_text(_CHANGELOG_WITH_NOTE, encoding="utf-8")
     head_cl.write_text(_CHANGELOG_WITH_NOTE, encoding="utf-8")
-    rc = od.main(
-        ["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)]
-    )
+    rc = od.main(["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)])
     assert rc == 1
 
 
@@ -256,7 +250,7 @@ def test_a_note_in_a_shipped_release_section_is_not_evidence():
 
 
 def test_the_approval_names_every_break_it_permits(tmp_path, capsys):
-    """"Approved" must record *what* was approved, not merely that something was."""
+    """ "Approved" must record *what* was approved, not merely that something was."""
     old, new = _write_pair(
         tmp_path,
         _spec(paths={"/gone": {"get": {}}}, schemas={"Thing": {"properties": {"id": {"type": "string"}, "score": {"type": "number"}}}}),
@@ -265,9 +259,17 @@ def test_the_approval_names_every_break_it_permits(tmp_path, capsys):
     base_cl, head_cl = _changelogs(tmp_path, _CHANGELOG_WITH_NOTE)
     rc = od.main(
         [
-            "--old", str(old), "--new", str(new), "--allow-breaking",
-            "--changelog", str(head_cl), "--changelog-base", str(base_cl),
-            "--approved-by", "@maintainer at 2026-01-01T00:00:00Z",
+            "--old",
+            str(old),
+            "--new",
+            str(new),
+            "--allow-breaking",
+            "--changelog",
+            str(head_cl),
+            "--changelog-base",
+            str(base_cl),
+            "--approved-by",
+            "@maintainer at 2026-01-01T00:00:00Z",
         ]
     )
     out = capsys.readouterr().out
@@ -285,9 +287,7 @@ def test_the_approval_record_reaches_the_check_run_page(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     old, new = _breaking_pair(tmp_path)
     base_cl, head_cl = _changelogs(tmp_path, _CHANGELOG_WITH_NOTE)
-    od.main(
-        ["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)]
-    )
+    od.main(["--old", str(old), "--new", str(new), "--allow-breaking", "--changelog", str(head_cl), "--changelog-base", str(base_cl)])
     assert "Thing.health_score was removed" in summary.read_text(encoding="utf-8")
 
 

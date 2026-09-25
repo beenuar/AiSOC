@@ -31,6 +31,7 @@ Notes:
   plugin runner injects a pre-authenticated client; here we use httpx with a
   service-account API key from context["api_key"].
 """
+
 from __future__ import annotations
 
 import os
@@ -40,6 +41,7 @@ from typing import Any
 
 try:
     import httpx
+
     _HTTPX = True
 except ModuleNotFoundError:
     _HTTPX = False

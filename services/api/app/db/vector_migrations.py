@@ -151,7 +151,7 @@ async def _apply_baseline(client: Any) -> None:
 MIGRATIONS: tuple[VectorMigration, ...] = (
     VectorMigration(
         id="001_baseline",
-        description=("Records the collections QdrantStore creates on first use as the " "baseline. Creates nothing."),
+        description=("Records the collections QdrantStore creates on first use as the baseline. Creates nothing."),
         apply=_apply_baseline,
         tags=("baseline",),
     ),

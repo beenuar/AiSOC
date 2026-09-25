@@ -13,6 +13,7 @@ Instead we verify:
 If these tests break, the founder-style quickstart in the video script will
 desync from the CLI — that's exactly the regression we want to catch.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -46,6 +47,7 @@ def fake_repo(tmp_path: Path) -> Path:
 
 # ── help / discovery ──────────────────────────────────────────────────────────
 
+
 def test_top_level_help_lists_new_groups(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0, result.output
@@ -69,6 +71,7 @@ def test_mcp_group_lists_serve_and_install(runner: CliRunner) -> None:
 
 
 # ── serve ─────────────────────────────────────────────────────────────────────
+
 
 def test_serve_invokes_docker_compose_up(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, fake_repo: Path
@@ -124,9 +127,7 @@ def test_serve_no_detach_drops_minus_d(
     assert "-d" not in cmd
 
 
-def test_serve_fails_without_docker(
-    monkeypatch: pytest.MonkeyPatch, runner: CliRunner
-) -> None:
+def test_serve_fails_without_docker(monkeypatch: pytest.MonkeyPatch, runner: CliRunner) -> None:
     monkeypatch.setattr(cli_main.shutil, "which", lambda _name: None)
     result = runner.invoke(cli, ["serve"])
     assert result.exit_code != 0
@@ -134,6 +135,7 @@ def test_serve_fails_without_docker(
 
 
 # ── db upgrade ────────────────────────────────────────────────────────────────
+
 
 def test_db_upgrade_invokes_run_migrations(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, fake_repo: Path
@@ -191,6 +193,7 @@ def test_db_upgrade_non_zero_exits_with_hint(
 
 # ── mcp serve ─────────────────────────────────────────────────────────────────
 
+
 def test_mcp_serve_uses_local_dist(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, fake_repo: Path
 ) -> None:
@@ -244,6 +247,7 @@ def test_mcp_serve_falls_back_to_npx(
 
 
 # ── mcp install ───────────────────────────────────────────────────────────────
+
 
 def test_mcp_install_invokes_host(
     monkeypatch: pytest.MonkeyPatch, runner: CliRunner, fake_repo: Path

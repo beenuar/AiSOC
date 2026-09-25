@@ -70,7 +70,7 @@ def test_draft_from_nl_happy_path(client: TestClient) -> None:
     resp = _post(
         client,
         {
-            "prompt": ("When a high-severity alert fires, isolate the host " "and notify the SOC."),
+            "prompt": ("When a high-severity alert fires, isolate the host and notify the SOC."),
             "allow_llm": False,
         },
     )
@@ -159,6 +159,4 @@ def test_route_not_shadowed_by_id_param() -> None:
     # Any route containing ``{playbook_id}`` must appear AFTER nl_idx.
     for i, p in enumerate(paths_in_order):
         if p and "{playbook_id}" in p:
-            assert i > nl_idx, (
-                f"route {p!r} (idx {i}) comes BEFORE draft-from-nl (idx {nl_idx}); " f"it would shadow the NL drafter endpoint."
-            )
+            assert i > nl_idx, f"route {p!r} (idx {i}) comes BEFORE draft-from-nl (idx {nl_idx}); it would shadow the NL drafter endpoint."

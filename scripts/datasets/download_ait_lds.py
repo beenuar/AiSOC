@@ -119,8 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         "--scenario",
         action="append",
         choices=sorted(SCENARIOS),
-        help="Scenario to fetch; repeatable. Defaults to `fox`, which is "
-        "enough to exercise the loader end to end without pulling ~19 GB.",
+        help="Scenario to fetch; repeatable. Defaults to `fox`, which is enough to exercise the loader end to end without pulling ~19 GB.",
     )
     parser.add_argument("--all", action="store_true", help="Fetch every scenario.")
     parser.add_argument("--no-verify", action="store_true")
@@ -165,15 +164,13 @@ def main(argv: list[str] | None = None) -> int:
             actual = _sha256(dest)
             if actual != expected:
                 dest.unlink(missing_ok=True)
-                raise SystemExit(
-                    f"checksum mismatch for {entry['file']}: expected {expected}, " f"got {actual}. The file has been removed."
-                )
+                raise SystemExit(f"checksum mismatch for {entry['file']}: expected {expected}, got {actual}. The file has been removed.")
         elif not expected:
             # Said out loud rather than passed over: an unverified download
             # is a different thing from a verified one, and the difference
             # should be visible to whoever runs this.
             logger.warning(
-                "%s has no pinned SHA-256 — downloaded unverified. Pin it in " "this script in the same PR that re-runs the harness.",
+                "%s has no pinned SHA-256 — downloaded unverified. Pin it in this script in the same PR that re-runs the harness.",
                 entry["file"],
             )
 
@@ -183,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         "  python -m services.agents.tests.fidelity.runner "
         f"--dataset ait_lds --input {args.out}/<scenario>/gather/<host>/logs/apache2/access.log"
     )
-    print("  Thresholds for the full corpus are in " "services/agents/tests/fidelity/expected_results.yaml under `ait_lds_full`.")
+    print("  Thresholds for the full corpus are in services/agents/tests/fidelity/expected_results.yaml under `ait_lds_full`.")
     return 0
 
 

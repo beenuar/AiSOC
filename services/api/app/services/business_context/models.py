@@ -291,7 +291,7 @@ def _parse_one_rule(raw: Any, *, source_yaml: str) -> BusinessContextRule:
         raise RuleParseError(f"rule {rid!r}: 'then' clause is required")
     then = _parse_action(then_raw, rule_id=rid)
     if then.is_noop():
-        raise RuleParseError(f"rule {rid!r}: 'then' clause must set at least one of " "set_severity / route_to / tag / suppress")
+        raise RuleParseError(f"rule {rid!r}: 'then' clause must set at least one of set_severity / route_to / tag / suppress")
 
     enabled = raw.get("enabled", True)
     if not isinstance(enabled, bool):

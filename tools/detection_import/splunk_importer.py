@@ -137,9 +137,7 @@ def _convert_rule(
     }
 
     quarantine_reason = (
-        f"upstream status: {status}"
-        if status in SPLUNK_QUARANTINE_STATUSES
-        else "raw SPL — needs translation to AiSOC detection schema"
+        f"upstream status: {status}" if status in SPLUNK_QUARANTINE_STATUSES else "raw SPL — needs translation to AiSOC detection schema"
     )
 
     return ImportedRule(

@@ -808,7 +808,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("## Headline numbers")
     lines.append("")
     lines.append(f"- **Curated v1.0 detections**: `{s['selected']}` (target: ≥ {s['min_total']})")
-    lines.append(f"- **Total rules considered**: `{s['considered']}` " f"(quality floor: {s['quality_floor']})")
+    lines.append(f"- **Total rules considered**: `{s['considered']}` (quality floor: {s['quality_floor']})")
     lines.append(f"- **Unique MITRE techniques covered**: `{s['unique_techniques']}`")
     lines.append("")
 
@@ -818,7 +818,7 @@ def build_report(manifest: dict[str, Any]) -> str:
     lines.append("|---|---|---|---|")
     for fid, info in manifest["families"].items():
         check = "✅" if info["covered"] else "❌"
-        lines.append(f"| **{info['label']}** | {info['count']} | " f"≥ {info['min_target']} | {check} |")
+        lines.append(f"| **{info['label']}** | {info['count']} | ≥ {info['min_target']} | {check} |")
     lines.append("")
 
     lines.append("## Distribution")
@@ -924,11 +924,11 @@ def main() -> int:
             report
         ):
             print(
-                "marketplace/curated.json or coverage.md is stale. Run: " "pnpm marketplace:curate",
+                "marketplace/curated.json or coverage.md is stale. Run: pnpm marketplace:curate",
                 file=sys.stderr,
             )
             return 2
-        print(f"curation up to date " f"({stats['selected']} curated, " f"{manifest['stats']['unique_techniques']} techniques).")
+        print(f"curation up to date ({stats['selected']} curated, {manifest['stats']['unique_techniques']} techniques).")
         return 0 if ok else 1
 
     OUT_MANIFEST.parent.mkdir(parents=True, exist_ok=True)

@@ -194,10 +194,7 @@ ALLOWED_ILLUSTRATIVE: dict[tuple[str, str], str] = {}
 
 def _render_fallback_exempt(rel_path: str, matched: str) -> bool:
     """True when this `?? MOCK_*` site is documented UI configuration."""
-    return any(
-        rel_path.endswith(suffix) and const in matched
-        for (suffix, const) in RENDER_FALLBACK_EXEMPT
-    )
+    return any(rel_path.endswith(suffix) and const in matched for (suffix, const) in RENDER_FALLBACK_EXEMPT)
 
 
 def _array_body(lines: list[str], start: int) -> str:
@@ -351,7 +348,7 @@ def main() -> int:
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         print(
-            "\nSee apps/web/src/lib/demoFallback.ts. Fabricated security data must " "never render as a tenant's real state.",
+            "\nSee apps/web/src/lib/demoFallback.ts. Fabricated security data must never render as a tenant's real state.",
             file=sys.stderr,
         )
         return 1

@@ -28,6 +28,7 @@ Usage:
       }
   }
 """
+
 from __future__ import annotations
 
 import os
@@ -35,6 +36,7 @@ from typing import Any
 
 try:
     import httpx
+
     _HTTPX = True
 except ModuleNotFoundError:
     _HTTPX = False

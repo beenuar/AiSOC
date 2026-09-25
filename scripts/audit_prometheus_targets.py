@@ -205,7 +205,7 @@ def main() -> int:
         marker = "yes" if has else "NO  <-- broken scrape"
         print(f"{job:<20} {host:<18} {port:>6}  {marker}")
         if not has:
-            drift.append(f"prometheus.yml scrapes {host}:{port} but " f"services/{svc_dir}/ has no /metrics handler")
+            drift.append(f"prometheus.yml scrapes {host}:{port} but services/{svc_dir}/ has no /metrics handler")
 
     print()
 
@@ -235,10 +235,10 @@ def main() -> int:
     instrumented = [s for s in all_services if has_metrics_endpoint(s)]
     uninstrumented = [s for s in all_services if s not in instrumented]
 
-    print(f"Coverage: {len(instrumented)}/{len(all_services)} services expose " f"/metrics.")
+    print(f"Coverage: {len(instrumented)}/{len(all_services)} services expose /metrics.")
     if uninstrumented:
         print(f"  No metrics endpoint: {', '.join(uninstrumented)}")
-        print("  These emit nothing for Prometheus to scrape. That is a real gap " "in platform observability, not a gap in this config.")
+        print("  These emit nothing for Prometheus to scrape. That is a real gap in platform observability, not a gap in this config.")
     print()
 
     if args.check and drift:

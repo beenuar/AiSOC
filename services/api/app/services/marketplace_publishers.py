@@ -88,7 +88,7 @@ async def ensure_publisher(
     """Return this user's publisher id, creating an unverified one if needed."""
     row = (
         await db.execute(
-            text("SELECT id FROM marketplace_publishers " "WHERE tenant_id = :tenant_id AND user_id = :user_id"),
+            text("SELECT id FROM marketplace_publishers WHERE tenant_id = :tenant_id AND user_id = :user_id"),
             {"tenant_id": str(tenant_id), "user_id": str(user_id)},
         )
     ).first()

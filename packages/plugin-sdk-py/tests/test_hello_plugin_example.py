@@ -169,9 +169,7 @@ async def test_enrich_uses_configured_algorithm() -> None:
     result = await plugin.enrich(request, ctx)
 
     assert result.enrichments["hello_plugin.algorithm"] == "sha512"
-    assert result.enrichments["hello_plugin.digest"] == hashlib.sha512(
-        b"example.com"
-    ).hexdigest()
+    assert result.enrichments["hello_plugin.digest"] == hashlib.sha512(b"example.com").hexdigest()
 
 
 # ── Registry integration ─────────────────────────────────────────────────────

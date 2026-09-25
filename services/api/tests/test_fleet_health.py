@@ -193,6 +193,6 @@ class TestReasons:
                 continue
             # A non-healthy state has to say what is wrong in terms an
             # operator can act on — a duration, a count, or a next step.
-            assert any(
-                token in connector.reason.lower() for token in ("poll", "credential", "oauth", "error", "reconnect")
-            ), f"{connector.connector_id}: {connector.reason!r} is not actionable"
+            assert any(token in connector.reason.lower() for token in ("poll", "credential", "oauth", "error", "reconnect")), (
+                f"{connector.connector_id}: {connector.reason!r} is not actionable"
+            )

@@ -43,9 +43,9 @@ def test_azure_entra_schema_has_required_fields():
 def test_azure_activity_schema_includes_subscription_field():
     schema = AzureActivityConnector.schema()
     field_names = {f.name for f in schema.fields}
-    assert (
-        "subscription_id" in field_names
-    ), "azure_activity must collect a subscription_id; without it the polling loop has no scope to query"
+    assert "subscription_id" in field_names, (
+        "azure_activity must collect a subscription_id; without it the polling loop has no scope to query"
+    )
     assert {"tenant_id", "client_id", "client_secret"} <= field_names
     assert schema.category == "cloud"
 

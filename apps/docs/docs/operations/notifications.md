@@ -228,6 +228,7 @@ Verify the signature on the receiver side with:
 
 ```python
 import hmac, hashlib
+
 expected = hmac.new(secret.encode(), request.body, hashlib.sha256).hexdigest()
 assert hmac.compare_digest(expected, request.headers["X-AiSOC-Signature"].split("=", 1)[1])
 ```

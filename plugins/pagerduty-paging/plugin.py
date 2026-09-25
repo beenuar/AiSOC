@@ -1,4 +1,5 @@
 """PagerDuty paging action plugin for AiSOC."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,11 +37,7 @@ class Plugin:
         try:
             if action == "trigger_incident":
                 summary = payload.get("summary") or "AiSOC alert"
-                severity = (
-                    payload.get("severity")
-                    or config.get("default_severity")
-                    or "error"
-                )
+                severity = payload.get("severity") or config.get("default_severity") or "error"
                 event = {
                     "routing_key": routing_key,
                     "event_action": "trigger",
@@ -61,11 +58,7 @@ class Plugin:
             if action in ("acknowledge_incident", "resolve_incident"):
                 if not dedup_key:
                     return {"error": "dedup_key required for ack/resolve"}
-                event_action = (
-                    "acknowledge"
-                    if action == "acknowledge_incident"
-                    else "resolve"
-                )
+                event_action = "acknowledge" if action == "acknowledge_incident" else "resolve"
                 result = await self._post(
                     EVENTS_URL,
                     {},

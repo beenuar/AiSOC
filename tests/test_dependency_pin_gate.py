@@ -149,8 +149,7 @@ def test_detects_drift_inside_a_folded_run_block(tree: Path) -> None:
     """
     workflow = tree / ".github" / "workflows" / "ci.yml"
     workflow.write_text(
-        workflow.read_text()
-        + "      - run: >-\n          pip install --quiet\n          \"cryptography>=41,<46\" structlog\n"
+        workflow.read_text() + '      - run: >-\n          pip install --quiet\n          "cryptography>=41,<46" structlog\n'
     )
     code, problems = gate.run(tree)
     assert code == 1
@@ -311,7 +310,7 @@ def test_detects_source_reaching_a_module_whose_extra_is_undeclared(tree: Path) 
 
 
 def test_detects_a_declared_extra_that_resolved_nothing(tree: Path) -> None:
-    """"The extra is declared and the library is absent" must be sayable."""
+    """ "The extra is declared and the library is absent" must be sayable."""
     _with_sqlalchemy(tree, extra=True, greenlet=False, ci_extra=True)
     code, problems = gate.run(tree)
     assert code == 1
@@ -329,9 +328,7 @@ def test_every_service_reaching_the_asyncio_module_declares_the_extra() -> None:
     """The property, asserted against this repository rather than a fixture."""
     rule = gate.EXTRAS["sqlalchemy"]
     scanned = gate.scan(REPO_ROOT)
-    declaring = {
-        d.service for d in scanned.by_package("sqlalchemy") if d.kind == "manifest" and rule.extra in d.extras
-    }
+    declaring = {d.service for d in scanned.by_package("sqlalchemy") if d.kind == "manifest" and rule.extra in d.extras}
     missing = sorted(gate._services_reaching(REPO_ROOT, rule.module) - declaring)
     assert not missing, f"services importing {rule.module} without declaring the extra: {missing}"
 

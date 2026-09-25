@@ -188,7 +188,7 @@ class HTTPAgent:
         except Exception as exc:
             return AgentVerdict(
                 abstained=True,
-                narrative=(f"adapter error: {type(exc).__name__}: {exc}. " f"Scored as an abstention, not as a wrong answer."),
+                narrative=(f"adapter error: {type(exc).__name__}: {exc}. Scored as an abstention, not as a wrong answer."),
             )
 
         if not isinstance(payload, dict):

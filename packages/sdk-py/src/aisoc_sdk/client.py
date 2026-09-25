@@ -133,7 +133,9 @@ class CasesClient(_ResourceClient):
 
 class DetectionsClient(_ResourceClient):
     async def list(self, page: int = 1, page_size: int = 20) -> Page[DetectionRule]:
-        return await self._get("/api/v1/detections", {"page": page, "page_size": page_size}, Page[DetectionRule])
+        return await self._get(
+            "/api/v1/detections", {"page": page, "page_size": page_size}, Page[DetectionRule]
+        )
 
     async def get(self, rule_id: str) -> DetectionRule:
         return await self._get(f"/api/v1/detections/{rule_id}", model=DetectionRule)
@@ -141,7 +143,9 @@ class DetectionsClient(_ResourceClient):
 
 class ConnectorsClient(_ResourceClient):
     async def list(self, page: int = 1, page_size: int = 20) -> Page[Connector]:
-        return await self._get("/api/v1/connectors", {"page": page, "page_size": page_size}, Page[Connector])
+        return await self._get(
+            "/api/v1/connectors", {"page": page, "page_size": page_size}, Page[Connector]
+        )
 
     async def get(self, connector_id: str) -> Connector:
         return await self._get(f"/api/v1/connectors/{connector_id}", model=Connector)
@@ -149,7 +153,9 @@ class ConnectorsClient(_ResourceClient):
 
 class PlaybooksClient(_ResourceClient):
     async def list(self, page: int = 1, page_size: int = 20) -> Page[Playbook]:
-        return await self._get("/api/v1/playbooks", {"page": page, "page_size": page_size}, Page[Playbook])
+        return await self._get(
+            "/api/v1/playbooks", {"page": page, "page_size": page_size}, Page[Playbook]
+        )
 
     async def get(self, playbook_id: str) -> Playbook:
         return await self._get(f"/api/v1/playbooks/{playbook_id}", model=Playbook)

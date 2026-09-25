@@ -265,7 +265,7 @@ async def test_cross_tenant_precondition_is_checked_before_enumerating_tenants(
     await run_once(db=db, dry_run=True)
     assert "app.current_tenant_id" in db.statements[0][0]
     assert not any("row_security" in sql for sql, _ in db.statements), (
-        "SET LOCAL row_security = off raises for a role the policies apply to; " "the worker must not reintroduce it"
+        "SET LOCAL row_security = off raises for a role the policies apply to; the worker must not reintroduce it"
     )
 
 

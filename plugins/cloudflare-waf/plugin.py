@@ -21,6 +21,7 @@ Payload shape:
     "level": "under_attack"  # for set_under_attack
   }
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -95,9 +96,7 @@ class Plugin:
                 )
                 if not rule_id:
                     return {"action": action, "ip": payload.get("ip"), "removed": False}
-                resp = await client.delete(
-                    f"/accounts/{account_id}/firewall/access_rules/rules/{rule_id}"
-                )
+                resp = await client.delete(f"/accounts/{account_id}/firewall/access_rules/rules/{rule_id}")
                 resp.raise_for_status()
                 return {"action": action, "ip": payload.get("ip"), "removed": True}
             if action == "set_under_attack":

@@ -63,7 +63,7 @@ async def mint_realtime_ticket(
         # than mint a ticket the realtime verifier will reject anyway.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=("Realtime ticket signing is not configured. Set AISOC_REALTIME_JWT_SECRET " "to enable WS/SSE connections."),
+            detail=("Realtime ticket signing is not configured. Set AISOC_REALTIME_JWT_SECRET to enable WS/SSE connections."),
         )
 
     ttl = max(1, min(settings.AISOC_REALTIME_TICKET_TTL_SECONDS, _MAX_TICKET_TTL_SECONDS))

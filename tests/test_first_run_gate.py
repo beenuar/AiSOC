@@ -133,9 +133,7 @@ def test_the_web_dockerfile_defaults_ship_no_demo_credential() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "source", [DEMO_AUTOLOGIN, LOGIN_PAGE], ids=lambda p: p.name
-)
+@pytest.mark.parametrize("source", [DEMO_AUTOLOGIN, LOGIN_PAGE], ids=lambda p: p.name)
 def test_no_client_component_hardcodes_a_demo_credential(source: pathlib.Path) -> None:
     """Gating the render hides the panel; it does not remove the strings.
 
@@ -155,8 +153,7 @@ def test_no_client_component_hardcodes_a_demo_credential(source: pathlib.Path) -
             text,
         )
         assert fallback is None, (
-            f"{source.name} falls back to the literal {fallback.group(1)!r}. A fallback is "
-            "inlined into every build, demo or not."
+            f"{source.name} falls back to the literal {fallback.group(1)!r}. A fallback is inlined into every build, demo or not."
         )
 
 
@@ -185,7 +182,7 @@ def test_the_demo_bundle_is_built_by_its_own_matrix_entry(workflow: pathlib.Path
     pulls — came to carry a bundle that disabled every write control.
     """
     demo_entries = [e for e in _matrix(workflow, job) if str(e.get("demo", "")) == "true"]
-    assert len(demo_entries) == 1, f"{workflow.name}: expected exactly one matrix entry with `demo: 'true'`, " f"found {len(demo_entries)}"
+    assert len(demo_entries) == 1, f"{workflow.name}: expected exactly one matrix entry with `demo: 'true'`, found {len(demo_entries)}"
     assert demo_entries[0]["image"].endswith("aisoc-web")
 
     step = _demo_build_step(workflow, job)
@@ -206,7 +203,7 @@ def test_release_publishes_the_demo_under_its_own_tag() -> None:
     text = RELEASE_WORKFLOW.read_text()
     assert "-demo" in text, "release.yml has no demo-suffixed tag for the demo build"
     assert 'matrix.demo }}" = "true"' in text, (
-        "release.yml does not branch its tag list on `matrix.demo`, so `vX.Y.Z` and " "`latest` could carry the demo bundle again"
+        "release.yml does not branch its tag list on `matrix.demo`, so `vX.Y.Z` and `latest` could carry the demo bundle again"
     )
 
 
@@ -219,9 +216,8 @@ def test_each_compose_file_pulls_the_image_built_for_it() -> None:
     assert root_ref and demo_ref
 
     assert "demo" not in root_ref.group(1), (
-        f"docker-compose.yml (what `make up` starts) pulls {root_ref.group(1)} — " "a self-host stack must not pull a demo bundle"
+        f"docker-compose.yml (what `make up` starts) pulls {root_ref.group(1)} — a self-host stack must not pull a demo bundle"
     )
     assert "demo" in demo_ref.group(1), (
-        f"the demo stack pulls {demo_ref.group(1)}, which is the product build: no banner, "
-        "no auto-login, and a visitor bounced to /login"
+        f"the demo stack pulls {demo_ref.group(1)}, which is the product build: no banner, no auto-login, and a visitor bounced to /login"
     )

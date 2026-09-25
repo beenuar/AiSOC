@@ -48,9 +48,7 @@ class DropboxConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description=(
-                "Dropbox Business team event log: sharing, sign-in, " "member role changes, OAuth-app authorisations, " "policy edits."
-            ),
+            description=("Dropbox Business team event log: sharing, sign-in, member role changes, OAuth-app authorisations, policy edits."),
             docs_url="/docs/connectors/dropbox",
             fields=[
                 Field(
@@ -58,9 +56,7 @@ class DropboxConnector(BaseConnector):
                     "secret",
                     "Team admin token",
                     help_text=(
-                        "OAuth 2.0 token for a Dropbox Business app "
-                        "with the ``team_data.governance.read`` and "
-                        "``events.read`` scopes."
+                        "OAuth 2.0 token for a Dropbox Business app with the ``team_data.governance.read`` and ``events.read`` scopes."
                     ),
                 ),
             ],
@@ -196,7 +192,7 @@ class DropboxConnector(BaseConnector):
             "source": self.connector_id,
             "external_id": raw.get("event_id") or "",
             "title": event_type or "Dropbox event",
-            "description": (f"event={event_type}; category={category}; " f"actor={actor_email}"),
+            "description": (f"event={event_type}; category={category}; actor={actor_email}"),
             "severity": severity,
             "actor": actor_email or actor_user.get("display_name"),
             "actor_email": actor_email,

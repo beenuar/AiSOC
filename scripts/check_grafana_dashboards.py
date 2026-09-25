@@ -184,10 +184,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    print(
-        f"grafana-dashboards: OK — {len(files)} dashboard(s), every panel "
-        f"queries a metric a service emits and every datasource resolves"
-    )
+    print(f"grafana-dashboards: OK — {len(files)} dashboard(s), every panel queries a metric a service emits and every datasource resolves")
     return 0
 
 

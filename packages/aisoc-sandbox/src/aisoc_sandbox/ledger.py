@@ -141,20 +141,14 @@ class Ledger:
                 "hunt": c("35", "HUNT"),
                 "respond": c("32", "RESPOND"),
             }.get(s.funnel_stage, s.funnel_stage.upper())
-            out.write(
-                f"{c('1', f'Step {s.step:>2}')}  {stage_label}  "
-                f"{c('2', s.agent)}  {c('2', f'({s.latency_ms} ms)')}\n"
-            )
+            out.write(f"{c('1', f'Step {s.step:>2}')}  {stage_label}  {c('2', s.agent)}  {c('2', f'({s.latency_ms} ms)')}\n")
             out.write(f"  Action     {s.action}\n")
             out.write(f"  Rationale  {s.rationale}\n")
             if s.evidence:
                 for k, v in s.evidence.items():
                     out.write(f"  · {k}: {v}\n")
             for tc in s.tool_calls:
-                out.write(
-                    f"  → would-call {c('36', tc['name'])}"
-                    f"({json.dumps(tc.get('args', {}), default=str)})\n"
-                )
+                out.write(f"  → would-call {c('36', tc['name'])}({json.dumps(tc.get('args', {}), default=str)})\n")
             if s.decision:
                 out.write(f"  {c('1', 'Decision')}   {s.decision}\n")
             out.write("\n")

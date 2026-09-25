@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--limit",
         type=int,
-        help="Grade only the first N incidents. For a smoke run; a limited " "matrix must not be published as a full one.",
+        help="Grade only the first N incidents. For a smoke run; a limited matrix must not be published as a full one.",
     )
     parser.add_argument("--timeout", type=int, default=3600)
     args = parser.parse_args(argv)
@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
 
     live = has_live_key()
     if not live:
-        print("model-matrix: no live LLM key configured — reporting 'not measured' " "for every model rather than emitting zeros.")
+        print("model-matrix: no live LLM key configured — reporting 'not measured' for every model rather than emitting zeros.")
 
     results = [
         run_one(model, limit=args.limit, timeout=args.timeout)
@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     measured = sum(1 for r in results if r.measured)
     print(f"model-matrix: {measured}/{len(results)} model(s) measured")
     if args.limit:
-        print(f"  PARTIAL: limited to {args.limit} incidents — not comparable " f"with a full run and must not be published as one.")
+        print(f"  PARTIAL: limited to {args.limit} incidents — not comparable with a full run and must not be published as one.")
     # Exit zero even with nothing measured: an absent key is a
     # configuration state, not a build failure, and failing here would
     # make every fork's CI red.

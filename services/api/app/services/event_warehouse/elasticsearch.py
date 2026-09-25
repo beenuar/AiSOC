@@ -76,8 +76,7 @@ class ElasticsearchProvider(_BaseProvider):
         es_url = credentials.get("base_url", "url", "endpoint")
         if not es_url:
             raise HuntNotConfigured(
-                f"connector {credentials.connector_name!r} has no cluster URL — "
-                "re-save it in the console with the Elasticsearch endpoint"
+                f"connector {credentials.connector_name!r} has no cluster URL — re-save it in the console with the Elasticsearch endpoint"
             )
 
         auth_header = elastic_auth_header(credentials)

@@ -14,6 +14,7 @@ from typing import Any
 
 try:
     import yaml  # type: ignore[import-untyped]
+
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
@@ -39,8 +40,7 @@ def load_manifest(plugin_dir: Path) -> PluginManifest:
     """
     if not _YAML_AVAILABLE:
         raise PluginLoadError(
-            "PyYAML is required to load plugin manifests. "
-            "Install it with: pip install pyyaml"
+            "PyYAML is required to load plugin manifests. Install it with: pip install pyyaml"
         )
     manifest_path = plugin_dir / "aisoc-plugin.yaml"
     if not manifest_path.exists():
@@ -106,13 +106,9 @@ def load_plugin_from_directory(plugin_dir: Path) -> AiSOCPlugin:
     try:
         plugin: AiSOCPlugin = factory()
     except Exception as exc:
-        raise PluginLoadError(
-            f"create_plugin() in {entry_point} raised an error: {exc}"
-        ) from exc
+        raise PluginLoadError(f"create_plugin() in {entry_point} raised an error: {exc}") from exc
 
     if not isinstance(plugin, AiSOCPlugin):
-        raise PluginLoadError(
-            f"create_plugin() must return an AiSOCPlugin, got {type(plugin)}"
-        )
+        raise PluginLoadError(f"create_plugin() must return an AiSOCPlugin, got {type(plugin)}")
 
     return plugin

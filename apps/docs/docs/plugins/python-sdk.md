@@ -28,6 +28,7 @@ The PyPI distribution will be `aisoc-plugin-sdk`; the import path is
 from aisoc_plugin_sdk import EnricherPlugin, PluginManifest, PluginType
 from aisoc_plugin_sdk.enricher import EnrichmentRequest, EnrichmentResult
 
+
 class VirusTotalEnricher(EnricherPlugin):
     def manifest(self) -> PluginManifest:
         return PluginManifest(
@@ -37,9 +38,7 @@ class VirusTotalEnricher(EnricherPlugin):
             plugin_type=PluginType.ENRICHER,
         )
 
-    async def enrich(
-        self, request: EnrichmentRequest, context
-    ) -> EnrichmentResult:
+    async def enrich(self, request: EnrichmentRequest, context) -> EnrichmentResult:
         # Call VirusTotal API here
         return EnrichmentResult(
             indicator_type=request.indicator_type,
@@ -54,6 +53,7 @@ class VirusTotalEnricher(EnricherPlugin):
 
 ```python
 from aisoc_plugin_sdk import enricher
+
 
 @enricher(
     id="myorg.virustotal",
@@ -70,6 +70,7 @@ async def vt_enrich(request, context):
 from aisoc_plugin_sdk import ActionPlugin, PluginManifest, PluginType
 from aisoc_plugin_sdk.action import ActionRequest, ActionResult
 
+
 class BlockIPAction(ActionPlugin):
     def manifest(self) -> PluginManifest:
         return PluginManifest(
@@ -82,14 +83,9 @@ class BlockIPAction(ActionPlugin):
     def supported_actions(self) -> list[str]:
         return ["block_ip"]
 
-    async def execute(
-        self, request: ActionRequest, context
-    ) -> ActionResult:
+    async def execute(self, request: ActionRequest, context) -> ActionResult:
         if request.dry_run:
-            return ActionResult(
-                action_id=request.action_id, success=True,
-                dry_run=True, summary=f"Would block {request.params['ip']}"
-            )
+            return ActionResult(action_id=request.action_id, success=True, dry_run=True, summary=f"Would block {request.params['ip']}")
         # firewall API call here
         return ActionResult(action_id=request.action_id, success=True)
 ```

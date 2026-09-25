@@ -59,7 +59,7 @@ class TestRedaction:
         assert "db.internal" in out, "the host is diagnostic and should survive"
 
     def test_a_private_key_block_is_stripped_whole(self) -> None:
-        key = "-----BEGIN RSA PRIVATE KEY-----\n" "MIIEowIBAAKCAQEAxyz\nabcdefgh\n" "-----END RSA PRIVATE KEY-----"
+        key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxyz\nabcdefgh\n-----END RSA PRIVATE KEY-----"
         out = redact(f"config: {key}")
         assert "MIIEowIBAAKCAQEAxyz" not in out
         assert "redacted" in out
@@ -126,7 +126,7 @@ class TestEnvironmentAllowList:
     def test_every_override_states_why_it_is_safe(self) -> None:
         for name, reason in support_bundle.ALLOW_LIST_OVERRIDES.items():
             assert support_bundle.SENSITIVE_NAME_RE.search(name), (
-                f"{name} does not match the sensitive pattern, so it needs no " f"override — put it in ENV_ALLOW_LIST"
+                f"{name} does not match the sensitive pattern, so it needs no override — put it in ENV_ALLOW_LIST"
             )
             assert len(reason) > 20, f"{name} has no stated reason"
 

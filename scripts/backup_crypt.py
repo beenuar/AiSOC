@@ -45,7 +45,7 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 except ImportError:  # pragma: no cover - surfaced as an actionable error below
     print(
-        "backup_crypt: the 'cryptography' package is required.\n" "  pip install cryptography",
+        "backup_crypt: the 'cryptography' package is required.\n  pip install cryptography",
         file=sys.stderr,
     )
     raise SystemExit(2) from None
@@ -92,7 +92,7 @@ def load_key() -> bytes:
         raise BackupCryptError(f"Backup encryption key is not hex ({exc}). Expected 64 hex characters.") from exc
 
     if len(key) != KEY_BYTES:
-        raise BackupCryptError(f"Backup encryption key must be {KEY_BYTES} bytes " f"({KEY_BYTES * 2} hex characters); got {len(key)}.")
+        raise BackupCryptError(f"Backup encryption key must be {KEY_BYTES} bytes ({KEY_BYTES * 2} hex characters); got {len(key)}.")
     return key
 
 
@@ -172,7 +172,7 @@ def decrypt_stream(src: BinaryIO, dst: BinaryIO, key: bytes) -> str:
             plain = aead.decrypt(nonce, sealed, _aad(counter, final=final))
         except InvalidTag as exc:
             raise BackupCryptError(
-                f"Authentication failed on chunk {counter}. Either the key is wrong " f"or the artifact was modified in transit or at rest."
+                f"Authentication failed on chunk {counter}. Either the key is wrong or the artifact was modified in transit or at rest."
             ) from exc
 
         if final:
@@ -184,7 +184,7 @@ def decrypt_stream(src: BinaryIO, dst: BinaryIO, key: bytes) -> str:
 
     if not saw_final:
         raise BackupCryptError(
-            "Backup ended without its end-of-stream marker, so it is truncated. " "Restoring it would silently produce a partial database."
+            "Backup ended without its end-of-stream marker, so it is truncated. Restoring it would silently produce a partial database."
         )
     return plain_digest.hexdigest()
 

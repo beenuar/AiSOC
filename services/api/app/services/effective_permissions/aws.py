@@ -234,7 +234,7 @@ class AwsIamResolver(Resolver):
                 decisions.append(decision)
 
         if any(p.get("permissions_boundary") for p in [principal]):
-            notes.append("permissions-boundary present on principal — not modelled; " "deny-side may over-permit")
+            notes.append("permissions-boundary present on principal — not modelled; deny-side may over-permit")
 
         return ResolverResult(
             provider=self.provider,

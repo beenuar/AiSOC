@@ -147,5 +147,5 @@ def test_it_wraps_the_real_eval_rather_than_reimplementing_it() -> None:
     assert "run_evals.py" in source
     for reimplementation in ("def grade", "def score_incident", "def _accuracy"):
         assert reimplementation not in source, (
-            f"{reimplementation} suggests the matrix is computing its own " f"metrics rather than collating the eval's"
+            f"{reimplementation} suggests the matrix is computing its own metrics rather than collating the eval's"
         )

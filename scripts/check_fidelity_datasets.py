@@ -87,9 +87,7 @@ def check_downloaders_require_licence_acceptance() -> list[str]:
                 f"without the operator reading them agrees on their behalf."
             )
         if "Citation" not in source and "citation" not in source:
-            errors.append(
-                f"{path.name}: carries no citation. Attribution is a licence " f"condition for every dataset here, not a courtesy."
-            )
+            errors.append(f"{path.name}: carries no citation. Attribution is a licence condition for every dataset here, not a courtesy.")
     return errors
 
 
@@ -129,9 +127,7 @@ def check_unmeasured_floors_are_not_published() -> list[str]:
             )
             if pattern.search(text):
                 errors.append(
-                    f"{name}: {doc.name} quotes a full-corpus percentage for "
-                    f"{dataset}, but the threshold block says it was never "
-                    f"measured."
+                    f"{name}: {doc.name} quotes a full-corpus percentage for {dataset}, but the threshold block says it was never measured."
                 )
     return errors
 
@@ -154,9 +150,9 @@ def main(argv: list[str] | None = None) -> int:
     found = sorted(loaders())
     data = yaml.safe_load(THRESHOLDS.read_text(encoding="utf-8")) or {}
     unmeasured = [name for name, entry in data.items() if isinstance(entry, dict) and entry.get("measured") is False]
-    print(f"fidelity-datasets: OK — {len(found)} dataset(s) with a loader " f"({', '.join(found)}), each with a licence-gated downloader")
+    print(f"fidelity-datasets: OK — {len(found)} dataset(s) with a loader ({', '.join(found)}), each with a licence-gated downloader")
     if unmeasured:
-        print(f"  {len(unmeasured)} full-corpus floor(s) not yet measured: " f"{', '.join(sorted(unmeasured))}")
+        print(f"  {len(unmeasured)} full-corpus floor(s) not yet measured: {', '.join(sorted(unmeasured))}")
     return 0
 
 

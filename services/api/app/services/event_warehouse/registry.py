@@ -129,7 +129,7 @@ def resolve_provider(
     if not translatable:
         tq = hunt.translated_query if isinstance(hunt.translated_query, dict) else {}
         raise UnsupportedTranslation(
-            f"resolve_provider: hunt {hunt.id} has no translated query for any registered provider " f"(have keys: {sorted(tq.keys())})"
+            f"resolve_provider: hunt {hunt.id} has no translated query for any registered provider (have keys: {sorted(tq.keys())})"
         )
 
     for provider in translatable:

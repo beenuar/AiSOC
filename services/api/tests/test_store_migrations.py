@@ -61,7 +61,7 @@ class TestEveryStoreHasARunner:
         statements against a schema that already has them."""
         first = module.MIGRATIONS[0]
         assert "baseline" in first.id or "core" in first.id, (
-            f"{store}'s first migration is {first.id!r}; it should record the " f"pre-existing schema so existing deployments converge"
+            f"{store}'s first migration is {first.id!r}; it should record the pre-existing schema so existing deployments converge"
         )
 
 

@@ -1,4 +1,5 @@
 """GitLab audit connector plugin for AiSOC."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -46,14 +47,10 @@ class Plugin:
 
         base = self._base(context)
         action = payload.get("action", "fetch_events")
-        since = payload.get("since") or (
-            datetime.now(UTC) - timedelta(minutes=15)
-        ).isoformat()
+        since = payload.get("since") or (datetime.now(UTC) - timedelta(minutes=15)).isoformat()
 
         try:
-            async with httpx.AsyncClient(
-                timeout=30.0, base_url=base, headers=headers
-            ) as client:
+            async with httpx.AsyncClient(timeout=30.0, base_url=base, headers=headers) as client:
                 if action == "test_connection":
                     resp = await client.get(path, params={"per_page": 1})
                     resp.raise_for_status()

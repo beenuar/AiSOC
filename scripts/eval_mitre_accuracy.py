@@ -36,25 +36,21 @@ def main() -> None:
     if args.json:
         print(result.to_json())
     else:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  AiSOC P1-Eval: MITRE ATT&CK Tactic Accuracy")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Incidents evaluated : {result.total}")
         print(f"  Correctly predicted : {result.correct}")
         print(f"  Accuracy            : {result.accuracy * 100:.1f}%")
         print(f"  Threshold           : {args.threshold * 100:.0f}%")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Print per-incident results
         for d in result.details:
             status = "PASS" if d["correct"] else "FAIL"
-            print(
-                f"  [{status}] {d['incident'][:70]}\n"
-                f"      expected={d['expected']}  predicted={d['predicted']}"
-                f"  overlap={d['overlap']}"
-            )
+            print(f"  [{status}] {d['incident'][:70]}\n      expected={d['expected']}  predicted={d['predicted']}  overlap={d['overlap']}")
 
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         passed = result.accuracy >= args.threshold
         verdict = "PASS" if passed else "FAIL"
         print(f"\n  {verdict}: {result.accuracy * 100:.1f}% ({'>=' if passed else '<'} {args.threshold * 100:.0f}%)")

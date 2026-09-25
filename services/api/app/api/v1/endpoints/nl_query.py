@@ -337,7 +337,7 @@ async def _resolve_tenant_elasticsearch(
     if es_url and es_api_key:
         return es_url, f"ApiKey {es_api_key}", es_url
 
-    raise ESQLNotConfigured("No Elasticsearch connector is enabled for this tenant and no deployment-wide " "ES_URL/ES_API_KEY is set.")
+    raise ESQLNotConfigured("No Elasticsearch connector is enabled for this tenant and no deployment-wide ES_URL/ES_API_KEY is set.")
 
 
 async def _execute_esql(

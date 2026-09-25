@@ -472,7 +472,7 @@ async def init_lake_schema() -> None:
         logger.info("ClickHouse lake migrations applied: %s", ", ".join(applied))
     if pending:
         logger.error(
-            "ClickHouse lake migrations still pending after startup: %s — " "lake-backed features may query columns that do not exist",
+            "ClickHouse lake migrations still pending after startup: %s — lake-backed features may query columns that do not exist",
             ", ".join(pending),
         )
     else:

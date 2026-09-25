@@ -40,10 +40,8 @@ class TestDeclarationsMatchReality:
         for capability, contract in CAPABILITY_CONTRACTS.items():
             if not contract.has_verification_probe:
                 continue
-            assert capability in known, (
-                f"{capability} declares a probe but has no ActionType, so the " f"verifier can never be reached for it"
-            )
-            assert capability in registered, f"{capability} declares has_verification_probe=True with no probe " f"registered"
+            assert capability in known, f"{capability} declares a probe but has no ActionType, so the verifier can never be reached for it"
+            assert capability in registered, f"{capability} declares has_verification_probe=True with no probe registered"
 
     def test_an_absent_probe_at_containment_impact_is_explained(self) -> None:
         """An omission and a deliberate decision look identical afterwards."""
@@ -52,9 +50,7 @@ class TestDeclarationsMatchReality:
                 continue
             if contract.impact not in (ActionImpact.HIGH, ActionImpact.SEVERE):
                 continue
-            assert contract.verification_gap.strip(), (
-                f"{capability} is {contract.impact.value} impact with no probe and " f"no stated reason"
-            )
+            assert contract.verification_gap.strip(), f"{capability} is {contract.impact.value} impact with no probe and no stated reason"
 
     def test_unverifiable_actions_are_not_automatic(self) -> None:
         """Unverifiable means not autonomous, whatever the confidence."""
@@ -66,7 +62,7 @@ class TestDeclarationsMatchReality:
                 # confirmation.
                 continue
             assert contract.has_verification_probe, (
-                f"{capability} is automatic at {contract.impact.value} impact with " f"nothing checking the effect"
+                f"{capability} is automatic at {contract.impact.value} impact with nothing checking the effect"
             )
 
 

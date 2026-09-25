@@ -136,6 +136,7 @@ MIGRATION_VAR_SUFFIX = "DATABASE_MIGRATION_URL"
 def is_migration_var(name: str) -> bool:
     return name.upper().endswith(MIGRATION_VAR_SUFFIX)
 
+
 #: Some DSNs must be the owner and cannot say so in their variable name, because
 #: the tool reading them chose the name: alembic and the SQL runner both read
 #: ``DATABASE_URL``, and ``scripts/backup.sh`` needs a credential that can dump
@@ -360,9 +361,7 @@ def classify(surface: str, text: str, inspected: Inspected, known_superusers: se
     # marker left behind after its DSN moved reads as a considered decision
     # and is not one.
     for lineno in stale_markers:
-        findings.append(
-            Finding(surface, f"line {lineno + 1} carries an `aisoc-db-role: owner` marker with no DSN under it — remove it")
-        )
+        findings.append(Finding(surface, f"line {lineno + 1} carries an `aisoc-db-role: owner` marker with no DSN under it — remove it"))
 
     for dsn in usable:
         var, role = dsn.var, _canonical_role(dsn.role)
@@ -372,9 +371,7 @@ def classify(surface: str, text: str, inspected: Inspected, known_superusers: se
         if dsn.owner_reason is not None:
             inspected.exempted.append((surface, var, role, dsn.owner_reason))
             if not dsn.owner_reason:
-                findings.append(
-                    Finding(surface, f"{var} is marked `aisoc-db-role: owner` with no reason given; state why it needs DDL")
-                )
+                findings.append(Finding(surface, f"{var} is marked `aisoc-db-role: owner` with no reason given; state why it needs DDL"))
 
         if not superusers:
             # Nothing in this surface says which role is privileged, so there
@@ -1104,14 +1101,10 @@ async def _live_findings(dsn: str, owner_dsn: str | None) -> list[Finding]:
         findings.append(Finding("<live>", f"{role!r} holds BYPASSRLS and ignores every RLS policy in this database"))
     if owned:
         names = ", ".join(r["relname"] for r in owned)
-        findings.append(
-            Finding("<live>", f"{role!r} owns objects in public ({names}…) and can ALTER TABLE … NO FORCE ROW LEVEL SECURITY")
-        )
+        findings.append(Finding("<live>", f"{role!r} owns objects in public ({names}…) and can ALTER TABLE … NO FORCE ROW LEVEL SECURITY"))
     if leaky_views:
         names = ", ".join(r["relname"] for r in leaky_views)
-        findings.append(
-            Finding("<live>", f"views without security_invoker execute as their owner and read past the policies: {names}")
-        )
+        findings.append(Finding("<live>", f"views without security_invoker execute as their owner and read past the policies: {names}"))
 
     # The credential 002_rls.sql shipped. Not detectable from a password hash,
     # but perfectly detectable by trying it.
@@ -1125,9 +1118,7 @@ async def _live_findings(dsn: str, owner_dsn: str | None) -> list[Finding]:
             pass
         else:
             await probe.close()
-            findings.append(
-                Finding("<live>", f"{role!r} still accepts the password 002_rls.sql shipped; set AISOC_APP_DB_PASSWORD")
-            )
+            findings.append(Finding("<live>", f"{role!r} still accepts the password 002_rls.sql shipped; set AISOC_APP_DB_PASSWORD"))
 
     if owner_dsn:
         owner = await asyncpg.connect(_bare_dsn(owner_dsn), timeout=15)
@@ -1143,9 +1134,7 @@ async def _live_findings(dsn: str, owner_dsn: str | None) -> list[Finding]:
                 Finding("<live>", f"the migration role {orow['role']!r} cannot CREATE in schema public, so the chain cannot apply")
             )
         if orow["role"] == role:
-            findings.append(
-                Finding("<live>", "DATABASE_URL and DATABASE_MIGRATION_URL are the same role, so the split is nominal only")
-            )
+            findings.append(Finding("<live>", "DATABASE_URL and DATABASE_MIGRATION_URL are the same role, so the split is nominal only"))
     return findings
 
 

@@ -7,6 +7,15 @@
 line-length = 140
 target-version = "py311"
 
+# The archived prototype subtree. `.github/workflows/codeql.yml` carries the
+# same exclusion, `scripts/check_mypy_baseline.py` excludes it from every
+# coverage direction, and the project rules forbid editing anything under it —
+# so a finding there is not actionable and a formatter run would be a diff
+# nobody may take. 844 lint findings and ~280 unformatted files live here; they
+# are excluded because they cannot be fixed, which is a different statement
+# from saying the code is clean.
+extend-exclude = ["plans"]
+
 [lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
 

@@ -306,7 +306,7 @@ class SnowflakeConnector(BaseConnector):
             "source": self.connector_id,
             "stream": "login_history",
             "external_id": raw.get("EVENT_ID") or "",
-            "title": (f"Snowflake login {'success' if is_success else 'failure'} " f"({raw.get('USER_NAME')})"),
+            "title": (f"Snowflake login {'success' if is_success else 'failure'} ({raw.get('USER_NAME')})"),
             "description": raw.get("ERROR_MESSAGE") or raw.get("REPORTED_CLIENT_TYPE"),
             "severity": severity,
             "actor": raw.get("USER_NAME"),

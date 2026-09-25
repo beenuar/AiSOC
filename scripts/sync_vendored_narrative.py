@@ -70,7 +70,7 @@ def _sync() -> int:
         return 1
     VENDORED_FILE.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(SOURCE_FILE, VENDORED_FILE)
-    print(f"copied {SOURCE_FILE.relative_to(REPO_ROOT)} → " f"{VENDORED_FILE.relative_to(REPO_ROOT)}")
+    print(f"copied {SOURCE_FILE.relative_to(REPO_ROOT)} → {VENDORED_FILE.relative_to(REPO_ROOT)}")
     print("\nDone. Don't forget to commit services/api/app/_vendor/narrative.py.")
     return 0
 

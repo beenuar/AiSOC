@@ -207,13 +207,11 @@ class ActionContract:
             # A read that requires approval is either mis-classified or is
             # not actually a read.
             if approval in (ApprovalRequirement.MANDATORY_HUMAN, ApprovalRequirement.PROHIBITED):
-                problems.append(
-                    f"impact is read_only but approval is {approval.value}; " f"a read that nobody may perform is mis-classified"
-                )
+                problems.append(f"impact is read_only but approval is {approval.value}; a read that nobody may perform is mis-classified")
             return problems
 
         if not cls.required_permission:
-            problems.append("state-changing action declares no required_permission, so the " "dispatcher has nothing to authorise against")
+            problems.append("state-changing action declares no required_permission, so the dispatcher has nothing to authorise against")
 
         # The route-back requirement exists to bound *autonomous* damage. An
         # action a human must personally approve is one where the approver is
@@ -238,7 +236,7 @@ class ActionContract:
             )
 
         if cls.reversal == Reversal.PLATFORM and not cls.reverse_capability:
-            problems.append("reversal is 'platform' but no reverse_capability is named, so the " "rollback path has nothing to dispatch")
+            problems.append("reversal is 'platform' but no reverse_capability is named, so the rollback path has nothing to dispatch")
 
         if cls.reversal != Reversal.PLATFORM and cls.reverse_capability:
             problems.append(
@@ -248,7 +246,7 @@ class ActionContract:
 
         if impact in NEVER_AUTONOMOUS and approval == ApprovalRequirement.AUTOMATIC:
             problems.append(
-                f"impact is {impact.value} but approval is automatic; no autonomy " f"tier may auto-execute this regardless of confidence"
+                f"impact is {impact.value} but approval is automatic; no autonomy tier may auto-execute this regardless of confidence"
             )
 
         # A probe is required wherever the effect is mechanically checkable.
@@ -298,7 +296,7 @@ class ActionContract:
             )
 
         if not cls.supports_dry_run and approval != ApprovalRequirement.PROHIBITED:
-            problems.append("action does not support dry_run, so it cannot be previewed or " "exercised in copilot mode")
+            problems.append("action does not support dry_run, so it cannot be previewed or exercised in copilot mode")
 
         if cls.parameters_schema and not isinstance(cls.parameters_schema, dict):
             problems.append("parameters_schema must be a JSON-schema object")

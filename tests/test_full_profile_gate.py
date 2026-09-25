@@ -89,8 +89,7 @@ def test_opensearch_memory_limit_exceeds_its_heap() -> None:
         " ".join(str(e) for e in (svc.get("environment") or []) if "JAVA_OPTS" in str(e)),
     )
     assert "-Xmx512m" in opts, (
-        "This bound assumes a 512m heap. If the heap changed, re-measure the "
-        "steady-state RSS and move the floor with it."
+        "This bound assumes a 512m heap. If the heap changed, re-measure the steady-state RSS and move the floor with it."
     )
 
     limit = _to_bytes(svc.get("mem_limit"))
@@ -181,12 +180,9 @@ def test_connectors_binds_the_port_it_publishes() -> None:
     svc = _services()["connectors"]
     env = _env(svc)
     assert "PORT" in env, (
-        "connectors/app/scripts/serve.py defaults PORT to 8087. Leaving it unset "
-        "binds a port the compose mapping does not forward to."
+        "connectors/app/scripts/serve.py defaults PORT to 8087. Leaving it unset binds a port the compose mapping does not forward to."
     )
-    assert int(env["PORT"]) in _published(svc), (
-        f"connectors binds PORT={env['PORT']} but publishes {sorted(_published(svc))}."
-    )
+    assert int(env["PORT"]) in _published(svc), f"connectors binds PORT={env['PORT']} but publishes {sorted(_published(svc))}."
 
 
 # ── A required key no service was given ────────────────────────────────────
@@ -222,10 +218,7 @@ def test_secret_key_is_overridable_and_consistent_across_services() -> None:
         env = _env(services[name])
         assert "SECRET_KEY" in env, f"{name} must be given SECRET_KEY"
         value = env["SECRET_KEY"]
-        assert value.startswith("${SECRET_KEY"), (
-            f"{name} pins SECRET_KEY to the literal {value!r}, so a value set in "
-            ".env is ignored."
-        )
+        assert value.startswith("${SECRET_KEY"), f"{name} pins SECRET_KEY to the literal {value!r}, so a value set in .env is ignored."
         keys[name] = value
     assert len(set(keys.values())) == 1, (
         f"api and connectors resolve different SECRET_KEY defaults ({keys}). The "
@@ -242,6 +235,4 @@ def test_full_profile_stores_are_reachable_over_a_published_port(service: str) -
     ships curl and no wget, the qdrant image ships neither, and both were
     reported as not answering while serving 200 on every request.
     """
-    assert _published(_services()[service]), (
-        f"{service} publishes no port, so the doctor cannot probe it from the host."
-    )
+    assert _published(_services()[service]), f"{service} publishes no port, so the doctor cannot probe it from the host."

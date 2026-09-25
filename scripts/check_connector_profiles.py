@@ -349,7 +349,7 @@ def evaluate(
             failures.append(
                 (
                     "canonical-target-undeclared",
-                    f"{source!r} folds onto {target!r}, which no connector declares: " "the alternate spelling still resolves to nothing",
+                    f"{source!r} folds onto {target!r}, which no connector declares: the alternate spelling still resolves to nothing",
                 )
             )
         if source in declared:

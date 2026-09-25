@@ -51,7 +51,7 @@ def _load_key() -> str:
     priv = Ed25519PrivateKey.generate()
     pub = base64.b64encode(priv.public_key().public_bytes_raw()).decode()
     print(
-        "[aisoc memory] no AISOC_MEMORY_SIGNING_KEY set — generated an ephemeral key. " f"Pin this public key on import:\n  {pub}",
+        f"[aisoc memory] no AISOC_MEMORY_SIGNING_KEY set — generated an ephemeral key. Pin this public key on import:\n  {pub}",
         file=sys.stderr,
     )
     return base64.b64encode(priv.private_bytes_raw()).decode()

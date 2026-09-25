@@ -126,7 +126,7 @@ REASON_CODES: dict[str, ReasonCode] = {
     "missing_context": ReasonCode(
         code="missing_context",
         label="Missing context",
-        description=("The verdict was reasonable given what the platform could see, and " "wrong given what the analyst could see."),
+        description=("The verdict was reasonable given what the platform could see, and wrong given what the analyst could see."),
         scope="rule",
         ttl_days=None,
         corroboration=1,
@@ -221,8 +221,7 @@ def compose_statement(reason: ReasonCode, context: dict[str, Any]) -> str:
         body = f"{subject} belongs to a sanctioned business application."
     elif reason.code == "bad_detection_logic":
         body = (
-            f"Rule {rule or 'unknown'} produces false positives on this pattern; "
-            f"the rule needs fixing rather than its output suppressing."
+            f"Rule {rule or 'unknown'} produces false positives on this pattern; the rule needs fixing rather than its output suppressing."
         )
     elif reason.code == "missing_context":
         body = (

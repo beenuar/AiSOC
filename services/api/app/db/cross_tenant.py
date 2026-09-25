@@ -62,7 +62,7 @@ async def assert_cross_tenant_session(session: AsyncSession, what: str) -> None:
     if not bound:
         return
     logger.error(
-        "cross-tenant scan %r refused: the session is bound to tenant %s, so it would " "process one tenant's rows and report success",
+        "cross-tenant scan %r refused: the session is bound to tenant %s, so it would process one tenant's rows and report success",
         _safe(what),
         _safe(bound),
     )

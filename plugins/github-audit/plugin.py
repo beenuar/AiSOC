@@ -17,6 +17,7 @@ Payload shape:
     "phrase": "action:org.invite"       # optional GitHub audit log search phrase
   }
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -63,16 +64,12 @@ class Plugin:
                 resp.raise_for_status()
                 return {"action": action, "events": resp.json()}
             if action == "list_secret_alerts":
-                resp = await client.get(
-                    f"/orgs/{org}/secret-scanning/alerts", params={"per_page": 100}
-                )
+                resp = await client.get(f"/orgs/{org}/secret-scanning/alerts", params={"per_page": 100})
                 resp.raise_for_status()
                 return {"action": action, "alerts": resp.json()}
             if action == "get_user_events":
                 username = payload.get("username", "")
-                resp = await client.get(
-                    f"/users/{username}/events/orgs/{org}", params={"per_page": 100}
-                )
+                resp = await client.get(f"/users/{username}/events/orgs/{org}", params={"per_page": 100})
                 resp.raise_for_status()
                 return {"action": action, "username": username, "events": resp.json()}
             if action == "list_members":

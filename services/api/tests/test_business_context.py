@@ -606,7 +606,7 @@ class TestEndpoints:
             endpoint.update_rule(
                 "rule-a",
                 endpoint.UpdateRuleRequest(
-                    yaml=("id: rule-a\n" "when: { field: alert.severity, op: eq, value: high }\n" "then: { route_to: tier3 }\n")
+                    yaml=("id: rule-a\nwhen: { field: alert.severity, op: eq, value: high }\nthen: { route_to: tier3 }\n")
                 ),
                 user,
                 _db(),
@@ -624,7 +624,7 @@ class TestEndpoints:
             _run(
                 endpoint.update_rule(
                     "rule-a",
-                    endpoint.UpdateRuleRequest(yaml=("id: rule-other\n" "when: { field: x, op: eq, value: 1 }\n" "then: { tag: t }\n")),
+                    endpoint.UpdateRuleRequest(yaml=("id: rule-other\nwhen: { field: x, op: eq, value: 1 }\nthen: { tag: t }\n")),
                     user,
                     _db(),
                 )
@@ -664,7 +664,7 @@ class TestEndpoints:
     def test_preview_against_supplied_alerts(self) -> None:
         user = _user()
         req = endpoint.PreviewRequest(
-            yaml=("id: prod-critical\n" "when: { field: alert.target.tag, op: eq, value: prod }\n" "then: { set_severity: critical }\n"),
+            yaml=("id: prod-critical\nwhen: { field: alert.target.tag, op: eq, value: prod }\nthen: { set_severity: critical }\n"),
             alerts=[
                 _alert("a", target_tag="prod", severity="medium"),
                 _alert("b", target_tag="dev", severity="medium"),
@@ -702,7 +702,7 @@ class TestEndpoints:
         db = MagicMock()
         db.execute = AsyncMock(side_effect=RuntimeError("no schema"))
         req = endpoint.PreviewRequest(
-            yaml=("id: noop-tag\n" "when: { field: alert.target.tag, op: eq, value: prod }\n" "then: { tag: noop }\n"),
+            yaml=("id: noop-tag\nwhen: { field: alert.target.tag, op: eq, value: prod }\nthen: { tag: noop }\n"),
             alerts=[],
         )
         resp = _run(endpoint.preview_rules(req, user, db))
@@ -744,7 +744,7 @@ class TestEndpoints:
         elapsed = time.perf_counter() - start
 
         assert elapsed < 1.0, (
-            f"save → evaluate round-trip took {elapsed:.3f}s, exceeds 1s budget " f"(eval slice = {elapsed_eval:.3f}s for 100 alerts)"
+            f"save → evaluate round-trip took {elapsed:.3f}s, exceeds 1s budget (eval slice = {elapsed_eval:.3f}s for 100 alerts)"
         )
 
         # Sanity check: at least the prod alerts got bumped.

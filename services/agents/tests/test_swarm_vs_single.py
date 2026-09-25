@@ -88,7 +88,7 @@ def test_swarm_beats_single_on_completeness_under_cost_ceiling():
     lift = swarm_macro - single_macro
 
     # Publish both numbers (visible in CI logs).
-    print(f"[swarm-vs-single] single={single_macro:.3f} swarm={swarm_macro:.3f} " f"lift={lift:+.3f} max_tokens={max_tokens}")
+    print(f"[swarm-vs-single] single={single_macro:.3f} swarm={swarm_macro:.3f} lift={lift:+.3f} max_tokens={max_tokens}")
 
     assert swarm_macro > single_macro, "swarm must not regress vs single-agent"
     assert lift >= MIN_LIFT, f"swarm lift {lift:.3f} below required {MIN_LIFT}"

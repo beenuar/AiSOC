@@ -32,9 +32,7 @@ from app.callbacks import callback_max_age_seconds, handle_card_action
 
 app = FastAPI(
     title="AiSOC Teams Bot",
-    description=(
-        "ChatOps adapter for Microsoft Teams. Renders Adaptive Card " "approval prompts and verifies the signed callback payload."
-    ),
+    description=("ChatOps adapter for Microsoft Teams. Renders Adaptive Card approval prompts and verifies the signed callback payload."),
     version="0.1.0",
 )
 

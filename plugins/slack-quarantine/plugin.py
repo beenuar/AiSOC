@@ -18,6 +18,7 @@ Config keys:
   channel      — Default channel.
   oncall_user  — Slack user ID to DM on critical events.
 """
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ from typing import Any
 
 try:
     import httpx
+
     _HTTPX = True
 except ModuleNotFoundError:
     _HTTPX = False

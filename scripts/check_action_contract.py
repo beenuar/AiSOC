@@ -91,7 +91,7 @@ def check_contracts() -> list[str]:
             f"default to irreversible so an undeclared action fails closed"
         )
     if ActionContract.approval != ApprovalRequirement.PROHIBITED:
-        errors.append(f"ActionContract.approval defaults to {ActionContract.approval.value}; it " f"must default to prohibited")
+        errors.append(f"ActionContract.approval defaults to {ActionContract.approval.value}; it must default to prohibited")
     if ActionContract.has_verification_probe is not False:
         errors.append("ActionContract.has_verification_probe must default to False")
 
@@ -99,7 +99,7 @@ def check_contracts() -> list[str]:
     overlap = NEVER_AUTONOMOUS & MUST_BE_REVERSIBLE
     if ActionImpact.IRREVERSIBLE in overlap:
         errors.append(
-            "ActionImpact.IRREVERSIBLE appears in MUST_BE_REVERSIBLE; an " "irreversible action cannot be required to declare a reverse"
+            "ActionImpact.IRREVERSIBLE appears in MUST_BE_REVERSIBLE; an irreversible action cannot be required to declare a reverse"
         )
 
     # Every concrete executor's own declaration.
@@ -149,13 +149,13 @@ def check_approval_matrix() -> list[str]:
     # No tier may auto-execute severe or irreversible impact.
     for tier, ceiling in TIER_MAX_AUTOMATIC.items():
         if ceiling in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
-            errors.append(f"tier {tier} permits automatic execution up to {ceiling.value}; " f"no tier may auto-execute at that impact")
+            errors.append(f"tier {tier} permits automatic execution up to {ceiling.value}; no tier may auto-execute at that impact")
 
     # Severe and irreversible must have no confidence floor at all —
     # an unreachable threshold invites someone to lower it.
     for impact in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
         if impact in AUTOMATIC_CONFIDENCE_FLOOR:
-            errors.append(f"{impact.value} has a confidence floor defined; it must have none, " f"because no confidence makes it automatic")
+            errors.append(f"{impact.value} has a confidence floor defined; it must have none, because no confidence makes it automatic")
 
     # Full confidence at the highest tier must still not auto-execute these.
     for impact in (ActionImpact.SEVERE, ActionImpact.IRREVERSIBLE):
@@ -167,7 +167,7 @@ def check_approval_matrix() -> list[str]:
         )
         if decision.can_auto_execute:
             errors.append(
-                f"{impact.value} at 100% confidence and tier L4 auto-executed; " f"the matrix lowered a requirement it must only raise"
+                f"{impact.value} at 100% confidence and tier L4 auto-executed; the matrix lowered a requirement it must only raise"
             )
 
     # A contract demanding a human must survive any tier and confidence.
@@ -178,7 +178,7 @@ def check_approval_matrix() -> list[str]:
         tier="L4",
     )
     if decision.can_auto_execute:
-        errors.append("a MANDATORY_HUMAN contract auto-executed at L4/100%; the tier " "overrode the action's own declaration")
+        errors.append("a MANDATORY_HUMAN contract auto-executed at L4/100%; the tier overrode the action's own declaration")
 
     # Absent confidence must behave as the lowest band.
     decision = evaluate(
@@ -188,7 +188,7 @@ def check_approval_matrix() -> list[str]:
         tier="L4",
     )
     if decision.can_auto_execute:
-        errors.append("an action with no confidence score auto-executed; a scoring bug " "would become an autonomous action")
+        errors.append("an action with no confidence score auto-executed; a scoring bug would become an autonomous action")
 
     return errors
 
@@ -300,7 +300,7 @@ def check_verification_probes() -> list[str]:
         # which is a different problem and worth naming differently.
         if capability not in known_action_types:
             errors.append(
-                f"{capability}: declares has_verification_probe=True but has no " f"ActionType, so the verifier can never be reached for it"
+                f"{capability}: declares has_verification_probe=True but has no ActionType, so the verifier can never be reached for it"
             )
         else:
             errors.append(
@@ -430,9 +430,9 @@ def check_capability_reachability() -> list[str]:
     builtin_count = builtins.register_builtin_executors(overwrite=True)
     for cls in adapters:
         if registry.get_executor(cls.vendor_id, cls.capability) is None:
-            errors.append(f"{cls.__module__}.{cls.__name__}: declares " f"{cls.vendor_id}/{cls.capability} but did not register")
+            errors.append(f"{cls.__module__}.{cls.__name__}: declares {cls.vendor_id}/{cls.capability} but did not register")
     if builtin_count != len(adapters):
-        errors.append(f"register_builtin_executors registered {builtin_count} of " f"{len(adapters)} adapters")
+        errors.append(f"register_builtin_executors registered {builtin_count} of {len(adapters)} adapters")
 
     # ── Direction 4: legacy executor → adapter ─────────────────────────────
     # The one that was missing. A legacy executor with no adapter is reachable
@@ -695,11 +695,11 @@ def check_capability_mirror() -> list[str]:
 
     missing_here = connector_caps - KNOWN_CAPABILITIES
     if missing_here:
-        errors.append(f"capabilities declared in connectors but missing from the actions " f"mirror: {', '.join(sorted(missing_here))}")
+        errors.append(f"capabilities declared in connectors but missing from the actions mirror: {', '.join(sorted(missing_here))}")
     missing_there = KNOWN_CAPABILITIES - connector_caps
     if missing_there:
         errors.append(
-            f"capabilities in the actions mirror but missing from the connectors " f"Capability enum: {', '.join(sorted(missing_there))}"
+            f"capabilities in the actions mirror but missing from the connectors Capability enum: {', '.join(sorted(missing_there))}"
         )
     return errors
 
@@ -741,9 +741,7 @@ def main(argv: list[str] | None = None) -> int:
     from app.live_actions.executor import LiveActionExecutor
 
     concrete = [c for c in _all_subclasses(LiveActionExecutor) if not getattr(c, "__abstractmethods__", None)]
-    print(
-        f"action-contract: OK — {len(concrete)} executors declare a coherent " f"contract; the approval matrix cannot lower a requirement"
-    )
+    print(f"action-contract: OK — {len(concrete)} executors declare a coherent contract; the approval matrix cannot lower a requirement")
     return 0
 
 

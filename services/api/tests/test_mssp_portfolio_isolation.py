@@ -167,7 +167,7 @@ async def _seed(session) -> None:
         {"p": str(ORG_P), "q": str(ORG_Q), "a": str(TENANT_A)},
     )
     await session.execute(
-        text("INSERT INTO organization_tenants (org_id, tenant_id) VALUES " "(:p, :a), (:p, :b), (:q, :c)"),
+        text("INSERT INTO organization_tenants (org_id, tenant_id) VALUES (:p, :a), (:p, :b), (:q, :c)"),
         {"p": str(ORG_P), "q": str(ORG_Q), "a": str(TENANT_A), "b": str(TENANT_B), "c": str(TENANT_C)},
     )
     await session.execute(

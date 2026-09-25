@@ -28,7 +28,7 @@ class TestHuntSearchProvenance:
     async def test_search_declares_itself_as_sample(self):
         res = await hunt_mod.hunt_search(hunt_mod.HuntQuery(query="process_name:powershell"))
         assert res.source == "sample", (
-            "the search handler generates events rather than querying telemetry; " "it must not present them as live"
+            "the search handler generates events rather than querying telemetry; it must not present them as live"
         )
         assert res.notice, "a sample response must carry a human-readable reason"
         assert "not results from your telemetry" in res.notice

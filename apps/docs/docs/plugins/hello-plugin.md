@@ -149,10 +149,7 @@ Three things to call out:
 async def on_load(self, ctx: PluginContext) -> None:
     self._algorithm = (ctx.config.get("algorithm") or "sha256").lower()
     if self._algorithm not in hashlib.algorithms_guaranteed:
-        raise ValueError(
-            f"Unsupported hash algorithm: {self._algorithm!r}. "
-            f"Pick one of: {sorted(hashlib.algorithms_guaranteed)}"
-        )
+        raise ValueError(f"Unsupported hash algorithm: {self._algorithm!r}. Pick one of: {sorted(hashlib.algorithms_guaranteed)}")
 ```
 
 What's happening:
@@ -166,9 +163,7 @@ What's happening:
 This is the actual work the platform calls.
 
 ```python
-async def enrich(
-    self, request: EnrichmentRequest, ctx: PluginContext
-) -> EnrichmentResult:
+async def enrich(self, request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:
     algorithm = getattr(self, "_algorithm", "sha256")
     digest = hashlib.new(algorithm, request.indicator_value.encode("utf-8")).hexdigest()
 
@@ -266,7 +261,8 @@ async def test_enrich_is_deterministic(ctx: PluginContext) -> None:
     await plugin.on_load(ctx)
 
     request = EnrichmentRequest(
-        indicator_type="ip", indicator_value="203.0.113.42",
+        indicator_type="ip",
+        indicator_value="203.0.113.42",
     )
     expected_digest = hashlib.sha256(b"203.0.113.42").hexdigest()
 

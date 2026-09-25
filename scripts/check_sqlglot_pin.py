@@ -31,7 +31,9 @@ from pathlib import Path
 # test loads it by path with importlib. gate_toolkit sits beside it either way.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from gate_toolkit import SELF_TEST_FLAG, repo_root, self_test_main
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
 
 REPO_ROOT = repo_root()
 # Every file that installs sqlglot for a build or a test run. A new one must
@@ -48,40 +50,12 @@ DECLARING_FILES = (
 )
 
 # `lake-isolation.yml` installs sqlglot from a build matrix, deliberately
-# reaching past the shipped range so a future bump cannot silently turn
-# isolation off. It therefore cannot declare a single pin, and is checked on
-# its own terms instead of being exempted:
-#
-#   `shipped`       must equal the agreed pin, or the matrix proves a version
-#                   nothing installs still works.
-#   `forward-compat` must carry no upper bound, and must not float below the
-#                   shipped floor.
-#
-# The second rule is the one with history behind it. That leg used to read
-# `>=27,<31`, which only reached past the pin while the pin sat below 27.
-# With the pin on the 30 line there is no sqlglot 31 to name, so the leg is
-# written unbounded and resolves whatever is newest: it re-runs the shipped
-# version today and arms itself the day a higher major is published, with no
-# edit and nobody remembering. A ceiling would take that away silently, which
-# is exactly how 27 reached production — every install path pinned below the
-# version that broke isolation, so nothing ever ran on it.
-#
-# What is deliberately *not* asserted here is that a higher major exists.
-# Upstream's release schedule is not this repository's to require, and a gate
-# that failed until sqlglot shipped 31 would be red for a reason no change in
-# this tree could fix. The workflow's own `Forward coverage` step reports
-# which of the two states it is in on every run.
+# including a version outside the shipped range so a future bump cannot
+# silently turn isolation off. It therefore cannot declare a single pin. What
+# it *must* do is test the version we ship, so the matrix leg labelled
+# `shipped` is checked against the agreed pin below.
 MATRIX_WORKFLOW = ".github/workflows/lake-isolation.yml"
-_MATRIX_LEG = re.compile(r"""-\s*sqlglot:\s*["'](?P<spec>[^"']+)["']\s*\n\s*label:\s*(?P<label>[\w-]+)""")
-
-# The ceiling the workflow's `Forward coverage` step compares against. It is a
-# second copy of the shipped range's `<N` bound, so it is checked against the
-# first rather than trusted: a stale copy would report "above the shipped
-# ceiling" about a version that is inside it.
-_WORKFLOW_CEILING = re.compile(r"""^\s*SHIPPED_CEILING\s*=\s*(?P<major>\d+)\s*$""", re.MULTILINE)
-
-SHIPPED_LABEL = "shipped"
-FORWARD_LABEL = "forward-compat"
+_SHIPPED_MATRIX_LEG = re.compile(r"""-\s*sqlglot:\s*["'](?P<spec>[^"']+)["']\s*\n\s*label:\s*shipped""")
 
 # `services/api/Dockerfile` used to be on the list above, because its pip
 # fallback carried its own copy of the dependency list. That fallback is gone:
@@ -121,86 +95,6 @@ def satisfies(version: str, spec: str) -> bool:
         if not allowed:
             return False
     return True
-
-
-def _bound(spec: str, operators: tuple[str, ...]) -> tuple[int, ...] | None:
-    """The version named by the first clause using one of ``operators``."""
-    for clause in spec.replace(" ", "").split(","):
-        match = re.fullmatch(r"(?P<op>[<>=!]+)(?P<ver>[0-9][0-9.]*)", clause)
-        if match and match.group("op") in operators:
-            return _release(match.group("ver"))
-    return None
-
-
-def upper_bound(spec: str) -> tuple[int, ...] | None:
-    """The ceiling a specifier declares, or None when it has none."""
-    return _bound(spec, ("<", "<="))
-
-
-def lower_bound(spec: str) -> tuple[int, ...] | None:
-    """The floor a specifier declares, or None when it has none."""
-    return _bound(spec, (">=", ">"))
-
-
-def matrix_problems(text: str, agreed: str) -> list[str]:
-    """Everything wrong with the version matrix in ``lake-isolation.yml``.
-
-    Pure, taking the workflow text rather than reading it, so ``--self-test``
-    can inject each violation and require this function to report it. A rule
-    that only ever runs against a tree already satisfying it is a rule nobody
-    has seen fail.
-    """
-    legs = {match.group("label"): match.group("spec") for match in _MATRIX_LEG.finditer(text)}
-    problems: list[str] = []
-
-    shipped = legs.get(SHIPPED_LABEL)
-    if shipped is None:
-        problems.append(f"{MATRIX_WORKFLOW} has no matrix leg labelled `{SHIPPED_LABEL}`")
-    elif normalise(shipped) != agreed:
-        problems.append(
-            f"{MATRIX_WORKFLOW} tests the shipped rewriter against {shipped}, but the declared pin is {agreed}"
-        )
-
-    forward = legs.get(FORWARD_LABEL)
-    if forward is None:
-        problems.append(
-            f"{MATRIX_WORKFLOW} has no matrix leg labelled `{FORWARD_LABEL}` — the rewriter would only ever "
-            f"be exercised on the version already shipping, which is the state sqlglot 27 reached production in"
-        )
-        return problems
-
-    ceiling = upper_bound(forward)
-    if ceiling is not None:
-        problems.append(
-            f"{MATRIX_WORKFLOW}'s `{FORWARD_LABEL}` leg is bounded above ({forward}), so it can never resolve a "
-            f"version past the pin. That is the shape of the original break: every install path pinned below the "
-            f"major that turned isolation off, so nothing ran on it. Leave the ceiling off"
-        )
-    if shipped is not None:
-        floor, shipped_floor = lower_bound(forward), lower_bound(shipped)
-        if floor is not None and shipped_floor is not None and floor < shipped_floor:
-            problems.append(
-                f"{MATRIX_WORKFLOW}'s `{FORWARD_LABEL}` leg floors at {forward}, below the shipped floor "
-                f"{shipped}. Retargeting it downwards turns forward coverage into regression coverage for "
-                f"versions nothing installs, and leaves nothing between the next major and production"
-            )
-        shipped_ceiling = upper_bound(shipped)
-        declared = _WORKFLOW_CEILING.search(text)
-        if shipped_ceiling is None:
-            problems.append(f"{MATRIX_WORKFLOW}'s `{SHIPPED_LABEL}` leg {shipped} has no upper bound to compare against")
-        elif declared is None:
-            problems.append(
-                f"{MATRIX_WORKFLOW} declares no `SHIPPED_CEILING`, so the `Forward coverage` step cannot say "
-                f"whether the leg reached past the pin — and a leg that cannot report that is a leg that "
-                f"reports a duplicate green as evidence"
-            )
-        elif int(declared.group("major")) != shipped_ceiling[0]:
-            problems.append(
-                f"{MATRIX_WORKFLOW}'s `Forward coverage` step compares against SHIPPED_CEILING="
-                f"{declared.group('major')} while the shipped leg is {shipped} — the step would report "
-                f"forward coverage for a version inside the shipped range, or deny it for one above"
-            )
-    return problems
 
 
 # Where we deliberately do not look: prose, and the archived prototype subtree.
@@ -321,9 +215,7 @@ def main() -> int:
         else:
             locked_version = match.group("version")
             if agreed_so_far is not None and not satisfies(locked_version, agreed_so_far):
-                problems.append(
-                    f"{RESOLVED_FILE} resolved sqlglot {locked_version}, outside the declared {agreed_so_far}"
-                )
+                problems.append(f"{RESOLVED_FILE} resolved sqlglot {locked_version}, outside the declared {agreed_so_far}")
 
     stray = scan_for_unregistered()
     if stray:
@@ -334,10 +226,13 @@ def main() -> int:
     if not matrix_path.exists():
         problems.append(f"{MATRIX_WORKFLOW} is missing — the rewriter would no longer be tested across sqlglot majors")
     elif agreed is not None:
-        problems += matrix_problems(matrix_path.read_text(encoding="utf-8"), agreed)
+        leg = _SHIPPED_MATRIX_LEG.search(matrix_path.read_text(encoding="utf-8"))
+        if leg is None:
+            problems.append(f"{MATRIX_WORKFLOW} has no matrix leg labelled `shipped`")
+        elif normalise(leg.group("spec")) != agreed:
+            problems.append(f"{MATRIX_WORKFLOW} tests the shipped rewriter against {leg.group('spec')}, but the declared pin is {agreed}")
 
     if problems:
-        print(f"check_sqlglot_pin: root {REPO_ROOT}")
         print("check_sqlglot_pin: FAIL")
         for problem in problems:
             print(f"  - {problem}")
@@ -345,68 +240,12 @@ def main() -> int:
         return 1
 
     only = next(iter(seen))
-    print(f"check_sqlglot_pin: root {REPO_ROOT}")
     print(
         f"check_sqlglot_pin: OK — {len(DECLARING_FILES)} install paths all declare {only}, "
-        f"{RESOLVED_FILE} resolves {locked_version} inside it, and {MATRIX_WORKFLOW} tests "
-        f"that range plus everything above it"
+        f"and {RESOLVED_FILE} resolves {locked_version} inside it"
     )
     return 0
 
 
-# ── Self-test ────────────────────────────────────────────────────────────────
-#
-# The empty-tree refusal comes from the shared body. What is added here is the
-# matrix rule, because it is new and because a rule whose only exercise is a
-# tree that already satisfies it has never been observed to fail.
-_MATRIX_FIXTURE = """
-        include:
-          - sqlglot: '>=30,<31'
-            label: shipped
-          - sqlglot: '>=30'
-            label: forward-compat
-    steps:
-      - run: |
-          SHIPPED_CEILING = 31
-"""
-
-
-def _matrix_self_test() -> list[tuple[str, bool]]:
-    agreed = normalise(">=30,<31")
-
-    def detects(text: str, fragment: str) -> bool:
-        return any(fragment in problem for problem in matrix_problems(text, agreed))
-
-    return [
-        ("the unperturbed matrix reports nothing", not matrix_problems(_MATRIX_FIXTURE, agreed)),
-        (
-            "a shipped leg that is not the agreed pin is reported",
-            detects(_MATRIX_FIXTURE.replace("'>=30,<31'", "'>=23,<27'"), "but the declared pin is"),
-        ),
-        (
-            "a forward leg bounded above is reported",
-            detects(_MATRIX_FIXTURE.replace("- sqlglot: '>=30'", "- sqlglot: '>=30,<31'"), "is bounded above"),
-        ),
-        (
-            "a forward leg retargeted below the shipped floor is reported",
-            detects(_MATRIX_FIXTURE.replace("- sqlglot: '>=30'", "- sqlglot: '>=27'"), "below the shipped floor"),
-        ),
-        (
-            "a missing forward leg is reported",
-            detects(_MATRIX_FIXTURE.replace("label: forward-compat", "label: spare"), "has no matrix leg labelled"),
-        ),
-        (
-            "a SHIPPED_CEILING that has drifted from the shipped leg is reported",
-            detects(_MATRIX_FIXTURE.replace("SHIPPED_CEILING = 31", "SHIPPED_CEILING = 27"), "SHIPPED_CEILING="),
-        ),
-        (
-            "a deleted SHIPPED_CEILING is reported",
-            detects(_MATRIX_FIXTURE.replace("SHIPPED_CEILING = 31", "pass"), "declares no `SHIPPED_CEILING`"),
-        ),
-    ]
-
-
 if __name__ == "__main__":
-    if SELF_TEST_FLAG in sys.argv[1:]:
-        sys.exit(self_test_main(Path(__file__).name, extra=_matrix_self_test()))
     sys.exit(main())

@@ -86,8 +86,7 @@ def _fetch_json(url: str) -> object:
         raise SystemExit(f"fetch failed for {url}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise SystemExit(
-            f"{url} did not return JSON. The Engenuity API has changed shape "
-            f"before; check the endpoint before assuming a network fault."
+            f"{url} did not return JSON. The Engenuity API has changed shape before; check the endpoint before assuming a network fault."
         ) from exc
 
 
@@ -101,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         dest="rounds",
         action="append",
         choices=sorted(ROUNDS),
-        help="Round to fetch; repeatable. Defaults to the most recent the " "loader is known to parse.",
+        help="Round to fetch; repeatable. Defaults to the most recent the loader is known to parse.",
     )
     parser.add_argument(
         "--accept-license",
@@ -140,12 +139,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print()
     print("Next:")
-    print("  python -m services.agents.tests.fidelity.runner " f"--dataset mitre_engenuity --input {args.out}/<round>.json")
-    print(
-        "  Thresholds for the full corpus are in " "services/agents/tests/fidelity/expected_results.yaml under " "`mitre_engenuity_full`."
-    )
+    print(f"  python -m services.agents.tests.fidelity.runner --dataset mitre_engenuity --input {args.out}/<round>.json")
+    print("  Thresholds for the full corpus are in services/agents/tests/fidelity/expected_results.yaml under `mitre_engenuity_full`.")
     print()
-    print("  Any number you publish from this must carry MITRE Engenuity's own " "caveat: the evaluations do not rank vendors.")
+    print("  Any number you publish from this must carry MITRE Engenuity's own caveat: the evaluations do not rank vendors.")
     return 0
 
 

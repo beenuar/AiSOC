@@ -386,7 +386,7 @@ def main() -> int:
         return 1
 
     if len(derived) < args.max_unreachable:
-        print(f"\nThe ratchet can be tightened: lower MAX_UNREACHABLE to {len(derived)} " "in scripts/check_detection_fields.py.")
+        print(f"\nThe ratchet can be tightened: lower MAX_UNREACHABLE to {len(derived)} in scripts/check_detection_fields.py.")
 
     return 0
 

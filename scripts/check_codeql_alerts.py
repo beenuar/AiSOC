@@ -390,8 +390,7 @@ def evaluate(
             failures.append(
                 (
                     "open-alert",
-                    f"#{alert.get('number')} {rule.get('id')} [{rule.get('severity')}] "
-                    f"{location.get('path')}:{location.get('start_line')}",
+                    f"#{alert.get('number')} {rule.get('id')} [{rule.get('severity')}] {location.get('path')}:{location.get('start_line')}",
                 )
             )
 

@@ -224,7 +224,7 @@ def _require_pinned(oci_ref: str) -> str:
         return oci_ref
     raise PluginError(
         oci_ref,
-        "oci_ref must be pinned to a digest (repo@sha256:...); " "set AISOC_PLUGIN_ALLOW_UNPINNED=1 to accept a mutable tag",
+        "oci_ref must be pinned to a digest (repo@sha256:...); set AISOC_PLUGIN_ALLOW_UNPINNED=1 to accept a mutable tag",
     )
 
 

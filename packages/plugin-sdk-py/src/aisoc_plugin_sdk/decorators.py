@@ -25,6 +25,7 @@ def enricher(
         async def vt_enrich(request: EnrichmentRequest, ctx: PluginContext) -> EnrichmentResult:
             ...
     """
+
     def decorator(fn: Callable) -> type[EnricherPlugin]:
         manifest = PluginManifest(
             id=id,
@@ -68,6 +69,7 @@ def action(
         async def block_ip_action(request: ActionRequest, ctx: PluginContext) -> ActionResult:
             ...
     """
+
     def decorator(fn: Callable) -> type[ActionPlugin]:
         manifest = PluginManifest(
             id=id,
@@ -107,6 +109,7 @@ def connector(
     tags: list[str] | None = None,
 ) -> Callable:
     """Marker decorator — intended for use with ConnectorPlugin subclasses to set manifest metadata."""
+
     def decorator(cls: type) -> type:
         manifest = PluginManifest(
             id=id,
