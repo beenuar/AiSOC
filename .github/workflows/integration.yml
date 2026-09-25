@@ -193,6 +193,21 @@ jobs:
           AISOC_GRAPH_ENABLED: "true"
         run: docker compose --profile full up -d
 
+      # /v1/ingest is authenticated and the tenant comes from the
+      # credential, so the spine test holds one like any other pusher.
+      # Minted through the shipped command rather than inserted into
+      # Postgres, so this also covers the path an operator follows.
+      - name: Mint the ingest credential the spine test needs
+        run: |
+          set -euo pipefail
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_ingest_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_INGEST_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py
 

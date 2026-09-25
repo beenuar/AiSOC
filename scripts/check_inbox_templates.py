@@ -105,7 +105,13 @@ def declared_catalog_ids() -> set[str]:
     """
     tree = ast.parse(INBOX_ENDPOINT.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        targets = list(node.targets) if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
         for target in targets:
             if isinstance(target, ast.Name) and target.id == "_TEMPLATE_CATALOG":
                 value = node.value
