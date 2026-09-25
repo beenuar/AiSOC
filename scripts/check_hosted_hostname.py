@@ -154,12 +154,24 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "apps/web/src/components/landing/Hero.tsx": (2, _MARKETING),
     "apps/web/src/components/landing/Hero.test.tsx": (1, _MARKETING),
     "apps/web/src/components/landing/sections/Footer.tsx": (2, _MARKETING),
-    "apps/web/src/components/landing/sections/StickyNav.tsx": (2, _MARKETING),
-    "apps/web/src/components/landing/sections/DemoEmbed.tsx": (1, _MARKETING),
     "apps/web/src/components/landing/sections/DeployOptions.tsx": (1, _MARKETING),
-    "apps/web/src/components/landing/sections/Faq.tsx": (2, _MARKETING),
-    "apps/web/src/components/landing/sections/Hero.tsx": (1, _MARKETING),
     "apps/web/src/components/landing/sections/PricingTeaser.tsx": (1, _MARKETING),
+    # Four entries used to sit here and were dropped rather than renumbered,
+    # because their occurrences are gone rather than reduced:
+    #   sections/Hero.tsx      (1) the fold's primary button, "Open the live
+    #                              dashboard", pointing at the hosted host. The
+    #                              repository is the conversion, so it is now
+    #                              "Read the source on GitHub".
+    #   sections/StickyNav.tsx (2) the same button in the site-wide nav, desktop
+    #                              and mobile, on every marketing page.
+    #   sections/Faq.tsx       (2) "What runs in production today?" answered with
+    #                              beta deployments and a managed waitlist. The
+    #                              question was replaced; the adopter claim it
+    #                              asserted was not supported by anything.
+    #   sections/DemoEmbed.tsx (1) a mocked console whose chrome displayed a
+    #                              hosted URL. The file was deleted; its
+    #                              replacement shows real captures taken on
+    #                              localhost.
     "apps/web/content/blog/automation-maturity.mdx": (2, _MARKETING),
     "marketing/launch/blog-outlines.md": (2, _MARKETING),
     "marketing/launch/product-hunt.md": (1, _MARKETING),

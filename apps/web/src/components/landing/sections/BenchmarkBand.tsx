@@ -41,9 +41,13 @@ const METRICS: ReadonlyArray<Metric> = [
     caption: 'MITRE-tactic accuracy · substrate · per-case',
   },
   {
+    // `mtc_p50_seconds` is null on every row of the published scoreboard: the
+    // weekly wet-eval has never run against a funded provider key. This tile
+    // used to read "Sub-minute p50 · wet-eval target", which put an aspiration
+    // in a row of measurements and let a reader take it for one.
     value: undefined,
-    label: 'Sub-minute p50',
-    caption: 'End-to-end investigation latency · wet-eval target',
+    label: 'Not measured',
+    caption: 'Live-LLM investigation latency · no funded provider key',
   },
   {
     value: 35,
@@ -75,11 +79,13 @@ export function BenchmarkBand() {
             Benchmarked, not vibes.
           </h2>
           <p className="mt-4 text-base leading-relaxed text-velvet-content-secondary sm:text-lg">
-            Five pytest suites gate every PR. 200 synthetic incidents drawn
-            from 55 templates plus a 361-event telemetry corpus across 14
-            log sources. Per-template macros catch the regression the
-            per-case mean hides. Every figure is labelled — substrate
-            (gated per-PR) or wet-eval (weekly job).
+            Five pytest suites gate every PR over 200 synthetic incidents drawn
+            from 55 templates plus a 361-event telemetry corpus across 14 log
+            sources, and per-template macros catch the regression a per-case
+            mean hides. Every figure carries the label that says what it
+            measures: a substrate gate grades the harness&rsquo;s own
+            consistency, not the agent, and a figure nobody has measured says
+            so rather than showing a zero.
           </p>
         </div>
 

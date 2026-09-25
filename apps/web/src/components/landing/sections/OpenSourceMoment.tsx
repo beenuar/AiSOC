@@ -25,9 +25,18 @@ import { GithubMark } from './icons';
 
 const REPO_URL = 'https://github.com/beenuar/AiSOC';
 const CONTRIBUTING_URL = docs('contributing/guidelines');
+
+/**
+ * The snippet used to end `pnpm aisoc:demo`, under the caption "boots a
+ * pre-seeded case in under a minute". That command loads the synthetic demo
+ * dataset, so the three commands a visitor was given produced a stack whose
+ * every row is labelled `is_synthetic = true` — the one thing this project
+ * asks readers not to mistake for the product working. `make up` is the
+ * documented path and produces real data, and `make smoke` proves it did.
+ */
 const SNIPPET = `git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC
-pnpm aisoc:demo`;
+make up && make smoke`;
 
 export function OpenSourceMoment() {
   const prefersReducedMotion = useReducedMotion();
@@ -142,7 +151,8 @@ export function OpenSourceMoment() {
                   </div>
                 </div>
                 <p className="text-sm leading-relaxed text-velvet-content-secondary">
-                  Clone, demo, and inspect a live case in three commands:
+                  Clone it, bring the pipeline up, and prove it works — three
+                  commands, no credentials:
                 </p>
                 <pre className="overflow-x-auto rounded-lg border border-velvet-border bg-velvet-surface-raised/60 p-4 text-xs leading-relaxed text-velvet-content-secondary">
                   <code className="block whitespace-pre font-mono">
@@ -155,13 +165,16 @@ export function OpenSourceMoment() {
                     <span className="text-velvet-content-primary">AiSOC</span>
                     {'\n'}
                     <span className="select-none text-velvet-content-tertiary">$ </span>
-                    <span className="text-velvet-emerald-mint">pnpm</span>{' '}
-                    <span className="text-velvet-content-primary">aisoc:demo</span>
+                    <span className="text-velvet-emerald-mint">make</span>{' '}
+                    <span className="text-velvet-content-primary">up && make smoke</span>
                   </code>
                 </pre>
                 <div className="flex items-center gap-2 text-xs text-velvet-content-tertiary">
                   <Terminal className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Boots a pre-seeded case in under a minute.</span>
+                  <span>
+                    One real event through the real spine, PASS or FAIL per
+                    stage.
+                  </span>
                 </div>
                 {/* Hidden plaintext copy for screen readers / clipboard tools */}
                 <span className="sr-only">{SNIPPET}</span>
