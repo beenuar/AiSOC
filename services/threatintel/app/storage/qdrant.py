@@ -24,6 +24,12 @@ logger = structlog.get_logger(__name__)
 
 _IOC_COLLECTION = "threatintel_iocs"
 _ACTOR_COLLECTION = "threatintel_actors"
+
+#: Public aliases. The read route in ``app.api.indicators`` needs to name the
+#: collection it scrolls, and importing a private name across modules is how
+#: two spellings of the same string end up in the tree.
+IOC_COLLECTION = _IOC_COLLECTION
+ACTOR_COLLECTION = _ACTOR_COLLECTION
 _EMBEDDING_DIM = 1536  # text-embedding-3-small / ada-002
 
 # Sentinel tenant for globally-shared feed intel (STIX/TAXII/MISP), which is

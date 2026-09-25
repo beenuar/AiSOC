@@ -23,6 +23,8 @@ import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 import { DraftFromPromptDialog } from './DraftFromPromptDialog';
 import { demoFallback } from '@/lib/demoFallback';
+import { FailureBanner } from '@/components/ui/FailureBanner';
+import { describeApiFailure, jsonFetcher } from '@/lib/failure';
 
 /** Filter snapshot stored by the backend as a saved-view preset. */
 type PlaybookFilterSnapshot = PlaybookGalleryFilters;
@@ -36,11 +38,10 @@ const DEFAULT_PLAYBOOK_FILTERS: PlaybookFilterSnapshot = {
   search: '',
 };
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error('Failed to fetch');
-    return r.json();
-  });
+// Was `throw new Error('Failed to fetch')` — the status was discarded
+// entirely, so neither banner below it could say anything more specific than
+// "unavailable", and both guessed at a cause.
+const fetcher = jsonFetcher;
 
 /* ─────────────────────────── Run History Tab ─────────────────────────── */
 
@@ -53,16 +54,23 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 function RunHistoryTab() {
-  const { data, isLoading, error } = useSWR<PlaybookRun[]>(
+  const { data, isLoading, error, mutate } = useSWR<PlaybookRun[]>(
     '/api/v1/playbooks/runs?limit=100',
     fetcher,
     { refreshInterval: 10000 }
   );
   if (isLoading) return <div className="py-10 text-center text-gray-600 text-sm">Loading run history…</div>;
+  // "the agents service may be offline" was a guess, and on the 403 a
+  // non-responder role actually gets, it is the wrong one.
   if (error) return (
-    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-      Run history unavailable — the agents service may be offline.
-    </div>
+    <FailureBanner
+      title="Run history unavailable"
+      message={describeApiFailure(error, {
+        subject: 'playbook run history',
+        service: 'agents service',
+      })}
+      onRetry={() => mutate()}
+    />
   );
   if (!data || data.length === 0)
     // WS-F5 — fresh tenants haven't run anything yet; nudge toward the editor.
@@ -414,7 +422,7 @@ const MOCK_PLAYBOOKS: Playbook[] = [
 
 export function PlaybooksView() {
   const [tab, setTab] = useState<'playbooks' | 'runs' | 'community'>('playbooks');
-  const { data, isLoading, error } = useSWR<Playbook[]>('/api/v1/playbooks', fetcher, {
+  const { data, isLoading, error, mutate } = useSWR<Playbook[]>('/api/v1/playbooks', fetcher, {
     refreshInterval: 30000,
     fallbackData: demoFallback(MOCK_PLAYBOOKS),
   });
@@ -471,7 +479,9 @@ export function PlaybooksView() {
           onClick={() => setTab('playbooks')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${tab === 'playbooks' ? 'border-blue-500 text-blue-300' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
         >
-          Playbooks ({data?.length ?? '…'})
+          {/* '…' means "still loading"; on a failed request the count is not
+              pending, it is unknown. */}
+          Playbooks ({data?.length ?? (error ? '—' : '…')})
         </button>
         <button
           onClick={() => setTab('runs')}
@@ -505,10 +515,27 @@ export function PlaybooksView() {
 
           {isLoading && <div className="text-gray-600 text-sm">Loading playbooks…</div>}
 
+          {/* Outside the hosted demo there are no demo playbooks to show:
+              `fallbackData` is `undefined`, and a truthy `error` also
+              suppresses the empty state below, so this banner was the entire
+              tab. It now discloses the failure and says the list is unknown. */}
           {error && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-              Agents API unreachable — showing demo playbooks so you can explore the workflow.
-            </div>
+            <>
+              <FailureBanner
+                title="Playbooks unavailable"
+                message={describeApiFailure(error, {
+                  subject: 'playbook list',
+                  service: 'agents service',
+                })}
+                onRetry={() => mutate()}
+              />
+              <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-gray-800/60 bg-gray-900/40 px-4 py-12 text-center">
+                <p className="text-sm text-amber-200/80">The playbook list could not be loaded.</p>
+                <p className="text-[11px] text-gray-600">
+                  Treat this as unknown rather than as a tenant with no playbooks.
+                </p>
+              </div>
+            </>
           )}
 
           {!isLoading && !error && (!data || data.length === 0) && (

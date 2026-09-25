@@ -23,11 +23,9 @@
 ```
    Your security tools  (EDR, cloud, identity, network, SIEM)
              |
-             v
-   ┌──────────────────────────────────────────────────────┐
+   ┌─────────v────────────────────────────────────────────────┐
    │  normalize -> detect -> correlate -> investigate -> respond  │
-   └──────────────────────────────────────────────────────┘
-             |
+   └─────────|────────────────────────────────────────────────┘
              v
    SOC analyst: one incident, with the evidence and the reasoning
 ```
@@ -40,36 +38,40 @@ recorded, and proposes an action. A human approves before anything executes.
 
 ```bash
 git clone https://github.com/beenuar/AiSOC && cd AiSOC
-cp .env.example .env
 make up
 ```
 
-`make up` finishes by creating an administrator and printing its password.
-That password is generated on your machine, shown once, and stored nowhere —
-copy it before the terminal scrolls. If you lose it, mint a new one with
+Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker
+VM**, plus `python3` (3.9+) and `bash` — `make doctor` checks all of it, and
+[Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements)
+says what each number was measured against. The first run downloads a ~2 GB
+language model into a named volume; only `make clean` fetches it again.
+
+`make up` also creates `.env` and generates the three secrets in it — the
+credential-vault key, the session signing key, and the service-to-service
+token — then creates an administrator and prints its password. That password
+is generated on your machine, shown once, and stored nowhere: copy it before
+the terminal scrolls, or mint a new one with
 `make bootstrap ARGS=--reset-password`.
 
-Then **prove it actually works** — this is the part that matters:
-
-```bash
-make smoke
-```
-
-That posts one real event to the ingest API and follows it through Kafka,
-detection, correlation and Postgres, then reads the resulting alert back out
-of the public API. Every stage reports PASS or FAIL:
+Then **prove it actually works** — this is the part that matters. `make smoke`
+posts one real event to the ingest API, follows it through Kafka, detection,
+correlation and Postgres, and reads the resulting alert back out of the public
+API. Every stage reports PASS or FAIL:
 
 ```
+$ make smoke
 [PASS] raw telemetry accepted by ingest
 [PASS] event traversed the spine and became an alert
 [PASS] alert is retrievable by id from the API
 ```
 
 Open **http://localhost:3000** and sign in with the credentials `make up`
-printed (API docs at **http://localhost:8000/api/docs**).
+printed (API docs at **http://localhost:8000/api/docs**). Deploying somewhere
+that is not your laptop? Set `AISOC_CONSOLE_URL` in `.env` so the printed
+address is the one people browse to.
 
-Something wrong? `make doctor` checks every dependency and tells you what to
-run next. Requires Docker with ~6.5 GB of RAM.
+Something wrong? `make doctor` checks every dependency and says what to run next.
 
 ## Try it without connecting anything
 
@@ -77,16 +79,13 @@ run next. Requires Docker with ~6.5 GB of RAM.
 make demo
 ```
 
-> **The demo dataset is synthetic.** It exists to show the pipeline shape, not
-> to represent real activity. Every row it writes is marked
-> `is_synthetic = true` in the database and labelled in the console. It is not
-> a benchmark, a customer, or a real incident.
+> **The demo dataset is synthetic.** It shows the pipeline shape, not real
+> activity. Every row is marked `is_synthetic = true` in the database and
+> labelled in the console. It is not a benchmark, a customer, or an incident.
 
 ## Connect real data
 
-Two ways in. Push, from anything that can make an HTTP request. The tenant
-comes from the credential, not from a header, so mint one first with
-`make ingest-token`:
+Two ways in. Push, with a credential from `make ingest-token` (the tenant comes from it, not from a header):
 
 ```bash
 curl -X POST http://localhost:8081/v1/ingest/batch \
@@ -100,12 +99,11 @@ Or pull, by configuring one of **84 click-and-connect data connectors** in
 **Settings → Connectors** (needs the `full` profile). Those with
 vendor-specific normalization and live setup docs include Splunk, Microsoft
 Sentinel, Elastic, CrowdStrike, Okta, AWS (GuardDuty / CloudTrail / Security
-Hub), Wiz, and Kubernetes audit logs. The full list is in the
+Hub), Wiz, and Kubernetes audit logs — full list in the
 [connector docs](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage).
-
-A connector without a vendor profile still ingests through a generic mapping,
-which resolves host, user and source IP from the usual spellings so the alert
-is still pivotable. A vendor profile adds that vendor's own field names on top.
+A connector without a vendor profile still ingests through a generic mapping
+that resolves host, user and source IP from the usual spellings, so the alert
+is pivotable either way.
 
 ## How it works
 
@@ -123,23 +121,28 @@ response.
 
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 11 | ~6.5 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console, plus the LLM gateway |
-| **full** | `make up-full` | 21 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, scheduled connectors |
-| **demo** | `make up && make demo` | 11 | ~6.5 GB | Core plus labelled synthetic data |
+| **core** | `make up` | 14 | ~8 GB | The full alerting pipeline: ingest → detect → correlate → alert → triage → console, plus the LLM gateway, a local model, and the CISA KEV threat feed |
+| **full** | `make up-full` | 22 | ~12 GB | Core plus event lake, entity graph, full-text search, enrichment, scheduled connectors |
+| **demo** | `make up && make demo` | 14 | ~8 GB | Core plus labelled synthetic data |
 
-CORE is not a cut-down toy — it is the smallest deployment that takes a real
-event and produces a real alert.
+CORE is the smallest deployment that takes a real event and produces a real
+alert, and **it needs no credentials to do either** — for two reasons.
 
-**What CORE can and cannot do about AI.** The LLM gateway ships in CORE, so a
-provider key in `.env` reaches a model with no profile change and no second
-command. That route is proven against a **local** model — one real completion,
-measured, through Ollama on an operator's own hardware. **No hosted provider
-has ever been exercised**: this project has no funded key, so its published
-per-model rows read *not measured* rather than zero. Until you supply a key
-there is no AI — every alert takes the deterministic path and the console says
-so. The gateway is also the only thing that can report what a call cost, so an
-unmeasured cost renders as absent, never as `$0.00`. Reasoning:
-[ADR-0006](docs/decisions/0006-llm-gateway-in-core.md).
+**The model ships with the gateway.** Ollama runs a pinned ~2 GB
+`llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up`
+produces real triage verdicts with real token counts in the Investigation
+Ledger — not a stub. A 3B quantized model is not a frontier model; to upgrade,
+set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP` and an
+empty `AISOC_LLM_API_BASE` in `.env`, then `make up` again. **No hosted
+provider has ever been exercised here** — there is no funded key, so per-model
+rows read *not measured* rather than zero, and an unmeasured cost renders as
+absent, never `$0.00`. ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
+
+**One real external feed ships too.** `services/threatintel` polls the
+[CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+catalog — authoritative, public, no API key — into the console's Threat
+Intelligence page: the one thing in a fresh install that is neither synthetic
+nor yours.
 
 ## Real vs synthetic data
 
@@ -148,6 +151,7 @@ This matters more than any feature, so it is stated plainly.
 | Kind | Where | How you can tell |
 |---|---|---|
 | **Real** | Your connectors and the ingest API | `is_synthetic = false` (the default) |
+| **Real, and not yours** | The CISA KEV feed on the Threat Intelligence page | Every row carries `source: cisa-kev`; it is the public catalog, unmodified |
 | **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
 | **Benchmark** | `services/agents/tests/eval_data/` | Every published row carries `substrate: true` |
 | **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
@@ -175,8 +179,9 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
   approver must hold the required permission tier and must not be the person
   who requested the action.
 
-Without a model provider key, agents run a deterministic offline path and say
-so. They do not fabricate a verdict.
+CORE's bundled local model means agents reason for real out of the box. If no
+model is reachable at all they run a deterministic offline path and say so —
+they never fabricate a verdict.
 
 ## Project maturity
 
@@ -209,25 +214,21 @@ so. They do not fabricate a verdict.
 
 ## Troubleshooting
 
-`make doctor` diagnoses the deployment and prints the command to run next.
-The five most common failures:
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `port is already allocated` | Something else on 5432/6379/9092/3000 | `make doctor` names the port; stop it or edit the host port |
-| Kafka reports healthy but nothing flows | Docker VM out of disk — Kafka corrupts its log dir and still passes its healthcheck | `docker system prune -af`, then `make clean && make up` |
-| `make smoke` fails at "became an alert" | fusion is down or not consuming | `docker compose logs fusion \| tail -60` |
-| Console loads but is empty | No data yet — this is correct | `make smoke`, or `make demo` |
-| Services restart-loop on 8 GB machines | Not enough RAM for `full` | Use `make up` (core) |
+`make doctor` diagnoses the deployment and prints the command to run next. It
+checks the host tools, free memory and disk in the Docker VM, every port, each
+datastore by querying it rather than by asking whether its container is up, and
+whether `.env` still holds template placeholders. The six failures it is most
+often right about — and what each one actually means — are tabulated under
+[Installation → Troubleshooting](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
 
 ## Security
 
-Secrets live in `.env` and are never committed; connector credentials are
-encrypted at rest with a per-deployment key. Tenant isolation is enforced at
-the query layer in every store, not by convention. RBAC gates every mutating
-route. Prompts are validated before they leave the deployment, and you can
-bring your own model key or run entirely local models. Report vulnerabilities
-via [SECURITY.md](SECURITY.md).
+Secrets live in `.env`, are generated per deployment, and are never committed;
+connector credentials are encrypted at rest with a per-deployment key. Tenant
+isolation is enforced at the query layer in every store, not by convention.
+RBAC gates every mutating route. Prompts are validated before they leave the
+deployment, and the default install never sends one anywhere — the model runs
+beside it. Report vulnerabilities via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
@@ -240,10 +241,9 @@ make stats       # recount every figure this README publishes
 Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
 [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
 [plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
-[contributing](CONTRIBUTING.md)
-
-The connector and detection-rule counts here are recounted from the tree by
-`scripts/project_stats.py`, which CI fails if this README disagrees with it.
+[contributing](CONTRIBUTING.md). The connector and detection-rule counts above
+are recounted from the tree by `scripts/project_stats.py`, which CI fails if
+this README disagrees with it.
 
 ## Roadmap · Contributing · License
 

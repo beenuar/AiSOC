@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import type { AttackChainTimeline, Case } from '@/lib/api';
+import { __setDemoModeForTests } from '@/lib/demoMode';
 
 // We mock SWR rather than the real network layer so the test stays
 // hermetic and so we can exercise both the loaded and fallback paths.
@@ -134,6 +135,7 @@ describe('CaseWorkspace', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    __setDemoModeForTests(null);
   });
 
   it('renders the case header with title, severity, and MITRE chips', () => {
@@ -153,18 +155,22 @@ describe('CaseWorkspace', () => {
     );
   });
 
-  it('shows the demo banner when the backend errors out', () => {
+  it('shows the demo banner when the backend errors out in the hosted demo', () => {
+    // This case previously asserted the fallback fired on *any* deployment.
+    // `buildDemoCase(caseId)` copies the route param, so outside the demo it
+    // put an invented title, assignee and timeline on screen under the id the
+    // analyst had opened. The fallback is right for the hosted demo, which
+    // has no backend of its own, and wrong everywhere else — see
+    // `CaseWorkspaceHonesty.test.tsx` for the other half.
+    __setDemoModeForTests(true);
     swrState.caseData = undefined;
     swrState.caseError = new Error('fetch failed');
 
     render(<CaseWorkspace caseId="INC-001" />);
 
-    // Falls back to buildDemoCase, so the demo title renders…
     expect(
       screen.getByRole('heading', { level: 1, name: /lateral movement from finance subnet/i }),
     ).toBeInTheDocument();
-
-    // …and the demo-mode banner is visible so the analyst knows it's not live data.
     expect(screen.getByText(/demo data — writes disabled/i)).toBeInTheDocument();
   });
 

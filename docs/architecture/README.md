@@ -251,17 +251,30 @@ One architecture, three profiles of it — not three architectures.
 
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 11 | ~6.5 GB | Ingest → detect → correlate → alert → triage → console, plus the LLM gateway. The full alerting pipeline. |
-| **full** | `make up-full` | 21 | ~12 GB | Core plus event lake, entity graph, vector store, enrichment, connectors. |
-| **demo** | `make up && make demo` | 11 | ~6.5 GB | Core plus clearly-labelled synthetic data. |
+| **core** | `make up` | 14 | ~8 GB | Ingest → detect → correlate → alert → triage → console, plus the LLM gateway, the local model behind it, and the CISA KEV threat feed with its vector store. |
+| **full** | `make up-full` | 22 | ~12 GB | Core plus event lake, entity graph, full-text search, enrichment, scheduled connectors. |
+| **demo** | `make up && make demo` | 14 | ~8 GB | Core plus clearly-labelled synthetic data. |
 
-The LLM gateway moved into CORE this release, so a provider key works without
-a profile change. `full` is 21 services, not the 30 published here previously:
-30 is `full` plus the `monitoring`, `chatops`, `extras` and `osquery`
-profiles, which `make up-full` does not start.
+`full` is 22 services, not the 30 published here previously: 30 is `full` plus
+the `monitoring`, `chatops`, `extras` and `osquery` profiles, which
+`make up-full` does not start. (The CORE count is fourteen long-running
+containers; `ollama-pull` is a fifteenth that runs once and exits.)
 
 CORE is not a toy. It is the smallest deployment that can take a real event
-and produce a real alert, which is the thing the product is for.
+and produce a real alert, which is the thing the product is for — **and it does
+that, and triages the result with a real model, with no credentials**. Three
+services moved into CORE to make that last clause true:
+
+* **`litellm`** — the gateway. Every `aisoc-<role>` alias resolves here and
+  nowhere else, so a CORE deployment *with* a provider key could not use it.
+* **`ollama` (+ a one-shot `ollama-pull`)** — the model behind the gateway,
+  pinned at `llama3.2:3b-instruct-q4_K_M` (~2 GB, CPU-only). Promoted from the
+  air-gapped overlay, where this pairing was already proven end to end. Without
+  it the gateway in CORE could route a key nobody had.
+* **`threatintel` + `qdrant`** — the CISA Known Exploited Vulnerabilities feed,
+  which is public and keyless, and the store it writes to. OpenSearch and Neo4j
+  stay in `full`: both sinks are best-effort, so their absence costs full-text
+  IOC search and the actor graph, not the feed.
 
 **Two flags travel with the `full` profile.** The lake writer and the
 graph writer target stores that exist only there, so in CORE they default off

@@ -518,13 +518,30 @@ async def persist_auto_triage(
                     # a list-price guess keyed on a gateway alias, so a local
                     # deployment that spent nothing accrued a per-alert dollar
                     # figure here and everywhere reading from here.
+                    #
+                    # COALESCE on both sums, matching `complete_run` above.
+                    # Both columns are NOT NULL, and `None` is the ordinary
+                    # value of `estimated_cost_usd` whenever no estimate was
+                    # made — which is every run against a local model, because
+                    # there is no list price for `ollama_chat/...`. Binding it
+                    # directly made the UPDATE violate the constraint, so the
+                    # whole transaction rolled back, the worker retried three
+                    # times and dead-lettered the alert. With a model shipped in
+                    # CORE that is not an edge case: it was *every* auto-triage
+                    # run on a default install, and the console showed no
+                    # verdict for an LLM call that had genuinely happened.
+                    #
+                    # Leaving the column at its DEFAULT 0 is not a claim that
+                    # the run cost nothing — `estimated_call_count` and
+                    # `unpriced_call_count` are what carry that distinction, and
+                    # they are written from the same tuple.
                     """
                     UPDATE investigation_runs
                        SET status = 'completed', iterations = $2,
                            total_tokens = $3,
-                           total_cost_usd = $4,
+                           total_cost_usd = COALESCE($4, total_cost_usd),
                            measured_call_count = $5,
-                           estimated_cost_usd = $6,
+                           estimated_cost_usd = COALESCE($6, estimated_cost_usd),
                            estimated_call_count = $7,
                            unpriced_call_count = $8,
                            completed_at = now()

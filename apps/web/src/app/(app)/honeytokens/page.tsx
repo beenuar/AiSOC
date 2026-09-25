@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
+import { useTenantId } from "@/components/layout/TenantProvider";
 
 // Same-origin by default — Next.js rewrites proxy `/api/v1/honeytokens/*`
 // to the honeytokens service. Override with `NEXT_PUBLIC_HONEYTOKENS_URL`
 // to debug against a different origin.
 const API = process.env.NEXT_PUBLIC_HONEYTOKENS_URL ?? "";
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
+
+// The tenant used to come from `NEXT_PUBLIC_TENANT_ID`, defaulting to the
+// literal `00000000-0000-0000-0000-000000000001`. A `NEXT_PUBLIC_*` value is
+// inlined at build time, so on a multi-tenant deployment it is one constant
+// for every operator of every tenant: the list showed another tenant's
+// honeytokens, and "Create Honeytoken" planted the decoy in that tenant. The
+// active tenant now comes from `TenantProvider`, the same source the rest of
+// the console's `X-Tenant-Id` header uses.
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
@@ -110,9 +118,11 @@ function TokenRow({
 }
 
 function CreateTokenModal({
+  tenantId,
   onClose,
   onCreate,
 }: {
+  tenantId: string;
   onClose: () => void;
   onCreate: () => void;
 }) {
@@ -131,7 +141,7 @@ function CreateTokenModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenant_id: TENANT_ID,
+          tenant_id: tenantId,
           name,
           description: description || null,
           token_type: tokenType,
@@ -284,19 +294,26 @@ function TriggersPanel({ tokenId, onClose }: { tokenId: string; onClose: () => v
 }
 
 export default function HoneytokensPage() {
+  const tenantId = useTenantId();
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const listKey = `${API}/api/v1/honeytokens?tenant_id=${TENANT_ID}${statusFilter ? `&status=${statusFilter}` : ""}${typeFilter ? `&token_type=${typeFilter}` : ""}`;
+  // `null` until the tenant resolves, which suspends the fetch rather than
+  // issuing it against a placeholder UUID.
+  const listKey = tenantId
+    ? `${API}/api/v1/honeytokens?tenant_id=${tenantId}${statusFilter ? `&status=${statusFilter}` : ""}${typeFilter ? `&token_type=${typeFilter}` : ""}`
+    : null;
 
   const { data: rawTokens, isLoading } = useSWR<HoneytokenRecord[]>(listKey, fetcher, {
     refreshInterval: 15_000,
   });
   const tokens = Array.isArray(rawTokens) ? rawTokens : undefined;
 
-  const refresh = () => mutate(listKey);
+  const refresh = () => {
+    if (listKey) void mutate(listKey);
+  };
 
   const revoke = async (id: string) => {
     await fetch(`${API}/api/v1/honeytokens/${id}/revoke`, { method: "PATCH" });
@@ -328,7 +345,9 @@ export default function HoneytokensPage() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          disabled={!tenantId}
+          title={tenantId ? undefined : 'Waiting for the active tenant to resolve'}
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
         >
           + New Token
         </button>
@@ -378,7 +397,9 @@ export default function HoneytokensPage() {
 
       {/* Table */}
       <div className="bg-gray-900/60 border border-gray-700 rounded-lg overflow-hidden">
-        {isLoading ? (
+        {!tenantId ? (
+          <div className="p-8 text-center text-sm text-gray-500">Resolving the active tenant…</div>
+        ) : isLoading ? (
           <div className="p-8 text-center text-sm text-gray-500">Loading tokens…</div>
         ) : !tokens?.length ? (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -412,8 +433,12 @@ export default function HoneytokensPage() {
       </div>
 
       {/* Modals */}
-      {showCreate && (
-        <CreateTokenModal onClose={() => setShowCreate(false)} onCreate={refresh} />
+      {showCreate && tenantId && (
+        <CreateTokenModal
+          tenantId={tenantId}
+          onClose={() => setShowCreate(false)}
+          onCreate={refresh}
+        />
       )}
       {selectedId && (
         <TriggersPanel tokenId={selectedId} onClose={() => setSelectedId(null)} />

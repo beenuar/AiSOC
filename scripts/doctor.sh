@@ -83,6 +83,25 @@ else
   pass "docker compose v2 available"
 fi
 
+# Docker is not the only host requirement and the other two were undocumented.
+# `make smoke` — the README's headline proof — is a Python script run on the
+# host, not in a container, and `make up` generates `.env` with another one. An
+# operator without python3 gets a traceback from the command the quick start
+# tells them to trust.
+if have python3; then
+  pass "python3 available ($(python3 --version 2>&1 | awk '{print $2}'))"
+else
+  fail "python3 is not installed — make smoke and make env run on the host" "https://www.python.org/downloads/ (3.9+; CI uses 3.11)"
+fi
+
+# Every script under scripts/ has a bash shebang and uses bash-only syntax.
+# macOS ships bash 3.2, which is enough for all of them.
+if have bash; then
+  pass "bash available"
+else
+  fail "bash is not installed — every script under scripts/ needs it" "install bash from your package manager"
+fi
+
 # Skipped under --ports-only: `make up` runs that mode as a pre-flight, and the
 # disk probe starts a container. Advisories about free space do not belong in
 # the path between typing `make up` and the stack starting.
@@ -90,22 +109,29 @@ if [ "$PORTS_ONLY" = "0" ] && docker info >/dev/null 2>&1; then
   # Disk exhaustion inside the Docker VM corrupts Kafka's log dir and the
   # broker then reports healthy while refusing every request. That exact
   # failure cost hours, so it is checked before anything else.
+  #
+  # The thresholds are measured, not guessed: CORE is 16.5GB of unique image
+  # layers plus a 2GB model volume, so 20GB is the floor at which a first
+  # `make up` completes with room for Postgres, Kafka and Qdrant to grow.
   avail_raw="$(docker run --rm --entrypoint sh alpine:3 -c 'df -P /' 2>/dev/null | awk 'NR==2{print $4}')"
   if [ -n "${avail_raw:-}" ]; then
     avail_gb=$((avail_raw / 1024 / 1024))
     if [ "$avail_gb" -lt 5 ]; then
       fail "docker has ${avail_gb}GB free — Kafka will corrupt its log dir below ~2GB" "docker system prune -af && docker volume prune -f"
-    elif [ "$avail_gb" -lt 15 ]; then
-      warn "docker has ${avail_gb}GB free (15GB+ recommended for the full profile)" "docker system prune -af"
+    elif [ "$avail_gb" -lt 20 ]; then
+      warn "docker has ${avail_gb}GB free — CORE needs ~20GB (16.5GB of images plus a 2GB model)" "docker system prune -af"
     else
       pass "docker disk space: ${avail_gb}GB free"
     fi
   fi
 
+  # CORE measured 4.84GiB resident with the local model loaded, so 8GB is the
+  # floor rather than the old 6: the model is mapped in on first inference and
+  # the ollama container grows to roughly the model size while serving.
   mem_bytes="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
   mem_gb=$((mem_bytes / 1024 / 1024 / 1024))
-  if [ "$mem_gb" -gt 0 ] && [ "$mem_gb" -lt 6 ]; then
-    fail "docker has ${mem_gb}GB RAM — CORE needs 6GB, full needs 12GB" "raise the memory limit in Docker Desktop → Settings → Resources"
+  if [ "$mem_gb" -gt 0 ] && [ "$mem_gb" -lt 8 ]; then
+    fail "docker has ${mem_gb}GB RAM — CORE needs 8GB (the bundled local model reaches ~3GB while answering), full needs 12GB" "raise the memory limit in Docker Desktop → Settings → Resources"
   elif [ "$mem_gb" -gt 0 ]; then
     pass "docker memory: ${mem_gb}GB"
   fi
@@ -189,11 +215,32 @@ fi
 head2 "Configuration"
 if [ -f .env ]; then
   pass ".env present"
-  if grep -qE '^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$' .env 2>/dev/null; then
-    warn ".env has unset or placeholder secrets" "./install.sh regenerates them, or edit .env by hand"
+  # Delegated to scripts/check_env_placeholders.py rather than grepped here.
+  # The grep this replaced was
+  #   ^[A-Z_]*(SECRET|PASSWORD|KEY)=(change_me|changeme|)$
+  # which matched neither placeholder the repository actually shipped, so the
+  # one check built to catch them reported clean on the exact .env that broke
+  # the vault. A detector and the file it inspects cannot be two hand-kept
+  # lists; tests/test_env_placeholder_gate.py now compares them.
+  if have python3; then
+    if placeholders="$(python3 scripts/check_env_placeholders.py .env 2>/dev/null)" && [ -z "${placeholders##*OK*}" ]; then
+      pass ".env has no placeholder values"
+    else
+      fail ".env still contains template placeholders:"$'\n'"$(printf '%s\n' "$placeholders" | sed 's/^/    /')" \
+           "make env   # generates real values for the secrets that need them"
+    fi
+  else
+    warn "cannot check .env for placeholders: python3 is not installed" "install python3 — make smoke and make env need it too"
+  fi
+  # A generated secret that is still empty is not fatal (the vault falls back
+  # to an ephemeral development key) but it does mean saved connector
+  # credentials will not survive a restart, which is worth saying out loud.
+  if have python3 && ! python3 scripts/ensure_env.py --check >/dev/null 2>&1; then
+    warn ".env has generated secrets that are still unset — connector credentials will not survive a restart" \
+         "make env"
   fi
 else
-  warn ".env not found — compose will fall back to built-in dev defaults" "cp .env.example .env"
+  warn ".env not found — compose will fall back to built-in dev defaults" "make env"
 fi
 
 # ── 4. Datastores — probed, not just 'running' ──────────────────────────────

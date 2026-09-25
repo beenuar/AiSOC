@@ -147,7 +147,7 @@ A view executes its underlying reads as the **view's owner** unless it is declar
 
 #### What an operator still has to do
 
-The compose stacks and CI need nothing: `infra/postgres/initdb/zz_runtime_role_password.sh` runs inside the postgres image's first-boot init, after the migration chain and before the container reports healthy, and sets the runtime role's password from `AISOC_APP_DB_PASSWORD`. `depends_on: service_healthy` makes that ordering a guarantee rather than a race.
+The compose stacks and CI need nothing: `infra/postgres/initdb/20_runtime_role_password.sh` runs inside the postgres image's first-boot init, after the migration chain and before the container reports healthy, and sets the runtime role's password from `AISOC_APP_DB_PASSWORD`. `depends_on: service_healthy` makes that ordering a guarantee rather than a race.
 
 Three cases are **not** automatic:
 

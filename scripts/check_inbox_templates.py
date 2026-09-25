@@ -39,9 +39,20 @@ import ast
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_DIR = REPO_ROOT / "services/ingest/internal/normalizer/templates"
-INBOX_ENDPOINT = REPO_ROOT / "services/api/app/api/v1/endpoints/inbox.py"
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root
+
+# Asked of git rather than computed from __file__: two levels above this
+# script is whatever happens to be there, which is how a gate ends up
+# reporting OK about a tree that is not the repository.
+REPO_ROOT = repo_root()
+TEMPLATE_DIR_REL = Path("services/ingest/internal/normalizer/templates")
+INBOX_ENDPOINT_REL = Path("services/api/app/api/v1/endpoints/inbox.py")
+TEMPLATE_DIR = REPO_ROOT / TEMPLATE_DIR_REL
+INBOX_ENDPOINT = REPO_ROOT / INBOX_ENDPOINT_REL
 
 #: Mintable ids that deliberately have no YAML, and why. An id may only be
 #: in ``ALLOWED_TEMPLATE_IDS`` without a template file if it is listed here.

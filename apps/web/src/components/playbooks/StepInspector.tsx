@@ -16,27 +16,26 @@
  *   - The `condition` editor still applies to every step kind; it
  *     gates whether the step runs (and, for `condition` steps, drives
  *     true/false branching on the canvas).
- *   - `validateStepParams` is run on every change and surfaced in the
+ *   - `validateStepFields` is run on every change and surfaced in the
  *     form so users see required-field issues before saving.
+ *   - The type dropdown offers what the engine can run. A step whose type
+ *     it cannot — `approval`, today — still renders, because a playbook
+ *     imported with one has to be readable in order to be fixed; it is
+ *     listed in the dropdown only while it is the step's current type, and
+ *     `StepExecutionNotice` says plainly that the run will stop there.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import type { PlaybookStep, StepType, OnFailure } from './types';
 import { STEP_TYPE_META } from './stepColors';
-import { STEP_SCHEMAS, defaultParamsFor, validateStepParams } from './stepSchemas';
+import {
+  AUTHORABLE_STEP_TYPES,
+  STEP_SCHEMAS,
+  defaultParamsFor,
+  validateStepFields,
+} from './stepSchemas';
 import { SchemaForm } from './SchemaForm';
-
-const ALL_TYPES: StepType[] = [
-  'enrich',
-  'investigate',
-  'notify',
-  'block_ip',
-  'isolate_host',
-  'create_ticket',
-  'close_case',
-  'http',
-  'condition',
-];
+import { StepExecutionNotice } from './StepExecutionNotice';
 
 interface StepInspectorProps {
   step: PlaybookStep;
@@ -51,6 +50,7 @@ export function StepInspector({
   onDelete,
   readOnly = false,
 }: StepInspectorProps) {
+  const uid = useId();
   const [local, setLocal] = useState<PlaybookStep>(step);
 
   useEffect(() => {
@@ -76,8 +76,18 @@ export function StepInspector({
   const meta = STEP_TYPE_META[local.type];
   const schema = STEP_SCHEMAS[local.type];
   const validationErrors = useMemo(
-    () => validateStepParams(local.type, local.params ?? {}),
+    () => validateStepFields(local.type, local.params ?? {}),
     [local.type, local.params],
+  );
+  // An unrunnable type is not offered, but it is kept in the list while it is
+  // the step's own type — otherwise the select would silently display some
+  // other step kind for a step that is not one.
+  const typeOptions = useMemo(
+    () =>
+      AUTHORABLE_STEP_TYPES.includes(local.type)
+        ? AUTHORABLE_STEP_TYPES
+        : [local.type, ...AUTHORABLE_STEP_TYPES],
+    [local.type],
   );
 
   return (
@@ -107,16 +117,15 @@ export function StepInspector({
         )}
       </div>
 
-      {schema.description && (
-        <div className="text-xs text-gray-500 leading-relaxed">
-          {schema.description}
-        </div>
-      )}
+      <StepExecutionNotice schema={schema} />
 
       {/* Name */}
       <div>
-        <label className="block text-gray-400 text-xs mb-1">Step Name</label>
+        <label htmlFor={`${uid}-name`} className="block text-gray-400 text-xs mb-1">
+          Step Name
+        </label>
         <input
+          id={`${uid}-name`}
           value={local.name}
           onChange={(e) => update({ name: e.target.value })}
           disabled={readOnly}
@@ -126,16 +135,22 @@ export function StepInspector({
 
       {/* Type */}
       <div>
-        <label className="block text-gray-400 text-xs mb-1">Step Type</label>
+        <label htmlFor={`${uid}-type`} className="block text-gray-400 text-xs mb-1">
+          Step Type
+        </label>
         <select
+          id={`${uid}-type`}
           value={local.type}
           onChange={(e) => changeType(e.target.value as StepType)}
           disabled={readOnly}
           className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-60"
         >
-          {ALL_TYPES.map((t) => (
+          {typeOptions.map((t) => (
             <option key={t} value={t}>
-              {STEP_TYPE_META[t].icon} {STEP_TYPE_META[t].label}
+              {STEP_SCHEMAS[t].icon} {STEP_SCHEMAS[t].label}
+              {STEP_SCHEMAS[t].execution === 'unimplemented'
+                ? ' — not runnable'
+                : ''}
             </option>
           ))}
         </select>
@@ -143,8 +158,14 @@ export function StepInspector({
 
       {/* On Failure */}
       <div>
-        <label className="block text-gray-400 text-xs mb-1">On Failure</label>
+        <label
+          htmlFor={`${uid}-on-failure`}
+          className="block text-gray-400 text-xs mb-1"
+        >
+          On Failure
+        </label>
         <select
+          id={`${uid}-on-failure`}
           value={local.on_failure}
           onChange={(e) => update({ on_failure: e.target.value as OnFailure })}
           disabled={readOnly}
@@ -159,8 +180,14 @@ export function StepInspector({
       {/* Retry / Timeout */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-gray-400 text-xs mb-1">Retry Max</label>
+          <label
+            htmlFor={`${uid}-retry-max`}
+            className="block text-gray-400 text-xs mb-1"
+          >
+            Retry Max
+          </label>
           <input
+            id={`${uid}-retry-max`}
             type="number"
             min={0}
             max={5}
@@ -171,8 +198,14 @@ export function StepInspector({
           />
         </div>
         <div>
-          <label className="block text-gray-400 text-xs mb-1">Timeout (s)</label>
+          <label
+            htmlFor={`${uid}-timeout`}
+            className="block text-gray-400 text-xs mb-1"
+          >
+            Timeout (s)
+          </label>
           <input
+            id={`${uid}-timeout`}
             type="number"
             min={1}
             max={600}
@@ -186,14 +219,19 @@ export function StepInspector({
         </div>
       </div>
 
-      {/* Condition */}
-      <div>
-        <label className="block text-gray-400 text-xs mb-1">
+      {/* Condition — a group of three controls, so a fieldset rather than a
+          label pointing at nothing in particular. */}
+      <fieldset className="border-0 p-0 m-0">
+        <legend className="block text-gray-400 text-xs mb-1">
           Condition (optional)
-        </label>
+        </legend>
         <div className="space-y-2 border border-gray-700 rounded p-3">
           <div>
+            <label htmlFor={`${uid}-cond-field`} className="sr-only">
+              Condition field
+            </label>
             <input
+              id={`${uid}-cond-field`}
               placeholder="field e.g. verdict"
               value={local.condition?.field ?? ''}
               onChange={(e) =>
@@ -210,7 +248,11 @@ export function StepInspector({
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
+            <label htmlFor={`${uid}-cond-operator`} className="sr-only">
+              Condition operator
+            </label>
             <select
+              id={`${uid}-cond-operator`}
               value={local.condition?.operator ?? 'eq'}
               onChange={(e) =>
                 update({
@@ -237,7 +279,11 @@ export function StepInspector({
               <option value="contains">contains</option>
               <option value="exists">exists</option>
             </select>
+            <label htmlFor={`${uid}-cond-value`} className="sr-only">
+              Condition value
+            </label>
             <input
+              id={`${uid}-cond-value`}
               placeholder="value"
               value={String(local.condition?.value ?? '')}
               onChange={(e) =>
@@ -263,11 +309,11 @@ export function StepInspector({
             </button>
           )}
         </div>
-      </div>
+      </fieldset>
 
       {/* Params — schema-driven */}
-      <div>
-        <label className="block text-gray-400 text-xs mb-1">Params</label>
+      <fieldset className="border-0 p-0 m-0">
+        <legend className="block text-gray-400 text-xs mb-1">Params</legend>
         <SchemaForm
           schema={schema}
           value={(local.params ?? {}) as Record<string, unknown>}
@@ -275,7 +321,7 @@ export function StepInspector({
           readOnly={readOnly}
           validationErrors={validationErrors}
         />
-      </div>
+      </fieldset>
 
       {/* Step ID */}
       <div className="text-xs text-gray-600 font-mono">id: {local.id}</div>

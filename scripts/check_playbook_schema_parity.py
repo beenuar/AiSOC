@@ -25,8 +25,43 @@ drift accumulates in the direction things actually change — the engine grows
 a verb and nobody tells the schema. That is how a sibling gate in this repo
 reported "OK" on a YAML file declaring 17 labels against Go code with 28.
 
+The fifth vocabulary, and why the file list is not written down
+---------------------------------------------------------------
+This gate used to name the two TypeScript facts it cared about: the union in
+``packages/types``. It never opened ``apps/web``, where the playbook editor
+declared a nine-member union of its own under a header comment claiming it
+mirrored the engine's twenty-two. Keying its form registry
+``Record<StepType, StepSchema>`` on that local union meant exhaustiveness was
+satisfied with thirteen forms missing, so the compiler was quiet and the gate
+was looking somewhere else. The one step type an operator could actually
+click was the one nothing checked.
+
+Naming ``apps/web/src/components/playbooks/stepSchemas.ts`` here would fix
+that file and leave the next one free. So the TypeScript half is a **scan**:
+every ``.ts``/``.tsx`` file in the tree is parsed for collections of step-type
+literals, and any collection that overlaps the engine's vocabulary is required
+either to match it exactly or to be a recorded subset with a reason. A sixth
+vocabulary is a failing build wherever somebody puts it.
+
+What the scan credits, and what it cannot see
+---------------------------------------------
+``--list`` prints every collection it found and the verdict it reached, which
+is the only way to tell a gate that found nothing from one that looked
+nowhere. Two limits, stated because an unstated limit is a blind spot:
+
+* A collection overlapping the vocabulary by fewer than two members is not
+  treated as a vocabulary. ``new Set<StepType>(['close_case'])`` is a
+  predicate about one verb, not a restatement of the list.
+* The parser reads array elements, object keys and string-literal union
+  members. A vocabulary assembled at runtime — by ``.map()`` over something
+  else, or spread from another module — is not a literal and is not seen.
+  Deriving one from ``STEP_SCHEMAS`` is how the editor's palette and canvas
+  metadata are written, and that is the shape this gate wants to encourage:
+  derived lists cannot drift, so not seeing them costs nothing.
+
 Run:
     python3 scripts/check_playbook_schema_parity.py
+    python3 scripts/check_playbook_schema_parity.py --list
     python3 scripts/check_playbook_schema_parity.py --self-test
 """
 
@@ -76,6 +111,41 @@ _EXECUTION_CLASSES = _RUNS | {"unimplemented"}
 #: a new label on it.
 _GOVERNED = "governed"
 
+#: Directories the TypeScript scan never enters. Build output and vendored
+#: packages are copies of something else; grading them would report the same
+#: drift twice and, worse, make the gate's verdict depend on whether somebody
+#: had run a build.
+_TS_SKIP_DIRS = frozenset({"node_modules", ".git", "dist", "build", ".next", ".turbo", "coverage", "storybook-static"})
+
+#: How much of a literal collection has to be step types before the gate
+#: treats it as a statement about the vocabulary. One is a predicate about one
+#: verb (``new Set<StepType>(['close_case'])``); two or more is a list.
+_VOCABULARY_MIN_OVERLAP = 2
+
+#: Literal collections of step types that are deliberately partial, keyed
+#: ``<path>::<symbol>`` with the reason. Shrink-only and checked in both
+#: directions: an entry naming a collection that no longer exists fails, and
+#: so does one that has since become complete. Empty is the goal — every entry
+#: is a place a future reader has to be told "yes, on purpose".
+RECORDED_TS_SUBSETS: dict[str, str] = {}
+
+
+@dataclass(frozen=True)
+class TsVocabulary:
+    """One literal collection of step-type names found in TypeScript."""
+
+    path: str
+    symbol: str
+    line: int
+    kind: str
+    members: frozenset[str]
+    #: ``member -> execution class`` where the collection annotates one.
+    execution: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def ref(self) -> str:
+        return f"{self.path}::{self.symbol}"
+
 
 class GateError(RuntimeError):
     """The gate could not inspect what it is supposed to inspect.
@@ -98,6 +168,14 @@ class Registries:
     response_step_types: frozenset[str]
     #: The ``StepType`` union published in ``packages/types``.
     typescript_step_types: frozenset[str]
+    #: Every literal collection of step types found anywhere in TypeScript,
+    #: discovered rather than listed — see the module docstring.
+    ts_vocabularies: tuple[TsVocabulary, ...]
+    #: How many TypeScript files the scan opened to find them, and how many it
+    #: could not finish reading and proved irrelevant instead.
+    ts_files_scanned: int
+    #: Files the reader could not finish, each proved to hold no vocabulary.
+    ts_files_skipped: tuple[str, ...]
     execution: dict[str, str]
     schema_timeout_max: int
     schema_timeout_min: int
@@ -253,6 +331,404 @@ def _typescript_step_types(root: Path) -> frozenset[str]:
     return members
 
 
+# ---------------------------------------------------------------------------
+# TypeScript scan — find every literal collection of step types in the tree
+# ---------------------------------------------------------------------------
+#
+# Parsed with a small hand-written reader rather than transpiled: the gate runs
+# in a Python job with jsonschema, pydantic and httpx installed and nothing
+# else, and requiring a Node toolchain to check a TypeScript fact would mean
+# the check gets dropped from the job that can afford it.
+
+
+def _closing_quote(text: str, start: int) -> int:
+    """Index of the quote closing the one at ``start``, or -1 if there is none
+    before the end of the line."""
+    quote = text[start]
+    i, n = start + 1, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "\n":
+            return -1
+        if ch == quote:
+            return i
+        i += 1
+    return -1
+
+
+def _mask_ts(text: str) -> tuple[str, list[tuple[int, int, str]], str]:
+    """Blank comments and string interiors, keeping every offset.
+
+    Returns the masked text, ``(open_quote_index, close_quote_index, value)``
+    for each quoted string literal, and a non-empty reason when the file could
+    not be read to the end. Structure is read from the mask so a brace inside
+    a string or a comment cannot move the depth count; values are read from
+    the list so the mask can be blank.
+
+    Template literals are tracked with a stack because they nest: a
+    ``${ … }`` interpolation is code again, and that code may contain another
+    template. The first version of this treated a backtick as a plain quote,
+    so ``` `a ${xs.map((k) => `\\`${k}\\``)} b` ``` desynchronised it and the
+    remainder of the file — including the registry the gate exists to read —
+    was swallowed into an unterminated string. Nothing said so; the scan
+    simply found one declaration in that file instead of two and reported
+    agreement. A parser that can silently stop reading is the same defect as a
+    gate that never opened the file, which is why running out of input inside
+    a string is now returned as a reason and refused by the caller rather than
+    tolerated.
+    """
+    masked = list(text)
+    strings: list[tuple[int, int, str]] = []
+    #: ``["tpl", start]`` inside a template literal, ``["expr", depth]``
+    #: inside one of its ``${ }`` interpolations.
+    stack: list[list] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+
+        if stack and stack[-1][0] == "tpl":
+            if ch == "\\" and i + 1 < n:
+                masked[i] = " "
+                if text[i + 1] != "\n":
+                    masked[i + 1] = " "
+                i += 2
+                continue
+            if ch == "$" and i + 1 < n and text[i + 1] == "{":
+                stack.append(["expr", 0])
+                i += 2
+                continue
+            if ch == "`":
+                stack.pop()
+                i += 1
+                continue
+            if ch != "\n":
+                masked[i] = " "
+            i += 1
+            continue
+
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                masked[i] = " "
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            end = text.find("*/", i + 2)
+            if end == -1:
+                return "".join(masked), strings, f"unterminated block comment opened at offset {i}"
+            for j in range(i, end + 2):
+                if text[j] != "\n":
+                    masked[j] = " "
+            i = end + 2
+            continue
+        if ch in "\"'":
+            # A quoted string may not contain a raw newline, so a quote with
+            # no partner before the end of the line is not opening one — it is
+            # an apostrophe in JSX text, or inside a regex literal such as
+            # `/couldn\'t load the alert envelope/i`. Reading those as string
+            # openers desynchronised the reader and swallowed the rest of the
+            # file, which is the one outcome a scanner must not have.
+            #
+            # JSX and regex literals are why there is no attempt to lex `/`
+            # here: `</div>` and `/>` are far more common in this tree than
+            # division is, and a reader that guessed would be wrong more often
+            # than the thing it was trying to fix.
+            closed = _closing_quote(text, i)
+            if closed == -1:
+                i += 1
+                continue
+            chars: list[str] = []
+            j = i + 1
+            while j < closed:
+                if text[j] == "\\":
+                    chars.append(text[j + 1])
+                    masked[j] = masked[j + 1] = " "
+                    j += 2
+                    continue
+                chars.append(text[j])
+                masked[j] = " "
+                j += 1
+            strings.append((i, closed, "".join(chars)))
+            i = closed + 1
+            continue
+        if ch == "`":
+            stack.append(["tpl", i])
+            i += 1
+            continue
+        if stack and stack[-1][0] == "expr":
+            if ch == "{":
+                stack[-1][1] += 1
+            elif ch == "}":
+                if stack[-1][1] == 0:
+                    stack.pop()
+                    i += 1
+                    continue
+                stack[-1][1] -= 1
+        i += 1
+
+    if stack:
+        return "".join(masked), strings, f"ran out of input inside a template literal opened at offset {stack[0][1]}"
+    return "".join(masked), strings, ""
+
+
+_OPEN_TO_CLOSE = {"{": "}", "[": "]", "(": ")"}
+
+
+def _matching(masked: str, start: int) -> int:
+    """Index of the bracket closing the one at ``start``, or -1."""
+    opener = masked[start]
+    closer = _OPEN_TO_CLOSE[opener]
+    depth = 0
+    for i in range(start, len(masked)):
+        if masked[i] == opener:
+            depth += 1
+        elif masked[i] == closer:
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _depth_map(masked: str, start: int, end: int) -> list[int]:
+    """Bracket depth at each offset in ``[start, end)``, relative to ``start``."""
+    depths: list[int] = []
+    depth = 0
+    for i in range(start, end):
+        ch = masked[i]
+        if ch in "{[(":
+            depth += 1
+        elif ch in "}])":
+            depth -= 1
+            depths.append(depth)
+            continue
+        depths.append(depth)
+    return depths
+
+
+_IDENT = re.compile(r"[A-Za-z_$][\w$]*")
+_DECL = re.compile(r"\b(?:export\s+)?(?:const|let|var|type)\s+([A-Za-z_$][\w$]*)")
+#: Skipped between the ``=`` and the literal, so `new Set([...])`,
+#: `Object.freeze({...})` and `new Map<K, V>([...])` all reach their literal.
+_WRAPPERS = re.compile(r"\s*(?:new\s+)?(?:[A-Za-z_$][\w$.]*)?\s*(?:<[^<>]*>)?\s*\(\s*")
+
+
+def _literal_start(masked: str, after: int) -> int:
+    """Offset of the literal a declaration is initialised with, or -1.
+
+    Walks past the type annotation to the assignment, then past any wrapping
+    call. A union has no ``=``-then-bracket shape and is handled separately.
+    """
+    end = min(len(masked), after + 400)
+    eq = -1
+    i = after
+    while i < end:
+        if masked[i] == "=" and masked[i : i + 2] != "=>" and masked[i : i + 2] != "==" and masked[i - 1] not in "=!<>":
+            eq = i
+            break
+        if masked[i] == ";":
+            return -1
+        i += 1
+    if eq == -1:
+        return -1
+    pos = eq + 1
+    for _ in range(3):  # at most a couple of nested wrappers
+        while pos < len(masked) and masked[pos] in " \t\r\n":
+            pos += 1
+        if pos < len(masked) and masked[pos] in "{[":
+            return pos
+        match = _WRAPPERS.match(masked, pos)
+        if not match or match.end() == pos:
+            return -1
+        pos = match.end()
+    return -1
+
+
+def _object_entries(masked: str, strings: list[tuple[int, int, str]], start: int, end: int) -> dict[str, tuple[int, int]]:
+    """Top-level ``key: value`` spans of the object literal at ``[start, end]``."""
+    depths = _depth_map(masked, start, end)
+    by_start = {s: (e, v) for s, e, v in strings}
+    entries: dict[str, tuple[int, int]] = {}
+    i = start + 1
+    while i < end:
+        if depths[i - start] != 1 or masked[i] in " \t\r\n,":
+            i += 1
+            continue
+        if masked[i] in "\"'`":
+            close, value = by_start.get(i, (-1, ""))
+            if close == -1:
+                i += 1
+                continue
+            key, after = value, close + 1
+        else:
+            match = _IDENT.match(masked, i)
+            if not match:
+                i += 1
+                continue
+            key, after = match.group(0), match.end()
+        colon = after
+        while colon < end and masked[colon] in " \t\r\n":
+            colon += 1
+        if colon >= end or masked[colon] != ":":
+            i = after
+            continue
+        value_start = colon + 1
+        while value_start < end and masked[value_start] in " \t\r\n":
+            value_start += 1
+        if value_start < end and masked[value_start] in "{[(":
+            value_end = _matching(masked, value_start)
+            if value_end == -1:
+                break
+        else:
+            value_end = value_start
+            while value_end < end and (depths[value_end - start] != 1 or masked[value_end] != ","):
+                value_end += 1
+        entries[key] = (value_start, value_end)
+        i = value_end + 1
+    return entries
+
+
+def _top_level_strings(masked: str, strings: list[tuple[int, int, str]], start: int, end: int) -> list[str]:
+    """String literals sitting directly inside the bracket at ``start``."""
+    depths = _depth_map(masked, start, end)
+    return [value for s, _e, value in strings if start < s < end and depths[s - start] == 1]
+
+
+def _union_members(masked: str, strings: list[tuple[int, int, str]], after: int) -> list[str]:
+    """Members of a ``type X = | "a" | "b";`` union declared at ``after``."""
+    end = masked.find(";", after)
+    if end == -1:
+        return []
+    span = masked[after:end]
+    if "=" not in span or "|" not in span:
+        return []
+    return [value for s, _e, value in strings if after < s < end]
+
+
+def _execution_property(entries: dict[str, dict[str, str]]) -> str | None:
+    """The property, if any, by which a registry annotates execution class.
+
+    Found by the shape of its values rather than by its name: a property
+    present on every entry whose values are all execution classes is the
+    execution annotation, whatever it is called. Reading it by name would let
+    a rename silently drop the check that the editor's claims match the
+    schema's.
+    """
+    if not entries:
+        return None
+    common = set.intersection(*(set(props) for props in entries.values()))
+    found = [name for name in sorted(common) if all(props[name] in _EXECUTION_CLASSES for props in entries.values())]
+    return found[0] if len(found) == 1 else None
+
+
+#: Any bare word, used only by the fallback below. Deliberately not restricted
+#: to quoted strings: the editor's registry is an object literal with bare
+#: identifier keys, so a quoted-only scan would have proved a file irrelevant
+#: on the strength of not looking at the shape the vocabulary is actually
+#: written in. Over-counting here is harmless — it only ever turns a silent
+#: skip into a loud refusal.
+_ANY_WORD = re.compile(r"[A-Za-z_][\w]*")
+
+
+def _scan_ts_file(path: Path, rel: str, engine_members: frozenset[str]) -> tuple[list[TsVocabulary], str]:
+    """Every literal collection of strings declared in one TypeScript file.
+
+    Returns the collections and, when the file could not be read to the end, a
+    reason. The reason is not swallowed: ``_typescript_vocabularies`` proves
+    the file is irrelevant before skipping it, because a half-read file and a
+    clean one both produce "no vocabulary found here".
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    masked, strings, unreadable = _mask_ts(text)
+    if unreadable:
+        # The reader is not a JavaScript engine — JSX text with an apostrophe
+        # in it is the case it cannot finish. Skipping is only safe if the
+        # file provably holds no vocabulary, and a vocabulary has to contain
+        # at least two step-type literals in the raw bytes. Counting those is
+        # a sound over-approximation: it cannot miss one.
+        literals = {m.group(0) for m in _ANY_WORD.finditer(text)} & engine_members
+        if len(literals) >= _VOCABULARY_MIN_OVERLAP:
+            raise GateError(
+                f"{rel}: the TypeScript reader could not parse the file to the end ({unreadable}), and it "
+                f"mentions {len(literals)} step-type names ({', '.join(sorted(literals))}). Anything declared after "
+                f"that point is invisible, so the gate refuses to report agreement over it."
+            )
+        return [], unreadable
+    found: list[TsVocabulary] = []
+    for decl in _DECL.finditer(masked):
+        symbol = decl.group(1)
+        line = masked.count("\n", 0, decl.start()) + 1
+        if decl.group(0).lstrip().startswith(("type", "export type")):
+            members = _union_members(masked, strings, decl.end())
+            if members:
+                found.append(TsVocabulary(rel, symbol, line, "union", frozenset(members)))
+            continue
+        start = _literal_start(masked, decl.end())
+        if start == -1:
+            continue
+        end = _matching(masked, start)
+        if end == -1:
+            continue
+        if masked[start] == "[":
+            members = _top_level_strings(masked, strings, start, end)
+            if members:
+                found.append(TsVocabulary(rel, symbol, line, "array", frozenset(members)))
+            continue
+        spans = _object_entries(masked, strings, start, end)
+        if not spans:
+            continue
+        # Each entry's own properties, so an execution annotation can be
+        # recognised by the shape of its values.
+        props: dict[str, dict[str, str]] = {}
+        for key, (value_start, value_end) in spans.items():
+            if masked[value_start : value_start + 1] != "{":
+                continue
+            inner = _object_entries(masked, strings, value_start, value_end)
+            by_start = {s: v for s, _e, v in strings}
+            props[key] = {name: by_start[vs] for name, (vs, _ve) in inner.items() if vs in by_start}
+        execution_prop = _execution_property(props) if len(props) == len(spans) else None
+        execution = {key: props[key][execution_prop] for key in spans} if execution_prop else {}
+        found.append(TsVocabulary(rel, symbol, line, "object", frozenset(spans), execution))
+    return found, ""
+
+
+def _typescript_vocabularies(root: Path, engine_members: frozenset[str]) -> tuple[tuple[TsVocabulary, ...], int, tuple[str, ...]]:
+    """Every TypeScript collection in the tree that talks about step types.
+
+    Returns the candidates, the number of files opened and the number proved
+    irrelevant after the reader could not finish them — because "found
+    nothing" and "scanned nothing" print the same word, and the second is the
+    state this gate was in with respect to ``apps/web``.
+    """
+    scanned = 0
+    skipped: list[str] = []
+    candidates: list[TsVocabulary] = []
+    for path in sorted(root.rglob("*.ts*")):
+        if path.suffix not in {".ts", ".tsx"} or any(part in _TS_SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        scanned += 1
+        rel = str(path.relative_to(root))
+        try:
+            vocabularies, unreadable = _scan_ts_file(path, rel, engine_members)
+        except (OSError, RecursionError) as exc:
+            raise GateError(f"could not read {rel}: {exc}") from exc
+        if unreadable:
+            skipped.append(f"{rel} ({unreadable})")
+        for vocabulary in vocabularies:
+            if len(vocabulary.members & engine_members) >= _VOCABULARY_MIN_OVERLAP:
+                candidates.append(vocabulary)
+    if not scanned:
+        raise GateError(f"no TypeScript files under {root}; the web vocabulary cannot be compared and a pass would mean nothing")
+    if not candidates:
+        raise GateError(
+            f"scanned {scanned} TypeScript files and found no declaration of the step vocabulary. "
+            "The published union and the editor's form registry are both meant to be here; "
+            "refusing to report agreement having compared nothing."
+        )
+    return tuple(candidates), scanned, tuple(skipped)
+
+
 def _validator_triggers(root: Path) -> frozenset[str]:
     """``scripts/validate_playbooks.py`` keeps its own trigger allow-list."""
     scripts = str(root / "scripts")
@@ -285,13 +761,18 @@ def collect(root: Path) -> Registries:
     schema = _load_schema(root)
     engine_mod, models_mod, bounds_mod = _import_engine(root)
     s_tmax, s_tmin, s_rmax = _schema_step_bounds(schema)
+    model_step_types = frozenset(st.value for st in models_mod.StepType)
+    ts_vocabularies, ts_files_scanned, ts_files_skipped = _typescript_vocabularies(root, model_step_types)
     return Registries(
         schema_step_types=_schema_step_types(schema),
-        model_step_types=frozenset(st.value for st in models_mod.StepType),
+        model_step_types=model_step_types,
         handler_step_types=frozenset(st.value for st in engine_mod._HANDLERS),
         inline_step_types=_inline_step_types(engine_mod, models_mod),
         response_step_types=frozenset(st.value for st in engine_mod.RESPONSE_STEP_TYPES),
         typescript_step_types=_typescript_step_types(root),
+        ts_vocabularies=ts_vocabularies,
+        ts_files_scanned=ts_files_scanned,
+        ts_files_skipped=ts_files_skipped,
         execution=_schema_execution(schema),
         schema_timeout_max=s_tmax,
         schema_timeout_min=s_tmin,
@@ -312,8 +793,15 @@ def collect(root: Path) -> Registries:
 # ---------------------------------------------------------------------------
 
 
-def compare(reg: Registries) -> list[str]:
-    """Every check, in both directions. Returns human-readable failures."""
+def compare(reg: Registries, *, recorded_subsets: dict[str, str] | None = None) -> list[str]:
+    """Every check, in both directions. Returns human-readable failures.
+
+    ``recorded_subsets`` is a parameter rather than a read of the module
+    global so the self-test drives the same value production does; a ratchet
+    whose exemptions can only be exercised by editing the file is a ratchet
+    nobody has seen work.
+    """
+    recorded_subsets = RECORDED_TS_SUBSETS if recorded_subsets is None else recorded_subsets
     errors: list[str] = []
 
     if not reg.schema_step_types or not reg.model_step_types:
@@ -372,6 +860,63 @@ def compare(reg: Registries) -> list[str]:
             f"`packages/types/src/playbook.ts` publishes step type {extra!r}, which `StepType` does not implement — "
             f"code that type-checks against the package would be rejected by the server."
         )
+
+    # 2c. every TypeScript declaration of the vocabulary <-> StepType, both
+    #     ways, over whatever the scan found rather than a list of files kept
+    #     here. The editor's nine-member union survived because this gate knew
+    #     the name of one TypeScript file and that was not the one an operator
+    #     clicked.
+    if not reg.ts_vocabularies:
+        return errors + ["no TypeScript declaration of the step vocabulary was found; the comparison would pass on nothing"]
+
+    for vocabulary in reg.ts_vocabularies:
+        recorded = recorded_subsets.get(vocabulary.ref)
+        omitted = reg.model_step_types - vocabulary.members
+        invented = vocabulary.members - reg.model_step_types
+        if not omitted and not invented:
+            if recorded:
+                errors.append(
+                    f"a recorded subset lists {vocabulary.ref} as deliberate and it now declares the "
+                    f"whole vocabulary; remove the entry rather than leaving it to excuse a future gap."
+                )
+            continue
+        if recorded and not invented:
+            continue
+        for member in sorted(omitted):
+            errors.append(
+                f"{vocabulary.ref} ({vocabulary.kind}, line {vocabulary.line}) omits step type {member!r} that "
+                f"`StepType` implements — a vocabulary that is a subset of the engine's is a verb the product "
+                f"runs and this surface cannot express. Complete it, or record it in RECORDED_TS_SUBSETS with a reason."
+            )
+        for member in sorted(invented):
+            errors.append(
+                f"{vocabulary.ref} ({vocabulary.kind}, line {vocabulary.line}) declares step type {member!r} that "
+                f"`StepType` does not implement — code written against it would be rejected by the server."
+            )
+
+    # 2d. execution classes declared in TypeScript <-> `x-aisoc-execution`,
+    #     both ways. A surface that tells an author a step will run when the
+    #     schema says it is unimplemented is the same lie in a nearer place.
+    for vocabulary in reg.ts_vocabularies:
+        if not vocabulary.execution:
+            continue
+        for member, declared in sorted(vocabulary.execution.items()):
+            published = reg.execution.get(member)
+            if published is None:
+                errors.append(f"{vocabulary.ref} annotates {member!r} as {declared!r} and `x-aisoc-execution` does not describe it at all.")
+            elif declared != published:
+                errors.append(
+                    f"{vocabulary.ref} tells an author {member!r} is {declared!r} while `x-aisoc-execution` "
+                    f"says {published!r} — the surface and the contract disagree about what will happen."
+                )
+        for member in sorted(frozenset(reg.execution) - frozenset(vocabulary.execution)):
+            errors.append(
+                f"{vocabulary.ref} annotates execution for some step types and not for {member!r}, so what the "
+                f"engine does with it is unstated exactly where somebody is choosing it."
+            )
+
+    for ref in sorted(set(recorded_subsets) - {v.ref for v in reg.ts_vocabularies}):
+        errors.append(f"a recorded subset lists {ref!r}, which the scan did not find; remove the entry")
 
     # 3b. `governed` claims <-> the engine's response-verb set, both ways.
     #     A step labelled `governed` that the engine answers from inside its
@@ -510,6 +1055,78 @@ def self_test(reg: Registries) -> list[str]:
         replace(reg, typescript_step_types=reg.typescript_step_types | {"create_ticket_jira"}),
         "which `StepType` does not implement",
     )
+
+    # The scanned half. Perturbing a discovered vocabulary rather than a
+    # named field is the point: these are the directions that let the
+    # editor's nine-member union sit unnoticed behind a green build.
+    if not reg.ts_vocabularies:
+        failures.append("self-test: no TypeScript vocabulary was discovered; the scan directions cannot be tested")
+    else:
+        sample = reg.ts_vocabularies[0]
+
+        def with_vocabulary(vocabulary: TsVocabulary) -> Registries:
+            rest = tuple(v for v in reg.ts_vocabularies if v.ref != vocabulary.ref)
+            return replace(reg, ts_vocabularies=(vocabulary, *rest))
+
+        expect(
+            # Precisely the defect: a surface declaring a subset of the
+            # vocabulary, exhaustive against itself and short of the engine.
+            "a scanned TypeScript surface declares fewer step types than the engine runs",
+            with_vocabulary(replace(sample, members=sample.members - {victim})),
+            "omits step type",
+        )
+        expect(
+            "a scanned TypeScript surface invents a step type",
+            with_vocabulary(replace(sample, members=sample.members | {absent})),
+            "does not implement",
+        )
+        expect(
+            "the scan finds no declaration at all",
+            replace(reg, ts_vocabularies=()),
+            "would pass on nothing",
+        )
+        # The recorded-subset ratchet, in both directions. Driven through
+        # `compare`'s parameter rather than the module global so the test
+        # perturbs the same value production reads.
+        shrunk = replace(sample, members=sample.members - {victim})
+        excused = compare(
+            replace(reg, ts_vocabularies=(shrunk, *reg.ts_vocabularies[1:])),
+            recorded_subsets={shrunk.ref: "recorded for the self-test"},
+        )
+        if any("omits step type" in e for e in excused):
+            failures.append("self-test: a recorded subset was still reported as drift, so the exemption does nothing")
+        stale = compare(reg, recorded_subsets={sample.ref: "recorded for the self-test"})
+        if not any("remove the entry rather than leaving it" in e for e in stale):
+            failures.append("self-test: a recorded subset that now declares the whole vocabulary was not reported as stale")
+        ghost = compare(reg, recorded_subsets={"nowhere.ts::Ghost": "recorded for the self-test"})
+        if not any("which the scan did not find" in e for e in ghost):
+            failures.append("self-test: a recorded subset naming a collection that does not exist was not reported")
+
+        annotated = next((v for v in reg.ts_vocabularies if v.execution), None)
+        if annotated is None:
+            failures.append(
+                "self-test: no scanned vocabulary annotates an execution class, so the surface-vs-schema "
+                "directions are untested — the editor is supposed to carry one"
+            )
+        else:
+            member = sorted(annotated.execution)[0]
+            expect(
+                "a surface promises an execution the schema does not",
+                with_vocabulary(replace(annotated, execution={**annotated.execution, member: "executed"}))
+                if annotated.execution[member] != "executed"
+                else with_vocabulary(replace(annotated, execution={**annotated.execution, member: "unimplemented"})),
+                "the surface and the contract disagree",
+            )
+            expect(
+                "a surface annotates some step types and silently omits one",
+                with_vocabulary(replace(annotated, execution={k: v for k, v in annotated.execution.items() if k != member})),
+                "is unstated exactly where somebody is choosing it",
+            )
+            expect(
+                "a surface annotates a step type the schema never declared",
+                with_vocabulary(replace(annotated, execution={**annotated.execution, absent: "executed"})),
+                "does not describe it at all",
+            )
     expect(
         "declared type with no execution annotation",
         replace(reg, execution={k: v for k, v in reg.execution.items() if k != victim}),
@@ -584,6 +1201,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo-root", default=None, help="Tree to inspect (default: the repo this script lives in)")
     parser.add_argument("--self-test", action="store_true", help="Prove the gate detects injected drift in each direction")
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Print every declaration of the vocabulary the scan credited, and what it credited it as",
+    )
     args = parser.parse_args()
 
     try:
@@ -607,7 +1229,35 @@ def main() -> int:
     print("execution          " + " | ".join(f"{k} {v}" for k, v in counts.items()))
     print(f"bounds             timeout {reg.schema_timeout_min}..{reg.schema_timeout_max}s | retries <={reg.schema_retry_max}")
     print(f"playbooks scanned  {len(scanned)}")
+    unreadable = len(reg.ts_files_skipped)
+    annotating = sum(1 for v in reg.ts_vocabularies if v.execution)
+    print(
+        f"typescript         {reg.ts_files_scanned} files read "
+        f"({unreadable} unparseable, each proved to hold no vocabulary) | "
+        f"{len(reg.ts_vocabularies)} declaration(s) of the vocabulary | "
+        f"{annotating} annotating execution"
+    )
     print()
+
+    if args.list:
+        # What it credits, not what it flags. A gate that only prints its
+        # complaints cannot be told apart from one whose scan matched nothing.
+        print("declarations of the step vocabulary found in TypeScript:")
+        for vocabulary in sorted(reg.ts_vocabularies, key=lambda v: v.ref):
+            verdict = "complete" if vocabulary.members == reg.model_step_types else "DIFFERS from StepType"
+            annotation = f", execution for {len(vocabulary.execution)}" if vocabulary.execution else ""
+            where = f"{vocabulary.ref} ({vocabulary.kind}, line {vocabulary.line})"
+            print(f"  {verdict:<22} {len(vocabulary.members):>3} members{annotation}  {where}")
+        print(
+            f"  (a collection overlapping the vocabulary by fewer than {_VOCABULARY_MIN_OVERLAP} members is "
+            f"not treated as one; runtime-derived lists are not literals and are not seen)"
+        )
+        if reg.ts_files_skipped:
+            print()
+            print("files the reader could not finish, each checked for step-type literals before being skipped:")
+            for note in reg.ts_files_skipped:
+                print(f"  {note}")
+        print()
 
     errors = compare(reg)
 

@@ -10649,6 +10649,66 @@ paths:
                 $ref: '#/components/schemas/OverrideSummaryResponse'
       security:
       - HTTPBearer: []
+  /api/v1/feedback/context-statements:
+    get:
+      tags:
+      - feedback
+      summary: Get Context Statements
+      description: 'Unexpired organisation memory for a tenant.
+
+
+        Dual-mode for the same reason ``/alerts/{id}/source-writeback`` is: the
+
+        consumer is the agents service''s triage worker, which has no session, and
+
+        the API owns the tenant-scoped database session.
+
+
+        A session caller''s ``tenant_id`` is **intersected** with the session rather
+
+        than ignored. Ignoring it is safe but dishonest — a caller who names
+
+        another tenant gets this tenant''s memory back under that tenant''s name,
+
+        which is the "silently returns the wrong data" shape rather than a
+
+        refusal. ``scoped_tenant_or_403`` returns the caller''s own tenant when the
+
+        parameter is absent, honours it when it matches, and 403s otherwise.'
+      operationId: get_context_statements_api_v1_feedback_context_statements_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Tenant Id
+      - name: x-aisoc-service-token
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Aisoc-Service-Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextStatementsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/autonomy-policy:
     get:
       tags:
@@ -11904,6 +11964,77 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/threat-intel/indicators:
+    get:
+      tags:
+      - threat-intel
+      summary: List Feed Indicators
+      description: 'Indicators the feed scheduler has collected, from `services/threatintel`.
+
+
+        The console has called this path since the IOC inbox shipped and nothing
+
+        served it — the page 404''d, and for a while rendered five invented IOCs
+
+        instead. `services/threatintel` and its Qdrant store are in CORE now, and
+
+        the CISA Known Exploited Vulnerabilities catalog is public and keyless, so
+
+        a default install has real indicators to show within a poll interval.
+
+
+        Tenant scope is enforced upstream: this proxy asserts the caller''s tenant
+
+        in the same header the connectors proxy uses, and the threatintel route
+
+        filters on it plus the `shared` sentinel that public feed intel is written
+
+        under.'
+      operationId: list_feed_indicators_api_v1_threat_intel_indicators_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: filter to one indicator type
+          title: Type
+        description: filter to one indicator type
+      - name: tag
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tag
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: substring match on value or description
+          title: Q
+        description: substring match on value or description
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedIndicatorsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/threat-intel/iocs:
     get:
       tags:
@@ -15404,6 +15535,16 @@ components:
           - type: 'null'
           title: Reason
           description: Optional free-text justification
+        reason_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason Code
+          description: Optional code from the closed disagreement vocabulary (known_admin_tool,
+            approved_pentest, expected_service_account, known_scanner, business_application,
+            bad_detection_logic, missing_context, true_positive_confirmed). Supplying
+            one lets the platform compile durable organisation memory from repeated
+            disagreement; free text alone cannot generalise.
       type: object
       required:
       - alert_id
@@ -15448,6 +15589,11 @@ components:
           type: integer
           title: Redisposition Total Matched
           default: 0
+        context_statement:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Context Statement
       type: object
       required:
       - alert_id
@@ -17912,6 +18058,51 @@ components:
         svc_deploy, owned by a contractor whose last day was Friday, on the host
 
         running the tier-1 payments service".'
+    ContextStatementModel:
+      properties:
+        statement:
+          type: string
+          title: Statement
+        reason_code:
+          type: string
+          title: Reason Code
+        scope:
+          type: string
+          title: Scope
+        scope_value:
+          type: string
+          title: Scope Value
+        observations:
+          type: integer
+          title: Observations
+        expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expires At
+      type: object
+      required:
+      - statement
+      - reason_code
+      - scope
+      - scope_value
+      - observations
+      title: ContextStatementModel
+    ContextStatementsResponse:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        statements:
+          items:
+            $ref: '#/components/schemas/ContextStatementModel'
+          type: array
+          title: Statements
+      type: object
+      required:
+      - tenant_id
+      - statements
+      title: ContextStatementsResponse
     ControlItem:
       properties:
         control_id:
@@ -20036,6 +20227,44 @@ components:
       - name
       - feed_type
       title: FeedCreate
+    FeedIndicatorsResponse:
+      properties:
+        indicators:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Indicators
+        total:
+          type: integer
+          title: Total
+        source:
+          type: string
+          title: Source
+        degraded:
+          type: boolean
+          title: Degraded
+          default: false
+        reason:
+          type: string
+          title: Reason
+          default: ''
+      type: object
+      required:
+      - indicators
+      - total
+      - source
+      title: FeedIndicatorsResponse
+      description: 'What the console''s `/threat-intel` page renders.
+
+
+        ``source`` and ``degraded`` travel with the payload for the same reason
+
+        they do on the connector catalog: an empty list because nothing has been
+
+        collected yet and an empty list because the service is not deployed are
+
+        different facts, and a reader cannot tell them apart from the rows alone.'
     FeedOut:
       properties:
         name:

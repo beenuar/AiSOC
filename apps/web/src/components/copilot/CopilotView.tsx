@@ -7,9 +7,11 @@
  *   left  — recent conversations + suggested prompts
  *   right — active conversation thread + composer
  *
- * Talks to `copilotApi`. If the backend is unreachable the component falls
- * back to a deterministic local "demo" reply so the UX is still useful in
- * dev / no-LLM environments. Streaming is preferred when available.
+ * Talks to `copilotApi`. In the hosted demo an unreachable backend falls back
+ * to a deterministic local reply so the UX is still useful with no LLM key;
+ * everywhere else the failure is surfaced as a failure, because a fabricated
+ * verdict an analyst cannot distinguish from a real one is the worse outcome.
+ * Streaming is preferred when available.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -23,6 +25,7 @@ import {
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { canUseDemoData } from '@/lib/demoFallback';
+import { describeApiFailure } from '@/lib/failure';
 
 // ─── Suggested prompts ───────────────────────────────────────────────────────
 
@@ -337,6 +340,76 @@ function renderRichText(content: string): React.ReactNode {
   return <>{blocks}</>;
 }
 
+// ─── Connection status ───────────────────────────────────────────────────────
+
+export type CopilotStatusTone = 'unknown' | 'ok' | 'failed';
+
+export interface CopilotStatus {
+  tone: CopilotStatusTone;
+  label: string;
+  /** Long-form explanation for the `title` attribute; empty when there is none. */
+  detail: string;
+}
+
+/**
+ * What the header pill is entitled to claim about the backend.
+ *
+ * It had two states and both were wrong. A green dot reading "Connected"
+ * rendered before any request had been made, so it asserted connectivity it
+ * had not tested. And **any** error — a 500, an expired session, a dropped
+ * connection — flipped it to "Demo mode" on deployments that are not the demo,
+ * which tells an operator their platform is in a mode it does not have while
+ * the real cause goes unnamed.
+ *
+ * Three states now, and the middle one is the honest default: nothing has come
+ * back yet, so nothing is claimed.
+ */
+export function copilotStatus(args: {
+  sendError: unknown;
+  conversationsError: unknown;
+  conversationsLoaded: boolean;
+  everSucceeded: boolean;
+  demo: boolean;
+}): CopilotStatus {
+  const { sendError, conversationsError, conversationsLoaded, everSucceeded, demo } = args;
+
+  if (sendError) {
+    return {
+      tone: 'failed',
+      label: demo ? 'Demo reply shown' : 'Last message failed',
+      detail: demo
+        ? `The backend did not answer, so the reply below came from a built-in demo script. ${describeApiFailure(
+            sendError,
+            { subject: 'copilot reply' },
+          )}`
+        : describeApiFailure(sendError, { subject: 'copilot reply' }),
+    };
+  }
+  if (conversationsError) {
+    // Listing conversations and answering a question are different endpoints.
+    // One failing does not prove the other is down, so this says what it knows.
+    return {
+      tone: 'failed',
+      label: 'History unavailable',
+      detail: describeApiFailure(conversationsError, { subject: 'conversation history' }),
+    };
+  }
+  if (everSucceeded || conversationsLoaded) {
+    return { tone: 'ok', label: 'Connected', detail: 'The last request to the copilot succeeded.' };
+  }
+  return {
+    tone: 'unknown',
+    label: 'Not yet contacted',
+    detail: 'No request has completed yet, so connectivity is untested.',
+  };
+}
+
+const STATUS_DOT: Record<CopilotStatusTone, string> = {
+  unknown: 'bg-slate-500',
+  ok: 'bg-emerald-400',
+  failed: 'bg-amber-400',
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function CopilotView() {
@@ -345,6 +418,10 @@ export function CopilotView() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // The prompt whose request failed, so the retry re-issues *that* request
+  // rather than making the operator retype it.
+  const [failedPrompt, setFailedPrompt] = useState<string | null>(null);
+  const [everSucceeded, setEverSucceeded] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const conversationsState = useSWR(
@@ -361,20 +438,27 @@ export function CopilotView() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, sending]);
 
-  const send = async (prompt: string) => {
+  /**
+   * `replay` re-issues a prompt already in the thread (the retry after a
+   * failure) without appending a second identical user bubble.
+   */
+  const send = async (prompt: string, { replay = false }: { replay?: boolean } = {}) => {
     const trimmed = prompt.trim();
     if (!trimmed || sending) return;
 
-    const userMsg: CopilotMessage = {
-      id: `u-${Date.now()}`,
-      role: 'user',
-      content: trimmed,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!replay) {
+      const userMsg: CopilotMessage = {
+        id: `u-${Date.now()}`,
+        role: 'user',
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInput('');
     setSending(true);
     setError(null);
+    setFailedPrompt(null);
 
     try {
       const res = await copilotApi.chat({
@@ -406,6 +490,7 @@ export function CopilotView() {
             }
           : res.reply;
       setMessages((prev) => [...prev, reply]);
+      setEverSucceeded(true);
     } catch (err) {
       // This used to substitute `buildDemoReply(trimmed)` unconditionally, so
       // a backend outage produced an invented investigation — a named host, a
@@ -418,6 +503,7 @@ export function CopilotView() {
         setMessages((prev) => [...prev, buildDemoReply(trimmed)]);
       }
       setError(err);
+      setFailedPrompt(trimmed);
     } finally {
       setSending(false);
     }
@@ -434,9 +520,18 @@ export function CopilotView() {
     setMessages([]);
     setConversationId(undefined);
     setError(null);
+    setFailedPrompt(null);
   };
 
   const empty = messages.length === 0;
+  const demo = canUseDemoData();
+  const status = copilotStatus({
+    sendError: error,
+    conversationsError: conversationsState.error,
+    conversationsLoaded: conversationsState.data !== undefined,
+    everSucceeded,
+    demo,
+  });
 
   return (
     <div className="grid h-[calc(100vh-7rem)] grid-cols-1 gap-4 lg:grid-cols-[18rem_1fr]">
@@ -515,14 +610,9 @@ export function CopilotView() {
               coverage.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <span
-              className={clsx(
-                'inline-block h-2 w-2 rounded-full',
-                error ? 'bg-amber-400' : 'bg-emerald-400',
-              )}
-            />
-            {error ? 'Demo mode' : 'Connected'}
+          <div className="flex items-center gap-2 text-xs text-slate-400" title={status.detail}>
+            <span className={clsx('inline-block h-2 w-2 rounded-full', STATUS_DOT[status.tone])} />
+            {status.label}
           </div>
         </div>
 
@@ -637,6 +727,31 @@ export function CopilotView() {
                   </div>
                   <div className="rounded-2xl bg-slate-800/70 px-4 py-3 ring-1 ring-slate-700/60">
                     <TypingDots />
+                  </div>
+                </li>
+              )}
+              {/* Outside the hosted demo a failed send produced no reply at
+                  all: the analyst's question sat in the thread unanswered,
+                  and the only signal anywhere was a header pill reading
+                  "Demo mode". In the demo a scripted reply *was* substituted,
+                  so "No answer" would be its own small lie — the pill
+                  discloses that case instead. */}
+              {error != null && !sending && !demo && (
+                <li role="status" className="flex justify-start">
+                  <div className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+                    <p>
+                      <span className="font-semibold">No answer:</span>{' '}
+                      {describeApiFailure(error, { subject: 'copilot reply' })}
+                    </p>
+                    {failedPrompt && (
+                      <button
+                        type="button"
+                        onClick={() => void send(failedPrompt, { replay: true })}
+                        className="mt-2 rounded border border-amber-400/40 px-2 py-1 text-xs font-medium text-amber-100 transition-colors hover:bg-amber-400/10"
+                      >
+                        Retry that question
+                      </button>
+                    )}
                   </div>
                 </li>
               )}
