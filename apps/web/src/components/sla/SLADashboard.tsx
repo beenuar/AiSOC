@@ -438,7 +438,7 @@ export function SLADashboard() {
   const [editConfig, setEditConfig] = useState<SLAConfig | null>(null);
   const [editKpiTargets, setEditKpiTargets] = useState<KpiBarTargets | null>(null);
 
-  const { data: rawMetrics, error: metricsError } = useSWR<SLAMetrics>(
+  const { data: rawMetrics, error: metricsError, mutate: refetchMetrics } = useSWR<SLAMetrics>(
     `/api/v1/sla/metrics?days=${days}`,
     fetcher,
     {
@@ -454,7 +454,12 @@ export function SLADashboard() {
     rawMetrics &&
     typeof rawMetrics.overall?.total_alerts === 'number' &&
     typeof rawMetrics.per_severity === 'object';
-  const metrics = isValidMetrics ? rawMetrics : MOCK_SLA_METRICS;
+  // `fallbackData` above is already gated, and this is where that gate used
+  // to be thrown away: `isValidMetrics ? rawMetrics : MOCK_SLA_METRICS`.
+  // Outside the hosted demo `demoFallback` returns `undefined`, so the test
+  // is falsy on first paint as much as on error — and 847 alerts, 23 breaches
+  // and a 42.5m MTTR rendered in both, on every deployment, identically.
+  const metrics = isValidMetrics ? rawMetrics : undefined;
 
   const { data: configs } = useSWR<SLAConfig[]>('/api/v1/sla/config', fetcher, {
     fallbackData: demoFallback(MOCK_SLA_CONFIGS),
@@ -481,6 +486,7 @@ export function SLADashboard() {
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
+          aria-label="Reporting period"
           className="bg-gray-800 border border-gray-600 text-white text-sm rounded px-3 py-1.5"
         >
           {[7, 14, 30, 60, 90].map((d) => (
@@ -491,9 +497,32 @@ export function SLADashboard() {
         </select>
       </div>
 
-      {metricsError && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
-          SLA API unreachable — showing demo metrics so you can explore the dashboard.
+      {!metrics && (
+        <div
+          role="alert"
+          className="rounded-md border border-gray-700 bg-gray-900/40 px-4 py-3 text-sm text-gray-300"
+        >
+          <h2 className="font-medium text-gray-200">
+            {metricsError ? 'SLA metrics unavailable' : 'SLA metrics not measured yet'}
+          </h2>
+          <p className="mt-1 text-xs text-gray-400">
+            {metricsError
+              ? 'The SLA service did not answer, so there is nothing to report for this period.'
+              : 'Waiting for the SLA service. Figures appear once it answers.'}
+          </p>
+          {metricsError != null && (
+            <>
+              <pre className="mt-2 overflow-x-auto rounded bg-black/30 px-2 py-1 font-mono text-xs text-gray-400">
+                {metricsError instanceof Error ? metricsError.message : String(metricsError)}
+              </pre>
+              <button
+                onClick={() => void refetchMetrics()}
+                className="mt-3 rounded border border-gray-600 px-3 py-1 text-xs text-gray-200 hover:bg-gray-800"
+              >
+                Retry
+              </button>
+            </>
+          )}
         </div>
       )}
 
