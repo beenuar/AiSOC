@@ -75,12 +75,14 @@ It will not certify a corpus it did not read. A renamed directory, a changed
 suffix or a wrong `--root` all produce zero findings over zero files, so the
 file count is part of the verdict rather than a statistic printed beside it.
 
-And it does not pretend the tree is clean. The sites this revision newly
-detects are recorded in `KNOWN_UNGATED` with a reason each, because the
-components belong to other authors and the alternative — dropping the rules
-that find them — would make the gate lie. Those entries are checked in both
-directions by count, so one cannot be fixed without deleting it and a second
-violation cannot hide behind a recorded one. The number may only go down.
+And when it cannot say the tree is clean, it says so instead of saying
+nothing. `KNOWN_UNGATED` records sites the detector reports and the tree has
+not fixed, with a reason each, so a stricter rule can land without either
+weakening it or waiting on somebody else's change; while any entry stands, the
+closing line is a count of what is outstanding rather than the unqualified
+sentence. It is empty today, and it emptied itself: the seven sites this
+revision first detected were fixed, the recorded counts stopped matching, and
+the entries had to go before the build would pass.
 
 It remains deliberately shallow. It cannot prove a view is honest — only that
 these regressions have not reappeared. The reviewable property is that adding a
@@ -464,39 +466,19 @@ ALLOWED_ILLUSTRATIVE: dict[tuple[str, str], str] = {}
 #: it cannot hide behind the first.
 #:
 #: Shrink-only. `--list-known` prints what is left.
-KNOWN_UNGATED: dict[tuple[str, str], tuple[int, str]] = {
-    ("components/cases/CaseWorkspace.tsx", "returned-sample"): (
-        1,
-        "`return buildDemoCase(caseId)` in a useMemo — a whole fabricated case substituted for any id the API fails on.",
-    ),
-    ("components/cases/CaseWorkspace.tsx", "catch-inline-object"): (
-        1,
-        "the catch path invents an entire investigation — a named host, a pivot IP, a C2 domain, confidence 0.88 — "
-        "and reports it as status 'completed'.",
-    ),
-    ("components/hunt/HuntView.tsx", "render-fallback"): (
-        1,
-        "`savedState.data ?? (demoMode ? DEMO_SAVED : [])`, where `demoMode` is a flag the component raises itself "
-        "when the backend fails rather than a deployment-level demo check.",
-    ),
-    ("components/hunt/HuntView.tsx", "catch-inline-object"): (
-        1,
-        "the catch path assigns DEMO_RESULTS into the results object, so a failed hunt renders three invented "
-        "detections on named workstations.",
-    ),
-    ("components/sla/SLADashboard.tsx", "ternary-fallback"): (
-        1,
-        "`isValidMetrics ? rawMetrics : MOCK_SLA_METRICS` — the SWR fallbackData above it is correctly gated and this line bypasses it.",
-    ),
-    ("components/copilot/InvestigationChat.tsx", "inline-records"): (
-        1,
-        "`CONTEXT` hard-codes a case reference and its alert/IOC counts, rendered as the chat's live context.",
-    ),
-    ("components/coverage/CoverageAdvisorView.tsx", "inline-records"): (
-        1,
-        "`TECHNIQUES` is fifteen invented ATT&CK coverage verdicts from which the view derives and prints a coverage percentage.",
-    ),
-}
+#: **Empty, and it emptied itself.** This held the seven sites the relaxed
+#: detector found: a fabricated case returned from a `useMemo`, an invented
+#: investigation written into a `catch` and reported as `status: 'completed'`,
+#: a hunt substituting three detections on named workstations, an SLA ternary
+#: bypassing the `demoFallback` three lines above it, a hard-coded chat
+#: context, and fifteen ATT&CK coverage verdicts behind a printed percentage.
+#: Every one of them was *reported* for as long as this ledger existed — it
+#: recorded that they were known, it never hid them. They were fixed in a
+#: parallel change, the recorded counts stopped matching, and the entries had
+#: to be deleted before the build would pass again. That is the direction the
+#: count exists for, and it is the reason to keep the mechanism rather than
+#: leave the next person to invent a weaker one.
+KNOWN_UNGATED: dict[tuple[str, str], tuple[int, str]] = {}
 
 
 def _known_ungated_key(finding: Finding) -> tuple[str, str] | None:
@@ -1185,9 +1167,13 @@ def main(argv: list[str] | None = None) -> int:
     recorded = len(report.findings)
     print(f"scanned {report.files} .ts/.tsx file(s) under {root}")
     print(f"  {len(report.records)} module-scope fabricated-record literal(s): {gated} gated, {len(report.records) - gated} reported")
-    print("No new ungated sample-data sites.")
     if recorded:
+        # The unqualified sentence is a claim about the whole console, so it is
+        # only printed when it is true of the whole console.
+        print("No new ungated sample-data sites.")
         print(f"  {recorded} known-ungated site(s) still outstanding — `--list-known` for the list. This number may only go down.")
+    else:
+        print("All sample-data fallbacks are gated behind demo mode.")
     return 0
 
 

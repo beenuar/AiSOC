@@ -201,12 +201,16 @@ number is the one the requirement is sized against.
   must account for it rather than that something fired — the conditional rules
   overlap by construction, so a boolean check would pass with half the fixes
   reverted. Each case builds its own source and its own tree.
-- **`KNOWN_UNGATED`**, a shrink-only ledger of the sites this revision detects
-  that the tree has not fixed yet, each with a reason. Not an exemption: the
-  detector still reports them, and the gate prints the outstanding count
-  instead of claiming the console is clean. Recorded by count so an entry
-  cannot survive its fix and a second violation cannot hide behind a recorded
-  one.
+- **`KNOWN_UNGATED`**, a shrink-only ledger of sites the detector reports and
+  the tree has not fixed, each with a reason, so a stricter rule can land
+  without weakening it. Not an exemption: while an entry stands the gate
+  prints the outstanding count instead of the unqualified "all gated"
+  sentence. Recorded by count, so an entry cannot survive its own fix and a
+  second violation cannot hide behind a recorded one. It shipped holding the
+  seven sites this revision first detected and is **empty** — they were fixed
+  in a parallel change, the counts stopped matching, and the entries had to be
+  deleted before the build would pass. The console is now genuinely clean:
+  21 module-scope fabricated-record literals, 21 of them gated.
 
 - **`scripts/generate_corpus_stats.py`** — generates
   `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
