@@ -9,12 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A retracted benchmark figure was still badged "Real measurement".**
+  `apps/docs/docs/benchmark.md` withdrew the 75.3 % alert-reduction claim —
+  the harness that produced it groups on four tiers of `(rule_id, host,
+  user)` while the shipping `RawAlert.correlation_key()` groups on
+  `{tenant}:{entity}:{tactic}`, so it does not merely re-implement fusion's
+  grouping, it implements *different* grouping. The retraction reached one
+  surface of five. `BenchmarkResults.tsx` rendered a green **"Real
+  measurement"** badge on `0.753` with a blurb claiming the harness used the
+  production rules, "same logic"; `benchmarks/alert-reduction.md`
+  (`sidebar_position: 1`) called it a "faithful in-harness re-implementation"
+  and headlined 75.3 %; `ComparisonTable.tsx` qualified it as "measured on
+  fixed noisy stream". Two more were found while gating the invariant:
+  `benchmark-methodology.md`, and `benchmark.md` itself, which re-asserted
+  the claim in its own intro blockquote. All five now carry the wording
+  `benchmark.md` already uses. The comparison table quotes **33.3 %**, the
+  figure measured against the key the product actually runs.
+- **The landing page published three different wrong corpus counts.**
+  "6,998 detections" in four places (the tree indexes 7,016, of which 5,937
+  are quarantined and the engine loads **833**), "57 plugins" (77), "7,117
+  community items" (7,155), and `218 rules across 5 categories` on the
+  contributor leaderboard (833 across 6). The 6,998 figure also quoted the
+  imported corpus as the detection capability, presenting quarantined rules
+  as executable.
+- **Governance figures had gone stale.** `ROADMAP.md` published "136 rows —
+  128 GATED / 8 PARTIAL" against a matrix holding 139 / 131, in the same
+  sentence that tells the reader to recount with the script "rather than
+  trusting a figure quoted in prose — this line has gone stale before".
+  `CLAIM_TO_GATE_MATRIX.md` carried a stale executable-rule figure (939) in
+  a row note. The scoreboard's newest substrate row was labelled `v8.1.1`
+  while `VERSION` read `10.0.0`; it is refreshed from a fresh deterministic
+  run (0.97, unchanged) and now carries the tree's version. The scoreboard
+  keeps its three rows, all `substrate: true`, and no live-LLM row was
+  invented.
+- **The "Design partners" block on the landing page was removed** rather
+  than updated. Four dashed "Partner A–D" chips under the caption
+  "Reference partners onboarding through Q2 2026": placeholders rather than
+  fabricated logos, but four of them assert a partner count nothing in the
+  repository supports, and the window closed in June 2026 while still being
+  advertised as upcoming.
 - **Six console surfaces rendered fabricated security data outside demo mode,
   on a tree where the existing gate reported clean.** The gate recognises
   *shapes* — a bare mock in SWR's `fallbackData`, a mock through a state
   setter, a mock behind `??`. Each was added after a specific escape, so each
   knows only the syntax that got past it last time.
-
   `SLADashboard.tsx` wrote the same defect as a ternary. Line 446 passed
   `fallbackData: demoFallback(MOCK_SLA_METRICS)`, which is correct and which
   the gate accepted; line 457 then read `isValidMetrics ? rawMetrics :
@@ -24,7 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rendered in both states, identically, on every deployment. The disclosure
   banner fired only on `metricsError`, so during loading the invented figures
   appeared with nothing saying so.
-
   The worst of the six was `CaseWorkspace.tsx`. A failed case load rendered
   `buildDemoCase(caseId)`, which copies the route param, so the invention did
   not present as sample data — it presented *as the case the analyst had
@@ -40,14 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file. And `updateStatus` mutated the SWR cache optimistically and, on
   failure, toasted "writes disabled" without rolling back, so the workspace
   showed a status the database did not have.
-
   `HuntView.tsx` had no demo gate at all: its `demoMode` was a local
   `useState(false)` flipped by **fetch failure**, so it substituted three
   detections on named hosts with encoded-PowerShell command lines precisely
   when the backend was unhealthy — when a reader is least equipped to notice.
   It also published `took: 42`, a query latency for a query that never ran,
   in the same line as a real measurement.
-
   `CoverageAdvisorView.tsx` was fabricated end to end, with no API call
   anywhere in the file: fifteen invented ATT&CK verdicts whose recommendation
   column asserted deployment state it could not know ("Existing PowerShell &
@@ -55,7 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   50%" and "Critical Gaps 5" were byte-identical everywhere, and one button
   that raised `toast.success('Detection rule draft created')` and created
   nothing. It now reads `GET /api/v1/detection/coverage`.
-
 - **`/coverage-advisor` reports what that endpoint can actually support.**
   The endpoint returns one cell per technique *at least one rule references*,
   so a technique nobody has written a rule for never appears and a percentage
@@ -67,7 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   much as no rule. The `ROADMAP.md` and `apps/docs/docs/architecture.md`
   claims that it "ranks technique gaps by adversary prevalence" were corrected
   — no prevalence data exists anywhere in the tree.
-
 - **The server fetch on `/cases` was discarded on every non-demo
   deployment.** `initialCases` is documented as server-rendered data that
   avoids a flash of mock content. It was folded into the same object as
@@ -76,26 +109,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real SSR data was supplied* — so the round-trip in `cases/page.tsx` was
   made, awaited and thrown away. Real SSR data is not sample data, and the
   gate that withholds one must not withhold the other.
-
 - **`CopilotDock` answered a failed request with an assistant turn.** Same
   class as the above: a local `demoMode` flipped by fetch failure. Outside the
   hosted demo the dock now reports that the copilot could not be reached, with
   the error, instead of emitting a reply.
 
-### Removed
-
-- **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
-  threat-intel replies ("VirusTotal: 14/87 engines flagged malicious",
-  "Associated campaigns: APT-42"), a fixed context sidebar, no API call for
-  the chat, and imported by no file. One import from being live, which is the
-  `MitreStrip.tsx` precedent exactly. It also embedded a personal email
-  address in OSS source; the same string in `FunnelKpiBar.tsx` was removed
-  too. `/investigate` already permanently redirects to `/hunt`, and the
-  multi-turn copilot is `CopilotDock` and `/copilot`, so the docs line naming
-  this component was corrected rather than the component wired.
-
 ### Added
 
+- **`scripts/generate_corpus_stats.py`** — generates
+  `apps/web/src/data/corpus-stats.json` + `corpusStats.ts` from the compiled
+  engine ruleset, the generated detection truth table, and the marketplace
+  index, reconciling all three against each other and refusing to publish if
+  they disagree. Every landing surface imports the constants, so none can
+  carry its own literal. `--check` is wired into `ci.yml :: python-lint`;
+  `--self-test` hand-edits the artefact and requires the drift to be caught.
+  The artefact keeps `executable` and `onDisk`/`quarantined` as separate
+  fields, and the UI leads with the executable count.
+- **`scripts/check_alert_reduction_claims.py`** — prose cannot be generated
+  the way a count can, so the retraction is gated instead. No published
+  surface may assert the legacy harness runs the production grouping; any
+  surface quoting 75.3 % must carry the retraction; the `alert_reduction`
+  suite card may not be declared `kind: 'measurement'`; and every surface
+  publishing the real figure must quote `PUBLISHED_REDUCTION_PCT`, a new
+  constant in `services/fusion/tests/test_alert_reduction_real.py` that the
+  test asserts against its own measurement — so the chain from measurement
+  to published prose has no hand-copied link. A paragraph that dates or
+  negates the claim is exempt, so the retraction can quote the wording it
+  retracts.
 - **`scripts/check_demo_state_gated.py`** — a CI gate that asks the two
   questions which do not depend on guessing the next syntax. *Is the
   fabricated value reachable?* — every read of a fabricated symbol must have a
@@ -103,7 +143,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *Does the component decide for itself that it is a demo?* — no component may
   hold demo/sample **mode** in local state, because state derived from a fetch
   failure fabricates exactly when the backend is unhealthy.
-
   It treats three things as fabricated: a `MOCK_*`/`DEMO_*`-style constant; a
   factory that builds one (the constant convention could not see
   `buildDemoCase`); and any constant assembled out of either (`EASMView`
@@ -116,6 +155,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty and checked in both directions; a gate seeded with its own exceptions
   has never been true.
 
+### Changed
+
+- **`readme_gates.py` covers the governance documents.** Its `FIGURE_DOCS`
+  list named one compliance page, which is why `ROADMAP.md` drifted with CI
+  green. `ROADMAP.md` and `RELEASES.md` are now on the list, the matrix
+  **row total** is compared as well as the GATED/PARTIAL split, and a figure
+  the prose explicitly dates ("the count at that time") is exempt so history
+  need not be rewritten.
+- **`check_scoreboard.py --check` verifies `agent_version` against
+  `VERSION`.** `--refresh` already stamped it; nothing compared it, and the
+  freshness gate reads only the date — which a refresh keeps current — so a
+  row could be two days old and still labelled two majors behind.
+
+### Removed
+
+- **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
+  threat-intel replies ("VirusTotal: 14/87 engines flagged malicious",
+  "Associated campaigns: APT-42"), a fixed context sidebar, no API call for
+  the chat, and imported by no file. One import from being live, which is the
+  `MitreStrip.tsx` precedent exactly. It also embedded a personal email
+  address in OSS source; the same string in `FunnelKpiBar.tsx` was removed
+  too. `/investigate` already permanently redirects to `/hunt`, and the
+  multi-turn copilot is `CopilotDock` and `/copilot`, so the docs line naming
+  this component was corrected rather than the component wired.
 ## [10.0.0] — 2026-09-25
 
 **Two ways for a control to be absent: not written, or written and not

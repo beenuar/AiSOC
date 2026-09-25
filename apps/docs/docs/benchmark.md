@@ -39,9 +39,11 @@ agent performance**. Every table below is labelled with its class.
 >
 > This page is _not_ a leaderboard for AI SOC agents. It is a CI-gated harness
 > that exercises the deterministic substrate underneath AiSOC — the keyword
-> extractors, the in-harness fusion grouping (a faithful re-implementation of
-> the production Tier 1/2/3 logic in `services/fusion`, minus the DB-backed
-> dedup and ML scoring), the report and response templates, and the offline
+> extractors, the in-harness fusion grouping (a four-tier scheme implemented
+> inside the test, which groups on different dimensions from `services/fusion`
+> and is retained for continuity — see [Why there are two alert-reduction
+> numbers](#why-there-are-two-alert-reduction-numbers)), the report and
+> response templates, and the offline
 > judges that grade them. The dataset, the harness, and the CI gate are all in
 > the repo. You can reproduce every number on this page in under 10 seconds on
 > a laptop.
@@ -512,29 +514,38 @@ python3 scripts/run_evals.py --ci --out report.json
 
 ## What each suite actually measures
 
-### 1. Alert reduction ratio — `Real measurement`
+### 1. Alert reduction ratio — two numbers
 
-**Source:** [`services/agents/tests/test_alert_reduction.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_alert_reduction.py)
+**Product logic:** [`services/fusion/tests/test_alert_reduction_real.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/tests/test_alert_reduction_real.py)
+groups the stream with `RawAlert.correlation_key()` — `{tenant}:{entity}:{tactic}`
+over a one-hour window, the method `Correlator` actually calls — and reports
+**33.3 %**. `Correlator` itself needs Redis, but Redis is where it *stores*
+incidents; the grouping decision is the key plus the window, so the ratio is
+computed from the real method without the storage layer. The gate is bounded
+on both sides, because a floor alone is satisfied by a key that collapses
+everything into one incident.
+
+**Legacy suite:** [`services/agents/tests/test_alert_reduction.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/test_alert_reduction.py)
 
 A 1 000-alert noisy stream — pure duplicates, near-duplicates within a
 30-minute host window, multi-host rule storms, and benign low-score chatter —
-is fed into the in-harness `fuse_alerts` function. That function is a
-deterministic, in-memory re-implementation of the same Tier 1/2/3 grouping
-rules used by the production `services/fusion` engine — minus the
-DB-backed deduplicator and the ML scorer. The grouping logic itself is the
-same:
+is fed into the in-harness `fuse_alerts` function. Four tiers keyed on
+`(rule_id, host, user)`:
 
 - **Tier 1** — same `(rule, host, user)` within 10 minutes → 1 incident
 - **Tier 2** — same `(rule, host)` within 30 minutes → merge into a Tier-1 incident
 - **Tier 3** — same rule within 5 minutes across ≥ 3 hosts → "storm" incident
 
-Incidents below the noise threshold (`score < 0.35`) are dropped. The output is
-whatever the code produces — a fusion-rule regression will move the number.
-This is a legitimate measurement of grouping behavior on a controlled dataset,
-but it is **not** end-to-end coverage of the production fusion service.
+Incidents below the noise threshold (`score < 0.35`) are dropped.
 
-The reported ~75 % is the actual output of the in-harness grouping function on
-this fixed dataset. It is not tuned to match a marketing number.
+This page previously described that function as a re-implementation of the
+production rules "minus the DB-backed deduplicator and the ML scorer", and
+said the grouping logic itself was the same. It is not: different dimensions,
+different windows, different answer — see [Why there are two alert-reduction
+numbers](#why-there-are-two-alert-reduction-numbers). The reported ~75 % is
+the honest output of *that* function on this fixed dataset — it is not tuned
+to match a marketing number — but it describes an algorithm this product does
+not run, and is retained as a regression gate only.
 
 ### 2. MITRE ATT&CK tactic accuracy — `Substrate self-consistency`
 

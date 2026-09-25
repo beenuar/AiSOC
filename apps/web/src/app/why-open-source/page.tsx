@@ -33,7 +33,7 @@ const PILLARS = [
   {
     label: 'Public eval harness',
     href: '/benchmark',
-    body: 'A 200-incident eval suite runs on every PR targeting main / develop. Four CI gates: one real measurement (alert reduction, against a separately generated 1,000-alert noisy stream) and three substrate self-consistency checks (MITRE tactic, completeness, response quality, against the 200-incident dataset). The harness, the dataset, the rubric, and historical results are in the repo. The benchmark page documents what each metric measures and what it does not.',
+    body: 'A 200-incident eval suite runs on every PR targeting main / develop. Alert reduction is measured against RawAlert.correlation_key() — the grouping the fusion Correlator actually calls — on a separately generated 1,000-alert noisy stream; a legacy in-test suite groups on different dimensions and is retained for continuity, not as a description of this product. Three further gates (MITRE tactic, completeness, response quality, against the 200-incident dataset) are substrate self-consistency checks. The harness, the dataset, the rubric, and historical results are in the repo. The benchmark page documents what each metric measures and what it does not.',
   },
   {
     label: 'MIT, end-to-end',
@@ -49,7 +49,7 @@ const ARTEFACTS = [
   },
   {
     title: 'A reproducible eval harness',
-    body: 'Cloning the repo and running `python3 scripts/run_evals.py` produces the same alert-reduction ratio, MITRE-tactic gate, completeness coverage, and response-quality score that the CI gate produces. The benchmark page documents which numbers are real measurements of the substrate and which are self-consistency gates that would need an online LLM-as-judge run to be called agent accuracy.',
+    body: 'Cloning the repo and running `python3 scripts/run_evals.py` produces the same legacy alert-reduction ratio, MITRE-tactic gate, completeness coverage, and response-quality score that the CI gate produces; `pytest services/fusion/tests/test_alert_reduction_real.py` produces the reduction measured against the correlation key the product runs. The benchmark page documents which numbers measure the substrate and which are self-consistency gates that would need an online LLM-as-judge run to be called agent accuracy.',
   },
   {
     title: 'Source code for the agent',

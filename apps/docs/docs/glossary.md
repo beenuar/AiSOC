@@ -184,8 +184,12 @@ carry a `tenant_id` column and are protected by RLS.
 
 ## Eval & quality
 
-**Alert reduction** — Real measurement: ratio of raw alerts in to
-correlated incidents out, computed over a fixed noisy stream.
+**Alert reduction** — Ratio of raw alerts in to correlated incidents out,
+computed over a fixed noisy stream. Two figures are published: the real
+measurement groups with `RawAlert.correlation_key()` — what `Correlator`
+calls — and reports 33.3 %; a legacy in-test suite groups on four tiers of
+`(rule_id, host, user)` and reports 75.3 %, which does not describe this
+product.
 
 **Eval harness** — Reproducible suite that runs in CI against a fixed
 200-incident synthetic dataset. Three suites measure substrate self-

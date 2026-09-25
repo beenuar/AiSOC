@@ -41,6 +41,10 @@ import {
 import type { ComponentType, SVGProps } from 'react';
 import { cn } from '@/lib/utils';
 import { CONNECTOR_COUNT } from '@/data/connectorCount';
+import {
+  EXECUTABLE_DETECTION_COUNT,
+  MARKETPLACE_ITEM_COUNT,
+} from '@/data/corpusStats';
 
 interface Tile {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -72,7 +76,7 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
       {
         icon: FileCog,
         title: 'Native detections.',
-        body: '6,998 YAML rules across cloud, endpoint, identity, network, application, and data-exfil.',
+        body: `${EXECUTABLE_DETECTION_COUNT} executable rules across cloud, endpoint, identity, network, application, and data-exfil.`,
       },
       {
         icon: ScrollText,
@@ -139,7 +143,7 @@ const BLOCKS: ReadonlyArray<FeatureBlock> = [
       {
         icon: Boxes,
         title: 'Marketplace.',
-        body: '7,117 community items — detections, playbooks, plugins.',
+        body: `${MARKETPLACE_ITEM_COUNT.toLocaleString('en-US')} indexed items — detections, playbooks, plugins.`,
       },
       {
         icon: Code2,
