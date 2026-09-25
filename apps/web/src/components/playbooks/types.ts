@@ -1,18 +1,24 @@
 /**
  * Shared TypeScript types for the Playbook editor and list UI.
- * Mirrors services/agents/app/playbook/models.py
+ *
+ * `StepType` is re-exported from `@aisoc/types` rather than restated here.
+ * The restatement was a nine-member union under a header comment claiming it
+ * mirrored `services/agents/app/playbook/models.py`, which declares
+ * twenty-two. Nothing checked the claim, and because `STEP_SCHEMAS` is keyed
+ * `Record<StepType, StepSchema>` on the *local* union, thirteen missing forms
+ * satisfied exhaustiveness and the build stayed green. Importing the published
+ * union puts the compiler back in charge: a verb the engine grows is a type
+ * error here until the editor can author it.
+ *
+ * `scripts/check_playbook_schema_parity.py` reads every declaration of this
+ * vocabulary — the engine, the schema, the published package and this
+ * directory — in both directions, so the comment above is a checked property
+ * rather than an assertion.
  */
 
-export type StepType =
-  | 'enrich'
-  | 'investigate'
-  | 'notify'
-  | 'block_ip'
-  | 'isolate_host'
-  | 'create_ticket'
-  | 'close_case'
-  | 'http'
-  | 'condition';
+import type { StepType } from '@aisoc/types';
+
+export type { StepType, StepExecution } from '@aisoc/types';
 
 export type OnFailure = 'abort' | 'continue' | 'retry';
 

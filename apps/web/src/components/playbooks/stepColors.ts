@@ -1,16 +1,35 @@
-import type { StepType } from './types';
+/**
+ * Canvas and palette presentation for each step type.
+ *
+ * Derived from `STEP_SCHEMAS` rather than declared. This file used to hold a
+ * second nine-entry `Record<StepType, …>` beside the one in `stepSchemas`,
+ * which meant adding a step type required remembering both — and the thirteen
+ * the engine already ran were missing from each.
+ */
 
-export const STEP_TYPE_META: Record<
-  StepType,
-  { label: string; color: string; bgColor: string; icon: string }
-> = {
-  enrich:         { label: 'Enrich',         color: '#60a5fa', bgColor: '#1e3a5f', icon: 'enr' },
-  investigate:    { label: 'Investigate',    color: '#a78bfa', bgColor: '#2e1f5e', icon: 'inv' },
-  notify:         { label: 'Notify',         color: '#34d399', bgColor: '#1a3d2e', icon: 'ntf' },
-  block_ip:       { label: 'Block IP',       color: '#f87171', bgColor: '#3d1a1a', icon: 'blk' },
-  isolate_host:   { label: 'Isolate Host',   color: '#fb923c', bgColor: '#3d2a1a', icon: 'iso' },
-  create_ticket:  { label: 'Create Ticket',  color: '#fbbf24', bgColor: '#3d341a', icon: 'tkt' },
-  close_case:     { label: 'Close Case',     color: '#94a3b8', bgColor: '#252d3a', icon: 'cls' },
-  http:           { label: 'HTTP',           color: '#38bdf8', bgColor: '#1a3040', icon: 'http' },
-  condition:      { label: 'Condition',      color: '#e879f9', bgColor: '#3a1a40', icon: 'if' },
-};
+import type { StepType } from './types';
+import { STEP_SCHEMAS, ALL_STEP_TYPES } from './stepSchemas';
+
+export interface StepTypeMeta {
+  label: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+}
+
+export const STEP_TYPE_META: Record<StepType, StepTypeMeta> = Object.fromEntries(
+  ALL_STEP_TYPES.map((type) => {
+    const schema = STEP_SCHEMAS[type];
+    return [
+      type,
+      {
+        label: schema.label,
+        color: schema.accent,
+        bgColor: schema.bgColor,
+        // The canvas node is too narrow for an emoji plus a name, so it shows
+        // the short code; the palette uses `schema.icon`.
+        icon: schema.shortCode,
+      },
+    ];
+  }),
+) as Record<StepType, StepTypeMeta>;

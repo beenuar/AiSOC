@@ -23,7 +23,7 @@
  *     logical buckets (EDR, IAM, Ticketing, SIEM, Notify, AI, Firewall).
  */
 
-import type { Playbook } from './types';
+import type { Playbook, StepType } from './types';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -220,7 +220,17 @@ export const INTEGRATION_TYPES = [
 
 export type IntegrationType = (typeof INTEGRATION_TYPES)[number];
 
-const STEP_TYPE_TO_INTEGRATION: Record<string, IntegrationType> = {
+/**
+ * Which integration a step type reaches, or `null` where it reaches none.
+ *
+ * Keyed `Record<StepType, …>` rather than `Record<string, …>`: as a
+ * string-keyed map it listed eighteen of the engine's twenty-two step types
+ * and the compiler had nothing to say about the four it did not, so a
+ * playbook built entirely from those four claimed to use no integrations at
+ * all. `null` is spelled out per type so "reaches nothing" is a decision
+ * somebody made rather than a key nobody added.
+ */
+const STEP_TYPE_TO_INTEGRATION: Record<StepType, IntegrationType | null> = {
   investigate:         'AI Analysis',
   enrich:              'AI Analysis',
   isolate_host:        'EDR / Endpoint',
@@ -228,6 +238,7 @@ const STEP_TYPE_TO_INTEGRATION: Record<string, IntegrationType> = {
   kill_process:        'EDR / Endpoint',
   run_av_scan:         'EDR / Endpoint',
   run_script:          'EDR / Endpoint',
+  osquery_live_query:  'EDR / Endpoint',
   disable_user:        'Identity / IAM',
   reset_password:      'Identity / IAM',
   revoke_session:      'Identity / IAM',
@@ -239,6 +250,12 @@ const STEP_TYPE_TO_INTEGRATION: Record<string, IntegrationType> = {
   block_ip:            'Firewall / Network',
   block_ioc:           'Firewall / Network',
   http:                'HTTP / Custom',
+  // Engine-internal: these reach the AiSOC API or nothing at all, and
+  // showing a vendor badge for them would overstate what a pack integrates.
+  close_case:          null,
+  condition:           null,
+  // Not runnable at all — see `STEP_SCHEMAS.approval`.
+  approval:            null,
 };
 
 /**
