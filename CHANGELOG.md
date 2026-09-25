@@ -1019,6 +1019,15 @@ number is the one the requirement is sized against.
 
 ### Removed
 
+- **The empty blog section on the documentation site.** The classic preset
+  enabled the blog plugin while no `apps/docs/blog` directory has ever
+  existed, so the published site served an empty index at `/AiSOC/blog` at
+  HTTP 200, listed it in the sitemap, and advertised it from both the navbar
+  and the footer. Dropping the footer entry left the "More" column holding
+  only a duplicate of the GitHub link already in the navbar, so that link
+  moved to "Community" and the column went with it. The three long-form posts
+  under `apps/web/content/blog` are a different surface and are unaffected.
+
 - **`apps/web/src/components/copilot/InvestigationChat.tsx`** — canned
   threat-intel replies ("VirusTotal: 14/87 engines flagged malicious",
   "Associated campaigns: APT-42"), a fixed context sidebar, no API call for
