@@ -65,7 +65,13 @@ clickhouse-driver = "^0.2.8"
 # two different isolation guarantees. This line read `<31.0.0` while the
 # Dockerfile and CI read `<27`, and on 27+ the rewriter returned unscoped
 # SQL and reported success.
-sqlglot = ">=23,<27"
+#
+# One major wide, deliberately. The previous `>=23,<27` permitted four majors
+# of which exactly one was ever exercised, so three of them were installable
+# and untested. The rewriter suites and an adversarial corpus were run on the
+# 30 line; 27, 28 and 29 were not, and a range is a statement about what may
+# be installed rather than about what upstream has released.
+sqlglot = ">=30,<31"
 boto3 = "^1.34.0"
 neo4j = ">=5.19,<7.0"
 pysigma = "^0.11.0"

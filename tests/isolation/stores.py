@@ -45,7 +45,8 @@ STORES: tuple[StoreCoverage, ...] = (
         "container_gated",
         "lake_sql.rewrite_for_tenant injects tenant predicate and refuses (LakeSqlIsolationError) when it cannot prove "
         "it did; live-replay test_live_stores.py::test_clickhouse_lake_query_as_A_excludes_B (isolation-live.yml); "
-        "rewriter run against two sqlglot majors + pin agreement gate (lake-isolation.yml)",
+        "rewriter run against the shipped sqlglot range and against the newest release above it "
+        "+ pin agreement gate (lake-isolation.yml)",
     ),
     StoreCoverage(
         "redis",

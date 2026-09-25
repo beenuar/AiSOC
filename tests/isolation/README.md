@@ -151,7 +151,12 @@ rewriter returned every single-table query unscoped *and* unfiltered by the
 allowlist while reporting success. Two gates in
 `.github/workflows/lake-isolation.yml` close that off — `check_sqlglot_pin.py`
 requires all seven install paths to declare one identical range, and the
-rewriter suites run against the shipped range and the next major. The rewriter
+rewriter suites run against the shipped range and against whatever sqlglot
+publishes above it. The second leg carries no upper bound on purpose, so it
+begins testing the next major the day one exists rather than when somebody
+remembers to widen it; while no such release exists it re-runs the shipped
+version and says so in a warning annotation rather than passing a duplicate
+green off as forward coverage. The rewriter
 also audits its own output now and raises `LakeSqlIsolationError` rather than
 returning SQL it cannot prove is scoped; `services/api/tests/test_lake_sql_fail_closed.py`
 blinds the table walk deliberately to assert that refusal on any sqlglot

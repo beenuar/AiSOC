@@ -173,7 +173,7 @@ jobs:
         "opentelemetry-instrumentation-fastapi"
         "strawberry-graphql[fastapi]"
         neo4j redis celery httpx aiofiles email-validator
-        "sqlglot>=23,<27" aiosqlite "croniter>=2.0,<7.0"
+        "sqlglot>=30,<31" aiosqlite "croniter>=2.0,<7.0"
         pytest pytest-asyncio
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
