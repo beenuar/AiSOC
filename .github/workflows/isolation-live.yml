@@ -44,13 +44,22 @@ jobs:
 
       - name: Install clients + test deps
         # sqlglot MUST be pinned to the same range the API service ships
-        # (`>=23,<27`): the ClickHouse test runs the production
-        # lake_sql.rewrite_for_tenant, and sqlglot >= 27 silently stops
-        # injecting the tenant WHERE predicate (the tenant-isolation break this
-        # very gate exists to catch). test_lake_sql.py guards the pin itself.
+        # (`>=30,<31`): the ClickHouse test runs the production
+        # lake_sql.rewrite_for_tenant, so a version this job resolves and the
+        # image does not is a different isolation guarantee than the one under
+        # test. `scripts/check_sqlglot_pin.py` is what keeps the two equal.
+        #
+        # The historical break is why the pin is enforced rather than
+        # suggested: sqlglot 27 renamed the SELECT's FROM argument key, the
+        # table walk found nothing, and every single-table query came back
+        # with no tenant predicate, no allowlist check and no table-function
+        # ban — reported as success. `lake_sql._from_clause` now resolves the
+        # clause by node type rather than by key name, so that specific
+        # rename cannot recur; the agreement requirement stands because the
+        # next AST change will not announce itself either.
         run: >-
           pip install --quiet
-          pytest pytest-asyncio structlog "sqlglot>=23,<27"
+          pytest pytest-asyncio structlog "sqlglot>=30,<31"
           neo4j "redis>=5,<6" clickhouse-driver "kafka-python>=2,<3"
 
       # Single-container stores run as `services:`-style `docker run` so we can

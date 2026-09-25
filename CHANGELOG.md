@@ -9,6 +9,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`sqlglot` moved to the 30 line across all eight declarations, and the
+  forward-compatibility matrix leg was rewritten so it can still reach past
+  the pin.** The bump itself was never the work: a single-path proposal moved
+  1 of 8 declarations and left six workflows at `>=23,<27`, which
+  `scripts/check_sqlglot_pin.py` fails closed on — correctly, since that gate
+  exists because sqlglot 27 renamed the SELECT's FROM argument key and
+  silently stripped the tenant predicate, the table allowlist and the `url()`
+  exfiltration ban from every single-table query while reporting success. All
+  eight now read `>=30,<31` (`services/api/pyproject.toml` plus `ci.yml`,
+  `integration.yml` ×2, `isolation-live.yml`, `cross-tenant-rbac.yml`,
+  `check-openapi.yml`, `reproducible-builds.yml`), and
+  `services/api/poetry.lock` resolves 30.19.0 inside it.
+
+  One major wide rather than four. The previous range permitted 23–26 and
+  exactly one of those was ever exercised, so three majors were installable
+  and untested; 27, 28 and 29 are likewise unexercised, and a range states
+  what may be installed rather than what upstream has released.
+
+  Measured before moving, on 64 adversarial cases written against the
+  documented policy rather than reusing the module's fixtures — DDL, DML,
+  admin verbs, multi-statement input, seven ClickHouse table functions
+  including ones hidden in subqueries and CTE bodies, non-allowlisted tables
+  reached through JOIN, subquery, UNION arm and CTE, and five forged
+  `tenant_id` predicates. 26.33.0 and 30.19.0 return the same disposition on
+  all 64 (23 rewritten, 33 `LakeSqlForbiddenError`, 8 `LakeSqlSyntaxError`)
+  and the rendered SQL of all 23 rewritten cases is byte-identical. Two cases
+  differ in wording only and both remain refusals: `DETACH TABLE` now reaches
+  the statement-kind check instead of failing to parse, and `KILL`'s class
+  moved to `sqlglot.expressions.ddl`, which the parse error quotes. The
+  in-tree suites pass 58/58 on each major.
+
+  The forward leg is the part that needed a decision. It read `>=27,<31`,
+  which only reached past the pin while the pin sat below 27; there is no
+  sqlglot 31, so with the pin on the 30 line every way of naming a ceiling is
+  worse than leaving it off — `>=31` cannot be installed and reds the job
+  forever, `>=30,<31` duplicates the shipped leg and reports two greens for
+  one piece of evidence, and retargeting to `>=27,<30` tests majors below the
+  pin, which is regression coverage for versions nothing installs and leaves
+  nothing between the next major and production. The leg is now unbounded
+  above, so it resolves whatever is newest and arms itself the day a higher
+  major is published with no edit. Because that means it re-runs the shipped
+  version today, a `Forward coverage` step emits a warning annotation saying
+  so rather than letting a duplicate green pass for evidence, and
+  `check_sqlglot_pin.py` gained the structural half in both directions: the
+  forward leg must carry no upper bound and must not float below the shipped
+  floor, and the step's `SHIPPED_CEILING` must equal the shipped range's `<N`
+  bound so a stale copy cannot report the wrong verdict. Seven injected
+  violations in `--self-test`, which runs before the gate. What is
+  deliberately not asserted is that a higher major exists: upstream's release
+  schedule is not this repository's to require, and a gate red until sqlglot
+  ships 31 would be red for a reason no change here could fix.
+
 - **Four root-workspace dependency bumps landed as one lockfile change.**
   `cytoscape` 3.34.0 → 3.34.3, `lucide-react` 1.28.0 → 1.48.0,
   `@modelcontextprotocol/sdk` 1.29.0 → 1.30.1 and `tsx` 4.23.1 → 4.23.15 all
