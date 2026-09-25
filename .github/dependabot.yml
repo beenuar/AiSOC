@@ -8,6 +8,26 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    # `pnpm-workspace.yaml` excludes `apps/mobile` with a `!apps/mobile`
+    # negation, and pnpm honours it: the root `pnpm-lock.yaml` has no
+    # `apps/mobile` importer. Dependabot's manifest scan does not honour it.
+    # It expands `apps/*`, finds `apps/mobile/package.json`, and proposes
+    # updates for it from *this* entry — where none of the Expo holds written
+    # into the `/apps/mobile` entry below apply, because that entry never sees
+    # the dependency.
+    #
+    # That produced `expo-constants 18.0.14 -> 57.0.19`: the Expo SDK 57
+    # release-train version of a package this repository pins to SDK 54, which
+    # `pnpm install` resolves with `expo-router 6.0.24 unmet peer
+    # expo-constants@^18.0.13`. It arrived with no lockfile change at all,
+    # because from this entry's point of view the lockfile is the root one and
+    # the root one does not contain the package.
+    #
+    # `exclude-paths` is version-updates-only, so the `/apps/mobile` entry
+    # keeps sole ownership of that directory and its security alerts are
+    # unaffected.
+    exclude-paths:
+      - "apps/mobile/**"
     groups:
       next-ecosystem:
         patterns: ["next", "react", "react-dom", "@types/react*"]
@@ -55,7 +75,6 @@ updates:
       - dependency-name: "@storybook/*"
         update-types: ["version-update:semver-major"]
 
-  # ── pip (api) ────────────────────────────────────────────────
   # ── apps/mobile ──────────────────────────────────────────────
   #
   # Its own install root, deliberately outside the pnpm workspace: React
@@ -138,6 +157,22 @@ updates:
       # that either resolves all of them or none.
       opentelemetry:
         patterns: ["@opentelemetry/*"]
+      # The eslint family has to move as one, for the same reason the root
+      # entry quarantines it — but measured here rather than assumed.
+      # `@eslint/js@10.0.1` declares `peerDependencies: { eslint: "^10.0.0" }`,
+      # so an ungrouped bump of it alone against this service's `eslint@^9`
+      # installs a tree `npm ls` reports as `invalid` in nine places. It is
+      # not caught by anything: `npm ci`, `tsc`, `eslint src test` and the
+      # test run were all green on that tree, and the effective rule set
+      # actually *grew* by three rules, so the only signal was the peer graph.
+      #
+      # Unlike the root entry this service does not use `eslint-plugin-react`
+      # — its flat config is `@eslint/js` plus `typescript-eslint`, and
+      # `typescript-eslint@8.70.1` already accepts `eslint@^10`. So this is a
+      # group and not an `ignore`: the family can move whenever the three
+      # arrive in one reviewable pull request.
+      eslint:
+        patterns: ["eslint", "@eslint/*", "typescript-eslint", "@typescript-eslint/*"]
     ignore:
       # Major bumps here are breaking-change reviews, not dependency hygiene:
       # typescript 5 -> 7 and @types/node 20 -> 26 both arrived as automatic
@@ -147,12 +182,58 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
 
+  # ── pip (api) ────────────────────────────────────────────────
+  #
+  # This entry had no `ignore` rules at all, which is why `ruff 0.4.10 ->
+  # 0.16.8` and `mypy 1.20.2 -> 2.3.1` arrived as ordinary weekly bumps
+  # against a service whose lint and type-check gates are both ratchets.
+  #
+  # Neither hold is about the tool being unwelcome. Both are about the fact
+  # that Dependabot can only edit `services/api/pyproject.toml` and its lock,
+  # while each of these versions is declared in several places that have to
+  # move in one commit — and in both cases the `Python — Lint & Type-check`
+  # required check is what fails, i.e. on every open pull request, not just
+  # the bump's own.
   - package-ecosystem: pip
     directory: /services/api
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
+    ignore:
+      # ruff is declared `>=0.4.4,<0.5` in fourteen files (seven
+      # pyproject.toml plus CI and image install lines) — a count
+      # `scripts/check_dependency_pins.py` enforces agreement across — and
+      # `.github/workflows/ci.yml` runs `ruff format --check services/` as a
+      # hard gate. Measured on 0.16.8: 90 files would be
+      # reformatted and `ruff check services/` reports 3 errors, against
+      # `All checks passed!` / `1229 files already formatted` on the pin.
+      # Moving ruff is therefore a whole-tree reformat landed together with
+      # all fourteen declarations, not a dependency bump. ruff is 0.x, so the
+      # 0.4 -> 0.16 step is a *minor* under semver; patches inside 0.4.x are
+      # deliberately still allowed through.
+      - dependency-name: "ruff"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+      # mypy is declared `>=1.10,<2` in six pyproject.toml files and in the
+      # same CI job, which runs `scripts/check_mypy_baseline.py` — a
+      # `(tree, file, code)` ratchet. Measured on 2.3.1 under Python 3.11
+      # (the environment the baseline is recorded in): the gate exits 1 with
+      # 35 entries no longer matching. They are all *shrinkages* — mypy 2
+      # stops reporting `import-untyped` for those files — and the ratchet
+      # refuses them in that direction on purpose, so the banked headroom
+      # cannot silently absorb the next regression. Moving mypy means
+      # re-recording the baseline with `--update` under 2.x on 3.11 and
+      # moving all six declarations at once.
+      - dependency-name: "mypy"
+        update-types: ["version-update:semver-major"]
+      # Deliberately *not* held: `sqlglot`. It is the parser enforcing
+      # ClickHouse tenant isolation, an `ignore` rule suppresses security
+      # updates as well as version updates, and a single-path bump already
+      # cannot merge — `scripts/check_sqlglot_pin.py` fails closed when the
+      # seven install paths disagree. Noise that a gate catches is a better
+      # trade here than a muted advisory on the isolation boundary.
 
   # ── pip (actions) ────────────────────────────────────────────
   - package-ecosystem: pip
