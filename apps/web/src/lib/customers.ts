@@ -109,9 +109,8 @@ function parseFile(filename: string): CustomerStudy {
 }
 
 /**
- * List every case study on disk. `includeDrafts` is true by default for
- * detail-page resolution (GTM should be able to preview a draft directly via
- * its slug); the index page passes `false` so drafts stay private.
+ * List every case study on disk. Callers that render anything publicly pass
+ * `false`, so an unpublished study stays unpublished.
  */
 export function listCustomers(includeDrafts = true): CustomerStudy[] {
   const studies = readDir().map(parseFile);
@@ -126,16 +125,33 @@ export function listCustomers(includeDrafts = true): CustomerStudy[] {
   });
 }
 
+/**
+ * Resolve one case study, refusing drafts outside development.
+ *
+ * A draft is unpublished content, and the template shipped in this directory
+ * is fabricated end to end — a company that does not exist, invented
+ * before/after numbers, and a quote attributed to a role at it. Serving that
+ * from a public deployment states it as fact, so a draft resolves only where
+ * someone is previewing their own work.
+ */
 export function getCustomerBySlug(slug: string): CustomerStudy | null {
   for (const ext of ['mdx', 'md'] as const) {
     const file = path.join(CONTENT_DIR, `${slug}.${ext}`);
     if (fs.existsSync(file)) {
-      return parseFile(`${slug}.${ext}`);
+      const study = parseFile(`${slug}.${ext}`);
+      if (study.frontmatter.draft && process.env.NODE_ENV === 'production') {
+        return null;
+      }
+      return study;
     }
   }
   return null;
 }
 
+/**
+ * Slugs to pre-render. Drafts are excluded so an unpublished study is never
+ * built into the static output, where nothing downstream could withhold it.
+ */
 export function listCustomerSlugs(): string[] {
-  return readDir().map((name) => name.replace(/\.(mdx|md)$/u, ''));
+  return listCustomers(false).map((study) => study.slug);
 }

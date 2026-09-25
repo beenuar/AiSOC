@@ -659,6 +659,36 @@ number is the one the requirement is sized against.
 
 ### Fixed
 
+- **`/customers/example` published a fabricated case study on the public
+  site.** `generateStaticParams` pre-rendered every file in
+  `apps/web/content/customers/`, and `getCustomerBySlug` never consulted the
+  `draft` flag, so the template shipped as scaffolding was built into the
+  static output and served: a company that does not exist, invented
+  before/after numbers, a quote attributed to a role at it, and a claim that a
+  SOC 2 Type II auditor closed three named controls. The index page was
+  correct — it filters drafts — which is what made this invisible: the
+  fabrication was reachable only by its own URL, and by search engines.
+
+  Drafts are now excluded from pre-rendering, and resolve by slug only outside
+  production so an author can still preview their own work. Verified against
+  the build output rather than the source: the study appears in no file under
+  `.next/`, only the index route is generated, and the sitemap lists
+  `/customers` alone.
+
+  The index itself asserted customers exist when none do. Its metadata read
+  "Reference customers running AiSOC in production", its Open Graph
+  description promised "the before/after metrics each team reports", and its
+  heading read "Teams running AiSOC in production." — all published while the
+  published-study count was zero. The page now says so plainly and points at
+  the real screenshots and the repository instead.
+
+- **A duplicate "Investigation Chat" entry in the console sidebar.** It pointed
+  at `/investigate`, which permanently redirects to `/hunt` — a route the
+  sidebar already lists — so the entry advertised a surface that was collapsed
+  into Hunt, and whose component was removed as fabricated. Clicking it landed
+  on Hunt with the highlight on a different item than the one clicked.
+
+
 - **The `Public papers (regenerate PDFs)` workflow could never succeed on
   `main`, and its design hid that from everyone opening a PR.** Its final step
   pushed refreshed PDFs directly to `main`, which stopped being possible when

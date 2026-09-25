@@ -10,14 +10,14 @@ import { listCustomers } from '@/lib/customers';
  */
 
 export const metadata: Metadata = {
-  title: 'Customers — AiSOC',
+  title: 'Case studies — AiSOC',
   description:
-    'Reference customers running AiSOC in production: who they are, the security challenge, and the measurable outcome.',
+    'Published AiSOC case studies. Each one is an MDX file in the repository, written from numbers the team running it reported.',
   alternates: { canonical: '/customers' },
   openGraph: {
-    title: 'Customers — AiSOC',
+    title: 'Case studies — AiSOC',
     description:
-      'Real-world AiSOC deployments and the before/after metrics each team reports.',
+      'Published AiSOC case studies, each contributed as a file in the repository.',
     type: 'website',
   },
 };
@@ -34,16 +34,17 @@ export default function CustomersIndexPage() {
       <section className="px-6 pt-32 pb-12">
         <div className="mx-auto max-w-5xl">
           <span className="text-xs font-semibold uppercase tracking-wider text-brand-300">
-            Customers
+            Case studies
           </span>
           <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-            Teams running AiSOC in production.
+            {hasStudies
+              ? 'Teams running AiSOC in production.'
+              : 'No case studies published yet.'}
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-relaxed text-gray-400">
-            Each case study below is a single MDX file in the repo. The
-            challenge, the before/after numbers, and the analyst quote are
-            taken directly from the customer — no marketing rewrite, no
-            unverifiable vendor metrics.
+            {hasStudies
+              ? 'Each case study below is a single MDX file in the repository. The challenge, the before/after numbers, and the analyst quote come from the team that ran it — no marketing rewrite, no unverifiable vendor metrics.'
+              : 'This page lists case studies contributed as files in the repository, written from numbers the team running AiSOC reported. Nobody has published one yet, so rather than fill the space we are saying so.'}
           </p>
         </div>
       </section>
@@ -110,13 +111,31 @@ export default function CustomersIndexPage() {
               })}
             </div>
           ) : (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
-              <p className="text-sm text-gray-400">
-                No published customer stories yet. Drop an MDX file into{' '}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10">
+              <p className="max-w-2xl text-sm leading-relaxed text-gray-400">
+                AiSOC is an open-source project, so the deployments we know
+                about are the ones people tell us about. If you are running it,
+                a case study is a pull request adding one file under{' '}
                 <code className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs text-gray-200">
                   apps/web/content/customers/
-                </code>{' '}
-                to publish one.
+                </code>
+                . In the meantime, the{' '}
+                <Link
+                  href="/#product"
+                  className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
+                >
+                  screenshots on the home page
+                </Link>{' '}
+                are captures of a real stack, and everything behind them is in{' '}
+                <a
+                  href="https://github.com/beenuar/AiSOC"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
+                >
+                  the repository
+                </a>
+                .
               </p>
             </div>
           )}
