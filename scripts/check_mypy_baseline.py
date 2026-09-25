@@ -127,6 +127,22 @@ BASELINE = Path("scripts/mypy_baseline.json")
 UNMANAGED_CONFIG = Path("mypy-unmanaged.toml")
 UNMANAGED_SCOPE = "(unmanaged)"
 
+#: The environment the baseline was recorded under, stored beside the findings.
+#: Bracketed for the same reason ``UNMANAGED_SCOPE`` is: every other key in the
+#: file is a directory path.
+#:
+#: Recorded because a mypy major does not merely add findings, it *moves* them
+#: — 2.x reports where 1.x did not and vice versa — so running the gate under
+#: the wrong one produces a long list of per-file mismatches that read as code
+#: problems and are not. Naming the mismatch once, first, turns a confusing
+#: afternoon into a line of output.
+ENVIRONMENT_KEY = "(environment)"
+
+#: Keys in the baseline that are not trees. Collected here rather than written
+#: out at each site: there are four places that subtract them, and the one
+#: that forgets is the one that reports a metadata key as a deleted service.
+_NON_TREE_KEYS = frozenset({UNMANAGED_SCOPE, ENVIRONMENT_KEY})
+
 # The archived prototype. `.github/workflows/codeql.yml` carries the same
 # exclusion and the project rules forbid editing anything under it, so a
 # finding there is not actionable.
@@ -135,6 +151,41 @@ _SKIP_DIRS = frozenset({"node_modules", ".venv", "venv", "site-packages", "__pyc
 
 # `file:line: error: message  [code]`
 _FINDING = re.compile(r"^(?P<file>[^:]+):\d+:(?:\d+:)?\s*error:\s*(?P<message>.*?)\s*(?:\[(?P<code>[\w-]+)\])?$")
+
+#: Passed to every invocation, so the answer describes the repository rather
+#: than the machine it was asked on.
+#:
+#: ``--no-site-packages`` is the one that matters. mypy reads type information
+#: out of installed PEP 561 packages, so with ``httpx`` importable a file's
+#: ``import-untyped`` finding disappears and the calls it enables start
+#: producing real ones instead. The baseline was recorded on a runner with no
+#: project dependencies, which made it reproducible *there* and nowhere else:
+#: a contributor with the service's virtualenv active got a long list of
+#: mismatches in both directions and no hint that the cause was their
+#: environment rather than their code. Measured on ``services/connectors``:
+#: 73 findings on a bare interpreter, 140 with eight project dependencies
+#: installed, and 73 with either of those once this flag is passed.
+#:
+#: The interpreter is *not* the variable people assume. Every tree pins
+#: ``python_version`` and this scope's config does too, so 3.13 against 3.11
+#: moves exactly one finding; installing eight dependencies moves 59.
+#:
+#: ``--no-incremental`` closes the second one, which is subtler and was found
+#: while measuring the first: a ``.mypy_cache`` written by an earlier run under
+#: a *different* environment is reused by the next one, so the same tree
+#: answered 990 on a cold cache and 988 on a cache a dependency-installed run
+#: had left behind. A gate whose answer depends on what was run in the
+#: directory before it is not reproducible in the sense that matters — the
+#: contributor cannot get back to the number CI will produce without knowing to
+#: delete something. CI checks out fresh and is always cold, so this costs it
+#: nothing; locally it is the difference between about five seconds and about
+#: eighteen, for an answer that is the same every time.
+_INVARIANT_FLAGS = (
+    "--no-color-output",
+    "--no-error-summary",
+    "--no-site-packages",
+    "--no-incremental",
+)
 
 
 def repo_root() -> Path:
@@ -276,7 +327,7 @@ def coverage_problems(root: Path, trees: list[str], recorded: dict) -> list[str]
                 f"use python_version/strict=false/ignore_missing_imports, the packages use "
                 f"strict=true. Then run --update to record what it surfaces"
             )
-    for tree in sorted((set(recorded) | set(trees)) - {UNMANAGED_SCOPE}):
+    for tree in sorted((set(recorded) | set(trees)) - _NON_TREE_KEYS):
         if not (root / tree / "pyproject.toml").is_file():
             problems.append(
                 f"`{tree}` is configured or recorded but has no pyproject.toml on disk — "
@@ -302,7 +353,7 @@ def coverage_problems(root: Path, trees: list[str], recorded: dict) -> list[str]
 def run_mypy(root: Path, tree: str) -> tuple[dict[str, dict[str, int]], str]:
     """Findings for one tree, as {relative file: {error code: count}}."""
     completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [sys.executable, "-m", "mypy", "--no-color-output", "--no-error-summary", "."],
+        [sys.executable, "-m", "mypy", *_INVARIANT_FLAGS, "."],
         cwd=root / tree,
         capture_output=True,
         text=True,
@@ -377,8 +428,7 @@ def run_mypy_unmanaged(root: Path, files: list[str]) -> tuple[dict[str, dict[str
                     sys.executable,
                     "-m",
                     "mypy",
-                    "--no-color-output",
-                    "--no-error-summary",
+                    *_INVARIANT_FLAGS,
                     "--config-file",
                     str(config),
                     "--linecount-report",
@@ -445,6 +495,86 @@ def load(root: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+def environment() -> dict[str, str]:
+    """What this run is being answered by, as the baseline records it.
+
+    Only what actually moves the answer. ``--no-site-packages`` removed the
+    installed-package variable, every config pins ``python_version``, and what
+    is left is mypy's own version — which is the largest lever of all, because
+    a major does not add findings so much as relocate them.
+
+    The major is what is compared; the full version is recorded so a reader
+    can reproduce the exact run. Holding contributors to a patch release would
+    fail the gate for a reason the repository did not cause.
+    """
+    version = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        [sys.executable, "-m", "mypy", "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    reported = version.stdout.split()[1] if version.returncode == 0 and len(version.stdout.split()) > 1 else "unknown"
+    return {
+        "mypy": reported,
+        "mypy_major": reported.split(".")[0],
+        "python": ".".join(str(p) for p in sys.version_info[:2]),
+        "flags": " ".join(_INVARIANT_FLAGS),
+    }
+
+
+def environment_problems(found: dict[str, str], recorded: dict[str, str]) -> tuple[list[str], list[str]]:
+    """(refusals, notes) for whether this run is comparable to the baseline.
+
+    Reported *before* the per-file comparison and phrased as one sentence,
+    because the alternative is what used to happen: a contributor on the wrong
+    mypy got a screen of file-level mismatches in both directions, every one of
+    which described their environment and none of which said so.
+
+    Two severities, because the two variables are not the same size. A mypy
+    major relocates findings wholesale, so the comparison below means nothing
+    and running it would be worse than refusing. A Python minor moves 2
+    findings in 1 file out of 990 — the comparison stays almost entirely
+    useful, and refusing it would stop a contributor on 3.12 from running the
+    gate at all over a difference that is fully explainable. Labelled, not
+    refused.
+
+    Both directions, like everything else here. A baseline with no environment
+    recorded is as unusable as one recorded under a different major — it just
+    fails later, and against whoever next touches an unrelated file.
+    """
+    if not recorded:
+        return (
+            [
+                f"{BASELINE} records no {ENVIRONMENT_KEY} block, so nothing says which mypy produced it. "
+                f"Re-record with --update under the version `ci.yml` installs (baseline -> environment)"
+            ],
+            [],
+        )
+    if found.get("mypy") == "unknown":
+        return (["could not read `mypy --version` from this interpreter, so the run cannot be compared to the baseline"], [])
+    if found["mypy_major"] != recorded.get("mypy_major"):
+        major = recorded.get("mypy_major", "0")
+        return (
+            [
+                f"this run used mypy {found['mypy']} and {BASELINE} was recorded under "
+                f"{recorded.get('mypy', 'an unrecorded version')}. A mypy major moves findings rather than only "
+                f"adding them, so every difference below would be the version and not the code. Install "
+                f"`mypy>={major},<{int(major) + 1}` and run again (environment -> findings)"
+            ],
+            [],
+        )
+    notes: list[str] = []
+    if found["python"] != recorded.get("python"):
+        notes.append(
+            f"this run is on python {found['python']} and the baseline was recorded on "
+            f"{recorded.get('python')}. Every config here pins `python_version`, so the analysis is the same — "
+            f"but PEP 701 changed how f-string sub-expressions are attributed to source lines in 3.12, which "
+            f"splits some findings that 3.11 reports once. Measured: 2 findings in scripts/run_evals.py out of "
+            f"{recorded.get('total', '~990')}. Anything else below is real"
+        )
+    return [], notes
+
+
 def _python_file_count(root: Path, tree: str) -> int:
     return sum(1 for path in (root / tree).rglob("*.py") if not any(part in _SKIP_DIRS for part in path.parts))
 
@@ -462,7 +592,12 @@ def run(root: Path, update: bool = False) -> int:
 
     unmanaged = unmanaged_files(root, all_trees)
     scanned = sum(_python_file_count(root, tree) for tree in trees)
+    here = environment()
     print(f"check_mypy_baseline: root {root}")
+    # Name the environment as well as the corpus. Everything below is an answer
+    # given by a particular type checker, and a reader comparing two runs needs
+    # to know whether they were answered by the same one.
+    print(f"  mypy {here['mypy']} on python {here['python']}, flags: {here['flags']}")
     # Name what was scanned. "OK" over a tree that was never opened is the
     # failure this gate exists to make impossible, and a count is the cheapest
     # way for a reader to notice it happened.
@@ -489,10 +624,25 @@ def run(root: Path, update: bool = False) -> int:
         print(f"  {UNMANAGED_SCOPE}: {total} finding(s) across {len(found)} file(s)")
 
     if update:
-        (root / BASELINE).write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        recording = {**results, ENVIRONMENT_KEY: here}
+        (root / BASELINE).write_text(json.dumps(recording, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         total = sum(sum(sum(c.values()) for c in f.values()) for f in results.values())
         print(f"check_mypy_baseline: recorded {total} finding(s) across {len(results)} tree(s) in {BASELINE}")
+        print(f"check_mypy_baseline: recorded the environment as mypy {here['mypy']} on python {here['python']}")
         return 1 if problems else 0
+
+    # Before the per-file comparison, not after: if the environments disagree
+    # then every line the comparison would print describes the environment, and
+    # printing 200 of those above the one sentence that explains them is how a
+    # contributor concludes the gate is broken and stops running it.
+    refusals, notes = environment_problems(here, recorded.get(ENVIRONMENT_KEY, {}))
+    for note in notes:
+        print(f"  note: {note}")
+    if refusals:
+        print("check_mypy_baseline: FAIL")
+        for problem in refusals:
+            print(f"  - {problem}")
+        return 1
 
     for tree in sorted(results):
         if tree not in recorded:
@@ -502,7 +652,7 @@ def run(root: Path, update: bool = False) -> int:
             )
             continue
         problems += compare(tree, results[tree], recorded[tree])
-    for tree in sorted(set(recorded) - set(trees) - {UNMANAGED_SCOPE}):
+    for tree in sorted(set(recorded) - set(trees) - _NON_TREE_KEYS):
         problems.append(
             f"{BASELINE} records `{tree}`, which no longer declares [tool.mypy] — "
             f"remove it rather than leaving a baseline for a tree nobody checks "
@@ -675,6 +825,13 @@ def _coverage_self_test() -> tuple[list[str], int]:
         return failures, len(cases)
 
 
+#: Two recorded environments, for the comparison cases below. Written out
+#: rather than produced by `environment()`, which would only ever report the
+#: one this process is running under and so could never express a mismatch.
+_ENV_1 = {"mypy": "1.20.2", "mypy_major": "1", "python": "3.11", "flags": " ".join(_INVARIANT_FLAGS)}
+_ENV_2 = {"mypy": "2.3.1", "mypy_major": "2", "python": "3.11", "flags": " ".join(_INVARIANT_FLAGS)}
+
+
 def self_test(root: Path) -> int:
     """Prove the comparison reports drift in each direction.
 
@@ -695,6 +852,54 @@ def self_test(root: Path) -> int:
         ("unchanged", {"a.py": {"arg-type": 1}}, {"a.py": {"arg-type": 1}}, None),
     ]
     failures: list[str] = []
+    env_cases: list[tuple[str, tuple[list[str], list[str]], str | None, str | None]] = [
+        (
+            "a baseline with no recorded environment is refused",
+            environment_problems(_ENV_2, {}),
+            "records no (environment) block",
+            None,
+        ),
+        (
+            "a different mypy major is refused before any file is compared",
+            environment_problems(_ENV_1, _ENV_2),
+            "A mypy major moves findings",
+            None,
+        ),
+        (
+            "the same major on a different patch is fine",
+            environment_problems({**_ENV_2, "mypy": "2.9.9"}, _ENV_2),
+            None,
+            None,
+        ),
+        (
+            "a different python minor is a note, not a refusal",
+            environment_problems({**_ENV_2, "python": "3.13"}, _ENV_2),
+            None,
+            "PEP 701",
+        ),
+        (
+            "an unreadable mypy version is refused rather than guessed",
+            environment_problems({**_ENV_2, "mypy": "unknown"}, _ENV_2),
+            "could not read `mypy --version`",
+            None,
+        ),
+        ("a matching environment says nothing", environment_problems(_ENV_2, _ENV_2), None, None),
+    ]
+    for name, (refusals, notes), want_refusal, want_note in env_cases:
+        blob_r, blob_n = " ".join(refusals), " ".join(notes)
+        failure = None
+        if want_refusal is None and refusals:
+            failure = f"{name}: expected no refusal, got {refusals}"
+        elif want_refusal is not None and want_refusal not in blob_r:
+            failure = f"{name}: expected a refusal mentioning {want_refusal!r}, got {refusals}"
+        elif want_note is None and notes:
+            failure = f"{name}: expected no note, got {notes}"
+        elif want_note is not None and want_note not in blob_n:
+            failure = f"{name}: expected a note mentioning {want_note!r}, got {notes}"
+        if failure:
+            failures.append(failure)
+        print(f"  self-test [{'FAIL' if failure else 'ok'}] {name}")
+
     for name, found, recorded, expect in cases:
         problems = compare("t", found, recorded)
         blob = " ".join(problems)
@@ -712,8 +917,8 @@ def self_test(root: Path) -> int:
 
     # The baseline must describe this tree, not a remembered one.
     trees, recorded = discover(root), load(root)
-    if trees and recorded and set(trees) | {UNMANAGED_SCOPE} != set(recorded):
-        failures.append(f"baseline covers {sorted(recorded)} but the tree declares {sorted(trees)} plus {UNMANAGED_SCOPE}")
+    if trees and recorded and set(trees) | _NON_TREE_KEYS != set(recorded):
+        failures.append(f"baseline covers {sorted(recorded)} but the tree declares {sorted(trees)} plus {sorted(_NON_TREE_KEYS)}")
     print(f"  self-test [{'FAIL' if failures and 'baseline covers' in failures[-1] else 'ok'}] baseline matches the tree")
 
     coverage_failures, coverage_cases = _coverage_self_test()
@@ -724,7 +929,7 @@ def self_test(root: Path) -> int:
         for failure in failures:
             print(f"  - {failure}")
         return 1
-    print(f"\ncheck_mypy_baseline --self-test: OK — {len(cases) + 1 + coverage_cases} cases")
+    print(f"\ncheck_mypy_baseline --self-test: OK — {len(cases) + len(env_cases) + 1 + coverage_cases} cases")
     return 0
 
 

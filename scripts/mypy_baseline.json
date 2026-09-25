@@ -1,33 +1,18 @@
 {
+  "(environment)": {
+    "flags": "--no-color-output --no-error-summary --no-site-packages --no-incremental",
+    "mypy": "2.3.1",
+    "mypy_major": "2",
+    "python": "3.11"
+  },
   "(unmanaged)": {
     "plugins/mttr-widget/plugin.py": {
       "arg-type": 3,
       "return-value": 1
     },
-    "scripts/audit_managed_tenants.py": {
-      "import-untyped": 1
-    },
-    "scripts/build_marketplace.py": {
-      "import-untyped": 1
-    },
-    "scripts/build_quarantine_index.py": {
-      "import-untyped": 1
-    },
     "scripts/check_codeql_alerts.py": {
       "assignment": 1,
       "index": 3
-    },
-    "scripts/check_fidelity_datasets.py": {
-      "import-untyped": 1
-    },
-    "scripts/check_gate_coverage.py": {
-      "import-untyped": 1
-    },
-    "scripts/check_slos.py": {
-      "import-untyped": 1
-    },
-    "scripts/curate_detections.py": {
-      "import-untyped": 1
     },
     "scripts/datasets/download_ait_lds.py": {
       "arg-type": 1,
@@ -36,33 +21,17 @@
     "scripts/detection_specs_part3_helpers.py": {
       "arg-type": 1
     },
-    "scripts/detection_truth_table.py": {
-      "import-untyped": 1
-    },
     "scripts/eval_telemetry.py": {
       "arg-type": 3
-    },
-    "scripts/export_openapi.py": {
-      "import-untyped": 1
     },
     "scripts/generate_connector_types.py": {
       "attr-defined": 2
     },
-    "scripts/generate_detections.py": {
-      "import-untyped": 1
-    },
-    "scripts/generate_slo_alerts.py": {
-      "import-untyped": 1
-    },
     "scripts/lint_playbooks.py": {
       "assignment": 1
     },
-    "scripts/openapi_diff.py": {
-      "import-untyped": 1
-    },
     "scripts/project_stats.py": {
-      "assignment": 1,
-      "import-untyped": 1
+      "assignment": 1
     },
     "scripts/run_evals.py": {
       "attr-defined": 9,
@@ -71,9 +40,6 @@
     },
     "scripts/upgrade_playbooks.py": {
       "arg-type": 1
-    },
-    "scripts/validate_detections.py": {
-      "import-untyped": 1
     },
     "scripts/wet_eval.py": {
       "arg-type": 4
@@ -84,29 +50,11 @@
     "tests/test_detection_id_stability.py": {
       "attr-defined": 2
     },
-    "tests/test_first_run_gate.py": {
-      "import-untyped": 1
-    },
-    "tests/test_openapi_diff.py": {
-      "import-untyped": 1
-    },
     "tests/test_readme_figures_gate.py": {
       "attr-defined": 5
     },
     "tests/test_toolchain_pin_gate.py": {
       "name-defined": 1
-    },
-    "tools/detection_import/car_importer.py": {
-      "import-untyped": 1
-    },
-    "tools/detection_import/common.py": {
-      "import-untyped": 1
-    },
-    "tools/detection_import/sigma_importer.py": {
-      "import-untyped": 1
-    },
-    "tools/detection_import/splunk_importer.py": {
-      "import-untyped": 1
     }
   },
   "packages/aisoc-ai-sdk": {
@@ -299,17 +247,8 @@
     }
   },
   "services/agents": {
-    "app/hunt/loader.py": {
-      "import-untyped": 1
-    },
-    "app/investigator/report_writer_agent.py": {
-      "import-untyped": 1
-    },
     "app/nl_query/translator.py": {
       "no-redef": 3
-    },
-    "app/orchestrator/report.py": {
-      "import-untyped": 1
     },
     "app/orchestrator/router.py": {
       "arg-type": 5
@@ -335,9 +274,6 @@
       "call-overload": 2,
       "var-annotated": 2
     },
-    "app/workers/business_context.py": {
-      "import-untyped": 1
-    },
     "app/workers/fused_alert_consumer.py": {
       "union-attr": 1
     },
@@ -347,9 +283,6 @@
     "tests/test_audit_helpers.py": {
       "attr-defined": 24,
       "valid-type": 1
-    },
-    "tests/test_autonomy_guardrails.py": {
-      "import-untyped": 1
     },
     "tests/test_business_context_not_clause.py": {
       "attr-defined": 1,
@@ -373,9 +306,6 @@
     "tests/test_hunt_corpus.py": {
       "attr-defined": 12
     },
-    "tests/test_litellm_config.py": {
-      "import-untyped": 1
-    },
     "tests/test_llm_resolver.py": {
       "misc": 1,
       "var-annotated": 1
@@ -389,12 +319,6 @@
     }
   },
   "services/api": {
-    "app/api/v1/endpoints/business_context.py": {
-      "import-untyped": 1
-    },
-    "app/api/v1/endpoints/community.py": {
-      "import-untyped": 1
-    },
     "app/api/v1/endpoints/identity_timeline.py": {
       "assignment": 1
     },
@@ -419,17 +343,8 @@
     "app/services/alert_explain.py": {
       "arg-type": 1
     },
-    "app/services/business_context/models.py": {
-      "import-untyped": 1
-    },
-    "app/services/detections/sigma_import.py": {
-      "import-untyped": 1
-    },
     "app/services/event_warehouse/registry.py": {
       "list-item": 2
-    },
-    "app/services/fixture_synth.py": {
-      "import-untyped": 1
     },
     "app/services/fleet_health.py": {
       "arg-type": 22
@@ -439,12 +354,6 @@
     },
     "app/services/playbook_step_dispatch.py": {
       "arg-type": 8
-    },
-    "app/services/plugin_manager.py": {
-      "import-untyped": 1
-    },
-    "app/services/rule_engine.py": {
-      "import-untyped": 1
     },
     "app/services/siem_writeback.py": {
       "arg-type": 1
@@ -606,11 +515,7 @@
     }
   },
   "services/mesh": {},
-  "services/osquery-tls": {
-    "app/services/pack_loader.py": {
-      "import-untyped": 1
-    }
-  },
+  "services/osquery-tls": {},
   "services/purple-team": {
     "alembic/env.py": {
       "attr-defined": 1
@@ -623,9 +528,6 @@
     },
     "alembic/versions/0003_tenant_rls.py": {
       "attr-defined": 1
-    },
-    "app/services/atomic_loader.py": {
-      "import-untyped": 1
     }
   },
   "services/slack-bot": {

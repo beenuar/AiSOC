@@ -160,17 +160,41 @@ configuration is invalid"* from every directory that does not hold a manifest
 of its own — poetry searches upward. The header of `mypy-unmanaged.toml`
 records that and the two other measurements behind the choice.
 
-The baseline is only reproducible against a fixed environment: **mypy alone,
-no project dependencies installed, on Python 3.11** — the interpreter CI uses
-and the one every service image ships. Re-record under the same conditions:
+The baseline used to be reproducible only on a CI runner, which is another way
+of saying it was not reproducible. mypy reads type information out of installed
+packages, so a contributor with a service virtualenv active got mismatches in
+both directions — 59 of them with eight dependencies present — and nothing in
+the output said the cause was their environment rather than their code.
+
+The gate now removes both variables it can remove. It passes
+`--no-site-packages`, so installed packages stop contributing (measured on
+`services/connectors`: 73 findings on a bare interpreter, 140 with eight
+dependencies installed, and 73 either way once the flag is on), and
+`--no-incremental`, because a `.mypy_cache` written under different conditions
+is reused by the next run and answered 988 where a cold cache answered 990.
+Run it from anywhere:
 
 ```bash
-docker run --rm -v "$PWD":/w -w /w python:3.11-slim \
-  bash -c "pip install 'mypy>=1.10,<2' && python scripts/check_mypy_baseline.py --update"
+pip install 'mypy>=2.3.1,<3'
+python scripts/check_mypy_baseline.py
 ```
 
-Fixing a finding requires re-recording too, so the freed headroom cannot
-silently absorb the next one.
+The one variable that cannot be removed is mypy itself, so it is recorded. The
+baseline carries an `(environment)` block naming the version that produced it,
+and the gate refuses to compare across majors — a mypy major *moves* findings
+rather than only adding them, so a run under the wrong one would print a screen
+of file-level differences that all describe the version. It says that once,
+first, instead.
+
+The interpreter is not the variable people assume. Every config here pins
+`python_version`, so 3.13 against 3.11 moves exactly two findings in one file —
+PEP 701 changed how f-string sub-expressions are attributed to source lines in
+3.12, which splits some findings that 3.11 reports once. That is reported as a
+note rather than a refusal, because refusing would stop a contributor on 3.12
+from running the gate at all over a difference the gate can explain.
+
+Re-record with `--update`. Fixing a finding requires re-recording too, so the
+freed headroom cannot silently absorb the next one.
 
 ## Why this exists
 

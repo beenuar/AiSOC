@@ -220,12 +220,12 @@ jobs:
           python-version: '3.11'
       - name: Install Ruff & Mypy
         # Pin to versions compatible with the constraints declared in each
-        # service's ``pyproject.toml`` (``ruff = ">=0.16.8,<0.17"``, ``mypy = ">=1.10,<2"``).
+        # service's ``pyproject.toml`` (``ruff = ">=0.16.8,<0.17"``, ``mypy = ">=2.3.1,<3"``).
         # The CI gate previously left these unpinned, so every new ruff release
         # (e.g. 0.15.x adding ``UP037`` enforcement) silently broke main without
         # any dependency-file change. `scripts/check_dependency_pins.py` holds
         # this line equal to the fourteen other places ruff is declared.
-        run: pip install 'ruff>=0.16.8,<0.17' 'mypy>=1.10,<2'
+        run: pip install 'ruff>=0.16.8,<0.17' 'mypy>=2.3.1,<3'
       # Formatting is checked over the whole repository. It has no semantic
       # content, so there is no reason for any Python file this repository may
       # edit to sit outside it, and `.` means a tree added anywhere is covered
@@ -262,14 +262,21 @@ jobs:
       # The findings are recorded in `scripts/mypy_baseline.json` exactly as
       # mypy reports them and the gate fails when any grows — no
       # `ignore_errors`, no widened config, no tree excluded. Nothing installs
-      # the services' dependencies here on purpose: mypy's answer depends on
-      # what is importable, so the baseline is only reproducible against a
-      # fixed environment, and "mypy alone on 3.11" is that environment — 3.11
-      # because that is the interpreter every service image ships, and a
-      # baseline recorded on an interpreter production does not run is a
-      # baseline for software nobody ships. Re-record with
-      # `python scripts/check_mypy_baseline.py --update` under the same
-      # conditions.
+      # the services' dependencies here, but that is no longer what makes the
+      # baseline reproducible, because "reproducible only on a runner" is not
+      # reproducible: a contributor with a service virtualenv active got 59
+      # mismatches in both directions and nothing telling them the cause was
+      # their environment. The gate now passes `--no-site-packages` and
+      # `--no-incremental`, which removes both variables it could remove —
+      # installed packages (measured on `services/connectors`: 73 findings
+      # bare, 140 with eight dependencies installed, 73 either way with the
+      # flag) and a `.mypy_cache` left behind by a run under different
+      # conditions (990 cold against 988 warm). It records the mypy version
+      # in the baseline and refuses to compare across majors, so the one
+      # remaining variable names itself instead of appearing as two hundred
+      # file-level diffs. Re-record with
+      # `python scripts/check_mypy_baseline.py --update`; it no longer matters
+      # much where from, which was the point.
       #
       # The same gate now also fails when a Python tree declares no
       # `[tool.mypy]`, and when a configured or recorded tree is no longer on

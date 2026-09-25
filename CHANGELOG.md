@@ -104,6 +104,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`mypy` moved to 2.3.1 across all ten declarations, and the baseline it
+  ratchets became reproducible outside CI.** The bump alone makes
+  `scripts/check_mypy_baseline.py` exit 1 on 35 mismatched `(tree, file, code)`
+  entries, so the re-record is the work — and a re-record is the moment a
+  ratchet can quietly grow, so every entry was triaged before being banked.
+
+  **Zero new findings.** All 35 are the same code in the same direction:
+  `import-untyped` went 38 → 3 and nothing appeared, nothing grew. The cause
+  is a behaviour change rather than a code improvement, and is recorded as
+  such: mypy 2 extends `ignore_missing_imports = true` to silence
+  `import-untyped`, which 1.x did not. Isolated on a two-line file — under
+  1.20.2 the finding is reported with the option either way; under 2.3.1 it is
+  reported only with the option off. So the ten trees that set it lose the
+  "this third-party import carries no type information" signal, every one of
+  the 35 was `yaml`, and `packages/aisoc-cli` — strict, with no such option —
+  still reports its three. `enable_error_code = import-untyped` does not
+  bring it back; `ignore_missing_imports` wins. The alternative, dropping the
+  option, would surface `import-not-found` for every uninstalled dependency in
+  a deliberately dependency-free run, which is a statement about the runner
+  rather than the tree. Banked at 955, with the reason on the record.
+
+  **The baseline was only reproducible on a CI runner, which is not
+  reproducible.** Measured rather than assumed: the interpreter is not the
+  variable people assume — Python 3.13 against 3.11 moves exactly 2 findings
+  in 1 file (PEP 701 changed f-string sub-expression line attribution in 3.12,
+  splitting findings 3.11 reports once) — while installing eight project
+  dependencies moves 59. mypy reads type information out of installed
+  packages, so a contributor with a service virtualenv active got mismatches
+  in both directions and nothing saying the cause was their environment. A
+  second cause surfaced while measuring the first: a `.mypy_cache` written
+  under different conditions is reused by the next run, and the same tree
+  answered 990 cold against 988 warm.
+
+  Both are now closed at the source. The gate passes `--no-site-packages`
+  (measured on `services/connectors`: 73 findings bare, 140 with eight
+  dependencies installed, 73 either way with the flag — and a no-op in CI's
+  own dependency-free environment, verified by re-recording under 1.20.2 and
+  getting the committed file back byte for byte) and `--no-incremental`. It
+  records the mypy version in an `(environment)` block and refuses to compare
+  across majors, because a major *moves* findings and every difference would
+  otherwise print as a file-level diff that describes the version. The
+  interpreter difference is reported as a note rather than a refusal, so a
+  contributor on 3.12 can still run the gate. Verified: the same 955 from a
+  bare interpreter and from one with the project's dependencies installed.
+
+  `mypy` is now in `check_dependency_pins.py`'s `CRITICAL` set, so the ten
+  declarations have to move together the way `ruff`'s fourteen do. Nothing
+  enforced that before, which is how a single-path bump could be proposed at
+  all. One real bug was caught by the re-recorded baseline while this was
+  being written — a `used-before-def` introduced into the gate's own
+  self-test — and fixed rather than banked.
+
 - **`ruff` moved to the 0.16 line across all fourteen declarations, the tree
   was reformatted under it, and the lint gate stopped ending at `services/`.**
   The bump alone reds every open pull request, because `ruff format --check`
