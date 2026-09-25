@@ -1,11 +1,12 @@
 # AiSOC v8 — progress tracker
 
-**Last updated:** 2026-09-23
-**Current release:** `v9.0.0` (2026-09-23) · **Next:** unscheduled.
+**Last updated:** 2026-09-25
+**Current release:** `v10.0.0` (2026-09-25) · **Next:** unscheduled.
 Packaging is no longer named against a version: it slipped v8.0 to v8.1 to
 v8.2 for the same reason each time, and the blocker is registry credentials
-rather than code. See `[9.0.0]` in `CHANGELOG.md` for what v9.0 closed and
-what it knowingly left open.
+rather than code. See `[10.0.0]` in `CHANGELOG.md` for what v10.0 closed and
+what it knowingly left open — it is a major because upgrading requires an
+operator action, not because the v8 line is superseded.
 
 This tracker is the at-a-glance view of what has landed across the v8 line and
 what is still open. It is deliberately short and dated. When it disagrees with

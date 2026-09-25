@@ -2,13 +2,31 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v9.0.0`, released 2026-09-23 — ten waves, and one finding under nearly all of them: the mechanism existed, was tested, and nothing called it. The one worth stating first is that **approving an action executed nothing** — `decide()` flipped a row and never reached the execution service, so every tap of Approve recorded a decision and ran nothing while telling the operator the opposite. Both ends of that loop are closed. Every product claim is backed by a failing CI test (claim-to-gate matrix: 99 GATED / 9 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v10.0.0`, released 2026-09-25 — a release about controls that were written and not reachable. Row-level security covered 92 tables and filtered nothing, because every service connected to Postgres as a superuser; fifty-eight routes carried no authentication at all; UEBA reported healthy and could not write an anomaly; AI triage was wired to a gateway both of its resolvers ignored. **It is a major because upgrading requires action** — services now connect as a DML-only `aisoc_app` role. Every product claim is backed by a failing CI test (claim-to-gate matrix: 139 rows — 131 GATED / 8 PARTIAL / 0 NO GATE). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `9.0.0`. The **v9.0.0** release (2026-09-23) is ten waves of one audit question: what in this tree exists, is tested, and has no caller?
+`VERSION` is `10.0.0`. The **v10.0.0** release (2026-09-25) is an audit of a single shape: a control that exists, is tested, and sits on a path nothing reaches.
+
+**Read the BREAKING section of the changelog before upgrading.** Every deployment must act on one item: services connect to Postgres as a DML-only `aisoc_app` role rather than as the schema owner, which is what makes the row-level-security policies filter. The bundled Postgres provisions it on a fresh volume; an existing volume or a managed database does not.
+
+**v10.0.0 highlights (September 25, 2026)**
+- **92 row-level-security policies filtered nothing.** Compose, CI, the Helm chart and the Terraform environment all ran every service as `POSTGRES_USER=aisoc`, which the postgres image creates as a superuser — and a superuser ignores policies even under `FORCE ROW LEVEL SECURITY`. Measured with one alert per tenant and the session bound to tenant A: the old role saw 2 rows, the new role sees 1.
+- **Fifty-eight routes across four services carried no authentication at all.** Reproduced rather than inferred: an anonymous caller with no `Authorization` header created a playbook, listed all 64, **executed one**, deleted it, then read copilot conversations and ran a threat hunt. A further thirty routes let the caller name the tenant they were reading.
+- **UEBA could never write a baseline or an anomaly, and reported healthy throughout.** Three schema defects on one code path, then a fourth: the baseline updater mutated a dict in place, so SQLAlchemy saw no change and left the column out of every `UPDATE`. Measured on a live stack — 36 events for one entity, all processed without error, the stored baseline frozen at `count: 1`.
+- **AI triage could not reach a model, and it was not a missing key.** Compose set `LLM_GATEWAY_URL` on both services; both resolvers had been deliberately written to ignore it, so every `aisoc-<role>` alias went to a provider that cannot resolve one and the caller rendered that as "no LLM available". The gateway also moved from `full` into CORE, so a key now works with no profile change.
+- **A new user who followed only the README could not log in** — the seeded address was rejected by the login route's own validator before the password was compared, and the committed hash matched no published credential. `make up` now creates an administrator and prints a generated password once.
+- **Costs stopped being invented.** The tracker priced the `aisoc-<role>` *alias* against a table of hosted list prices it does not appear in, so every call fell through a default and a local completion that cost nothing was booked at `$0.000999` — a figure that reached the dashboard, the ledger and the budget circuit breaker. Every cost is now measured, labelled an estimate, or absent.
+
+The full inventory — 188 entries, including what is knowingly still open — lives under `[10.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v9.0.0 (2026-09-23)
+
+`VERSION` was `9.0.0`. The **v9.0.0** release (2026-09-23) is ten waves of one audit question: what in this tree exists, is tested, and has no caller?
 
 **v9.0.0 highlights (September 23, 2026)**
 - **Approving an action executed nothing.** `decide()` flipped a row, notified the realtime service and returned 200 without ever touching `services/actions`. The other end was missing too — nothing in the repository ever created an approval, so the queue had no producer and was structurally empty on every deployment. A queue with no producer and a queue with no pending work look identical.
