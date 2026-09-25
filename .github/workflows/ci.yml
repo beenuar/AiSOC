@@ -337,6 +337,15 @@ jobs:
       # API call failed, none of it gated on demo mode — and because SWR v2
       # disables `revalidateOnMount` when `fallbackData` is set, several never
       # fetched at all. This gate fails the build if that shape reappears.
+      #
+      # Self-test first, as always. This one earns it twice over: the gate
+      # reported everything gated over a tree holding nine live bypasses, and
+      # several of its rules overlap by construction — a parenthesised
+      # `?? (flag ? DEMO_X : [])` satisfies both the nullish rule and the
+      # ternary rule — so each case names the rule that must account for it
+      # rather than asserting that something fired.
+      - name: Sample-data gate — self-test
+        run: python scripts/check_mock_data_gated.py --self-test
       - name: Verify sample data is gated behind demo mode
         run: python scripts/check_mock_data_gated.py
       # The check above recognises the *shapes* that carried fabricated data:
