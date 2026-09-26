@@ -117,6 +117,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an existing tag, because the only way to finish a half-published release was
   previously to invent a new tag for a commit that had already shipped.
 
+- **A republish moved `latest` to the older release it was repairing, and
+  stamped the wrong commit on every image it built.** Both come from the same
+  place: on a dispatched run the GitHub context describes the ref the workflow
+  was launched from while the source checked out is the tag being
+  republished. So `metadata-action` wrote `main`'s commit into
+  `org.opencontainers.image.revision` on images built from v11.0.0 — the field
+  `check_published_images.py` trusts to decide what an image contains — and
+  the tag list still carried `latest`, which handed eight images older content
+  than `main` on the tag a self-hoster pulls by default. A republish now
+  publishes only the tag it was asked to repair, and labels the commit it
+  actually built. Its verification step also checks out the workflow's own ref
+  rather than the tag, because the gate it runs exists on the default branch
+  and not in a tree from two releases ago.
+
 - **A dispatched release reported success having published nothing.** The
   recovery path's `release` job is push-only, and a skip propagates the whole
   length of a `needs` chain rather than one link: `docker-build` declared
