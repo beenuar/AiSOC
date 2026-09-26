@@ -3,7 +3,7 @@ name: Pass the Hash Activity 2
 description: Detects the attack technique pass the hash which is used to move laterally
   inside the network
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1550.002
@@ -43,3 +43,4 @@ provenance:
   upstream_path: rules/windows/builtin/security/account_management/win_security_pass_the_hash_2.yml
 falsepositives:
 - Administrator activity
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (TargetUserName)"

@@ -6,7 +6,7 @@ description: 'Ensure that all account usernames and authentication credentials a
   Ensure that an encryption is used for all sensitive information in transit. Ensure
   that an encrypted channels is used for all administrative account access.'
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre: []
   categories:
@@ -55,3 +55,4 @@ provenance:
   upstream_path: rules/network/firewall/net_firewall_cleartext_protocols.yml
 falsepositives:
 - Unknown
+quarantine_reason: "no connector emits this log source (None/None)"

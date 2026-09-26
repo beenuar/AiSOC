@@ -2,7 +2,7 @@ id: sigmahq-sigma-ea5c131b-380d-49f9-aeb3-920694da4d4b
 name: Suspicious Unsigned Thor Scanner Execution
 description: Detects loading and execution of an unsigned thor scanner binary.
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1574.001
@@ -37,3 +37,4 @@ provenance:
   upstream_path: rules/windows/image_load/image_load_thor_unsigned_execution.yml
 falsepositives:
 - Other legitimate binaries named "thor.exe" that aren't published by Nextron Systems
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (Signed)"

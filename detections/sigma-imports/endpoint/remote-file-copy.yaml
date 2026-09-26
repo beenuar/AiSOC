@@ -2,7 +2,7 @@ id: sigmahq-sigma-7a14080d-a048-4de8-ae58-604ce58a795b
 name: Remote File Copy
 description: Detects the use of tools that copy files from or to remote systems
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1105
@@ -32,3 +32,4 @@ provenance:
   upstream_path: rules/linux/builtin/lnx_file_copy.yml
 falsepositives:
 - Legitimate administration activities
+quarantine_reason: "no connector emits this log source (linux/None)"

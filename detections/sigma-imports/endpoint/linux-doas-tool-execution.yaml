@@ -3,7 +3,7 @@ name: Linux Doas Tool Execution
 description: Detects the doas tool execution in linux host platform. This utility
   tool allow standard users to perform tasks as root, the same way sudo does.
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1548
@@ -30,3 +30,4 @@ provenance:
   upstream_path: rules/linux/process_creation/proc_creation_lnx_doas_execution.yml
 falsepositives:
 - Unlikely
+quarantine_reason: "no connector emits this log source (linux/None)"

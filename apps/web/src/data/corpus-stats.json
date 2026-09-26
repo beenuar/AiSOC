@@ -1,16 +1,16 @@
 {
-  "executable": 833,
+  "executable": 2603,
   "onDisk": 7016,
-  "quarantined": 5937,
+  "quarantined": 4213,
   "plugins": 77,
   "playbookPacks": 62,
   "marketplaceItems": 7155,
   "categories": {
     "application": 86,
-    "cloud": 190,
+    "cloud": 257,
     "data-exfil": 20,
-    "endpoint": 296,
-    "identity": 160,
+    "endpoint": 1983,
+    "identity": 176,
     "network": 81
   },
   "generatedFrom": [

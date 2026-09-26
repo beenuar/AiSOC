@@ -2,7 +2,7 @@ id: sigmahq-sigma-10c14723-61c7-4c75-92ca-9af245723ad2
 name: HackTool - Potential Impacket Lateral Movement Activity
 description: Detects wmiexec/dcomexec/atexec/smbexec from Impacket framework
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1047
@@ -52,3 +52,4 @@ provenance:
   upstream_path: rules/windows/process_creation/proc_creation_win_hktl_impacket_lateral_movement.yml
 falsepositives:
 - Unknown
+quarantine_reason: "compiled, but could not be proven to fire on a replayed event of its log source"

@@ -43,10 +43,11 @@ false_positives:
   - cron package installation/update modifying /etc/crontab
   - SSO/LDAP integration tooling updating /etc/nsswitch.conf
 playbook: tpl-credential-access
-enabled: true
+enabled: false
 author: AiSOC
 references:
   - https://attack.mitre.org/techniques/T1003/008/
   - https://attack.mitre.org/techniques/T1053/003/
 created: '2026-05-10'
 modified: '2026-05-10'
+quarantine_reason: "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse"

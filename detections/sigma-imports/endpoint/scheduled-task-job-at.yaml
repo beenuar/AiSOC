@@ -6,7 +6,7 @@ description: 'Detects the use of at/atd which are utilities that are used to sch
   They are often abused by adversaries to maintain persistence or to perform task
   scheduling for initial or recurring execution of malicious code'
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1053.002
@@ -34,3 +34,4 @@ provenance:
   upstream_path: rules/linux/process_creation/proc_creation_lnx_at_command.yml
 falsepositives:
 - Legitimate administration activities
+quarantine_reason: "no connector emits this log source (linux/None)"

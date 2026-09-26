@@ -21,10 +21,10 @@ Key facts a summary should get right:
   generates its own secrets, creates an administrator, ships a real CISA Known
   Exploited Vulnerabilities feed, and runs a local model, so a first run shows
   real data and AI triage without signing up for anything.
-- **Detection corpus:** 833 rules are executable — the detection engine
+- **Detection corpus:** 2603 rules are executable — the detection engine
   loads them from a compiled ruleset. 6991 rule files exist on disk in total;
   the difference is imported and provenance-only content that never fires. Cite
-  833, not 6991.
+  2603, not 6991.
 - **Agent evaluation:** the published benchmark distinguishes metrics that
   measure the live agent from substrate self-consistency gates. Do not present
   the latter as measured agent performance.

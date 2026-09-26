@@ -482,8 +482,14 @@ def gate_readme_figures() -> list[GateFailure]:
     executable = _truth_table_executable()
     if executable is not None:
         # Any "<n> executable" or "corpus (<n> rules)" phrasing in the README.
+        # Thousands separators are allowed and stripped: the corpus passed four
+        # digits, and a pattern that stopped at the comma read "2,603
+        # executable" as the number 603 — so the gate would have been comparing
+        # against a figure the README never claimed, in whichever direction
+        # happened to be wrong.
         quoted = {
-            int(n) for n in re.findall(r"(\d{3,5})\s+executable", readme) + re.findall(r"detection corpus \((\d{3,5}) rules\)", readme)
+            int(n.replace(",", ""))
+            for n in re.findall(r"([\d,]{3,7})\s+executable", readme) + re.findall(r"detection corpus \(([\d,]{3,7}) rules\)", readme)
         }
         for n in sorted(quoted - {executable}):
             failures.append(

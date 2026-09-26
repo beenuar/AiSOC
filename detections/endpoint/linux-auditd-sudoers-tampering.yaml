@@ -26,7 +26,8 @@ false_positives:
 - Package upgrade installing a new sudoers.d/ drop-in (visudo, dpkg, rpm)
 - Sanctioned automation/IaC pipeline (Ansible, Chef, Puppet) — tune by adding the agent's exe to the allowlist
 playbook: tpl-privilege-escalation
-enabled: true
+enabled: false
 author: AiSOC
 created: '2026-05-12'
 modified: '2026-05-12'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

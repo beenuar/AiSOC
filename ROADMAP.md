@@ -38,7 +38,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 
 **Program status:** all 13 hardening phases (0–12) are landed. Building on them, the **Fully-Operational AI-SOC roadmap** (Phases A1–E1) is now complete — it wired the three end-to-end paths the reality audit found unwired and pushed the platform to competitive parity + beyond:
 
-- **Phase A (SIEM foundation):** A1 ClickHouse lake writer · A2 live detection-evaluation worker (833 executable rules on the stream) · A3 default-on one-command deploy (connectors + graph on) · A4 UEBA behavioral-model fusion.
+- **Phase A (SIEM foundation):** A1 ClickHouse lake writer · A2 live detection-evaluation worker (2603 executable rules on the stream) · A3 default-on one-command deploy (connectors + graph on) · A4 UEBA behavioral-model fusion.
 - **Phase B (SOAR foundation):** B1 auto-triage worker (copilot default) · B2 credential resolver + `decide()`-governed live dispatch + 10 vendor adapters · B3 real rollback + post-action verification + durable approval-SLA timers · B4 Business Context Rules in the hot path.
 - **Phase C (parity differentiators):** C1 Advanced Data Explorer · C2 Effective-Permissions live posture loader · C3 autopilot/copilot posture scorecard · C4 fuse-time attack-chain auto-grouping.
 - **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.

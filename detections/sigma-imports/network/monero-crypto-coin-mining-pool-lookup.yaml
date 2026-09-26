@@ -2,7 +2,7 @@ id: sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641
 name: Monero Crypto Coin Mining Pool Lookup
 description: Detects suspicious DNS queries to Monero mining pools
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1496
@@ -48,3 +48,4 @@ provenance:
   upstream_path: rules/network/dns/net_dns_pua_cryptocoin_mining_xmr.yml
 falsepositives:
 - Legitimate crypto coin mining
+quarantine_reason: "no connector emits this log source (None/None)"

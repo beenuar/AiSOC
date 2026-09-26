@@ -20,7 +20,8 @@ detection:
 false_positives:
 - Planned collaboration policy change during partner onboarding
 playbook: tpl-exfiltration
-enabled: true
+enabled: false
 author: AiSOC
 created: '2026-05-07'
 modified: '2026-05-07'
+quarantine_reason: "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse"

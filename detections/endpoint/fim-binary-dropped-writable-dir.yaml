@@ -34,10 +34,11 @@ false_positives:
   - Container entrypoint scripts copied from image layers to /tmp
   - Legitimate Python/Ruby scripts deployed to /tmp by config management
 playbook: tpl-defense-evasion
-enabled: true
+enabled: false
 author: AiSOC
 references:
   - https://attack.mitre.org/techniques/T1036/005/
   - https://attack.mitre.org/techniques/T1059/
 created: '2026-05-10'
 modified: '2026-05-10'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

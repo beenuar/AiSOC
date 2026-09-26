@@ -3,7 +3,7 @@ name: User Added to Local Administrator Group
 description: Detects the addition of a new member to the local administrator group,
   which could be legitimate activity or a sign of privilege escalation activity
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1078
@@ -36,3 +36,4 @@ provenance:
   upstream_path: rules/windows/builtin/security/win_security_user_added_to_local_administrators.yml
 falsepositives:
 - Legitimate administrative activity
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (SubjectUserName|endswith)"

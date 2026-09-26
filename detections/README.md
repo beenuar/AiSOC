@@ -11,10 +11,14 @@ the AiSOC engine can do with them out of the box.
 | Quarantined | `detections/<source>-imports/_quarantine/<category>/` | disabled (`enabled: false`) | parses, but engine cannot execute upstream query |
 | Community | `detections/community/<category>/`        | disabled by default | YAML schema; provenance encouraged                |
 
-The native tier currently ships **800 fixture-tested rules** (1,200 fixtures —
-positive + negative) across six categories, generated from the spec modules
-under [`scripts/detection_specs*.py`](../scripts/) by
-[`scripts/build_detections_from_specs.py`](../scripts/build_detections_from_specs.py).
+The library holds **6,991 rules on disk, of which 2,603 execute** — 833 native
+and 1,770 imported Sigma rules translated into the engine's `match_when` by
+[`scripts/compile_sigma_ruleset.py`](../scripts/compile_sigma_ruleset.py) and
+shipped only after being replayed through a real connector and the real engine.
+Recount rather than quoting these: they move, and
+[`docs/detections/truth-table.md`](../docs/detections/truth-table.md) derives
+them from the ruleset the engine loads. The native tier is generated from the
+spec modules under [`scripts/detection_specs*.py`](../scripts/).
 Imported tiers are populated by the importers under
 [`tools/detection_import/`](../tools/detection_import/) and remain empty in this
 checkout until you run them — see [`tools/detection_import/README.md`](../tools/detection_import/README.md)

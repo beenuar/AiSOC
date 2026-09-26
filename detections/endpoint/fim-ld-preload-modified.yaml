@@ -32,10 +32,11 @@ false_positives:
     /etc/ld.so.conf.d/ during installation
   - System package updates that refresh shared library search paths
 playbook: tpl-persistence
-enabled: true
+enabled: false
 author: AiSOC
 references:
   - https://attack.mitre.org/techniques/T1574/006/
   - https://man7.org/linux/man-pages/man8/ld.so.8.html
 created: '2026-05-10'
 modified: '2026-05-10'
+quarantine_reason: "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse"
