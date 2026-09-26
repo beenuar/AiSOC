@@ -23,8 +23,9 @@ this repository has a standing rule against.
 So the artefact separates the two figures rather than picking one:
 
 ``executable``
-    What the engine loads — ``services/fusion/app/data/detection_ruleset.json``.
-    This is the capability number and the one the UI leads with.
+    What the engine loads — ``services/fusion/app/data/detection_ruleset.json``
+    plus ``detection_ruleset_imported.json`` beside it. This is the capability
+    number and the one the UI leads with.
 ``on_disk`` / ``quarantined``
     The corpus as indexed by ``marketplace/index.json``. Real, published, and
     only ever quoted *as* a corpus.
@@ -71,6 +72,7 @@ from gate_toolkit import repo_root, self_test_main
 
 REPO_ROOT = repo_root()
 RULESET = REPO_ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
+IMPORTED_RULESET = REPO_ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset_imported.json"
 MARKETPLACE = REPO_ROOT / "marketplace" / "index.json"
 TRUTH_TABLE = REPO_ROOT / "docs" / "detections" / "truth-table.md"
 JSON_OUT = REPO_ROOT / "apps" / "web" / "src" / "data" / "corpus-stats.json"
@@ -104,14 +106,26 @@ def _read_json(path: Path, label: str) -> Any:
 
 
 def read_engine_ruleset() -> tuple[int, dict[str, int]]:
-    """Executable rule count and per-category split, from the compiled ruleset."""
-    data = _read_json(RULESET, "detection ruleset")
-    rules = data.get("rules")
-    if not isinstance(rules, list) or not rules:
-        raise SystemExit(f"{Path(sys.argv[0]).name}: {RULESET} declares no rules — refusing to publish a zero corpus")
-    declared = data.get("count")
-    if isinstance(declared, int) and declared != len(rules):
-        raise SystemExit(f"{Path(sys.argv[0]).name}: ruleset `count` is {declared} but it holds {len(rules)} rules")
+    """Executable rule count and per-category split, from the compiled rulesets.
+
+    The engine loads two artifacts — the native specs and the imported rules
+    the Sigma compiler translated and proved fireable — so both count. Reading
+    only the first made this gate report 833 against a truth table that had
+    correctly moved to 2,603, which is the failure it exists to catch, pointed
+    the wrong way: the figure it trusted was the stale one.
+    """
+    rules: list[dict] = []
+    for path, required in ((RULESET, True), (IMPORTED_RULESET, False)):
+        if not path.exists() and not required:
+            continue
+        data = _read_json(path, "detection ruleset")
+        found = data.get("rules")
+        if not isinstance(found, list) or not found:
+            raise SystemExit(f"{Path(sys.argv[0]).name}: {path} declares no rules — refusing to publish a zero corpus")
+        declared = data.get("count")
+        if isinstance(declared, int) and declared != len(found):
+            raise SystemExit(f"{Path(sys.argv[0]).name}: {path} `count` is {declared} but it holds {len(found)} rules")
+        rules.extend(found)
     categories = Counter(str(rule.get("category", "uncategorized")) for rule in rules)
     return len(rules), dict(sorted(categories.items()))
 

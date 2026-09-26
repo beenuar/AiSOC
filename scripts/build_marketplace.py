@@ -36,6 +36,7 @@ import json
 import re
 import sys
 from collections.abc import Iterable
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -174,17 +175,39 @@ def detection_files() -> list[Path]:
     return files
 
 
+@lru_cache(maxsize=1)
+def engine_rule_ids() -> frozenset[str]:
+    """Ids the detection engine loads, across both compiled rulesets."""
+    ids: set[str] = set()
+    for name in ("detection_ruleset.json", "detection_ruleset_imported.json"):
+        path = REPO_ROOT / "services" / "fusion" / "app" / "data" / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        ids |= {str(r["id"]) for r in data.get("rules") or [] if r.get("id")}
+    return frozenset(ids)
+
+
 def imported_detection_files() -> list[tuple[Path, str, bool]]:
     """Return (path, source_name, is_quarantined) for every imported rule.
 
     Walks the tier directories declared in :data:`IMPORTED_TIER_DIRS`.
-    Rules nested under a ``_quarantine/`` directory are returned with
-    ``is_quarantined=True`` so the marketplace can surface them as
-    "imported, requires translation" instead of pretending they execute.
+
+    Quarantine used to be read off the directory name, and that stopped being
+    true when the Sigma compiler began translating rules in place: 1,724 files
+    still sit under ``_quarantine/`` and the engine loads every one of them. A
+    published figure calling those quarantined would understate the capability
+    in exactly the direction this repository normally guards the other way, and
+    the fix is the same one the truth table already applies — ask the engine,
+    not the path. A rule is quarantined when the engine does not load it.
     """
     out: list[tuple[Path, str, bool]] = []
     if not DETECTIONS_DIR.exists():
         return out
+    loaded = engine_rule_ids()
     for tier_dir, source_name in IMPORTED_TIER_DIRS.items():
         root = DETECTIONS_DIR / tier_dir
         if not root.exists():
@@ -194,8 +217,15 @@ def imported_detection_files() -> list[tuple[Path, str, bool]]:
                 rel = f.relative_to(root).parts
             except ValueError:
                 continue
-            quarantined = bool(rel) and rel[0] == "_quarantine"
-            out.append((f, source_name, quarantined))
+            in_quarantine_dir = bool(rel) and rel[0] == "_quarantine"
+            if in_quarantine_dir and loaded:
+                try:
+                    doc = yaml.safe_load(f.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001 — a bad file stays quarantined
+                    doc = None
+                rule_id = str(doc.get("id")) if isinstance(doc, dict) and doc.get("id") else ""
+                in_quarantine_dir = rule_id not in loaded
+            out.append((f, source_name, in_quarantine_dir))
     return out
 
 
