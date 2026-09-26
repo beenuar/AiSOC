@@ -1,0 +1,222 @@
+---
+id: walkthrough
+title: Deployment walkthrough
+sidebar_label: Walkthrough (video)
+---
+
+# From nothing to an AI verdict, on one host
+
+This page is the written form of the walkthrough recorded for the README. It
+covers the same ground in the same order, with the detail a three-minute video
+has no room for: what each command does, what you should see, and what it means
+when you see something else.
+
+[![Preview of the walkthrough: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent](../../../web/public/demo/hero.gif)](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/demo/demo.mp4)
+
+The loop above is a cut from the recording. **[Play the full three minutes](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/demo/demo.mp4)**
+— it ships in the repository at `apps/web/public/demo/demo.mp4`, so it is also
+there in a clone, offline.
+
+**What is real in the recording.** The stack, the images, the threat feed, the
+event, the alert and the token counts are all real. The images came from
+`ghcr.io`, not from a local build. Demo mode was off and nothing was seeded. The
+event that becomes an alert was *authored* to be representative — everything
+downstream of it is the product doing its own work. Terminal waits are
+shortened and the recording says so on screen; the browser sections run at real
+speed.
+
+## The scenario
+
+A single host that people reach over the network, addressed by something other
+than `localhost`. That is the shape most self-hosted deployments take and the
+one where the laptop defaults are wrong, so it is worth walking rather than
+assuming.
+
+## 1. Configure, in one file
+
+```bash
+git clone https://github.com/beenuar/AiSOC && cd AiSOC
+cp .env.example .env
+```
+
+Copying the template is optional — `make up` creates `.env` if it is missing —
+but doing it explicitly lets you set two values before anything starts.
+
+```bash
+# .env
+AISOC_CONSOLE_BIND_ADDR=0.0.0.0
+AISOC_CONSOLE_URL=http://192.0.2.10:3000      # the address people type
+```
+
+The first publishes the console beyond loopback. Every host port ships bound to
+`127.0.0.1`, which is right for a laptop and useless for a server: the stack
+comes up healthy and nothing outside the machine can reach it. The console is
+the only port a browser needs — its Next.js server proxies same-origin paths to
+the API, the agents service and the realtime gateway over the internal network
+— so publishing one port exposes one service and the datastores stay private.
+
+The second decides which address AiSOC *tells* people to use. `make up` and
+`make bootstrap` both print it when the administrator is created. Leave it at
+the default and a server deployment prints `http://localhost:3000`, which
+resolves on the reader's own machine to something that is not your console.
+
+:::caution Put TLS in front before exposing this to a network you do not control
+`AISOC_CONSOLE_BIND_ADDR=0.0.0.0` publishes plain HTTP. See
+[Single-host deployment](./single-host.md) for the reverse-proxy setup.
+:::
+
+## 2. Bring it up
+
+```bash
+make up
+```
+
+This pulls the published images, starts the fifteen CORE services, waits for
+each one that declares a health check, and then creates the first
+administrator. On a first run it also downloads the bundled
+`llama3.2:3b-instruct-q4_K_M` model — about 2 GB — into a named volume; only
+`make clean` makes it fetch again.
+
+`make up` ends with something like:
+
+```
+  Console:  http://192.0.2.10:3000
+  API:      http://localhost:8000/api/docs
+
+Prove the pipeline works:  make smoke
+
+────────────────────────────────────────────────────────────────
+  Administrator created. Sign in at http://192.0.2.10:3000
+────────────────────────────────────────────────────────────────
+  Email     admin@aisoc.internal
+  Password  ••••••••••••••••
+```
+
+The password is generated on your machine, shown once and stored nowhere. Copy
+it, or run `make bootstrap ARGS=--reset-password` to mint another. The `API:`
+line stays on loopback deliberately: that is where the API publishes on this
+host, and a console URL behind a reverse proxy tells you nothing about where
+the API port ended up.
+
+If the stack does not come up, `make doctor` checks host tools, memory and disk
+inside the Docker VM, every port, and each datastore by querying it rather than
+by asking whether its container is running.
+
+## 3. Sign in, and look at what is honestly empty
+
+Open the console at the address it printed. Most of it has nothing in it,
+because nothing has been connected yet, and it says so rather than filling the
+space — "No entities are currently being tracked", zeroes that are really
+zeroes.
+
+One page is different. **Threat Intel** shows roughly 1,700 rows within a
+minute or two of boot, each tagged `cisa-kev`: the
+[CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
+catalog, which is public, authoritative and needs no API key. It is the one
+thing in a fresh install that is neither synthetic nor yours.
+
+:::note The feed has a fallback, and you will see it in the logs
+The catalog's primary URL on `cisa.gov` answers `403 Forbidden` to
+non-browser clients. The service logs that at `warning` and fetches the same
+catalog from the `cisagov/kev-data` mirror, which is what the count comes from.
+A warning line followed by `CISA KEV IOCs ingested` is the healthy path, not a
+failure.
+:::
+
+## 4. Send it one real event
+
+Ingest is authenticated, and the credential carries its own tenant — the
+request body never names one, and no header is trusted to.
+
+```bash
+export AISOC_INGEST_TOKEN=$(make -s ingest-token ARGS=--quiet | tail -1)
+
+curl -X POST http://localhost:8081/v1/ingest/batch \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $AISOC_INGEST_TOKEN" \
+  -d '{"connector_id":"edr-1","connector_type":"crowdstrike","source_format":"json",
+       "events":[{"severity":"high","title":"Encoded PowerShell from Office",
+                  "host":"WIN-FIN-01","process_name":"powershell.exe",
+                  "user":"j.reyes","src_ip":"203.0.113.44"}]}'
+```
+
+A successful push answers `{"accepted":1,"rejected":0,"request_id":"…"}`. The
+event is normalized to a common shape, published to Kafka, evaluated against
+the executable detection corpus, correlated, and written to Postgres as an
+alert — in about a second on an idle stack.
+
+Then run the built-in proof:
+
+```bash
+make smoke
+```
+
+It pushes its own event and follows it the whole way, reporting **ten** stages
+as PASS or FAIL — including that an *unauthenticated* push is refused, that
+severity survives normalization, that source attribution is not duplicated, and
+that the description is prose rather than a serialized payload. A clean run
+ends `PASS: 10/10 stages`.
+
+## 5. The alert, and what answered it
+
+The alert appears in the queue attributed to the connector that fed it. Opening
+it gives you the confidence score with its contributing factors named and
+weighted, the entities involved, and the verdict triage reached.
+
+Triage runs automatically on every fused alert. It is a real model call: the
+**Cost Dashboard** reports measured prompt and completion tokens against the
+resolved model name, and the per-run record carries the same figures.
+
+:::warning The bundled model is small, and it shows
+`llama3.2:3b-instruct-q4_K_M` is chosen to run on CPU in 8 GB of RAM, not to be
+accurate. It returns schema-valid triage JSON a minority of the time — in one
+measured run, 7 of 19. When validation fails, triage falls back to a
+deterministic path and **labels which one answered**: the run's `model_used`
+reads `kafka:auto_triage:deterministic` rather than naming a model. Both runs
+in the recorded walkthrough took that fallback. The token counts are still
+real, because the model really was called; what failed was the shape of its
+reply. Set `OPENAI_API_KEY` with `AISOC_LLM_MODEL_FAST` / `AISOC_LLM_MODEL_DEEP`
+to route to a hosted model instead.
+:::
+
+Measured spend reads `$0.00` because the model runs beside the stack and costs
+nothing per call. That is a real zero, not an unmeasured one — the dashboard
+distinguishes the two and never shows an unpriced call as free.
+
+## Running a second stack on the same host
+
+Every service in `docker-compose.yml` pins a `container_name`, so a distinct
+`COMPOSE_PROJECT_NAME` alone is not enough to run two stacks side by side. You
+need a `docker-compose.override.yml` that overrides both the names and the host
+ports:
+
+```yaml
+services:
+  web:
+    container_name: other-web
+    ports: !override
+      - "0.0.0.0:13000:3000"
+```
+
+`ports: !override` matters: a plain override *appends*, leaving the original
+binding in place and the conflict unresolved. Note also that `make up`'s port
+pre-flight reads `docker compose port`, which only knows about containers that
+already exist — on a cold start it cannot see a remap that has not run yet and
+will report the default port as taken. Start that stack with
+`docker compose up -d` once and `make up` works normally from then on.
+
+## Reproducing the recording
+
+The walkthrough was recorded from a real session, not reconstructed:
+
+- Terminal segments were captured with `asciinema` in a real PTY and rendered
+  with `agg`. The commands genuinely ran; the only edit is that idle gaps are
+  capped, which the on-screen badge discloses.
+- Browser segments are Playwright screen recordings of the live console at the
+  host's LAN address, at real speed.
+- The generated administrator password was filtered out of the terminal stream
+  as it was printed, and the browser only ever shows a masked password field.
+
+Assets live in `apps/web/public/demo/`: `demo.mp4` (the full recording),
+`hero.gif` (the README preview loop, cut from the same file) and
+`demo-poster.png`.

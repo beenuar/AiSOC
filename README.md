@@ -27,10 +27,15 @@ recorded, and proposes an action. A human approves before anything executes.
 
 ## What it looks like running
 
-Real captures from a stack brought up with `make up` and fed through the
-ingest API below — no seeded rows, no demo mode, no mockups. The events were
-authored to be representative; everything downstream of them is the product
-doing its job. ([what is real in each shot](apps/web/public/screenshots/README.md))
+<a href="apps/web/public/demo/demo.mp4"><img src="apps/web/public/demo/hero.gif" alt="AiSOC on one host: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent" /></a>
+
+**[Watch the three-minute walkthrough](apps/web/public/demo/demo.mp4)** — install
+to AI verdict on one server, against the published images. Terminal waits are
+shortened, which the recording states on screen. ([step by step](https://beenuar.github.io/AiSOC/docs/deployment/walkthrough))
+
+Stills from earlier runs under the same rules — no seeded rows, no demo mode, no
+mockups. The events were authored to be representative; everything downstream of
+them is the product doing its job. ([what is real](apps/web/public/screenshots/README.md))
 
 | | |
 |---|---|
@@ -54,15 +59,13 @@ language model into a named volume; only `make clean` fetches it again.
 
 `make up` also creates `.env` and generates the three secrets in it — the
 credential-vault key, the session signing key, and the service-to-service
-token — then creates an administrator and prints its password. That password
-is generated on your machine, shown once, and stored nowhere: copy it before
-the terminal scrolls, or mint a new one with
-`make bootstrap ARGS=--reset-password`.
+token — then creates an administrator and prints its password. That password is
+generated on your machine, shown once, and stored nowhere: copy it, or mint a
+new one with `make bootstrap ARGS=--reset-password`.
 
-Then **prove it actually works** — this is the part that matters. `make smoke`
-posts one real event to the ingest API, follows it through Kafka, detection,
-correlation and Postgres, and reads the resulting alert back out of the public
-API. Every stage reports PASS or FAIL:
+Then **prove it actually works**. `make smoke` posts one real event to the
+ingest API, follows it through Kafka, detection, correlation and Postgres, and
+reads the alert back out of the public API. Every stage reports PASS or FAIL:
 
 ```
 $ make smoke
@@ -72,9 +75,9 @@ $ make smoke
 ```
 
 Open **http://localhost:3000** and sign in with the credentials `make up`
-printed (API docs at **http://localhost:8000/api/docs**). Deploying somewhere
-that is not your laptop? Set `AISOC_CONSOLE_URL` in `.env` so the printed
-address is the one people browse to. Something wrong? `make doctor`.
+printed (API docs at **http://localhost:8000/api/docs**). On a server, set
+`AISOC_CONSOLE_URL` in `.env` — `make up` then prints that address rather than
+localhost, which is the one people can actually browse to. Stuck? `make doctor`.
 
 ## Try it without connecting anything
 
@@ -105,11 +108,10 @@ that resolves host, user and source IP from the usual spellings.
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it. Then
-fusion runs 833 executable detection rules and decides what becomes an alert,
-correlation groups related alerts into one incident, an agent investigates and
-writes its reasoning to the Investigation Ledger, and a human approves any
-response.
+Ingest normalizes to a common shape and Kafka carries it. Then fusion runs 833
+executable detection rules and decides what becomes an alert, correlation groups
+related alerts into one incident, an agent investigates and writes its reasoning
+to the Investigation Ledger, and a human approves any response.
 
 Both **[docs/architecture/README.md](docs/architecture/README.md)** and the
 [docs portal](https://beenuar.github.io/AiSOC/docs/architecture) walk that path

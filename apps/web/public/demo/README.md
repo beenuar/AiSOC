@@ -1,43 +1,57 @@
 # `apps/web/public/demo/` — screencast assets
 
-This directory is the **canonical home** for the 90-second AiSOC product
-screencast and its accompanying poster/GIF. The marketing landing page,
-documentation, and several READMEs link to file paths under this
-directory; treat the paths below as a stable contract.
+This directory is the **canonical home** for the AiSOC walkthrough recording
+and the preview loop cut from it. The README, the documentation portal and the
+onboarding hero link to the paths below; treat them as a stable contract.
 
-| Asset | Purpose | Source |
+| Asset | What it is | Size |
 |---|---|---|
-| `demo.mp4` | 90 s product walkthrough, 1280×720, H.264 + AAC, ≤ 8 MB | recorded by [`.github/workflows/screencast.yml`](../../../../.github/workflows/screencast.yml) following [`docs/demo/SCREENCAST_SHOTLIST.md`](../../../../docs/demo/SCREENCAST_SHOTLIST.md) |
-| `demo-poster.png` | 1280×720 poster frame for the `<video>` tag | captured by [`apps/web/e2e/demo/screencast.spec.ts`](../../e2e/demo/screencast.spec.ts) at the cover frame |
-| `hero.gif` | README hero loop (≤ 10 s, ≤ 5 MB) | rendered from `demo.mp4` by `scripts/aisoc-demo.ts --record --gif` (lands in Phase 2 of the GitHub on-ramp fix) |
+| `demo.mp4` | The deployment walkthrough — 2 min 57 s, 1280×720, H.264, no audio | ~1.6 MB |
+| `hero.gif` | README preview loop, 17 s, 860×484, cut from `demo.mp4` | ~1.2 MB |
+| `demo-poster.png` | 1280×720 still from the recording, used as a thumbnail | ~0.3 MB |
 
-## Why the files are not committed yet
+## What the recording shows, and what is real in it
 
-The screencast workflow runs **manually** (`workflow_dispatch`) and
-uploads the rendered `.mp4` + poster as **release assets**, not into
-this directory. Until the v8.0 launch cut ships, this directory is
-empty (`.gitkeep` only) so:
+A single host reached by its LAN address rather than `localhost`, taken from
+nothing to an AI triage verdict: `make up`, the console signed into, the CISA
+Known Exploited Vulnerabilities feed already populated, one event pushed
+through the documented ingest path, `make smoke` reporting ten stages, and the
+resulting alert with its measured token counts.
 
-- The placement contract above is documented and discoverable.
-- The marketing-site hero (`apps/web/src/components/onboarding/StartHero.tsx`)
-  can ship a graceful fallback when the asset is missing.
-- Nothing in the repo lies about the asset being available.
+The stack, the images (pulled from `ghcr.io`, not built locally), the threat
+feed, the alert and the token counts are real. Demo mode was off and nothing
+was seeded. The event was **authored to be representative** — everything
+downstream of it is the product's own work. Terminal waits are shortened,
+disclosed by an on-screen badge for the whole of every segment it applies to;
+browser sections run at real speed.
 
-The text-only stub at [`apps/web/public/.demo-mp4-placeholder`](../.demo-mp4-placeholder)
-captures the recording brief and the do/don't rules for whoever picks
-up the recording. Read it before you commit a real `demo.mp4` to this
-directory.
+The bundled local model returns schema-valid triage JSON a minority of the
+time. In this recording both triage runs fell back to the deterministic path,
+which the console labels (`model_used` reads `kafka:auto_triage:deterministic`).
+That is the honest common case and the closing card says so.
 
-## After the screencast ships
+## How it was produced
 
-When the next maintainer cuts the v8.0 launch screencast:
+- **Terminal** — `asciinema` recording a real PTY, rendered with `agg`. The
+  commands genuinely ran; the only edit is capping idle gaps.
+- **Browser** — Playwright screen recordings of the live console.
+- **Assembly** — `ffmpeg`, concatenating the segments with title cards
+  rasterised in a browser (this `ffmpeg` build has no `drawtext` filter).
+- **Secrets** — the generated administrator password was filtered out of the
+  terminal stream as it was printed (`sed` in the recorded pipeline, visible in
+  the recording), the ingest token was only ever held in a shell variable, and
+  the browser shows nothing but a masked password field.
 
-1. Run the `90s demo screencast (record)` workflow from the Actions
-   tab with `release_tag=v8.0.0`.
-2. Download the workflow's `screencast-<sha>` artefact.
-3. Copy `demo.mp4` and `demo-poster.png` into this directory.
-4. Run `pnpm aisoc:demo --record --gif` (lands in Phase 2) to render
-   `hero.gif` from the `.mp4`.
-5. Open a PR with all three files; the file-size guard in
-   [`.github/workflows/ci.yml`](../../../../.github/workflows/ci.yml)
-   will fail the build if any individual asset exceeds its budget.
+## Re-recording
+
+There is no unattended job that regenerates these. `.github/workflows/screencast.yml`
+records a different, older product tour of a *deployed* instance
+(`apps/web/e2e/demo/screencast.spec.ts`) and uploads it as a workflow artefact;
+it does not write into this directory. Re-recording the deployment walkthrough
+means driving a real deployment again — the written form of every step is in
+[`apps/docs/docs/deployment/walkthrough.md`](../../../docs/docs/deployment/walkthrough.md),
+including the recording method, so it can be reproduced rather than guessed at.
+
+Keep the budget in mind if you replace them: these files are committed, so
+every byte is cloned by everybody. `demo.mp4` under 8 MB and `hero.gif` under
+5 MB are the ceilings; the current files are well inside both.

@@ -183,6 +183,25 @@ svc_published_port() {
   printf '%s' "${_sp_mapped##*:}"
 }
 
+# Base URL for one of this deployment's own services, on whatever host port it
+# actually published.
+#
+# The port section below already derives that from `docker compose port`. The
+# service probes did not: they dialled the canonical port, so on a host running
+# a second AiSOC project they reported the *other* deployment's health as this
+# one's. Observed here — a remapped stack was told "ingest-worker is alive but
+# NOT ready, it cannot reach Kafka" while its own /readyz answered 200 with
+# kafka reachable, and four services were reported healthy that the probe never
+# touched. A diagnostic that names the wrong deployment is worse than a vague
+# one: it sends the operator to debug something that is not theirs.
+#
+# Falls back to the canonical port when compose cannot answer (nothing started
+# yet), and an explicit AISOC_*_URL still wins over both.
+svc_base_url() { # <service> <container-port> <fallback-url>
+  _bu_port="$(svc_published_port "$1" "$2" || true)"
+  if [ -n "${_bu_port:-}" ]; then printf 'http://localhost:%s' "$_bu_port"; else printf '%s' "$3"; fi
+}
+
 # host-port service container-port
 for spec in "5432 postgres 5432" "6379 redis 6379" "9092 kafka 9092" \
             "8000 api 8000" "8081 ingest-worker 8080" "3000 web 3000"; do
@@ -361,17 +380,20 @@ check_http_service() {
   esac
 }
 
-check_http_service api          "${AISOC_API_URL:-http://localhost:8000}/health"   "docker compose logs api | tail -40"
-check_http_service ingest-worker "${AISOC_INGEST_URL:-http://localhost:8081}/health" "docker compose logs ingest-worker | tail -40"
+API_BASE="${AISOC_API_URL:-$(svc_base_url api 8000 http://localhost:8000)}"
+INGEST_BASE="${AISOC_INGEST_URL:-$(svc_base_url ingest-worker 8080 http://localhost:8081)}"
+
+check_http_service api           "${API_BASE}/health"    "docker compose logs api | tail -40"
+check_http_service ingest-worker "${INGEST_BASE}/health" "docker compose logs ingest-worker | tail -40"
 
 # Liveness says the process is up. Readiness says it can do its job. For
 # ingest the difference is Kafka: without it every accepted event is dropped
 # while /health keeps answering 200.
 if svc_running ingest-worker; then
-  ready_code="$(http_ok "${AISOC_INGEST_URL:-http://localhost:8081}/readyz" 8)"
+  ready_code="$(http_ok "${INGEST_BASE}/readyz" 8)"
   case "$ready_code" in
     200) pass "ingest-worker ready (kafka reachable)" ;;
-    503) fail "ingest-worker is alive but NOT ready — it cannot reach Kafka, so ingested events are dropped" "curl -s ${AISOC_INGEST_URL:-http://localhost:8081}/readyz   # prints the reason" ;;
+    503) fail "ingest-worker is alive but NOT ready — it cannot reach Kafka, so ingested events are dropped" "curl -s ${INGEST_BASE}/readyz   # prints the reason" ;;
     404) warn "ingest-worker has no /readyz — running an image older than v8.2" "docker compose build ingest-worker && docker compose up -d ingest-worker" ;;
     *)   warn "ingest-worker /readyz returned $ready_code" "docker compose logs ingest-worker | tail -30" ;;
   esac
@@ -383,7 +405,7 @@ if svc_running fusion; then
   # Probe the service rather than grepping its log. A log line scrolls out of
   # retention and a restart loses it, so log-grep reported a working fusion as
   # broken. The HTTP probe answers the same question durably.
-  fusion_code="$(http_ok "${AISOC_FUSION_URL:-http://localhost:8003}/health" 6)"
+  fusion_code="$(http_ok "${AISOC_FUSION_URL:-$(svc_base_url fusion 8003 http://localhost:8003)}/health" 6)"
   if [ "$fusion_code" = "200" ]; then
     pass "fusion healthy"
   elif $COMPOSE logs fusion 2>/dev/null | grep -q 'Fusion worker started'; then
@@ -398,12 +420,18 @@ else
   fail "fusion is not running — events will never become alerts" "docker compose up -d fusion"
 fi
 
-for spec in "web 3000 /" "realtime 8086 /health" "agents 8001 /health"; do
-  set -- $spec; name="$1"; port="$2"; path="$3"
+# host-port service container-port path. The container port is what
+# `docker compose port` is keyed on, and it differs from the host port for
+# realtime (4000) and agents (8084) — reading the host port for both is how
+# these three ended up probing another project's containers.
+for spec in "3000 web 3000 /" "8086 realtime 4000 /health" "8001 agents 8084 /health"; do
+  # shellcheck disable=SC2086 # deliberate word splitting of a fixed 4-field spec
+  set -- $spec; port="$1"; name="$2"; cport="$3"; path="$4"
   if svc_running "$name"; then
-    code="$(http_ok "http://localhost:${port}${path}" 6)"
+    base="$(svc_base_url "$name" "$cport" "http://localhost:${port}")"
+    code="$(http_ok "${base}${path}" 6)"
     if [ "$code" = "200" ] || [ "$code" = "204" ]; then pass "$name healthy"
-    else warn "$name is running but http://localhost:${port}${path} returned $code" "docker compose logs $name | tail -30"; fi
+    else warn "$name is running but ${base}${path} returned $code" "docker compose logs $name | tail -30"; fi
   else
     warn "$name is not running" "docker compose up -d $name"
   fi
