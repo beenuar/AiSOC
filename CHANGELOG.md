@@ -54,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behaviour and requires all 1,687 Windows rules to stop firing, so the proof
   is known to be capable of failing.
 
+- **Eight windowed aggregation rules**, covering the detection family the
+  quarantine index had been telling contributors to skip. Windows now
+  contributes here too: failed-logon volume per host, password spray counted by
+  distinct account rather than by attempt, service-install and scheduled-task
+  bursts, remote-thread fan-out, and per-process DNS fan-out for tunnelling
+  and domain-generation algorithms.
+
 ### Changed
 
 - **Upstream lifecycle status no longer decides whether an imported rule runs.**
@@ -86,6 +93,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`readme_gates.py` misread a formatted figure.** Its pattern stopped at the
   thousands separator, so "2,603 executable" was compared as 603 — a gate
   measuring a number the README never claimed.
+
+- **The quarantine index told translators to skip the largest untranslated
+  family in it.** Step 3 said `| stats` aggregations belong in the windowed
+  engine, "which today has three hardcoded rules and no loader. Skip those
+  until it has one." `load_window_rules()` reads `windowed_ruleset.json` and
+  `main.py` wires it on by default, so the instruction had been stale for some
+  time while continuing to steer people away from roughly half the Splunk
+  quarantine. Corrected in `scripts/build_quarantine_index.py`, since the
+  README is generated output and editing the file would have regenerated the
+  error — the same shape as the detection-coverage generator that kept
+  restoring a dead link after the page was fixed.
 
 - **Auto-triage never asked the provider for JSON, so a third of the bundled
   model's replies were thrown away.** `run_auto_triage` parses the reply as a

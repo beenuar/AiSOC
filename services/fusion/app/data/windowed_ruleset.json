@@ -1,5 +1,5 @@
 {
-  "count": 10,
+  "count": 18,
   "rules": [
     {
       "category": "application",
@@ -149,6 +149,146 @@
       "severity": "high",
       "threshold": 50,
       "window_seconds": 300
+    },
+    {
+      "category": "identity",
+      "group_by": "Computer",
+      "id": "wd-windows-failed-logons-per-host",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^4625$"
+        ]
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Repeated failed Windows logons against one host",
+      "severity": "high",
+      "threshold": 15,
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "distinct_by": "TargetUserName",
+      "group_by": "IpAddress",
+      "id": "wd-windows-password-spray",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^4625$"
+        ]
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Windows logon failures across many accounts from one source",
+      "severity": "high",
+      "threshold": 10,
+      "window_seconds": 900
+    },
+    {
+      "category": "endpoint",
+      "group_by": "Computer",
+      "id": "wd-windows-service-install-burst",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^7045$"
+        ]
+      },
+      "mitre": [
+        "T1543.003"
+      ],
+      "name": "Several new Windows services installed on one host",
+      "severity": "high",
+      "threshold": 4,
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "distinct_by": "TargetUserName",
+      "group_by": "SubjectUserName",
+      "id": "wd-windows-account-creation-burst",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^4720$"
+        ]
+      },
+      "mitre": [
+        "T1136.002"
+      ],
+      "name": "One actor created several Windows accounts",
+      "severity": "high",
+      "threshold": 5,
+      "window_seconds": 900
+    },
+    {
+      "category": "endpoint",
+      "group_by": "Computer",
+      "id": "wd-windows-scheduled-task-burst",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^4698$"
+        ]
+      },
+      "mitre": [
+        "T1053.005"
+      ],
+      "name": "Several scheduled tasks registered on one host",
+      "severity": "medium",
+      "threshold": 5,
+      "window_seconds": 600
+    },
+    {
+      "category": "endpoint",
+      "distinct_by": "TargetImage",
+      "group_by": "SourceImage",
+      "id": "wd-sysmon-remote-thread-fanout",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^8$"
+        ]
+      },
+      "mitre": [
+        "T1055"
+      ],
+      "name": "One process created remote threads in many others",
+      "severity": "high",
+      "threshold": 5,
+      "window_seconds": 300
+    },
+    {
+      "category": "network",
+      "distinct_by": "QueryName",
+      "group_by": "Image",
+      "id": "wd-sysmon-dns-query-fanout",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^22$"
+        ]
+      },
+      "mitre": [
+        "T1071.004"
+      ],
+      "name": "One process resolved an unusual number of distinct domains",
+      "severity": "medium",
+      "threshold": 150,
+      "window_seconds": 300
+    },
+    {
+      "category": "endpoint",
+      "group_by": "ParentImage",
+      "id": "wd-sysmon-process-spawn-burst",
+      "match_when": {
+        "EventID_pattern_match_any": [
+          "^1$"
+        ]
+      },
+      "mitre": [
+        "T1059"
+      ],
+      "name": "One parent process spawned an unusual number of children",
+      "severity": "medium",
+      "threshold": 100,
+      "window_seconds": 120
     }
   ]
 }
