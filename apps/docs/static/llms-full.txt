@@ -77,7 +77,7 @@ Read more: https://beenuar.github.io/AiSOC/docs/connectors
 
 ## Detection content
 
-- **Executable rules: 833.** These are the rules the detection engine
+- **Executable rules: 2603.** These are the rules the detection engine
   loads from its compiled ruleset. Only these can fire.
 - **Rule files on disk: 6991.** The remainder is imported and
   provenance-only content — community and vendor corpora kept for coverage

@@ -58,16 +58,27 @@ def _connectors() -> int | None:
 
 
 def _executable_detections() -> int | None:
-    """Rules the fusion engine loads — the only ones that can fire."""
-    ruleset = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
-    if not ruleset.is_file():
-        return None
-    try:
-        data = json.loads(ruleset.read_text(encoding="utf-8"))
-    except ValueError:
-        return None
-    rules = data.get("rules") if isinstance(data, dict) else data
-    return len(rules) if isinstance(rules, list) else None
+    """Rules the fusion engine loads — the only ones that can fire.
+
+    Both compiled rulesets count. The engine reads the native specs and the
+    imported rules the Sigma compiler translated and proved fireable, so
+    counting one of them reports a number no deployment runs.
+    """
+    data_dir = ROOT / "services" / "fusion" / "app" / "data"
+    total: int | None = None
+    for name in ("detection_ruleset.json", "detection_ruleset_imported.json"):
+        path = data_dir / name
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return None
+        rules = data.get("rules") if isinstance(data, dict) else data
+        if not isinstance(rules, list):
+            return None
+        total = len(rules) if total is None else total + len(rules)
+    return total
 
 
 def _detection_files_on_disk() -> int:
