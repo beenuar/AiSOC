@@ -38,6 +38,7 @@ from app.context.organisation_memory import render_for_prompt
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.structured_output import extract_json_block
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
@@ -243,13 +244,58 @@ def _close_truncated_json(fragment: str) -> str:
     return repaired + "".join(reversed(stack))
 
 
+_NEUTRAL_CONFIDENCE = 0.5
+
+
+def _coerce_confidence(value: Any) -> float:
+    """Read a confidence, and never discard a verdict over this field alone.
+
+    ``float(value)`` was unguarded here. A model answering ``"confidence":
+    "high"`` raised ``ValueError``, which the caller turns into an
+    ``AutoTriageError``, throwing away a verdict and rationale that may have
+    been perfectly good because one field of three was the wrong type.
+
+    Not observed in the 70 measured calls behind this change — the failures
+    there were all malformed ``rationale`` — but it is reachable by any model
+    on any alert, and the cost of it firing is a fallback nobody can explain.
+
+    Degrading to a neutral value is safe *here* specifically because confidence
+    is a gate, not a verdict: ``run_auto_triage`` auto-closes only when
+    ``confidence >= AUTO_CLOSE_THRESHOLD``, which defaults to 0.85, so 0.5
+    routes to a human. An operator who lowers that below the neutral value is
+    choosing to auto-close on an unread field, which is why this returns the
+    neutral constant rather than 0.0 — a deployment that trusts everything
+    should not be handed a number that also fails every other comparison.
+    It is the verdict itself that must never be guessed, and that still fails
+    closed through ``normalize_disposition``.
+    """
+    if isinstance(value, bool):  # bool is an int; "confidence": true means nothing
+        return _NEUTRAL_CONFIDENCE
+    if isinstance(value, int | float):
+        return max(0.0, min(1.0, float(value)))
+    if isinstance(value, str):
+        text = value.strip().rstrip("%")
+        try:
+            number = float(text)
+        except ValueError:
+            return _NEUTRAL_CONFIDENCE
+        # "85%" and "85" both mean 0.85; a bare 0.85 already does.
+        if number > 1.0:
+            number /= 100.0
+        return max(0.0, min(1.0, number))
+    return _NEUTRAL_CONFIDENCE
+
+
 def _parse_llm_response(text: str) -> dict[str, Any]:
-    """Extract the JSON verdict from the LLM response, tolerating markdown fences."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.split("\n")
-        lines = [line for line in lines if not line.strip().startswith("```")]
-        cleaned = "\n".join(lines).strip()
+    """Extract the JSON verdict from the LLM response, tolerating markdown fences.
+
+    Extraction is shared with every other caller through
+    ``app.llm.structured_output.extract_json_block``: fences, and prose on
+    either side of the body. What stays here is the part that is specific to a
+    triage verdict — the taxonomy, the confidence gate, and the one repair
+    below. Extraction is a property of LLM replies; a verdict is not.
+    """
+    cleaned = extract_json_block(text)
 
     try:
         data = json.loads(cleaned)
@@ -272,8 +318,7 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
     if verdict not in LLM_VERDICTS:
         verdict = TRUE_POSITIVE
 
-    confidence = float(data.get("confidence", 0.5))
-    confidence = max(0.0, min(1.0, confidence))
+    confidence = _coerce_confidence(data.get("confidence"))
 
     rationale = data.get("rationale", "No rationale provided by LLM.")
 
@@ -312,7 +357,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # and auto_triage_node catches AutoTriageError specifically — so
         # constructing outside would have failed the whole graph run over a
         # configuration problem the deterministic path handles fine.
-        llm = make_chat_model("triage", temperature=0.0, max_tokens=512)
+        llm = make_chat_model("triage", temperature=0.0, max_tokens=512, json_output=True)
         response = await safe_ainvoke(
             llm,
             [

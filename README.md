@@ -132,9 +132,9 @@ alert, and **it needs no credentials to do either** — for two reasons.
 **The model ships with the gateway.** Ollama runs a pinned ~2 GB
 `llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up`
 produces real triage verdicts with real token counts in the Investigation
-Ledger — not a stub. It is also not a frontier model, and the difference shows:
-in a measured run of 19 auto-triages it returned schema-valid output 7 times,
-and the other 12 fell back to the deterministic path, which the rail labels.
+Ledger — not a stub. It is also not a frontier model: over 50 alerts it gave
+triage usable output 44 times before the reply was constrained to JSON and 50
+after ([method](scripts/measure_triage_reliability.py)), and the rail labels which path answered.
 To upgrade, set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP`
 and an empty `AISOC_LLM_API_BASE`. **No hosted provider has ever been exercised
 here** — there is no funded key, so per-model rows read *not measured* rather

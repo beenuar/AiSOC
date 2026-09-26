@@ -25,10 +25,15 @@ downstream of it is the product's own work. Terminal waits are shortened,
 disclosed by an on-screen badge for the whole of every segment it applies to;
 browser sections run at real speed.
 
-The bundled local model returns schema-valid triage JSON a minority of the
-time. In this recording both triage runs fell back to the deterministic path,
-which the console labels (`model_used` reads `kafka:auto_triage:deterministic`).
-That is the honest common case and the closing card says so.
+In this recording both triage runs fell back to the deterministic path, which
+the console labels (`model_used` reads `kafka:auto_triage:deterministic`), and
+the closing card says so.
+
+**That is no longer the common case.** Triage now asks the provider to
+constrain its reply to a JSON object: measured over 50 alerts through the
+gateway, replies triage could use went from 44 of 50 to 50 of 50. The recording
+predates that change and is kept as recorded rather than re-cut to flatter the
+product, so it shows the fallback the older build took.
 
 ## How it was produced
 
