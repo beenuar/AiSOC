@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.1.0] — 2026-09-25
+
 ### Fixed
 
 - **The console's API and realtime addresses are now read when the container
@@ -9779,7 +9781,8 @@ demo profile. Details below.
 - Helm chart for Kubernetes deployment (`infra/helm/aisoc/`)
 - MIT License
 
-[Unreleased]: https://github.com/beenuar/AiSOC/compare/v11.0.0...HEAD
+[Unreleased]: https://github.com/beenuar/AiSOC/compare/v11.1.0...HEAD
+[11.1.0]: https://github.com/beenuar/AiSOC/compare/v11.0.0...v11.1.0
 [11.0.0]: https://github.com/beenuar/AiSOC/compare/v10.0.0...v11.0.0
 [10.0.0]: https://github.com/beenuar/AiSOC/compare/v9.0.0...v10.0.0
 [9.0.0]: https://github.com/beenuar/AiSOC/compare/v8.1.1...v9.0.0

@@ -303,10 +303,7 @@ honeytokens:
   otelEndpoint: ""
   image:
     repository: ghcr.io/beenuar/aisoc-honeytokens
-    # First published on the merge that added it to publish-images.yml,
-    # so it has no vX.Y.Z tag until the next release; empty here would
-    # resolve to Chart.AppVersion and 404. Move it to "" at that point.
-    tag: "latest"
+    tag: ""              # defaults to Chart.AppVersion; first release tag was v11.1.0
     pullPolicy: IfNotPresent
   autoscaling:
     enabled: false
@@ -329,10 +326,7 @@ purpleTeam:
   otelEndpoint: ""
   image:
     repository: ghcr.io/beenuar/aisoc-purple-team
-    # First published on the merge that added it to publish-images.yml,
-    # so it has no vX.Y.Z tag until the next release; empty here would
-    # resolve to Chart.AppVersion and 404. Move it to "" at that point.
-    tag: "latest"
+    tag: ""              # defaults to Chart.AppVersion; first release tag was v11.1.0
     pullPolicy: IfNotPresent
   autoscaling:
     enabled: false
