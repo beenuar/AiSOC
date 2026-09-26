@@ -25,6 +25,25 @@ PROFILE ?=
 # `--profile full` when PROFILE=full, nothing otherwise.
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 
+# The address `up` prints for the console. README tells operators deploying
+# somewhere that is not a laptop to set AISOC_CONSOLE_URL "so the printed
+# address is the one people browse to" — and `up` printed a hardcoded
+# http://localhost:3000 regardless, two lines above `bootstrap`, which reads
+# the variable and printed the configured address. An operator on a host
+# reached by its LAN address got both, the wrong one first, and localhost
+# resolves on their machine to something that is not this console.
+#
+# Recursively expanded on purpose: `up` depends on `env`, which creates .env,
+# so this has to be read when the recipe line runs rather than when the
+# Makefile is parsed.
+#
+# Only the console line is derived. `API:` below stays loopback because it is
+# accurate as written — the API publishes on 127.0.0.1:8000 of this host — and
+# a console URL behind a reverse proxy says nothing about where the API port
+# is, so deriving one from the other would trade a wrong address for a guess.
+CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail -n1 | tr -d '\r')
+console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:3000)
+
 .PHONY: help install env up up-full down restart status doctor smoke demo logs clean \
         bootstrap ingest-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
@@ -81,7 +100,7 @@ up: env _ports
 	@echo "Waiting for services to become healthy…"
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
-	@echo "  Console:  http://localhost:3000"
+	@echo "  Console:  $(console_url)"
 	@echo "  API:      http://localhost:8000/api/docs"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
@@ -119,7 +138,7 @@ up-full: env _ports
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait PROFILE=full
 	@echo ""
-	@echo "  Console:  http://localhost:3000"
+	@echo "  Console:  $(console_url)"
 	@echo "  API:      http://localhost:8000/api/docs"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"

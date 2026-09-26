@@ -216,41 +216,40 @@ export function StartHero() {
  * Small screencast preview card linked from the onboarding hero (T6.4).
  *
  * Rendered immediately below the three CTAs so it doesn't compete with the
- * primary "Try the demo" path. The thumbnail comes from
- * `apps/web/public/demo-thumbnail.svg` (1280x720, brand-aligned, see SVG
- * comments). The link itself points at `/demo.mp4`, which is a placeholder
- * until the screencast is actually recorded for the v8.0 launch — the
- * surrounding copy is intentionally honest about that so a buyer who clicks
- * before launch doesn't feel cheated.
+ * primary "Try the demo" path.
  *
- * Why an `<a>` to /demo.mp4 instead of an inline `<video>`?
- *   - The placeholder file (`apps/web/public/.demo-mp4-placeholder`) is a
- *     text file, not a playable .mp4. Embedding `<video>` would render a
- *     broken player. A plain link lets the browser do the right thing
- *     (download dialog for self-hosters, autoplay for buyers once the real
- *     file lands).
- *   - Keeps the bundle clean — no media controls polyfill, no autoplay
- *     mute-gate, no `<track>` captions plumbing yet. We add that the day
- *     the screencast actually ships.
+ * This card used to link `/demo.mp4`, a text placeholder, under the label
+ * "Coming v8.0" — a 404 wearing a promise that went stale three majors
+ * before anyone noticed, on a surface the "no dead controls" rule covers.
+ * It now points at the recording that exists: the deployment walkthrough at
+ * `/demo/demo.mp4`, described in `apps/web/public/demo/README.md`. The copy
+ * describes that recording rather than the four-case product tour, which is
+ * still unrecorded (brief in `apps/web/public/.demo-mp4-placeholder`).
+ *
+ * Why an `<a>` rather than an inline `<video>`? It keeps the bundle free of
+ * media controls, autoplay mute-gating and caption plumbing on a card that
+ * is deliberately secondary to the three CTAs above it. The thumbnail is a
+ * real frame from the recording, so it cannot drift from the content the
+ * way the hand-drawn SVG it replaced had.
  */
 function DemoScreencast() {
   return (
     <aside
-      aria-label="AiSOC 90-second product demo"
+      aria-label="AiSOC deployment walkthrough"
       className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
     >
       <a
-        href="/demo.mp4"
+        href="/demo/demo.mp4"
         className="group flex flex-col items-stretch gap-4 p-4 transition hover:bg-white/[0.05] sm:flex-row sm:items-center sm:gap-5 sm:p-5"
         data-testid="demo-screencast"
       >
-        {/* Thumbnail. <img> rather than next/image so the SVG ships as-is
+        {/* Thumbnail. <img> rather than next/image so the frame ships as-is
             without going through the image optimizer. */}
         <span className="relative block w-full overflow-hidden rounded-lg border border-white/10 sm:w-56 sm:flex-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/demo-thumbnail.svg"
-            alt="AiSOC 90-second product demo thumbnail showing the four canonical cases (phishing, cloud takeover, insider exfil, ransomware)"
+            src="/demo/demo-poster.png"
+            alt="A frame from the walkthrough: make up finishing, reporting every service healthy and printing the address to sign in at"
             width={1280}
             height={720}
             className="block h-auto w-full"
@@ -261,18 +260,19 @@ function DemoScreencast() {
 
         <span className="flex flex-1 flex-col gap-1">
           <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-brand-300">
-            <span aria-hidden="true">▶</span> Watch the demo
-            <span className="ml-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-amber-200">
-              Coming v8.0
+            <span aria-hidden="true">▶</span> Watch the walkthrough
+            <span className="ml-2 rounded-full border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-300">
+              2 min 57 s
             </span>
           </span>
           <span className="text-base font-semibold text-white">
-            4 cases in 4 minutes
+            One host, install to AI verdict
           </span>
           <span className="text-xs leading-relaxed text-gray-400">
-            90-second walkthrough of <span className="font-mono">pnpm aisoc:demo --quick</span>:
-            phishing, cloud takeover, insider exfil, and a LockBit ransomware
-            response — every alert deterministic, every action audited.
+            <span className="font-mono">make up</span> against the published images,
+            real CISA KEV data, one event pushed through to an alert and a triage
+            verdict with its token count. Nothing seeded; terminal waits shortened
+            and labelled.
           </span>
         </span>
       </a>

@@ -180,7 +180,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existence only, since a release note naming an older image is describing
   history rather than instructing anybody.
 
+- **`make up` printed an address the operator could not use.** README tells
+  anyone deploying to something other than a laptop to set `AISOC_CONSOLE_URL`
+  "so the printed address is the one people browse to", and `up` printed a
+  hardcoded `http://localhost:3000` regardless. Two lines below it
+  `bootstrap` printed the configured address, because it reads the variable —
+  so the operator got both, contradicting each other, wrong one first, on the
+  one screen where they are being handed a credential and told where to use
+  it. On a host reached by its LAN address `localhost` resolves on the
+  reader's own machine to something that is not that console. Both `up` and
+  `up-full` now derive the line from `.env`, falling back to
+  `http://localhost:3000` when it is unset, so a laptop install is unchanged.
+  The `API:` line beside it stays on loopback deliberately: that is accurate
+  for this host, and a console URL behind a reverse proxy says nothing about
+  where the API port ended up, so deriving one from the other would trade a
+  wrong address for a guess.
+
+- **`make doctor` reported another deployment's health as yours.** Its port
+  section derives each host port from `docker compose port`, so it correctly
+  says "aisoc api is published on 18000 (not the default 8000)". Its service
+  probes then dialled the canonical port anyway. On a host running a second
+  AiSOC project that means probing the other project's containers: observed
+  here as `ingest-worker is alive but NOT ready — it cannot reach Kafka`
+  while this deployment's own `/readyz` answered 200 with Kafka reachable,
+  alongside four services reported healthy that the probe never touched. A
+  diagnostic that names the wrong deployment is worse than a vague one,
+  because it sends the operator to debug something that is not theirs. The
+  probes now default to the port this project actually published, falling
+  back to the canonical one when compose cannot answer — so a single-stack
+  install is unchanged — and an explicit `AISOC_*_URL` still wins over both.
+  `web`, `realtime` and `agents` had no override at all and were purely
+  hardcoded; they also read the *host* port where `docker compose port` is
+  keyed on the container port, which differs for two of the three.
+
+- **The onboarding hero's screencast card was a dead link wearing a stale
+  promise.** It pointed at `/demo.mp4`, a text placeholder, labelled
+  "Coming v8.0" — three majors after v8.0 shipped — and described a
+  four-case product tour nobody had recorded. It now links the walkthrough
+  below, is thumbnailed with a real frame from it rather than a hand-drawn
+  SVG that could drift from the content, and describes what the recording
+  actually contains. The four-case tour is still unrecorded and its brief
+  stays in `apps/web/public/.demo-mp4-placeholder`, now saying so plainly.
+
 ### Added
+
+- **A recorded deployment walkthrough, and the written form of it.**
+  `apps/web/public/demo/demo.mp4` (2 min 57 s) takes one host from nothing to
+  an AI triage verdict: `make up` against the images published on GHCR, the
+  console signed into at a LAN address rather than `localhost`, the CISA
+  Known Exploited Vulnerabilities feed already populated with no API key, one
+  event pushed through the documented ingest path, `make smoke` reporting ten
+  stages, and the resulting alert with its measured token counts. README
+  embeds `hero.gif`, a 17-second loop cut from the same file — an animated
+  image renders inline on GitHub, on mirrors and on package pages, where a
+  `<video>` pointing at a repository path does not.
+
+  Everything in it is real: real images, real feed, real alert, real tokens.
+  Demo mode was off and nothing was seeded. The event was authored to be
+  representative and the recording says so. Terminal waits are shortened,
+  disclosed by a badge on screen for the whole of every segment it applies
+  to; the browser sections run at real speed. Both triage runs in the
+  recording fell back to the deterministic path because the bundled
+  3B model's output failed schema validation, and the closing card states
+  that rather than hiding it — the token counts are real because the model
+  really was called; what failed was the shape of its reply.
+
+  `apps/docs/docs/deployment/walkthrough.md` is the same path in prose, with
+  the detail three minutes has no room for: why `AISOC_CONSOLE_BIND_ADDR` and
+  `AISOC_CONSOLE_URL` are separate decisions, that the CISA feed's primary URL
+  answers `403` to non-browser clients and the service falls back to a mirror
+  (a warning line followed by `CISA KEV IOCs ingested` is the healthy path),
+  and how to run a second stack beside an existing one — every service pins a
+  `container_name`, so a distinct project name alone is not enough, and
+  `make up`'s port pre-flight reads `docker compose port`, which cannot see a
+  remap on a host where no container has started yet.
 
 - `scripts/check_published_images.py` — the gate none of the above had. It
   resolves every image reference in `docker-compose.yml` and the Helm chart
