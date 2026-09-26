@@ -14,12 +14,20 @@ import { isDemoMode } from '@/lib/demoMode';
 
 interface AppShellProps {
   children: React.ReactNode;
+  /**
+   * Resolved by the Server Component in `app/(app)/layout.tsx`, which can see
+   * the running container's `AISOC_DEMO_MODE`. Passed in rather than read here
+   * so server and client render the same value by construction. Optional so
+   * the stories and tests that mount the shell directly keep working; those
+   * run in the browser, where `isDemoMode()` is the only answer available.
+   */
+  demoMode?: boolean;
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, demoMode }: AppShellProps) {
   // In demo mode the banner adds 36px (h-9) to the top, so push the main
   // content down to keep the TopBar from sliding underneath it.
-  const demo = isDemoMode();
+  const demo = demoMode ?? isDemoMode();
   const topPadClass = demo ? 'pt-[100px]' : 'pt-16';
 
   return (
@@ -51,15 +59,18 @@ export function AppShell({ children }: AppShellProps) {
         <TenantProvider>
           <div className="min-h-screen bg-surface-base">
         {/*
-          DemoBanner reads `NEXT_PUBLIC_DEMO_MODE`, a build-time env var.
-          In development the client bundle can have a stale inlined value that
-          differs from the SSR process.env read, producing React hydration
-          error #418. Wrapping in ClientOnly defers the banner to after mount
-          so both paints see the same value (client-only, post-hydration).
+          `demo` arrives as a prop from the Server Component above, so the SSR
+          pass and the hydration pass render from the same value and the
+          banner can be part of the first paint.
+
+          It used to call `isDemoMode()` itself, which the server answered
+          from `process.env` and the client from the value Next inlined at
+          build time. When those disagreed the result was React hydration
+          error #418, and the fix at the time was to defer the whole banner
+          behind ClientOnly — which hid the mismatch rather than removing it,
+          and cost a frame of layout shift on every demo page load.
         */}
-        <ClientOnly>
-          <DemoBanner />
-        </ClientOnly>
+        <DemoBanner demoMode={demo} />
         <Sidebar />
         <div className="md:ml-60">
           <TopBar demoOffset={demo} />

@@ -15,8 +15,18 @@
 import { isDemoMode, demoBannerMessage } from '@/lib/demoMode';
 import { docs } from '@/lib/docs';
 
-export function DemoBanner() {
-  if (!isDemoMode()) return null;
+interface DemoBannerProps {
+  /**
+   * The deployment's answer, resolved server-side in `app/(app)/layout.tsx`
+   * so it reflects the running container rather than the build. Falls back to
+   * the compiled value when the banner is mounted outside that layout, as the
+   * stories and tests do.
+   */
+  demoMode?: boolean;
+}
+
+export function DemoBanner({ demoMode }: DemoBannerProps = {}) {
+  if (!(demoMode ?? isDemoMode())) return null;
 
   return (
     <div

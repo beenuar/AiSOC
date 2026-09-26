@@ -33,11 +33,59 @@ const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
 let _override: boolean | null = null;
 
-/** Returns `true` when the build is the hosted demo. */
-export function isDemoMode(): boolean {
-  if (_override !== null) return _override;
-  const v = process.env.NEXT_PUBLIC_DEMO_MODE?.toLowerCase().trim() ?? '';
+/** Where the answer came from, so an operator never has to infer it. */
+export type DemoModeSource =
+  /** `AISOC_DEMO_MODE` in the running container. Outranks the compiled value. */
+  | 'runtime'
+  /** `NEXT_PUBLIC_DEMO_MODE`, fixed when the image was built. */
+  | 'build'
+  /** Neither was set. Not a demo. */
+  | 'default'
+  /** `__setDemoModeForTests` is in force. */
+  | 'test-override';
+
+function truthy(raw: string | undefined): boolean | null {
+  const v = raw?.toLowerCase().trim() ?? '';
+  if (v === '') return null;
   return TRUTHY.has(v);
+}
+
+/**
+ * The single authoritative answer to "is this deployment a demo", and where it
+ * came from.
+ *
+ * Two flags used to decide this and neither could be reconciled from outside
+ * the container. `AISOC_DEMO_MODE` gates the API service's seed at run time,
+ * while the console read `NEXT_PUBLIC_DEMO_MODE`, which Next inlines when the
+ * image is *built* — so on a pulled image the console's answer was fixed at
+ * build time and could disagree with the API's, with nothing to consult but
+ * the rendered page. `AISOC_DEMO_MODE` now answers here too and outranks the
+ * compiled value; `GET /api/runtime-config` reports the result.
+ *
+ * Runtime environment is only readable server-side, so in the browser this
+ * returns the compiled answer. That is the first-paint value — `DemoBanner`
+ * reconciles it against the endpoint, which cannot be stale.
+ */
+export function demoModeReport(): { enabled: boolean; source: DemoModeSource } {
+  if (_override !== null) return { enabled: _override, source: 'test-override' };
+
+  // `typeof window` is the client/server test Next itself compiles against;
+  // AISOC_DEMO_MODE carries no NEXT_PUBLIC_ prefix, so it is never inlined
+  // into the browser bundle and reading it there yields undefined.
+  if (typeof window === 'undefined') {
+    const runtime = truthy(process.env.AISOC_DEMO_MODE);
+    if (runtime !== null) return { enabled: runtime, source: 'runtime' };
+  }
+
+  const build = truthy(process.env.NEXT_PUBLIC_DEMO_MODE);
+  if (build !== null) return { enabled: build, source: 'build' };
+
+  return { enabled: false, source: 'default' };
+}
+
+/** Returns `true` when this deployment is a demo. */
+export function isDemoMode(): boolean {
+  return demoModeReport().enabled;
 }
 
 /** Banner copy shown at the top of every page in demo mode. */

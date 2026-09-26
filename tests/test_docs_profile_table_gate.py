@@ -119,9 +119,16 @@ def test_documented_host_ports_match_compose() -> None:
     for name, cfg in services.items():
         published = set()
         for mapping in (cfg or {}).get("ports") or []:
-            match = re.match(r"^(?:[\d.]+:)?(\d+):", str(mapping))
-            if match:
-                published.add(match.group(1))
+            # `[bind:]host:container[/proto]`. Read positionally from the right
+            # rather than matching the bind address, which is now a Compose
+            # interpolation with a nested default —
+            # `${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}}` —
+            # and carries colons of its own. A pattern anchored on a literal
+            # IP silently matched nothing and reported every service as
+            # publishing no host port at all.
+            fields = str(mapping).split("/")[0].split(":")
+            if len(fields) >= 2 and fields[-2].isdigit():
+                published.add(fields[-2])
         actual[name] = published
 
     wrong: list[str] = []

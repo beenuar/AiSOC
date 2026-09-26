@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The console's API and realtime addresses are now read when the container
+  starts, so a deployment that is not a laptop can be pointed at its own
+  services.** Reported by a self-hoster bringing AiSOC up with Compose on a
+  single host: setting the documented variables changed nothing. It could not
+  have — `next build` freezes *both* halves of the console's routing. Anything
+  prefixed `NEXT_PUBLIC_` is inlined into the JavaScript bundle as a string
+  literal, and the destinations returned by `rewrites()` in `next.config.js`
+  are compiled into `.next/routes-manifest.json`. `next start` loads the
+  config again and logs that it did, which makes this look configurable, but
+  production routing is served from the manifest. A pulled image could
+  therefore only ever talk to the hosts it was built against.
+
+  It worked on the bundled Compose stack by coincidence: the baked
+  `http://api:8000` happens to be that service's DNS name on that network.
+  Any other topology resolved a hostname that does not exist, and no variable
+  could re-point it.
+
+  `apps/web/docker-entrypoint.sh` now re-evaluates `rewrites()` against the
+  container's environment and writes the result into the manifest before the
+  server starts. `next.config.js` stays the single definition of the routing
+  table — the resolver duplicates no route — so `AISOC_API_URL`,
+  `AISOC_AGENTS_URL` and `AISOC_REALTIME_URL` take effect on a pulled image
+  with no rebuild. An address that is set and cannot be applied stops the
+  container and names itself rather than starting on the built-in defaults,
+  because a console silently pointed at the wrong host is worse than one that
+  refuses to boot.
+
+  The browser needs no absolute URL at all and did not need one before: the
+  bundle calls same-origin paths and this server forwards them, which is why
+  one image works on `localhost`, on a LAN address and behind a reverse proxy,
+  and why there is no CORS surface to configure. `docker-compose.yml` no
+  longer sets `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` on the `web`
+  service, where they were read by nothing while looking like the knob an
+  operator was meant to turn.
+
+- **A single-host deployment can be reached.** Every host port published to a
+  literal `127.0.0.1`, so the stack came up healthy and nothing outside the
+  machine could reach it — including the browser it was meant to be used from
+  — and nothing in `.env` could change that. `AISOC_CONSOLE_BIND_ADDR`
+  publishes the console, and `AISOC_BIND_ADDR` moves every binding for an
+  isolated network. Both default to loopback, so a laptop install still
+  exposes nothing by omission.
+
+  The console gets its own knob because same-origin proxying means one port is
+  enough: exposing AiSOC to a LAN no longer means handing out Postgres, Redis,
+  Kafka and Neo4j with the development passwords this repository ships.
+
+- **The Helm chart pointed the console at hostnames that do not exist in a
+  cluster.** It set no upstream addresses on the web Deployment at all, while
+  the published image dials `http://api:8000`; the chart's Services are
+  `<release>-api`, `<release>-agents` and `<release>-realtime`. Every console
+  request resolved nowhere, so the page loaded and every panel stayed empty.
+  The three addresses are now derived from the release's own Services, and
+  `services.web.env` overrides them for an API outside the release. This needs
+  a console image carrying the runtime entrypoint above; an older image
+  ignores them.
+
+- **Demo mode has one authoritative answer, and it is visible.** Two flags
+  decided it and neither could be reconciled from outside the container:
+  `AISOC_DEMO_MODE` gated the API's seed at run time while the console read
+  `NEXT_PUBLIC_DEMO_MODE`, compiled in at build time. The two could disagree,
+  and `AppShell` wrapped the banner in `ClientOnly` to hide the resulting
+  React hydration error rather than remove its cause. `AISOC_DEMO_MODE` now
+  answers for both services and outranks the compiled value, the Server
+  Component in `app/(app)/layout.tsx` resolves it once and hands it down so
+  the two paints cannot differ, and `GET /api/runtime-config` reports the
+  answer with the source that produced it (`runtime`, `build` or `default`)
+  plus the version the image was built from. Checking whether a deployment
+  thinks it is a demo no longer means inferring it from the rendered page —
+  which was actively misleading, because the banner copy is an inlined
+  constant present in the HTML either way.
+
+### Added
+
+- `apps/docs/docs/deployment/single-host.md` — the path for a server you reach
+  over the network: publishing the console, pointing it at your services,
+  confirming what the deployment thinks it is, and what changes on the way to
+  Kubernetes.
+- `tests/test_console_runtime_config_gate.py` — runs the real resolver against
+  the real `next.config.js` and asserts an operator's chosen API address is
+  the one the console proxies to, plus the deployment contract that carries
+  it. All five fail against `v11.0.0`.
+
 ## [11.0.0] — 2026-09-25
 
 ### BREAKING

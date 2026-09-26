@@ -131,9 +131,36 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy the full workspace so symlinked workspace packages keep resolving.
 COPY --from=builder --chown=nextjs:nodejs /app ./
 
+# ─── Runtime upstream addresses (server-side proxy) ─────────────────────────
+# The same three values the builder stage used, re-declared because a new
+# stage inherits no ENV from the one before it. They matter here for two
+# reasons:
+#
+#   1. `docker inspect` now says what this image will proxy to, instead of the
+#      answer being locked inside .next/routes-manifest.json.
+#   2. docker-entrypoint.sh re-evaluates next.config.js against this
+#      environment. Holding the build-time defaults means an unconfigured
+#      container resolves to exactly what was compiled in and re-points
+#      nothing — while `-e API_URL=…` now genuinely takes effect, which on a
+#      pulled image it previously could not.
+#
+# A `--build-arg` applies to every stage that declares the ARG, so an image
+# built for a different topology keeps agreeing with itself here.
+ARG API_URL=http://api:8000
+ARG AGENTS_URL=http://agents:8084
+ARG REALTIME_URL=http://realtime:4000
+ENV API_URL=${API_URL}
+ENV AGENTS_URL=${AGENTS_URL}
+ENV REALTIME_URL=${REALTIME_URL}
+
 USER nextjs
 EXPOSE 3000
 WORKDIR /app/apps/web
+
+# Re-points the compiled rewrite table at the upstreams this container is
+# started with, then execs CMD. Without it, API_URL and friends are inert on a
+# pulled image — see apps/web/scripts/resolve-runtime-routes.mjs.
+ENTRYPOINT ["/app/apps/web/docker-entrypoint.sh"]
 
 # pnpm resolves the workspace's next binary correctly under symlinked layout.
 CMD ["pnpm", "start"]
