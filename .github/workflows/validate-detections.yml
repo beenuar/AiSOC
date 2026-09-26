@@ -33,7 +33,11 @@ jobs:
         # DetectionEngine rather than a copy of either, so it needs what those
         # modules import. A gate that reimplemented them would need nothing
         # here and would also prove nothing.
-        run: pip install structlog httpx pydantic pydantic-settings cryptography
+        # `cryptography` is bounded to match every other install path: the
+        # vault's Fernet token format and the Ed25519 plugin signatures are
+        # behaviour, not a library preference, so an unbounded install here
+        # would be a build of this commit running software nobody tested.
+        run: pip install structlog httpx pydantic pydantic-settings "cryptography>=46,<51"
 
       - name: Rule ids must be stable
         # Ids were positional, so inserting a rule renumbered every rule

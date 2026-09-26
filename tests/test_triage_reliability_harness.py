@@ -24,8 +24,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parents[1]
 HARNESS = REPO / "scripts" / "measure_triage_reliability.py"
 AGENT = REPO / "services" / "agents" / "app" / "agents" / "auto_triage_agent.py"
@@ -39,15 +37,20 @@ def _harness_constant(name: str) -> float | int:
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
             return ast.literal_eval(node.value)
-    pytest.fail(f"{HARNESS.name} no longer defines {name}")
+    raise AssertionError(f"{HARNESS.name} no longer defines {name}")
+
+
+def _triage_call_args() -> str:
+    """The keyword arguments of the production `make_chat_model("triage", ...)`."""
+    match = _CALL.search(AGENT.read_text(encoding="utf-8"))
+    if match is None:
+        raise AssertionError(f'no make_chat_model("triage", ...) call found in {AGENT.name}')
+    return match.group(1)
 
 
 def _production_kwargs() -> dict[str, float | int]:
-    match = _CALL.search(AGENT.read_text(encoding="utf-8"))
-    if match is None:
-        pytest.fail(f'no make_chat_model("triage", ...) call found in {AGENT.name}')
     kwargs: dict[str, float | int] = {}
-    for part in match.group(1).split(","):
+    for part in _triage_call_args().split(","):
         if "=" not in part:
             continue
         key, _, value = part.partition("=")
@@ -72,6 +75,4 @@ def test_production_triage_still_requests_json():
     Dropping `json_output` would restore the defect the figure was published
     about while the figure stayed on the page.
     """
-    match = _CALL.search(AGENT.read_text(encoding="utf-8"))
-    assert match is not None
-    assert "json_output=True" in match.group(1).replace(" ", "")
+    assert "json_output=True" in _triage_call_args().replace(" ", "")
