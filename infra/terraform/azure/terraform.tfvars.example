@@ -44,7 +44,7 @@
 # Defaults point at the public GHCR demo images so the skeleton runs with zero
 # CI work. Override with images you've pushed to the ACR this stack provisions.
 
-# api_image    = "ghcr.io/beenuar/aisoc-api:latest"
+# api_image    = "ghcr.io/beenuar/aisoc-core-api:latest"
 # web_image    = "ghcr.io/beenuar/aisoc-web:latest"
 # ingest_image = "ghcr.io/beenuar/aisoc-ingest:latest"
 

@@ -119,6 +119,37 @@ commit as the `CHANGELOG.md` promotion, then tag:
 git tag vX.Y.Z && git push --tags
 ```
 
+Bump `appVersion` in `infra/helm/aisoc/Chart.yaml` to the tag you are cutting
+in that same commit. Every image tag in the chart's values defaults to it, so
+a chart left on the previous release pins operators to the previous release —
+and one left on a version that was never published pins them to nothing at
+all, which is the state the chart shipped in until v11.1.0: `appVersion` read
+`5.2.0`, a tag no image has ever carried, so a default `helm install` could
+only reach `ImagePullBackOff`. `scripts/check_published_images.py` resolves
+that value the same way the templates do and fails when it names nothing, so
+this is a gated step rather than a remembered one.
+
+`honeytokens` and `purpleTeam` pin `latest` rather than an empty tag until
+they have a `vX.Y.Z` to point at — they were first published on the merge that
+added them to the build matrix, so their first release tag is v11.1.0. Move
+them back to `tag: ""` in that release.
+
+## Recovering a release that only partly published
+
+A release is the set of artefacts it published, not the set of jobs that
+finished. If `check_published_images.py` reports an image missing at a tag
+that has already shipped, republish the images for that tag rather than
+cutting a new one:
+
+```bash
+gh workflow run release.yml --ref main -f tag=vX.Y.Z
+```
+
+Dispatch it from `main` so the current workflow definition runs; the build
+checks the named tag out for its source. The GitHub Release, npm and PyPI jobs
+are push-only and stay skipped, because a registry will not accept a package
+version twice.
+
 ## Verifying a publish
 
 ```bash

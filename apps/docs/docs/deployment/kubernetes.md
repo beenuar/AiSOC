@@ -24,13 +24,18 @@ helm dependency update infra/helm/aisoc
 
 helm install aisoc infra/helm/aisoc \
   --namespace aisoc --create-namespace \
-  --set api.image.tag=v5.2.0 \
-  --set agents.image.tag=v5.2.0 \
-  --set realtime.image.tag=v5.2.0 \
-  --set mcp.image.tag=v5.2.0 \
-  --set web.image.tag=v5.2.0 \
   --set secrets.openai.apiKey=sk-... \
   --set postgresql.auth.password=changeme
+```
+
+The image tags come from the chart's `appVersion`, so there is nothing to
+override for a working install. To pin a different release, note that every
+service lives under `services.<name>` — `--set api.image.tag=...` addresses a
+path no template reads and silently changes nothing:
+
+```bash
+  --set services.api.image.tag=v11.0.0 \
+  --set services.web.image.tag=v11.0.0
 ```
 
 Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
@@ -40,14 +45,20 @@ Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.
 All images are published to GHCR and Cosign-signed:
 
 ```
-ghcr.io/beenuar/aisoc-api:v5.2.0
-ghcr.io/beenuar/aisoc-agents:v5.2.0
-ghcr.io/beenuar/aisoc-realtime:v5.2.0
-ghcr.io/beenuar/aisoc-mcp:v5.2.0
-ghcr.io/beenuar/aisoc-ingest:v5.2.0
-ghcr.io/beenuar/aisoc-enrichment:v5.2.0
-ghcr.io/beenuar/aisoc-web:v5.2.0
+ghcr.io/beenuar/aisoc-core-api:v11.0.0
+ghcr.io/beenuar/aisoc-agents:v11.0.0
+ghcr.io/beenuar/aisoc-realtime:v11.0.0
+ghcr.io/beenuar/aisoc-ingest:v11.0.0
+ghcr.io/beenuar/aisoc-enrichment:v11.0.0
+ghcr.io/beenuar/aisoc-web:v11.0.0
 ```
+
+`scripts/check_published_images.py` resolves every one of these against GHCR
+daily, so a name or tag that stops existing fails a build rather than a
+`helm install`. This list read `v5.2.0` until v11.1.0 — a tag no image has
+ever carried — and two of the names, `aisoc-api` and `aisoc-mcp`, have never
+been published at all. The API image is `aisoc-core-api`; the MCP server ships
+inside it rather than as its own image.
 
 Verify a signature before deploying:
 
@@ -55,18 +66,23 @@ Verify a signature before deploying:
 cosign verify \
   --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/beenuar/aisoc-api:v5.2.0
+  ghcr.io/beenuar/aisoc-core-api:v11.0.0
 ```
 
 ## Scaling
 
+The chart deploys `api`, `ingest`, `enrichment`, `alert-fusion`, `agents`,
+`web` and `realtime`; `ueba`, `honeytokens` and `purpleTeam` are off by
+default. There is no `mcp` deployment — the MCP server runs inside the API.
+
 ```bash
 kubectl scale deployment aisoc-agents --replicas=3 -n aisoc
 kubectl scale deployment aisoc-api --replicas=2 -n aisoc
-kubectl scale deployment aisoc-mcp --replicas=2 -n aisoc
 ```
 
-Horizontal Pod Autoscaler manifests are included in the chart — enable them with `--set api.autoscaling.enabled=true` (and similarly for `agents`, `realtime`, `mcp`).
+Horizontal Pod Autoscaler manifests are included in the chart — enable them
+with `--set services.api.autoscaling.enabled=true` (and similarly for
+`agents`, `realtime`). As above, the `services.` prefix is load-bearing.
 
 ## Ingress
 

@@ -129,7 +129,7 @@ variable "redis_capacity" {
 variable "api_image" {
   description = "Container image for the API service (FastAPI). Defaults to the GHCR demo image."
   type        = string
-  default     = "ghcr.io/beenuar/aisoc-api:latest"
+  default     = "ghcr.io/beenuar/aisoc-core-api:latest"
 }
 
 variable "web_image" {

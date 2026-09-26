@@ -77,7 +77,7 @@ services:
     replicaCount: 4               # explicit replicas (HPA still applies)
     image:
       repository: my-registry/aisoc-core-api
-      tag: "5.2.0"
+      tag: "v11.0.0"        # defaults to Chart.appVersion
     env:                           # extra env vars merged into the pod
       LOG_LEVEL: debug
     hpa:

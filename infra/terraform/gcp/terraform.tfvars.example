@@ -45,7 +45,7 @@ project_id = "your-gcp-project-id"
 # zero CI work. Override with images from the Artifact Registry repo this
 # stack provisions for production.
 
-# api_image    = "ghcr.io/beenuar/aisoc-api:latest"
+# api_image    = "ghcr.io/beenuar/aisoc-core-api:latest"
 # web_image    = "ghcr.io/beenuar/aisoc-web:latest"
 # ingest_image = "ghcr.io/beenuar/aisoc-ingest:latest"
 

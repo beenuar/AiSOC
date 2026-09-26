@@ -771,7 +771,6 @@ services:
     build:
       context: ./services/osquery-tls
       dockerfile: Dockerfile
-    # Not in publish-images.yml matrix yet — pull falls back to local build.
     image: ghcr.io/beenuar/aisoc-osquery-tls:${AISOC_VERSION:-latest}
     pull_policy: missing
     container_name: aisoc-osquery-tls
@@ -1033,14 +1032,17 @@ services:
 
   honeytokens:
     # Gated behind the `extras` profile: image isn't published to GHCR yet, so
-    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
-    # local Dockerfile build will run.
+    # `aisoc serve` skips it by default. Opt in with `--profile extras`.
+    # `pull_policy: build` used to be the only thing that worked here,
+    # because the image this names had never been published; it is in the
+    # publish matrix now, so `--profile extras` pulls like every other
+    # service instead of spending ten minutes building one.
     profiles: ["extras"]
     build:
       context: ./services/honeytokens
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
-    pull_policy: build
+    pull_policy: missing
     container_name: aisoc-honeytokens
     depends_on:
       postgres:
@@ -1085,14 +1087,17 @@ services:
 
   purple-team:
     # Gated behind the `extras` profile: image isn't published to GHCR yet, so
-    # `aisoc serve` skips it by default. Opt in with `--profile extras` and the
-    # local Dockerfile build will run.
+    # `aisoc serve` skips it by default. Opt in with `--profile extras`.
+    # `pull_policy: build` used to be the only thing that worked here,
+    # because the image this names had never been published; it is in the
+    # publish matrix now, so `--profile extras` pulls like every other
+    # service instead of spending ten minutes building one.
     profiles: ["extras"]
     build:
       context: ./services/purple-team
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
-    pull_policy: build
+    pull_policy: missing
     container_name: aisoc-purple-team
     depends_on:
       postgres:
