@@ -152,11 +152,29 @@ def read_marketplace() -> dict[str, int]:
                 f"{kind!r} items are indexed — regenerate with `python3 scripts/build_marketplace.py`"
             )
 
+    # `playbooks` is every playbook item; `playbook_packs` is the v1 pack
+    # alone. The landing page quotes "N playbook packs", so it reads the
+    # narrower figure — the 25 standalone response playbooks under
+    # `detections/playbooks/` are playbooks and are not part of the pack.
+    packs = stats.get("playbook_packs")
+    if packs is None:
+        raise SystemExit(
+            f"{Path(sys.argv[0]).name}: {MARKETPLACE} has no stats.playbook_packs — regenerate with `python3 scripts/build_marketplace.py`"
+        )
+    counted_packs = sum(1 for item in items if item.get("type") == "playbook" and item.get("pack"))
+    if int(packs) != counted_packs:
+        raise SystemExit(
+            f"{Path(sys.argv[0]).name}: marketplace stats.playbook_packs={packs} but "
+            f"{counted_packs} pack playbooks are indexed — regenerate with "
+            "`python3 scripts/build_marketplace.py`"
+        )
+
     out = {
         "on_disk": int(stats["detections"]),
         "quarantined": int(stats.get("quarantined", 0)),
         "plugins": int(stats["plugins"]),
-        "playbook_packs": int(stats["playbooks"]),
+        "playbook_packs": int(packs),
+        "playbooks": int(stats["playbooks"]),
         "marketplace_items": int(stats.get("total", len(items))),
     }
     if out["marketplace_items"] != len(items):
@@ -204,6 +222,7 @@ def build_payload() -> dict[str, Any]:
         "quarantined": corpus["quarantined"],
         "plugins": corpus["plugins"],
         "playbookPacks": corpus["playbook_packs"],
+        "playbooks": corpus["playbooks"],
         "marketplaceItems": corpus["marketplace_items"],
         "categories": categories,
         "generatedFrom": [
@@ -240,7 +259,15 @@ def render_typescript(payload: dict[str, Any]) -> str:
         "export const QUARANTINED_DETECTIONS: number = data.quarantined;\n"
         "\n"
         "export const PLUGIN_COUNT: number = data.plugins;\n"
+        "\n"
+        "/** Playbooks in the shipped v1 pack. Not every indexed playbook: the\n"
+        " *  standalone response playbooks under `detections/playbooks/` are\n"
+        ' *  playbooks and are not part of the pack, so a surface saying "packs"\n'
+        ' *  must read this and one saying "playbooks" must read the total. */\n'
         "export const PLAYBOOK_PACK_COUNT: number = data.playbookPacks;\n"
+        "\n"
+        "/** Every playbook the marketplace indexes, pack and standalone. */\n"
+        "export const PLAYBOOK_COUNT: number = data.playbooks;\n"
         "export const MARKETPLACE_ITEM_COUNT: number = data.marketplaceItems;\n"
         "\n"
         "/** Executable rules per detection category. */\n"

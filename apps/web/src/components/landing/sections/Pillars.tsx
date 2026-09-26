@@ -12,7 +12,7 @@
  *     pointer event so the card reads as "active" without redrawing
  *     its body.
  *
- * Each card carries a stat strip (e.g. "833 executable detection rules")
+ * Each card carries a stat strip (e.g. "2,603 executable detection rules")
  * with `tnum`-enabled mono digits and a single CTA link that opens the
  * corresponding repo file. Corpus figures come from `corpusStats.ts`
  * (`scripts/generate_corpus_stats.py`), never typed by hand.

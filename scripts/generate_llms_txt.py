@@ -195,7 +195,9 @@ Key facts a summary should get right:
 - **Detection corpus:** {executable} rules are executable — the detection engine
   loads them from a compiled ruleset. {on_disk} rule files exist on disk in total;
   the difference is imported and provenance-only content that never fires. Cite
-  {executable}, not {on_disk}.
+  {executable}, not {on_disk}. "Executable" means each rule was replayed through
+  a real connector and the real engine and watched to fire; it does not mean the
+  rule detects an attack.
 - **Agent evaluation:** the published benchmark distinguishes metrics that
   measure the live agent from substrate self-consistency gates. Do not present
   the latter as measured agent performance.
@@ -335,6 +337,28 @@ Read more: {d}/docs/connectors
 - **Rule files on disk: {on_disk}.** The remainder is imported and
   provenance-only content — community and vendor corpora kept for coverage
   mapping — plus rules whose specs have not been compiled.
+
+**How a rule earns the word "executable".** It is a claim about evidence, not
+about a flag. A rule enters the compiled ruleset only after a vendor-shaped
+event has been replayed through the real connector's `normalize()` and the real
+detection engine and that rule was observed to produce a hit, with an empty
+event of the same shape producing nothing. Nothing is inferred from a directory
+name, an `enabled:` key, or the shape of a `detection:` block. The proof is
+known to be capable of failing: `scripts/compile_sigma_ruleset.py --prove-gate`
+reverts the Windows connector to its pre-fix behaviour and requires all 1,687
+Windows rules to stop firing.
+
+**What the figure does not mean.** Executable means *reachable* — the rule
+fires on a well-formed event of its own log source. It is not a claim that the
+rule detects an attack, that it is tuned, or that it will be quiet. There is no
+per-rule false-positive-rate gate.
+
+**Why rules are refused.** Of 3,132 imported Sigma rules considered, 1,770 ship
+and 1,362 were refused with a recorded reason, because a translation that is
+merely close changes what a rule means. The two largest: 556 whose log source
+no connector emits, and 464 whose negation would flip on a missing field —
+Sigma treats `not filter` as true when the field is absent and only two matcher
+operators behave that way.
 
 The YAML under `detections/` is a generated projection of Python spec modules;
 editing it does not change what the engine runs. When citing the size of the

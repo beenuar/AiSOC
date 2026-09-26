@@ -303,8 +303,15 @@ def _render_report(rules: list[dict[str, Any]], refusals: Counter, examples: dic
         "| --- | ---: | --- |",
     ]
     for reason, count in refusals.most_common():
+        # Several reasons *name a Sigma modifier*, and a Sigma modifier starts
+        # with the pipe that also delimits a Markdown table cell — "|re is
+        # case-sensitive upstream" opened an empty first column and shunted
+        # every value one cell right. The sample was escaped and the reason
+        # was not, so the rows that rendered wrong were exactly the ones
+        # explaining the least obvious refusals.
+        label = reason.replace("|", "\\|")
         sample = examples.get(reason, [""])[0].replace("|", "\\|")
-        lines.append(f"| {reason} | {count:,} | `{sample}` |")
+        lines.append(f"| {label} | {count:,} | `{sample}` |")
     by_status = Counter(r.get("upstream_status") or "(none recorded)" for r in rules)
     lines += [
         "",
@@ -347,6 +354,25 @@ def _render_report(rules: list[dict[str, Any]], refusals: Counter, examples: dic
         "travel with it. Every compiled rule therefore carries a `provenance` block,",
         "and the engine stamps that attribution onto each alert, because DRL-1.1 also",
         "requires messages produced by a match to identify the rule's author.",
+        "",
+        "### Known gap: the author is not the person",
+        "",
+        "What travels today is the upstream repository, the rule's upstream UUID,",
+        "its path in that repository and the licence — enough to find the rule, not",
+        "enough to name who wrote it. `provenance.author` is empty on all",
+        f"{len(rules):,} compiled rules, because the Sigma importer never read the",
+        "upstream `author:` field, and the compiler can only carry forward what the",
+        "importer recorded. `_attribution()` in the detection engine is built from",
+        "whatever the block actually holds, so the alert reads *Translated from",
+        "SigmaHQ/sigma (rules/...), licensed under DRL-1.1* rather than naming an",
+        'author called `""` — the sentence is short rather than false, which is the',
+        "right behaviour for a gap but is not the same as closing it.",
+        "",
+        "Closing it needs a re-import: the field has to be captured at import time",
+        "and the corpus recompiled. It is reported here rather than left implicit",
+        "because a licence obligation that is partly met is not met, and a reader",
+        "comparing this corpus against DRL-1.1 should not have to discover that by",
+        "reading the JSON.",
         "",
     ]
     return "\n".join(lines) + "\n"

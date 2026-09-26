@@ -44,7 +44,7 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - **Phase D (breadth):** D1 eight connectors (QRadar/Exabeam/Securonix/Devo/Netskope/Windows-Sysmon/Zeek-Suricata/syslog-CEF) · D2 AI/LLM-usage audit connector + `llm-*` detections + hot/cold lake tiering · D3 live-vendor mock-server smoke.
 - **Phase E (prove it):** E1 CI-gated benchmark scoreboard tied to a deterministic live-agent MITRE-accuracy run.
 
-The claim-to-gate matrix stands at **146 rows — 138 GATED / 8 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 8 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. The six lettered deferrals are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md).
+The claim-to-gate matrix stands at **147 rows — 139 GATED / 8 PARTIAL / 0 NO GATE** — **every product claim is backed by a failing test** and the ratchet (`MAX_NO_GATE=0`) forbids any regression. The 8 remaining PARTIAL rows are honest, named deferrals; none was relabelled without building the gate it names. Count the table rows with `python3 scripts/check_claim_gate_matrix.py` rather than trusting a figure quoted in prose — this line has gone stale before. The six lettered deferrals are scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md).
 
 ## v4.0 — Shipped
 
@@ -719,6 +719,50 @@ failed schema validation — the closing card says so. No hosted provider has
 been exercised; there is still no funded key.
 
 Full inventory under `[11.1.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v11.2 — Shipped (2026-09-26)
+
+The answer to a question this repository had been asked for months: why 833
+executable rules against a library of roughly 7,000? Not a missing feature —
+Windows events nest their payload under `System`/`EventData`, one level below
+anything the engine flattened, so `CommandLine` (2,173 rules) and `Image`
+(2,300 rules) read `None` and no Windows rule could fire however correctly it
+was written. The fix is in `windows_event.normalize()`, because those are
+names from the Windows event schema and the engine is shared by every
+connector; the engine and matcher are byte-identical.
+
+**The engine now runs 2,603 rules, and every added rule was watched to fire.**
+`scripts/sigma_compiler.py` translates imported Sigma into `match_when` or
+refuses: of 3,132 rules considered, 1,770 ship and 1,362 are refused with a
+recorded reason. The largest refusals are 556 whose log source no connector
+emits and 464 whose negation would flip on a missing field, since Sigma treats
+`not filter` as true when the field is absent and only two matcher operators
+do. A rule enters the compiled ruleset only after a vendor-shaped event has
+been replayed through the real connector and the real engine and produced a
+hit, with an empty event of the same shape producing nothing — and
+`compile_sigma_ruleset.py --prove-gate` reverts the connector and requires all
+1,687 Windows rules to stop firing, so the proof is known to be able to fail.
+It is a claim about reachability, not about detection.
+
+**A minor: nothing here requires an operator to act.** No configuration
+change, no migration, no API change; the connector fix only adds fields and a
+normalized key still wins on collision. The detection surface is 3.1x wider
+though, so a deployment with Windows telemetry should expect more alerts from
+the same stream; `upstream_status` travels onto the alert so the 125
+`experimental` rules can be filtered without disabling the rest.
+
+Also here: upstream lifecycle status no longer gates execution (fireability
+does), all 122 previously phantom-enabled rules are resolved, windowed
+aggregation rules went from 10 to 18, and auto-triage asks the provider for
+JSON rather than correcting prose afterwards — measured 44/50 to 50/50 on the
+bundled local model. Four counters that still classified rules by directory
+were moved onto the compiled ruleset, which is what closed the long-standing
+disagreement between the validator, the coverage page, the marketplace index
+and the truth table.
+
+Full inventory under `[11.2.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

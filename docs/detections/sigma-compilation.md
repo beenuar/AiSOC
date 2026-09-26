@@ -37,14 +37,14 @@ that do not ship.
 | no connector emits this log source | 556 | `access-of-sudoers-file-content.yaml: linux/None` |
 | negation is not faithfully expressible (missing field would flip) | 464 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
 | compiled, but did not fire on its own proof event | 133 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
-| |re is case-sensitive upstream and the matcher forces IGNORECASE | 71 | `add-potential-suspicious-new-download-source-to-winget.yaml: CommandLine\|re` |
+| \|re is case-sensitive upstream and the matcher forces IGNORECASE | 71 | `add-potential-suspicious-new-download-source-to-winget.yaml: CommandLine\|re` |
 | field is a dotted path and the matcher has no path traversal | 59 | `account-created-and-deleted-within-a-close-time-frame.yaml: properties.message` |
 | the connector rejected the proof event | 30 | `azure-application-gateway-modified-or-deleted.yaml` |
-| |cidr has no matcher operator | 17 | `communication-to-uncommon-destination-ports.yaml: DestinationIp\|cidr` |
-| |all on a non-contains modifier has no matcher operator | 14 | `aws-iam-s3browser-templated-s3-bucket-policy-creation.yaml: requestParameters\|contains\|all with wildcards` |
+| \|cidr has no matcher operator | 17 | `communication-to-uncommon-destination-ports.yaml: DestinationIp\|cidr` |
+| \|all on a non-contains modifier has no matcher operator | 14 | `aws-iam-s3browser-templated-s3-bucket-policy-creation.yaml: requestParameters\|contains\|all with wildcards` |
 | bare keywords search the whole event; the matcher is field-scoped | 10 | `granting-of-permissions-to-an-account.yaml: keywords block` |
-| |base64/|base64offset has no matcher operator | 7 | `cobaltstrike-service-installations-security.yaml: ServiceFileName\|base64offset` |
-| |fieldref compares two fields and has no matcher operator | 1 | `process-deletion-of-its-own-executable.yaml: TargetFilename\|fieldref` |
+| \|base64/\|base64offset has no matcher operator | 7 | `cobaltstrike-service-installations-security.yaml: ServiceFileName\|base64offset` |
+| \|fieldref compares two fields and has no matcher operator | 1 | `process-deletion-of-its-own-executable.yaml: TargetFilename\|fieldref` |
 
 ## Upstream lifecycle status
 
@@ -75,4 +75,23 @@ that — provided author identification, a link to the rule, and the licence
 travel with it. Every compiled rule therefore carries a `provenance` block,
 and the engine stamps that attribution onto each alert, because DRL-1.1 also
 requires messages produced by a match to identify the rule's author.
+
+### Known gap: the author is not the person
+
+What travels today is the upstream repository, the rule's upstream UUID,
+its path in that repository and the licence — enough to find the rule, not
+enough to name who wrote it. `provenance.author` is empty on all
+1,770 compiled rules, because the Sigma importer never read the
+upstream `author:` field, and the compiler can only carry forward what the
+importer recorded. `_attribution()` in the detection engine is built from
+whatever the block actually holds, so the alert reads *Translated from
+SigmaHQ/sigma (rules/...), licensed under DRL-1.1* rather than naming an
+author called `""` — the sentence is short rather than false, which is the
+right behaviour for a gap but is not the same as closing it.
+
+Closing it needs a re-import: the field has to be captured at import time
+and the corpus recompiled. It is reported here rather than left implicit
+because a licence obligation that is partly met is not met, and a reader
+comparing this corpus against DRL-1.1 should not have to discover that by
+reading the JSON.
 

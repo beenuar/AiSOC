@@ -125,9 +125,9 @@ describe('MarketplaceView install flow', () => {
 });
 
 describe('MarketplaceView tier filter', () => {
-  // The plan's central UX requirement: a working `cloudflare-waf` and a
-  // 5,937-rule pile of imported Sigma content must not look identical. The
-  // default-on `stable` tier is the mechanism. These tests pin that.
+  // The plan's central UX requirement: a working `cloudflare-waf` and the
+  // six-thousand-rule imported corpus must not look identical. The default-on
+  // `stable` tier is the mechanism. These tests pin that.
   const stableItem: MarketplaceItem = {
     ...baseItem,
     id: 'cloudflare-waf',

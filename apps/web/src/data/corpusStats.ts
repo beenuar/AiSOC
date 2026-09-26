@@ -20,7 +20,15 @@ export const DETECTIONS_ON_DISK: number = data.onDisk;
 export const QUARANTINED_DETECTIONS: number = data.quarantined;
 
 export const PLUGIN_COUNT: number = data.plugins;
+
+/** Playbooks in the shipped v1 pack. Not every indexed playbook: the
+ *  standalone response playbooks under `detections/playbooks/` are
+ *  playbooks and are not part of the pack, so a surface saying "packs"
+ *  must read this and one saying "playbooks" must read the total. */
 export const PLAYBOOK_PACK_COUNT: number = data.playbookPacks;
+
+/** Every playbook the marketplace indexes, pack and standalone. */
+export const PLAYBOOK_COUNT: number = data.playbooks;
 export const MARKETPLACE_ITEM_COUNT: number = data.marketplaceItems;
 
 /** Executable rules per detection category. */

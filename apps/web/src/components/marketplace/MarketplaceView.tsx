@@ -559,8 +559,10 @@ export function MarketplaceView() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [sdkFilter, setSdkFilter] = useState<SdkFilter>('all');
   // Default to stable so that a working `cloudflare-waf` doesn't look identical
-  // to a 5,937-rule pile of imported Sigma content. Users opt in to imported
-  // content explicitly via the chip.
+  // to the six-thousand-rule imported corpus. Users opt in to imported content
+  // explicitly via the chip. The tier says where a rule came from and not
+  // whether it runs: 1,770 of the imported Sigma rules are compiled, proven to
+  // fire and loaded by the engine, so this filter is about provenance.
   const [tierFilter, setTierFilter] = useState<TierFilter>('stable');
   const [mitreFilter, setMitreFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOption>('name');
