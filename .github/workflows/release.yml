@@ -4,6 +4,25 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Re-run the image half of a release that only partly published.
+  #
+  # v11.0.0 is the case: twelve images carried the tag and the console did
+  # not, because its arm64 leg livelocked under QEMU and was still running
+  # hours later. Without this the only way to finish that release was to
+  # invent a new tag for a commit that had already shipped — so the registry
+  # stayed wrong because correcting it was more disruptive than leaving it.
+  #
+  # Dispatch this from `main` so the current workflow definition runs, and
+  # name the tag to publish; the build checks that tag out for its source.
+  # The GitHub Release, npm and PyPI jobs are push-only and stay skipped,
+  # because re-publishing a package version is not a thing registries allow
+  # and re-cutting a release note is not a thing anyone wants.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag whose images should be (re)published, e.g. v11.0.0'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -15,6 +34,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -28,7 +48,7 @@ jobs:
       # to travel through a step output into an action *input*, which becomes a
       # process argument — and v10.0.0's section is 263,761 characters, so the
       # runner died with `Argument list too long` before the API was reached.
-      # Because docker-push, npm-publish and pypi-publish all `needs: release`,
+      # Because docker-build, npm-publish and pypi-publish all `needs: release`,
       # one oversized note skipped every image and every package in the
       # release: the whole publish, lost to a shell limit.
       #
@@ -176,13 +196,51 @@ jobs:
   # whose `:main` / `:latest` tag is published on push-to-main also needs a
   # pinned `:vX.Y.Z` tag on release, so users who set `AISOC_VERSION=vX.Y.Z`
   # in their .env get a reproducible deploy across the full stack.
-  docker-push:
-    name: Docker — Build & Push (${{ matrix.service }})
-    runs-on: ubuntu-latest
+  # ── Per-architecture build, each on a runner of that architecture ────────
+  #
+  # Same split, and the same reason, as publish-images.yml. It was this
+  # workflow that proved the point: in the v11.0.0 release run every image
+  # published except the console, whose arm64 `pnpm install --frozen-lockfile`
+  # ran for 6,358 seconds under QEMU without finishing — 56x its own normal
+  # 114s — while the amd64 leg of the identical build completed in 100s. The
+  # release was green, `aisoc-web:v11.0.0` simply never existed, and a partial
+  # release is worse than a failed one because nothing says so.
+  #
+  # Native runners remove the emulator rather than budgeting for it. arm64
+  # stays because Apple Silicon is the majority of contributor laptops and an
+  # amd64-only manifest turns the quickstart into a long silent build there.
+  docker-build:
+    name: Docker — Build (${{ matrix.service }}, ${{ matrix.platform }})
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     needs: release
+    # `needs` alone would skip this whenever `release` is skipped, which is
+    # every dispatched run — the one path that exists to publish images.
+    if: always() && needs.release.result != 'failure' && needs.release.result != 'cancelled'
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
+        platform: [amd64, arm64]
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        # `include` entries whose `service` matches an existing combination add
+        # their remaining keys to it rather than creating new ones, so each
+        # block below applies to both platforms of that one service.
         include:
           # Demo-stack images (pulled by `pnpm aisoc:demo`).
           - service: api
@@ -247,22 +305,43 @@ jobs:
             context: services/slack-bot
             dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-slack-bot
+
+          # Named by docker-compose.yml and the Helm chart since they were
+          # written, and published by nothing until now. The chart has no
+          # build fallback, so `helm install` could only ever have produced
+          # ImagePullBackOff for these three.
+          - service: honeytokens
+            context: services/honeytokens
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            context: services/purple-team
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            context: services/osquery-tls
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-osquery-tls
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # arm64 is cross-built on an amd64 runner, which needs the binfmt
-      # handlers QEMU registers. Without this the arm64 leg of the manifest
-      # fails with "exec format error" rather than anything that names the
-      # missing piece. Same SHA-pinned action devcontainer-build.yml already
-      # uses for its multi-arch build.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels only. The release tags are attached by docker-manifest below,
+      # once both architectures exist — a `vX.Y.Z` tag that resolves to half a
+      # manifest is not a release anybody can reproduce.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ matrix.image }}
 
       # Only the demo build gets the NEXT_PUBLIC_DEMO_* flags, and only it is
       # published under a demo tag. Mirrors publish-images.yml. Other images
@@ -282,6 +361,115 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ steps.web-build-args.outputs.build_args }}
+          # Scoped per architecture now that the two are separate jobs, and
+          # shared with publish-images.yml so a release reuses the layers the
+          # merge that preceded it already built.
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.platform }}
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          # SLSA provenance + SPDX SBOM attached to the image by BuildKit.
+          provenance: mode=max
+          sbom: true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: digest-${{ matrix.service }}-${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Assemble the manifest list and attach the release tags ──────────────
+  docker-manifest:
+    name: Docker — Publish (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    needs: docker-build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        include:
+          - service: api
+            image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            image: ghcr.io/beenuar/aisoc-agents
+          - service: realtime
+            image: ghcr.io/beenuar/aisoc-realtime
+          - service: web
+            image: ghcr.io/beenuar/aisoc-web
+          - service: web-demo
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+          - service: ingest
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            image: ghcr.io/beenuar/aisoc-slack-bot
+          - service: honeytokens
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            image: ghcr.io/beenuar/aisoc-osquery-tls
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.service }}-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       # `vX.Y.Z-demo` is pinnable the same way `vX.Y.Z` is, and `demo` tracks
       # the newest one. Neither `vX.Y.Z` nor `latest` ever carries a demo
       # bundle.
@@ -290,41 +478,38 @@ jobs:
           {
             echo 'tags<<EOF'
             if [ "${{ matrix.demo }}" = "true" ]; then
-              echo "${{ matrix.image }}:${{ github.ref_name }}-demo"
+              echo "${{ matrix.image }}:${{ inputs.tag || github.ref_name }}-demo"
               echo "${{ matrix.image }}:demo"
             else
-              echo "${{ matrix.image }}:${{ github.ref_name }}"
+              echo "${{ matrix.image }}:${{ inputs.tag || github.ref_name }}"
               echo "${{ matrix.image }}:latest"
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - id: build
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.image-tags.outputs.tags }}
-          build-args: ${{ steps.web-build-args.outputs.build_args }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-          # Apple Silicon is the majority of contributor laptops, and
-          # amd64-only manifests meant `pnpm aisoc:demo` - the README's
-          # headline "Docker + pnpm" path - could not pull a single service
-          # image there. Compose reported
-          # `no matching manifest for linux/arm64/v8` for every one, fell back
-          # to building four services from source, and the quickstart became a
-          # long silent build instead of a demo. The devcontainer image has
-          # been multi-arch all along, so the pattern already existed; it was
-          # simply never applied to the service images.
-          #
-          # This roughly doubles image-build time. That is the correct trade:
-          # a first run that cannot start is worse than a slower release.
-          platforms: linux/amd64,linux/arm64
-          # SLSA provenance + SPDX SBOM attached to the image by BuildKit.
-          provenance: mode=max
-          sbom: true
+      - name: Create manifest list and push
+        id: manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ matrix.image }}
+          TAGS: ${{ steps.image-tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          # One digest file per architecture. Fewer means a leg did not run,
+          # and a `vX.Y.Z` tag resolving to a single-architecture manifest is
+          # the silent half-release this job exists to prevent.
+          count=$(find . -type f | wc -l | tr -d ' ')
+          if [ "$count" -ne 2 ]; then
+            echo "::error::expected 2 per-architecture digests for ${IMAGE}, found ${count}" >&2
+            exit 1
+          fi
+          mapfile -t tags <<< "$TAGS"
+          docker buildx imagetools create \
+            "${tags[@]/#/--tag=}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+          digest=$(docker buildx imagetools inspect "${tags[0]}" --format '{{json .Manifest}}' | jq -r '.digest')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE} @ ${digest} as: ${tags[*]}"
 
       # ── Supply-chain attestation (mirrors publish-images.yml) ────────────
       # Keyless cosign signature + CycloneDX SBOM attestation per released
@@ -339,12 +524,12 @@ jobs:
 
       - name: Sign image (cosign keyless)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.manifest.outputs.digest }}
         run: cosign sign --yes "${{ matrix.image }}@${DIGEST}"
 
       - name: Attach CycloneDX SBOM attestation
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.manifest.outputs.digest }}
         run: |
           set -euo pipefail
           syft "${{ matrix.image }}@${DIGEST}" -o cyclonedx-json > /tmp/sbom.cdx.json
@@ -371,6 +556,7 @@ jobs:
     name: npm — publish ${{ matrix.pkg }}
     runs-on: ubuntu-latest
     needs: release
+    if: github.event_name == 'push'
     permissions:
       contents: read
       id-token: write # npm provenance attestation
@@ -467,6 +653,7 @@ jobs:
     name: PyPI — publish ${{ matrix.pkg }}
     runs-on: ubuntu-latest
     needs: release
+    if: github.event_name == 'push'
     permissions:
       contents: read
       id-token: write # PyPI trusted publishing
@@ -512,3 +699,26 @@ jobs:
         if: vars.AISOC_PYPI_TRUSTED_PUBLISHING != 'true'
         run: |
           echo "::warning title=PyPI::Trusted publishing is not enabled, so ${{ matrix.pkg }} was built and validated but not uploaded. Set the AISOC_PYPI_TRUSTED_PUBLISHING repository variable to 'true' once the pending publishers exist — see docs/operations/publishing.md."
+
+  # ── Prove the release actually published every image ────────────────────
+  #
+  # v11.0.0 is why this exists: twelve images carried the tag, the console did
+  # not, and the release reported success because every job that finished had
+  # finished. A release is the set of artefacts it published, so it has to be
+  # checked against the registry rather than against its own job statuses.
+  docker-verify:
+    name: Docker — Released images match the tree
+    runs-on: ubuntu-24.04
+    needs: docker-manifest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      - name: Every image docker-compose.yml and the chart name resolves
+        run: python3 scripts/check_published_images.py --require-fresh --require-network --list

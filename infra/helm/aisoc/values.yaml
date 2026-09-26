@@ -118,7 +118,7 @@ services:
 
   alert-fusion:
     image:
-      repository: ghcr.io/beenuar/aisoc-alert-fusion
+      repository: ghcr.io/beenuar/aisoc-fusion
       tag: ""
       pullPolicy: IfNotPresent
     replicaCount: 2
@@ -303,7 +303,10 @@ honeytokens:
   otelEndpoint: ""
   image:
     repository: ghcr.io/beenuar/aisoc-honeytokens
-    tag: ""
+    # First published on the merge that added it to publish-images.yml,
+    # so it has no vX.Y.Z tag until the next release; empty here would
+    # resolve to Chart.AppVersion and 404. Move it to "" at that point.
+    tag: "latest"
     pullPolicy: IfNotPresent
   autoscaling:
     enabled: false
@@ -326,7 +329,10 @@ purpleTeam:
   otelEndpoint: ""
   image:
     repository: ghcr.io/beenuar/aisoc-purple-team
-    tag: ""
+    # First published on the merge that added it to publish-images.yml,
+    # so it has no vX.Y.Z tag until the next release; empty here would
+    # resolve to Chart.AppVersion and 404. Move it to "" at that point.
+    tag: "latest"
     pullPolicy: IfNotPresent
   autoscaling:
     enabled: false

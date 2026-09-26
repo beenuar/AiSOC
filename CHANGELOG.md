@@ -81,7 +81,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which was actively misleading, because the banner copy is an inlined
   constant present in the HTML either way.
 
+- **The console image a self-hoster pulls now tracks `main`, and a release
+  that publishes only some of its images now fails.** The fix above shipped to
+  nobody: `ghcr.io/beenuar/aisoc-web:latest` — what the documented
+  `docker compose up` pulls — was built from a commit two releases behind
+  `main`, and `aisoc-web:v11.0.0` was never pushed at all while
+  `aisoc-core-api`, `aisoc-fusion` and `aisoc-ingest` all carried that tag.
+  Every workflow was green throughout, which is the whole problem: a green
+  workflow says a job ran, not that the registry holds anything.
+
+  The cause was arm64 cross-building under QEMU on an amd64 runner. Measured
+  from BuildKit's own step timings in the v11.0.0 release run, emulation cost
+  roughly 7x on a good run — `pnpm install --frozen-lockfile` 15.0s on amd64
+  against 114.2s on arm64, the Next.js build 45.0s against 281.6s — and on a
+  bad run it did not converge at all: that release's arm64 `pnpm install` ran
+  **6,358 seconds without finishing**, 56x its own normal time, while the
+  amd64 leg of the identical build completed in 100s. The slow step is the
+  dependency install rather than the compile, so it was never a Next.js
+  problem, and it is intermittent rather than a steady cost — the same build
+  succeeded in five minutes on another runner while that one was still stuck.
+
+  Both `publish-images.yml` and `release.yml` now build each architecture on a
+  runner of that architecture and merge the two into a manifest list, so the
+  emulator is gone rather than budgeted for. arm64 itself stays: Apple Silicon
+  is the majority of contributor laptops, and an amd64-only manifest turns the
+  quickstart into a long silent build there. Every leg pushes by digest and
+  the tags are attached once, after both exist, so `:latest` can no longer
+  resolve to half a manifest.
+
+  `publish-images.yml` also no longer cancels itself. `cancel-in-progress` is
+  thrift on a test run and a correctness bug on a run that pushes artefacts —
+  it is what left twelve images at the new commit and the thirteenth two
+  behind, reported as `cancelled` rather than `failed`. Runs now queue. And
+  `release.yml` gained a `workflow_dispatch` that republishes the images for
+  an existing tag, because the only way to finish a half-published release was
+  previously to invent a new tag for a commit that had already shipped.
+
+- **`aisoc-honeytokens`, `aisoc-purple-team` and `aisoc-osquery-tls` are
+  published.** All three were named by `docker-compose.yml` since it was
+  written and built by nothing, so `--profile extras` silently compiled them
+  from source every time. The Helm chart has no such fallback and named two of
+  them, so those pods could only ever have reached `ImagePullBackOff`.
+
+- **The Helm chart could not install at all.** Every image tag defaults to
+  `Chart.AppVersion`, which read `5.2.0` — a tag that exists for no image in
+  the registry — so a default `helm install` would have failed to pull on
+  every pod. It now pins a tag that exists. The chart also named
+  `ghcr.io/beenuar/aisoc-alert-fusion`, which has never existed under any tag;
+  the image the publish matrix builds is `aisoc-fusion`.
+
+- **Deployment docs named four images that have never been published.**
+  `deployment/kubernetes.md` listed seven images at `v5.2.0` — including
+  `aisoc-api` and `aisoc-mcp`, neither of which exists under any tag — and its
+  `helm install` passed `--set api.image.tag=…`, a path no template reads,
+  since every service lives under `services.<name>`. The overrides therefore
+  changed nothing and the tag they set existed for nothing. `deployment/
+  docker.md`, the Vault connector page, and the Azure and GCP Terraform
+  defaults — the `api_image` variable a `terraform apply` uses, which pointed
+  at `aisoc-api` — named the same non-existent images. The gate now
+  resolves fully-written first-party references in tracked prose too —
+  existence only, since a release note naming an older image is describing
+  history rather than instructing anybody.
+
 ### Added
+
+- `scripts/check_published_images.py` — the gate none of the above had. It
+  resolves every image reference in `docker-compose.yml` and the Helm chart
+  the way the tooling that reads them does (`${AISOC_VERSION:-latest}` to its
+  default, an empty chart `tag:` to `Chart.AppVersion`) and asks GHCR whether
+  each one is there, optionally checking that the version inside matches the
+  tree. Against `main` before this change it reported 14 findings across both
+  files. Third-party images are counted and named but not resolved: this
+  checks the images *this project publishes*, and upstream availability is not
+  a claim this repository makes. Offline it prints `SKIPPED` and never `OK`,
+  because a skip is not a pass; `--require-network` makes unreachable a
+  failure, which is what the scheduled job uses. `--self-test` covers 28
+  assertions including every shape the registry was actually in.
+
+- `.github/workflows/image-availability.yml` — runs that gate daily against
+  `main`, and `publish-images.yml` and `release.yml` each run it over their own
+  output, so a half-published release fails the run that half-published it.
 
 - `apps/docs/docs/deployment/single-host.md` — the path for a server you reach
   over the network: publishing the console, pointing it at your services,

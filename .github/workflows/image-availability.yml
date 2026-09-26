@@ -1,0 +1,88 @@
+name: Image availability
+
+# The registry has to hold what the deployment files tell people to pull.
+#
+# Nothing checked that, and the result was not hypothetical: `aisoc-web:latest`
+# — what `docker compose up` pulls for the console — spent a day built from a
+# commit two releases behind `main`, `aisoc-web:v11.0.0` was never pushed while
+# the rest of that release was, and three images `docker-compose.yml` names had
+# never been published once. Every workflow was green throughout, because a
+# green workflow says a job ran, not that the registry holds anything.
+#
+# Only the registry can answer this, so scripts/check_published_images.py asks
+# it — and the answer is about `main`, never about a pull request, which is why
+# the schedule is the gate here and the pull-request job proves only that the
+# gate still detects what it claims to.
+#
+# The loop is also closed at the point of publishing: publish-images.yml and
+# release.yml each run this same script after their manifests are pushed, so a
+# half-published release fails the run that half-published it rather than
+# waiting for tomorrow.
+
+on:
+  schedule:
+    # 06:42 UTC daily. Off the hour because the runner pool is busiest on it,
+    # and a job that queues past its window is a job that did not run.
+    - cron: '42 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docker-compose.yml'
+      - 'infra/helm/aisoc/**'
+      - 'scripts/check_published_images.py'
+      - 'scripts/gate_toolkit.py'
+      - '.github/workflows/image-availability.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-availability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  registry:
+    name: Every image the deployment files name exists
+    # Only against `main`. A pull request cannot change what is in the
+    # registry, and a PR that adds a service to docker-compose.yml names an
+    # image that cannot exist until that PR has merged and published — so
+    # asking the registry there would block the one change that fixes it.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The freshness half reads `VERSION` as of the commit each published
+          # image records in org.opencontainers.image.revision. A shallow
+          # clone cannot, and the gate reports that as unverified rather than
+          # clean — correct, but useless as a gate.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      # Self-test first, on the same tree: a gate that has quietly stopped
+      # detecting anything fails here rather than printing OK below.
+      - name: The gate detects the drift it claims to
+        run: python3 scripts/check_published_images.py --self-test
+
+      # --require-network because this job exists to ask the registry. A skip
+      # would be a green run that verified nothing, which is the shape the
+      # gate was written against.
+      - name: Every reference resolves, at the version the tree is on
+        run: python3 scripts/check_published_images.py --require-fresh --require-network --list
+
+  self-test:
+    name: The image-availability gate still works
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      - name: The gate detects the drift it claims to
+        run: python3 scripts/check_published_images.py --self-test

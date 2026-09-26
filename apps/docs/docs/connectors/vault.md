@@ -52,7 +52,7 @@ Add a `file` audit device on the Vault server:
 vault audit enable file file_path=/var/log/vault/audit.log
 ```
 
-Then run the AiSOC Vault sidecar (image at `ghcr.io/beenuar/aisoc-vault-sidecar`) with read access to `/var/log/vault/audit.log` and the AiSOC connectors service URL in `AISOC_CONNECTORS_URL`. The sidecar `tail -F`s the file and posts each JSON line to `POST /v1/_/audit_ingest`, which the AiSOC connectors service holds in an in-memory ring buffer keyed by tenant. The connector's poll loop drains the buffer.
+Then run the AiSOC Vault sidecar — no image is published for it, so build it from `services/connectors` — with read access to `/var/log/vault/audit.log` and the AiSOC connectors service URL in `AISOC_CONNECTORS_URL`. The sidecar `tail -F`s the file and posts each JSON line to `POST /v1/_/audit_ingest`, which the AiSOC connectors service holds in an in-memory ring buffer keyed by tenant. The connector's poll loop drains the buffer.
 
 ### Topology B — Pull (small / single-node Vault)
 

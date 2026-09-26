@@ -132,7 +132,7 @@ docker compose build agents
 For releases, prebuilt and signed images are published to GHCR:
 
 ```
-ghcr.io/beenuar/aisoc-api:<version>
+ghcr.io/beenuar/aisoc-core-api:<version>
 ghcr.io/beenuar/aisoc-agents:<version>
 ghcr.io/beenuar/aisoc-actions:<version>
 ghcr.io/beenuar/aisoc-fusion:<version>
@@ -144,7 +144,6 @@ ghcr.io/beenuar/aisoc-connectors:<version>
 ghcr.io/beenuar/aisoc-osquery-tls:<version>
 ghcr.io/beenuar/aisoc-slack-bot:<version>
 ghcr.io/beenuar/aisoc-realtime:<version>
-ghcr.io/beenuar/aisoc-mcp:<version>
 ghcr.io/beenuar/aisoc-ingest:<version>
 ghcr.io/beenuar/aisoc-enrichment:<version>
 ghcr.io/beenuar/aisoc-web:<version>
@@ -180,7 +179,7 @@ release artifact before deploying it into a sensitive environment:
 cosign verify \
   --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/beenuar/aisoc-api:<version>
+  ghcr.io/beenuar/aisoc-core-api:<version>
 ```
 
 The certificate identity is bound to this repository's workflow, so a
