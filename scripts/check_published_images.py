@@ -277,7 +277,7 @@ def collect_docs_references(root: Path) -> list[Reference]:
 
     A published page telling somebody to pull an image is the same claim the
     compose file makes, and it was wrong in the same way:
-    ``docs/deployment/kubernetes.md`` listed seven images at ``v5.2.0``, a tag
+    ``apps/docs/docs/deployment/kubernetes.md`` listed seven images at ``v5.2.0``, a
     no image carries, and two of the names — ``aisoc-api`` and ``aisoc-mcp`` —
     have never existed under any tag at all.
 
