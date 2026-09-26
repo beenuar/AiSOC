@@ -117,6 +117,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an existing tag, because the only way to finish a half-published release was
   previously to invent a new tag for a commit that had already shipped.
 
+- **The console's manifest job collected the demo build's digests as well as
+  its own.** `web` and `web-demo` push to the same repository and the digest
+  artefacts were keyed `digest-<service>-<platform>`, downloaded with a
+  `digest-<service>-*` pattern — so `digest-web-*` also matched
+  `digest-web-demo-amd64`, and the console's merge job pulled four digests,
+  two of them the demo bundle. It failed on the merge step's own check that it
+  had exactly one digest per architecture, which is the only reason a mixed
+  manifest did not go out under the tag `make up` pulls. The separator is now
+  a dot, which cannot collide, and `test_one_image_cannot_collect_another_images_digests`
+  replays each service's download pattern against every service's upload name
+  so the ambiguity is caught at review rather than at publish.
+
 - **`aisoc-honeytokens`, `aisoc-purple-team` and `aisoc-osquery-tls` are
   published.** All three were named by `docker-compose.yml` since it was
   written and built by nothing, so `--profile extras` silently compiled them

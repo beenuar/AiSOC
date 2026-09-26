@@ -21,6 +21,7 @@ behavioural coverage is in `services/api/tests/test_bootstrap_admin.py`.
 
 from __future__ import annotations
 
+import fnmatch
 import pathlib
 import re
 
@@ -206,6 +207,51 @@ def test_the_demo_bundle_is_built_by_its_own_matrix_entry(workflow: pathlib.Path
         f"{workflow.name}: the demo build args are not gated on `matrix.demo`, so a "
         f"product build can still receive them (if: {step.get('if')!r})"
     )
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [PUBLISH_WORKFLOW, RELEASE_WORKFLOW],
+    ids=["publish-images", "release"],
+)
+def test_one_image_cannot_collect_another_images_digests(workflow: pathlib.Path) -> None:
+    """The per-architecture digest an image merges must be its own.
+
+    `web` and `web-demo` push to the same repository and differ only in the
+    bundle they contain, and the upload/download pair keyed them
+    `digest-<service>-<platform>` with a `digest-<service>-*` pattern. So the
+    console's merge job collected four digests — two of them the demo build —
+    and would have published a mixed manifest under the tag `make up` pulls.
+    The merge step's count check caught it, but only after both builds had run.
+
+    This is the same question one step earlier: replay each service's download
+    pattern against every service's upload name and require exactly its own.
+    """
+    build = _build_job(workflow)[1]
+    merge = next(
+        job
+        for job in yaml.safe_load(workflow.read_text())["jobs"].values()
+        if any("download-artifact" in str(step.get("uses", "")) for step in job.get("steps", []))
+    )
+    services = [e["service"] for e in build["strategy"]["matrix"]["include"]]
+    platforms = build["strategy"]["matrix"]["platform"]
+
+    upload = next(s for s in build["steps"] if "upload-artifact" in str(s.get("uses", "")))
+    download = next(s for s in merge["steps"] if "download-artifact" in str(s.get("uses", "")))
+    name_template = upload["with"]["name"]
+    pattern_template = download["with"]["pattern"]
+
+    def rendered(template: str, service: str, platform: str = "") -> str:
+        return template.replace("${{ matrix.service }}", service).replace("${{ matrix.platform }}", platform).strip()
+
+    uploaded = {rendered(name_template, s, p): (s, p) for s in services for p in platforms}
+    for service in services:
+        pattern = rendered(pattern_template, service)
+        matched = {uploaded[name] for name in uploaded if fnmatch.fnmatch(name, pattern)}
+        assert matched == {(service, p) for p in platforms}, (
+            f"{workflow.name}: the pattern {pattern!r} for {service!r} collects "
+            f"{sorted(matched)}. An image must merge only its own architectures."
+        )
 
 
 def test_publish_images_keeps_demo_off_the_moving_tags() -> None:
