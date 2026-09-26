@@ -117,6 +117,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an existing tag, because the only way to finish a half-published release was
   previously to invent a new tag for a commit that had already shipped.
 
+- **A dispatched release reported success having published nothing.** The
+  recovery path's `release` job is push-only, and a skip propagates the whole
+  length of a `needs` chain rather than one link: `docker-build` declared
+  `always()` and ran, `docker-manifest` declared nothing and was skipped
+  anyway. The first dispatched run built both architectures of sixteen images,
+  tagged none of them, and went green — the same silent green the workflow was
+  being changed to fix. Every job below the conditional one now says
+  `always()` and states what it requires, and
+  `test_no_job_below_a_conditional_one_is_silently_skipped` walks the `needs`
+  graph of both workflows so the shape cannot return.
+
 - **The console's manifest job collected the demo build's digests as well as
   its own.** `web` and `web-demo` push to the same repository and the digest
   artefacts were keyed `digest-<service>-<platform>`, downloaded with a
