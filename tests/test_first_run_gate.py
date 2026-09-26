@@ -254,6 +254,57 @@ def test_one_image_cannot_collect_another_images_digests(workflow: pathlib.Path)
         )
 
 
+#: Expressions that make a job run despite an upstream skip. Without one of
+#: these, GitHub's default `success()` condition skips the job — and it
+#: propagates the whole length of a `needs` chain rather than one link.
+_SURVIVES_A_SKIP = ("always()", "!cancelled()")
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [PUBLISH_WORKFLOW, RELEASE_WORKFLOW],
+    ids=["publish-images", "release"],
+)
+def test_no_job_below_a_conditional_one_is_silently_skipped(workflow: pathlib.Path) -> None:
+    """A run that publishes nothing must not report success.
+
+    `release.yml` gained a dispatch path whose `release` job is push-only.
+    `docker-build` declared `always()` and ran; `docker-manifest` declared
+    nothing and was skipped anyway, because a skip travels the whole length of
+    a `needs` chain. The dispatched run built both architectures of sixteen
+    images, published none of them, and reported **success** — the same silent
+    green the workflow was being changed to fix.
+
+    So: every job reachable from one that can skip itself must say `always()`
+    (or `!cancelled()`) and then state what it actually requires.
+    """
+    jobs = yaml.safe_load(workflow.read_text())["jobs"]
+
+    def needs_of(name: str) -> list[str]:
+        declared = jobs[name].get("needs") or []
+        return [declared] if isinstance(declared, str) else list(declared)
+
+    def survives(name: str) -> bool:
+        return any(token in str(jobs[name].get("if", "")) for token in _SURVIVES_A_SKIP)
+
+    # A job can skip itself when it carries an `if` that is not one of the
+    # skip-surviving forms — that is the shape that starts the propagation.
+    can_skip = {name for name, job in jobs.items() if job.get("if") and not survives(name)}
+
+    downstream: set[str] = set()
+    frontier = set(can_skip)
+    while frontier:
+        frontier = {name for name in jobs if set(needs_of(name)) & frontier} - downstream - can_skip
+        downstream |= frontier
+
+    offenders = sorted(name for name in downstream if not survives(name))
+    assert not offenders, (
+        f"{workflow.name}: {offenders} sit below a job that can skip itself "
+        f"({sorted(can_skip)}) and do not declare always() or !cancelled(), so a skip "
+        "propagates into them and the run reports success having done nothing."
+    )
+
+
 def test_publish_images_keeps_demo_off_the_moving_tags() -> None:
     text = PUBLISH_WORKFLOW.read_text()
     for tag in ("value=main", "value=latest"):

@@ -400,6 +400,14 @@ jobs:
     name: Docker — Publish (${{ matrix.service }})
     runs-on: ubuntu-24.04
     needs: docker-build
+    # A skip propagates the whole way down a `needs` chain, not just one link:
+    # `docker-build` overrode it with `always()`, and this job — which has no
+    # condition of its own — was skipped anyway because `release` was. The
+    # dispatched run then reported **success** having built both architectures
+    # of sixteen images and published none of them, which is the same silent
+    # green this workflow was being fixed for. Every job below the conditional
+    # one has to say `always()` and then state what it actually requires.
+    if: always() && needs.docker-build.result == 'success'
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -716,6 +724,7 @@ jobs:
     name: Docker — Released images match the tree
     runs-on: ubuntu-24.04
     needs: docker-manifest
+    if: always() && needs.docker-manifest.result == 'success'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
