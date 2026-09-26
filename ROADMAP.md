@@ -746,8 +746,9 @@ Re-measured rather than restated: CORE is 14 long-running services plus a
 one-shot model pull and `full` is 22; resident memory for the whole stack went
 1.72 GiB → 4.84 GiB. A fresh `make up` now holds 1,723 real CISA KEV entries
 within a minute of boot with no credentials, and runs triage against a bundled
-3B model — which returned schema-valid JSON **7 times in a measured run of 19**,
-the other 12 falling back to the deterministic path. No hosted provider has
+3B model — which returned usable triage output **44 times in 50 before its reply
+was constrained to a JSON object, and 50 of 50 after**, the remainder falling
+back to the deterministic path and logging that they had. No hosted provider has
 been exercised; there is still no funded key.
 
 Full inventory under `[11.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).

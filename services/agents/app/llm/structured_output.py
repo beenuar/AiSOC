@@ -1,11 +1,19 @@
 """Fail-closed structured-output validation for LLM responses (Phase 8).
 
 LLMs are asked to return JSON; they routinely wrap it in ``` fences, add a
-preamble, or emit a field that violates the contract. Before this, each agent
-had its own ad-hoc `_parse_llm_response` that, on a malformed reply, tended to
-guess or fall through with a partial object. Passing a half-parsed structured
-output downstream (into an autonomy decision, a ledger entry) is worse than
-failing.
+preamble, or emit a field that violates the contract. Passing a half-parsed
+structured output downstream (into an autonomy decision, a ledger entry) is
+worse than failing.
+
+This module claimed to have replaced the agents' ad-hoc parsers. It had not:
+until `auto_triage_agent` was wired to `extract_json_block`, nothing in
+production imported it at all, and its tests were the only callers — a passing
+test on an uncalled function looks exactly like a working feature.
+
+`auto_triage_agent` now shares the extraction step. `cloud_agent`,
+`identity_agent`, `insider_threat_agent` and `phishing_agent` each still carry
+their own `_parse_llm_response`; that is a real remaining gap, recorded here
+rather than described as done.
 
 This module is the single, fail-closed parser: it extracts the JSON body,
 validates it against a caller-supplied validator (typically a Pydantic model's
@@ -35,19 +43,60 @@ class ParseResult:
 def extract_json_block(text: str) -> str:
     """Best-effort extraction of a JSON object/array from an LLM reply.
 
-    Strips ``` fences and any prose before the first `{`/`[`. Does NOT attempt
-    to repair invalid JSON — a reply we can't parse cleanly is a failure, by
-    design.
+    Strips ``` fences and prose on *both* sides of the JSON body. Does NOT
+    attempt to repair invalid JSON — a reply we can't parse cleanly is a
+    failure, by design.
+
+    Trailing prose used to defeat this: it trimmed everything before the first
+    ``{`` and nothing after the last ``}``, so a model that answered correctly
+    and then added "Hope that helps!" was scored as unparseable. Extraction and
+    repair are different things — finding where the JSON ends is still reading
+    what the model said, not guessing at what it meant.
+
+    The scan is brace-balanced and string-aware, because a closing brace inside
+    a string value ("rationale": "he typed }") is not the end of the object.
     """
     if not isinstance(text, str):
         return ""
     stripped = _FENCE_RE.sub("", text.strip())
-    # Trim any leading prose before the first JSON opener.
-    for opener in ("{", "["):
-        idx = stripped.find(opener)
-        if idx != -1:
-            return stripped[idx:].strip()
-    return stripped.strip()
+    starts = [i for i in (stripped.find("{"), stripped.find("[")) if i != -1]
+    if not starts:
+        return stripped.strip()
+    start = min(starts)
+    end = _matching_close(stripped, start)
+    return (stripped[start:end] if end is not None else stripped[start:]).strip()
+
+
+def _matching_close(text: str, start: int) -> int | None:
+    """Index just past the bracket that closes the one at ``start``.
+
+    ``None`` when it is never closed, so the caller keeps the remainder and
+    lets the JSON parser report the truncation rather than silently trimming.
+    """
+    opener = text[start]
+    closer = {"{": "}", "[": "]"}[opener]
+    depth = 0
+    in_string = False
+    escaped = False
+    for idx in range(start, len(text)):
+        char = text[idx]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == opener:
+            depth += 1
+        elif char == closer:
+            depth -= 1
+            if depth == 0:
+                return idx + 1
+    return None
 
 
 def parse_structured(

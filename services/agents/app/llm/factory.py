@@ -121,6 +121,7 @@ def make_chat_model(
     *,
     temperature: float = 0.0,
     max_tokens: int | None = None,
+    json_output: bool = False,
     **kwargs: Any,
 ) -> ChatOpenAI:
     """Build a :class:`ChatOpenAI` for a task ``role`` (alias + gateway base URL).
@@ -128,12 +129,38 @@ def make_chat_model(
     The returned model is **not** contract-guarded — every caller still routes the
     invocation through :func:`app.llm.safe_ainvoke`, which enforces the input
     contract. Extra ``kwargs`` pass straight through to ``ChatOpenAI``.
+
+    Set ``json_output`` when the caller parses the reply as JSON. It asks the
+    provider to constrain generation to a valid JSON object instead of leaving
+    the model free to emit prose that merely looks like one.
+
+    This is worth more than it sounds on a small local model. Measured over 50
+    alerts through the gateway against the bundled
+    ``llama3.2:3b-instruct-q4_K_M``, replies the triage parser could use went
+    from 44/50 to 50/50. Every one of the six failures had a correct verdict and
+    confidence and a malformed ``rationale`` — an unquoted value, or an invalid
+    ``\\'`` escape. None was truncated. Constraining the grammar removes that
+    class outright, which no amount of parsing after the fact can.
+
+    Safe on providers that do not support it: the gateway ships
+    ``drop_params: true`` (``infra/litellm/config.yaml``), so the parameter is
+    dropped rather than erroring, and the caller degrades to today's behaviour.
     """
     override = _llm_override.get()
     model = (override or {}).get("model") or resolve_model_alias(role)
     params: dict[str, Any] = {"model": model, "temperature": temperature}
     if max_tokens is not None:
         params["max_tokens"] = max_tokens
+    if json_output:
+        # Via ``model_kwargs`` rather than as a top-level argument. ChatOpenAI
+        # does not declare ``response_format`` as a field, so passing it
+        # directly still works but warns "response_format is not default
+        # parameter" on every single construction — noise on a hot path, for a
+        # parameter we are deliberately setting.
+        params["model_kwargs"] = {
+            **kwargs.pop("model_kwargs", {}),
+            "response_format": {"type": "json_object"},
+        }
     base_url = (override or {}).get("base_url") or resolve_base_url(model)
     assert_routable(model, base_url)
     if base_url:

@@ -173,16 +173,26 @@ Triage runs automatically on every fused alert. It is a real model call: the
 **Cost Dashboard** reports measured prompt and completion tokens against the
 resolved model name, and the per-run record carries the same figures.
 
-:::warning The bundled model is small, and it shows
+:::warning The bundled model is small, and the recording predates a fix
 `llama3.2:3b-instruct-q4_K_M` is chosen to run on CPU in 8 GB of RAM, not to be
-accurate. It returns schema-valid triage JSON a minority of the time — in one
-measured run, 7 of 19. When validation fails, triage falls back to a
+accurate. When its reply cannot be validated, triage falls back to a
 deterministic path and **labels which one answered**: the run's `model_used`
-reads `kafka:auto_triage:deterministic` rather than naming a model. Both runs
-in the recorded walkthrough took that fallback. The token counts are still
-real, because the model really was called; what failed was the shape of its
-reply. Set `OPENAI_API_KEY` with `AISOC_LLM_MODEL_FAST` / `AISOC_LLM_MODEL_DEEP`
-to route to a hosted model instead.
+reads `kafka:auto_triage:deterministic` rather than naming a model. The token
+counts are still real, because the model really was called; what failed was the
+shape of its reply.
+
+**Both triage runs in the recorded walkthrough took that fallback, and that is
+no longer representative.** Triage now asks the provider to constrain its reply
+to a JSON object. Measured over 50 alerts through the gateway, replies triage
+could use went from **44 of 50 to 50 of 50**; every one of the six failures
+carried a correct verdict and confidence with a malformed `rationale`, and none
+was truncated. Reproduce it with
+`python3 scripts/measure_triage_reliability.py --attempts 50 --json-mode`.
+
+The video is kept as recorded rather than re-cut to flatter the product, so
+expect it to show the fallback the older build took. Set `OPENAI_API_KEY` with
+`AISOC_LLM_MODEL_FAST` / `AISOC_LLM_MODEL_DEEP` to route to a hosted model
+instead — no hosted provider has been exercised here.
 :::
 
 Measured spend reads `$0.00` because the model runs beside the stack and costs

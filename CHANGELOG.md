@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto-triage never asked the provider for JSON, so a third of the bundled
+  model's replies were thrown away.** `run_auto_triage` parses the reply as a
+  JSON object, but nothing in `services/agents/app/llm/` ever set
+  `response_format`, leaving the model free to emit prose shaped like JSON and
+  the parser to correct it afterwards. Measured over 50 alerts from the
+  committed synthetic corpus, through the LiteLLM gateway exactly as production
+  routes, against the bundled `llama3.2:3b-instruct-q4_K_M` at the production
+  `temperature=0.0` / `max_tokens=512`: replies triage could use went from
+  **44 of 50 to 50 of 50** once the reply was constrained to a JSON object.
+
+  The failure shape is worth recording, because it was not the one expected.
+  **Every one of the six failures carried a correct `verdict` and `confidence`
+  and a malformed `rationale`** — `"rationale": The alert is...` with the
+  opening quote simply missing, a raw newline before an unquoted value, or an
+  invalid `\'` escape. `finish_reason` was `stop` on all 50 calls, so
+  truncation was not involved and `max_tokens` is exonerated. A model that had
+  reasoned correctly was being discarded over its punctuation, which is
+  precisely what constraining the grammar prevents and no amount of parsing
+  after the fact can.
+
+  The gateway ships `drop_params: true`, so a provider that does not support
+  the parameter has it dropped rather than erroring. Requested through
+  `model_kwargs` rather than as a top-level argument, because langchain warns
+  on every construction otherwise.
+
+- **The published "7 of 19" reliability figure does not reproduce.** Re-measured
+  on the production call path at the sample sizes above, the pre-fix tree reads
+  44 of 50. The original number's conditions are not recoverable — it was taken
+  during a QA run whose host had exhausted its disk — so rather than restate it,
+  `scripts/measure_triage_reliability.py` now produces the figure repeatably and
+  records *why* each failed attempt failed. Every surface that published the old
+  ratio now carries the new one and names the method.
+
+- **A valid verdict was discarded when one field had the wrong type.**
+  `float(data.get("confidence", 0.5))` was unguarded, so `"confidence": "high"`
+  raised `ValueError`, which the caller converts into an `AutoTriageError` and a
+  deterministic fallback — losing a verdict and rationale that may have been
+  perfectly good. `_coerce_confidence` now reads numeric strings and
+  percentages and degrades to a neutral 0.5 otherwise. That is safe here and
+  only here: auto-close requires `confidence >= AUTO_CLOSE_THRESHOLD` (0.85 by
+  default), so an unread field escalates to a human instead of closing an
+  alert. The verdict itself still fails closed. Not a cause of the measured
+  failures, but reachable by any model on any alert.
+
+- **`structured_output.py` described itself as the single fail-closed parser
+  while nothing in production imported it.** Its docstring said each agent
+  "had its own ad-hoc `_parse_llm_response`", past tense; all five still did,
+  and its only callers were its own tests — a passing test on an uncalled
+  function is indistinguishable from a working feature. `auto_triage_agent` now
+  shares its extraction step, and the docstring records that `cloud_agent`,
+  `identity_agent`, `insider_threat_agent` and `phishing_agent` still carry
+  their own, rather than describing the consolidation as finished.
+
+  Extracting is also now brace-balanced and string-aware. It trimmed prose
+  before the opening `{` and nothing after the closing `}`, so a model that
+  answered correctly and added "Hope that helps!" was scored unparseable — and
+  a `}` inside a string value would have ended the scan early. An unclosed
+  object is still handed to the JSON parser to report rather than silently
+  trimmed to the last balanced point, because extraction may read what the
+  model said and must not guess at what it meant.
+
+### Added
+
+- **`scripts/measure_triage_reliability.py`** — the measurement behind the
+  figures above. It imports the production prompt, envelope and parser rather
+  than restating them, and uses a *different* alert per attempt: production
+  pins `temperature=0.0`, so asking one alert twenty times measures one reply
+  twenty times, not a rate. Failed attempts record the model's own words, since
+  "Expecting value: line 4 column 16" cannot be diagnosed without the text it
+  indexes into. With no model reachable it prints SKIPPED and says that nothing
+  was measured, because a skip is not a pass.
+
+
 ## [11.1.0] — 2026-09-25
 
 ### Fixed

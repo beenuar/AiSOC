@@ -179,7 +179,7 @@ const faqJsonLd = {
       acceptedAnswer: {
         '@type': 'Answer',
         text:
-          'It is a 3B quantized model sized for CPU inference, and the difference from a frontier model is visible. In a measured run of 19 auto-triages on a core stack, 7 returned schema-valid output and 12 did not; the 12 fell back to the deterministic path and the Investigation Rail shows which path produced the verdict it is displaying. Point the gateway at a hosted provider and that changes — but no hosted provider has ever been exercised in this repository, so those rows read "not measured" rather than zero.',
+          'It is a 3B quantized model sized for CPU inference, and the difference from a frontier model is visible. Measured over 50 alerts on a core stack, it returned output triage could use 44 times before its reply was constrained to a JSON object and 50 times after; each of the six failures carried a correct verdict and confidence with a malformed rationale. When validation does fail the run falls back to the deterministic path, and the Investigation Rail shows which path produced the verdict it is displaying. Point the gateway at a hosted provider and that changes — but no hosted provider has ever been exercised in this repository, so those rows read "not measured" rather than zero.',
       },
     },
     {
