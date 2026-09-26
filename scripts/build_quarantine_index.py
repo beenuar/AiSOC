@@ -302,9 +302,16 @@ def render_readme(rules: list[QuarantineRule]) -> str:
     )
     lines.append(
         "   - **SPL with `| stats` or `| tstats` is not translatable to "
-        "`match_when`.** Aggregation over a window belongs in "
-        "`services/fusion/app/services/windowed_detection.py`, which today has "
-        "three hardcoded rules and no loader. Skip those until it has one."
+        "`match_when`,** because that matcher sees one event at a time. "
+        "Aggregation over a window belongs in "
+        "`services/fusion/app/services/windowed_detection.py`, which loads "
+        "`app/data/windowed_ruleset.json` through `load_window_rules()` and is "
+        "wired on by default in `main.py`. Add the rule to "
+        "`scripts/export_windowed_ruleset.py` and re-export. This step used to "
+        'say the windowed engine had "three hardcoded rules and no loader" '
+        "and to skip those rules until it had one — that stopped being true "
+        "when the loader landed, and in the meantime it told translators to "
+        "skip the single largest untranslated family in this directory."
     )
     lines.append(
         "4. **Add fixtures** under `detections/fixtures/positive/<rule-id>.json` "
