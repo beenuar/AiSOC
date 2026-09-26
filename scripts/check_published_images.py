@@ -661,7 +661,7 @@ def main(argv: list[str] | None = None) -> int:
 # Self-test
 # --------------------------------------------------------------------------
 def _reference(**overrides: object) -> Reference:
-    base = {
+    base: dict[str, object] = {
         "source": "docker-compose.yml",
         "service": "web",
         "repository": f"{REGISTRY}/beenuar/aisoc-web",
@@ -838,16 +838,16 @@ def self_test() -> int:
             'ueba:\n  image:\n    repository: ghcr.io/beenuar/aisoc-ueba\n    tag: "1.2.3"\n',
             encoding="utf-8",
         )
-        found = {r.service: (r.repository, r.tag) for r in collect_helm_references(tree)}
+        parsed = {r.service: (r.repository, r.tag) for r in collect_helm_references(tree)}
     record(
         "CHART: an empty tag resolves to Chart.AppVersion rather than to nothing",
-        found.get("services.api.image") == ("ghcr.io/beenuar/aisoc-core-api", "9.9.9"),
-        f"got {found.get('services.api.image')!r}",
+        parsed.get("services.api.image") == ("ghcr.io/beenuar/aisoc-core-api", "9.9.9"),
+        f"got {parsed.get('services.api.image')!r}",
     )
     record(
         "CHART: a nested block outside services/ is found by walking, not by being named",
-        found.get("ueba.image") == ("ghcr.io/beenuar/aisoc-ueba", "1.2.3"),
-        f"got {found.get('ueba.image')!r}",
+        parsed.get("ueba.image") == ("ghcr.io/beenuar/aisoc-ueba", "1.2.3"),
+        f"got {parsed.get('ueba.image')!r}",
     )
 
     # The shared floor every gate here answers to, run the way CI runs this one.
