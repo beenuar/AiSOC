@@ -157,35 +157,51 @@ def test_no_client_component_hardcodes_a_demo_credential(source: pathlib.Path) -
         )
 
 
-def _matrix(workflow: pathlib.Path, job: str) -> list[dict]:
+def _build_job(workflow: pathlib.Path) -> tuple[str, dict]:
+    """The job that builds images, found by what it does rather than by name.
+
+    Named lookup broke the moment the release workflow split its build in two:
+    the test asked for `docker-push`, which no longer existed, and a gate that
+    fails because a job was renamed says nothing about the property it guards.
+    The demo build args are the structural signal — exactly one job sets them.
+    """
     spec = yaml.safe_load(workflow.read_text())
-    return spec["jobs"][job]["strategy"]["matrix"]["include"]
+    named = [
+        (name, job)
+        for name, job in spec["jobs"].items()
+        if any("NEXT_PUBLIC_DEMO_MODE=true" in str(step.get("run", "")) for step in job.get("steps", []))
+    ]
+    assert len(named) == 1, f"{workflow.name}: expected exactly one job setting NEXT_PUBLIC_DEMO_MODE, found {[n for n, _ in named]}"
+    return named[0]
 
 
-def _demo_build_step(workflow: pathlib.Path, job: str) -> dict:
-    spec = yaml.safe_load(workflow.read_text())
-    for step in spec["jobs"][job]["steps"]:
+def _matrix(workflow: pathlib.Path) -> list[dict]:
+    return _build_job(workflow)[1]["strategy"]["matrix"]["include"]
+
+
+def _demo_build_step(workflow: pathlib.Path) -> dict:
+    for step in _build_job(workflow)[1]["steps"]:
         if "NEXT_PUBLIC_DEMO_MODE=true" in str(step.get("run", "")):
             return step
     raise AssertionError(f"{workflow.name}: no step sets NEXT_PUBLIC_DEMO_MODE")
 
 
 @pytest.mark.parametrize(
-    ("workflow", "job"),
-    [(PUBLISH_WORKFLOW, "build"), (RELEASE_WORKFLOW, "docker-push")],
+    "workflow",
+    [PUBLISH_WORKFLOW, RELEASE_WORKFLOW],
     ids=["publish-images", "release"],
 )
-def test_the_demo_bundle_is_built_by_its_own_matrix_entry(workflow: pathlib.Path, job: str) -> None:
+def test_the_demo_bundle_is_built_by_its_own_matrix_entry(workflow: pathlib.Path) -> None:
     """The demo build must be a separate image, not a flag on the product one.
 
     It was a flag on the product one, which is how `latest` — what `make up`
     pulls — came to carry a bundle that disabled every write control.
     """
-    demo_entries = [e for e in _matrix(workflow, job) if str(e.get("demo", "")) == "true"]
+    demo_entries = [e for e in _matrix(workflow) if str(e.get("demo", "")) == "true"]
     assert len(demo_entries) == 1, f"{workflow.name}: expected exactly one matrix entry with `demo: 'true'`, found {len(demo_entries)}"
     assert demo_entries[0]["image"].endswith("aisoc-web")
 
-    step = _demo_build_step(workflow, job)
+    step = _demo_build_step(workflow)
     assert "matrix.demo" in str(step.get("if", "")), (
         f"{workflow.name}: the demo build args are not gated on `matrix.demo`, so a "
         f"product build can still receive them (if: {step.get('if')!r})"
