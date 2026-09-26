@@ -73,8 +73,11 @@ def test_operator_chosen_api_address_is_the_one_the_console_proxies_to(
     fixture in the shape `next build` emits, with the destination the published
     image actually carries.
     """
-    node = shutil.which("node")
-    if node is None:
+    # `or ""` rather than a None check: `shutil.which` is typed Optional, and
+    # narrowing it through `pytest.fail` depends on that being inferred
+    # NoReturn, which the type-check baseline does not do.
+    node = shutil.which("node") or ""
+    if not node:
         pytest.fail(
             "node is required to run apps/web/scripts/resolve-runtime-routes.mjs. "
             "Skipping would hide whether the console can be re-pointed at all."
@@ -140,8 +143,8 @@ def test_resolver_refuses_to_start_when_a_chosen_address_cannot_be_applied(
     no retry clears, so this is a permanent condition that must stop and name
     itself rather than degrade quietly to the built-in defaults.
     """
-    node = shutil.which("node")
-    if node is None:
+    node = shutil.which("node") or ""
+    if not node:
         pytest.fail("node is required to exercise the resolver's failure posture.")
 
     app = tmp_path / "apps" / "web"
