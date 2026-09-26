@@ -2,7 +2,7 @@ id: sigmahq-sigma-00eee2a5-fdb0-4746-a21d-e43fbdea5681
 name: Linux Doas Conf File Creation
 description: Detects the creation of doas.conf file in linux host platform.
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1548
@@ -29,3 +29,4 @@ provenance:
   upstream_path: rules/linux/file_event/file_event_lnx_doas_conf_creation.yml
 falsepositives:
 - Unlikely
+quarantine_reason: "no connector emits this log source (linux/None)"

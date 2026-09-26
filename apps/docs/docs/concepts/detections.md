@@ -17,10 +17,19 @@ the AiSOC engine can run as-is.
 | Quarantined | `detections/<source>-imports/_quarantine/<category>/`  | `enabled: false` | schema + provenance, plus a populated `quarantine_reason`            |
 | Community   | `detections/community/<category>/`                     | `enabled: false` | schema only (provenance encouraged)                                  |
 
-The native tier is the strict-quality, AiSOC-authored layer: 877 rules on disk,
-of which **833 are executable** — the count the detection engine actually loads —
-backed by 1,756 positive/negative fixtures. The 44-rule gap is native rules that
-ship YAML and fixtures but have no compiled spec, so the engine never loads them;
+The library holds **6,991 ATT&CK-mapped rules on disk, of which 2,603 are
+executable** — the count the detection engine actually loads. Those two numbers
+travel together everywhere, because a library figure presented on its own reads
+as coverage and is not.
+
+The executable set is 833 native rules, authored as Python specs and backed by
+1,756 positive/negative fixtures, plus 1,770 imported Sigma rules translated
+into the matcher's own language by
+[`scripts/compile_sigma_ruleset.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/compile_sigma_ruleset.py).
+A translated rule ships only after a vendor-shaped event has been replayed
+through its connector and the engine and produced a hit for that rule — see
+[the compilation report](https://github.com/beenuar/AiSOC/blob/main/docs/detections/sigma-compilation.md)
+for what was refused and why.
 [`docs/detections/truth-table.md`](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)
 cross-checks these counts against the loaded ruleset. Imported tiers are
 normalized into the AiSOC schema by

@@ -2,7 +2,7 @@ id: sigmahq-sigma-1f358e2e-cb63-43c3-b575-dfb072a6814f
 name: System and Hardware Information Discovery
 description: Detects system information discovery commands
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1082
@@ -38,3 +38,4 @@ provenance:
   upstream_path: rules/linux/auditd/path/lnx_auditd_system_info_discovery2.yml
 falsepositives:
 - Legitimate administration activities
+quarantine_reason: "no connector emits this log source (linux/auditd)"

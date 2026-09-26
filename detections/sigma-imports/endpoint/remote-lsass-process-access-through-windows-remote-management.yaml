@@ -3,7 +3,7 @@ name: Remote LSASS Process Access Through Windows Remote Management
 description: Detects remote access to the LSASS process via WinRM. This could be a
   sign of credential dumping from tools like mimikatz.
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1003.001
@@ -34,3 +34,4 @@ provenance:
   upstream_path: rules/windows/process_access/proc_access_win_lsass_remote_access_trough_winrm.yml
 falsepositives:
 - Unlikely
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (GrantedAccess)"

@@ -32,10 +32,11 @@ false_positives:
   - Legitimate user key rotation via a verified deployment pipeline
   - CI/CD runners that add deployment keys to service accounts
 playbook: tpl-persistence
-enabled: true
+enabled: false
 author: AiSOC
 references:
   - https://attack.mitre.org/techniques/T1098/004/
   - https://www.openssh.com/manual.html
 created: '2026-05-10'
 modified: '2026-05-10'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

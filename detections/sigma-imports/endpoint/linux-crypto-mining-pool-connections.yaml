@@ -2,7 +2,7 @@ id: sigmahq-sigma-a46c93b7-55ed-4d27-a41b-c259456c4746
 name: Linux Crypto Mining Pool Connections
 description: Detects process connections to a Monero crypto mining pool
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1496
@@ -50,3 +50,4 @@ provenance:
   upstream_path: rules/linux/network_connection/net_connection_lnx_crypto_mining_indicators.yml
 falsepositives:
 - Legitimate use of crypto miners
+quarantine_reason: "no connector emits this log source (linux/None)"

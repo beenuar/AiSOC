@@ -20,15 +20,9 @@ lever that reaches the engine is adding a spec and re-running
 | metric | count |
 |--------|------:|
 | rules on disk (total) | 6991 |
-| **executable (loaded by the engine)** | **833** |
-| non-executable (provenance/coverage only) | 6158 |
-| — of which: enabled, but no compiled spec | 122 |
-
-Those 122 rules are the ones an earlier version of this
-table counted as executable. They carry `enabled: true` and a body whose
-shape looks evaluable, and the engine has never seen them because no spec
-produced a `match_when` for them. They are genuine work items, listed by
-tier below, not a rounding error.
+| **executable (loaded by the engine)** | **2603** |
+| non-executable (provenance/coverage only) | 4388 |
+| — of which: enabled, but no compiled spec | 0 |
 
 ## By tier
 
@@ -36,24 +30,23 @@ tier below, not a rounding error.
 |------|--------:|-----------:|-----------------------:|
 | car (imported) | 99 | 0 | 0 |
 | chronicle (imported) | 877 | 0 | 0 |
-| community | 1 | 0 | 1 |
-| native | 877 | 833 | 44 |
-| sigma (imported) | 3132 | 0 | 77 |
+| community | 1 | 0 | 0 |
+| native | 877 | 833 | 0 |
+| sigma (imported) | 3132 | 1770 | 0 |
 | splunk (imported) | 2005 | 0 | 0 |
 
 ## Why rules are non-executable
 
 | reason | count |
 |--------|------:|
-| `enabled: false` | 99 |
-| enabled, but no compiled spec — the engine does not load it | 122 |
-| under `_quarantine/` (untranslated on import) | 5937 |
+| `enabled: false` | 175 |
+| under `_quarantine/` (untranslated on import) | 4213 |
 
 ## How to read the README claim
 
 The imported corpus is large (6991 rules on disk) and valuable as a
 provenance-tracked ATT&CK-mapped library, but the number that matters
-operationally is **833 executable rules** — the ones the engine
+operationally is **2603 executable rules** — the ones the engine
 loads and fires against live telemetry. The README and marketplace must cite
 the executable figure when describing detection *coverage*, and may cite the
 on-disk figure only when explicitly describing the imported *library*.

@@ -20,7 +20,8 @@ detection:
 false_positives:
 - Break-glass account activation during a planned emergency drill
 playbook: tpl-privilege-escalation
-enabled: true
+enabled: false
 author: AiSOC
 created: '2026-05-07'
 modified: '2026-05-07'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

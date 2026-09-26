@@ -27,7 +27,8 @@ false_positives:
 - Driver hot-plug (USB device, NVIDIA installer, ZFS/DKMS rebuild)
 - Container runtime loading overlay/br_netfilter on host
 playbook: tpl-defense-evasion
-enabled: true
+enabled: false
 author: AiSOC
 created: '2026-05-12'
 modified: '2026-05-12'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

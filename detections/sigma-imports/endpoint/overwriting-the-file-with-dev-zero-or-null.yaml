@@ -2,7 +2,7 @@ id: sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e
 name: Overwriting the File with Dev Zero or Null
 description: Detects overwriting (effectively wiping/deleting) of a file.
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1485
@@ -33,3 +33,4 @@ provenance:
 falsepositives:
 - Appending null bytes to files.
 - Legitimate overwrite of files.
+quarantine_reason: "no connector emits this log source (linux/auditd)"

@@ -31,9 +31,10 @@ false_positives:
     before closing.
   - Initial AWS account setup before an IAM admin user exists.
 playbook: tpl-credential-access
-enabled: true
+enabled: false
 author: AiSOC Tutorial
 created: '2026-05-12'
 modified: '2026-05-12'
 references:
   - https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#lock-away-credentials
+quarantine_reason: "field is a dotted path and the matcher has no path traversal (userIdentity.type)"

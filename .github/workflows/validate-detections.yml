@@ -28,6 +28,13 @@ jobs:
       - name: Install PyYAML
         run: pip install pyyaml
 
+      - name: Install the runtime deps the fireability proof replays through
+        # The proof runs a real connector's normalize() and the real
+        # DetectionEngine rather than a copy of either, so it needs what those
+        # modules import. A gate that reimplemented them would need nothing
+        # here and would also prove nothing.
+        run: pip install structlog httpx pydantic pydantic-settings
+
       - name: Rule ids must be stable
         # Ids were positional, so inserting a rule renumbered every rule
         # after it — and ids appear in alert rows, suppression priors and
@@ -82,6 +89,20 @@ jobs:
       # nobody reviewed.
       - name: Verify exported windowed ruleset is current
         run: python3 scripts/export_windowed_ruleset.py --check
+
+      # Recompiles every imported Sigma rule AND re-proves it: each shipped
+      # rule is replayed, as a vendor-shaped event, through its connector's
+      # real normalize() and the real engine. A rule that stops firing — because
+      # a connector changed what it emits, or the matcher changed what an
+      # operator means — fails here rather than going quiet in production.
+      - name: Verify compiled Sigma ruleset is current and still fires
+        run: python3 scripts/compile_sigma_ruleset.py --check
+
+      # The proof above only means something if it can fail. This reverts the
+      # connector to the behaviour that made Windows fields unreachable and
+      # requires every rule depending on them to stop firing.
+      - name: Prove the fireability gate is not vacuous
+        run: python3 scripts/compile_sigma_ruleset.py --prove-gate
 
       - name: Count rules by severity
         if: always()

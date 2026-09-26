@@ -130,5 +130,38 @@ class WindowsEventConnector(BaseConnector):
             "process_name": data.get("Image") or data.get("NewProcessName"),
             "event_type": f"windows.{(channel or 'event').lower()}.{event_id}",
             "created_at": raw.get("TimeCreated") or system.get("TimeCreated"),
-            "raw_event": raw,
+            "raw_event": _lift_containers(raw, system, data),
         }
+
+
+def _lift_containers(raw: dict[str, Any], system: Any, data: Any) -> dict[str, Any]:
+    """Return the WEF event with `System` and `EventData` lifted to its top level.
+
+    The detection engine merges `raw_event`'s **top level** into the flat
+    namespace the matcher reads, and the matcher does a plain `event.get(field)`
+    with no dotted-path traversal. A Windows event nests everything one level
+    deeper than that: `Image` and `CommandLine` live under `EventData`, and
+    `EventID` and `Channel` under `System`. So the two most-used detection
+    fields in the public Sigma corpus — `CommandLine` in 2,173 rules, `Image` in
+    2,300 — resolved to `None` and no Windows rule could ever fire, however
+    correctly it was written.
+
+    Lifting belongs here rather than in the engine because `System` and
+    `EventData` are names from the Windows event schema. The engine is shared by
+    every connector and should not carry one vendor's envelope layout.
+
+    This is deliberately not the per-field hoisting the engine's docstring warns
+    about (`process_name` from `Image`, and nothing else). Lifting the whole
+    container fixes the class for this connector rather than the one field
+    somebody happened to notice.
+
+    Precedence runs most-specific-last, so a key the event sets at its own top
+    level always beats the same key lifted out of a child container, and the
+    original containers are left in place for anything reading them by name.
+    """
+    lifted: dict[str, Any] = {}
+    for container in (system, data):
+        if isinstance(container, dict):
+            lifted.update({k: v for k, v in container.items() if isinstance(k, str)})
+    lifted.update(raw)
+    return lifted

@@ -29,6 +29,14 @@ rules, and blocking CI on all of them would either stop every unrelated PR or
 invite someone to weaken the gate. `MAX_UNREACHABLE` pins the current count so
 it can only go down, exactly like `scripts/check_claim_gate_matrix.py`.
 
+**Scope: native rules only.** This reads `detection_ruleset.json` and not the
+imported ruleset beside it, which is deliberate rather than an oversight.
+Imported rules are held to a stronger standard than this gate can apply:
+`scripts/compile_sigma_ruleset.py` replays each one, as a vendor-shaped event,
+through the real connector and the real engine, and ships it only if it fires.
+That is direct evidence where this file has only static approximation, so
+adding them here would substitute a weaker check for a stronger one.
+
 Usage:
     python3 scripts/check_detection_fields.py             # enforce the ratchet
     python3 scripts/check_detection_fields.py --list      # name every rule

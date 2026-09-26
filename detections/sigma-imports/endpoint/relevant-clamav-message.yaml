@@ -2,7 +2,7 @@ id: sigmahq-sigma-36aa86ca-fd9d-4456-814e-d3b1b8e1e0bb
 name: Relevant ClamAV Message
 description: Detects relevant ClamAV messages
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1588.001
@@ -32,3 +32,4 @@ provenance:
   upstream_path: rules/linux/builtin/clamav/lnx_clamav_relevant_message.yml
 falsepositives:
 - Unknown
+quarantine_reason: "no connector emits this log source (linux/clamav)"

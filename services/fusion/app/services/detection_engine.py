@@ -43,7 +43,14 @@ from app.services.provenance import extract_provenance
 
 logger = structlog.get_logger()
 
-_RULESET_PATH = Path(__file__).resolve().parent.parent / "data" / "detection_ruleset.json"
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_RULESET_PATH = _DATA_DIR / "detection_ruleset.json"
+#: Imported rules translated into `match_when` by `scripts/compile_sigma_ruleset.py`.
+#: Held in a second file rather than merged into the one above so that the
+#: exporter's drift check keeps comparing the hand-authored specs against
+#: exactly what they generate. Both are loaded here, so "executable" still
+#: means "the engine loads it".
+_IMPORTED_RULESET_PATH = _DATA_DIR / "detection_ruleset_imported.json"
 
 _SEVERITY_MAP = {
     "critical": AlertSeverity.CRITICAL,
@@ -61,6 +68,12 @@ class DetectionHit:
     severity: str
     category: str
     mitre: list[str]
+    #: Upstream credit for a rule translated from an imported corpus, empty for
+    #: AiSOC's own. DRL-1.1 — which the imported Sigma corpus is licensed under
+    #: — requires not only that redistribution keep attribution, but that
+    #: *messages produced by a match* identify the rule's author. An alert is
+    #: such a message, so the attribution has to reach it.
+    attribution: str = ""
 
 
 def _get(obj: Any, *path: str) -> Any:
@@ -170,6 +183,7 @@ class DetectionEngine:
                             severity=rule["severity"],
                             category=rule["category"],
                             mitre=list(rule.get("mitre") or []),
+                            attribution=_attribution(rule),
                         )
                     )
             except Exception as exc:  # noqa: BLE001 — one bad rule must not wedge detection
@@ -189,7 +203,10 @@ class DetectionEngine:
             tenant_id=tenant_id,
             source=f"detection:{hit.rule_id}",
             title=hit.name,
-            description=f"Detection rule {hit.rule_id} ({hit.category}) fired on ingested telemetry.",
+            description=(
+                f"Detection rule {hit.rule_id} ({hit.category}) fired on ingested telemetry."
+                + (f" {hit.attribution}" if hit.attribution else "")
+            ),
             severity=_SEVERITY_MAP.get(hit.severity, AlertSeverity.MEDIUM),
             src_ip=_get(ocsf, "src_endpoint", "ip"),
             dst_ip=_get(ocsf, "dst_endpoint", "ip"),
@@ -205,16 +222,48 @@ class DetectionEngine:
         )
 
 
-@lru_cache(maxsize=1)
-def _load_ruleset() -> list[dict[str, Any]]:
-    if not _RULESET_PATH.exists():
-        logger.warning("detection_engine.ruleset_missing", path=str(_RULESET_PATH))
+def _attribution(rule: dict[str, Any]) -> str:
+    """One sentence crediting an imported rule's upstream, or empty.
+
+    Built from whatever the provenance block actually holds rather than from a
+    template with blanks, so a missing author reads as a shorter sentence
+    instead of as an author called "".
+    """
+    prov = rule.get("provenance")
+    if not isinstance(prov, dict) or not prov.get("source"):
+        return ""
+    parts = [f"Translated from {prov['source']}"]
+    if prov.get("author"):
+        parts.append(f"by {prov['author']}")
+    if prov.get("upstream_path"):
+        parts.append(f"({prov['upstream_path']})")
+    licence = prov.get("license")
+    tail = f", licensed under {licence}" if licence else ""
+    url = prov.get("license_url")
+    return " ".join(parts) + tail + (f" <{url}>" if url else "") + "."
+
+
+def _read_ruleset(path: Path, *, required: bool) -> list[dict[str, Any]]:
+    if not path.exists():
+        if required:
+            logger.warning("detection_engine.ruleset_missing", path=str(path))
         return []
     try:
-        data = json.loads(_RULESET_PATH.read_text(encoding="utf-8"))
-        rules = data.get("rules") or []
-        logger.info("detection_engine.ruleset_loaded", count=len(rules))
-        return rules
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("rules") or []
     except (ValueError, OSError) as exc:
-        logger.error("detection_engine.ruleset_load_failed", error=str(exc))
+        logger.error("detection_engine.ruleset_load_failed", path=str(path), error=str(exc))
         return []
+
+
+@lru_cache(maxsize=1)
+def _load_ruleset() -> list[dict[str, Any]]:
+    native = _read_ruleset(_RULESET_PATH, required=True)
+    imported = _read_ruleset(_IMPORTED_RULESET_PATH, required=False)
+    logger.info(
+        "detection_engine.ruleset_loaded",
+        count=len(native) + len(imported),
+        native=len(native),
+        imported=len(imported),
+    )
+    return native + imported

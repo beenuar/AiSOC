@@ -2,7 +2,7 @@ id: sigmahq-sigma-2632954e-db1c-49cb-9936-67d1ef1d17d2
 name: Addition of SID History to Active Directory Object
 description: An attacker can use the SID history attribute to gain additional privileges.
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1134.005
@@ -38,3 +38,4 @@ provenance:
   upstream_path: rules/windows/builtin/security/win_security_susp_add_sid_history.yml
 falsepositives:
 - Migration of an account into a new domain
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (SidHistory)"

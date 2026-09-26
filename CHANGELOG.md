@@ -7,7 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The detection engine runs 2,603 rules instead of 833, and every one of the
+  1,770 added rules has been watched to fire.** The library has held roughly
+  7,000 ATT&CK-mapped rules for months while 833 executed, and the question
+  that prompted this — why 800 and not 5,000 — turned out to have a single
+  concrete answer rather than a missing feature.
+
+  **Windows telemetry was unreachable, and nothing said so.** The engine
+  flattens `raw_event`'s top level into the namespace the matcher reads, and
+  the matcher does a plain `event.get(field)` with no path traversal. A Windows
+  event puts its payload one level below that: `CommandLine` lives at
+  `raw_event.EventData.CommandLine`, `EventID` under `System`. Those are the
+  two most-used fields in the public Sigma corpus — `CommandLine` in 2,173
+  rules and `Image` in 2,300 — so every Windows rule read `None` on its first
+  clause and could not fire however correctly it was written.
+  `windows_event.normalize()` now lifts both containers, which is where the
+  fix belongs: `System` and `EventData` are names from the Windows event
+  schema, and the engine is shared by every connector. Nothing in the engine or
+  the matcher changed, so the blast radius on the existing 833 is nil — proven
+  by replaying all 1,756 committed fixtures and confirming every native rule
+  keeps its verdict, now a standing test rather than a one-off check.
+
+  **`scripts/sigma_compiler.py` translates imported Sigma into `match_when`, or
+  refuses.** Refusal is the design. Sigma compares strings case-insensitively
+  and several matcher operators do not, so equality and affix tests compile to
+  anchored `pattern_match_any` rather than to `endswith_any`, which would have
+  silently stopped matching `\SvcHost.exe`. Sigma's `not filter` is true when
+  the field is missing, and only `not_in` and `not_contains_any` behave that
+  way, so the other negations are refused rather than narrowed. Of 3,132
+  imported rules, 1,770 ship and 1,362 are refused with a recorded reason — the
+  largest being 556 whose log source no connector emits and 464 whose negation
+  would flip on a missing field. The full taxonomy is in
+  `docs/detections/sigma-compilation.md`.
+
+  **A rule ships only after it is seen to fire.** `check_detection_fields.py`
+  says in its own docstring that it over-approximates and that "a false pass is
+  a rule this gate should have caught", so passing it is not evidence.
+  `scripts/compile_sigma_ruleset.py` replays a vendor-shaped event through the
+  **real** connector `normalize()` and the **real** `DetectionEngine`, and
+  keeps the rule only if it produces a hit and stays silent on an empty event
+  of the same shape. The proof is that the rule is reachable and fires on a
+  well-formed event of its log source — not that it detects an attack, which
+  no gate here claims. `--prove-gate` reverts the connector to its pre-fix
+  behaviour and requires all 1,687 Windows rules to stop firing, so the proof
+  is known to be capable of failing.
+
+### Changed
+
+- **Upstream lifecycle status no longer decides whether an imported rule runs.**
+  The importer quarantined on SigmaHQ status, which put 2,844 `test` and 211
+  `experimental` rules behind a flag. That conflated whether a rule *can
+  execute here* with how confident its authors are in its content; only the
+  first was ever the blocker. In SigmaHQ, `test` means reviewed and in
+  community use — the normal state for most of the corpus, not a warning.
+  Fireability now gates, status is carried onto the rule and the alert so it
+  can still be filtered, and `deprecated`/`unsupported` are refused outright.
+
+- **Published counts lead with the library and always name the executable
+  figure beside it** — "6,991 rules on disk, 2,603 executable". The two travel
+  together because a library figure on its own reads as coverage. 6,991 rather
+  than the 7,016 files under `detections/`, because 25 of those are playbooks.
+
 ### Fixed
+
+- **76 rules were marked enabled and the engine had never heard of them.** They
+  counted as shipped coverage and detected nothing: 44 native rules authored as
+  YAML with no Python spec (the YAML is a generated projection, so the engine
+  never reads it), 31 imported Sigma rules, and 1 community rule. 46 of the
+  original 122 became executable through the compiler; the rest are now
+  `enabled: false` with a `quarantine_reason` naming what each would need. They
+  were deliberately not translated: their fields have no known emitter, so
+  making them load would have added rules that cannot fire, which is the defect
+  being removed rather than progress against it.
+  `detection_truth_table.py --check` now fails on any such rule.
+
+- **`readme_gates.py` misread a formatted figure.** Its pattern stopped at the
+  thousands separator, so "2,603 executable" was compared as 603 — a gate
+  measuring a number the README never claimed.
 
 - **Auto-triage never asked the provider for JSON, so a third of the bundled
   model's replies were thrown away.** `run_auto_triage` parses the reply as a

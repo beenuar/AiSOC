@@ -18,7 +18,8 @@ detection:
 false_positives:
 - Scheduled credential rotation runbook (must be linked)
 playbook: tpl-persistence
-enabled: true
+enabled: false
 author: AiSOC
 created: '2026-07-04'
 modified: '2026-07-04'
+quarantine_reason: "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire"

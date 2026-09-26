@@ -6,7 +6,7 @@ description: 'Detects the clearing or configuration tampering of EventLog using 
   This technique were seen used by threat actors and ransomware strains in order to
   evade defenses.'
 severity: high
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1685.005
@@ -81,3 +81,4 @@ falsepositives:
 - Admin activity
 - Scripts and administrative tools used in the monitored environment
 - Maintenance activity
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (ParentImage)"

@@ -2,7 +2,7 @@ id: sigmahq-sigma-dd80db93-6ec2-4f4c-a017-ad40da6ffe81
 name: Windows Defender Real-Time Protection Failure/Restart
 description: Detects issues with Windows Defender Real-Time Protection features
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1685
@@ -38,3 +38,4 @@ provenance:
 falsepositives:
 - Some crashes can occur sometimes and the event doesn't provide enough information
   to tune out these cases. Manual exception is required
+quarantine_reason: "negation is not faithfully expressible (missing field would flip) (Feature_Name)"

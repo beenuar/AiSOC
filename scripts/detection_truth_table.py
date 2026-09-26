@@ -74,6 +74,9 @@ DOC = ROOT / "docs" / "detections" / "truth-table.md"
 #: The compiled ruleset `services/fusion` loads at startup. This is the only
 #: artifact that determines what fires, so it is the source of truth here.
 RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
+#: Imported rules the compiler translated and proved fireable. The engine
+#: loads this beside the native ruleset, so it is equally a source of truth.
+IMPORTED_RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset_imported.json"
 
 # Directories under detections/ that are not rules.
 SKIP_DIRS = {"fixtures", "playbooks"}
@@ -109,26 +112,38 @@ class Counts:
         d[key] = d.get(key, 0) + 1
 
 
+def _ids_in(path: Path, *, required: bool) -> set[str]:
+    if not path.exists():
+        if required:
+            print(
+                f"WARNING: {path.relative_to(ROOT)} is missing — run scripts/export_detection_ruleset.py. Reporting zero executable rules.",
+                file=sys.stderr,
+            )
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        print(f"WARNING: could not read {path.relative_to(ROOT)}: {exc}", file=sys.stderr)
+        return set()
+    return {str(rule["id"]) for rule in data.get("rules") or [] if rule.get("id")}
+
+
 def _engine_rule_ids() -> set[str]:
     """Ids the detection engine actually loads.
+
+    The engine reads two artifacts: the native specs exported by
+    ``export_detection_ruleset.py`` and the imported rules translated and
+    proven fireable by ``compile_sigma_ruleset.py``. Both count, because the
+    definition of executable here is "the engine loads it" — reading only the
+    first would under-report by exactly the corpus this file exists to keep
+    honest about.
 
     An empty set is returned when the ruleset is missing, which makes the
     headline read zero rather than falling back to the body-shape heuristic.
     Reporting zero executable rules is loud and obviously wrong; quietly
     reverting to a heuristic that over-reports is not.
     """
-    if not RULESET.exists():
-        print(
-            f"WARNING: {RULESET.relative_to(ROOT)} is missing — run scripts/export_detection_ruleset.py. Reporting zero executable rules.",
-            file=sys.stderr,
-        )
-        return set()
-    try:
-        data = json.loads(RULESET.read_text(encoding="utf-8"))
-    except (ValueError, OSError) as exc:
-        print(f"WARNING: could not read {RULESET.relative_to(ROOT)}: {exc}", file=sys.stderr)
-        return set()
-    return {str(rule["id"]) for rule in data.get("rules") or [] if rule.get("id")}
+    return _ids_in(RULESET, required=True) | _ids_in(IMPORTED_RULESET, required=False)
 
 
 def _tier_for(path: Path) -> str:
@@ -315,6 +330,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if the committed doc is stale")
     parser.add_argument("--json", dest="as_json", action="store_true", help="print counts as JSON")
+    parser.add_argument(
+        "--max-phantoms",
+        type=int,
+        default=0,
+        help=(
+            "how many enabled-but-never-loaded rules to tolerate. A phantom is "
+            "counted as shipped coverage and detects nothing, so the ceiling is zero."
+        ),
+    )
     args = parser.parse_args()
 
     counts = compute()
@@ -343,6 +367,20 @@ def main() -> int:
         return 0
 
     if args.check:
+        if counts.counted_but_not_loaded > args.max_phantoms:
+            # These are the rules that look shipped and are not: enabled on
+            # disk, absent from what the engine loads. They were the whole
+            # reason this file stopped classifying by file path, so letting a
+            # new one through would reopen the hole rather than widen a
+            # tolerance.
+            print(
+                f"ERROR: {counts.counted_but_not_loaded} rule(s) are enabled but the engine never loads them "
+                f"(limit {args.max_phantoms}): {counts.not_loaded_by_tier}.\n"
+                "Either give the rule a compiled spec, or set `enabled: false` with a "
+                "`quarantine_reason` saying what it would need.",
+                file=sys.stderr,
+            )
+            return 1
         if not DOC.exists():
             print(f"ERROR: {DOC.relative_to(ROOT)} does not exist — run scripts/detection_truth_table.py", file=sys.stderr)
             return 1

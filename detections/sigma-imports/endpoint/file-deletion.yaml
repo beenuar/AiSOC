@@ -4,7 +4,7 @@ description: Detects file deletion using "rm", "shred" or "unlink" commands whic
   are used often by adversaries to delete files left behind by the actions of their
   intrusion activity
 severity: low
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1070.004
@@ -33,3 +33,4 @@ provenance:
   upstream_path: rules/linux/process_creation/proc_creation_lnx_file_deletion.yml
 falsepositives:
 - Legitimate administration activities
+quarantine_reason: "no connector emits this log source (linux/None)"

@@ -3,7 +3,7 @@ name: Django Framework Exceptions
 description: Detects suspicious Django web application framework exceptions that could
   indicate exploitation attempts
 severity: medium
-enabled: true
+enabled: false
 tags:
   mitre:
   - T1190
@@ -41,3 +41,4 @@ provenance:
   upstream_path: rules/application/django/appframework_django_exceptions.yml
 falsepositives:
 - Application bugs
+quarantine_reason: "no connector emits this log source (django/None)"
