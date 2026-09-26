@@ -34,8 +34,8 @@ service lives under `services.<name>` — `--set api.image.tag=...` addresses a
 path no template reads and silently changes nothing:
 
 ```bash
-  --set services.api.image.tag=v11.0.0 \
-  --set services.web.image.tag=v11.0.0
+  --set services.api.image.tag=v11.1.0 \
+  --set services.web.image.tag=v11.1.0
 ```
 
 Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
@@ -45,12 +45,12 @@ Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.
 All images are published to GHCR and Cosign-signed:
 
 ```
-ghcr.io/beenuar/aisoc-core-api:v11.0.0
-ghcr.io/beenuar/aisoc-agents:v11.0.0
-ghcr.io/beenuar/aisoc-realtime:v11.0.0
-ghcr.io/beenuar/aisoc-ingest:v11.0.0
-ghcr.io/beenuar/aisoc-enrichment:v11.0.0
-ghcr.io/beenuar/aisoc-web:v11.0.0
+ghcr.io/beenuar/aisoc-core-api:v11.1.0
+ghcr.io/beenuar/aisoc-agents:v11.1.0
+ghcr.io/beenuar/aisoc-realtime:v11.1.0
+ghcr.io/beenuar/aisoc-ingest:v11.1.0
+ghcr.io/beenuar/aisoc-enrichment:v11.1.0
+ghcr.io/beenuar/aisoc-web:v11.1.0
 ```
 
 `scripts/check_published_images.py` resolves every one of these against GHCR
@@ -66,7 +66,7 @@ Verify a signature before deploying:
 cosign verify \
   --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/beenuar/aisoc-core-api:v11.0.0
+  ghcr.io/beenuar/aisoc-core-api:v11.1.0
 ```
 
 ## Scaling

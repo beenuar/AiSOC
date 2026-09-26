@@ -106,7 +106,7 @@ curl http://<your-host>:3000/api/runtime-config
 ```
 
 ```json
-{ "demoMode": false, "demoModeSource": "runtime", "consoleVersion": "11.0.0" }
+{ "demoMode": false, "demoModeSource": "runtime", "consoleVersion": "11.1.0" }
 ```
 
 `demoMode` is the deployment's own answer rather than something to infer from

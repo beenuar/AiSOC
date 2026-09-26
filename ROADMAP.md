@@ -677,6 +677,51 @@ Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
+## v11.1 — Shipped (2026-09-25)
+
+One user's bug report, and the audit it turned into. A self-hoster bringing
+AiSOC up with Compose on a single host reported that it "always deploys the
+demo environment, even if I add the right variables". They were right, for two
+independent reasons. `next build` freezes *both* halves of the console's
+routing — `NEXT_PUBLIC_*` values are inlined into the bundle and the
+destinations returned by `rewrites()` are compiled into
+`routes-manifest.json` — so a pulled image could only ever talk to the hosts
+it was built against, while `docker-compose.yml` set the variables on the web
+service where nothing read them. And every host port published to a literal
+`127.0.0.1`, so the stack came up healthy and unreachable from anywhere but
+the machine it ran on. The console's addresses are now resolved when the
+container starts, and an address that is set and cannot be applied stops the
+container rather than silently falling back.
+
+**A minor: nothing here requires an operator to act.** Every new variable
+defaults to the behaviour that was previously compiled in, and the only
+removals are two variables the console never read.
+
+The second root cause was that the fix would have shipped to nobody. The
+console image a quickstart pulls was built from a commit two releases behind
+`main` and `aisoc-web:v11.0.0` was never pushed at all, while the rest of that
+release was — every workflow green throughout, because a green workflow says a
+job ran, not that the registry holds anything. The cause was arm64
+cross-building under QEMU, measured at roughly 7x on a good run and
+non-converging on a bad one: one arm64 `pnpm install` ran 6,358 seconds
+without finishing while the amd64 leg of the same build took 100s. Both
+publish workflows now build each architecture natively and merge the results
+into a manifest list, and `scripts/check_published_images.py` asks the
+registry whether every image the compose file, the chart and the docs name is
+actually there — 14 findings against `main` before it existed. The Helm chart
+could not have installed at all, and `aisoc-honeytokens`, `aisoc-purple-team`
+and `aisoc-osquery-tls` are published here for the first time.
+
+Also in this release: a recorded 2 min 57 s deployment walkthrough against the
+published images, with real data and real token counts. Both triage runs in it
+fell back to the deterministic path because the bundled 3B model's output
+failed schema validation — the closing card says so. No hosted provider has
+been exercised; there is still no funded key.
+
+Full inventory under `[11.1.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## v11.0 — Shipped (2026-09-25)
 
 What a first run actually produced. Most of this was found by bringing the
