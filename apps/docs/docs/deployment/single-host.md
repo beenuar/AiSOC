@@ -14,7 +14,7 @@ Two things differ from a laptop install, and both are deliberate choices you
 have to make rather than defaults you inherit.
 
 If you would rather watch one being done end to end first, the
-[deployment walkthrough](./walkthrough.md) records exactly this path — console
+[deployment walkthrough](./walkthrough.mdx) records exactly this path — console
 published on a LAN address, real threat-intel data, an event pushed through to
 an AI verdict.
 
