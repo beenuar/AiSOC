@@ -139,11 +139,13 @@ It's also what makes the analyst-override feedback loop work — a verdict overr
 
 Three tiers:
 
-1. **Native rules** — ~800 rules authored for AiSOC, in our Sigma-shaped YAML. Tagged `tier: stable`.
-2. **Imported rules** — ~6,000 rules from SigmaHQ, Splunk Security Content, Chronicle, MITRE CAR. Each carries provenance and an upstream link. Tagged `tier: imported`.
+1. **Native rules** — 877 rules authored for AiSOC in our Sigma-shaped YAML, 833 of them executable. Tagged `tier: stable`.
+2. **Imported rules** — 6,113 rules from SigmaHQ, Splunk Security Content, Chronicle and MITRE CAR, each carrying provenance and an upstream link. Tagged `tier: imported`. 1,770 of them execute: the Sigma compiler translates rules into the matcher's own language, while Splunk SPL, Chronicle YARA-L and MITRE CAR pseudocode have no evaluator in this repository and are kept for provenance and coverage mapping.
 3. **Community contributions** — rules submitted via PR or installed from the marketplace. Tagged by author and license.
 
-All run on the same engine: native YAML over OpenSearch + ClickHouse plus YARA, KQL, EQL, and SPL via federated search.
+**2,603 of the 6,991 execute, and that is the number to quote for coverage.** A rule counts as executable only after a vendor-shaped event was replayed through its real connector and the real engine and the rule was watched to fire — it is a claim that the rule is *reachable*, not that it detects an attack. See [Detection Coverage](../detections/coverage.md) and the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
+
+Everything executable runs on the same engine: native YAML over OpenSearch + ClickHouse plus YARA, KQL, EQL, and SPL via federated search.
 
 ### Can I write rules in plain English?
 

@@ -27,8 +27,9 @@ API (EDR, SIEM, cloud, IAM, SaaS, VCS, network) and pushes normalized OCSF
 records into the ingest spine. See the [connector catalog](./connectors).
 
 **Detection rule** — A query (Sigma / YARA / KQL / EQL) that fires an
-alert when matching events are seen. AiSOC ships ~800 native rules plus
-~6,000 imported from public catalogs, each tagged with provenance.
+alert when matching events are seen. AiSOC's library holds 6,991 rules on
+disk, of which 2,603 are **executable** (see below) — 833 native and 1,770
+translated from SigmaHQ. Every imported rule is tagged with provenance.
 
 **Investigation Ledger** — Append-only, replayable record of every
 prompt, tool call, evidence citation, and decision the agent emits while
@@ -68,6 +69,23 @@ reputation, UEBA Z-score). The label is computed, not hand-set.
 **Detection drift** — Change in MITRE ATT&CK coverage over time.
 Scheduled coverage snapshots enable "delta vs. last week" tracking on
 the heatmap.
+
+**Executable (of a detection rule)** — The rule is loaded by the detection
+engine, and it got there by being *observed to fire*: a vendor-shaped event
+was replayed through the real connector's `normalize()` and the real engine,
+that rule produced a hit, and an empty event of the same shape produced
+nothing. It is never inferred from a directory name, an `enabled:` key, or
+the shape of a `detection:` block. Executable means **reachable** — it is not
+a claim that the rule detects an attack, that it is tuned, or that it will be
+quiet. Contrast with **on disk**, which counts every rule file in the
+repository including imported corpora in query languages this engine cannot
+evaluate. The two figures always travel together, because the larger one on
+its own reads as coverage.
+
+**`_quarantine/`** — Where an importer wrote a rule it could not translate.
+A location, not a verdict: the Sigma compiler translates rules in place, so
+many files under that directory are compiled, proven to fire and loaded. Ask
+the compiled ruleset whether a rule runs, never the path.
 
 **Fusion** — Real-time stage that ingests alerts off the Kafka spine,
 applies ML scoring (LightGBM + Isolation Forest), deduplicates on a
