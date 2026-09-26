@@ -108,10 +108,10 @@ that resolves host, user and source IP from the usual spellings.
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it. Then fusion runs 833
-executable detection rules and decides what becomes an alert, correlation groups
-related alerts into one incident, an agent investigates and writes its reasoning
-to the Investigation Ledger, and a human approves any response.
+Ingest normalizes to a common shape and Kafka carries it. Then
+fusion runs 833 executable detection rules and decides what becomes an alert,
+correlation groups related alerts into one incident, an agent investigates and
+writes its reasoning to the Investigation Ledger, and a human approves any response.
 
 Both **[docs/architecture/README.md](docs/architecture/README.md)** and the
 [docs portal](https://beenuar.github.io/AiSOC/docs/architecture) walk that path
