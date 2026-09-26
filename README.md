@@ -144,6 +144,10 @@ catalog — authoritative, public, no API key — into the console's Threat
 Intelligence page: the one thing in a fresh install that is neither synthetic
 nor yours.
 
+## ☁️ One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/aisoc/)
+
 ## Real vs synthetic data
 
 This matters more than any feature, so it is stated plainly.
