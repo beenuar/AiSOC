@@ -34,8 +34,8 @@ service lives under `services.<name>` — `--set api.image.tag=...` addresses a
 path no template reads and silently changes nothing:
 
 ```bash
-  --set services.api.image.tag=v11.1.0 \
-  --set services.web.image.tag=v11.1.0
+  --set services.api.image.tag=v11.2.0 \
+  --set services.web.image.tag=v11.2.0
 ```
 
 Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
@@ -45,17 +45,23 @@ Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.
 All images are published to GHCR and Cosign-signed:
 
 ```
-ghcr.io/beenuar/aisoc-core-api:v11.1.0
-ghcr.io/beenuar/aisoc-agents:v11.1.0
-ghcr.io/beenuar/aisoc-realtime:v11.1.0
-ghcr.io/beenuar/aisoc-ingest:v11.1.0
-ghcr.io/beenuar/aisoc-enrichment:v11.1.0
-ghcr.io/beenuar/aisoc-web:v11.1.0
+ghcr.io/beenuar/aisoc-core-api:v11.2.0
+ghcr.io/beenuar/aisoc-agents:v11.2.0
+ghcr.io/beenuar/aisoc-realtime:v11.2.0
+ghcr.io/beenuar/aisoc-ingest:v11.2.0
+ghcr.io/beenuar/aisoc-enrichment:v11.2.0
+ghcr.io/beenuar/aisoc-web:v11.2.0
 ```
+
+The tags above are an example pinned to a release. The current one is whatever
+the chart's `appVersion` says — a default install needs no tag at all, and
+`helm show chart oci://ghcr.io/beenuar/aisoc` reports what it resolves to.
 
 `scripts/check_published_images.py` resolves every one of these against GHCR
 daily, so a name or tag that stops existing fails a build rather than a
-`helm install`. This list read `v5.2.0` until v11.1.0 — a tag no image has
+`helm install`. It asks whether the tag exists and whether the image behind it
+holds the version its tag names — not whether the page names the newest
+release, which is why this list can lag one and still pass. This list read `v5.2.0` until v11.1.0 — a tag no image has
 ever carried — and two of the names, `aisoc-api` and `aisoc-mcp`, have never
 been published at all. The API image is `aisoc-core-api`; the MCP server ships
 inside it rather than as its own image.
@@ -66,7 +72,7 @@ Verify a signature before deploying:
 cosign verify \
   --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  ghcr.io/beenuar/aisoc-core-api:v11.1.0
+  ghcr.io/beenuar/aisoc-core-api:v11.2.0
 ```
 
 ## Scaling
