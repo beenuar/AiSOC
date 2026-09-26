@@ -2,13 +2,13 @@ apiVersion: v2
 name: aisoc
 description: AiSOC - the open-source, AI-native Security Operations Center
 type: application
-version: 5.4.0
+version: 5.5.0
 # Used as the image tag wherever a `tag:` in values.yaml is left empty, so
 # it has to be a tag the registry actually holds — it read "5.2.0", which
 # exists for no image, so every pod of a default install would have gone to
 # ImagePullBackOff. scripts/check_published_images.py resolves it the same
 # way the templates do and fails when it names nothing.
-appVersion: "v11.1.0"
+appVersion: "v11.2.0"
 
 keywords:
   - security

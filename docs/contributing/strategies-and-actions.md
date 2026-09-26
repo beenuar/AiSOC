@@ -7,12 +7,22 @@ failures rather than as general good practice.
 
 ## Why there are rules at all
 
-The detection corpus reached roughly 6,000 rules of which 833 execute. The
+The detection corpus reached roughly 6,000 rules of which 833 executed. The
 gap was not laziness: rules were added faster than anything checked whether
 they could fire, and by the time anyone counted, the number nobody could
 defend had been published for months. The connector catalogue went the same
 way — 35 of 84 had no documentation, and the sidebar listed 34 pages against
 96 files, so most of what existed could not be found.
+
+The detection figure is 2,603 now, and how it moved is the part worth keeping.
+It was not closed by writing rules. Someone asked why the existing ones could
+not fire and found a single cause — Windows events nest their payload one
+level below the namespace the matcher reads, so the two most-used fields in
+the corpus resolved to `None` — and then made "executable" mean *observed to
+fire through the real connector and the real engine*, with a gate that reverts
+the fix and requires those rules to go silent. A count that is gated on
+evidence can be raised honestly; a count that is gated on a flag can only be
+edited.
 
 Both recovered by making the artifact derived and the count gated. A
 strategy library aiming at a hundred entries, and an action registry aiming

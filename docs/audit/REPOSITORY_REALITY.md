@@ -121,11 +121,20 @@ SSRF allow-list entry, and is commented as such.
 
 | Item | Count | Status |
 |---|---|---|
-| Rules the engine loads | **833** | **WORKING** — these can fire |
-| YAML files under `detections/` | **7016** | mostly quarantined imports with **no evaluator**; the engine never reads them |
+| Rules the engine loads | **2603** | **WORKING** — each was replayed through its real connector and the real engine and watched to fire |
+| Detection rules on disk | **6991** | the rest are imports in languages with **no evaluator** here (Splunk SPL, Chronicle YARA-L, CAR pseudocode); the engine never reads them |
+| YAML files under `detections/` | **7016** | the extra 25 are response playbooks, not rules — see `detections/playbooks/` |
 
 The gap matters and has been published both ways in the past. `make stats`
-reports both numbers side by side so they cannot be conflated again.
+reports the first two numbers side by side so they cannot be conflated again.
+
+833 of the executable set are native; 1,770 are imported Sigma rules the
+compiler translated. The reason the figure was 833 for months was not a
+missing feature: Windows events nest their payload under `System`/`EventData`,
+one level below anything the engine flattened, so `CommandLine` and `Image` —
+the two most-used fields in the public Sigma corpus — read `None` and no
+Windows rule could fire however correctly it was written. Fixed in the
+connector; the engine and matcher are byte-identical.
 
 ### Known defects found by running it
 

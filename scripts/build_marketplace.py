@@ -72,9 +72,20 @@ DETECTION_CATEGORIES = {
 
 # Top-level dirs under detections/ that are NOT native rule directories
 # but contain rules in some tier (we walk these separately).
+#
+# `playbooks` is here because `detections/playbooks/*.yaml` holds 25 response
+# playbooks — `trigger:`/`steps:`, no `detection:` block — and this walker
+# indexed every one of them as `"type": "detection"`. That is the whole of the
+# gap between the 7,016 this script published and the 6,991 the README, the
+# truth table and `detection_truth_table.py` all publish: the truth table's
+# own `SKIP_DIRS` has always held `{"fixtures", "playbooks"}`, so the two
+# walkers were reading the same tree and disagreeing about what a detection
+# is. They are indexed below as playbooks, which is what they are, so the
+# marketplace keeps them and neither count is inflated.
 DETECTION_NATIVE_SKIP = {
     "fixtures",
     "community",
+    "playbooks",
     "sigma-imports",
     "car-imports",
     "splunk-imports",
@@ -235,6 +246,21 @@ def playbook_files() -> list[Path]:
     return sorted(PLAYBOOKS_PACKS_DIR.rglob("*.playbook.json"))
 
 
+def standalone_playbook_files() -> list[Path]:
+    """Response playbooks that live under ``detections/playbooks/``.
+
+    Same document shape as a pack entry — ``trigger``/``steps`` — written as
+    YAML and filed under the detections tree. They are not part of the v1
+    pack, so they are counted separately from it: ``stats.playbook_packs``
+    stays the pack figure the landing page quotes, and ``stats.playbooks``
+    is every playbook the marketplace indexes.
+    """
+    directory = DETECTIONS_DIR / "playbooks"
+    if not directory.exists():
+        return []
+    return sorted(directory.rglob("*.yaml"))
+
+
 def plugin_manifests() -> list[Path]:
     if not PLUGINS_DIR.exists():
         return []
@@ -340,9 +366,10 @@ def build_detection_item(
     return item
 
 
-def build_playbook_item(path: Path, *, source: str, tier: str) -> dict[str, Any] | None:
+def build_playbook_item(path: Path, *, source: str, tier: str, pack: bool = True) -> dict[str, Any] | None:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(text) if path.suffix in {".yaml", ".yml"} else json.loads(text)
     except Exception as exc:
         print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
         return None
@@ -378,6 +405,7 @@ def build_playbook_item(path: Path, *, source: str, tier: str) -> dict[str, Any]
         "verified": tier == "stable",
         "source": source,
         "tier": tier,
+        "pack": pack,
         "enabled": True,
         "path": str(path.relative_to(REPO_ROOT)),
     }
@@ -467,6 +495,10 @@ def collect_items() -> list[dict[str, Any]]:
             items.append(item)
     for f in community_playbook_files():
         item = build_playbook_item(f, source="community", tier="community")
+        if item:
+            items.append(item)
+    for f in standalone_playbook_files():
+        item = build_playbook_item(f, source="core", tier="stable", pack=False)
         if item:
             items.append(item)
 
@@ -566,6 +598,11 @@ def build_index() -> dict[str, Any]:
         "stats": {
             "total": len(items),
             "playbooks": sum(1 for i in items if i["type"] == "playbook"),
+            # The v1 pack alone. Quoted on the landing page as "N playbook
+            # packs", so it must not absorb the standalone response playbooks
+            # under `detections/playbooks/`, which are playbooks but not part
+            # of the pack.
+            "playbook_packs": sum(1 for i in items if i["type"] == "playbook" and i.get("pack")),
             "detections": sum(1 for i in items if i["type"] == "detection"),
             "plugins": sum(1 for i in items if i["type"] == "plugin"),
             "verified": sum(1 for i in items if i.get("verified")),

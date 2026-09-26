@@ -27,8 +27,9 @@ const BADGE_STYLES: Record<Contributor['badge'], { bg: string; text: string; bor
 };
 
 // The core row is the executable corpus, read from the generated artefact
-// rather than typed: it previously claimed 218 rules across 5 categories,
-// which matched neither the engine (833) nor the indexed corpus.
+// rather than typed: it once claimed 218 rules across 5 categories, which
+// matched neither the engine (833 at the time, 2,603 now) nor the indexed
+// corpus — the reason it reads the artefact is that both figures move.
 const CORE_CONTRIBUTORS: Contributor[] = [
   {
     name: 'AiSOC',

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,7 @@ ROOT = repo_root()
 DETECTIONS_DIR = ROOT / "detections"
 FIXTURES_DIR = DETECTIONS_DIR / "fixtures"
 SCRIPTS_DIR = ROOT / "scripts"
+RULESET_DIR = ROOT / "services" / "fusion" / "app" / "data"
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
@@ -86,6 +88,28 @@ VALID_CATEGORIES = {
 }
 
 REQUIRED_FIELDS = ["id", "name", "severity", "detection"]
+
+
+@lru_cache(maxsize=1)
+def engine_rule_ids() -> frozenset[str]:
+    """Ids the detection engine loads, across both compiled rulesets.
+
+    Empty when neither artefact is on disk, which the summary reports as
+    unknown rather than as zero — a fresh checkout that has not exported the
+    ruleset should not be told none of its rules run.
+    """
+    ids: set[str] = set()
+    for name in ("detection_ruleset.json", "detection_ruleset_imported.json"):
+        path = RULESET_DIR / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        ids |= {str(r["id"]) for r in data.get("rules") or [] if r.get("id")}
+    return frozenset(ids)
+
 
 # Provenance fields required on every imported rule. License and
 # license_url should be present so we can prove the redistribution chain;
@@ -395,7 +419,8 @@ def main() -> int:
         "community": 0,
         "unknown": 0,
     }
-    quarantine_count = 0
+    loaded_ids = engine_rule_ids()
+    executable_count = 0
 
     for path in yaml_files:
         rel = path.relative_to(ROOT)
@@ -415,13 +440,22 @@ def main() -> int:
         classification = classify(path)
         tier = classification["tier"]
         tier_counts[tier] = tier_counts.get(tier, 0) + 1
-        if classification["is_quarantined"]:
-            quarantine_count += 1
 
         total += 1
 
         errors, rule = validate_rule(path, seen_ids, classification)
         rule_failed = bool(errors)
+
+        # Whether a rule runs is reported by asking the engine, not by reading
+        # the path. `_quarantine/` stopped meaning "cannot run" when the Sigma
+        # compiler began translating rules where they sat — 1,724 files under
+        # that directory are loaded and fire — so the old path-derived figure
+        # said 5,937 while `detection_truth_table.py` said 4,213 about the same
+        # tree. Two counts of one thing that disagree is how a stale number
+        # survives; this one derives from the same artefact as the truth table.
+        rule_loaded = str((rule or {}).get("id") or "") in loaded_ids
+        if rule_loaded:
+            executable_count += 1
 
         replay_errors: list[str] = []
         if rule and not rule_failed and tier == "native" and path.parent.name in VALID_CATEGORIES:
@@ -441,16 +475,18 @@ def main() -> int:
                 print(f"    - {e}")
         else:
             warn_suffix = f" ({len(warnings)} warn)" if warnings else ""
-            quarantine_suffix = "  [quarantined]" if classification["is_quarantined"] else ""
-            print(f"PASS  [{tier}] {rel}{warn_suffix}{quarantine_suffix}")
+            state_suffix = "  [executable]" if rule_loaded else "  [not loaded]"
+            print(f"PASS  [{tier}] {rel}{warn_suffix}{state_suffix}")
             for w in warnings:
                 print(f"    {w}")
 
     print(f"\n{'─' * 60}")
     print(f"Validated {total} rules — {total - failed} passed, {failed} failed, {fixture_warnings} fixture warnings")
     print("  Tiers: " + ", ".join(f"{tier}={count}" for tier, count in sorted(tier_counts.items()) if count > 0))
-    if quarantine_count:
-        print(f"  Quarantined (parsed-but-disabled): {quarantine_count}")
+    if loaded_ids:
+        print(f"  Executable (loaded by the engine): {executable_count}; not loaded: {total - executable_count}")
+    else:
+        print("  Executable: unknown — no compiled ruleset on disk; run scripts/export_detection_ruleset.py")
 
     return 1 if failed > 0 else 0
 

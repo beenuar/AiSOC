@@ -124,15 +124,25 @@ block the front door, and the reason an event is not lost when fusion restarts.
 ## 4 · Fusion evaluates detections
 
 [`services/fusion`](https://github.com/beenuar/AiSOC/tree/main/services/fusion)
-(container port 8003) consumes the spine and runs **833 executable detection
+(container port 8003) consumes the spine and runs **2,603 executable detection
 rules** against each event.
 
 The rules the engine runs are compiled into
-[`app/data/detection_ruleset.json`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/data/detection_ruleset.json).
-The YAML under `detections/` is a *projection* of that, not the engine's input —
-most of what is on disk sits in `_quarantine/` and never loads, which is why
-the corpus figure and the executable figure are published separately. See
+[`app/data/detection_ruleset.json`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/data/detection_ruleset.json)
+and its imported counterpart beside it. The YAML under `detections/` is a
+*projection* of those, not the engine's input — 6,991 rules are on disk and
+2,603 load, which is why the corpus figure and the executable figure are
+published separately. See
 [the detection truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
+
+Executable is a claim backed by a replay, not by a flag: a rule enters the
+compiled ruleset only after a vendor-shaped event has been pushed through the
+real connector and this engine and that rule was observed to fire, with an
+empty event of the same shape producing nothing. The proof is checkable in
+both directions —
+`scripts/compile_sigma_ruleset.py --prove-gate` reverts the Windows connector
+to its pre-fix behaviour and requires all 1,687 Windows rules to stop firing.
+It does not claim the rules detect attacks, only that they are reachable.
 
 | Step | Code |
 |---|---|

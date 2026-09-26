@@ -1,38 +1,38 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-23T14:16:45Z",
+  "generated": "2026-09-26T19:28:33Z",
   "stats": {
-    "considered": 1054,
-    "eligible": 1051,
-    "selected": 418,
+    "considered": 2603,
+    "eligible": 2592,
+    "selected": 509,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 117,
+    "unique_techniques": 140,
     "selected_by_tier": {
-      "imported": 41,
-      "native": 377
+      "imported": 148,
+      "native": 361
     },
     "selected_by_severity": {
-      "critical": 100,
-      "high": 209,
-      "low": 6,
-      "medium": 103
+      "critical": 105,
+      "high": 273,
+      "low": 17,
+      "medium": 114
     },
     "selected_by_category": {
       "application": 36,
-      "cloud": 164,
+      "cloud": 155,
       "data-exfil": 20,
-      "endpoint": 117,
-      "identity": 69,
-      "network": 12
+      "endpoint": 210,
+      "identity": 77,
+      "network": 11
     }
   },
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 48,
+      "count": 70,
       "rule_ids": [
         "det-application-050",
         "det-application-078",
@@ -59,8 +59,6 @@
         "det-cloud-160",
         "det-cloud-161",
         "det-cloud-179",
-        "det-cloud-205",
-        "det-cloud-212",
         "det-endpoint-003",
         "det-endpoint-012",
         "det-endpoint-074",
@@ -74,21 +72,45 @@
         "det-endpoint-182",
         "det-endpoint-286",
         "det-identity-121",
-        "mitre-car-car-2021-01-009",
-        "mitre-car-car-2021-05-003",
+        "sigmahq-sigma-00321fee-ca72-4cce-b011-5415af3b9960",
+        "sigmahq-sigma-06125661-3814-4e03-bfa2-1e4411c60ac3",
+        "sigmahq-sigma-0e0255bf-2548-47b8-9582-c0955c9283f5",
+        "sigmahq-sigma-1279262f-1464-422f-ac0d-5b545320c526",
         "sigmahq-sigma-1444443e-6757-43e4-9ea4-c8fc705f79a2",
         "sigmahq-sigma-16124c2d-e40b-4fcc-8f2c-5ab7870a2223",
-        "sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e",
+        "sigmahq-sigma-21ff4ca9-f13a-41ad-b828-0077b2af2e40",
+        "sigmahq-sigma-33d50d03-20ec-4b74-a74e-1e65a38af1c0",
+        "sigmahq-sigma-39a80702-d7ca-4a83-b776-525b1f86a36d",
+        "sigmahq-sigma-4b046706-5789-4673-b111-66f25fe99534",
+        "sigmahq-sigma-570ae5ec-33dc-427c-b815-db86228ad43e",
+        "sigmahq-sigma-5de03871-5d46-4539-a82d-3aa992a69a83",
+        "sigmahq-sigma-639c9081-f482-47d3-a0bd-ddee3d4ecd76",
+        "sigmahq-sigma-6a7ba45c-63d8-473e-9736-2eaabff79964",
+        "sigmahq-sigma-6fe4aa1e-0531-4510-8be2-782154b73b48",
+        "sigmahq-sigma-77df53a5-1d78-4f32-bc5a-0e7465bd8f41",
+        "sigmahq-sigma-7c06ab9b-b1d2-4ba9-b06e-09491ded20d9",
+        "sigmahq-sigma-81bcb81b-5b1f-474b-b373-52c871aaa7b1",
         "sigmahq-sigma-87df9ee1-5416-453a-8a08-e8d4a51e9ce1",
+        "sigmahq-sigma-88872991-7445-4a22-90b2-a3adadb0e827",
+        "sigmahq-sigma-9ac94dc8-9042-493c-ba45-3b5e7c86b980",
+        "sigmahq-sigma-9e3cb244-bdb8-4632-8c90-6079c8f4f16d",
+        "sigmahq-sigma-a136ac98-b2bc-4189-a14d-f0d0388e57a7",
+        "sigmahq-sigma-a4824fca-976f-4964-b334-0621379e84c4",
         "sigmahq-sigma-add64136-62e5-48ea-807e-88638d02df1e",
-        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2"
+        "sigmahq-sigma-c1337eb8-921a-4b59-855b-4ba188ddcc42",
+        "sigmahq-sigma-c49c5062-0966-4170-9efd-9968c913a6cf",
+        "sigmahq-sigma-c947b146-0abc-4c87-9c64-b17e9d7274a2",
+        "sigmahq-sigma-ce72ef99-22f1-43d4-8695-419dcb5d9330",
+        "sigmahq-sigma-d223b46b-5621-4037-88fe-fda32eead684",
+        "sigmahq-sigma-db1c21e4-cd66-4b4e-85ca-590f0780529c",
+        "sigmahq-sigma-dbc1f800-0fe0-4bc0-9c66-292c2abe3f78"
       ],
       "min_target": 25,
       "covered": true
     },
     "credential-access": {
       "label": "Credential Access",
-      "count": 86,
+      "count": 100,
       "rule_ids": [
         "det-application-004",
         "det-application-008",
@@ -111,15 +133,12 @@
         "det-cloud-176",
         "det-cloud-183",
         "det-cloud-189",
-        "det-cloud-208",
-        "det-cloud-211",
         "det-data-exfil-020",
         "det-endpoint-093",
         "det-endpoint-096",
         "det-endpoint-141",
         "det-endpoint-267",
         "det-endpoint-272",
-        "det-endpoint-302",
         "det-identity-001",
         "det-identity-003",
         "det-identity-010",
@@ -161,28 +180,45 @@
         "det-network-004",
         "det-network-026",
         "det-network-076",
-        "mitre-car-car-2013-04-002",
-        "mitre-car-car-2013-07-001",
-        "mitre-car-car-2013-09-003",
-        "mitre-car-car-2019-04-004",
-        "mitre-car-car-2019-07-002",
-        "mitre-car-car-2019-08-001",
-        "mitre-car-car-2019-08-002",
-        "mitre-car-car-2020-05-001",
-        "mitre-car-car-2020-09-004",
-        "mitre-car-car-2020-11-002",
-        "mitre-car-car-2021-05-008",
-        "mitre-car-car-2021-05-011",
+        "sigmahq-sigma-0adc67e0-a68f-4ffd-9c43-28905aad5d6a",
+        "sigmahq-sigma-0ed99dda-6a35-11ef-8c99-0242ac120002",
+        "sigmahq-sigma-0f60b28c-64dd-4e2c-9a63-5334d3e3a6e6",
+        "sigmahq-sigma-189e3b02-82b2-4b90-9662-411eb64486d4",
+        "sigmahq-sigma-1ce8c8a3-2723-48ed-8246-906ac91061a6",
+        "sigmahq-sigma-1de68c67-af5c-4097-9c85-fe5578e09e67",
+        "sigmahq-sigma-24c77512-782b-448a-8950-eddb0785fc71",
+        "sigmahq-sigma-24e3e58a-646b-4b50-adef-02ef935b9fc8",
+        "sigmahq-sigma-25cde13e-8e20-4c29-b949-4e795b76f16f",
+        "sigmahq-sigma-2d3cdeec-c0db-45b4-aa86-082f7eb75701",
+        "sigmahq-sigma-3245cd30-e015-40ff-a31d-5cadd5f377ec",
+        "sigmahq-sigma-37c1333a-a0db-48be-b64b-7393b2386e3b",
+        "sigmahq-sigma-39b31e81-5f5f-4898-9c0e-2160cfc0f9bf",
+        "sigmahq-sigma-416bc4a2-7217-4519-8dc7-c3271817f1d5",
+        "sigmahq-sigma-42a993dd-bb3e-48c8-b372-4d6684c4106c",
+        "sigmahq-sigma-4833155a-4053-4c9c-a997-777fcea0baa7",
+        "sigmahq-sigma-48d91a3a-2363-43ba-a456-ca71ac3da5c2",
+        "sigmahq-sigma-53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc",
+        "sigmahq-sigma-58f4ea09-0fc2-4520-ba18-b85c540b0eaf",
+        "sigmahq-sigma-5a44727c-3b85-4713-8c44-4401d5499629",
+        "sigmahq-sigma-60f6535a-760f-42a9-be3f-c9a0a025906e",
         "sigmahq-sigma-7679d464-4f74-45e2-9e01-ac66c5eb041a",
-        "sigmahq-sigma-78cc2dd2-7d20-4d32-93ff-057084c38b93",
-        "sigmahq-sigma-7ec2c172-dceb-4c10-92c9-87c1881b7e18"
+        "sigmahq-sigma-7892ec59-c5bb-496d-8968-e5d210ca3ac4",
+        "sigmahq-sigma-7ec2c172-dceb-4c10-92c9-87c1881b7e18",
+        "sigmahq-sigma-851fd622-b675-4d26-b803-14bc7baa517a",
+        "sigmahq-sigma-8a1b2c3d-4e5f-6789-abcd-ef1234567890",
+        "sigmahq-sigma-97dbf6e2-e436-44d8-abee-4261b24d3e41",
+        "sigmahq-sigma-9e099d99-44c2-42b6-a6d8-54c3545cab29",
+        "sigmahq-sigma-aaafa146-074c-11eb-adc1-0242ac120002",
+        "sigmahq-sigma-b4a6d707-9430-4f5f-af68-0337f52d5c42",
+        "sigmahq-sigma-baef1ec6-2ca9-47a3-97cc-4cf2bda10b77",
+        "sigmahq-sigma-c8da0dfd-4ed0-4b68-962d-13c9c884384e"
       ],
       "min_target": 25,
       "covered": true
     },
     "lateral": {
       "label": "Lateral Movement",
-      "count": 33,
+      "count": 68,
       "rule_ids": [
         "det-endpoint-010",
         "det-endpoint-111",
@@ -190,7 +226,6 @@
         "det-endpoint-113",
         "det-endpoint-114",
         "det-endpoint-226",
-        "det-endpoint-298",
         "det-identity-102",
         "det-identity-103",
         "det-identity-104",
@@ -201,29 +236,65 @@
         "det-network-065",
         "det-network-066",
         "det-network-070",
-        "mitre-car-car-2013-01-003",
-        "mitre-car-car-2013-04-002",
-        "mitre-car-car-2013-05-003",
-        "mitre-car-car-2013-05-005",
-        "mitre-car-car-2013-07-001",
-        "mitre-car-car-2013-07-002",
-        "mitre-car-car-2013-10-001",
-        "mitre-car-car-2014-03-001",
-        "mitre-car-car-2014-05-001",
-        "mitre-car-car-2014-11-004",
-        "mitre-car-car-2014-11-006",
-        "mitre-car-car-2016-04-004",
-        "mitre-car-car-2016-04-005",
-        "sigmahq-sigma-10c14723-61c7-4c75-92ca-9af245723ad2",
-        "sigmahq-sigma-18f37338-b9bd-4117-a039-280c81f7a596",
-        "sigmahq-sigma-aa35a627-33fb-4d04-a165-d33b4afca3e8"
+        "sigmahq-sigma-055fb54c-a8f4-4aee-bd44-f74cf30a0d9d",
+        "sigmahq-sigma-05a2ab7e-ce11-4b63-86db-ab32e763e11d",
+        "sigmahq-sigma-214e8f95-100a-4e04-bb31-ef6cba8ce07e",
+        "sigmahq-sigma-2f7979ae-f82b-45af-ac1d-2b10e93b0baa",
+        "sigmahq-sigma-304afd73-55a5-4bb9-8c21-0b1fc84ea9e4",
+        "sigmahq-sigma-327f48c1-a6db-4eb8-875a-f6981f1b0183",
+        "sigmahq-sigma-32d56ea1-417f-44ff-822b-882873f5f43b",
+        "sigmahq-sigma-3ce8e9a4-bc61-4c9b-8e69-d7e2492a8781",
+        "sigmahq-sigma-45545954-4016-43c6-855e-eae8f1c369dc",
+        "sigmahq-sigma-48a61b29-389f-4032-b317-b30de6b95314",
+        "sigmahq-sigma-48d91a3a-2363-43ba-a456-ca71ac3da5c2",
+        "sigmahq-sigma-4b8f6d3a-9c5e-4f2a-a7d8-6b9c3e5f2a8d",
+        "sigmahq-sigma-51e33403-2a37-4d66-a574-1fda1782cc31",
+        "sigmahq-sigma-551d9c1f-816c-445b-a7a6-7a3864720d60",
+        "sigmahq-sigma-586a8d6b-6bfe-4ad9-9d78-888cd2fe50c3",
+        "sigmahq-sigma-5bb68627-3198-40ca-b458-49f973db8752",
+        "sigmahq-sigma-60167e5c-84b2-4c95-a7ac-86281f27c445",
+        "sigmahq-sigma-60bfeac3-0d35-4302-8efb-1dd16f715bc6",
+        "sigmahq-sigma-614a7e17-5643-4d89-b6fe-f9df1a79641c",
+        "sigmahq-sigma-61a7697c-cb79-42a8-a2ff-5f0cdfae0130",
+        "sigmahq-sigma-6e8fe0a8-ba0b-4a93-8f9e-82657e7a5984",
+        "sigmahq-sigma-730fc21b-eaff-474b-ad23-90fd265d4988",
+        "sigmahq-sigma-734f8d9b-42b8-41b2-bcf5-abaf49d5a3c8",
+        "sigmahq-sigma-7638e5fe-600c-4289-a968-f49dd537ec7d",
+        "sigmahq-sigma-7707a579-e0d8-4886-a853-ce47e4575aaa",
+        "sigmahq-sigma-78f10490-f2f4-4d19-a75b-4e0683bf3b8d",
+        "sigmahq-sigma-7b836d7f-179c-4ba4-90a7-a7e60afb48e6",
+        "sigmahq-sigma-7e6237fe-3ddb-438f-9381-9bf9de5af8d0",
+        "sigmahq-sigma-7f3a9c2d-4e8b-4a7f-9d3e-5c6f8a9b2e1d",
+        "sigmahq-sigma-855bc8b5-2ae8-402e-a9ed-b889e6df1900",
+        "sigmahq-sigma-871b9555-69ca-4993-99d3-35a59f9f3599",
+        "sigmahq-sigma-882e858a-3233-4ba8-855e-2f3d3575803d",
+        "sigmahq-sigma-8a3038e8-9c9d-46f8-b184-66234a160f6f",
+        "sigmahq-sigma-8e5c03fa-b7f0-11ea-b242-07e0576828d9",
+        "sigmahq-sigma-96b9f619-aa91-478f-bacb-c3e50f8df575",
+        "sigmahq-sigma-991a9744-f2f0-44f2-bd33-9092eba17dc3",
+        "sigmahq-sigma-9e4b7d3a-6f2c-4e9a-8d1b-3c5e7a9f2b4d",
+        "sigmahq-sigma-9f38c1db-e2ae-40bf-81d0-5b68f73fb512",
+        "sigmahq-sigma-a197e378-d31b-41c0-9635-cfdf1c1bb423",
+        "sigmahq-sigma-b0ce780f-10bd-496d-9067-066d23dc3aa5",
+        "sigmahq-sigma-b1e5da3b-ca8e-4adf-915c-9921f3d85481",
+        "sigmahq-sigma-bcfece3d-56fe-4545-9931-3b8e92927db1",
+        "sigmahq-sigma-d36f87ea-c403-44d2-aa79-1a0ac7c24456",
+        "sigmahq-sigma-def8b624-e08f-4ae1-8612-1ba21190da6b",
+        "sigmahq-sigma-efc21479-9e83-41da-8cf1-122e06ba8db3",
+        "sigmahq-sigma-f117933c-980c-4f78-b384-e3d838111165",
+        "sigmahq-sigma-f1f3bf22-deb2-418d-8cce-e1a45e46a5bd",
+        "sigmahq-sigma-f318b911-ea88-43f4-9281-0de23ede628e",
+        "sigmahq-sigma-f354eba5-623b-450f-b073-0b5b2773b6aa",
+        "sigmahq-sigma-f43f5d2f-3f2a-4cc8-b1af-81fde7dbaf0e",
+        "sigmahq-sigma-f72aa3e8-49f9-4c7d-bd74-f8ab84ff9bbb",
+        "sigmahq-sigma-ffa28e60-bdb1-46e0-9f82-05f7a61cc06e"
       ],
       "min_target": 25,
       "covered": true
     },
     "exfil": {
       "label": "Data Exfiltration",
-      "count": 42,
+      "count": 52,
       "rule_ids": [
         "det-application-081",
         "det-cloud-058",
@@ -232,14 +303,6 @@
         "det-cloud-073",
         "det-cloud-184",
         "det-cloud-186",
-        "det-cloud-192",
-        "det-cloud-195",
-        "det-cloud-196",
-        "det-cloud-203",
-        "det-cloud-204",
-        "det-cloud-206",
-        "det-cloud-221",
-        "det-cloud-222",
         "det-data-exfil-001",
         "det-data-exfil-002",
         "det-data-exfil-003",
@@ -265,8 +328,26 @@
         "det-endpoint-270",
         "det-identity-152",
         "det-network-055",
-        "mitre-car-car-2013-04-002",
-        "sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641"
+        "sigmahq-sigma-07837ab9-60e1-481f-a74d-c31fb496a94c",
+        "sigmahq-sigma-18249279-932f-45e2-b37a-8925f2597670",
+        "sigmahq-sigma-1d08ac94-400d-4469-a82f-daee9a908849",
+        "sigmahq-sigma-1f0f6176-6482-4027-b151-00071af39d7e",
+        "sigmahq-sigma-457cc9ac-d8e6-4d1d-8c0e-251d0f11a74c",
+        "sigmahq-sigma-4b657234-038e-4ad5-997c-4be42340bce4",
+        "sigmahq-sigma-6ddff2e8-ea1a-45d0-8938-93dfc1d67ae7",
+        "sigmahq-sigma-78b3756a-7804-4ef7-8555-7b9024a02e2d",
+        "sigmahq-sigma-7cd1dcdc-6edf-4896-86dc-d1f19ad64903",
+        "sigmahq-sigma-855bc8b5-2ae8-402e-a9ed-b889e6df1900",
+        "sigmahq-sigma-8e4cf0e5-aa5d-4dc3-beff-dc26917744a9",
+        "sigmahq-sigma-99793437-3e16-439b-be0f-078782cf953d",
+        "sigmahq-sigma-9c8afa4d-0022-48f0-9456-3712466f9701",
+        "sigmahq-sigma-9e02c8ec-02b9-43e8-81eb-34a475ba7965",
+        "sigmahq-sigma-abae8fec-57bd-4f87-aff6-6e3db989843d",
+        "sigmahq-sigma-c615d676-f655-46b9-b913-78729021e5d7",
+        "sigmahq-sigma-d2e3f2f6-7e09-4bf2-bc5d-90186809e7fb",
+        "sigmahq-sigma-d59d7842-9a21-4bc6-ba98-64bfe0091355",
+        "sigmahq-sigma-e290b10b-1023-4452-a4a9-eb31a9013b3a",
+        "sigmahq-sigma-fbc5e92f-3044-4e73-a5c6-1c4359b539de"
       ],
       "min_target": 25,
       "covered": true
@@ -335,6 +416,8 @@
         "det-cloud-061",
         "det-cloud-062",
         "det-cloud-063",
+        "det-cloud-067",
+        "det-cloud-068",
         "det-cloud-072",
         "det-cloud-077",
         "det-cloud-081",
@@ -360,8 +443,6 @@
         "det-cloud-183",
         "det-cloud-185",
         "det-cloud-190",
-        "det-cloud-191",
-        "det-cloud-225",
         "det-endpoint-178",
         "det-endpoint-245",
         "det-endpoint-246",
@@ -435,12 +516,6 @@
         "det-cloud-185",
         "det-cloud-189",
         "det-cloud-190",
-        "det-cloud-191",
-        "det-cloud-197",
-        "det-cloud-208",
-        "det-cloud-209",
-        "det-cloud-213",
-        "det-cloud-226",
         "det-endpoint-026",
         "det-endpoint-027",
         "det-endpoint-141",
@@ -456,11 +531,17 @@
         "det-endpoint-263",
         "det-endpoint-264",
         "det-endpoint-265",
-        "det-endpoint-300",
-        "det-endpoint-301",
-        "det-endpoint-302",
         "det-identity-001",
+        "det-identity-002",
+        "det-identity-003",
+        "det-identity-004",
+        "det-identity-006",
+        "det-identity-008",
         "det-identity-009",
+        "det-identity-011",
+        "det-identity-012",
+        "det-identity-013",
+        "det-identity-016",
         "det-identity-020",
         "det-identity-021",
         "det-identity-027",
@@ -489,7 +570,7 @@
     },
     "supply-chain": {
       "label": "Supply Chain",
-      "count": 36,
+      "count": 44,
       "rule_ids": [
         "det-application-006",
         "det-application-014",
@@ -512,10 +593,6 @@
         "det-cloud-049",
         "det-cloud-071",
         "det-cloud-143",
-        "det-cloud-198",
-        "det-cloud-199",
-        "det-cloud-207",
-        "det-cloud-210",
         "det-data-exfil-010",
         "det-endpoint-024",
         "det-endpoint-190",
@@ -526,14 +603,26 @@
         "det-identity-153",
         "det-identity-154",
         "det-identity-155",
-        "det-identity-156"
+        "det-identity-156",
+        "sigmahq-sigma-0ee4d8a5-4e67-4faf-acfa-62a78457d1f2",
+        "sigmahq-sigma-1f0489be-b496-4ddf-b3a9-5900f2044e9c",
+        "sigmahq-sigma-401e5d00-b944-11ea-8f9a-00163ecd60ae",
+        "sigmahq-sigma-50a0aa3d-ab16-4594-a8aa-5145a6e6792b",
+        "sigmahq-sigma-6b269392-9eba-40b5-acb6-55c882b20ba6",
+        "sigmahq-sigma-7280c9f3-a5af-45d0-916a-bc01cb4151c9",
+        "sigmahq-sigma-7bd3902d-8b8b-4dd4-838a-c6862d40150d",
+        "sigmahq-sigma-805c55d9-31e6-4846-9878-c34c75054fe9",
+        "sigmahq-sigma-89c42960-f244-4dad-9151-ae9b1a3287a2",
+        "sigmahq-sigma-9637e8a5-7131-4f7f-bdc7-2b05d8670c43",
+        "sigmahq-sigma-bd1212e5-78da-431e-95fa-c58e3237a8e6",
+        "sigmahq-sigma-fa3c117a-bc0d-416e-a31b-0c0e80653efb"
       ],
       "min_target": 25,
       "covered": true
     },
     "k8s": {
       "label": "Kubernetes / Containers",
-      "count": 73,
+      "count": 71,
       "rule_ids": [
         "det-application-018",
         "det-application-023",
@@ -605,8 +694,6 @@
         "det-identity-020",
         "det-identity-151",
         "sigmahq-sigma-66c3b204-9f88-4d0a-a7f7-8a57d521ca55",
-        "sigmahq-sigma-a46c93b7-55ed-4d27-a41b-c259456c4746",
-        "sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641",
         "sigmahq-sigma-fa5b1358-b040-4403-9868-15f7d9ab6329"
       ],
       "min_target": 25,
@@ -614,123 +701,146 @@
     }
   },
   "mitre_techniques": {
-    "T1003": 12,
+    "T1003": 14,
     "T1003.001": 2,
     "T1003.002": 1,
+    "T1003.004": 1,
     "T1003.006": 2,
-    "T1007": 1,
-    "T1010": 1,
+    "T1005": 3,
     "T1011": 1,
-    "T1012": 1,
-    "T1016": 1,
-    "T1018": 1,
-    "T1020": 2,
-    "T1021": 11,
-    "T1021.001": 1,
-    "T1021.002": 6,
-    "T1021.003": 1,
-    "T1021.004": 1,
-    "T1021.006": 4,
-    "T1027": 1,
-    "T1029": 1,
+    "T1018": 2,
+    "T1020": 3,
+    "T1021": 3,
+    "T1021.001": 9,
+    "T1021.002": 23,
+    "T1021.003": 8,
+    "T1021.004": 4,
+    "T1021.005": 1,
+    "T1021.006": 10,
+    "T1027.005": 1,
+    "T1027.010": 1,
     "T1033": 1,
-    "T1036.005": 1,
     "T1039": 1,
-    "T1040": 3,
-    "T1041": 7,
+    "T1040": 2,
+    "T1041": 8,
     "T1046": 1,
-    "T1047": 2,
-    "T1049": 1,
+    "T1047": 5,
+    "T1048": 7,
     "T1052": 1,
     "T1053": 1,
-    "T1057": 1,
-    "T1059": 3,
-    "T1059.001": 1,
-    "T1059.004": 1,
-    "T1069": 1,
+    "T1059.001": 6,
+    "T1059.003": 3,
+    "T1059.004": 2,
+    "T1059.005": 2,
+    "T1059.006": 3,
+    "T1059.007": 2,
+    "T1068": 1,
     "T1069.003": 1,
-    "T1070": 4,
+    "T1070": 2,
+    "T1070.004": 1,
     "T1071.001": 1,
     "T1078": 14,
-    "T1078.001": 1,
-    "T1078.004": 26,
+    "T1078.001": 3,
+    "T1078.004": 25,
     "T1082": 1,
     "T1087": 1,
     "T1087.004": 1,
-    "T1098": 17,
-    "T1098.001": 14,
-    "T1098.003": 8,
-    "T1098.004": 6,
+    "T1090": 2,
+    "T1090.002": 1,
+    "T1098": 16,
+    "T1098.001": 13,
+    "T1098.003": 5,
+    "T1098.004": 4,
     "T1098.007": 1,
+    "T1102": 2,
     "T1105": 1,
-    "T1110": 7,
-    "T1110.001": 3,
+    "T1106": 1,
+    "T1110": 12,
+    "T1110.001": 4,
+    "T1110.002": 1,
     "T1110.003": 3,
     "T1110.004": 2,
-    "T1112": 1,
-    "T1114.002": 3,
-    "T1114.003": 3,
-    "T1133": 3,
-    "T1136": 1,
-    "T1136.001": 2,
-    "T1187": 1,
-    "T1190": 6,
-    "T1195.002": 9,
-    "T1199": 14,
-    "T1210": 1,
-    "T1212": 2,
-    "T1213.002": 1,
+    "T1114.002": 1,
+    "T1114.003": 1,
+    "T1133": 4,
+    "T1134.001": 1,
+    "T1136.001": 3,
+    "T1136.002": 1,
+    "T1187": 2,
+    "T1190": 10,
+    "T1195": 1,
+    "T1195.001": 1,
+    "T1195.002": 8,
+    "T1199": 11,
+    "T1201": 1,
+    "T1203": 1,
+    "T1204.002": 1,
+    "T1210": 4,
+    "T1211": 1,
+    "T1212": 3,
+    "T1218": 4,
+    "T1219": 2,
     "T1484.002": 1,
-    "T1485": 31,
-    "T1486": 5,
-    "T1489": 2,
-    "T1490": 11,
-    "T1496": 6,
-    "T1505.003": 2,
+    "T1485": 34,
+    "T1486": 8,
+    "T1489": 10,
+    "T1490": 19,
+    "T1496": 4,
+    "T1499.004": 1,
+    "T1505.003": 8,
     "T1518": 1,
     "T1525": 8,
-    "T1528": 5,
+    "T1528": 6,
     "T1530": 24,
     "T1531": 2,
-    "T1537": 10,
-    "T1539": 2,
-    "T1543": 1,
-    "T1548.003": 1,
-    "T1550": 4,
-    "T1550.003": 1,
+    "T1537": 7,
+    "T1539": 4,
+    "T1543.003": 2,
+    "T1548": 1,
+    "T1548.002": 1,
+    "T1550": 5,
+    "T1550.001": 1,
+    "T1550.003": 2,
     "T1552": 3,
-    "T1552.001": 5,
-    "T1552.005": 1,
+    "T1552.001": 6,
+    "T1552.004": 1,
     "T1552.007": 1,
-    "T1554": 1,
-    "T1555": 2,
+    "T1553.002": 1,
+    "T1554": 3,
+    "T1555": 5,
+    "T1555.003": 2,
     "T1555.005": 1,
-    "T1556": 40,
+    "T1556": 38,
     "T1556.001": 1,
     "T1556.006": 5,
     "T1556.007": 1,
-    "T1558": 1,
+    "T1557.001": 1,
+    "T1558": 2,
     "T1558.001": 2,
     "T1558.002": 1,
-    "T1558.003": 1,
+    "T1558.003": 2,
     "T1560.001": 3,
-    "T1562": 1,
-    "T1562.001": 8,
+    "T1562.001": 5,
     "T1562.004": 2,
-    "T1562.008": 8,
+    "T1562.008": 7,
+    "T1563.002": 1,
     "T1565": 1,
-    "T1565.001": 1,
-    "T1567": 11,
-    "T1567.002": 2,
+    "T1567": 15,
+    "T1567.002": 3,
+    "T1568.002": 1,
     "T1569": 1,
-    "T1570": 6,
-    "T1574": 1,
-    "T1606": 1,
+    "T1569.002": 4,
+    "T1570": 5,
+    "T1572": 8,
+    "T1588.002": 2,
     "T1606.002": 1,
+    "T1608.003": 1,
     "T1609": 1,
     "T1610": 11,
     "T1611": 24,
-    "T1612": 1
+    "T1612": 1,
+    "T1621": 1,
+    "T1685": 2
   },
   "items": [
     {
@@ -3089,6 +3199,57 @@
       "has_executable_body": true
     },
     {
+      "id": "det-cloud-067",
+      "name": "AWS EC2 UserData Modified On Running Instance",
+      "path": "detections/cloud/aws-ec2-userdata-modified-running.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1059.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-068",
+      "name": "AWS VPC Default Route Pointed At New IGW",
+      "path": "detections/cloud/aws-vpc-route-to-internet-gateway.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1090"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
       "id": "det-cloud-071",
       "name": "AWS VPC Peering Connection Across Organizations",
       "path": "detections/cloud/aws-vpc-peering-cross-org.yaml",
@@ -5301,598 +5462,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "multi-cloud",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-191",
-      "name": "AWS GuardDuty \u2014 UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration",
-      "path": "detections/cloud/aws-guardduty-instance-credential-exfiltration.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1552.005",
-        "T1078.004",
-        "T1071.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:3(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-192",
-      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
-      "path": "detections/cloud/m365-exchange-transport-rule-external-redirect.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1114.003",
-        "T1020"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-195",
-      "name": "M365 eDiscovery Search Results Exported",
-      "path": "detections/cloud/m365-exchange-ediscovery-export.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1567"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-196",
-      "name": "M365 SharePoint External Sharing Enabled at Org Level",
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-org.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1537",
-        "T1213.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-197",
-      "name": "M365 SharePoint Site Collection Admin Granted to External User",
-      "path": "detections/cloud/m365-sharepoint-site-admin-external-user.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-198",
-      "name": "M365 Teams External Access Domain Allow-Listed",
-      "path": "detections/cloud/m365-teams-external-access-domain-added.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1199"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-199",
-      "name": "M365 Teams Custom App Sideloading Enabled",
-      "path": "detections/cloud/m365-teams-app-sideloading-enabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1195.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-203",
-      "name": "M365 Purview DLP Policy Disabled",
-      "path": "detections/cloud/m365-purview-dlp-policy-disabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1537"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-204",
-      "name": "M365 Purview Sensitivity Label Removed From Document",
-      "path": "detections/cloud/m365-purview-sensitivity-label-removed.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1565.001",
-        "T1537"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-205",
-      "name": "M365 Purview Retention Policy Deleted",
-      "path": "detections/cloud/m365-purview-retention-policy-deleted.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1485",
-        "T1070"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-206",
-      "name": "M365 Power Platform DLP Connector Policy Modified",
-      "path": "detections/cloud/m365-power-platform-dlp-policy-modified.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1537"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-207",
-      "name": "M365 Power Automate Flow Shared With External User",
-      "path": "detections/cloud/m365-power-automate-flow-shared-externally.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1199"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-208",
-      "name": "M365 Entra ID Conditional Access Policy Disabled",
-      "path": "detections/cloud/m365-entra-conditional-access-policy-disabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1556"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-209",
-      "name": "M365 Entra PIM Global Admin Role Activated",
-      "path": "detections/cloud/m365-entra-pim-role-activated-global-admin.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1098.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-210",
-      "name": "M365 Entra Cross-Tenant Access Policy Changed",
-      "path": "detections/cloud/m365-entra-cross-tenant-access-policy-changed.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1199",
-        "T1078.004"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-211",
-      "name": "M365 OAuth App Accessing Mailbox via Graph API",
-      "path": "detections/cloud/m365-exchange-oauth-app-mailbox-access.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1528"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-212",
-      "name": "Azure Key Vault Purge Protection Disabled",
-      "path": "detections/cloud/azure-key-vault-purge-protection-disabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1485",
-        "T1070"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "azure",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-213",
-      "name": "Azure Elevated Access to Manage All Subscriptions",
-      "path": "detections/cloud/azure-management-group-elevated-access.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1098.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "azure",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-221",
-      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
-      "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1114.003",
-        "T1020"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-222",
-      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1567",
-        "T1537"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-225",
-      "name": "M365 Unified Audit Log Disabled",
-      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "m365",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-226",
-      "name": "AWS IAM UpdateAccessKey On Privileged Principal",
-      "path": "detections/cloud/aws-iam-update-access-key-privileged.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
       "has_executable_body": true
     },
     {
@@ -8272,114 +7841,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-endpoint-298",
-      "name": "Executable Dropped in World-Writable Directory (FIM)",
-      "path": "detections/endpoint/fim-binary-dropped-writable-dir.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1027",
-        "T1059",
-        "T1036.005",
-        "T1570"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:4(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "osquery",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-endpoint-300",
-      "name": "SSH authorized_keys File Modified (FIM)",
-      "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "endpoint",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.004",
-        "T1078",
-        "T1136"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:3(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "osquery",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-endpoint-301",
-      "name": "Sudoers Tampering Via auditd Watch",
-      "path": "detections/endpoint/linux-auditd-sudoers-tampering.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "endpoint",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1548.003",
-        "T1098"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "linux",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-endpoint-302",
-      "name": "SSH Config Or Authorized Keys Tampering Via auditd Watch",
-      "path": "detections/endpoint/linux-auditd-ssh-config-tampering.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "endpoint",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.004",
-        "T1556"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "linux",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-001",
       "name": "Authentication Brute-Force Burst",
       "path": "detections/identity/brute-force-login.yaml",
@@ -8407,6 +7868,32 @@
       "has_executable_body": true
     },
     {
+      "id": "det-identity-002",
+      "name": "Impossible Travel Between Two Authentications",
+      "path": "detections/identity/impossible-travel.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
       "id": "det-identity-003",
       "name": "Password Spray Across Many Users from Single IP",
       "path": "detections/identity/password-spray.yaml",
@@ -8420,6 +7907,84 @@
       "mitre_tactics": [],
       "families": [
         "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-004",
+      "name": "Login from Tor / Anonymous Proxy",
+      "path": "detections/identity/login-anonymous-ip.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-006",
+      "name": "Login from Country Outside Allowed Geography",
+      "path": "detections/identity/login-from-foreign-country.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-008",
+      "name": "MFA Push Bombing (MFA Fatigue)",
+      "path": "detections/identity/mfa-fatigue.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1621"
+      ],
+      "mitre_tactics": [],
+      "families": [
         "cloud",
         "identity"
       ],
@@ -8481,6 +8046,108 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-011",
+      "name": "Service Account Used for Interactive Login",
+      "path": "detections/identity/service-account-interactive-login.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "okta",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-012",
+      "name": "Root SSH Login on Production Host",
+      "path": "detections/identity/root-ssh-login.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-013",
+      "name": "Login with Vendor Default Credentials",
+      "path": "detections/identity/default-credential-login.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-016",
+      "name": "Privileged Role Assignment",
+      "path": "detections/identity/privileged-role-assignment.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "okta",
@@ -10451,679 +10118,64 @@
       "has_executable_body": true
     },
     {
-      "id": "mitre-car-car-2013-01-003",
-      "name": "SMB Events Monitoring",
-      "path": "detections/car-imports/endpoint/car-2013-01-003.yaml",
+      "id": "sigmahq-sigma-00321fee-ca72-4cce-b011-5415af3b9960",
+      "name": "MSSQL Destructive Query",
+      "path": "detections/sigma-imports/_quarantine/mssql-destructive-query.yaml",
       "tier": "imported",
-      "source": "mitre-car",
+      "source": "sigmahq",
       "category": "endpoint",
       "severity": "medium",
       "mitre_techniques": [
-        "T1039",
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-04-002",
-      "name": "Quick execution of a series of suspicious commands",
-      "path": "detections/car-imports/endpoint/car-2013-04-002.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1087",
-        "T1003",
-        "T1069",
-        "T1057",
-        "T1021",
-        "T1543",
-        "T1112",
-        "T1574",
-        "T1018",
-        "T1569",
-        "T1053",
-        "T1029",
-        "T1033",
-        "T1007",
-        "T1082",
-        "T1049",
-        "T1016",
-        "T1010",
-        "T1518",
-        "T1046",
-        "T1562",
-        "T1098",
-        "T1059",
-        "T1012"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "lateral",
-        "exfil",
-        "identity"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:24(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-05-003",
-      "name": "SMB Write Request",
-      "path": "detections/car-imports/endpoint/car-2013-05-003.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1570",
-        "T1021",
-        "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral",
-        "identity"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:3(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-05-005",
-      "name": "SMB Copy and Execution",
-      "path": "detections/car-imports/endpoint/car-2013-05-005.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021",
-        "T1078",
-        "T1570"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral",
-        "identity"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:3(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-07-001",
-      "name": "Suspicious Arguments",
-      "path": "detections/car-imports/endpoint/car-2013-07-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003",
-        "T1021",
-        "T1105"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:3(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-07-002",
-      "name": "RDP Connection Detection",
-      "path": "detections/car-imports/endpoint/car-2013-07-002.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-09-003",
-      "name": "SMB Session Setups",
-      "path": "detections/car-imports/endpoint/car-2013-09-003.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1187"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2013-10-001",
-      "name": "User Login Activity Monitoring",
-      "path": "detections/car-imports/endpoint/car-2013-10-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021",
-        "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral",
-        "identity"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2014-03-001",
-      "name": "SMB Write Request - NamedPipes",
-      "path": "detections/car-imports/endpoint/car-2014-03-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1570"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2014-05-001",
-      "name": "RPC Activity",
-      "path": "detections/car-imports/endpoint/car-2014-05-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2014-11-004",
-      "name": "Remote PowerShell Sessions",
-      "path": "detections/car-imports/endpoint/car-2014-11-004.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1059",
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:2(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2014-11-006",
-      "name": "Windows Remote Management (WinRM)",
-      "path": "detections/car-imports/endpoint/car-2014-11-006.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2016-04-004",
-      "name": "Successful Local Account Login",
-      "path": "detections/car-imports/endpoint/car-2016-04-004.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1550"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2016-04-005",
-      "name": "Remote Desktop Logon",
-      "path": "detections/car-imports/endpoint/car-2016-04-005.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1021"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2019-04-004",
-      "name": "Credential Dumping via Mimikatz",
-      "path": "detections/car-imports/endpoint/car-2019-04-004.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2019-07-002",
-      "name": "Lsass Process Dump via Procdump",
-      "path": "detections/car-imports/endpoint/car-2019-07-002.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2019-08-001",
-      "name": "Credential Dumping via Windows Task Manager",
-      "path": "detections/car-imports/endpoint/car-2019-08-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2019-08-002",
-      "name": "Active Directory Dumping via NTDSUtil",
-      "path": "detections/car-imports/endpoint/car-2019-08-002.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2020-05-001",
-      "name": "MiniDump of LSASS",
-      "path": "detections/car-imports/endpoint/car-2020-05-001.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2020-09-004",
-      "name": "Credentials in Files & Registry",
-      "path": "detections/car-imports/endpoint/car-2020-09-004.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1552"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2020-11-002",
-      "name": "Local Network Sniffing",
-      "path": "detections/car-imports/endpoint/car-2020-11-002.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1040"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2021-01-009",
-      "name": "Detecting Shadow Copy Deletion or Resize",
-      "path": "detections/car-imports/endpoint/car-2021-01-009.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1490"
+        "T1485"
       ],
       "mitre_tactics": [],
       "families": [
         "ransomware"
       ],
-      "quality_score": 0.605,
+      "quality_score": 0.755,
       "quality_notes": [
         "tier:imported(+0.3)",
         "mitre_techniques:1(+0.2)",
         "severity:medium(+0.105)",
-        "no_executable_body(0)"
+        "executable(+0.15)"
       ],
-      "log_source_product": null,
-      "has_executable_body": false
+      "log_source_product": "windows",
+      "has_executable_body": true
     },
     {
-      "id": "mitre-car-car-2021-05-003",
-      "name": "BCDEdit Failure Recovery Modification",
-      "path": "detections/car-imports/endpoint/car-2021-05-003.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1490"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2021-05-008",
-      "name": "Certutil exe certificate extraction",
-      "path": "detections/car-imports/endpoint/car-2021-05-008.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1606"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "mitre-car-car-2021-05-011",
-      "name": "Create Remote Thread into LSASS",
-      "path": "detections/car-imports/endpoint/car-2021-05-011.yaml",
-      "tier": "imported",
-      "source": "mitre-car",
-      "category": "endpoint",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.605,
-      "quality_notes": [
-        "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "no_executable_body(0)"
-      ],
-      "log_source_product": null,
-      "has_executable_body": false
-    },
-    {
-      "id": "sigmahq-sigma-10c14723-61c7-4c75-92ca-9af245723ad2",
-      "name": "HackTool - Potential Impacket Lateral Movement Activity",
-      "path": "detections/sigma-imports/endpoint/hacktool-potential-impacket-lateral-movement-activity.yaml",
+      "id": "sigmahq-sigma-055fb54c-a8f4-4aee-bd44-f74cf30a0d9d",
+      "name": "HackTool - SharpMove Tool Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-sharpmove-tool-execution.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
       "severity": "high",
       "mitre_techniques": [
-        "T1047",
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-05a2ab7e-ce11-4b63-86db-ab32e763e11d",
+      "name": "MMC Spawning Windows Shell",
+      "path": "detections/sigma-imports/_quarantine/mmc-spawning-windows-shell.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
         "T1021.003"
       ],
       "mitre_tactics": [],
@@ -11133,11 +10185,218 @@
       "quality_score": 0.777,
       "quality_notes": [
         "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-06125661-3814-4e03-bfa2-1e4411c60ac3",
+      "name": "Backup Files Deleted",
+      "path": "detections/sigma-imports/_quarantine/backup-files-deleted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-07837ab9-60e1-481f-a74d-c31fb496a94c",
+      "name": "Network Communication Initiated To Portmap.IO Domain",
+      "path": "detections/sigma-imports/_quarantine/network-communication-initiated-to-portmap-io-domain.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1041",
+        "T1090.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-0adc67e0-a68f-4ffd-9c43-28905aad5d6a",
+      "name": "HackTool - Koh Default Named Pipe",
+      "path": "detections/sigma-imports/_quarantine/hacktool-koh-default-named-pipe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1528",
+        "T1134.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-0e0255bf-2548-47b8-9582-c0955c9283f5",
+      "name": "Suspicious Reg Add BitLocker",
+      "path": "detections/sigma-imports/_quarantine/suspicious-reg-add-bitlocker.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1486"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-0ed99dda-6a35-11ef-8c99-0242ac120002",
+      "name": "Attempts of Kerberos Coercion Via DNS SPN Spoofing",
+      "path": "detections/sigma-imports/_quarantine/attempts-of-kerberos-coercion-via-dns-spn-spoofing.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1557.001",
+        "T1187"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
         "mitre_techniques:2(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-0ee4d8a5-4e67-4faf-acfa-62a78457d1f2",
+      "name": "HybridConnectionManager Service Installation",
+      "path": "detections/sigma-imports/_quarantine/hybridconnectionmanager-service-installation.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1554"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-0f60b28c-64dd-4e2c-9a63-5334d3e3a6e6",
+      "name": "Script Interpreter Spawning Credential Scanner - Windows",
+      "path": "detections/sigma-imports/_quarantine/script-interpreter-spawning-credential-scanner-windows.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1552",
+        "T1005",
+        "T1059.007"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-1279262f-1464-422f-ac0d-5b545320c526",
+      "name": "AWS KMS Imported Key Material Usage",
+      "path": "detections/sigma-imports/_quarantine/aws-kms-imported-key-material-usage.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1486",
+        "T1608.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
       "has_executable_body": true
     },
     {
@@ -11193,19 +10452,125 @@
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-18f37338-b9bd-4117-a039-280c81f7a596",
-      "name": "Zerologon Exploitation Using Well-known Tools",
-      "path": "detections/sigma-imports/endpoint/zerologon-exploitation-using-well-known-tools.yaml",
+      "id": "sigmahq-sigma-18249279-932f-45e2-b37a-8925f2597670",
+      "name": "Process Initiated Network Connection To Ngrok Domain",
+      "path": "detections/sigma-imports/_quarantine/process-initiated-network-connection-to-ngrok-domain.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1567",
+        "T1572",
+        "T1102"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-189e3b02-82b2-4b90-9662-411eb64486d4",
+      "name": "Potential Invoke-Mimikatz PowerShell Script",
+      "path": "detections/sigma-imports/_quarantine/potential-invoke-mimikatz-powershell-script.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-1ce8c8a3-2723-48ed-8246-906ac91061a6",
+      "name": "Possible PetitPotam Coerce Authentication Attempt",
+      "path": "detections/sigma-imports/_quarantine/possible-petitpotam-coerce-authentication-attempt.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1187"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-1d08ac94-400d-4469-a82f-daee9a908849",
+      "name": "Communication To Ngrok Tunneling Service Initiated",
+      "path": "detections/sigma-imports/_quarantine/communication-to-ngrok-tunneling-service-initiated.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1567",
+        "T1568.002",
+        "T1572",
+        "T1090",
+        "T1102"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:5(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-1de68c67-af5c-4097-9c85-fe5578e09e67",
+      "name": "WCE wceaux.dll Access",
+      "path": "detections/sigma-imports/_quarantine/wce-wceaux-dll-access.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
       "severity": "critical",
       "mitre_techniques": [
-        "T1210"
+        "T1003"
       ],
       "mitre_tactics": [],
       "families": [
-        "lateral"
+        "credential-access"
       ],
       "quality_score": 0.8,
       "quality_notes": [
@@ -11218,15 +10583,883 @@
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-37222991-11e9-4b6d-8bdf-60fbe48f753e",
-      "name": "Overwriting the File with Dev Zero or Null",
-      "path": "detections/sigma-imports/endpoint/overwriting-the-file-with-dev-zero-or-null.yaml",
+      "id": "sigmahq-sigma-1f0489be-b496-4ddf-b3a9-5900f2044e9c",
+      "name": "Suspicious File Write to SharePoint Layouts Directory",
+      "path": "detections/sigma-imports/_quarantine/suspicious-file-write-to-sharepoint-layouts-directory.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1190",
+        "T1505.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-1f0f6176-6482-4027-b151-00071af39d7e",
+      "name": "Arbitrary File Download Via ConfigSecurityPolicy.EXE",
+      "path": "detections/sigma-imports/_quarantine/arbitrary-file-download-via-configsecuritypolicy-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1567"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-214e8f95-100a-4e04-bb31-ef6cba8ce07e",
+      "name": "DCERPC SMB Spoolss Named Pipe",
+      "path": "detections/sigma-imports/_quarantine/dcerpc-smb-spoolss-named-pipe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-21ff4ca9-f13a-41ad-b828-0077b2af2e40",
+      "name": "Deletion of Volume Shadow Copies via WMI with PowerShell",
+      "path": "detections/sigma-imports/_quarantine/deletion-of-volume-shadow-copies-via-wmi-with-powershell.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-24c77512-782b-448a-8950-eddb0785fc71",
+      "name": "SQLite Chromium Profile Data DB Access",
+      "path": "detections/sigma-imports/_quarantine/sqlite-chromium-profile-data-db-access.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1539",
+        "T1555.003",
+        "T1005"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-24e3e58a-646b-4b50-adef-02ef935b9fc8",
+      "name": "Hacktool Execution - Imphash",
+      "path": "detections/sigma-imports/_quarantine/hacktool-execution-imphash.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1588.002",
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-25cde13e-8e20-4c29-b949-4e795b76f16f",
+      "name": "Suspicious Teams Application Related ObjectAcess Event",
+      "path": "detections/sigma-imports/_quarantine/suspicious-teams-application-related-objectacess-event.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1528"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-2d3cdeec-c0db-45b4-aa86-082f7eb75701",
+      "name": "Microsoft IIS Service Account Password Dumped",
+      "path": "detections/sigma-imports/_quarantine/microsoft-iis-service-account-password-dumped.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-2f7979ae-f82b-45af-ac1d-2b10e93b0baa",
+      "name": "Potential DCOM InternetExplorer.Application DLL Hijack",
+      "path": "detections/sigma-imports/_quarantine/potential-dcom-internetexplorer-application-dll-hijack.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-304afd73-55a5-4bb9-8c21-0b1fc84ea9e4",
+      "name": "PSEXEC Remote Execution File Artefact",
+      "path": "detections/sigma-imports/_quarantine/psexec-remote-execution-file-artefact.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1136.002",
+        "T1543.003",
+        "T1570"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-3245cd30-e015-40ff-a31d-5cadd5f377ec",
+      "name": "HackTool - Rubeus Execution - ScriptBlock",
+      "path": "detections/sigma-imports/_quarantine/hacktool-rubeus-execution-scriptblock.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003",
+        "T1558.003",
+        "T1550.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-327f48c1-a6db-4eb8-875a-f6981f1b0183",
+      "name": "Port Forwarding Activity Via SSH.EXE",
+      "path": "detections/sigma-imports/_quarantine/port-forwarding-activity-via-ssh-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1572",
+        "T1021.001",
+        "T1021.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-32d56ea1-417f-44ff-822b-882873f5f43b",
+      "name": "Impacket PsExec Execution",
+      "path": "detections/sigma-imports/_quarantine/impacket-psexec-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-33d50d03-20ec-4b74-a74e-1e65a38af1c0",
+      "name": "AWS EKS Cluster Created or Deleted",
+      "path": "detections/sigma-imports/_quarantine/aws-eks-cluster-created-or-deleted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-37c1333a-a0db-48be-b64b-7393b2386e3b",
+      "name": "Hacktool Execution - PE Metadata",
+      "path": "detections/sigma-imports/_quarantine/hacktool-execution-pe-metadata.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1588.002",
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-39a80702-d7ca-4a83-b776-525b1f86a36d",
+      "name": "Potential Secure Deletion with SDelete",
+      "path": "detections/sigma-imports/_quarantine/potential-secure-deletion-with-sdelete.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1070.004",
+        "T1027.005",
+        "T1485",
+        "T1553.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:4(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-39b31e81-5f5f-4898-9c0e-2160cfc0f9bf",
+      "name": "HackTool - Hashcat Password Cracker Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-hashcat-password-cracker-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1110.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-3ce8e9a4-bc61-4c9b-8e69-d7e2492a8781",
+      "name": "OpenSSH Server Listening On Socket",
+      "path": "detections/sigma-imports/_quarantine/openssh-server-listening-on-socket.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-401e5d00-b944-11ea-8f9a-00163ecd60ae",
+      "name": "AppLocker Prevented Application or Script from Running",
+      "path": "detections/sigma-imports/_quarantine/applocker-prevented-application-or-script-from-running.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1204.002",
+        "T1059.001",
+        "T1059.003",
+        "T1059.005",
+        "T1059.006",
+        "T1059.007"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:6(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-416bc4a2-7217-4519-8dc7-c3271817f1d5",
+      "name": "Suspicious Loading of Dbgcore/Dbghelp DLLs from Uncommon Location",
+      "path": "detections/sigma-imports/_quarantine/suspicious-loading-of-dbgcore-dbghelp-dlls-from-uncommon-location.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003",
+        "T1685"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-42a993dd-bb3e-48c8-b372-4d6684c4106c",
+      "name": "HackTool - CrackMapExec Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-crackmapexec-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1047",
+        "T1053",
+        "T1059.003",
+        "T1059.001",
+        "T1110",
+        "T1201"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:6(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-45545954-4016-43c6-855e-eae8f1c369dc",
+      "name": "Protected Storage Service Access",
+      "path": "detections/sigma-imports/_quarantine/protected-storage-service-access.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-457cc9ac-d8e6-4d1d-8c0e-251d0f11a74c",
+      "name": "Modification or Deletion of an AWS RDS Cluster",
+      "path": "detections/sigma-imports/_quarantine/modification-or-deletion-of-an-aws-rds-cluster.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1020"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil",
+        "cloud"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-4833155a-4053-4c9c-a997-777fcea0baa7",
+      "name": "SQLite Firefox Profile Data DB Access",
+      "path": "detections/sigma-imports/_quarantine/sqlite-firefox-profile-data-db-access.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1539",
+        "T1005"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-48a61b29-389f-4032-b317-b30de6b95314",
+      "name": "Suspicious Plink Port Forwarding",
+      "path": "detections/sigma-imports/_quarantine/suspicious-plink-port-forwarding.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1572",
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-48d91a3a-2363-43ba-a456-ca71ac3da5c2",
+      "name": "Audit CVE Event",
+      "path": "detections/sigma-imports/_quarantine/audit-cve-event.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1203",
+        "T1068",
+        "T1211",
+        "T1212",
+        "T1210",
+        "T1499.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "lateral"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:6(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-4b046706-5789-4673-b111-66f25fe99534",
+      "name": "Deleted Data Overwritten Via Cipher.EXE",
+      "path": "detections/sigma-imports/_quarantine/deleted-data-overwritten-via-cipher-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-4b657234-038e-4ad5-997c-4be42340bce4",
+      "name": "Network Connection Initiated To Visual Studio Code Tunnels Domain",
+      "path": "detections/sigma-imports/_quarantine/network-connection-initiated-to-visual-studio-code-tunnels-domain.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1567",
+        "T1572"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-4b8f6d3a-9c5e-4f2a-a7d8-6b9c3e5f2a8d",
+      "name": "RDP Enable or Disable via Win32_TerminalServiceSetting WMI Class",
+      "path": "detections/sigma-imports/_quarantine/rdp-enable-or-disable-via-win32-terminalservicesetting-wmi-class.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.001",
+        "T1047"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-50a0aa3d-ab16-4594-a8aa-5145a6e6792b",
+      "name": "Python One-Liners with Base64 Decoding",
+      "path": "detections/sigma-imports/_quarantine/python-one-liners-with-base64-decoding.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1059.006",
+        "T1027.010"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-51e33403-2a37-4d66-a574-1fda1782cc31",
+      "name": "RDP Login from Localhost",
+      "path": "detections/sigma-imports/_quarantine/rdp-login-from-localhost.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc",
+      "name": "Potential MFA Bypass Using Legacy Client Authentication",
+      "path": "detections/sigma-imports/_quarantine/potential-mfa-bypass-using-legacy-client-authentication.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1110"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-551d9c1f-816c-445b-a7a6-7a3864720d60",
+      "name": "Potential Excel.EXE DCOM Lateral Movement Via ActivateMicrosoftApp",
+      "path": "detections/sigma-imports/_quarantine/potential-excel-exe-dcom-lateral-movement-via-activatemicrosoftapp.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-570ae5ec-33dc-427c-b815-db86228ad43e",
+      "name": "Application Uninstalled",
+      "path": "detections/sigma-imports/_quarantine/application-uninstalled.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
       "severity": "low",
       "mitre_techniques": [
-        "T1485"
+        "T1489"
       ],
       "mitre_tactics": [],
       "families": [
@@ -11239,7 +11472,291 @@
         "severity:low(+0.083)",
         "executable(+0.15)"
       ],
-      "log_source_product": "linux",
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-586a8d6b-6bfe-4ad9-9d78-888cd2fe50c3",
+      "name": "Remote Service Activity via SVCCTL Named Pipe",
+      "path": "detections/sigma-imports/_quarantine/remote-service-activity-via-svcctl-named-pipe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-58f4ea09-0fc2-4520-ba18-b85c540b0eaf",
+      "name": "Suspicious Serv-U Process Pattern",
+      "path": "detections/sigma-imports/_quarantine/suspicious-serv-u-process-pattern.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1555"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-5a44727c-3b85-4713-8c44-4401d5499629",
+      "name": "Replay Attack Detected",
+      "path": "detections/sigma-imports/_quarantine/replay-attack-detected.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1558"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-5bb68627-3198-40ca-b458-49f973db8752",
+      "name": "Rundll32 Execution Without Parameters",
+      "path": "detections/sigma-imports/_quarantine/rundll32-execution-without-parameters.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1570",
+        "T1569.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-5de03871-5d46-4539-a82d-3aa992a69a83",
+      "name": "Registry Disable System Restore",
+      "path": "detections/sigma-imports/_quarantine/registry-disable-system-restore.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-60167e5c-84b2-4c95-a7ac-86281f27c445",
+      "name": "Remote PowerShell Session (PS Classic)",
+      "path": "detections/sigma-imports/_quarantine/remote-powershell-session-ps-classic.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1021.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-60bfeac3-0d35-4302-8efb-1dd16f715bc6",
+      "name": "Suspicious SysAidServer Child",
+      "path": "detections/sigma-imports/_quarantine/suspicious-sysaidserver-child.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1210"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-60f6535a-760f-42a9-be3f-c9a0a025906e",
+      "name": "Use of Legacy Authentication Protocols",
+      "path": "detections/sigma-imports/_quarantine/use-of-legacy-authentication-protocols.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1110"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-614a7e17-5643-4d89-b6fe-f9df1a79641c",
+      "name": "Wmiprvse Wbemcomn DLL Hijack - File",
+      "path": "detections/sigma-imports/_quarantine/wmiprvse-wbemcomn-dll-hijack-file.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1047",
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-61a7697c-cb79-42a8-a2ff-5f0cdfae0130",
+      "name": "Potential CobaltStrike Service Installations - Registry",
+      "path": "detections/sigma-imports/_quarantine/potential-cobaltstrike-service-installations-registry.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1543.003",
+        "T1569.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-639c9081-f482-47d3-a0bd-ddee3d4ecd76",
+      "name": "All Backups Deleted Via Wbadmin.EXE",
+      "path": "detections/sigma-imports/_quarantine/all-backups-deleted-via-wbadmin-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
@@ -11262,6 +11779,239 @@
       "quality_notes": [
         "tier:imported(+0.3)",
         "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6a7ba45c-63d8-473e-9736-2eaabff79964",
+      "name": "AWS EFS Fileshare Mount Modified or Deleted",
+      "path": "detections/sigma-imports/_quarantine/aws-efs-fileshare-mount-modified-or-deleted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6b269392-9eba-40b5-acb6-55c882b20ba6",
+      "name": "Suspicious File Drop by Exchange",
+      "path": "detections/sigma-imports/_quarantine/suspicious-file-drop-by-exchange.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1190",
+        "T1505.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6ddff2e8-ea1a-45d0-8938-93dfc1d67ae7",
+      "name": "PUA - Restic Backup Tool Execution",
+      "path": "detections/sigma-imports/_quarantine/pua-restic-backup-tool-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1048",
+        "T1567.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6e8fe0a8-ba0b-4a93-8f9e-82657e7a5984",
+      "name": "BaaUpdate.exe Suspicious DLL Load",
+      "path": "detections/sigma-imports/_quarantine/baaupdate-exe-suspicious-dll-load.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1218",
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6fe4aa1e-0531-4510-8be2-782154b73b48",
+      "name": "File Recovery From Backup Via Wbadmin.EXE",
+      "path": "detections/sigma-imports/_quarantine/file-recovery-from-backup-via-wbadmin-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7280c9f3-a5af-45d0-916a-bc01cb4151c9",
+      "name": "Suspicious MSExchangeMailboxReplication ASPX Write",
+      "path": "detections/sigma-imports/_quarantine/suspicious-msexchangemailboxreplication-aspx-write.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1190",
+        "T1505.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-730fc21b-eaff-474b-ad23-90fd265d4988",
+      "name": "Psexec Execution",
+      "path": "detections/sigma-imports/_quarantine/psexec-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1569",
+        "T1021"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-734f8d9b-42b8-41b2-bcf5-abaf49d5a3c8",
+      "name": "Remote PowerShell Session Host Process (WinRM)",
+      "path": "detections/sigma-imports/_quarantine/remote-powershell-session-host-process-winrm.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1059.001",
+        "T1021.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7638e5fe-600c-4289-a968-f49dd537ec7d",
+      "name": "HackTool - NetExec Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-netexec-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1018",
+        "T1021"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
@@ -11294,31 +12044,258 @@
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-78cc2dd2-7d20-4d32-93ff-057084c38b93",
-      "name": "Antivirus Password Dumper Detection",
-      "path": "detections/sigma-imports/endpoint/antivirus-password-dumper-detection.yaml",
+      "id": "sigmahq-sigma-7707a579-e0d8-4886-a853-ce47e4575aaa",
+      "name": "Wmiprvse Wbemcomn DLL Hijack",
+      "path": "detections/sigma-imports/_quarantine/wmiprvse-wbemcomn-dll-hijack.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
-      "severity": "critical",
+      "severity": "high",
       "mitre_techniques": [
-        "T1003",
-        "T1558",
-        "T1003.001",
-        "T1003.002"
+        "T1047",
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-77df53a5-1d78-4f32-bc5a-0e7465bd8f41",
+      "name": "Portable Gpg.EXE Execution",
+      "path": "detections/sigma-imports/_quarantine/portable-gpg-exe-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1486"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7892ec59-c5bb-496d-8968-e5d210ca3ac4",
+      "name": "DPAPI Backup Keys And Certificate Export Activity IOC",
+      "path": "detections/sigma-imports/_quarantine/dpapi-backup-keys-and-certificate-export-activity-ioc.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1555",
+        "T1552.004"
       ],
       "mitre_tactics": [],
       "families": [
         "credential-access"
       ],
-      "quality_score": 0.8,
+      "quality_score": 0.777,
       "quality_notes": [
         "tier:imported(+0.3)",
-        "mitre_techniques:4(+0.2)",
-        "severity:critical(+0.150)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
-      "log_source_product": null,
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-78b3756a-7804-4ef7-8555-7b9024a02e2d",
+      "name": "AWS S3 Data Management Tampering",
+      "path": "detections/sigma-imports/_quarantine/aws-s3-data-management-tampering.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil",
+        "cloud"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-78f10490-f2f4-4d19-a75b-4e0683bf3b8d",
+      "name": "Suspicious Speech Runtime Binary Child Process",
+      "path": "detections/sigma-imports/_quarantine/suspicious-speech-runtime-binary-child-process.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.003",
+        "T1218"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7b836d7f-179c-4ba4-90a7-a7e60afb48e6",
+      "name": "Execute Invoke-command on Remote Host",
+      "path": "detections/sigma-imports/_quarantine/execute-invoke-command-on-remote-host.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7bd3902d-8b8b-4dd4-838a-c6862d40150d",
+      "name": "DNS HybridConnectionManager Service Bus",
+      "path": "detections/sigma-imports/_quarantine/dns-hybridconnectionmanager-service-bus.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1554"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7c06ab9b-b1d2-4ba9-b06e-09491ded20d9",
+      "name": "System Restore Registry Modification via CommandLine",
+      "path": "detections/sigma-imports/_quarantine/system-restore-registry-modification-via-commandline.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7cd1dcdc-6edf-4896-86dc-d1f19ad64903",
+      "name": "Network Connection Initiated To Cloudflared Tunnels Domains",
+      "path": "detections/sigma-imports/_quarantine/network-connection-initiated-to-cloudflared-tunnels-domains.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1567",
+        "T1572"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7e6237fe-3ddb-438f-9381-9bf9de5af8d0",
+      "name": "Windows Internet Hosted WebDav Share Mount Via Net.EXE",
+      "path": "detections/sigma-imports/_quarantine/windows-internet-hosted-webdav-share-mount-via-net-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
@@ -11343,6 +12320,169 @@
         "tier:imported(+0.3)",
         "mitre_techniques:3(+0.2)",
         "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-7f3a9c2d-4e8b-4a7f-9d3e-5c6f8a9b2e1d",
+      "name": "OpenEDR Spawning Command Shell",
+      "path": "detections/sigma-imports/_quarantine/openedr-spawning-command-shell.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1059.003",
+        "T1021.004",
+        "T1219"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-805c55d9-31e6-4846-9878-c34c75054fe9",
+      "name": "Octopus Scanner Malware",
+      "path": "detections/sigma-imports/_quarantine/octopus-scanner-malware.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1195",
+        "T1195.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-81bcb81b-5b1f-474b-b373-52c871aaa7b1",
+      "name": "Stop Windows Service Via Sc.EXE",
+      "path": "detections/sigma-imports/_quarantine/stop-windows-service-via-sc-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-851fd622-b675-4d26-b803-14bc7baa517a",
+      "name": "HackTool - WinPwn Execution - ScriptBlock",
+      "path": "detections/sigma-imports/_quarantine/hacktool-winpwn-execution-scriptblock.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1046",
+        "T1082",
+        "T1106",
+        "T1518",
+        "T1548.002",
+        "T1552.001",
+        "T1555",
+        "T1555.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:8(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-855bc8b5-2ae8-402e-a9ed-b889e6df1900",
+      "name": "Copy From Or To Admin Share Or Sysvol Folder",
+      "path": "detections/sigma-imports/_quarantine/copy-from-or-to-admin-share-or-sysvol-folder.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1039",
+        "T1048",
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-871b9555-69ca-4993-99d3-35a59f9f3599",
+      "name": "Suspicious UltraVNC Execution",
+      "path": "detections/sigma-imports/_quarantine/suspicious-ultravnc-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.005"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
@@ -11374,41 +12514,219 @@
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-a46c93b7-55ed-4d27-a41b-c259456c4746",
-      "name": "Linux Crypto Mining Pool Connections",
-      "path": "detections/sigma-imports/endpoint/linux-crypto-mining-pool-connections.yaml",
+      "id": "sigmahq-sigma-882e858a-3233-4ba8-855e-2f3d3575803d",
+      "name": "DNS Query Request By QuickAssist.EXE",
+      "path": "detections/sigma-imports/_quarantine/dns-query-request-by-quickassist-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1071.001",
+        "T1210"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-88872991-7445-4a22-90b2-a3adadb0e827",
+      "name": "Stop Windows Service Via Net.EXE",
+      "path": "detections/sigma-imports/_quarantine/stop-windows-service-via-net-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-89c42960-f244-4dad-9151-ae9b1a3287a2",
+      "name": "Suspicious File Write to Webapps Root Directory",
+      "path": "detections/sigma-imports/_quarantine/suspicious-file-write-to-webapps-root-directory.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1505.003",
+        "T1190"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-8a1b2c3d-4e5f-6789-abcd-ef1234567890",
+      "name": "PUA - Memory Dump Mount Via MemProcFS",
+      "path": "detections/sigma-imports/_quarantine/pua-memory-dump-mount-via-memprocfs.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
       "severity": "high",
       "mitre_techniques": [
-        "T1496"
+        "T1003",
+        "T1003.001",
+        "T1003.004",
+        "T1003.002"
       ],
       "mitre_tactics": [],
       "families": [
-        "cloud",
-        "k8s"
+        "credential-access"
       ],
       "quality_score": 0.777,
       "quality_notes": [
         "tier:imported(+0.3)",
-        "mitre_techniques:1(+0.2)",
+        "mitre_techniques:4(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
-      "log_source_product": "linux",
+      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-aa35a627-33fb-4d04-a165-d33b4afca3e8",
-      "name": "Remote LSASS Process Access Through Windows Remote Management",
-      "path": "detections/sigma-imports/endpoint/remote-lsass-process-access-through-windows-remote-management.yaml",
+      "id": "sigmahq-sigma-8a3038e8-9c9d-46f8-b184-66234a160f6f",
+      "name": "Potential Remote Desktop Tunneling",
+      "path": "detections/sigma-imports/_quarantine/potential-remote-desktop-tunneling.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-8e4cf0e5-aa5d-4dc3-beff-dc26917744a9",
+      "name": "Tap Driver Installation",
+      "path": "detections/sigma-imports/_quarantine/tap-driver-installation.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1048"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-8e5c03fa-b7f0-11ea-b242-07e0576828d9",
+      "name": "Denied Access To Remote Desktop",
+      "path": "detections/sigma-imports/_quarantine/denied-access-to-remote-desktop.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9637e8a5-7131-4f7f-bdc7-2b05d8670c43",
+      "name": "Suspicious File Characteristics Due to Missing Fields",
+      "path": "detections/sigma-imports/_quarantine/suspicious-file-characteristics-due-to-missing-fields.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1059.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-96b9f619-aa91-478f-bacb-c3e50f8df575",
+      "name": "Remote PowerShell Session (PS Module)",
+      "path": "detections/sigma-imports/_quarantine/remote-powershell-session-ps-module.yaml",
       "tier": "imported",
       "source": "sigmahq",
       "category": "endpoint",
       "severity": "high",
       "mitre_techniques": [
-        "T1003.001",
         "T1059.001",
         "T1021.006"
       ],
@@ -11419,11 +12737,393 @@
       "quality_score": 0.777,
       "quality_notes": [
         "tier:imported(+0.3)",
-        "mitre_techniques:3(+0.2)",
+        "mitre_techniques:2(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-97dbf6e2-e436-44d8-abee-4261b24d3e41",
+      "name": "Microsoft IIS Connection Strings Decryption",
+      "path": "detections/sigma-imports/_quarantine/microsoft-iis-connection-strings-decryption.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-991a9744-f2f0-44f2-bd33-9092eba17dc3",
+      "name": "Enable Windows Remote Management",
+      "path": "detections/sigma-imports/_quarantine/enable-windows-remote-management.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-99793437-3e16-439b-be0f-078782cf953d",
+      "name": "Tap Installer Execution",
+      "path": "detections/sigma-imports/_quarantine/tap-installer-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1048"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9ac94dc8-9042-493c-ba45-3b5e7c86b980",
+      "name": "Disable Important Scheduled Task",
+      "path": "detections/sigma-imports/_quarantine/disable-important-scheduled-task.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9c8afa4d-0022-48f0-9456-3712466f9701",
+      "name": "Tap Driver Installation - Security",
+      "path": "detections/sigma-imports/_quarantine/tap-driver-installation-security.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1048"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9e02c8ec-02b9-43e8-81eb-34a475ba7965",
+      "name": "Network Connection Initiated To BTunnels Domains",
+      "path": "detections/sigma-imports/_quarantine/network-connection-initiated-to-btunnels-domains.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1567",
+        "T1572"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9e099d99-44c2-42b6-a6d8-54c3545cab29",
+      "name": "HackTool - Mimikatz Kirbi File Creation",
+      "path": "detections/sigma-imports/_quarantine/hacktool-mimikatz-kirbi-file-creation.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1558"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9e3cb244-bdb8-4632-8c90-6079c8f4f16d",
+      "name": "Important Scheduled Task Deleted or Disabled",
+      "path": "detections/sigma-imports/_quarantine/important-scheduled-task-deleted-or-disabled.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9e4b7d3a-6f2c-4e9a-8d1b-3c5e7a9f2b4d",
+      "name": "Potentially Suspicious File Creation by OpenEDR's ITSMService",
+      "path": "detections/sigma-imports/_quarantine/potentially-suspicious-file-creation-by-openedr-s-itsmservice.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1105",
+        "T1570",
+        "T1219"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-9f38c1db-e2ae-40bf-81d0-5b68f73fb512",
+      "name": "Suspicious BitLocker Access Agent Update Utility Execution",
+      "path": "detections/sigma-imports/_quarantine/suspicious-bitlocker-access-agent-update-utility-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1218",
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-a136ac98-b2bc-4189-a14d-f0d0388e57a7",
+      "name": "AWS S3 Bucket Versioning Disable",
+      "path": "detections/sigma-imports/_quarantine/aws-s3-bucket-versioning-disable.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-a197e378-d31b-41c0-9635-cfdf1c1bb423",
+      "name": "HackTool - WinRM Access Via Evil-WinRM",
+      "path": "detections/sigma-imports/_quarantine/hacktool-winrm-access-via-evil-winrm.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.006"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-a4824fca-976f-4964-b334-0621379e84c4",
+      "name": "Potential File Overwrite Via Sysinternals SDelete",
+      "path": "detections/sigma-imports/_quarantine/potential-file-overwrite-via-sysinternals-sdelete.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-aaafa146-074c-11eb-adc1-0242ac120002",
+      "name": "HackTool - Hydra Password Bruteforce Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-hydra-password-bruteforce-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1110",
+        "T1110.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-abae8fec-57bd-4f87-aff6-6e3db989843d",
+      "name": "AWS Snapshot Backup Exfiltration",
+      "path": "detections/sigma-imports/_quarantine/aws-snapshot-backup-exfiltration.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
       "has_executable_body": true
     },
     {
@@ -11453,22 +13153,45 @@
       "has_executable_body": true
     },
     {
-      "id": "sigmahq-sigma-b593fd50-7335-4682-a36c-4edcb68e4641",
-      "name": "Monero Crypto Coin Mining Pool Lookup",
-      "path": "detections/sigma-imports/network/monero-crypto-coin-mining-pool-lookup.yaml",
+      "id": "sigmahq-sigma-b0ce780f-10bd-496d-9067-066d23dc3aa5",
+      "name": "HackTool - SharpWSUS/WSUSpendu Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-sharpwsus-wsuspendu-execution.yaml",
       "tier": "imported",
       "source": "sigmahq",
-      "category": "network",
+      "category": "endpoint",
       "severity": "high",
       "mitre_techniques": [
-        "T1496",
-        "T1567"
+        "T1210"
       ],
       "mitre_tactics": [],
       "families": [
-        "exfil",
-        "cloud",
-        "k8s"
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-b1e5da3b-ca8e-4adf-915c-9921f3d85481",
+      "name": "RDP to HTTP or HTTPS Target Ports",
+      "path": "detections/sigma-imports/_quarantine/rdp-to-http-or-https-target-ports.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1572",
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
       ],
       "quality_score": 0.777,
       "quality_notes": [
@@ -11477,7 +13200,212 @@
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
-      "log_source_product": null,
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-b4a6d707-9430-4f5f-af68-0337f52d5c42",
+      "name": "Sign-in Failure Due to Conditional Access Requirements Not Met",
+      "path": "detections/sigma-imports/_quarantine/sign-in-failure-due-to-conditional-access-requirements-not-met.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1110",
+        "T1078.004"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-baef1ec6-2ca9-47a3-97cc-4cf2bda10b77",
+      "name": "Potential Credential Dumping Attempt Using New NetworkProvider - CLI",
+      "path": "detections/sigma-imports/_quarantine/potential-credential-dumping-attempt-using-new-networkprovider-cli.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-bcfece3d-56fe-4545-9931-3b8e92927db1",
+      "name": "Winrs Local Command Execution",
+      "path": "detections/sigma-imports/_quarantine/winrs-local-command-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.006",
+        "T1218"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-bd1212e5-78da-431e-95fa-c58e3237a8e6",
+      "name": "Suspicious ASPX File Drop by Exchange",
+      "path": "detections/sigma-imports/_quarantine/suspicious-aspx-file-drop-by-exchange.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1505.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-c1337eb8-921a-4b59-855b-4ba188ddcc42",
+      "name": "Deletion of Volume Shadow Copies via WMI with PowerShell - PS Script",
+      "path": "detections/sigma-imports/_quarantine/deletion-of-volume-shadow-copies-via-wmi-with-powershell-ps-script.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-c49c5062-0966-4170-9efd-9968c913a6cf",
+      "name": "Stop Windows Service Via PowerShell Stop-Service",
+      "path": "detections/sigma-imports/_quarantine/stop-windows-service-via-powershell-stop-service.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-c615d676-f655-46b9-b913-78729021e5d7",
+      "name": "Data Export From MSSQL Table Via BCP.EXE",
+      "path": "detections/sigma-imports/_quarantine/data-export-from-mssql-table-via-bcp-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1048"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-c8da0dfd-4ed0-4b68-962d-13c9c884384e",
+      "name": "Potential Credential Dumping Via LSASS Process Clone",
+      "path": "detections/sigma-imports/_quarantine/potential-credential-dumping-via-lsass-process-clone.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1003",
+        "T1003.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
@@ -11507,6 +13435,445 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-ce72ef99-22f1-43d4-8695-419dcb5d9330",
+      "name": "Suspicious Windows Service Tampering",
+      "path": "detections/sigma-imports/_quarantine/suspicious-windows-service-tampering.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1489",
+        "T1685"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d223b46b-5621-4037-88fe-fda32eead684",
+      "name": "New Root or CA or AuthRoot Certificate to Store",
+      "path": "detections/sigma-imports/_quarantine/new-root-or-ca-or-authroot-certificate-to-store.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d2e3f2f6-7e09-4bf2-bc5d-90186809e7fb",
+      "name": "PowerShell Script With File Upload Capabilities",
+      "path": "detections/sigma-imports/_quarantine/powershell-script-with-file-upload-capabilities.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1020"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d36f87ea-c403-44d2-aa79-1a0ac7c24456",
+      "name": "PUA - RemCom Default Named Pipe",
+      "path": "detections/sigma-imports/_quarantine/pua-remcom-default-named-pipe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1569.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d59d7842-9a21-4bc6-ba98-64bfe0091355",
+      "name": "Powershell DNSExfiltration",
+      "path": "detections/sigma-imports/_quarantine/powershell-dnsexfiltration.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1048"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-db1c21e4-cd66-4b4e-85ca-590f0780529c",
+      "name": "Windows Recovery Environment Disabled Via Reagentc",
+      "path": "detections/sigma-imports/_quarantine/windows-recovery-environment-disabled-via-reagentc.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1490"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-dbc1f800-0fe0-4bc0-9c66-292c2abe3f78",
+      "name": "Delete Important Scheduled Task",
+      "path": "detections/sigma-imports/_quarantine/delete-important-scheduled-task.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-def8b624-e08f-4ae1-8612-1ba21190da6b",
+      "name": "Outgoing Logon with New Credentials",
+      "path": "detections/sigma-imports/_quarantine/outgoing-logon-with-new-credentials.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1550"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-e290b10b-1023-4452-a4a9-eb31a9013b3a",
+      "name": "LOLBAS Data Exfiltration by DataSvcUtil.exe",
+      "path": "detections/sigma-imports/_quarantine/lolbas-data-exfiltration-by-datasvcutil-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1567"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-efc21479-9e83-41da-8cf1-122e06ba8db3",
+      "name": "HackTool - NetExec File Indicators",
+      "path": "detections/sigma-imports/_quarantine/hacktool-netexec-file-indicators.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1059.005"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f117933c-980c-4f78-b384-e3d838111165",
+      "name": "Windows Share Mount Via Net.EXE",
+      "path": "detections/sigma-imports/_quarantine/windows-share-mount-via-net-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1021.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f1f3bf22-deb2-418d-8cce-e1a45e46a5bd",
+      "name": "MMC20 Lateral Movement",
+      "path": "detections/sigma-imports/_quarantine/mmc20-lateral-movement.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f318b911-ea88-43f4-9281-0de23ede628e",
+      "name": "PUA - CSExec Default Named Pipe",
+      "path": "detections/sigma-imports/_quarantine/pua-csexec-default-named-pipe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1569.002"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f354eba5-623b-450f-b073-0b5b2773b6aa",
+      "name": "Potential DCOM InternetExplorer.Application DLL Hijack - Image Load",
+      "path": "detections/sigma-imports/_quarantine/potential-dcom-internetexplorer-application-dll-hijack-image-load.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1021.002",
+        "T1021.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.8,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f43f5d2f-3f2a-4cc8-b1af-81fde7dbaf0e",
+      "name": "AWS Suspicious SAML Activity",
+      "path": "detections/sigma-imports/_quarantine/aws-suspicious-saml-activity.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1078",
+        "T1548",
+        "T1550",
+        "T1550.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:4(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f72aa3e8-49f9-4c7d-bd74-f8ab84ff9bbb",
+      "name": "Suspicious RDP Redirect Using TSCON",
+      "path": "detections/sigma-imports/_quarantine/suspicious-rdp-redirect-using-tscon.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1563.002",
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-fa3c117a-bc0d-416e-a31b-0c0e80653efb",
+      "name": "Chopper Webshell Process Pattern",
+      "path": "detections/sigma-imports/_quarantine/chopper-webshell-process-pattern.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1505.003",
+        "T1018",
+        "T1033",
+        "T1087"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:4(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-fa5b1358-b040-4403-9868-15f7d9ab6329",
       "name": "Network Communication With Crypto Mining Pool",
       "path": "detections/sigma-imports/endpoint/network-communication-with-crypto-mining-pool.yaml",
@@ -11526,6 +13893,59 @@
       "quality_notes": [
         "tier:imported(+0.3)",
         "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-fbc5e92f-3044-4e73-a5c6-1c4359b539de",
+      "name": "PowerShell Script With File Hostname Resolving Capabilities",
+      "path": "detections/sigma-imports/_quarantine/powershell-script-with-file-hostname-resolving-capabilities.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1020"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "exfil"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-ffa28e60-bdb1-46e0-9f82-05f7a61cc06e",
+      "name": "User Added to Remote Desktop Users Group",
+      "path": "detections/sigma-imports/_quarantine/user-added-to-remote-desktop-users-group.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1133",
+        "T1136.001",
+        "T1021.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],

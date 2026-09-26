@@ -1,9 +1,10 @@
 {
   "executable": 2603,
-  "onDisk": 7016,
+  "onDisk": 6991,
   "quarantined": 4213,
   "plugins": 77,
   "playbookPacks": 62,
+  "playbooks": 87,
   "marketplaceItems": 7155,
   "categories": {
     "application": 86,

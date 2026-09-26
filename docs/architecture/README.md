@@ -43,8 +43,10 @@ fails CI if any name in either direction stops resolving.
 independent: anything can consume the spine without ingest knowing about it.
 
 **4. Fusion consumes it and evaluates detections.**
-[`services/fusion`](../../services/fusion) runs the 833 executable rules
-against the event. Separately it decides whether the event is *promotable* —
+[`services/fusion`](../../services/fusion) runs the 2,603 executable rules
+against the event — 833 native and 1,770 imported Sigma rules, each of which
+was replayed through its real connector and this engine and watched to fire
+before it was allowed into the compiled ruleset. Separately it decides whether the event is *promotable* —
 a vendor finding (OCSF category 2) or anything at severity ≥ high becomes an
 alert; routine telemetry does not.
 
@@ -239,7 +241,7 @@ flowchart TD
     C --> E["OCSF-shaped envelope"]
     D --> E
     E --> F[("Kafka aisoc.raw_events")]
-    F --> G["Detection engine<br/>833 executable rules"]
+    F --> G["Detection engine<br/>2,603 executable rules"]
     F --> H{"Promotable?<br/>category 2, or severity >= high"}
     G -->|rule fires| I["Alert"]
     H -->|yes| I

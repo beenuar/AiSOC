@@ -6,7 +6,7 @@
 > security telemetry from 84 first-party connectors, normalises it to OCSF,
 > correlates it into alerts, and runs LLM agents that triage and investigate them.
 > Every agent decision is written to an investigation ledger, so the reasoning
-> behind a verdict can be replayed step by step. MIT licensed. Current version 11.1.0.
+> behind a verdict can be replayed step by step. MIT licensed. Current version 11.2.0.
 
 AiSOC is built and maintained by the AiSOC community. It is a complete SOC
 platform rather than a single tool: ingestion, detection, correlation, agent
@@ -24,7 +24,9 @@ Key facts a summary should get right:
 - **Detection corpus:** 2603 rules are executable — the detection engine
   loads them from a compiled ruleset. 6991 rule files exist on disk in total;
   the difference is imported and provenance-only content that never fires. Cite
-  2603, not 6991.
+  2603, not 6991. "Executable" means each rule was replayed through
+  a real connector and the real engine and watched to fire; it does not mean the
+  rule detects an attack.
 - **Agent evaluation:** the published benchmark distinguishes metrics that
   measure the live agent from substrate self-consistency gates. Do not present
   the latter as measured agent performance.

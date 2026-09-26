@@ -14,8 +14,18 @@ the AiSOC engine can run as-is.
 | ----------- | ------------------------------------------------------ | ---------------- | -------------------------------------------------------------------- |
 | Native      | `detections/<category>/`                               | enabled          | schema + fixture replay (positive matches, negative does not)        |
 | Imported    | `detections/<source>-imports/<category>/`              | source-dependent | schema + populated `provenance` block                                |
-| Quarantined | `detections/<source>-imports/_quarantine/<category>/`  | `enabled: false` | schema + provenance, plus a populated `quarantine_reason`            |
+| Quarantined | `detections/<source>-imports/_quarantine/<category>/`  | see below        | schema + provenance, plus a populated `quarantine_reason`            |
 | Community   | `detections/community/<category>/`                     | `enabled: false` | schema only (provenance encouraged)                                  |
+
+:::note `_quarantine/` is a location, not a verdict
+
+It stopped being one when the Sigma compiler began translating rules where
+they sat: 1,724 files under `_quarantine/` are compiled, proven to fire and
+loaded by the engine today. Ask the compiled ruleset whether a rule runs —
+that is what the truth table, the validator, the marketplace builder and the
+coverage page all do now, and it is why they agree.
+
+:::
 
 The library holds **6,991 ATT&CK-mapped rules on disk, of which 2,603 are
 executable** — the count the detection engine actually loads. Those two numbers
@@ -26,15 +36,74 @@ The executable set is 833 native rules, authored as Python specs and backed by
 1,756 positive/negative fixtures, plus 1,770 imported Sigma rules translated
 into the matcher's own language by
 [`scripts/compile_sigma_ruleset.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/compile_sigma_ruleset.py).
-A translated rule ships only after a vendor-shaped event has been replayed
-through its connector and the engine and produced a hit for that rule — see
-[the compilation report](https://github.com/beenuar/AiSOC/blob/main/docs/detections/sigma-compilation.md)
-for what was refused and why.
 [`docs/detections/truth-table.md`](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md)
 cross-checks these counts against the loaded ruleset. Imported tiers are
 normalized into the AiSOC schema by
 the source-specific importers under [`tools/detection_import/`](https://github.com/beenuar/AiSOC/blob/main/tools/detection_import/README.md)
 and remain empty in a fresh checkout until you run them.
+
+## What "executable" means here
+
+It is a claim about evidence, not about a flag in a file. A rule counts as
+executable when a vendor-shaped event has been pushed through the **real**
+connector's `normalize()` and the **real** `DetectionEngine`, and that rule
+was observed to produce a hit — while an empty event of the same shape
+produced nothing. Nothing is inferred from the rule's directory, its
+`enabled:` key or the shape of its `detection:` block.
+
+That distinction matters because the static check that looks like it proves
+this does not. `scripts/check_detection_fields.py` says in its own docstring
+that it over-approximates, and that "a false pass is a rule this gate should
+have caught" — so passing it is not evidence a rule can fire.
+
+The proof is also known to be capable of failing, which is the part that makes
+it worth anything. Running
+
+```bash
+python3 scripts/compile_sigma_ruleset.py --prove-gate
+```
+
+reverts the Windows connector to its pre-fix behaviour — where `System` and
+`EventData` were left nested one level below the namespace the matcher reads —
+replays every shipped rule against it, and **requires all 1,687 Windows rules
+to stop firing**. If they kept firing, the proof would not be measuring what it
+claims, and the gate fails.
+
+## What it does not mean
+
+A rule that is executable is *reachable*: it fires on a well-formed event of
+its own log source. That is not a claim that it detects an attack, that it is
+tuned for your estate, or that it will not be noisy. `false_positives:` is
+prose and is not machine-checked, and there is no per-rule false-positive-rate
+gate. Treat the figure as "these rules can fire", never as "these rules are
+correct".
+
+## Why 1,362 imported rules were refused
+
+3,132 Sigma rules were considered, 1,770 ship, and 1,362 were refused with a
+recorded reason. The refusals are as informative as the acceptances, because a
+translation that is merely close changes what a rule means, and a rule that
+fires on the wrong events is worse than one that does not ship.
+
+The two largest reasons account for three quarters of them:
+
+| Refused | Why |
+| ---: | --- |
+| 556 | **No connector emits that log source.** The rule is well-formed and there is nothing in the product producing the telemetry it reads, so it could only ever be silent. |
+| 464 | **The negation would flip on a missing field.** Sigma treats `not filter` as *true* when the field is absent; only `not_in` and `not_contains_any` behave that way in the AiSOC matcher. Compiling the rest would have turned "not this value" into "fires whenever the field is missing", which is the opposite of the rule. |
+
+The remaining 342 are smaller, mechanical gaps — Sigma modifiers with no
+matcher operator (`|cidr`, `|base64`, `|fieldref`, `|all` on a non-contains
+modifier), case-sensitive regexes where the matcher forces `IGNORECASE`,
+dotted field paths the matcher cannot traverse, and 133 that compiled cleanly
+but did not fire on their own proof event and so were not shipped.
+
+The full taxonomy, with an example rule for every reason and the per-connector
+breakdown of what does ship, is in
+[the compilation report](https://github.com/beenuar/AiSOC/blob/main/docs/detections/sigma-compilation.md).
+That report also records a known attribution gap: the importer never captured
+the upstream `author:` field, so DRL-1.1 attribution travels as repository,
+rule id, upstream path and licence, but not as the person who wrote it.
 
 ## Native rule format
 
@@ -123,12 +192,18 @@ The full attribution table for every redistributed corpus lives in the repo's
 
 ### Quarantine
 
-A rule lives in `detections/<source>-imports/_quarantine/<category>/` when it
-parses cleanly but the engine cannot execute the upstream query as-is. This
-covers Splunk SPL, Chronicle YARA-L, and MITRE CAR pseudocode out of the box.
-Quarantined rules ship with `enabled: false` and a `quarantine_reason`. They
-are still indexed for coverage accounting and surfaced in the UI as
+A rule is written into `detections/<source>-imports/_quarantine/<category>/`
+when the importer could not execute the upstream query as-is. That is still
+true of Splunk SPL, Chronicle YARA-L and MITRE CAR pseudocode, for which there
+is no evaluator in this repository at all: all 2,005 Splunk, 877 Chronicle and
+99 CAR rules are indexed for coverage accounting and surfaced in the UI as
 "imported, requires translation" — never silently activated.
+
+What changed is Sigma. `compile_sigma_ruleset.py` translates those rules in
+place rather than moving them, so a file under `_quarantine/` may be compiled,
+proven to fire and loaded. The directory records where the importer put a rule;
+only the compiled ruleset records whether it runs. Anything that reports on the
+corpus reads the latter.
 
 ## CI validation
 
@@ -142,16 +217,22 @@ checks:
   `provenance` block.
 - **Community** — schema check only.
 
-The summary line breaks the count down by tier and quarantine state so a
-typical green CI run looks like:
+The summary line breaks the count down by tier and by whether the engine loads
+the rule, so a typical green CI run looks like:
 
 ```
-Validated 6991 rules — 6991 passed, 0 failed, 0 fixture warnings
-  Tiers: native=877 imported=6113 community=1 (quarantined=5937)
+Validated 6991 rules — 6991 passed, 0 failed, 44 fixture warnings
+  Tiers: community=1, imported=6113, native=877
+  Executable (loaded by the engine): 2603; not loaded: 4388
 ```
+
+The executable figure is read out of the compiled ruleset, which is the same
+authority the truth table uses, so the validator and the truth table cannot
+report different numbers about the same tree. It used to be derived from the
+directory layout and said 5,937 quarantined where the truth table said 4,213.
 
 Counts move as importers refresh upstream sources; the line above is a
-sample from the November 2026 pull, not a hard target.
+sample, not a hard target.
 
 CI integration is wired into the [`Validate Detection Rules`](https://github.com/beenuar/AiSOC/actions/workflows/validate-detections.yml)
 workflow.

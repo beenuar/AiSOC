@@ -305,9 +305,11 @@ before/after delta in the PR body.
 Two libraries here are designed to grow — investigation strategies and
 response actions — and both are the same shape as things that have already
 gone wrong in this repository. The detection corpus reached ~6,000 rules of
-which 833 execute; the connector catalogue reached 84 connectors of which 35
+which 833 executed; the connector catalogue reached 84 connectors of which 35
 had no documentation. Both recovered by making the artifact derived and the
-count gated.
+count gated — and the detection gap then closed properly, to 2,603, once
+somebody asked *why* the other rules could not fire instead of treating the
+number as a backlog.
 
 The rule is one sentence: **a contribution that cannot fail a test is not a
 contribution.** What that means per library, and why each rule exists, is in

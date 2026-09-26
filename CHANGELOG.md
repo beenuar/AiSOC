@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.2.0] — 2026-09-26
+
 ### Added
 
 - **The detection engine runs 2,603 rules instead of 833, and every one of the
@@ -61,7 +63,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bursts, remote-thread fan-out, and per-process DNS fan-out for tunnelling
   and domain-generation algorithms.
 
+- **`scripts/measure_triage_reliability.py`** — the measurement behind the
+  auto-triage reliability figures under *Fixed* below. It imports the
+  production prompt, envelope and parser rather than restating them, and uses a
+  *different* alert per attempt: production pins `temperature=0.0`, so asking
+  one alert twenty times measures one reply twenty times, not a rate. Failed
+  attempts record the model's own words, since "Expecting value: line 4 column
+  16" cannot be diagnosed without the text it indexes into. With no model
+  reachable it prints SKIPPED and says that nothing was measured, because a
+  skip is not a pass.
+
 ### Changed
+
+- **Nothing an operator has to do, but the detection surface is 3.1x wider.**
+  There is no configuration change, no migration and no API change in this
+  release — the connector fix lifts the `System` and `EventData` containers
+  into the namespace the matcher already read, and a connector-normalized key
+  still wins on collision, so it only adds fields. What does change is that
+  2,603 rules evaluate where 833 did, and 1,687 of the additions are Windows
+  rules that could never fire before, so a deployment with Windows telemetry
+  should expect more alerts from the same stream. Every imported rule carries
+  its `upstream_status` onto the alert, so the 125 `experimental` ones can be
+  filtered without disabling the rest.
 
 - **Upstream lifecycle status no longer decides whether an imported rule runs.**
   The importer quarantined on SigmaHQ status, which put 2,844 `test` and 211
@@ -166,16 +189,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trimmed to the last balanced point, because extraction may read what the
   model said and must not guess at what it meant.
 
-### Added
+- **Three counters still classified rules by their directory, and disagreed
+  with the engine by about 1,700 each.** `_quarantine/` stopped meaning "cannot
+  run" when the Sigma compiler began translating rules where they sat, and the
+  tools that had not been moved to the compiled ruleset kept reporting the old
+  world while printing OK. `validate_detections.py` published "Quarantined
+  (parsed-but-disabled): 5937" against a truth table saying 4,213 about the
+  same tree; it now reports `Executable (loaded by the engine): 2603; not
+  loaded: 4388`, read from the same artefact, so the two cannot diverge.
+  `curate_detections.py` skipped every `_quarantine/` file before scoring, so
+  the published coverage page selected from 1,054 candidates out of 2,603
+  executable rules and its "By category" list contained a category named
+  `_quarantine`; candidates are now the rules the engine loads, and a rule
+  that cannot fire is no longer eligible for a page that promises coverage.
 
-- **`scripts/measure_triage_reliability.py`** — the measurement behind the
-  figures above. It imports the production prompt, envelope and parser rather
-  than restating them, and uses a *different* alert per attempt: production
-  pins `temperature=0.0`, so asking one alert twenty times measures one reply
-  twenty times, not a rate. Failed attempts record the model's own words, since
-  "Expecting value: line 4 column 16" cannot be diagnosed without the text it
-  indexes into. With no model reachable it prints SKIPPED and says that nothing
-  was measured, because a skip is not a pass.
+- **`build_marketplace.py` published 7,016 detections against a README and a
+  truth table that both say 6,991.** The 25-rule gap was `detections/playbooks/`
+  — response playbooks with `trigger:` and `steps:` and no `detection:` block —
+  walked as native detections because `playbooks` was missing from the skip set
+  that `detection_truth_table.py` has always carried. They are indexed as
+  playbooks now, so the marketplace keeps all 7,155 items, `stats.detections`
+  reads 6,991, and the landing page's pack figure is unaffected: `stats.playbooks`
+  counts every playbook and a new `stats.playbook_packs` counts the v1 pack
+  alone, because 62 of the 87 are packs and calling all 87 packs would have
+  traded one wrong number for another.
+
+- **Five refusal reasons rendered as broken table rows.** The Sigma compilation
+  report escapes the example it prints and not the reason, and five reasons
+  *name a Sigma modifier* — `|re`, `|cidr`, `|all`, `|base64`, `|fieldref` —
+  whose leading pipe is also a Markdown cell delimiter, so each opened an empty
+  first column and shifted its row. The rows that rendered wrong were exactly
+  the ones explaining the least obvious refusals.
+
+- **The DRL-1.1 attribution gap is now stated in the report rather than
+  discoverable only from the JSON.** `provenance.author` is empty on all 1,770
+  compiled rules because the Sigma importer never read the upstream `author:`
+  field. Attribution travels as repository, upstream rule id, upstream path and
+  licence — enough to find the rule, not enough to name who wrote it. The engine
+  builds its attribution sentence from what the block holds, so an alert reads
+  short rather than crediting an author called `""`, but a licence obligation
+  that is partly met is not met. Closing it needs a re-import.
 
 
 ## [11.1.0] — 2026-09-25

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import clsx from 'clsx';
 
+import { EXECUTABLE_DETECTION_COUNT } from '@/data/corpusStats';
 import {
   OTHER_TACTIC,
   TACTICS,
@@ -145,19 +146,27 @@ function Summary({
   );
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
       <Card label="Techniques covered" value={coverage.unique_techniques}>
         {tierFilter === 'all'
           ? 'across all tiers'
           : `in ${TIER_LABEL[tierFilter]} tier (${techShown} shown)`}
       </Card>
 
+      {/* The executable figure leads, because this page is called Coverage
+          and a library figure standing on its own reads as coverage. A rule
+          only counts here after it was replayed through its real connector
+          and the real engine and watched to fire. */}
+      <Card label="Executable rules" value={EXECUTABLE_DETECTION_COUNT}>
+        loaded by the engine, of {detTotal} on disk
+      </Card>
+
       <Card label="Rules with MITRE" value={coverage.total_with_mitre}>
-        of {detTotal} detection rules
+        across the whole library, not only what runs
       </Card>
 
       <Card
-        label="Detection rules"
+        label="Detection rules on disk"
         value={detTotal}
         breakdown={
           <div className="mt-2 space-y-0.5 text-[11px] text-gray-400">
@@ -177,8 +186,9 @@ function Summary({
         }
       />
 
-      <Card label="Quarantined" value={quarantined}>
-        imported rules disabled until translated
+      <Card label="Not loaded" value={quarantined}>
+        on disk for provenance and coverage mapping; no evaluator here, so they
+        never fire
       </Card>
     </div>
   );
