@@ -27,11 +27,11 @@ recorded, and proposes an action. A human approves before anything executes.
 
 ## What it looks like running
 
-<a href="apps/web/public/demo/demo.mp4"><img src="apps/web/public/demo/hero.gif" alt="AiSOC on one host: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent" /></a>
+<a href="https://beenuar.github.io/AiSOC/docs/deployment/walkthrough"><img src="apps/web/public/demo/hero.gif" alt="AiSOC on one host: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent" /></a>
 
-**[Watch the three-minute walkthrough](apps/web/public/demo/demo.mp4)** — install
-to AI verdict on one server, against the published images. Terminal waits are
-shortened, which the recording states on screen. ([step by step](https://beenuar.github.io/AiSOC/docs/deployment/walkthrough))
+**[Watch the full three minutes](https://beenuar.github.io/AiSOC/docs/deployment/walkthrough)** —
+install to AI verdict on one server, against the published images. Terminal waits
+are shortened, which the recording says on screen. It is also committed here, at `apps/web/public/demo/demo.mp4`.
 
 Stills from earlier runs under the same rules — no seeded rows, no demo mode, no
 mockups. The events were authored to be representative; everything downstream of

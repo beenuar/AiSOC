@@ -11,11 +11,17 @@ covers the same ground in the same order, with the detail a three-minute video
 has no room for: what each command does, what you should see, and what it means
 when you see something else.
 
-[![Preview of the walkthrough: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent](../../../web/public/demo/hero.gif)](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/demo/demo.mp4)
+import demoVideo from '@site/../web/public/demo/demo.mp4';
+import demoPoster from '@site/../web/public/demo/demo-poster.png';
 
-The loop above is a cut from the recording. **[Play the full three minutes](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/demo/demo.mp4)**
-— it ships in the repository at `apps/web/public/demo/demo.mp4`, so it is also
-there in a clone, offline.
+<video controls preload="metadata" poster={demoPoster} style={{width: '100%', borderRadius: '8px'}}>
+  <source src={demoVideo} type="video/mp4" />
+  Your browser cannot play embedded video —{' '}
+  <a href={demoVideo}>download the recording</a> instead.
+</video>
+
+Two minutes fifty-seven seconds, no audio. It also ships in the repository at
+`apps/web/public/demo/demo.mp4`, so it is there in a clone, offline.
 
 **What is real in the recording.** The stack, the images, the threat feed, the
 event, the alert and the token counts are all real. The images came from
