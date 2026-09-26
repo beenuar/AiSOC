@@ -489,8 +489,7 @@ def gate_readme_figures() -> list[GateFailure]:
         # happened to be wrong.
         quoted = {
             int(n.replace(",", ""))
-            for n in re.findall(r"([\d,]{3,7})\s+executable", readme)
-            + re.findall(r"detection corpus \(([\d,]{3,7}) rules\)", readme)
+            for n in re.findall(r"([\d,]{3,7})\s+executable", readme) + re.findall(r"detection corpus \(([\d,]{3,7}) rules\)", readme)
         }
         for n in sorted(quoted - {executable}):
             failures.append(

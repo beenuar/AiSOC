@@ -33,7 +33,7 @@ jobs:
         # DetectionEngine rather than a copy of either, so it needs what those
         # modules import. A gate that reimplemented them would need nothing
         # here and would also prove nothing.
-        run: pip install structlog httpx pydantic pydantic-settings
+        run: pip install structlog httpx pydantic pydantic-settings cryptography
 
       - name: Rule ids must be stable
         # Ids were positional, so inserting a rule renumbered every rule

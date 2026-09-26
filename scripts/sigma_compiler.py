@@ -32,7 +32,7 @@ on a missing field, which would silently narrow the rule. Those compile to a
 refusal rather than to something that looks equivalent.
 
 The compiler never decides that a rule works. It proposes one, and
-``scripts/check_rule_fireability.py`` replays a vendor-shaped event through the
+``scripts/compile_sigma_ruleset.py`` replays a vendor-shaped event through the
 real connector and the real engine to decide whether it actually fires.
 """
 

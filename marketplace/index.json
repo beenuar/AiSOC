@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-24T07:22:47Z",
+  "generated": "2026-09-26T17:22:54Z",
   "categories": [
     {
       "id": "playbooks",
@@ -28581,7 +28581,7 @@
       "verified": false,
       "source": "community",
       "tier": "community",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/community/cloud/hello-hunt-aws-root-login.yaml"
     },
     {
@@ -35016,7 +35016,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/aws-guardduty-instance-credential-exfiltration.yaml"
     },
     {
@@ -35040,7 +35040,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-transport-rule-external-redirect.yaml"
     },
     {
@@ -35063,7 +35063,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-audit-bypass-enabled.yaml"
     },
     {
@@ -35087,7 +35087,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-ediscovery-search-all-mailboxes.yaml"
     },
     {
@@ -35111,7 +35111,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-ediscovery-export.yaml"
     },
     {
@@ -35135,7 +35135,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-org.yaml"
     },
     {
@@ -35158,7 +35158,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-sharepoint-site-admin-external-user.yaml"
     },
     {
@@ -35181,7 +35181,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-teams-external-access-domain-added.yaml"
     },
     {
@@ -35204,7 +35204,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-teams-app-sideloading-enabled.yaml"
     },
     {
@@ -35227,7 +35227,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-defender-safe-attachments-policy-disabled.yaml"
     },
     {
@@ -35250,7 +35250,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-defender-safe-links-policy-disabled.yaml"
     },
     {
@@ -35274,7 +35274,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-defender-antiphish-policy-weakened.yaml"
     },
     {
@@ -35298,7 +35298,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-purview-dlp-policy-disabled.yaml"
     },
     {
@@ -35322,7 +35322,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-purview-sensitivity-label-removed.yaml"
     },
     {
@@ -35346,7 +35346,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-purview-retention-policy-deleted.yaml"
     },
     {
@@ -35370,7 +35370,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-power-platform-dlp-policy-modified.yaml"
     },
     {
@@ -35394,7 +35394,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-power-automate-flow-shared-externally.yaml"
     },
     {
@@ -35418,7 +35418,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-entra-conditional-access-policy-disabled.yaml"
     },
     {
@@ -35442,7 +35442,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-entra-pim-role-activated-global-admin.yaml"
     },
     {
@@ -35466,7 +35466,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-entra-cross-tenant-access-policy-changed.yaml"
     },
     {
@@ -35490,7 +35490,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-oauth-app-mailbox-access.yaml"
     },
     {
@@ -35514,7 +35514,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/azure-key-vault-purge-protection-disabled.yaml"
     },
     {
@@ -35538,7 +35538,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/azure-management-group-elevated-access.yaml"
     },
     {
@@ -35561,7 +35561,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/azure-defender-for-cloud-plan-disabled.yaml"
     },
     {
@@ -35584,7 +35584,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/gcp-org-policy-constraint-removed.yaml"
     },
     {
@@ -35607,7 +35607,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/gcp-vpc-firewall-rule-allow-all-ingress.yaml"
     },
     {
@@ -35630,7 +35630,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/gcp-cloud-armor-policy-removed.yaml"
     },
     {
@@ -35653,7 +35653,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/gcp-audit-log-sink-deleted.yaml"
     },
     {
@@ -35677,7 +35677,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-ediscovery-search-created.yaml"
     },
     {
@@ -35700,7 +35700,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-mail-connector-external-domain.yaml"
     },
     {
@@ -35724,7 +35724,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml"
     },
     {
@@ -35748,7 +35748,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml"
     },
     {
@@ -35771,7 +35771,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-sharepoint-site-collection-admin-added.yaml"
     },
     {
@@ -35794,7 +35794,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-teams-external-access-enabled.yaml"
     },
     {
@@ -35817,7 +35817,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/m365-unified-audit-log-disabled.yaml"
     },
     {
@@ -35840,7 +35840,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/cloud/aws-iam-update-access-key-privileged.yaml"
     },
     {
@@ -43147,7 +43147,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/fim-sensitive-file-modified.yaml"
     },
     {
@@ -43175,7 +43175,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/fim-binary-dropped-writable-dir.yaml"
     },
     {
@@ -43202,7 +43202,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/fim-ld-preload-modified.yaml"
     },
     {
@@ -43229,7 +43229,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml"
     },
     {
@@ -43253,7 +43253,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/linux-auditd-sudoers-tampering.yaml"
     },
     {
@@ -43277,7 +43277,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/linux-auditd-ssh-config-tampering.yaml"
     },
     {
@@ -43301,7 +43301,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/linux-auditd-kernel-module-load.yaml"
     },
     {
@@ -43325,7 +43325,7 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/endpoint/linux-auditd-systemd-persistence.yaml"
     },
     {
@@ -52797,7 +52797,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/linux-doas-conf-file-creation.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -54960,7 +54960,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/linux-doas-tool-execution.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -57736,7 +57736,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/ruby-on-rails-framework-exceptions.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -59315,7 +59315,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/hacktool-potential-impacket-lateral-movement-activity.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -62843,7 +62843,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/zerologon-exploitation-using-well-known-tools.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -63204,7 +63204,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/python-sql-exceptions.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -65632,7 +65632,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/system-and-hardware-information-discovery.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -67443,7 +67443,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/antivirus-exploitation-framework-detection.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -68575,7 +68575,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/addition-of-sid-history-to-active-directory-object.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -72015,7 +72015,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/file-deletion.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -74553,7 +74553,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/relevant-clamav-message.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -74719,7 +74719,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/overwriting-the-file-with-dev-zero-or-null.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -79155,7 +79155,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/system-information-discovery.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -100304,7 +100304,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/antivirus-password-dumper-detection.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -100769,7 +100769,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/remote-file-copy.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -103555,7 +103555,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/linux-logs-clearing-attempts.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -109289,7 +109289,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/pass-the-hash-activity-2.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -119140,7 +119140,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/linux-crypto-mining-pool-connections.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -121259,7 +121259,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/remote-lsass-process-access-through-windows-remote-management.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -122805,7 +122805,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/spring-framework-exceptions.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -126081,7 +126081,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/network/monero-crypto-coin-mining-pool-lookup.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -131259,7 +131259,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/user-added-to-local-administrator-group.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -134532,7 +134532,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/password-policy-discovery-linux.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -135317,7 +135317,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/suspicious-eventlog-clearing-or-configuration-change-activity.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -137362,7 +137362,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/wmiprvse-spawned-a-process.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -137823,7 +137823,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/scheduled-task-job-at.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -139903,7 +139903,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/network/cleartext-protocol-usage.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -141461,7 +141461,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/windows-defender-real-time-protection-failure-restart.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -147005,7 +147005,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/suspicious-unsigned-thor-scanner-execution.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -153684,7 +153684,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/antivirus-hacktool-detection.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
@@ -154834,7 +154834,7 @@
       "verified": false,
       "source": "sigmahq",
       "tier": "imported",
-      "enabled": true,
+      "enabled": false,
       "path": "detections/sigma-imports/endpoint/django-framework-exceptions.yaml",
       "provenance": {
         "source": "SigmaHQ/sigma",
