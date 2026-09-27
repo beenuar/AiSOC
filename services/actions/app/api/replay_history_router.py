@@ -194,7 +194,10 @@ async def _read_defender(body: HistoryRequest) -> list[ClosedFinding]:
     return [parse_defender_alert(row) for row in rows]
 
 
-_READERS = {
+#: Public because the shadow-reconciliation route reads the same five windows
+#: with the same five readers. A second dispatch table would be a second place
+#: for a vendor arm to be added to one and forgotten in the other.
+READERS = {
     "splunk": _read_splunk,
     "sentinel": _read_sentinel,
     "elastic": _read_elastic,
@@ -221,7 +224,7 @@ async def read_history(
         )
 
     try:
-        findings = await _READERS[body.vendor](body)
+        findings = await READERS[body.vendor](body)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 - every vendor failure is a 502, never an empty window
