@@ -29,6 +29,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seam the runbooks use, and the cutoff is proven against a **live store**
   rather than a stub — an ORM-level filter that a stub satisfies is the half
   that has already been wrong once in this programme.
+- **A hunting agent that turns a hypothesis into a plan, and cannot write a
+  query while doing it** (gap-closure Phase 8.3).
+
+  **The gap.** Hunting was a library of hunts somebody had already written. An
+  analyst with a hypothesis that nobody had turned into a hunt had no path from
+  the sentence to the evidence.
+
+  **Why the model does not write SQL.** The obvious build is to let the model
+  emit a query and to sanitise what comes back. That makes the safety of the
+  system a property of a filter, tested against the payloads somebody thought
+  of. Instead the model fills a plan whose fields and operators are **closed
+  enums in the schema it is handed** — 17 fields, 8 operators — and
+  `hunt_plan_sql.compile_plan` renders those into SQL with every model-supplied
+  value as a bound parameter. There is no string the model can produce that
+  becomes SQL text, so injection is not filtered, it is unrepresentable.
+
+  `scripts/check_hunt_agent_boundary.py` reads the enum, the compiler and the
+  ClickHouse DDL together and fails when any of the three drifts from the other
+  two — a field added to the enum but absent from the table matches nothing
+  forever, which is a silent wrong answer rather than an error. It was proven
+  against three injected faults: an open enum, a query-shaped property, and a
+  field the DDL does not declare.
+
+  **A lake that could not answer is not zero findings.** The unavailable branch
+  carries a reason and **no `rows` key at all**, so a caller reading `rows`
+  raises rather than receiving an empty list it would report as a clean estate.
+  Findings, no findings and could not check stay three outcomes.
+
+  The route authorises on `lake:query`. `hunts:read` reads plausibly and does
+  not exist in `ROLE_PERMISSIONS`, so it would have been a silent 403 on every
+  deployment.
 
 - **The hunt corpus grew from 5 hunts to 68, and the grading that covers it
   stopped being satisfiable by accident** (gap-closure Phase 8.4).

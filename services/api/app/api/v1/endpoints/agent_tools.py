@@ -44,9 +44,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.db.clickhouse import (
+    LakeQueryError,
+    LakeQueryNotConfiguredError,
+    LakeQueryTimeoutError,
+    execute_lake_query,
+)
 from app.services import actions_client
 from app.services.agent_tools import siem_search, vendor_reads
 from app.services.agent_tools.indicators import INDICATOR_TYPES, IndicatorTypeError
+from app.services.retro_hunt import hunt_plan_sql
 
 logger = structlog.get_logger(__name__)
 
@@ -229,3 +236,90 @@ async def vendor_read(
     # precisely so a new status cannot inherit "a vendor answered".
     payload["executed"] = report.executed
     return payload
+
+
+# ------------------------------------------------------------- hunt plan
+
+
+class HuntPlanClause(BaseModel):
+    """One predicate of a hunting agent's plan.
+
+    Three typed strings and nothing else. There is no property here that can
+    carry a query, a fragment of one, or free text, which is the property
+    ``scripts/check_hunt_agent_boundary.py`` reads this model to check. The
+    field and operator are validated against the closed sets in
+    ``app.services.retro_hunt.hunt_plan_sql`` before anything is compiled.
+    """
+
+    field: str = Field(..., max_length=64)
+    operator: str = Field(..., max_length=16)
+    value: str = Field(..., max_length=512)
+
+
+class HuntPlanExecuteRequest(BaseModel):
+    clauses: list[HuntPlanClause] = Field(..., min_length=1, max_length=7)
+    lookback_hours: int = Field(default=168, ge=1, le=2160)
+    limit: int = Field(default=hunt_plan_sql.MAX_ROWS, ge=1, le=hunt_plan_sql.MAX_ROWS)
+
+
+@router.post("/hunt-plan/execute", summary="Run a hunting agent's structured plan against the event lake")
+async def execute_hunt_plan(
+    request: HuntPlanExecuteRequest,
+    # `lake:query`, the same permission the operator-facing lake API requires,
+    # because this reads the same warehouse. Not a new permission: one that no
+    # role grants makes the route a silent 403 on every deployment, which is
+    # the class of defect this program keeps finding rather than adding.
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> dict[str, Any]:
+    """Compile a validated plan and run it, tenant-scoped.
+
+    The tenant comes from the credential, never from the request, which is why
+    there is no tenant field on the model above. An unreachable lake is
+    reported as ``available: false`` with a reason rather than as zero rows:
+    an agent that reads the second as the first concludes an estate is clean
+    on evidence nobody gathered.
+    """
+    try:
+        compiled = hunt_plan_sql.compile_plan(
+            [clause.model_dump() for clause in request.clauses],
+            tenant_id=str(user.tenant_id),
+            lookback_hours=request.lookback_hours,
+            limit=request.limit,
+        )
+    except hunt_plan_sql.HuntPlanCompileError as exc:
+        # A caller error the model can fix, surfaced verbatim so it can
+        # correct the clause rather than concluding the data is absent.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    try:
+        result = await execute_lake_query(
+            compiled.sql,
+            params=compiled.params,
+            timeout_seconds=30.0,
+            extra_settings={"max_bytes_to_read": 8 * 1024 * 1024 * 1024},
+        )
+    except LakeQueryNotConfiguredError:
+        return {
+            "available": False,
+            "reason": "No event lake is configured on this deployment, so the hunt was NOT run. This is not a result.",
+        }
+    except LakeQueryTimeoutError:
+        return {
+            "available": False,
+            "reason": "The hunt exceeded its time budget, so the history was NOT fully searched. This is not a result.",
+        }
+    except LakeQueryError:
+        return {
+            "available": False,
+            "reason": "The event lake refused or failed the hunt, so the history was NOT searched. This is not a result.",
+        }
+
+    rows = [dict(zip(result.columns, row, strict=False)) for row in result.rows]
+    return {
+        "available": True,
+        "row_count": len(rows),
+        "rows": rows,
+        "fields_searched": list(compiled.fields_searched),
+        "lookback_hours": request.lookback_hours,
+        "truncated": len(rows) >= request.limit,
+    }

@@ -1,4 +1,8 @@
 {
+  "hunt.system": {
+    "sha256": "cb7225c08a170bf2511ec0a04936cf91fd83dce38659f72de872481c217e5dd5",
+    "version": "1"
+  },
   "summary.system": {
     "sha256": "eb3fbcdf0bee804cb8a90489331750b059501bc0ed8ef07a9f7c36e12e8f1287",
     "version": "1"

@@ -94,6 +94,17 @@ model_list:
       api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
+  # Gap-closure Phase 8.3. The hunting agent turns a natural-language
+  # hypothesis into a structured plan over a closed field vocabulary. It emits
+  # JSON against a fixed schema rather than prose, so the fast model is the
+  # right default; a deployment wanting more careful field selection points
+  # AISOC_LLM_MODEL at something larger.
+  - model_name: aisoc-hunt
+    litellm_params:
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
+      api_key: os.environ/OPENAI_API_KEY
+
   # ── Other backends ────────────────────────────────────────────────────────────
   # The two variables above take any LiteLLM model string, so most swaps need no
   # edit here at all:

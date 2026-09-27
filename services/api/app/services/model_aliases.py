@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 
 # Mirrors the roles in services/agents/app/llm/model_pins.py.
-ROLES = frozenset({"triage", "recon", "investigation", "copilot", "summary", "report", "nl"})
+ROLES = frozenset({"triage", "recon", "investigation", "copilot", "summary", "report", "nl", "hunt"})
 
 
 DEFAULT_OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
