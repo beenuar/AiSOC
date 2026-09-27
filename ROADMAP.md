@@ -786,7 +786,7 @@ could reach the port could write alerts into any tenant. And CORE now needs
 **8 GB of memory and 20 GB of free disk**, up from `~6.5 GB`, because the
 threat-intelligence feed, its vector store and a local model moved into it.
 
-Re-measured rather than restated: CORE is 14 long-running services plus a
+Re-measured rather than restated: CORE is 16 long-running services plus a
 one-shot model pull and `full` is 22; resident memory for the whole stack went
 1.72 GiB → 4.84 GiB. A fresh `make up` now holds 1,723 real CISA KEV entries
 within a minute of boot with no credentials, and runs triage against a bundled

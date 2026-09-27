@@ -98,11 +98,97 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
         "core",
         r"CORE profile: (\d+) long-running services",
     ),
+    # The five below went unchecked until ADR-0007 moved CORE to 16 and they
+    # kept saying 14. Two of them are the landing page and the FAQ, so the
+    # wrong number was the one a reader met first.
+    ("ROADMAP.md", "core", r"CORE is (\d+) long-running services"),
+    (
+        "apps/web/public/screenshots/README.md",
+        "core",
+        r"CORE: (\d+) long-running services",
+    ),
+    ("apps/web/src/app/page.tsx", "core", r"core profile brings up (\d+) services"),
+    (
+        "apps/web/src/components/landing/sections/Faq.tsx",
+        "core",
+        r"core profile brings up (\d+) services",
+    ),
+    (
+        "docs/testing/CLEAN_INSTALL.md",
+        "core",
+        r"CORE profile, (\d+) long-running services",
+    ),
 )
+
+
+#: Where a service count may be *mentioned* without being a claim about a
+#: profile. Each entry is a path, and every one is a deliberate decision that
+#: the number there is not the CORE or `full` figure.
+COUNT_MENTION_EXEMPT: frozenset[str] = frozenset(
+    {
+        # Records what each release changed, including counts that were correct
+        # then and are not now. Rewriting them would be revisionism.
+        "CHANGELOG.md",
+        "RELEASES.md",
+        # An ADR states the count at the moment it was decided, as its own
+        # evidence. ADR-0006 says 11 and ADR-0007 says 14 to 16; both are true
+        # of the day they were written.
+        "docs/decisions",
+        # Historical prototype subtree, not this product.
+        "plans",
+        # Counts source directories, not running containers.
+        "docs/architecture/SYSTEM_DESIGN.md",
+        # Counts what that deployment target runs, which is not a profile of
+        # this compose file.
+        "infra/railway/README.md",
+    }
+)
+
+#: Finds a sentence that looks like it publishes a profile's service count.
+#: Deliberately narrow: it wants the number adjacent to the word services, not
+#: any integer in the vicinity.
+COUNT_MENTION = re.compile(r"\b(\d+)\s+(?:long-running\s+)?(?:services|containers)\b")
 
 
 class ScanError(RuntimeError):
     """The compose file could not be read or parsed."""
+
+
+def unregistered_mentions() -> list[str]:
+    """Files publishing a service count that no CLAIM_SITES entry validates.
+
+    The list above is deliberately exact, and the reasoning is sound: a gate
+    that guessed which integers were claims would flag prose forever. But it
+    left the gate blind in the direction things actually move. Nothing noticed
+    when five surfaces kept saying 14 after ADR-0007 took CORE to 16, including
+    the landing page and the FAQ, because a figure added to a file this list
+    does not name is a figure this gate never reads.
+
+    So the exactness stays for *validating* a number, and this asks the
+    complementary question: does anything publish a count we are not checking?
+    A new surface must either join CLAIM_SITES or be exempted on purpose.
+    """
+    registered = {rel for rel, _profile, _pattern in CLAIM_SITES}
+    findings: list[str] = []
+    for path in sorted(REPO_ROOT.rglob("*")):
+        if path.is_dir() or path.suffix not in {".md", ".mdx", ".tsx", ".ts"}:
+            continue
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if rel in registered or any(rel == e or rel.startswith(f"{e}/") for e in COUNT_MENTION_EXEMPT):
+            continue
+        if any(part in {"node_modules", ".git", ".next", "dist"} for part in path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            if "profile" not in line.lower() and "make up" not in line and "CORE" not in line:
+                continue
+            match = COUNT_MENTION.search(line)
+            if match:
+                findings.append(f"{rel}:{line_no} publishes '{match.group(0)}' and no CLAIM_SITES entry validates it")
+    return findings
 
 
 def _parse_services(text: str) -> dict[str, list[str] | None]:
@@ -232,6 +318,10 @@ def scan() -> tuple[dict[str, int], dict[str, set[str]], list[str]]:
             "actions is not reachable from the chatops profile, and slack-bot depends on it; "
             "`docker compose --profile chatops` will refuse to render"
         )
+
+    # Asks the tree about the list, having just asked the list about the tree.
+    # Without this the gate can only be wrong about files it already knows.
+    errors.extend(unregistered_mentions())
 
     return counts, members, errors
 

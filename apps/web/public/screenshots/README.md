@@ -13,7 +13,7 @@ so in the table below and in every caption that uses it.
 
 ```bash
 cp .env.example .env
-make up          # CORE: 14 long-running services, no credentials of any kind
+make up          # CORE: 16 long-running services, no credentials of any kind
 make smoke       # one real event through the real spine
 ```
 

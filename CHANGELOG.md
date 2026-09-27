@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Five surfaces kept publishing 14 CORE services after ADR-0007 moved it to
+  16, and the gate that exists for this could not see them.** Two were the
+  landing page and the FAQ, so the wrong figure was the one a reader met first.
+  `check_profile_service_counts.py` validated a hardcoded list of ten sites
+  against `docker-compose.yml` and never asked the tree whether anything else
+  published the number, so a count added to a file the list does not name was a
+  count the gate never read. It reported "10 published figures agree" while
+  five disagreed.
+
+  The exact list stays, because the reasoning behind it is right: a gate that
+  guessed which integers were claims would flag prose forever. What was missing
+  is the other direction. `unregistered_mentions()` now finds anything that
+  publishes a service count and fails unless it is registered or exempted on
+  purpose, so a new surface must join the list rather than escape it. The five
+  are registered and the gate now checks fifteen sites; the exemptions are
+  release history, ADRs that state the count they decided, and two files
+  counting something other than a compose profile.
+
+  Verified by running the repaired gate against the pre-fix tree, where it
+  names all five.
+
 ### Added
 
 - **A tenant can now teach the investigation agent what is normal in its own

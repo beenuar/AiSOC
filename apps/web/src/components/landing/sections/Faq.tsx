@@ -51,7 +51,7 @@ const FAQS: ReadonlyArray<QA> = [
   {
     q: 'Do I need an API key to try it?',
     a:
-      'No. The core profile brings up 14 services with no credentials of any kind: it generates its own secrets, creates an administrator, runs a local model behind the gateway so triage is real rather than stubbed, and polls the public CISA Known Exploited Vulnerabilities catalogue so the first thing you see is real threat intelligence.',
+      'No. The core profile brings up 16 services with no credentials of any kind: it generates its own secrets, creates an administrator, runs a local model behind the gateway so triage is real rather than stubbed, and polls the public CISA Known Exploited Vulnerabilities catalogue so the first thing you see is real threat intelligence.',
   },
   {
     q: 'How good is the model that ships with it?',

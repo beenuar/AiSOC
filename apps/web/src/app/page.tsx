@@ -170,7 +170,7 @@ const faqJsonLd = {
       acceptedAnswer: {
         '@type': 'Answer',
         text:
-          'No. The core profile brings up 14 services with no credentials of any kind: it generates its own secrets, creates an administrator, runs a local model behind the gateway so triage is real rather than stubbed, and polls the public CISA Known Exploited Vulnerabilities catalogue so the first thing you see is real threat intelligence.',
+          'No. The core profile brings up 16 services with no credentials of any kind: it generates its own secrets, creates an administrator, runs a local model behind the gateway so triage is real rather than stubbed, and polls the public CISA Known Exploited Vulnerabilities catalogue so the first thing you see is real threat intelligence.',
       },
     },
     {
