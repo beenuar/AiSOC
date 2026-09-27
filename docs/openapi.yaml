@@ -11993,6 +11993,233 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/evaluations/replay/capabilities:
+    get:
+      tags:
+      - evaluations
+      summary: Which connectors can be replayed on this deployment
+      operationId: capabilities_api_v1_evaluations_replay_capabilities_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/evaluations/replay:
+    post:
+      tags:
+      - evaluations
+      summary: Start a replay evaluation against this tenant's own history
+      description: 'Queue a run and return its id immediately.
+
+
+        202 rather than 200: replaying a few hundred findings through a model is
+
+        not a request-response operation, and a route that blocked on it would
+
+        time out at whichever proxy is in front of it while the work continued.'
+      operationId: start_replay_api_v1_evaluations_replay_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartReplayRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationSummary'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - evaluations
+      summary: This tenant's replay evaluations
+      operationId: list_replays_api_v1_evaluations_replay_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EvaluationSummary'
+                title: Response List Replays Api V1 Evaluations Replay Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluations/replay/{evaluation_id}:
+    get:
+      tags:
+      - evaluations
+      summary: One replay evaluation
+      operationId: get_replay_api_v1_evaluations_replay__evaluation_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: evaluation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Evaluation Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluations/replay/{evaluation_id}/decisions:
+    get:
+      tags:
+      - evaluations
+      summary: The decisions behind a report
+      description: 'Every replayed finding, so a disputed number can be re-derived.
+
+
+        Read separately from the report because these rows carry the evidence
+
+        handed to triage and are measured in megabytes, and the page that shows
+
+        the headline should not pay for them.'
+      operationId: get_replay_decisions_api_v1_evaluations_replay__evaluation_id__decisions_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: evaluation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Evaluation Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 2000
+          minimum: 1
+          default: 2000
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Get Replay Decisions Api V1 Evaluations Replay  Evaluation
+                  Id  Decisions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluations/replay/{evaluation_id}/export:
+    get:
+      tags:
+      - evaluations
+      summary: Export a report as JSON, Markdown or PDF
+      description: 'Serve the stored report, not a fresh render of it.
+
+
+        All three formats come from the artefact written when the run completed.
+
+        Re-rendering later would produce a document that no longer matches what
+
+        the operator read, and this phase''s acceptance bar is a report that
+
+        reproduces byte for byte.'
+      operationId: export_replay_api_v1_evaluations_replay__evaluation_id__export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: evaluation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Evaluation Id
+      - name: format
+        in: query
+        required: false
+        schema:
+          enum:
+          - json
+          - markdown
+          - pdf
+          type: string
+          default: markdown
+          title: Format
+      - name: exclude_latency
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Replace the two wall-clock latency figures with a note. Everything
+            else in the report is a property of the input and the code, so two runs
+            over one pinned window are then byte-identical; latency measures the host
+            and never will be.
+          default: false
+          title: Exclude Latency
+        description: Replace the two wall-clock latency figures with a note. Everything
+          else in the report is a property of the input and the code, so two runs
+          over one pinned window are then byte-identical; latency measures the host
+          and never will be.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/kb/ingest:
     post:
       tags:
@@ -17371,6 +17598,50 @@ components:
         among analyst-dispositioned alerts whose ai_score landed in that bucket
 
         — i.e., the empirical hit-rate the model claimed.'
+    CapabilitiesResponse:
+      properties:
+        connectors:
+          items:
+            $ref: '#/components/schemas/ReplayableConnectorInfo'
+          type: array
+          title: Connectors
+        default_window_days:
+          type: integer
+          title: Default Window Days
+        default_train_fraction:
+          type: number
+          title: Default Train Fraction
+        default_bootstrap_seed:
+          type: integer
+          title: Default Bootstrap Seed
+        default_bootstrap_resamples:
+          type: integer
+          title: Default Bootstrap Resamples
+        min_malicious_for_headline:
+          type: integer
+          title: Min Malicious For Headline
+        max_findings:
+          type: integer
+          title: Max Findings
+      type: object
+      required:
+      - connectors
+      - default_window_days
+      - default_train_fraction
+      - default_bootstrap_seed
+      - default_bootstrap_resamples
+      - min_malicious_for_headline
+      - max_findings
+      title: CapabilitiesResponse
+      description: 'What this deployment can replay, so the console offers nothing
+        it cannot.
+
+
+        ``min_malicious_for_headline`` travels to the client so the page can say
+
+        why a headline is withheld before a run is started, rather than only
+
+        after.'
     CaseMetrics:
       properties:
         open:
@@ -19886,6 +20157,235 @@ components:
         asserts it fires on every positive fixture and stays silent on every
 
         negative one. Approval now requires this verdict to pass.'
+    EvaluationDetail:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        connector_id:
+          type: string
+          title: Connector Id
+        vendor:
+          type: string
+          title: Vendor
+        window_start:
+          type: string
+          format: date-time
+          title: Window Start
+        window_end:
+          type: string
+          format: date-time
+          title: Window End
+        train_fraction:
+          type: number
+          title: Train Fraction
+        bootstrap_seed:
+          type: integer
+          title: Bootstrap Seed
+        bootstrap_resamples:
+          type: integer
+          title: Bootstrap Resamples
+        findings_read:
+          type: integer
+          title: Findings Read
+        findings_labelled:
+          type: integer
+          title: Findings Labelled
+        decisions_recorded:
+          type: integer
+          title: Decisions Recorded
+        graded:
+          type: integer
+          title: Graded
+        malicious_support:
+          type: integer
+          title: Malicious Support
+        headline_accuracy:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Headline Accuracy
+        headline_withheld_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Headline Withheld Reason
+        malicious_recall:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Malicious Recall
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        is_terminal:
+          type: boolean
+          title: Is Terminal
+        score:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Score
+        method:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Method
+        report_markdown:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Report Markdown
+      type: object
+      required:
+      - id
+      - status
+      - connector_id
+      - vendor
+      - window_start
+      - window_end
+      - train_fraction
+      - bootstrap_seed
+      - bootstrap_resamples
+      - findings_read
+      - findings_labelled
+      - decisions_recorded
+      - graded
+      - malicious_support
+      - created_at
+      - is_terminal
+      title: EvaluationDetail
+      description: A completed run with its report and the provenance behind it.
+    EvaluationSummary:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        connector_id:
+          type: string
+          title: Connector Id
+        vendor:
+          type: string
+          title: Vendor
+        window_start:
+          type: string
+          format: date-time
+          title: Window Start
+        window_end:
+          type: string
+          format: date-time
+          title: Window End
+        train_fraction:
+          type: number
+          title: Train Fraction
+        bootstrap_seed:
+          type: integer
+          title: Bootstrap Seed
+        bootstrap_resamples:
+          type: integer
+          title: Bootstrap Resamples
+        findings_read:
+          type: integer
+          title: Findings Read
+        findings_labelled:
+          type: integer
+          title: Findings Labelled
+        decisions_recorded:
+          type: integer
+          title: Decisions Recorded
+        graded:
+          type: integer
+          title: Graded
+        malicious_support:
+          type: integer
+          title: Malicious Support
+        headline_accuracy:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Headline Accuracy
+        headline_withheld_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Headline Withheld Reason
+        malicious_recall:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Malicious Recall
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        is_terminal:
+          type: boolean
+          title: Is Terminal
+      type: object
+      required:
+      - id
+      - status
+      - connector_id
+      - vendor
+      - window_start
+      - window_end
+      - train_fraction
+      - bootstrap_seed
+      - bootstrap_resamples
+      - findings_read
+      - findings_labelled
+      - decisions_recorded
+      - graded
+      - malicious_support
+      - created_at
+      - is_terminal
+      title: EvaluationSummary
+      description: One run as the list and the poll return it.
     EventListResponse:
       properties:
         items:
@@ -25863,6 +26363,23 @@ components:
       required:
       - yaml
       title: ReplaceRulesRequest
+    ReplayableConnectorInfo:
+      properties:
+        connector_type:
+          type: string
+          title: Connector Type
+        vendor:
+          type: string
+          title: Vendor
+        label:
+          type: string
+          title: Label
+      type: object
+      required:
+      - connector_type
+      - vendor
+      - label
+      title: ReplayableConnectorInfo
     ReportDefinitionBody:
       properties:
         name:
@@ -27729,6 +28246,51 @@ components:
       - disposition
       title: SourceWritebackRequest
       description: What the caller believes about the alert.
+    StartReplayRequest:
+      properties:
+        connector_id:
+          type: string
+          format: uuid
+          title: Connector Id
+        since:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Since
+        until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Until
+        train_fraction:
+          type: number
+          exclusiveMaximum: 1.0
+          exclusiveMinimum: 0.0
+          title: Train Fraction
+          default: 0.7
+        limit:
+          type: integer
+          maximum: 2000.0
+          minimum: 1.0
+          title: Limit
+          default: 1000
+        bootstrap_seed:
+          type: integer
+          title: Bootstrap Seed
+          default: 20260926
+        bootstrap_resamples:
+          type: integer
+          maximum: 20000.0
+          minimum: 0.0
+          title: Bootstrap Resamples
+          default: 1000
+      type: object
+      required:
+      - connector_id
+      title: StartReplayRequest
+      description: Which connector, which window, and how the report should be computed.
     StepDispatchRequest:
       properties:
         capability:
