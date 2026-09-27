@@ -45,6 +45,7 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
+from app.context import knowledge_base
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
@@ -116,6 +117,12 @@ _METRICS = {
     # is the difference between "my guidance is not helping" and "my guidance
     # was never read".
     "tenant_skill_applied": 0,
+    # Phase 6.3. Same reasoning as the skill counter, plus the refusal beside
+    # it: a library whose documents keep being withheld is a library somebody
+    # needs to look at, and a silent drop would leave the operator wondering
+    # why triage never cites the runbook they wrote.
+    "runbooks_retrieved": 0,
+    "runbooks_refused_for_injection": 0,
     "errors": 0,
 }
 
@@ -557,6 +564,11 @@ class FusedAlertTriageWorker:
                 # able to reach it. Selection is per alert and cheap; the fetch
                 # behind it is cached.
                 await self._attach_tenant_skill(state)
+                # Phase 6.3: the tenant's own runbooks for this shape of alert.
+                # Same port again, and for a source the freeze holds still by
+                # a server-side cutoff rather than by capture, which is why
+                # the worker passes a query and never a point in time.
+                await self._attach_runbooks(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -840,6 +852,33 @@ class FusedAlertTriageWorker:
         if guidance:
             state.tenant_skill["triage_guidance"] = guidance
         _METRICS["tenant_skill_applied"] += 1
+
+    async def _attach_runbooks(self, state: InvestigationState) -> None:
+        """Retrieve the tenant's runbooks for this alert and record them on the state.
+
+        Best-effort in one direction only, the same shape
+        :meth:`_attach_tenant_skill` uses: a retrieval that fails leaves the
+        state without runbooks and triage proceeds as it did before. The
+        failure that matters is the other one, a chunk that reached the prompt
+        with nothing recording which document it came from, so the retrieval
+        and the citation record happen together.
+        """
+        query = knowledge_base.query_for(state.alert_summary or "", state.raw_alert)
+        if not query:
+            return
+        try:
+            retrieval = await self._reader.retrieve_runbooks(str(state.tenant_id), query=query)
+        except Exception as exc:  # noqa: BLE001 - guidance is advisory, triage is not
+            logger.warning("auto_triage_worker.runbook_lookup_failed", error=str(exc)[:200])
+            return
+        if not retrieval.runbooks and not retrieval.dropped_for_injection:
+            return
+
+        state.knowledge_base = retrieval.as_state()
+        if retrieval.runbooks:
+            _METRICS["runbooks_retrieved"] += len(retrieval.runbooks)
+        if retrieval.dropped_for_injection:
+            _METRICS["runbooks_refused_for_injection"] += retrieval.dropped_for_injection
 
     async def _maybe_suppress_from_memory(
         self,

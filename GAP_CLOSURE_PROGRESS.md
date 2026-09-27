@@ -412,7 +412,7 @@ suites' job, and anything at all against a live vendor MCP server.
 
 - [x] **6.1 Tenant-authored skills** in YAML in the console editor, validated against the tenant's actual tools. Migration **070**, two tables: `aisoc_tenant_skills` (current state) and `aisoc_tenant_skill_versions` (append-only history). A skill carries match conditions, a plan and expected pivots like a `Strategy`, plus the four fields a built-in cannot have because they are statements about one organisation: guidance, verdict guidance, required evidence and escalation conditions, with owner, server-assigned version and a **required** expiry. The parser refuses unknown top-level keys rather than ignoring them, because `verdict_guidence` otherwise produces a skill that silently does half its job. Tool validation reads the tenant's own rows and their own registry: the built-in lake pivots, the Phase 4 customer-product tools whose product they have connected, and the tools on an **enabled** MCP server's allowlist, so a registered-but-disabled server contributes nothing. The customer half makes the same three reads `GET /agent-tools/backends` makes. See D26, where the gate caught Phase 4.3 landing underneath this work and a known tool name is accepted rather than refused while the registry is unknown.
 - [x] **6.2 Lifecycle**: draft, backtest through the Phase 1 replay, active; every investigation records the skill version that guided it. Two refusals carry the phase: a content edit bumps the version, drops to draft and **detaches both reports**, and activation requires a backtest of the exact version plus both halves of it. The rule is written in the migration's CHECK, in the store and on the docs page, and `scripts/check_tenant_skill_contract.py` fails if it leaves any of the three. The backtest is two Phase 1 replay evaluations over one window, seed and resample count; nothing re-implements replay, scoring or reporting. Skills became the fourth frozen context store, and the deliberate backtest bypass is published rather than silent: see D27.
-- [ ] **6.3 Triage context**: knowledge-base runbooks with citations, the last N analyst dispositions with reasons, and identity context, all point-in-time.
+- [~] **6.3 Triage context**, in progress. **Knowledge-base runbooks with citations: done.** The agents service had never read the knowledge base; it now retrieves through `GET /kb/runbooks/for-triage` on the same `TriageContextReader` seam the other three sources use, and every chunk in the prompt carries a marker whose citation record resolves to a document id **and chunk index**, because a marker pointing at a forty-chunk document is not something a reader can check. Runbook text is contained as untrusted evidence rather than as first-party guidance (nonce fence, inline boundary sentence, guard scan on the **raw** text), and the guard's held-out rate of 2 of 28 is what the docs cite rather than its tuned figure. A flagged chunk is dropped rather than demoting the case, because demoting on a poisoned library document would let anyone who can write a runbook switch off auto-close for the tenant. This added a **second freeze kind** to the replay: see D31. Remaining: the last N analyst dispositions with reasons, and identity context.
 - [ ] **6.4 Measure it**: replay before and after on the synthetic corpus and at least one recorded history fixture, and publish the delta.
 
 ## Phase 7: Declarative custom agents
@@ -1534,3 +1534,71 @@ own rows rather than taking a test's word for it.
 service. It reads "not measured" with the reason, in the API response and in
 the CSV header, and a test asserts it is not *also* declared as a meter so it
 can never be reported as a number.
+### D31. A context source too large to capture needs a second kind of freeze, and the freeze has to report what it refused
+
+Recorded because the obvious extension of Phase 1's freeze does not work for
+the store Phase 6.3 adds, and the way it fails is silent.
+
+The first three context stores are small: a tenant's organisation-memory
+statements, its outcome priors, its active skills. A replay captures each one
+whole before the test window runs, `capture_context` drops what post-dates the
+split, and the method note publishes what was kept and what was dropped.
+
+A knowledge base cannot work that way. It is queried per alert, and the corpus
+can hold every document a SOC has ever written, so there is nothing sensible
+to capture up front. The freeze is therefore a **parameter**: the frozen
+reader passes `split_at` as an `as_of`, the store applies the predicate, and
+the reader accumulates what came back.
+
+Three judgements in that, each with its own silent failure.
+
+**The caller must not be able to supply the instant.** The worker knows the
+alert and nothing about the split, which is exactly the division that keeps a
+replay honest. A protocol method that accepted `as_of` would be one a caller
+could forget to pass, and the replay would then read live behind a method note
+still saying "frozen". `check_triage_context_freeze.py` refuses a cutoff
+source whose protocol method takes any parameter that could be a cutoff.
+
+**The freeze has to report what it refused.** A cutoff that matched nothing
+and a cutoff that threw away fifty documents return the same empty list. So
+the route returns `excluded_after_cutoff` beside the rows, and the reader
+publishes `runbooks_dropped_after_split` alongside `runbooks_frozen`, which is
+the same pair D27's fix made the snapshot half publish and for the same
+reason: a note that says only what survived is not evidence.
+
+**A store that ignores the parameter returns a well-formed reply.** Unlike a
+captured set, where `capture_context` is the only thing that could have
+filtered, a cutoff depends on a server honouring a predicate. The only
+evidence is the instant echoed back, so an absent echo is counted as
+`runbooks_cutoff_not_honoured` rather than rounded down to a clean read.
+
+Two things from building the gate and its proof.
+
+The freeze kind is **declared**, in `CONTEXT_FREEZE_KINDS`, and the gate reads
+that table rather than inferring a kind from a method name. That alone would
+have left a hole worth more than the table: reclassifying a cutoff source as
+`snapshot` makes the weaker rule apply and the gate passes. So a snapshot
+source's frozen implementation must **await nothing**, which is true of a
+captured set by construction and false of anything reaching a store. The two
+rules together mean the classification cannot be changed to whichever one the
+implementation happens to satisfy.
+
+The proof harness needed proving first. Its first version reported twelve
+clean catches over an empty directory: the copy step had failed and the gate
+was refusing an empty tree, which is a refusal for the right reason about the
+wrong thing. It now verifies the unmodified copy **passes** before injecting
+anything, and requires each failure message to name the fault under test. The
+same shape caught a second and worse instance in the live-Postgres test, which
+formatted the retrieval SQL with its own copy of the cutoff clause and
+therefore kept passing after the clause was deleted from the route. A test
+comparing a producer against a copy of itself, which this file has now
+recorded three times. The builder is a function with two callers.
+
+One adjacent defect the work surfaced, worth recording because the symptom
+named the wrong subsystem. `POST /kb/query` returned 503 "Database error" for
+every request naming a `doc_kinds` filter, and the fault was never near the
+database: SQLAlchemy's `text()` skips a parameter name followed by a colon so
+the Postgres `::` cast is not mistaken for one, so `:kinds::text[]` declared
+no parameter and `.bindparams(kinds=...)` raised before any statement was
+sent. The retrieval route had copied the spelling; a test for the new route is
+what found both.

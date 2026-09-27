@@ -211,6 +211,12 @@ class ReplayRun:
     tenant_id: str
     connector_id: str
 
+    #: What the cutoff-frozen sources served and refused across the window.
+    #: Separate from ``snapshot`` because it cannot exist until the window has
+    #: been replayed: a snapshot's counts are fixed at capture, a cutoff
+    #: source's accumulate one alert at a time.
+    cutoff_context: dict[str, Any] = field(default_factory=dict)
+
     def method(self) -> dict[str, Any]:
         """Everything a reader needs to decide whether to believe the numbers."""
         return {
@@ -218,6 +224,7 @@ class ReplayRun:
             "connector_id": self.connector_id,
             "split": self.split.as_method_note(),
             "frozen_context": self.snapshot.as_method_note(),
+            "cutoff_context": dict(self.cutoff_context),
             "shadow_writes_attempted": dict(self.writes_attempted),
             "envelope_limits": list(ENVELOPE_LIMITS),
         }
@@ -288,6 +295,9 @@ class ReplayRunner:
             writes_attempted=dict(writer.calls),
             tenant_id=self._tenant_id,
             connector_id=self._connector_id,
+            # Read after the window, not before: these totals are what the
+            # cutoff sources did over the run.
+            cutoff_context=reader.as_method_note(),
         )
 
     async def _replay_one(self, worker: FusedAlertTriageWorker, finding: HistoricalFinding) -> ReplayDecision:

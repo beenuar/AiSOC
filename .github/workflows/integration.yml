@@ -658,6 +658,25 @@ jobs:
           AUTONOMY_PROMOTION_LIVE_REQUIRED: '1'
         run: python -m pytest ../../tests/isolation/test_autonomy_promotion_live.py -v --tb=short
 
+      # Gap-closure Phase 6.3. A replay freezes the knowledge base with a
+      # predicate in SQL rather than with a captured set, so every offline
+      # test of that freeze proves the reader *asks* for a cutoff and none of
+      # them proves the store applies one. The statement is PostgreSQL —
+      # to_tsvector, ts_rank, FILTER, LATERAL — so it does not parse in the
+      # API's SQLite suite at all.
+      #
+      # It runs the route's own `triage_retrieval_sql`. The first version of
+      # this test formatted the template with its own copy of the cutoff
+      # clause and kept passing after the clause was deleted from the route,
+      # which is why the builder is a function with two callers.
+      #
+      # KB_CUTOFF_LIVE_REQUIRED turns an unreachable database into a failure
+      # rather than a skip, for the same reason as the jobs above.
+      - name: Knowledge-base retrieval cutoff filters and reports what it refused (live Postgres)
+        env:
+          KB_CUTOFF_LIVE_REQUIRED: '1'
+        run: python -m pytest tests/isolation/test_kb_retrieval_cutoff_live.py -v --tb=short
+
       # The static half of this gate runs on every PR in security.yml. This is
       # the half that can only be answered by a database: the role the
       # deployment actually connects as, inspected in pg_roles and pg_class.

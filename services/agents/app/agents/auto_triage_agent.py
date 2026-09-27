@@ -34,6 +34,8 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.context.knowledge_base import citation_basis, unresolvable_citations
+from app.context.knowledge_base import render_for_prompt as render_runbooks
 from app.context.organisation_memory import render_for_prompt
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
@@ -75,6 +77,11 @@ _metrics: dict[str, Any] = {
     "btp_count": 0,
     "tp_count": 0,
     "injection_demoted": 0,
+    # Phase 6.3. A rationale citing a runbook marker no retrieved chunk
+    # carries. Counted rather than only logged: this is the one hallucination
+    # the groundedness scorer cannot see, because a marker is not an indicator
+    # and would never appear in the evidence text it checks against.
+    "kb_citations_unresolvable": 0,
 }
 
 _SYSTEM_PROMPT = """\
@@ -148,7 +155,7 @@ def set_threshold(value: float) -> float:
     return AUTO_CLOSE_THRESHOLD
 
 
-def _build_alert_context(state: InvestigationState) -> str:
+def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     """Serialise the alert into a compact string the LLM can reason over.
 
     ``state.organisation_memory`` is prepended, outside the untrusted-evidence
@@ -165,6 +172,13 @@ def _build_alert_context(state: InvestigationState) -> str:
     with the evidence the verdict is supposed to rest on. The block the
     resolver rendered is used verbatim rather than re-rendered here, so the
     text that steered the verdict is the text the provenance record names.
+
+    ``state.knowledge_base`` is the one that does **not** sit beside them, and
+    that is the whole reason this function now takes a nonce. A runbook is
+    long, frequently imported in bulk, edited by more people than a skill, and
+    routinely quotes attacker output verbatim while doing its job. So it goes
+    inside a nonce fence of its own, with the boundary sentence stated inline,
+    exactly as an MCP reply does. See ``app.context.knowledge_base``.
     """
     raw = state.raw_alert
     parts = [
@@ -207,9 +221,15 @@ def _build_alert_context(state: InvestigationState) -> str:
     if memory:
         preamble.append(sanitize_text(memory))
 
-    if not preamble:
+    # Not sanitised again on the way in: the retrieval already capped and
+    # sanitised each chunk, and `render_runbooks` fences the result. Running
+    # `sanitize_text` over the rendered block would rewrite the nonce markers
+    # it just placed, which is the one thing holding the fence together.
+    runbooks = render_runbooks(state.knowledge_base, nonce=nonce)
+
+    if not preamble and not runbooks:
         return telemetry
-    return "\n\n".join([*preamble, telemetry])
+    return "\n\n".join([*preamble, *([runbooks] if runbooks else []), telemetry])
 
 
 def _close_truncated_json(fragment: str) -> str:
@@ -369,7 +389,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
     nonce = make_nonce()
 
-    alert_context = _build_alert_context(state)
+    alert_context = _build_alert_context(state, nonce=nonce)
 
     t0 = time.monotonic()
     try:
@@ -440,6 +460,25 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     if skill_ref:
         owner = str((state.tenant_skill or {}).get("owner") or "unrecorded")
         state.confidence_basis.append(f"Tenant skill applied: {skill_ref} (owner: {owner})")
+
+    # Which runbook chunks the prompt carried, by the markers the rationale
+    # cites. Recorded on the basis for the same reason the skill reference is:
+    # a citation whose target nobody can find is not a citation, and the
+    # retrieval that produced it is cached and gone by the time anyone asks.
+    state.confidence_basis.extend(citation_basis(state.knowledge_base))
+    unresolvable = unresolvable_citations(rationale, state.knowledge_base)
+    if unresolvable:
+        # The model cited a runbook that was never retrieved. Named rather
+        # than left in the rationale looking like the others, because a marker
+        # that resolves to nothing is indistinguishable from one that resolves
+        # until somebody goes looking for the document.
+        state.confidence_basis.append(f"Knowledge base: the rationale cites {', '.join(unresolvable)}, which no retrieved chunk carries")
+        _metrics["kb_citations_unresolvable"] += 1
+        logger.warning(
+            "auto_triage.unresolvable_kb_citation",
+            incident_id=str(state.incident_id),
+            cited=unresolvable,
+        )
 
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")

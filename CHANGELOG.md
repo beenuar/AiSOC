@@ -32,6 +32,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auto-triage now reads the tenant's own runbooks, cites the chunks it was
+  given, and stays point-in-time when a replay measures it** (gap-closure
+  Phase 6.3, knowledge-base half).
+
+  **The gap.** AiSOC has held a knowledge base since runbook ingest shipped:
+  `services/api/app/api/v1/endpoints/knowledge_base.py`, full-text indexed,
+  with a console for putting runbooks, playbooks and SOPs into it. Nothing in
+  `services/agents` had ever read it. A SOC that wrote down how it handles a
+  password-spray alert still got a verdict produced in ignorance of that
+  document. This is the sixth thing this programme has found built with no
+  caller, and like the others the fix was wiring rather than a new subsystem:
+  retrieval is the API's own query and ranking, so a chunk triage was given is
+  one an analyst searching by hand would have found.
+
+  **What shipped.** `GET /kb/runbooks/for-triage`, service-token only, takes a
+  query and an optional `as_of`, and returns the best-matching runbook chunks
+  together with how many it refused. `app/context/knowledge_base.py` is the
+  agents-side reader, reached through `TriageContextReader` like every other
+  durable context source. Up to three chunks reach the prompt, each carrying a
+  marker; the verdict's confidence basis records, per marker, the document id,
+  the title and the chunk index, so a citation resolves to the text it claims
+  to rest on rather than to a forty-chunk document. A rationale citing a
+  marker no retrieved chunk carries is named on the basis rather than left
+  reading like a citation that resolves.
+
+  **How the text is contained, and why more than a skill gets.** A tenant
+  skill is typed by one `settings:write` holder into parsed, capped fields. A
+  runbook is longer, often imported in bulk from a wiki or a vendor advisory,
+  edited by more people, and reaches the prompt as prose that routinely quotes
+  attacker output while doing its job. So a chunk gets the containment an MCP
+  reply gets: capped, fenced in the run's nonce, labelled inline as data, and
+  scanned. The scan runs on the **raw** text, and that order is load-bearing:
+  the sanitiser rewrites "ignore all previous instructions" to a redaction
+  marker, so a guard run afterwards reads a clean string and the loudest
+  payload family would have scored zero forever while the counter reported a
+  clean library. A test pinned to exactly that payload is what caught it. The
+  guard's worth is stated honestly rather than by its tuned figure: against 28
+  payloads authored after its last hardening it detects 2, so the fence and
+  the standing system rule are what hold when it misses. A flagged chunk is
+  dropped rather than demoting the case, because demoting on a poisoned
+  *library document* would hand anyone who can write a runbook a way to switch
+  off auto-close across the tenant.
+
+  **A second kind of replay freeze.** The three existing context stores are
+  small enough for a replay to capture whole. A knowledge base is not, so the
+  freeze is a cutoff the frozen reader supplies and the store applies, and the
+  store reports what it refused. That count is the whole point: a cutoff that
+  matched nothing and a cutoff that threw away fifty documents return the same
+  empty list, so without it a method note would be describing a freeze it
+  never demonstrated. A reply that names no cutoff is recorded as
+  `cutoff_not_honoured` rather than counted as frozen, because a store that
+  ignores the parameter returns a perfectly well-formed reply and the echo is
+  the only evidence.
+
+  **The gate.** `scripts/check_triage_context_freeze.py` now reads
+  `CONTEXT_FREEZE_KINDS`, which classifies every context source, and applies a
+  different rule to each kind: a cutoff source's protocol method may not
+  accept the instant from its caller, its frozen implementation must bind
+  `as_of` to the snapshot's `split_at`, and a snapshot source's frozen
+  implementation may await nothing, which is what stops a source being
+  reclassified into whichever kind its implementation happens to satisfy.
+  Twelve regressions were injected into a detached copy of the tree and all
+  twelve are caught, each required to fail with a message naming the real
+  fault. `tests/isolation/test_kb_retrieval_cutoff_live.py` runs the route's
+  own statement against a real Postgres, because every offline test of this
+  freeze proves the reader asks for a cutoff and none of them proves the store
+  applies one.
+
 - **A tenant can now teach the investigation agent what is normal in its own
   estate, and every verdict that guidance steered says which version of it
   steered them** (gap-closure Phase 6.1 and 6.2).
@@ -271,6 +339,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement and let the stronger one qualify it.
 
 ### Fixed
+
+- **`POST /kb/query` returned 503 for every request that named a `doc_kinds`
+  filter.** SQLAlchemy's `text()` skips a bound-parameter name followed by a
+  colon so the Postgres `::` cast is not mistaken for one, which means
+  `:kinds::text[]` declared no parameter at all and `.bindparams(kinds=...)`
+  raised before the statement reached the database. The handler's catch-all
+  turned that into "Database error", so the symptom pointed at the database
+  and the fault was in the statement's own text. Now `CAST(:kinds AS text[])`.
+  Found by a test for the Phase 6.3 retrieval route, which had copied the same
+  spelling.
 
 - **The prompt-injection guard now reads a constrained field as the
   instruction it encodes, and the change was graded twice so the second

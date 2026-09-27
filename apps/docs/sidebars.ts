@@ -57,6 +57,7 @@ const sidebars: SidebarsConfig = {
         "console/investigation-rail",
         "console/public-replay",
         "console/tenant-skills",
+        "console/triage-context",
       ],
     },
     {

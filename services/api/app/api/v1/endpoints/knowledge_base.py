@@ -11,6 +11,8 @@ Endpoints
 * ``GET  /kb/documents/{id}`` Get a document.
 * ``DELETE /kb/documents/{id}`` Remove a document.
 * ``POST /kb/query``        Semantic/keyword search + optional LLM synthesis.
+* ``GET  /kb/runbooks/for-triage`` Internal: retrieval for the agents service,
+  with a point-in-time cutoff. Gap-closure Phase 6.3.
 """
 
 from __future__ import annotations
@@ -19,14 +21,16 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.endpoints.alert_writeback import service_token_valid
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.db.rls import set_rls_context
 from app.services.kb_chunking import chunk_text
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
@@ -245,7 +249,15 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
     wheres = ["to_tsvector('english', content) @@ plainto_tsquery('english', :q)", "tenant_id = :tenant_id"]
     params: dict[str, Any] = {"q": body.question, "tenant_id": user.tenant_id, "limit": body.top_k}
     if body.doc_kinds:
-        wheres.append("doc_kind = ANY(:kinds::text[])")
+        # `CAST(... AS text[])` rather than `:kinds::text[]`. SQLAlchemy's
+        # bound-parameter scanner skips a name followed by a colon, so that
+        # the Postgres `::` cast operator is not mistaken for one - which
+        # means `:kinds::text[]` declares no parameter at all and
+        # `.bindparams(kinds=...)` raises. Every call to this route that named
+        # a `doc_kinds` filter therefore came back as a 503 "Database error"
+        # before ever reaching the database. Found while adding the retrieval
+        # route below, which had copied the same spelling.
+        wheres.append("doc_kind = ANY(CAST(:kinds AS text[]))")
         params["kinds"] = body.doc_kinds
 
     sql = text(f"""
@@ -283,3 +295,182 @@ async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryRe
 
     sources = list(dict.fromkeys(c.title for c in chunks))
     return QueryResponse(question=body.question, chunks=chunks, answer=answer, sources=sources)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Internal route: retrieval for triage, with a point-in-time cutoff
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class TriageRunbookChunk(BaseModel):
+    """One retrieved chunk, carrying everything a citation has to resolve to."""
+
+    doc_id: uuid.UUID
+    title: str
+    doc_kind: str
+    source_url: str | None
+    chunk_index: int
+    chunk_total: int
+    content: str
+    created_at: datetime | None
+    score: float | None
+
+
+class TriageRunbooksResponse(BaseModel):
+    tenant_id: str
+    as_of: datetime | None
+    chunks: list[TriageRunbookChunk]
+    #: Chunks that matched the query and were refused for post-dating the
+    #: cutoff. Zero when no cutoff was asked for. This is what tells a replay
+    #: report whether the freeze did anything: without it, "the cutoff worked"
+    #: and "nothing would have been returned anyway" print the same number.
+    excluded_after_cutoff: int
+    #: Matching chunks with no ``created_at`` at all, which the cutoff cannot
+    #: test. The column is ``NOT NULL`` with a default, so this should stay
+    #: zero; it is published for the same reason ``statements_without_timestamp``
+    #: is, because "should be zero" is how the statement gap went unnoticed.
+    without_timestamp: int
+
+
+#: Retrieval is full-text over ``content`` with the rank the console's own
+#: ``/kb/query`` uses, so triage and an analyst searching by hand see the same
+#: ordering over the same corpus. ``{cutoff}`` is the only thing that varies
+#: and it is a fixed literal, not caller data.
+_TRIAGE_RETRIEVAL_SQL = """
+WITH matches AS (
+    SELECT id, title, doc_kind, source_url, chunk_index, chunk_total, content, created_at,
+           ts_rank(to_tsvector('english', content), plainto_tsquery('english', :q)) AS rank
+    FROM aisoc_kb_documents
+    WHERE tenant_id = :tenant_id
+      AND doc_kind = ANY(CAST(:kinds AS text[]))
+      AND to_tsvector('english', content) @@ plainto_tsquery('english', :q)
+),
+counted AS (
+    SELECT
+        count(*) FILTER (WHERE {excluded}) AS excluded_after_cutoff,
+        count(*) FILTER (WHERE created_at IS NULL) AS without_timestamp
+    FROM matches
+)
+SELECT c.excluded_after_cutoff, c.without_timestamp,
+       m.id, m.title, m.doc_kind, m.source_url, m.chunk_index, m.chunk_total,
+       m.content, m.created_at, m.rank
+FROM counted c
+LEFT JOIN LATERAL (
+    SELECT * FROM matches
+    {cutoff}
+    ORDER BY rank DESC, id
+    LIMIT :limit
+) m ON TRUE
+"""
+
+#: Runbooks, playbooks and SOPs tell an analyst what to do about an alert of
+#: this shape. A policy or a wiki page usually does not, and every chunk in
+#: the prompt is prompt budget the evidence does not get.
+_TRIAGE_DOC_KINDS: tuple[str, ...] = ("runbook", "playbook", "sop")
+
+
+def triage_retrieval_sql(*, cutoff: bool) -> str:
+    """The statement the route runs, with or without the point-in-time predicate.
+
+    A function rather than two constants because the live test in
+    ``tests/isolation/`` has to run *this* statement. Its first version
+    formatted the template with its own idea of what the cutoff clause was,
+    and it therefore kept passing after the clause was deleted from the route:
+    a test comparing a producer against a copy of itself. One function, two
+    callers, and deleting the predicate below breaks both.
+    """
+    if not cutoff:
+        return _TRIAGE_RETRIEVAL_SQL.format(excluded="FALSE", cutoff="")
+    return _TRIAGE_RETRIEVAL_SQL.format(excluded="created_at > :as_of", cutoff="WHERE created_at <= :as_of")
+
+
+@router.get(
+    "/runbooks/for-triage",
+    response_model=TriageRunbooksResponse,
+    include_in_schema=False,
+    summary="Runbook chunks for the agents service, as of a point in time",
+)
+async def retrieve_runbooks_for_triage(
+    db: DBSession,
+    tenant_id: uuid.UUID,
+    q: Annotated[str, Query(min_length=1, max_length=1024)],
+    as_of: datetime | None = None,
+    limit: Annotated[int, Query(ge=1, le=10)] = 3,
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> TriageRunbooksResponse:
+    """Retrieve the tenant's runbooks for one alert, optionally as of an instant.
+
+    Gap-closure Phase 6.3. The agents service has never read the knowledge
+    base; this is the route that lets it, and ``as_of`` is what keeps a replay
+    honest when it does.
+
+    Why a cutoff rather than a captured snapshot. The other three context
+    stores are small enough that a replay freezes them by capturing the whole
+    set once. This one is a per-alert query against a corpus that can hold
+    every document a SOC has ever written, so there is nothing sensible to
+    capture up front. The freeze is therefore a *parameter*: the frozen reader
+    supplies the split instant and the predicate lands in the SQL above, which
+    is also why the counts come back beside the rows. A cutoff that silently
+    matched nothing and a cutoff that refused fifty documents are the same
+    empty list from outside.
+
+    ``as_of`` is deliberately not defaulted. A default of "now" would make an
+    unfrozen caller look frozen, and a default of the epoch would make every
+    live triage return nothing.
+
+    The token is checked in band rather than through a bearer dependency, the
+    same shape ``/tenant-skills/resolved/active`` and ``/mcp-servers/resolved``
+    use, because the caller is a service with no session. ``tenant_id`` is the
+    scope rather than a narrowing of one, for the same reason: a service token
+    carries no tenant, so there is nothing to intersect it with.
+    """
+    if not service_token_valid(x_aisoc_service_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="this route is reachable only by an AiSOC service holding the shared service token",
+        )
+
+    await set_rls_context(db, tenant_id)
+
+    params: dict[str, Any] = {
+        "q": q,
+        "tenant_id": tenant_id,
+        "kinds": list(_TRIAGE_DOC_KINDS),
+        "limit": limit,
+    }
+    if as_of is not None:
+        params["as_of"] = as_of
+    sql = triage_retrieval_sql(cutoff=as_of is not None)
+
+    try:
+        rows = (await db.execute(text(sql).bindparams(**params))).fetchall()
+    except Exception as exc:
+        logger.exception("Database error in knowledge_base endpoint")
+        raise HTTPException(status_code=503, detail="Database error") from exc
+
+    excluded = int(rows[0].excluded_after_cutoff) if rows else 0
+    undated = int(rows[0].without_timestamp) if rows else 0
+    chunks = [
+        TriageRunbookChunk(
+            doc_id=r.id,
+            title=r.title,
+            doc_kind=r.doc_kind,
+            source_url=r.source_url,
+            chunk_index=r.chunk_index,
+            chunk_total=r.chunk_total,
+            content=r.content,
+            created_at=r.created_at,
+            score=float(r.rank) if r.rank is not None else None,
+        )
+        # The LATERAL yields one all-NULL row when nothing survives the cutoff,
+        # which is the case the counts above exist to describe.
+        for r in rows
+        if r.id is not None
+    ]
+    return TriageRunbooksResponse(
+        tenant_id=str(tenant_id),
+        as_of=as_of,
+        chunks=chunks,
+        excluded_after_cutoff=excluded,
+        without_timestamp=undated,
+    )

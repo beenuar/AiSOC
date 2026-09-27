@@ -80,7 +80,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.investigator.prompt_sanitizer import sanitize_for_prompt
+from app.investigator.prompt_sanitizer import DEFAULT_MAX_FIELD_LEN, sanitize_for_prompt
 
 __all__ = [
     "make_nonce",
@@ -124,11 +124,27 @@ class EvidenceEnvelope:
     source: str
 
     @classmethod
-    def wrap(cls, evidence: Any, *, nonce: str, source: str = "untrusted") -> EvidenceEnvelope:
+    def wrap(
+        cls,
+        evidence: Any,
+        *,
+        nonce: str,
+        source: str = "untrusted",
+        max_body_chars: int = DEFAULT_MAX_FIELD_LEN,
+    ) -> EvidenceEnvelope:
+        """Sanitise, cap, and fence one piece of untrusted evidence.
+
+        ``max_body_chars`` exists because the cap is per *string*, and a
+        caller that has already assembled several bounded pieces into one
+        block knows a budget this class cannot infer. It defaults to
+        :data:`~app.investigator.prompt_sanitizer.DEFAULT_MAX_FIELD_LEN`, so
+        every existing caller is unchanged; a caller that wants more has to
+        say so and thereby state its own budget.
+        """
         # Sanitise (strip control chars, neuter known markers, cap length),
         # then remove any occurrence of the run nonce so the fence is
         # unforgeable even if the nonce leaks mid-run.
-        sanitised = sanitize_for_prompt(evidence, label=source)
+        sanitised = sanitize_for_prompt(evidence, label=source, max_field_len=max_body_chars)
         safe_body = sanitised.replace(nonce, "[REDACTED:NONCE]")
         return cls(nonce=nonce, body=safe_body, source=source)
 

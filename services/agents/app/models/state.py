@@ -78,6 +78,16 @@ class InvestigationState(BaseModel):
     # `{"skill_id": ..., "version": N, "ref": "id@vN", "owner": ...}`.
     tenant_skill: dict[str, Any] | None = None
 
+    # Knowledge-base runbook chunks retrieved for this alert, as
+    # `app.context.knowledge_base.RunbookRetrieval.as_state()` renders them:
+    # the chunks, the markers a citation resolves through, and what the
+    # retrieval refused. Carried for the same reasons as the two above.
+    #
+    # A dict rather than the dataclass because this module sits below
+    # `app.context`, whose package import reaches back here through
+    # `bundle.py`. A type annotation is not worth an import cycle.
+    knowledge_base: dict[str, Any] | None = None
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)

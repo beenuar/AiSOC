@@ -51,17 +51,55 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from app.context import organisation_memory, tenant_skills
+from app.context import knowledge_base, organisation_memory, tenant_skills
+from app.context.knowledge_base import RunbookRetrieval
 from app.investigator import ledger as ledger_module
 from app.investigator import siem_writeback
 from app.memory import outcomes as outcomes_module
 
 __all__ = [
+    "CONTEXT_FREEZE_KINDS",
+    "CUTOFF",
     "LiveTriageContextReader",
     "LiveTriageWriter",
+    "SNAPSHOT",
     "TriageContextReader",
     "TriageWriter",
 ]
+
+#: The two ways a replay can hold a context source still, and which one each
+#: source is subject to. Declared here rather than inferred, and read by
+#: ``scripts/check_triage_context_freeze.py`` in both directions: a protocol
+#: method missing from this table fails the gate, and a name here that is no
+#: longer a protocol method fails it too.
+#:
+#: ``SNAPSHOT``
+#:     The whole set is small enough to capture once, before the test window
+#:     runs. ``capture_context`` filters it against the split and
+#:     ``ContextSnapshot.as_method_note`` publishes what it kept and dropped.
+#:     Organisation memory, outcome priors and tenant skills.
+#:
+#: ``CUTOFF``
+#:     A per-alert query against a store too large to capture: a knowledge
+#:     base, a queue's disposition history, a directory. There is nothing to
+#:     freeze up front, so the freeze is a parameter the **reader** supplies,
+#:     and the server is what refuses the late rows. The reader accumulates
+#:     what the server served and refused, and
+#:     ``FrozenTriageContextReader.as_method_note`` publishes it.
+#:
+#: The distinction is not cosmetic. A cutoff source's protocol method must not
+#: accept the cutoff from its caller, because a caller that can supply it is a
+#: caller that can forget to, and the resulting replay reads live with a
+#: method note that still says "frozen". The gate enforces that too.
+SNAPSHOT = "snapshot"
+CUTOFF = "cutoff"
+
+CONTEXT_FREEZE_KINDS: dict[str, str] = {
+    "fetch_statements": SNAPSHOT,
+    "lookup_prior": SNAPSHOT,
+    "fetch_skills": SNAPSHOT,
+    "retrieve_runbooks": CUTOFF,
+}
 
 
 @runtime_checkable
@@ -172,6 +210,10 @@ class TriageContextReader(Protocol):
     from the worker would be live during a replay no matter what the snapshot
     said, and the report would be measuring a world the split point does not
     describe.
+
+    Every method must also appear in :data:`CONTEXT_FREEZE_KINDS`, which says
+    which of the two freezes holds it still. A source with no declared kind is
+    a source nobody decided how to freeze.
     """
 
     async def fetch_statements(self, tenant_id: str | None) -> list[dict[str, Any]]:
@@ -182,6 +224,14 @@ class TriageContextReader(Protocol):
 
     async def fetch_skills(self, tenant_id: str | None) -> list[dict[str, Any]]:
         """The tenant's active, unexpired investigation skills."""
+
+    async def retrieve_runbooks(self, tenant_id: str | None, *, query: str) -> RunbookRetrieval:
+        """Knowledge-base runbook chunks relevant to one alert, with citations.
+
+        A ``CUTOFF`` source: the implementation decides the point in time, and
+        no caller may pass one. The worker knows the alert and nothing about
+        the split, which is exactly the division that keeps a replay honest.
+        """
 
 
 class LiveTriageWriter:
@@ -288,3 +338,10 @@ class LiveTriageContextReader:
 
     async def fetch_skills(self, tenant_id: str | None) -> list[dict[str, Any]]:
         return await tenant_skills.fetch_skills(tenant_id)
+
+    async def retrieve_runbooks(self, tenant_id: str | None, *, query: str) -> RunbookRetrieval:
+        # ``as_of=None`` is production: retrieve against the knowledge base as
+        # it stands. Stated explicitly rather than left to the default, so the
+        # one line that differs from the frozen reader is visible in a diff of
+        # the two classes.
+        return await knowledge_base.fetch_runbooks(tenant_id, query=query, as_of=None)

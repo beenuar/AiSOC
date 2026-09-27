@@ -36,6 +36,19 @@ about which of them broke.
    property under test is not that it is refused, it is that the method note
    **names it and carries the caveat**. An unfiltered store nobody is told
    about is indistinguishable from a leak.
+5. **Knowledge-base runbooks** (Phase 6.3), and the first source here that a
+   snapshot cannot hold. The other four are captured whole before the window
+   runs; a knowledge base is queried per alert against a corpus that can hold
+   everything a SOC has written, so the freeze is a cutoff the frozen reader
+   supplies and the server applies. A runbook written *after* an incident,
+   which is when runbooks are usually written, is the leak: it describes the
+   very alerts the test window is about.
+
+   Two properties rather than one, because the cutoff has two halves that fail
+   separately. The rows that reach the prompt must be the ones that existed at
+   the split, and the count of what the server refused must reach the method
+   note. A cutoff that matched nothing and a cutoff that refused fifty
+   documents produce the same empty list.
 
 Every test here is checked for sensitivity
 -------------------------------------------
@@ -56,6 +69,7 @@ from typing import Any
 
 import pytest
 from app.agents.dispositions import BENIGN, FALSE_POSITIVE, NEEDS_REVIEW, normalize_disposition
+from app.context import knowledge_base as kb_module
 from app.context import organisation_memory
 from app.context import tenant_skills as tenant_skills_module
 from app.memory import outcomes as outcomes_module
@@ -578,6 +592,177 @@ def test_a_skill_with_no_activation_stamp_is_counted_the_way_an_undated_statemen
     assert snapshot.undated_skills == 1
     assert snapshot.dropped_skills == 0
     assert snapshot.as_method_note()["skills_without_timestamp"] == 1
+
+
+# --------------------------------------------------------------------------
+# 5. Knowledge-base runbooks, frozen by a server-side cutoff
+# --------------------------------------------------------------------------
+
+
+def _kb_payload(as_of: str | None, *, rows: list[dict[str, Any]], excluded: int = 0) -> dict[str, Any]:
+    """One reply in the shape ``GET /kb/runbooks/for-triage`` returns."""
+    return {
+        "tenant_id": "t",
+        "as_of": as_of,
+        "chunks": rows,
+        "excluded_after_cutoff": excluded,
+        "without_timestamp": 0,
+    }
+
+
+def _kb_chunk(doc_id: str, title: str, content: str, created_at: str) -> dict[str, Any]:
+    return {
+        "doc_id": doc_id,
+        "title": title,
+        "doc_kind": "runbook",
+        "source_url": None,
+        "chunk_index": 0,
+        "chunk_total": 1,
+        "content": content,
+        "created_at": created_at,
+        "score": 0.5,
+    }
+
+
+class _KbServer:
+    """A stand-in for the API route that honours ``as_of`` the way it does.
+
+    A stub that ignored the parameter would make the test pass against a
+    frozen reader that never sent one, which is the defect this whole section
+    exists to catch. So the filtering happens here, on ``created_at``, exactly
+    as the SQL does, and the reply echoes the instant it applied.
+    """
+
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = rows
+        self.asked: list[str | None] = []
+
+    async def __call__(self, tenant_id: str | None, *, query: str, as_of: datetime | None = None, limit: int = 3) -> Any:
+        self.asked.append(as_of.isoformat() if as_of else None)
+        if as_of is None:
+            kept, excluded = list(self.rows), 0
+        else:
+            kept = [r for r in self.rows if datetime.fromisoformat(str(r["created_at"])) <= as_of]
+            excluded = len(self.rows) - len(kept)
+        payload = _kb_payload(as_of.isoformat() if as_of else None, rows=kept[:limit], excluded=excluded)
+        return kb_module._contain(payload, as_of=as_of, limit=limit)
+
+
+@pytest.mark.asyncio
+async def test_triage_reads_the_runbooks_that_existed_at_the_split_not_the_ones_written_since(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runbooks that reach the prompt are the ones the cutoff allowed.
+
+    A runbook is usually written *after* the incident that prompted it, which
+    makes this the most natural leak of the five: a document that describes
+    the answer to the alerts being graded.
+
+    Asserted on the prompt input rather than on the verdict, for the same
+    reason the organisation-memory and skill tests are: a verdict can be
+    unchanged by a leak that nonetheless happened.
+    """
+    captured: list[dict[str, Any] | None] = []
+
+    async def _capture(state: InvestigationState) -> InvestigationState:
+        captured.append(dict(state.knowledge_base) if state.knowledge_base else None)
+        state.verdict = FALSE_POSITIVE
+        state.confidence = 0.5
+        state.status = AgentStatus.RUNNING
+        return state
+
+    async def _resolve(tenant_id: str) -> _StubLlmConfig:
+        return _StubLlmConfig()
+
+    server = _KbServer(
+        [
+            _kb_chunk("doc-old", "Service logon runbook", "Written before the split.", "2026-04-01T00:00:00+00:00"),
+            _kb_chunk("doc-new", "Post-incident writeup", "POISON: written after the split.", "2026-06-01T00:00:00+00:00"),
+        ]
+    )
+
+    monkeypatch.delenv("AISOC_DETERMINISTIC", raising=False)
+    monkeypatch.setattr(worker_module, "run_auto_triage", _capture)
+    monkeypatch.setattr(worker_module, "resolve_llm_config", _resolve)
+    monkeypatch.setattr(kb_module, "fetch_runbooks", server)
+    kb_module.clear_cache()
+
+    frozen = capture_context(split_at=_SPLIT)
+    reader = FrozenTriageContextReader(frozen)
+    worker = FusedAlertTriageWorker(bootstrap_servers="", writer=ShadowTriageWriter(), context_reader=reader)
+
+    summary = await worker.triage(_envelope())
+    assert summary is not None
+
+    assert len(captured) == 1 and captured[0] is not None
+    titles = [r["title"] for r in captured[0]["runbooks"]]
+    assert titles == ["Service logon runbook"]
+    assert "POISON" not in str(captured[0]["runbooks"])
+
+    # The cutoff was asked for, and it was the split rather than a clock.
+    assert server.asked == [_SPLIT.isoformat()]
+
+    # The freeze did something, and the number says so rather than the absence
+    # of a poisoned prompt implying it. Without this a store that returned
+    # nothing at all would pass the assertions above.
+    note = reader.as_method_note()
+    assert note["cutoff_at"] == _SPLIT.isoformat()
+    assert note["runbooks_frozen"] == 1
+    assert note["runbooks_dropped_after_split"] == 1
+    assert note["runbooks_without_timestamp"] == 0
+    assert "runbooks_cutoff_not_honoured" not in note
+
+    # Sensitivity: the same worker with the live reader does see the poison.
+    # Without this the test above passes just as well against a build where
+    # runbooks never reach the prompt at all.
+    live_worker = FusedAlertTriageWorker(
+        bootstrap_servers="",
+        writer=ShadowTriageWriter(),
+        context_reader=LiveTriageContextReader(),
+    )
+    captured.clear()
+    await live_worker.triage(_envelope())
+    assert len(captured) == 1 and captured[0] is not None
+    assert [r["title"] for r in captured[0]["runbooks"]] == ["Service logon runbook", "Post-incident writeup"]
+    assert "POISON: written after the split." in str(captured[0]["runbooks"])
+    assert server.asked[-1] is None
+
+
+@pytest.mark.asyncio
+async def test_a_store_that_ignores_the_cutoff_is_recorded_as_unhonoured_not_as_frozen() -> None:
+    """A reply that names no cutoff is counted, not assumed to have applied one.
+
+    This is the failure a snapshot source cannot have. A captured set either
+    was filtered or was not, and ``capture_context`` is the only thing that
+    could have filtered it. A cutoff source depends on a *server* honouring a
+    parameter, and a server that ignores it returns a perfectly well-formed
+    reply. The only evidence is the echo, so its absence has to be reported
+    rather than rounded down to a clean read.
+    """
+
+    async def _ignores_the_cutoff(tenant_id: str | None, *, query: str, as_of: datetime | None = None, limit: int = 3) -> Any:
+        return kb_module._contain(
+            _kb_payload(None, rows=[_kb_chunk("doc-x", "Ignored", "body", "2026-06-01T00:00:00+00:00")]),
+            as_of=as_of,
+            limit=limit,
+        )
+
+    reader = FrozenTriageContextReader(capture_context(split_at=_SPLIT))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(kb_module, "fetch_runbooks", _ignores_the_cutoff)
+        await reader.retrieve_runbooks("t-1", query="anything")
+
+    note = reader.as_method_note()
+    assert note["runbooks_cutoff_not_honoured"] == 1
+    assert note["runbooks_frozen"] == 1
+
+    # Sensitivity: an honoured cutoff does not raise the counter, so the key
+    # means what it says rather than appearing on every run.
+    honest = FrozenTriageContextReader(capture_context(split_at=_SPLIT))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(kb_module, "fetch_runbooks", _KbServer([_kb_chunk("doc-y", "Fine", "body", "2026-04-01T00:00:00+00:00")]))
+        await honest.retrieve_runbooks("t-1", query="anything")
+    assert "runbooks_cutoff_not_honoured" not in honest.as_method_note()
 
 
 def test_a_snapshot_taken_at_a_different_instant_is_refused() -> None:
