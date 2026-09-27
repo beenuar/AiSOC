@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from app.api.replay_router import MAX_FINDINGS, ReplayRequest
-from app.main import app
+from app.api.replay_router import router as replay_router
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 _BASE = datetime(2026, 3, 1, tzinfo=UTC)
@@ -73,6 +75,23 @@ def _normalized(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _app() -> FastAPI:
+    """Only the replay router, mounted where ``app/main.py`` mounts it.
+
+    Importing ``app.main`` would pull the whole service in, including the hunt
+    scheduler's ``apscheduler``, which the agents CI job does not install
+    because no other test in this suite needs it. The behaviour under test is
+    the route's, and that it is reachable on the real application is asserted
+    two other ways: structurally by
+    ``test_the_router_is_included_by_the_service`` below, and live by
+    ``tests/e2e/test_replay_cli_end_to_end.py``, which drives the real
+    ``app.main`` through uvicorn.
+    """
+    app = FastAPI()
+    app.include_router(replay_router, prefix="/api/v1")
+    return app
+
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
@@ -82,7 +101,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # the tenant has to arrive on the header rather than in a token claim.
     monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.delenv("AISOC_DEV_MODE", raising=False)
-    return TestClient(app)
+    return TestClient(_app())
 
 
 @pytest.fixture
@@ -293,15 +312,37 @@ def test_two_runs_over_one_history_produce_identical_decisions_through_the_route
     assert len(first) == 6
 
 
-def test_the_route_is_registered_on_the_service(client: TestClient) -> None:
-    """A router nobody includes is the failure this phase exists to close.
+def test_the_route_is_served_where_the_client_expects_it(client: TestClient) -> None:
+    """Read off the served OpenAPI document, not off ``app.routes``.
 
-    Read off the served OpenAPI document rather than ``app.routes``: this
-    FastAPI holds included routers lazily, so ``app.routes`` lists wrappers
-    and a membership test against it passes vacuously.
+    This FastAPI holds included routers lazily, so ``app.routes`` lists
+    wrappers and a membership test against it passes vacuously.
     """
     schema = client.get("/openapi.json").json()
     assert "/api/v1/replay/run" in schema["paths"]
+
+
+def test_the_router_is_included_by_the_service() -> None:
+    """A router nobody includes is the failure this phase exists to close.
+
+    Parsed with ``ast`` rather than imported, for the reason ``_app`` records.
+    The live proof that the deployed application serves this route is
+    ``tests/e2e/test_replay_cli_end_to_end.py``, which drives it through four
+    real services.
+    """
+    import ast
+
+    main = ast.parse((Path(__file__).resolve().parents[1] / "app" / "main.py").read_text())
+    included = {
+        node.args[0].id
+        for node in ast.walk(main)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "include_router"
+        and node.args
+        and isinstance(node.args[0], ast.Name)
+    }
+    assert "replay_router" in included
 
 
 def test_a_console_token_carries_its_own_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -343,7 +384,7 @@ def test_a_console_token_carries_its_own_tenant(monkeypatch: pytest.MonkeyPatch)
         lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(handler)}),
     )
 
-    response = TestClient(app).post(
+    response = TestClient(_app()).post(
         "/api/v1/replay/run",
         json=_body(10),
         headers={"Authorization": f"Bearer {token}"},

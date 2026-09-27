@@ -360,3 +360,33 @@ def test_the_normalize_url_matches_where_the_route_is_mounted() -> None:
     served = {f"{prefix}{normalize_route}".replace("{connector_id}", "splunk") for prefix in prefixes}
     requested = f"{_API_PREFIX}/connectors/splunk/normalize"
     assert requested in served, f"{requested} is not served; the service mounts {sorted(served)}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "connector_id",
+    [
+        "../../admin",
+        "splunk/../../v1/shutdown",
+        "http://169.254.169.254/latest/meta-data",
+        "splunk?x=1",
+        "SPLUNK",
+        "",
+    ],
+)
+async def test_a_connector_id_that_is_not_one_never_reaches_a_url(connector_id: str) -> None:
+    """The id arrives in a request body and is interpolated into a URL path.
+
+    Refused against the registry's own shape rather than escaped: encoding
+    would turn `../../admin` into a literal segment that 404s, which reads as
+    a missing connector, while refusing names the value that was wrong. A
+    string outside this shape could not name a real connector anyway.
+    """
+    with pytest.raises(NormalizerUnavailable, match="not a connector id"):
+        await fetch_normalized(
+            connector_id,
+            [dict(_NOTABLE)],
+            tenant_id="t-1",
+            service_url="http://connectors:8003",
+            service_token="secret",
+        )

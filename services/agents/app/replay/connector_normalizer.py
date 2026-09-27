@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -55,6 +56,14 @@ _TIMEOUT_S = float(os.getenv("AISOC_REPLAY_NORMALIZE_TIMEOUT_S", "60"))
 #: ``CONNECTORS_SERVICE_URL`` is the bare origin. The API's own caller in
 #: ``endpoints/connectors.py`` appends the same segment for the same reason.
 #:
+#: Connector ids are registry keys: lowercase letters, digits and underscores.
+#: The id reaches this module from a request body, and it is interpolated into
+#: a URL path, so it is validated against that shape before it gets there
+#: rather than encoded after. Encoding would make `../../admin` a literal
+#: segment that 404s; refusing says which value was wrong, and a value outside
+#: this shape could never name a real connector anyway.
+_CONNECTOR_ID_RE = re.compile(r"^[a-z0-9_]{1,64}$")
+
 #: This was wrong when the route shipped: the URL was built without it, so
 #: every normalize request would have 404'd. Nothing called this path until
 #: Phase 1.4 wired the CLI to it, which is the failure shape this program
@@ -109,6 +118,11 @@ async def fetch_normalized(
     to measure, and continuing with partial coverage would publish a number
     over whichever rows happened to succeed.
     """
+    if not _CONNECTOR_ID_RE.match(connector_id):
+        raise NormalizerUnavailable(
+            f"{connector_id!r} is not a connector id. Ids are lowercase letters, digits and "
+            f"underscores, and this one reaches a URL path, so it is refused rather than escaped."
+        )
     if not rows:
         return PrenormalizedRows({}, connector_id=connector_id)
 

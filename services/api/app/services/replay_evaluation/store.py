@@ -24,11 +24,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-log = structlog.get_logger(__name__)
 
 __all__ = [
     "TERMINAL_STATUSES",

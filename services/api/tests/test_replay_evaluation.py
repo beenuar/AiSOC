@@ -552,7 +552,7 @@ def test_an_evaluation_in_another_tenant_is_a_404(stub_app: FastAPI, monkeypatch
     """Not a 403: telling the two apart would confirm the id exists."""
     from app.db.database import get_db
 
-    stub_app.dependency_overrides[get_db] = lambda: _StubSession()
+    stub_app.dependency_overrides[get_db] = _StubSession
 
     async def _none(db: Any, **kwargs: Any) -> None:
         return None
@@ -567,7 +567,7 @@ def test_an_evaluation_in_another_tenant_is_a_404(stub_app: FastAPI, monkeypatch
 def test_exporting_a_run_that_has_no_report_is_a_409_with_the_reason(stub_app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.db.database import get_db
 
-    stub_app.dependency_overrides[get_db] = lambda: _StubSession()
+    stub_app.dependency_overrides[get_db] = _StubSession
     evaluation_id = uuid.uuid4()
 
     async def _failed(db: Any, **kwargs: Any) -> store_module.EvaluationRow:
