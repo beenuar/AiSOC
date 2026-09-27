@@ -218,6 +218,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "rather than a narrowing of one, for the same reason as the MCP registry above, and the RLS context is set from "
         "that same value so the policy and the query predicate cannot disagree",
     ),
+    "services/api/app/api/v1/endpoints/knowledge_base.py::retrieve_runbooks_for_triage": (
+        "service_token_valid",
+        "the agents service retrieves this tenant's runbooks here on the path of a triage and holds no session; the "
+        "shared service token is the credential, compared in constant time and failing closed when unset. The named "
+        "tenant is the scope rather than a narrowing of one, for the same reason as the two above, and the RLS context "
+        "is set from that same value so the policy and the query predicate cannot disagree",
+    ),
 }
 
 #: Routes that are public by design. Each entry is (service, reason) and the
