@@ -913,7 +913,6 @@ script name, `disable_user` is in the guard's tool-name list, and a
 tool-name match is **high** severity, which demotes the case to L0. So an
 ordinary offboarding script takes automation away from a true positive.
 
-<<<<<<< HEAD
 ### D20. The hardening worked on the corpus and barely generalised, and the second number is the one that matters
 
 D19 left the field-native gap open on the grounds that tuning a guard against
@@ -991,7 +990,6 @@ verb, and both nouns are gone. `benign-edr-response-cmdline` still flags and
 stays recorded: suppressing it needs a rule that reads a containment verb in
 flag position as a tool invocation, and a suppression rule is the one kind
 whose failure mode is silence.
-=======
 ### D21. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
 
 The plan puts the client in `services/agents` and the registry in
@@ -1072,7 +1070,6 @@ The near-miss worth recording: the first draft had the API resolving DNS too,
 which would have read like the real check to every future reader while ageing
 into a false one, and would have made the agents-side guard look like a
 belt-and-braces duplicate that a later cleanup could reasonably delete.
->>>>>>> 54de0d37 (feat(agents): reach a tenant's own MCP servers, read-only and untrusted by default)
 
 ### D24. Two thirds of 5.6 already existed, and the third needed a boundary in code rather than in prose
 
