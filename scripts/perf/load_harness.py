@@ -818,7 +818,9 @@ def _self_test() -> int:
 
     title = f"{MARKER_PREFIX} run1 seq=12 t=1700000000123456789"
     match = _TITLE_RE.match(title)
-    checks.append(("the marker this harness matches is the marker the producer writes", bool(match) and match.group("seq") == "12"))
+    # `match is not None` rather than `bool(match)`: only the former narrows the
+    # Optional for the `.group` call on the same line.
+    checks.append(("the marker this harness matches is the marker the producer writes", match is not None and match.group("seq") == "12"))
 
     ok = True
     for description, passed in checks:

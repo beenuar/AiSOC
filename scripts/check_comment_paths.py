@@ -175,6 +175,13 @@ URL_PREFIX_RE = re.compile(r"(?:[A-Za-z][A-Za-z0-9+.-]*://\S*|[A-Za-z0-9-]+\.[A-
 #: or which no longer appears in the corpus at all, is a finding: a stale
 #: exception is how a list stops describing the tree it excuses.
 ACCEPTED: dict[tuple[str, str], str] = {
+    ("scripts/perf/load_harness.py", "scripts/load_harness.py"): (
+        "Prose asserting the file's absence. The comment explains why the self-test probe is "
+        "passed 'perf/load_harness.py' rather than a basename: a basename would have resolved to "
+        "scripts/load_harness.py, which does not exist, and a missing file exits non-zero so the "
+        "refusal would have passed while proving nothing. Making this path resolve would recreate "
+        "the trap the comment exists to warn about."
+    ),
     (".github/workflows/screencast.yml", "apps/web/pnpm-lock.yaml"): (
         "Prose asserting the file's absence — the sentence is 'apps/web/pnpm-lock.yaml does not "
         "exist', which is the fact the step depends on."
