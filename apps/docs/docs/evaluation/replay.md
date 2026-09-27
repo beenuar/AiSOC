@@ -14,11 +14,10 @@ Replay evaluation answers the question that actually matters: **how does AiSOC
 triage compare with what your analysts already decided, on your data?**
 
 :::note What exists today
-This page currently documents the **history readers**, which are the first half
-of the feature: the part that reads your closed findings and turns your
-analysts' labels into something gradeable. The replay runner, the scoring
-report and the `aisoc replay` command land next and this page grows with them.
-Nothing here describes a capability that is not in the tree.
+This page documents the **history readers**, the **replay runner** and the
+**scoring report**. The `aisoc replay` command and the console page land next
+and this page grows with them. Nothing here describes a capability that is not
+in the tree.
 :::
 
 ## The one rule worth reading first
@@ -153,6 +152,76 @@ category error.
 | `FalsePositive` | `false_positive` |
 | `Unknown` | `unlabeled` |
 
+## How a replay runs
+
+### Shadow mode writes nothing
+
+A replay runs the same triage path a live alert takes. Not a copy of it: the
+same `FusedAlertTriageWorker.triage` the Kafka consumer calls on every fused
+alert, constructed with two different sinks.
+
+Persistence is injected. In production the worker holds a writer that records
+the verdict to the Investigation Ledger and the `alerts` row, writes the
+outcome prior, queues approvals, caches the verdict for deduplication and
+pushes the disposition back to your SIEM. In a replay it holds one that counts
+each of those and performs none of them. The count is reported, because a
+replay that quietly stopped replaying and a replay whose writes were suppressed
+both write nothing, and only the count tells them apart.
+
+The full investigation graph is not run during a replay, because every node it
+executes records itself to the ledger. That does not change the measurement:
+the verdict is fixed before escalation is reached, and a test drives the real
+worker with a graph runner that tries to rewrite the verdict to prove it.
+
+### Point-in-time context, so the test window cannot answer itself
+
+History is ordered by close time and cut by time, 70/30 by default. The later
+period is the test window. A finding closed at the exact split instant stays on
+the train side.
+
+Organisation memory and outcome priors are captured **once**, at the split, and
+served from that snapshot for the whole run. Without this, a replay feeds
+itself: production writes every verdict back as a per-signature prior and reads
+that prior before triage, so the verdict on one alert auto-closes the next
+alert with the same evidence, and the evaluation grades an answer it supplied
+three seconds earlier. The deduplication cache does the same thing one layer
+earlier and leaves no trace in either store.
+
+There is one honest gap. Organisation-memory statements, as the API serves
+them, carry no creation time, so a statement cannot be tested against the split
+and is kept. The report publishes how many statements were in that position, as
+`statements_without_timestamp`, rather than claiming a tighter freeze than the
+data supports.
+
+### What the report says
+
+Recall on malicious leads, because it is the number you are deciding on and the
+one an imbalanced queue hides. Beside it: per-class precision and recall, a
+confusion matrix, the abstention rate, reliability bins with an expected
+calibration error, the hallucination rate with the indicators behind it,
+per-rule and per-source breakdowns, and bootstrap confidence intervals.
+
+Two rules govern what it prints.
+
+**Below 30 malicious cases in the test window, no headline accuracy is
+printed.** The count and the reason are printed instead. On a queue where
+almost everything is a false positive, an agent that calls everything benign
+scores well, and that figure would describe your queue rather than the product.
+
+**A rate with no denominator reads "not measured", never 0.** A zero in a
+recall column says the agent missed every case of that class; having never been
+asked is a different fact.
+
+### What a replay is not
+
+A replayed finding is normalized by the same connector `normalize()` your live
+pipeline uses, reached over HTTP in the connectors service so there is no
+second copy of any vendor's field mapping to drift. What it does not carry is
+everything fusion adds to a live alert: correlation across related events, the
+fused confidence score, the deterministic narrative and entity resolution.
+Every report states this in its method section. Replay measures triage on a
+single normalized finding, not the whole pipeline.
+
 ## Privacy: where your data goes
 
 Reading your history happens inside your deployment, against credentials you
@@ -181,3 +250,14 @@ through the same triage path production uses.
 - **Elastic yields nothing without tags**, as above.
 - **The vendor's own label is kept verbatim** alongside the mapped one, so you
   can audit a mapping you disagree with rather than having to trust it.
+- **Fusion's enrichments are absent**, as above. A replay grades triage on one
+  normalized finding at a time.
+- **Tool calls are structurally zero.** Shadow mode declines escalation, and
+  escalation is the only stage of this path that calls tools. The field is
+  recorded rather than omitted so a future change that gives triage a tool
+  shows up as a number moving off zero.
+- **Hallucination counting errs high.** Indicators are extracted from the
+  agent's own reasoning with the same pattern set the synthetic-corpus grader
+  checks against, so a phrase shaped like a domain is checked and, if absent
+  from the evidence, counted. The published rate is a ceiling, and the
+  indicators behind it travel with the report so you can re-derive it.

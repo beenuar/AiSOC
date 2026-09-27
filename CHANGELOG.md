@@ -9,60 +9,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-<<<<<<< HEAD
-- **Closed-finding history readers: the analyst labels a replay evaluation
-  grades against** (gap-closure Phase 1.1). AiSOC could already push a verdict
-  into somebody else's SIEM. It could not read back the findings a customer's
-  own analysts had already closed, so there was no way for an operator to
-  measure triage against their own decisions on their own data before being
-  asked to trust it. The published benchmark is substrate self-consistency on
-  a synthetic corpus, which answers a different question.
+- **Replay evaluation: the production triage path, run over a customer's own
+  closed findings, writing nothing** (gap-closure Phase 1.2 and 1.3). Phase
+  1.1 made an operator's analyst labels readable. Nothing could grade against
+  them, and the obvious way to build that grading is the wrong one: a second
+  triage implementation would measure the evaluation harness rather than the
+  product, and would diverge from it the first time anybody changed a prompt.
 
-  Five readers now list closed findings in a time window, each row carrying
-  the analyst's disposition, their reason, who closed it and when:
-  `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`,
-  `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses` and
-  `DefenderClient.list_resolved_alerts`. They extend the clients in
-  `services/actions`, which already own the credential path and already hold
-  the writeback going the other way.
+  **The gap, and how it was closed.** `FusedAlertTriageWorker.triage` could
+  not run without writing. It recorded the verdict to the Investigation
+  Ledger and the `alerts` row, wrote a per-signature outcome prior, queued
+  approvals, cached the verdict for deduplication and pushed the disposition
+  back to the source SIEM, all inline. Persistence is now injected through
+  `app/workers/triage_persistence.py`: `LiveTriageWriter` is the default and
+  does exactly what the worker used to do, and `ShadowTriageWriter` counts
+  each call and performs none of them. There is no `if replay` on the hot
+  path, so there is nothing to drift. `CostTracker` grew a `persist` flag for
+  the same reason: a replay must measure spend and must not bill it.
 
-  **The rule that carries the value is the refusal to guess.** Vendor labels
-  map to the canonical taxonomy in one place,
-  `app/services/alert_history.py`, rather than five places that could disagree
-  about what "benign positive" means. Anything outside that taxonomy becomes
-  `unlabeled` and is excluded from accuracy. That is not an edge case: Splunk
-  ES ships dispositions literally named "Other" and "Undetermined", and
-  Sentinel and Defender both ship an explicit `Undetermined` or `Unknown`
-  classification. An analyst who picked one of those said they did not know,
-  and folding it into `true_positive` because the finding happened to be
-  closed would manufacture agreement out of an admission of uncertainty.
+  **Point-in-time context, because the test window must not answer itself.**
+  Production writes every verdict back as an outcome prior and reads that
+  prior *before* triage, so in a naive replay the verdict on one finding
+  auto-closes the next finding with the same evidence and the evaluation
+  grades an answer it supplied itself. The deduplication cache does the same
+  thing one layer earlier and leaves no trace in either store. Organisation
+  memory and outcome priors are now captured once at the 70/30 time split and
+  served from that snapshot for the whole run, and rows recorded after the
+  split are dropped from it.
 
-  Two vendor-specific decisions are worth stating rather than burying.
-  Elastic Security ships no disposition field at all: closing a signal records
-  no reason, so the honest reader returns `unlabeled` unless the deployment
-  has adopted a workflow tag, and the convention it reads is documented rather
-  than assumed. QRadar's "Non-Issue" maps to `benign` and not
-  `benign_true_positive`, because it makes no claim about whether the rule was
-  right, which is the distinction `benign` exists to carry.
+  **Scoring extends `packages/aisoc-benchmark` rather than standing beside
+  it.** The hallucination machinery is the existing
+  `_INDICATOR_PATTERNS`, so an indicator counted here is one the synthetic
+  corpus grader would also count. New: per-class precision and recall with
+  malicious recall first, a confusion matrix, abstention rate, reliability
+  bins with an expected calibration error, per-rule and per-source
+  breakdowns, and seeded bootstrap confidence intervals. Below 30 malicious
+  cases the report prints the count and refuses a headline accuracy, because
+  on a queue that is almost entirely false positives an agent that calls
+  everything benign scores well and the figure would describe the queue. A
+  rate with no denominator reads "not measured", never 0.
 
-  **Measured:** 30 new tests drive each reader's real HTTP path against
-  vendor-shaped payloads with a mock transport, so a wrong endpoint, a wrong
-  filter or a parser that fails on the documented response shape is caught
-  here rather than on a customer's history. The `services/actions` suite goes
-  from 737 to 767 passing.
+  **Measured:** the `services/agents` suite goes from 1252 to 1280 passing,
+  `packages/aisoc-benchmark` from 35 to 57, and `services/connectors` from
+  880 to 886. Two runs of a 20-finding replay on the deterministic tier
+  produce identical decisions on every field but wall-clock latency, and two
+  renderings of one score are byte-identical.
 
-  **Gate:** `ci.yml` actions job (`test_alert_history.py`), with a new
-  claim-to-gate row. The assertions that hold the claim are the negative ones:
-  every vendor's explicit "I do not know" is asserted to land on `unlabeled`,
-  two conflicting Elastic tags yield `unlabeled` rather than a coin flip, and
-  `unlabeled` is asserted not to be a member of `CANONICAL_DISPOSITIONS` so
-  nothing downstream can score it as a verdict. `ClosedFinding.__post_init__`
-  refuses a disposition that is neither canonical nor `unlabeled`, so a mapper
-  cannot introduce a third vocabulary. An unparseable close time raises rather
-  than defaulting to now, because a silently wrong close time would put a row
-  on the wrong side of the train/test split and leak the answer into its own
-  evaluation.
-=======
+  **Gates:** `ci.yml` agents job (`test_replay_shadow_no_writes.py`,
+  `test_replay_leakage.py`), `ci.yml` benchmark job
+  (`test_replay_metrics.py`), and a new
+  `scripts/check_replay_contract_parity.py` wired into `ci.yml`, which
+  compares the finding shape and the disposition taxonomy across the three
+  trees that hold them and cannot import one another, in both directions. The
+  leakage tests each carry a sensitivity half that runs the unprotected
+  configuration and asserts it leaks, so the file cannot go quietly green
+  over a property it has stopped testing. Three claim-to-gate rows; the
+  matrix goes 148 rows to 151, GATED 140 to 143, NO GATE stays 0.
+
 - **File and URL analysis behind one provider contract, with uploading a
   customer file off by default.** AiSOC could enrich an IP, a domain and a URL
   and had nothing at all for a file hash: `services/enrichment` fans out to
@@ -149,7 +152,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   No file was uploaded to any third party while building this. The recorded
   fixture is a GET by hash for the published EICAR test file; every
   submit and poll fixture is hand-written and labelled as such.
->>>>>>> c51f197b (feat(sandbox): file and URL analysis behind one provider contract)
+
+- **Closed-finding history readers: the analyst labels a replay evaluation
+  grades against** (gap-closure Phase 1.1). AiSOC could already push a verdict
+  into somebody else's SIEM. It could not read back the findings a customer's
+  own analysts had already closed, so there was no way for an operator to
+  measure triage against their own decisions on their own data before being
+  asked to trust it. The published benchmark is substrate self-consistency on
+  a synthetic corpus, which answers a different question.
+
+  Five readers now list closed findings in a time window, each row carrying
+  the analyst's disposition, their reason, who closed it and when:
+  `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`,
+  `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses` and
+  `DefenderClient.list_resolved_alerts`. They extend the clients in
+  `services/actions`, which already own the credential path and already hold
+  the writeback going the other way.
+
+  **The rule that carries the value is the refusal to guess.** Vendor labels
+  map to the canonical taxonomy in one place,
+  `app/services/alert_history.py`, rather than five places that could disagree
+  about what "benign positive" means. Anything outside that taxonomy becomes
+  `unlabeled` and is excluded from accuracy. That is not an edge case: Splunk
+  ES ships dispositions literally named "Other" and "Undetermined", and
+  Sentinel and Defender both ship an explicit `Undetermined` or `Unknown`
+  classification. An analyst who picked one of those said they did not know,
+  and folding it into `true_positive` because the finding happened to be
+  closed would manufacture agreement out of an admission of uncertainty.
+
+  Two vendor-specific decisions are worth stating rather than burying.
+  Elastic Security ships no disposition field at all: closing a signal records
+  no reason, so the honest reader returns `unlabeled` unless the deployment
+  has adopted a workflow tag, and the convention it reads is documented rather
+  than assumed. QRadar's "Non-Issue" maps to `benign` and not
+  `benign_true_positive`, because it makes no claim about whether the rule was
+  right, which is the distinction `benign` exists to carry.
+
+  **Measured:** 30 new tests drive each reader's real HTTP path against
+  vendor-shaped payloads with a mock transport, so a wrong endpoint, a wrong
+  filter or a parser that fails on the documented response shape is caught
+  here rather than on a customer's history. The `services/actions` suite goes
+  from 737 to 767 passing.
+
+  **Gate:** `ci.yml` actions job (`test_alert_history.py`), with a new
+  claim-to-gate row. The assertions that hold the claim are the negative ones:
+  every vendor's explicit "I do not know" is asserted to land on `unlabeled`,
+  two conflicting Elastic tags yield `unlabeled` rather than a coin flip, and
+  `unlabeled` is asserted not to be a member of `CANONICAL_DISPOSITIONS` so
+  nothing downstream can score it as a verdict. `ClosedFinding.__post_init__`
+  refuses a disposition that is neither canonical nor `unlabeled`, so a mapper
+  cannot introduce a third vocabulary. An unparseable close time raises rather
+  than defaulting to now, because a silently wrong close time would put a row
+  on the wrong side of the train/test split and leak the answer into its own
+  evaluation.
 
 ## [11.2.0] — 2026-09-26
 

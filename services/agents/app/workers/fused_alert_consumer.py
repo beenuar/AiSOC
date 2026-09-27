@@ -45,19 +45,23 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
-from app.context.organisation_memory import fetch_statements
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
-from app.investigator import siem_writeback
 from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
-from app.memory.outcomes import AI, lookup_prior, record_outcome, should_auto_suppress
+from app.memory.outcomes import AI, should_auto_suppress
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
 from app.workers.business_context import BusinessContextApplier
+from app.workers.triage_persistence import (
+    LiveTriageContextReader,
+    LiveTriageWriter,
+    TriageContextReader,
+    TriageWriter,
+)
 
 logger = structlog.get_logger()
 
@@ -155,6 +159,26 @@ def _coerce_uuid(value: Any, *, fallback: str) -> uuid.UUID:
         return uuid.uuid5(_NAMESPACE, str(value or fallback))
 
 
+def _cost_payload(cost: CostSummary, tokens: int) -> dict[str, Any]:
+    """The spend a triage summary reports, with the provenance of every figure.
+
+    Added for Phase 1.2: replay has to record measured cost, tokens and the
+    model per decision, and the only place that knows them is this worker.
+    ``measured_usd`` stays ``None`` when no call reported a cost, because a
+    replay report that printed 0.0 there would be claiming a measurement of
+    free rather than the absence of one.
+    """
+    return {
+        "measured_usd": cost.measured_usd,
+        "measured_calls": cost.measured_calls,
+        "estimated_usd": cost.estimated_usd,
+        "estimated_calls": cost.estimated_calls,
+        "unpriced_calls": cost.unpriced_calls,
+        "resolved_models": list(cost.resolved_models),
+        "tokens": tokens,
+    }
+
+
 def _rationale_of(state: InvestigationState) -> str:
     """Human-readable rationale for the verdict, for the ledger + alerts row."""
     if state.confidence_basis:
@@ -224,6 +248,17 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
 class FusedAlertTriageWorker:
     """Consumes ``aisoc.alerts.fused`` and auto-triages each alert (copilot)."""
 
+    #: Production sinks, declared on the class rather than only assigned in
+    #: ``__init__``. Several tests build this worker with ``__new__`` to drive
+    #: one method without a broker, and a sink that existed only as an instance
+    #: attribute would leave those objects with no persistence at all —
+    #: silently, since every write here is fail-soft. A class-level default
+    #: makes "the default is production" true however the object was made.
+    #: Both implementations are stateless (``__slots__ = ()``), so one shared
+    #: instance carries nothing between workers.
+    _writer: TriageWriter = LiveTriageWriter()
+    _reader: TriageContextReader = LiveTriageContextReader()
+
     def __init__(
         self,
         *,
@@ -233,10 +268,18 @@ class FusedAlertTriageWorker:
         dlq_topic: str | None = None,
         max_attempts: int = _MAX_ATTEMPTS,
         business_context: BusinessContextApplier | None = None,
+        writer: TriageWriter | None = None,
+        context_reader: TriageContextReader | None = None,
     ) -> None:
         self._bootstrap = bootstrap_servers
         self._topic = topic
         self._group_id = group_id
+        # Phase 1.2 — persistence is injected so replay evaluation can run this
+        # exact path writing nothing. The defaults are what the worker did
+        # inline before, so a production deployment that passes neither is
+        # byte-for-byte the same behaviour.
+        self._writer: TriageWriter = writer or LiveTriageWriter()
+        self._reader: TriageContextReader = context_reader or LiveTriageContextReader()
         self._dlq_topic = dlq_topic or os.getenv("KAFKA_TOPIC_ALERTS_FUSED_DLQ", f"{topic}.dlq")
         self._max_attempts = max(1, max_attempts)
         self._consumer: Any | None = None
@@ -418,6 +461,7 @@ class FusedAlertTriageWorker:
                 return {
                     "incident_id": str(message.get("incident_id") or message.get("id") or ""),
                     "suppressed": True,
+                    "cost": _cost_payload(CostSummary(), 0),
                     "business_context_rules": bc_matched,
                     "response_dispatched": False,
                 }
@@ -463,11 +507,15 @@ class FusedAlertTriageWorker:
                 # is on the worker's timeline and is skipped entirely when no
                 # LLM call is going to happen. Never raises; an empty list just
                 # means the prompt is what it was before.
-                state.organisation_memory = await fetch_statements(str(state.tenant_id))
+                state.organisation_memory = await self._reader.fetch_statements(str(state.tenant_id))
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
-            async with CostTracker(run_id=str(state.run_id), tenant_id=str(state.tenant_id)) as tracker:
+            async with CostTracker(
+                run_id=str(state.run_id),
+                tenant_id=str(state.tenant_id),
+                persist=self._writer.persists_cost,
+            ) as tracker:
                 if use_llm and cfg is not None:
                     # Route the LLM call through the tenant's BYOK key/model so
                     # auto-triage actually honours per-tenant credentials.
@@ -517,7 +565,8 @@ class FusedAlertTriageWorker:
                 # spent. An unmeasured call contributes no dollars — it still
                 # contributes tokens, which is the cap that can be enforced
                 # honestly without a price.
-                governor.record_verdict(
+                self._writer.cache_verdict(
+                    governor,
                     str(state.tenant_id),
                     fingerprint,
                     {"verdict": verdict, "confidence": confidence},
@@ -541,7 +590,7 @@ class FusedAlertTriageWorker:
         # autonomous closures compound (a later identical alert can suppress).
         if _memory_writeback_enabled() and verdict:
             with contextlib.suppress(Exception):
-                await record_outcome(
+                await self._writer.record_outcome(
                     str(state.tenant_id),
                     fingerprint,
                     disposition=str(verdict),
@@ -578,6 +627,9 @@ class FusedAlertTriageWorker:
             "verdict": verdict,
             "confidence": confidence,
             "tier": tier,
+            "cost": _cost_payload(cost, tokens),
+            "findings": list(state.findings),
+            "confidence_basis": list(state.confidence_basis),
             "business_context_rules": bc_matched,
             # Copilot default: triage is read-only, response requires approval.
             "response_dispatched": False,
@@ -608,7 +660,7 @@ class FusedAlertTriageWorker:
         if not alert_id or not verdict:
             return None
         try:
-            report = await siem_writeback.write_back_disposition(
+            report = await self._writer.write_back_disposition(
                 tenant_id=str(state.tenant_id),
                 alert_id=alert_id,
                 disposition=str(verdict),
@@ -641,7 +693,7 @@ class FusedAlertTriageWorker:
             if not action.requires_approval:
                 continue
             risk = action.risk_level.value if hasattr(action.risk_level, "value") else str(action.risk_level)
-            approval_id = await ledger_module.raise_approval(
+            approval_id = await self._writer.raise_approval(
                 tenant_ref=str(state.tenant_id),
                 run_id=state.run_id,
                 alert_id=(state.raw_alert or {}).get("id"),
@@ -673,7 +725,7 @@ class FusedAlertTriageWorker:
         None. Best-effort: any lookup failure falls through to normal triage.
         """
         try:
-            prior = await lookup_prior(str(state.tenant_id), signature)
+            prior = await self._reader.lookup_prior(str(state.tenant_id), signature)
         except Exception as exc:  # noqa: BLE001 — memory read is advisory
             logger.debug("auto_triage_worker.memory_lookup_failed", error=str(exc))
             return None
@@ -699,7 +751,7 @@ class FusedAlertTriageWorker:
         _METRICS["triaged"] += 1
         await self._record(state, tier="memory", verdict=disposition, confidence=confidence)
         with contextlib.suppress(Exception):
-            await record_outcome(
+            await self._writer.record_outcome(
                 str(state.tenant_id),
                 signature,
                 disposition=disposition,
@@ -708,7 +760,7 @@ class FusedAlertTriageWorker:
                 alert_id=(state.raw_alert or {}).get("id"),
             )
         with contextlib.suppress(Exception):
-            await ledger_module.record_suppression(
+            await self._writer.record_suppression(
                 tenant_ref=str(state.tenant_id),
                 signature=signature,
                 alert_id=(state.raw_alert or {}).get("id"),
@@ -729,6 +781,11 @@ class FusedAlertTriageWorker:
             "verdict": disposition,
             "confidence": confidence,
             "tier": "memory",
+            # No model call was placed, so every figure here is a zero that was
+            # counted rather than a measurement that is missing.
+            "cost": _cost_payload(CostSummary(), 0),
+            "findings": list(state.findings),
+            "confidence_basis": list(state.confidence_basis),
             "suppressed_by_memory": True,
             "business_context_rules": bc_matched,
             "response_dispatched": False,
@@ -743,7 +800,10 @@ class FusedAlertTriageWorker:
         restart re-runs idempotently. Best-effort + budgeted — a failure or
         timeout leaves the durable verdict intact and the alert escalated.
         """
-        if not _escalation_enabled():
+        # Two independent switches. The env flag is the operator's; the
+        # writer's is the caller's, and a shadow run declines because every
+        # graph node records itself to the ledger.
+        if not _escalation_enabled() or not self._writer.escalation_allowed:
             return
         # Pre-fetch the same context an analyst-initiated investigation gets.
         # The manual orchestrator has built a ContextBundle since T2.1; the
@@ -758,7 +818,11 @@ class FusedAlertTriageWorker:
             raw_alert=state.raw_alert or {},
         )
         try:
-            async with CostTracker(run_id=str(state.run_id), tenant_id=str(state.tenant_id)):
+            async with CostTracker(
+                run_id=str(state.run_id),
+                tenant_id=str(state.tenant_id),
+                persist=self._writer.persists_cost,
+            ):
                 await run_escalation(state, budget=default_budget(), seq_start=1)
             _METRICS["escalated"] += 1
         except Exception as exc:  # noqa: BLE001 — escalation is best-effort over a durable verdict
@@ -875,7 +939,7 @@ class FusedAlertTriageWorker:
             }
             for a in state.proposed_actions
         ]
-        await ledger_module.persist_auto_triage(
+        await self._writer.persist_auto_triage(
             run_id=state.run_id,
             alert_id=(state.raw_alert or {}).get("id"),
             tenant_ref=str(state.tenant_id),

@@ -544,6 +544,16 @@ jobs:
         run: python3 scripts/check_cost_provenance.py --self-test
       - name: Cost provenance gate
         run: python3 scripts/check_cost_provenance.py
+      # Replay evaluation spans three trees that cannot import one another:
+      # the reader in services/actions, the runner in services/agents and the
+      # grader in packages/aisoc-benchmark. The contract between them is three
+      # declarations agreeing by convention, and this compares them in both
+      # directions so a field added on one side cannot be dropped silently at
+      # the boundary.
+      - name: Replay contract parity gate — self-test
+        run: python3 scripts/check_replay_contract_parity.py --self-test
+      - name: Replay contract parity gate
+        run: python3 scripts/check_replay_contract_parity.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector

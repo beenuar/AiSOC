@@ -1,0 +1,304 @@
+"""The replay runner: splitting, envelope construction, and reproducibility.
+
+Gap-closure Phase 1.2.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import httpx
+import pytest
+from app.replay.connector_normalizer import PrenormalizedRows, fetch_normalized, row_key
+from app.replay.findings import HistoricalFinding
+from app.replay.normalize import NormalizerUnavailable, to_fused_envelope
+from app.replay.runner import DEFAULT_TRAIN_FRACTION, ReplayRunner, split_by_time
+
+_BASE = datetime(2026, 3, 1, tzinfo=UTC)
+
+#: The real Splunk ES notable shape, as ``list_closed_notables`` returns it.
+#: Recorded rather than invented: the field names are the ones the SPL in
+#: ``SplunkClient.list_closed_notables`` selects.
+_NOTABLE = {
+    "event_id": "ES-1",
+    "rule_id": "rule-42",
+    "rule_name": "Suspicious PowerShell",
+    "search_name": "Suspicious PowerShell",
+    "urgency": "high",
+    "disposition": "disposition:1",
+    "src": "192.0.2.10",
+    "host": "WS-01",
+    "_time": "1772323200",
+}
+
+
+class _SplunkLikeNormalizer:
+    """The mapping ``services/connectors`` applies to a Splunk row.
+
+    A stand-in, and the docstring says so rather than letting a reader assume
+    the real connector is under test here. The real one is reached over HTTP
+    in production (``app.replay.connector_normalizer``) and is exercised
+    against the registry in the connectors service's own suite.
+    """
+
+    connector_id = "splunk"
+
+    def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "source": "splunk",
+            "external_id": raw.get("event_id", ""),
+            "title": raw.get("search_name") or "Splunk Notable Event",
+            "severity": "high",
+            "src_ip": raw.get("src"),
+            "hostname": raw.get("host"),
+            "raw_event": raw,
+            "created_at": raw.get("_time"),
+        }
+
+
+def _finding(index: int, *, disposition: str = "false_positive") -> HistoricalFinding:
+    return HistoricalFinding(
+        vendor="splunk",
+        finding_id=f"ES-{index:03d}",
+        title="Suspicious PowerShell",
+        disposition=disposition,
+        vendor_disposition="disposition:1",
+        closed_at=_BASE + timedelta(hours=index),
+        rule_id="rule-42",
+        raw={**_NOTABLE, "event_id": f"ES-{index:03d}"},
+    )
+
+
+# --------------------------------------------------------------------------
+# Splitting
+# --------------------------------------------------------------------------
+
+
+def test_the_split_is_by_time_and_the_test_window_is_the_later_period() -> None:
+    findings = [_finding(i) for i in range(10)]
+
+    split = split_by_time(findings)
+
+    assert split.train_fraction == DEFAULT_TRAIN_FRACTION
+    assert len(split.train) == 7
+    assert len(split.test) == 3
+    assert max(f.closed_at for f in split.train) <= split.split_at
+    assert min(f.closed_at for f in split.test) > split.split_at
+
+
+def test_a_finding_closed_exactly_at_the_split_stays_in_the_train_window() -> None:
+    """A tie must not become a test case the frozen context already knows about."""
+    findings = [_finding(i) for i in range(10)]
+    # Give three findings the same close time as the boundary row.
+    tied = [
+        HistoricalFinding(
+            vendor="splunk",
+            finding_id=f"TIE-{i}",
+            title="Tied",
+            disposition="false_positive",
+            vendor_disposition="disposition:3",
+            closed_at=findings[6].closed_at,
+            raw=dict(_NOTABLE),
+        )
+        for i in range(3)
+    ]
+
+    split = split_by_time([*findings, *tied])
+
+    assert all(f.closed_at <= split.split_at for f in split.train)
+    assert not any(f.finding_id.startswith("TIE") for f in split.test)
+
+
+def test_splitting_is_stable_when_close_times_collide() -> None:
+    """A bulk close gives many findings one timestamp; the order must still be total."""
+    same_time = [
+        HistoricalFinding(
+            vendor="splunk",
+            finding_id=f"BULK-{i:02d}",
+            title="Bulk closed",
+            disposition="false_positive",
+            vendor_disposition="disposition:3",
+            closed_at=_BASE,
+            raw=dict(_NOTABLE),
+        )
+        for i in range(10)
+    ]
+    later = [_finding(i + 50) for i in range(10)]
+
+    first = split_by_time([*same_time, *later])
+    shuffled = split_by_time([*later[::-1], *same_time[::-1]])
+
+    assert [f.finding_id for f in first.test] == [f.finding_id for f in shuffled.test]
+
+
+def test_an_empty_history_is_refused_rather_than_split() -> None:
+    with pytest.raises(ValueError, match="empty history"):
+        split_by_time([])
+
+
+@pytest.mark.parametrize("fraction", [0.0, 1.0, -0.1, 1.5])
+def test_a_fraction_that_would_empty_a_window_is_refused(fraction: float) -> None:
+    with pytest.raises(ValueError, match="strictly between"):
+        split_by_time([_finding(0), _finding(1)], train_fraction=fraction)
+
+
+# --------------------------------------------------------------------------
+# Envelope
+# --------------------------------------------------------------------------
+
+
+def test_the_envelope_carries_the_fields_build_state_reads() -> None:
+    finding = _finding(1)
+    normalized = _SplunkLikeNormalizer().normalize(dict(finding.raw))
+
+    envelope = to_fused_envelope(finding, normalized, tenant_id="t-1", connector_id="splunk")
+
+    alert = envelope["alert"]
+    assert envelope["alert_row_id"] == finding.finding_id
+    assert alert["title"] == "Suspicious PowerShell"
+    assert alert["severity"] == "high"
+    # Lifted by the connector.
+    assert alert["src_ip"] == "192.0.2.10"
+    assert alert["hostname"] == "WS-01"
+    # Present only in the untouched vendor row; read from there rather than
+    # dropped, because a connector lifts only what it has a canonical home for.
+    assert alert["rule_id"] == "rule-42"
+    assert alert["connector_type"] == "splunk"
+    assert alert["raw_event"] == dict(finding.raw)
+
+
+def test_the_envelope_does_not_invent_a_fusion_confidence() -> None:
+    """Fusion computes it from correlated evidence a single finding does not have."""
+    finding = _finding(1)
+    envelope = to_fused_envelope(finding, _SplunkLikeNormalizer().normalize(dict(finding.raw)), tenant_id="t-1")
+
+    assert "confidence_score" not in envelope
+    assert envelope["alert"]["risk_score"] == 0.0
+
+
+# --------------------------------------------------------------------------
+# Running
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_two_runs_over_one_history_produce_identical_decisions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deterministic tier must be reproducible, which is the phase's acceptance bar.
+
+    Latency is excluded from the comparison and nothing else is. It is a wall
+    clock measurement and will never repeat; every other field is a property
+    of the input and the code.
+    """
+    monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
+    findings = [_finding(i, disposition="true_positive" if i % 4 == 0 else "false_positive") for i in range(20)]
+    tenant = str(uuid.uuid4())
+
+    async def _run() -> list[dict[str, Any]]:
+        runner = ReplayRunner(normalizer=_SplunkLikeNormalizer(), tenant_id=tenant)
+        run = await runner.run(findings)
+        rows = []
+        for decision in run.decisions:
+            payload = decision.as_dict()
+            payload.pop("latency_ms")
+            rows.append(payload)
+        return rows
+
+    assert await _run() == await _run()
+
+
+@pytest.mark.asyncio
+async def test_a_row_the_normalizer_cannot_map_is_recorded_not_guessed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
+
+    class _Refuses:
+        connector_id = "splunk"
+
+        def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+            if raw.get("event_id") == "ES-009":
+                raise NormalizerUnavailable("no envelope for this row")
+            return _SplunkLikeNormalizer().normalize(raw)
+
+    runner = ReplayRunner(normalizer=_Refuses(), tenant_id=str(uuid.uuid4()))
+    run = await runner.run([_finding(i) for i in range(10)])
+
+    refused = [d for d in run.decisions if d.finding_id == "ES-009"]
+    assert len(refused) == 1
+    assert refused[0].verdict is None
+    assert "no envelope for this row" in (refused[0].error or "")
+
+
+# --------------------------------------------------------------------------
+# Reaching the production normalizer over HTTP
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_connectors_service_supplies_the_normalized_envelopes() -> None:
+    rows = [dict(_NOTABLE), {**_NOTABLE, "event_id": "ES-2"}]
+    seen: dict[str, Any] = {}
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["token"] = request.headers.get("Authorization")
+        seen["tenant"] = request.headers.get("X-AiSOC-Tenant-ID")
+        return httpx.Response(
+            200,
+            json={
+                "connector_id": "splunk",
+                "row_count": 2,
+                "rows": [_SplunkLikeNormalizer().normalize(dict(row)) for row in rows],
+            },
+        )
+
+    transport = httpx.MockTransport(_handler)
+    original = httpx.AsyncClient
+
+    def _client(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        kwargs["transport"] = transport
+        return original(*args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(httpx, "AsyncClient", _client)
+        lookup = await fetch_normalized("splunk", rows, tenant_id="t-1", service_url="http://connectors:8003", service_token="secret")
+
+    assert seen["url"] == "http://connectors:8003/connectors/splunk/normalize"
+    assert seen["token"] == "Bearer secret"
+    assert seen["tenant"] == "t-1"
+    assert isinstance(lookup, PrenormalizedRows)
+    assert lookup.normalize(dict(rows[1]))["external_id"] == "ES-2"
+
+
+@pytest.mark.asyncio
+async def test_a_short_batch_is_refused_rather_than_partially_graded() -> None:
+    """Fewer envelopes than rows would silently drop findings from the window."""
+    rows = [dict(_NOTABLE), {**_NOTABLE, "event_id": "ES-2"}]
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"connector_id": "splunk", "row_count": 1, "rows": [{"source": "splunk"}]})
+
+    transport = httpx.MockTransport(_handler)
+    original = httpx.AsyncClient
+
+    def _client(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        kwargs["transport"] = transport
+        return original(*args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(httpx, "AsyncClient", _client)
+        with pytest.raises(NormalizerUnavailable, match="silently drop findings"):
+            await fetch_normalized("splunk", rows, tenant_id="t-1", service_token="secret")
+
+
+@pytest.mark.asyncio
+async def test_a_missing_service_token_is_named_rather_than_retried() -> None:
+    with pytest.raises(NormalizerUnavailable, match="AISOC_SERVICE_TOKEN"):
+        await fetch_normalized("splunk", [dict(_NOTABLE)], tenant_id="t-1", service_token="")
+
+
+def test_a_row_outside_the_batch_is_refused_never_substituted() -> None:
+    lookup = PrenormalizedRows({row_key(_NOTABLE): {"source": "splunk"}}, connector_id="splunk")
+
+    with pytest.raises(NormalizerUnavailable, match="will not substitute"):
+        lookup.normalize({"event_id": "never-sent"})

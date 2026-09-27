@@ -110,6 +110,36 @@ class ResourceConfigRequest(BaseModel):
     at_ts: str = PydField(default="", description="Optional ISO-8601 point-in-time.")
 
 
+#: A normalize request carrying more rows than this is refused rather than
+#: truncated. Truncation would return a short list the caller reads as "these
+#: are all of them", and replay would grade a window it did not ask for.
+MAX_NORMALIZE_ROWS = 2000
+
+
+class NormalizeRequest(BaseModel):
+    """Map raw vendor rows through a connector's production ``normalize()``.
+
+    Gap-closure Phase 1.2. Replay evaluation runs in ``services/agents`` and
+    has to normalize a customer's closed findings exactly as the live pipeline
+    does. It cannot import a connector: both services package their code as
+    top-level ``app``, so one process can hold one of them. The alternative to
+    this route is a second copy of every vendor's field mapping inside the
+    agents service, which is the one thing the replay work is not allowed to
+    do, because a mapping that drifts would grade the agent on inputs the
+    product never produces.
+
+    Carries no ``auth_config``, and that is a property rather than an
+    omission: the handler never builds a configured client, so this route
+    cannot make an outbound call to a customer's SIEM no matter what it is
+    sent.
+    """
+
+    rows: list[dict[str, Any]] = PydField(
+        ...,
+        description="Raw vendor rows, exactly as the vendor returned them.",
+    )
+
+
 class FederatedQueryRequest(BaseModel):
     """Run a unified query against a single connector instance.
 
@@ -422,6 +452,58 @@ async def get_resource_config(connector_id: str, payload: ResourceConfigRequest)
         ) from exc
 
     return {"connector_id": connector_id, "resource_id": payload.resource_id, "config": config}
+
+
+@router.post("/connectors/{connector_id}/normalize")
+async def normalize_rows(connector_id: str, payload: NormalizeRequest):
+    """Run a connector's own ``normalize()`` over raw vendor rows.
+
+    The instance is built with ``__new__`` and no ``__init__``. That is
+    deliberate on two counts. ``normalize`` is a pure mapping in every
+    connector in this tree, so a configured client is not needed; and not
+    building one means this route holds no credential and has nothing to make
+    an outbound call with.
+
+    A connector whose ``normalize`` does reach for instance state raises
+    ``AttributeError``, and that becomes a 422 naming the connector rather
+    than a partially-mapped row. A half-normalized envelope would flow into
+    replay looking like a real one and quietly change what the agent was
+    graded on.
+    """
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
+    if len(payload.rows) > MAX_NORMALIZE_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{len(payload.rows)} rows exceeds the {MAX_NORMALIZE_ROWS}-row limit for one normalize request",
+        )
+
+    connector = cls.__new__(cls)
+    normalized: list[dict[str, Any]] = []
+    for index, row in enumerate(payload.rows):
+        try:
+            normalized.append(cls.normalize(connector, dict(row)))
+        except AttributeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"connector '{connector_id}' cannot normalize without a configured instance ({exc}); "
+                    f"row {index} was not mapped and none are returned"
+                ),
+            ) from exc
+        except Exception as exc:
+            logger.exception("connector.normalize.runtime_error", connector_id=_safe_log_val(connector_id))
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"connector '{connector_id}' failed to normalize row {index}: {type(exc).__name__}",
+            ) from exc
+
+    return {
+        "connector_id": connector_id,
+        "row_count": len(normalized),
+        "rows": normalized,
+    }
 
 
 @router.post("/connectors/{connector_id}/query")

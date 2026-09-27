@@ -42,7 +42,13 @@ _INDICATOR_PATTERNS = (
     re.compile(r"\b[a-fA-F0-9]{64}\b"),  # SHA-256
     re.compile(r"\b[a-fA-F0-9]{40}\b"),  # SHA-1
     re.compile(r"\b[a-fA-F0-9]{32}\b"),  # MD5
-    re.compile(r"\b[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b"),  # domain-ish
+    # Domain-ish, including every label. The single-label form this used to
+    # carry matched only `evil.example` out of `evil.example.com`, which was
+    # invisible while the pattern was used solely as a yes/no test and became
+    # visible the moment `extract_checkable_indicators` started returning the
+    # matched text. Anything the narrower form matched this one still matches,
+    # so `is_checkable_indicator` answers exactly as before.
+    re.compile(r"\b[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\b"),
 )
 
 
@@ -52,6 +58,43 @@ def is_checkable_indicator(value: str) -> bool:
     if not text:
         return False
     return any(pattern.search(text) for pattern in _INDICATOR_PATTERNS)
+
+
+def extract_checkable_indicators(text: str) -> list[str]:
+    """Pull every checkable indicator out of free-text reasoning.
+
+    Replay evaluation (gap-closure Phase 1.3) grades what the production
+    triage path wrote, and that path emits prose: findings and a confidence
+    basis, not a structured ``cited_indicators`` list. So the indicators have
+    to be read back out of the sentences.
+
+    The pattern set is :data:`_INDICATOR_PATTERNS`, unchanged, which is what
+    makes this an extension of the existing hallucination measurement rather
+    than a second one. Anything this returns is by construction something
+    :func:`is_checkable_indicator` accepts, so both paths grade the same
+    vocabulary.
+
+    Over-counting is the safe direction and is the one this errs in: a phrase
+    shaped like a domain that is really an English abbreviation will be
+    checked against the evidence and, if absent, counted as hallucinated. That
+    makes the published rate a ceiling rather than a flattering floor, and the
+    per-decision list travels with the report so a disputed count can be
+    re-derived by a reader who disagrees.
+
+    Ordered by first appearance and de-duplicated, so the same address cited
+    four times is one indicator rather than four.
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+    for pattern in _INDICATOR_PATTERNS:
+        for match in pattern.finditer(text or ""):
+            value = match.group(0)
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(value)
+    return sorted(found, key=lambda v: ((text or "").find(v), v))
 
 
 def evidence_corpus(incident: Any) -> str:

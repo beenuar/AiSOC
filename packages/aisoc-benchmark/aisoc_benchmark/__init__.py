@@ -6,20 +6,45 @@ method, get graded on the same corpus by the same code.
 """
 
 from .adapter import AgentVerdict, BenchmarkIncident, HTTPAgent, SOCAgent
-from .metrics import BenchmarkResult, IncidentScore, aggregate, score_incident
+from .metrics import (
+    BenchmarkResult,
+    IncidentScore,
+    aggregate,
+    extract_checkable_indicators,
+    score_incident,
+)
+from .replay import (
+    MALICIOUS,
+    MIN_MALICIOUS_FOR_HEADLINE,
+    CalibrationBin,
+    ClassScore,
+    ReplayScore,
+    SegmentScore,
+    format_replay_report,
+    score_replay,
+)
 from .runner import format_report, load_corpus, run_benchmark
 
 __all__ = [
+    "MALICIOUS",
+    "MIN_MALICIOUS_FOR_HEADLINE",
     "AgentVerdict",
     "BenchmarkIncident",
     "BenchmarkResult",
+    "CalibrationBin",
+    "ClassScore",
     "HTTPAgent",
     "IncidentScore",
+    "ReplayScore",
     "SOCAgent",
+    "SegmentScore",
     "aggregate",
+    "extract_checkable_indicators",
     "format_report",
     "load_corpus",
     "run_benchmark",
     "score_incident",
+    "format_replay_report",
+    "score_replay",
 ]
 __version__ = "0.1.0"

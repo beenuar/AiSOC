@@ -239,6 +239,12 @@ class CostSummary:
     estimated_calls: int = 0
     unpriced_calls: int = 0
 
+    #: What the gateway resolved the aliases to, when it said. Empty means no
+    #: model call was placed on this run, which is the honest answer for the
+    #: deterministic tier and is a different fact from "an unknown model".
+    #: Replay records it per decision so a report names the model it graded.
+    resolved_models: tuple[str, ...] = ()
+
     @classmethod
     def from_tracker(cls, tracker: CostTracker) -> CostSummary:
         return cls(
@@ -247,6 +253,7 @@ class CostSummary:
             estimated_usd=tracker.estimated_cost_usd,
             estimated_calls=tracker.estimated_call_count,
             unpriced_calls=tracker.unpriced_call_count,
+            resolved_models=tracker.resolved_models,
         )
 
 
@@ -435,6 +442,18 @@ async def _flush_to_db(
 class CostTracker:
     run_id: str
     tenant_id: str
+
+    #: Whether :meth:`flush` may write to ``aisoc_run_costs``.
+    #:
+    #: Gap-closure Phase 1.2. Shadow-mode replay has to *measure* spend, because
+    #: tokens, latency and measured cost are fields the replay report records
+    #: per decision. It must not *persist* it: a replay of somebody's closed
+    #: history is not a run their cost dashboard should bill them for, and the
+    #: run ids are synthetic. Measurement and persistence were the same step
+    #: until this flag, so the only way to decline the row was to decline the
+    #: numbers with it.
+    persist: bool = True
+
     _records: list[CallRecord] = field(default_factory=list, init=False)
     _start: float = field(default_factory=time.monotonic, init=False)
 
@@ -534,6 +553,11 @@ class CostTracker:
     def total_latency_ms(self) -> float:
         return sum(r.latency_ms for r in self._records)
 
+    @property
+    def resolved_models(self) -> tuple[str, ...]:
+        """Models the gateway said it billed, sorted. Empty when no call was placed."""
+        return tuple(sorted({r.resolved_model for r in self._records if r.resolved_model}))
+
     def summary(self) -> dict:
         """The run's spend, with the provenance of every figure in it.
 
@@ -560,7 +584,9 @@ class CostTracker:
 
     async def flush(self) -> None:
         summary = self.summary()
-        logger.info("cost_telemetry.run_summary", **summary)
+        logger.info("cost_telemetry.run_summary", **summary, persisted=self.persist)
+        if not self.persist:
+            return
         await _flush_to_db(self.run_id, self.tenant_id, self._records)
 
 
