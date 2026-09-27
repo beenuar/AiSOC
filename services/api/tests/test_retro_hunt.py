@@ -47,7 +47,7 @@ from app.services.retro_hunt.sweep import (
     SweepOutcome,
     build_sweep_sql,
 )
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401  (referenced by the casts in _budget)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -206,7 +206,7 @@ async def _budget(row: _FakeSettings, *, now: datetime) -> bool:
     so the casts are stated once here rather than as sixteen ignores spread
     across eight call sites.
     """
-    return await _consume_budget(cast("AsyncSession", None), cast("RetroHuntSettings", row), now=now)
+    return await _consume_budget(cast(AsyncSession, None), cast(RetroHuntSettings, row), now=now)
 
 
 @pytest.mark.asyncio
