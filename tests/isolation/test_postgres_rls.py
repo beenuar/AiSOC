@@ -114,6 +114,18 @@ def _role_of(dsn: str) -> str:
 #: ``CHECK (node_type = ANY (ARRAY['user'::text, 'host'::text]))``.
 _CHECK_LITERAL = re.compile(r"'([^']+)'")
 
+#: Operators whose quoted literal is a *pattern*, not a permitted value.
+#:
+#: The literal-harvesting heuristic above reads "a single-column CHECK's
+#: quoted strings are the vocabulary that column accepts", which is true of
+#: ``IN (...)`` and ``= ANY (ARRAY[...])`` and false of a regex. Without this,
+#: ``CHECK (name ~ '^[a-z0-9][a-z0-9_-]{0,38}[a-z0-9]$')`` seeds the column
+#: with the pattern source, Postgres refuses the row, and the table drops out
+#: of the isolation replay reporting a constraint violation rather than a
+#: leak. Found by `aisoc_mcp_servers`, which is the first regex CHECK in this
+#: schema and will not be the last.
+_PATTERN_OPERATORS = re.compile(r"\s(?:~\*?|!~\*?|LIKE|ILIKE|SIMILAR TO)\s", re.IGNORECASE)
+
 
 def _literal_for(
     data_type: str,
@@ -215,6 +227,10 @@ async def _check_vocabularies(conn, table: str) -> dict[str, list[str]]:
     )
     out: dict[str, list[str]] = {}
     for row in rows:
+        # A pattern check names no permitted value, so its literal must not
+        # become one. The generated value has to satisfy the pattern instead.
+        if _PATTERN_OPERATORS.search(row["def"]):
+            continue
         literals = [m for m in _CHECK_LITERAL.findall(row["def"]) if not m.endswith("::text")]
         if literals:
             out.setdefault(row["col"], []).extend(literals)

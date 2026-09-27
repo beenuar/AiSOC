@@ -83,11 +83,26 @@ CREATE TABLE IF NOT EXISTS aisoc_mcp_servers (
 
     UNIQUE (tenant_id, name),
 
-    -- A row that names neither an address nor a command is a server nothing
-    -- can reach, and it would sit in the console looking configured.
+    -- Three properties, and the third is conditional on purpose.
+    --
+    -- A row may never carry both a URL and a command, and its target may
+    -- never contradict its declared transport: those are states nothing can
+    -- recover from, because there is no way to tell which field the operator
+    -- meant.
+    --
+    -- A row that names *neither* is only wrong once it is enabled. Disabled
+    -- is the default and is the half-finished draft an operator saves while
+    -- they go and find the URL; refusing that would make the console's own
+    -- create-then-configure flow impossible. An **enabled** row naming no
+    -- target is a server the agent would try to reach and cannot, so that is
+    -- refused here. The API refuses it earlier with a 422 naming the field,
+    -- and the agents service refuses it again at discovery with a sentence an
+    -- operator can act on; this is the floor under both.
     CONSTRAINT aisoc_mcp_servers_transport_target CHECK (
-        (transport = 'streamable_http' AND url IS NOT NULL AND command IS NULL)
-        OR (transport = 'stdio' AND command IS NOT NULL AND url IS NULL)
+        (url IS NULL OR command IS NULL)
+        AND (transport <> 'streamable_http' OR command IS NULL)
+        AND (transport <> 'stdio' OR url IS NULL)
+        AND (NOT enabled OR COALESCE(url, command) IS NOT NULL)
     )
 );
 

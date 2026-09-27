@@ -40,6 +40,7 @@ from app.services.mcp_registry import (
     update_server,
     validate_target,
 )
+from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects.postgresql import JSONB
@@ -64,11 +65,16 @@ def _uuid_sqlite(_type_, _compiler_, **_kw_):
     return "CHAR(36)"
 
 
-# Two real Fernet keys. An invalid one makes the vault fall back to an
-# ephemeral process-local key, which would let the "credential will not
-# decrypt" test below pass for the wrong reason.
-VAULT_KEY = "SDfTOx7W2NY-NS1n0fKuyp0lZt4ZmPYZcZzVBB2jQks="
-OTHER_VAULT_KEY = "dNxZySwE28aNrq5YiY-61OWmHOrneVEQ0rnqJTR8VhQ="
+# Two real Fernet keys, generated per run rather than written down.
+#
+# They have to be *valid*: an invalid key makes the vault fall back to an
+# ephemeral process-local one, which would let the "credential will not
+# decrypt" test below pass for the wrong reason. Generating them keeps a
+# secret-shaped literal out of the tree entirely, which is better than
+# explaining one to the secret scanner, and the two are distinct by
+# construction rather than by somebody checking.
+VAULT_KEY = Fernet.generate_key().decode()
+OTHER_VAULT_KEY = Fernet.generate_key().decode()
 
 
 @pytest.fixture(autouse=True)

@@ -319,8 +319,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not MCP_DIR.is_dir():
         print(
-            f"mcp-client-policy: FAILED: {MCP_DIR} does not exist, so nothing was checked. "
-            f"A gate that scans no files finds no violations.",
+            f"mcp-client-policy: FAILED: {MCP_DIR} does not exist, so nothing was checked. A gate that scans no files finds no violations.",
             file=sys.stderr,
         )
         return 1
