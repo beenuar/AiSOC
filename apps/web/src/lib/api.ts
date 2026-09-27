@@ -5921,3 +5921,120 @@ export const apiKeysApi = {
   revoke: (id: string) =>
     request<void>(`/api/v1/api-keys/${id}`, { method: 'DELETE' }),
 };
+
+// ─── Replay evaluation (gap-closure Phase 1.4) ───────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/evaluations.py`: measure triage
+// against a tenant's own analysts, on their own closed findings.
+//
+// Every field the console needs to show sample sizes beside the headline is
+// on the summary, not buried in `score`. That is deliberate on both sides: a
+// headline accuracy rendered without the count behind it is the single most
+// misleading thing this surface could print, so the two travel together
+// through the wire shape rather than by a convention the UI has to remember.
+//
+// `headline_accuracy` is `null` when the window held too few malicious cases
+// for a headline to mean anything, and `headline_withheld_reason` carries the
+// sentence explaining that. Null is not zero: a zero in an accuracy column
+// says the agent got every answer wrong, which is a different fact with a
+// different remedy.
+
+export type ReplayEvaluationStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export interface ReplayEvaluationSummary {
+  id: string;
+  status: ReplayEvaluationStatus;
+  error: string | null;
+  connector_id: string;
+  vendor: string;
+  window_start: string;
+  window_end: string;
+  train_fraction: number;
+  bootstrap_seed: number;
+  bootstrap_resamples: number;
+  findings_read: number;
+  findings_labelled: number;
+  decisions_recorded: number;
+  graded: number;
+  malicious_support: number;
+  headline_accuracy: number | null;
+  headline_withheld_reason: string | null;
+  malicious_recall: number | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  is_terminal: boolean;
+}
+
+export interface ReplayEvaluationDetail extends ReplayEvaluationSummary {
+  /** The full `ReplayScore.as_dict()`. */
+  score: Record<string, unknown> | null;
+  /** Split point, frozen-context provenance, attempted writes, envelope gaps. */
+  method: Record<string, unknown> | null;
+  /** The artefact stored when the run completed, not a re-render. */
+  report_markdown: string | null;
+}
+
+export interface ReplayableConnectorInfo {
+  connector_type: string;
+  vendor: string;
+  label: string;
+}
+
+export interface ReplayCapabilities {
+  connectors: ReplayableConnectorInfo[];
+  default_window_days: number;
+  default_train_fraction: number;
+  default_bootstrap_seed: number;
+  default_bootstrap_resamples: number;
+  /** Below this many malicious cases no headline accuracy is printed. */
+  min_malicious_for_headline: number;
+  max_findings: number;
+}
+
+export interface StartReplayInput {
+  connector_id: string;
+  since?: string;
+  until?: string;
+  train_fraction?: number;
+  limit?: number;
+}
+
+export type ReplayExportFormat = 'markdown' | 'json' | 'pdf';
+
+export const evaluationsApi = {
+  capabilities: () =>
+    request<ReplayCapabilities>('/api/v1/evaluations/replay/capabilities'),
+
+  list: (limit = 50) =>
+    request<ReplayEvaluationSummary[]>('/api/v1/evaluations/replay', {
+      params: { limit },
+    }),
+
+  get: (id: string) =>
+    request<ReplayEvaluationDetail>(`/api/v1/evaluations/replay/${id}`),
+
+  decisions: (id: string, limit = 2000) =>
+    request<Array<Record<string, unknown>>>(
+      `/api/v1/evaluations/replay/${id}/decisions`,
+      { params: { limit } },
+    ),
+
+  start: (data: StartReplayInput) =>
+    request<ReplayEvaluationSummary>('/api/v1/evaluations/replay', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Where a download points. Built rather than fetched because the browser
+   * does the download, and the route already sets `Content-Disposition`.
+   *
+   * `exclude_latency` is offered on every format: the two wall-clock figures
+   * are the only part of the report that does not reproduce between runs, so
+   * an operator diffing two exports wants them gone.
+   */
+  exportUrl: (id: string, format: ReplayExportFormat, excludeLatency = false): string =>
+    `${API_BASE}/api/v1/evaluations/replay/${id}/export` +
+    `?format=${format}&exclude_latency=${excludeLatency ? 'true' : 'false'}`,
+};

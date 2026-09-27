@@ -240,6 +240,38 @@ must not be recorded as done until the fourth exists. Note also that a true
 end-to-end run spans three services, so its home is an integration test with
 containers rather than any service's unit suite.
 
+### D9. The route Phase 1.2 added could never have been reached, and only the end-to-end run could tell
+
+D8 predicted that three proven links are not the same claim as one end-to-end
+run. This is what the fourth link found the first time it ran.
+
+`POST /connectors/{id}/normalize` shipped in 1.2 as the resolution to D6: both
+services package their code as top-level `app`, so the agents service reaches
+the production connector mapping over HTTP rather than copying it. The client
+built its URL as `{CONNECTORS_SERVICE_URL}/connectors/{id}/normalize`. The
+connectors service mounts that router with `prefix="/api/v1"`, and the API's
+own caller in `endpoints/connectors.py` appends the same segment for exactly
+that reason. So every normalize request the agents service could have made
+would have returned 404, and no replay could have run on any deployment.
+
+Three suites were green over it. The unit test covering `fetch_normalized`
+asserted the URL the code produced rather than the URL the service serves,
+which is the one-directional shape this repository keeps finding: it compared
+the producer against a copy of itself and printed OK. Nothing else called the
+function, so nothing else could notice.
+
+**Resolution:** the prefix is a named constant with the reason recorded beside
+it, and the test now parses `services/connectors/app/main.py` and
+`app/api/router.py` with `ast`, derives what that service actually serves, and
+asserts the requested URL is in that set. It was proven against the pre-fix
+value: with the prefix removed it fails naming both URLs. This service cannot
+import that one, so reading the other tree's source is the only way to compare
+in the direction that drifts.
+
+The durable lesson is D8's, sharpened: an end-to-end test is not a slower
+version of the unit tests underneath it. It is the only thing that exercises
+the joins, and the joins are where a caller-less mechanism hides.
+
 ---
 
 ## Phase 1: Replay evaluation on a customer's own history
@@ -247,15 +279,38 @@ containers rather than any service's unit suite.
 - [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [x] **1.2 Replay runner.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `services/agents/app/replay/` holds the split, the shadow sinks and the runner; it holds no triage. Persistence is injected through `app/workers/triage_persistence.py`, whose default is `LiveTriageWriter` doing exactly what the worker did inline, so the measured path is the production one rather than a copy. `CostTracker` gained a `persist` flag so a replay measures spend without billing it. Normalisation reaches the real connector through a new `POST /connectors/{id}/normalize`, because both services package their code as top-level `app` and one process can hold one of them. Verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency are all recorded per decision. See D6 and D7 below for the two places the plan and the tree disagreed.
 - [x] **1.3 Scoring.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `packages/aisoc-benchmark/aisoc_benchmark/replay.py` reuses the existing `_INDICATOR_PATTERNS` for hallucination so there is one definition, and adds per-class precision and recall with malicious recall first, a confusion matrix, abstention rate, reliability bins with an expected calibration error, per-rule and per-source breakdowns, and seeded bootstrap intervals. Below 30 malicious cases the headline accuracy is withheld with the count and the reason. A rate with no denominator reads "not measured".
-- [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export. Markdown and JSON rendering already ship with 1.3 (`format_replay_report`, `ReplayScore.as_dict`). The remaining work is scoped in D8 below, because the shape it has to take is not the obvious one and rediscovering that would cost a session.
-- [~] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position. What remains is the documentation of the 1.4 surfaces once they exist.
+- [x] **1.4 Surfaces.** Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). Built to the shape D8 records: the API orchestrates, driving two new internal routes (`POST /replay/history` on actions, `POST /replay/run` on agents) and scoring in process through a byte-identical mirror of `packages/aisoc-benchmark` under `services/api/app/_vendor/`, since the API image's build context excludes `packages/`. `aisoc replay` drives the API and renders nothing of its own; progress goes to stderr so `aisoc replay ... > report.md` is the report and nothing else. The console page shows every rate beside the count it was computed over, and prints the withheld-headline sentence in place of a number rather than a dash or a zero. Export reuses `format_replay_report` and `ReplayScore.as_dict` from 1.3 and serves the stored artefact rather than re-rendering it; the PDF is that same Markdown through WeasyPrint, and answers 503 naming the native libraries when they are absent rather than serving an empty file. Migration **065**, not the 064 D8 names: `064_sandbox_upload_policy.sql` landed from Phase 11 while this was in flight, which is exactly why D8 says to check the directory. See D9 for the defect the end-to-end run found.
+- [x] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position, and now the three surfaces as well: a "Running one" section for the console, the CLI and the API, and a "Reproducibility, stated precisely" section that names what is excluded and why. Its "what exists today" note no longer hedges, because nothing on the page is unbuilt. Three more claim-to-gate rows added for 1.4, matrix 156 rows to 159, GATED 148 to 151.
 
 **Done when:** the CLI, run against a mocked Splunk ES holding 200 recorded
 closed notables, produces a report that reproduces byte for byte on a second run
 with the deterministic model path.
 
-**Not yet met.** Three of its four links are proven and the fourth is not built;
-the decomposition and what each link rests on are in D8 above.
+**Met.** `tests/e2e/test_replay_cli_end_to_end.py` is the fourth link, and it
+runs exactly that: a mock Splunk ES serving 200 closed notables over the two
+REST endpoints `SplunkClient.run_search` actually calls, four services started
+from the working tree with uvicorn, a real administrator created by the
+deployment's own bootstrap script and signed in through the real login route
+(the dev-mode bypass would have skipped the `connectors:write` and
+`reports:read` checks these routes declare), and the CLI invoked twice. The two
+reports are identical as bytes. Measured on this worktree: 200 findings read,
+200 carrying an analyst label, 60 replayed and graded, 40 malicious, headline
+printed rather than withheld.
+
+Two things stop that from being a vacuous pass. A second assertion fetches both
+reports **without** the latency exclusion and fails if more than that one line
+differs, so a stripped artefact cannot hide a field that quietly stopped
+reproducing. And further assertions require the report to carry the 200 findings
+read, the 60-finding graded window and a printed headline, because a withheld
+headline reproduces just as reliably while printing far fewer numbers, so a run
+that was accidentally thin would weaken the proof without failing it.
+
+Wall-clock latency is the only excluded field, and the exclusion lives beside
+the renderer that emits the line rather than in the CLI, so the producer and the
+remover cannot drift. The claim is therefore "byte for byte apart from the two
+latency figures, over a pinned window, on the deterministic model path", and
+each of those qualifiers is load-bearing: an unpinned window is a different
+window on a second run, and a hosted model may legitimately differ.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 

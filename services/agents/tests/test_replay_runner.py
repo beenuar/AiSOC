@@ -7,11 +7,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
-from app.replay.connector_normalizer import PrenormalizedRows, fetch_normalized, row_key
+from app.replay.connector_normalizer import (
+    _API_PREFIX,
+    PrenormalizedRows,
+    fetch_normalized,
+    row_key,
+)
 from app.replay.findings import HistoricalFinding
 from app.replay.normalize import NormalizerUnavailable, to_fused_envelope
 from app.replay.runner import DEFAULT_TRAIN_FRACTION, ReplayRunner, split_by_time
@@ -263,7 +269,13 @@ async def test_the_connectors_service_supplies_the_normalized_envelopes() -> Non
         patch.setattr(httpx, "AsyncClient", _client)
         lookup = await fetch_normalized("splunk", rows, tenant_id="t-1", service_url="http://connectors:8003", service_token="secret")
 
-    assert seen["url"] == "http://connectors:8003/connectors/splunk/normalize"
+    # The connectors service mounts its router under /api/v1. This asserted
+    # the bare path when the route shipped, which codified the defect rather
+    # than catching it: nothing called `fetch_normalized` until Phase 1.4, so
+    # a 404 on every request was invisible.
+    # `test_the_normalize_url_matches_where_the_route_is_mounted` below reads
+    # the mount out of the connectors service instead of restating it here.
+    assert seen["url"] == "http://connectors:8003/api/v1/connectors/splunk/normalize"
     assert seen["token"] == "Bearer secret"
     assert seen["tenant"] == "t-1"
     assert isinstance(lookup, PrenormalizedRows)
@@ -302,3 +314,48 @@ def test_a_row_outside_the_batch_is_refused_never_substituted() -> None:
 
     with pytest.raises(NormalizerUnavailable, match="will not substitute"):
         lookup.normalize({"event_id": "never-sent"})
+
+
+def test_the_normalize_url_matches_where_the_route_is_mounted() -> None:
+    """Both directions, against the connectors service's own source.
+
+    Gap-closure Phase 1.4. This service cannot import ``services/connectors``
+    (both package their code as top-level ``app``), so the mount prefix and
+    the route path are read out of that tree with ``ast`` rather than
+    restated here. A test that restates them is a test that agrees with
+    itself: the previous one asserted a URL missing the ``/api/v1`` segment
+    and passed for as long as nothing called the function.
+    """
+    import ast
+
+    connectors = Path(__file__).resolve().parents[3] / "services" / "connectors" / "app"
+
+    main = ast.parse((connectors / "main.py").read_text())
+    prefixes = {
+        keyword.value.value
+        for node in ast.walk(main)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "include_router"
+        for keyword in node.keywords
+        if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant)
+    }
+    assert prefixes, "could not read any router prefix out of the connectors service"
+
+    router = ast.parse((connectors / "api" / "router.py").read_text())
+    routes = {
+        decorator.args[0].value
+        for node in ast.walk(router)
+        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef)
+        for decorator in node.decorator_list
+        if isinstance(decorator, ast.Call)
+        and isinstance(decorator.func, ast.Attribute)
+        and decorator.func.attr in {"post", "get"}
+        and decorator.args
+        and isinstance(decorator.args[0], ast.Constant)
+    }
+    normalize_route = next(r for r in routes if r.endswith("/normalize"))
+
+    # What `fetch_normalized` would actually request, built the same way it
+    # builds it, against what the service actually serves.
+    served = {f"{prefix}{normalize_route}".replace("{connector_id}", "splunk") for prefix in prefixes}
+    requested = f"{_API_PREFIX}/connectors/splunk/normalize"
+    assert requested in served, f"{requested} is not served; the service mounts {sorted(served)}"

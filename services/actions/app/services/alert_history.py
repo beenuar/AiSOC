@@ -126,6 +126,35 @@ class ClosedFinding:
         """Whether this row may contribute to accuracy."""
         return self.disposition != UNLABELED
 
+    def as_dict(self) -> dict[str, Any]:
+        """Serialise for the boundary into ``services/agents``.
+
+        The key names are exactly the field names, because the replay side
+        rebuilds this row with ``HistoricalFinding.from_mapping`` and
+        ``scripts/check_replay_contract_parity.py`` compares the two field
+        sets in both directions. A hand-written key that drifted from a field
+        name would land a value in no column at all, and the receiving side
+        would default it rather than fail.
+
+        ``closed_at`` goes out as ISO-8601 rather than an epoch, because the
+        receiving parser refuses an unparseable close time instead of
+        defaulting it, and a naive epoch would have to guess a timezone to be
+        read back.
+        """
+        return {
+            "vendor": self.vendor,
+            "finding_id": self.finding_id,
+            "title": self.title,
+            "disposition": self.disposition,
+            "vendor_disposition": self.vendor_disposition,
+            "closed_at": self.closed_at.isoformat(),
+            "closed_by": self.closed_by,
+            "reason": self.reason,
+            "rule_id": self.rule_id,
+            "severity": self.severity,
+            "raw": dict(self.raw),
+        }
+
 
 def _coerce_time(value: Any) -> datetime:
     """Best-effort vendor timestamp to an aware UTC datetime.

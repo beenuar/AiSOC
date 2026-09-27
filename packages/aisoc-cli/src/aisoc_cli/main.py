@@ -13,6 +13,7 @@ Commands:
   aisoc mcp serve [--transport]     Launch the MCP server for IDE assistants
   aisoc mcp install --host <h>      Wire AiSOC into Claude / Cursor / Continue
   aisoc submit <file>               POST an alert/event JSON payload to the AiSOC API
+  aisoc replay --connector-id <id>  Measure triage against your own closed findings
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from importlib import resources
 from pathlib import Path
 from string import Template
@@ -41,6 +43,15 @@ from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
+
+#: Progress and diagnostics go here, never to stdout.
+#:
+#: ``aisoc replay`` writes the report itself to stdout when no ``--output`` is
+#: given, so ``aisoc replay ... > report.md`` has to produce the report and
+#: nothing else. A progress line on stdout would land in the middle of the
+#: file, and this phase's acceptance bar is a report that reproduces byte for
+#: byte.
+err_console = Console(stderr=True)
 
 PLUGIN_TYPES = ("enricher", "connector", "responder", "detection", "widget")
 DEFAULT_AUTHOR = "Your Name <you@example.com>"
@@ -976,6 +987,385 @@ def submit(
             title="[bold green]alert created[/bold green]",
         )
     )
+
+
+# ── replay command ───────────────────────────────────────────────────────────
+#
+# `aisoc replay` measures AiSOC triage against a tenant's own analysts, on
+# their own closed findings, before anyone is asked to trust it.
+#
+# The CLI drives the API and does no evaluation of its own. That is forced
+# rather than chosen: the history readers live in `services/actions`, triage in
+# `services/agents` and `normalize()` in `services/connectors`, and all three
+# package their code as top-level `app`, so one Python process can hold exactly
+# one of them. The API is the service that already orchestrates across all
+# three, holds the vault and owns the tenant session.
+#
+#     POST {api_url}/api/v1/evaluations/replay      -> 202 with an id
+#     GET  {api_url}/api/v1/evaluations/replay/{id} -> poll to a terminal state
+#     GET  .../export?format=markdown|json|pdf      -> the stored artefact
+#
+# Determinism, which is this phase's acceptance bar
+# -------------------------------------------------
+# Two runs over one history must produce the same bytes. Three things here
+# could break that and each is handled rather than hoped about:
+#
+#   * the window. `--since` / `--until` are passed through exactly as given,
+#     and when they are omitted the API dates the window from now — which is a
+#     different window on a second run, and therefore a different report. The
+#     help text says so rather than leaving it to be discovered.
+#   * the artefact. Nothing here renders anything. The file written is the
+#     bytes the API returned, which are the bytes stored when the run
+#     completed.
+#   * wall-clock latency. `--exclude-latency` asks the API for the report with
+#     its two latency figures replaced by a note. Everything else is a
+#     property of the input and the code.
+
+_DEFAULT_POLL_SECONDS = 3.0
+_DEFAULT_TIMEOUT_SECONDS = 3600.0
+
+#: Statuses the API will never move a run out of.
+_TERMINAL = frozenset({"completed", "failed"})
+
+
+def _replay_headers(api_key: str | None) -> dict[str, str]:
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def _api_error(response: httpx.Response) -> str:
+    """The server's own reason, or the status when it did not give one."""
+    try:
+        body = response.json()
+    except ValueError:
+        return f"HTTP {response.status_code}: {response.text[:300]}"
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return f"HTTP {response.status_code}: {detail or response.text[:300]}"
+
+
+def _poll_until_terminal(
+    client: httpx.Client,
+    url: str,
+    headers: dict[str, str],
+    *,
+    poll_seconds: float,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    """Poll one evaluation until it stops moving, or give up and say so.
+
+    A timeout here is reported as a timeout, never as a failed evaluation:
+    the run is still going server-side and the id is printed so it can be
+    collected later.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last_status = ""
+    while True:
+        response = client.get(url, headers=headers)
+        if response.status_code >= 400:
+            raise click.ClickException(f"Could not read the evaluation: {_api_error(response)}")
+        body = response.json()
+        status = str(body.get("status") or "")
+        if status != last_status:
+            err_console.print(f"[dim]status:[/dim] {status}")
+            last_status = status
+        if status in _TERMINAL:
+            return body
+        if time.monotonic() >= deadline:
+            raise click.ClickException(
+                f"Timed out after {timeout_seconds:.0f}s with the run still '{status}'. "
+                f"It is still running on the server; collect it with "
+                f"`aisoc replay --collect {body.get('id')}`."
+            )
+        time.sleep(poll_seconds)
+
+
+def _write_report(
+    client: httpx.Client,
+    base_url: str,
+    evaluation_id: str,
+    headers: dict[str, str],
+    *,
+    export_format: str,
+    exclude_latency: bool,
+    output: Path | None,
+) -> None:
+    """Fetch the stored artefact and write it out, unmodified.
+
+    Nothing is rendered, reformatted or annotated on the way through. The
+    bytes written are the bytes the API returned.
+    """
+    response = client.get(
+        f"{base_url}/api/v1/evaluations/replay/{evaluation_id}/export",
+        headers=headers,
+        params={"format": export_format, "exclude_latency": str(exclude_latency).lower()},
+    )
+    if response.status_code >= 400:
+        raise click.ClickException(f"Export failed: {_api_error(response)}")
+
+    if output is not None:
+        output.write_bytes(response.content)
+        err_console.print(f"[green]report written[/green] {output} ({len(response.content)} bytes)")
+        return
+
+    if export_format == "pdf":
+        raise click.ClickException("PDF is binary; pass --output to write it to a file.")
+    # stdout, so `aisoc replay ... > report.md` produces the report and
+    # nothing else. Every progress line above went to stderr.
+    sys.stdout.write(response.text)
+
+
+def _print_summary(body: dict[str, Any]) -> None:
+    """The sample sizes beside the headline, on stderr.
+
+    Both are shown together on purpose. A headline accuracy with no sample
+    size behind it is the single most misleading thing this surface could
+    print, and a withheld headline has to say why it was withheld rather
+    than showing a blank.
+    """
+    headline = body.get("headline_accuracy")
+    withheld = body.get("headline_withheld_reason")
+    if headline is None:
+        headline_line = "[yellow]withheld[/yellow]" + (f"\n  {withheld}" if withheld else "")
+    else:
+        headline_line = (
+            f"{float(headline) * 100:.1f}% over {body.get('graded', 0)} answered decisions"
+        )
+
+    recall = body.get("malicious_recall")
+    recall_line = "not measured" if recall is None else f"{float(recall) * 100:.1f}%"
+
+    err_console.print(
+        Panel(
+            f"[bold]evaluation:[/bold] {body.get('id')}\n"
+            f"[bold]source:[/bold] {body.get('vendor')} ({body.get('connector_id')})\n"
+            f"[bold]window:[/bold] {body.get('window_start')} to {body.get('window_end')}\n"
+            f"[bold]findings read:[/bold] {body.get('findings_read', 0)} "
+            f"({body.get('findings_labelled', 0)} carried an analyst label)\n"
+            f"[bold]replayed:[/bold] {body.get('decisions_recorded', 0)}, "
+            f"answered {body.get('graded', 0)}, malicious cases {body.get('malicious_support', 0)}\n"
+            f"[bold]malicious recall:[/bold] {recall_line}\n"
+            f"[bold]headline accuracy:[/bold] {headline_line}",
+            title="[bold green]replay evaluation[/bold green]",
+        )
+    )
+
+
+@cli.command()
+@click.option(
+    "--api-url",
+    envvar="AISOC_API_URL",
+    default=_DEFAULT_API_URL,
+    show_default=True,
+    help="Base URL for the AiSOC API.",
+)
+@click.option(
+    "--api-key",
+    envvar="AISOC_API_KEY",
+    default=None,
+    help="AiSOC bearer token. The tenant is derived from it; there is no tenant flag.",
+)
+@click.option(
+    "--connector-id",
+    default=None,
+    help="UUID of the saved connector whose SIEM history to replay.",
+)
+@click.option(
+    "--collect",
+    "collect_id",
+    default=None,
+    help="Skip starting a run and collect an existing evaluation by id.",
+)
+@click.option(
+    "--since",
+    default=None,
+    help=(
+        "Window start, ISO-8601. Omitting it dates the window from now, which means a second "
+        "run covers a different window and produces a different report. Pin both ends to compare runs."
+    ),
+)
+@click.option("--until", default=None, help="Window end, ISO-8601. See --since.")
+@click.option(
+    "--train-fraction",
+    type=float,
+    default=0.7,
+    show_default=True,
+    help="Time split. The earlier fraction fixes the frozen context; only the later period is graded.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=1000,
+    show_default=True,
+    help="Maximum findings to read from the window.",
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=None,
+    help="Bootstrap seed. Defaults to the platform's, and travels into the report either way.",
+)
+@click.option(
+    "--resamples",
+    type=int,
+    default=None,
+    help="Bootstrap resample count. Defaults to the platform's, and travels into the report.",
+)
+@click.option(
+    "--format",
+    "export_format",
+    type=click.Choice(["markdown", "json", "pdf"]),
+    default="markdown",
+    show_default=True,
+    help="Export format. All three come from the artefact stored when the run completed.",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+    default=None,
+    help="Write the report here. Without it, markdown and JSON go to stdout.",
+)
+@click.option(
+    "--exclude-latency",
+    is_flag=True,
+    default=False,
+    help=(
+        "Replace the two wall-clock latency figures with a note, so two runs over one pinned "
+        "window are byte-identical. Latency measures the host and never reproduces."
+    ),
+)
+@click.option(
+    "--wait/--no-wait",
+    default=True,
+    show_default=True,
+    help="Poll to completion. With --no-wait the id is printed and the run continues server-side.",
+)
+@click.option(
+    "--poll-interval",
+    type=float,
+    default=_DEFAULT_POLL_SECONDS,
+    show_default=True,
+    help="Seconds between polls.",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=_DEFAULT_TIMEOUT_SECONDS,
+    show_default=True,
+    help="Give up waiting after this many seconds. The run continues server-side.",
+)
+def replay(
+    api_url: str,
+    api_key: str | None,
+    connector_id: str | None,
+    collect_id: str | None,
+    since: str | None,
+    until: str | None,
+    train_fraction: float,
+    limit: int,
+    seed: int | None,
+    resamples: int | None,
+    export_format: str,
+    output: Path | None,
+    exclude_latency: bool,
+    wait: bool,
+    poll_interval: float,
+    timeout: float,
+) -> None:
+    """Measure AiSOC triage against your own analysts' past decisions.
+
+    Reads the findings your analysts already closed in a window, replays them
+    through the same triage path production runs (writing nothing, reading a
+    frozen world), and grades the result against the labels they chose.
+
+    The report leads with recall on malicious, prints every rate beside the
+    count it was computed over, and withholds a headline accuracy when the
+    window holds too few malicious cases for one to mean anything.
+
+    The tenant comes from the credential. There is no tenant flag, because a
+    flag would be a value you chose that nothing checked.
+    """
+    if not collect_id and not connector_id:
+        raise click.ClickException(
+            "Pass --connector-id to start a run, or --collect <id> to fetch one."
+        )
+
+    base_url = api_url.rstrip("/")
+    headers = _replay_headers(api_key)
+
+    with httpx.Client(timeout=60.0) as client:
+        if collect_id:
+            evaluation_id = collect_id
+            err_console.print(f"[dim]collecting[/dim] {evaluation_id}")
+        else:
+            payload: dict[str, Any] = {
+                "connector_id": connector_id,
+                "train_fraction": train_fraction,
+                "limit": limit,
+            }
+            # Only sent when given. An omitted bound lets the API date the
+            # window, and sending a locally-computed "now" instead would put
+            # the CLI's clock into a report the API is responsible for.
+            if since:
+                payload["since"] = since
+            if until:
+                payload["until"] = until
+            if seed is not None:
+                payload["bootstrap_seed"] = seed
+            if resamples is not None:
+                payload["bootstrap_resamples"] = resamples
+
+            try:
+                response = client.post(
+                    f"{base_url}/api/v1/evaluations/replay",
+                    headers=headers,
+                    json=payload,
+                )
+            except httpx.HTTPError as exc:
+                raise click.ClickException(
+                    f"AiSOC API unreachable at {base_url}: {exc}\nIs the stack running? Try `aisoc serve`."
+                ) from exc
+            if response.status_code >= 400:
+                raise click.ClickException(
+                    f"Could not start the evaluation: {_api_error(response)}"
+                )
+            started = response.json()
+            evaluation_id = str(started.get("id"))
+            err_console.print(f"[green]queued[/green] {evaluation_id}")
+
+            if not wait:
+                err_console.print(
+                    f"[dim]not waiting. Collect it with:[/dim] aisoc replay --collect {evaluation_id}"
+                )
+                return
+
+        body = _poll_until_terminal(
+            client,
+            f"{base_url}/api/v1/evaluations/replay/{evaluation_id}",
+            headers,
+            poll_seconds=poll_interval,
+            timeout_seconds=timeout,
+        )
+
+        if body.get("status") == "failed":
+            # The server's reason, verbatim. A replay that could not read a
+            # window has measured nothing, and saying so is the useful answer.
+            raise click.ClickException(
+                f"The evaluation failed: {body.get('error') or 'no reason recorded'}"
+            )
+
+        _print_summary(body)
+        _write_report(
+            client,
+            base_url,
+            evaluation_id,
+            headers,
+            export_format=export_format,
+            exclude_latency=exclude_latency,
+            output=output,
+        )
 
 
 if __name__ == "__main__":

@@ -14,10 +14,10 @@ Replay evaluation answers the question that actually matters: **how does AiSOC
 triage compare with what your analysts already decided, on your data?**
 
 :::note What exists today
-This page documents the **history readers**, the **replay runner** and the
-**scoring report**. The `aisoc replay` command and the console page land next
-and this page grows with them. Nothing here describes a capability that is not
-in the tree.
+Everything on this page is in the tree and reachable: the history readers, the
+replay runner, the scoring report, the `aisoc replay` command, the API job and
+the **Evaluate on your history** console page. Nothing here describes a
+capability that does not exist.
 :::
 
 ## The one rule worth reading first
@@ -222,6 +222,115 @@ fused confidence score, the deterministic narrative and entity resolution.
 Every report states this in its method section. Replay measures triage on a
 single normalized finding, not the whole pipeline.
 
+## Running one
+
+There are three ways in, and all three drive the same job. The API
+orchestrates it, because no single process can hold the three services
+involved: `services/actions` owns the SIEM credentials and the readers,
+`services/agents` owns triage, and `services/connectors` owns `normalize()`.
+All three package their code as a top-level `app`, so a process that imported
+two of them would get one of them.
+
+### The console
+
+**Evaluate on your history**, in the left-hand navigation. Pick a connected
+source and a window, and the page shows the report when the run finishes.
+
+Two things about how it presents a result are deliberate.
+
+**No number appears without the sample size behind it.** Recall on malicious
+renders with the count of malicious cases it was computed over, the headline
+accuracy with the count of answered decisions, and the history read with how
+many of those findings carried an analyst label at all. A precision of 1.00
+over two predictions is not a precision of 1.00 over two hundred, and a panel
+that prints only the ratio has thrown that away.
+
+**When the window is too thin for a headline, the page prints the reason
+rather than a number.** Below the floor of malicious cases the headline card
+reads "withheld" and the sentence explaining why is rendered underneath: how
+many malicious cases the window held, how many are required, and why a figure
+computed over fewer would describe the queue rather than the agent. It is not
+a dash, and it is not a zero. Zero would say the agent got every answer wrong,
+which is a different fact with a different remedy.
+
+The method block sits beside the report, not behind a tab: the split point,
+the frozen-context counts, the bootstrap seed and resample count, how many
+writes shadow mode intercepted, and the list of enrichments a replayed finding
+does not carry.
+
+### The CLI
+
+```bash
+aisoc replay --connector-id <uuid> --output report.md
+```
+
+The tenant comes from the credential (`--api-key`, or `AISOC_API_KEY`). There
+is no tenant flag, because a flag would be a value you chose that nothing
+checked.
+
+Useful options:
+
+| Option | What it does |
+|---|---|
+| `--since` / `--until` | Pin the window. Omitting them dates it from now, so a second run covers a different window and produces a different report. |
+| `--format markdown\|json\|pdf` | Which export to write. All three come from the artefact stored when the run completed. |
+| `--output PATH` | Where to write it. Without it, markdown and JSON go to stdout and every progress line goes to stderr, so `aisoc replay ... > report.md` produces the report and nothing else. |
+| `--exclude-latency` | Replace the two wall-clock latency figures with a note. See below. |
+| `--no-wait` / `--collect <id>` | Queue a run and collect it later. |
+| `--seed` / `--resamples` | Change the bootstrap. Both travel into the report either way. |
+
+### The API
+
+```
+POST /api/v1/evaluations/replay        -> 202 with an id
+GET  /api/v1/evaluations/replay/{id}   -> poll to `completed` or `failed`
+GET  /api/v1/evaluations/replay/{id}/export?format=markdown|json|pdf
+GET  /api/v1/evaluations/replay/{id}/decisions
+```
+
+Starting a run needs `connectors:write`, the same bar as testing a connector,
+because it does the same kind of thing: an outbound call to your SIEM with
+stored credentials. Reading a report needs `reports:read`.
+
+Results live in two tenant-scoped tables with row-level-security policies. The
+report is stored as the renderer produced it and served back unchanged, rather
+than re-rendered on each request: a report re-rendered later by a newer
+renderer is a different artefact from the one you read. The per-decision rows
+are kept separately, and carry the evidence triage was given, so a number you
+disagree with can be re-derived rather than re-argued.
+
+## Reproducibility, stated precisely
+
+**A report reproduces byte for byte between two runs over the same pinned
+window, apart from the two wall-clock latency figures.**
+
+Everything else is a property of the input and the code: the bootstrap is
+seeded and records its seed, the split is a total order over `(closed_at,
+finding_id)`, and the renderer emits no timestamp and iterates nothing
+unsorted. Mean and p95 latency measure the machine the replay ran on and will
+differ between two runs on one host, let alone two.
+
+`--exclude-latency` on the CLI, and `exclude_latency=true` on the export
+route, replace those two figures with a note. That is a filter over the stored
+artefact, not a second rendering, and the function that removes the line lives
+beside the one that emits it so the two cannot drift.
+
+Two caveats worth stating plainly:
+
+- **Pin the window.** An omitted `--since` or `--until` dates the window from
+  now, which is a different window on a second run and therefore a different
+  report for a reason that has nothing to do with determinism.
+- **Reproducibility is not accuracy.** A deterministic model path reproduces
+  because it is deterministic. Pointed at a hosted model, two runs may differ,
+  and that is a property of the model rather than of this pipeline.
+
+`tests/e2e/test_replay_cli_end_to_end.py` is what holds this claim up. It runs
+the CLI twice against a mocked Splunk ES holding 200 recorded closed notables,
+through the API, the actions service, the connectors service and the agents
+service, and compares the bytes. It also fetches both reports *without* the
+exclusion and asserts that latency is the only line that differs, so the
+comparison cannot pass on a stripped artefact that hid something else.
+
 ## Privacy: where your data goes
 
 Reading your history happens inside your deployment, against credentials you
@@ -256,6 +365,11 @@ through the same triage path production uses.
   escalation is the only stage of this path that calls tools. The field is
   recorded rather than omitted so a future change that gives triage a tool
   shows up as a number moving off zero.
+- **PDF export needs a native stack.** WeasyPrint's Pango, Cairo and GLib
+  libraries are installed in the API container image and are routinely absent
+  on a local checkout. When they are, the PDF route answers 503 naming them,
+  rather than serving an empty file; JSON and Markdown carry the same report
+  and need nothing extra.
 - **Hallucination counting errs high.** Indicators are extracted from the
   agent's own reasoning with the same pattern set the synthetic-corpus grader
   checks against, so a phrase shaped like a domain is checked and, if absent

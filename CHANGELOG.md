@@ -9,6 +9,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Replay evaluation reaches an operator: `aisoc replay`, an async API job,
+  an "Evaluate on your history" console page, and JSON, Markdown and PDF
+  export** (gap-closure Phase 1.4 and 1.5). Phases 1.1 through 1.3 built
+  readers that could list a customer's closed findings, a runner that could
+  replay them through the production triage path writing nothing, and a
+  scorer that could grade the result. None of the three had a caller. This is
+  the surface that drives them, and building it found a defect that three
+  green unit suites could not see.
+
+  **The shape was forced, not chosen.** No process can hold two of these
+  services: `services/actions` owns the SIEM credential path and the readers,
+  `services/agents` owns triage, `services/connectors` owns `normalize()`,
+  and all three package their code as a top-level `app`. So the API
+  orchestrates, which is what it already does for `/cases/{id}/investigate`
+  and for live actions, and two internal routes were added for it to drive:
+  `POST /replay/history` on actions and `POST /replay/run` on agents. Scoring
+  is the one link with no round trip, through a byte-identical mirror of
+  `packages/aisoc-benchmark` under `services/api/app/_vendor/`, because the
+  API image is built with `./services/api` as its context and nothing under
+  `packages/` exists at runtime.
+
+  **The defect the end-to-end run found.** `POST /connectors/{id}/normalize`
+  shipped in Phase 1.2 with no caller, and the client that builds its URL
+  omitted the `/api/v1` prefix the connectors service mounts its router
+  under. Every normalize request would have returned 404, so no replay could
+  have run on any deployment. The unit test covering that function asserted
+  the wrong URL and passed. It now reads the mount out of the connectors
+  service's own source with `ast` and compares in both directions.
+
+  **What the console does with a thin corpus.** No figure is rendered without
+  the count behind it: recall beside its malicious-case count, the headline
+  beside its answered-decision count, and the history read beside how many of
+  those findings carried an analyst label at all. Below the floor of malicious
+  cases the headline card reads "withheld" and prints the sentence explaining
+  why, rather than a dash or a zero. Zero would say the agent got every answer
+  wrong, which is a different fact with a different remedy.
+
+  **Reproducibility, stated precisely.** A report reproduces byte for byte
+  between two runs over the same pinned window, apart from the two wall-clock
+  latency figures, which measure the host. `strip_latency` lives beside the
+  renderer that emits that line so the two cannot drift, and is exposed as
+  `--exclude-latency` on the CLI and `exclude_latency=true` on the export
+  route. The export serves the artefact stored when the run completed rather
+  than re-rendering it, because a report re-rendered by a newer renderer is a
+  different artefact from the one the operator read.
+
+  **Measured.** Phase 1's "Done when" now holds end to end:
+  `tests/e2e/test_replay_cli_end_to_end.py` runs the CLI twice against a
+  mocked Splunk ES holding 200 recorded closed notables, through four
+  services started from the working tree, and the two reports are identical
+  as bytes. 200 findings read, 200 labelled, 60 replayed and graded, 40
+  malicious, headline printed rather than withheld. A second assertion
+  fetches both reports without the exclusion and fails if more than the one
+  latency line differs, so the comparison cannot pass on a stripped artefact
+  that hid something else. Suites: `services/actions` 767 to 780,
+  `services/agents` 1280 to 1306, `services/api` 2852 to 2877,
+  `packages/aisoc-benchmark` 57 to 62, `packages/aisoc-cli` 40 to 54.
+
+  **Migration 065**, not 064: `064_sandbox_upload_policy.sql` landed from
+  another phase while this one was in flight. Two tenant-scoped tables with
+  row-level-security policies and `aisoc_app` grants, verified applied
+  against a live `postgres:16`.
+
+  **Gates:** `integration.yml :: replay-e2e` (four services, a real database,
+  `AISOC_REPLAY_E2E_REQUIRED=1` so an unreachable database is a failure
+  rather than a skip), `ci.yml` cli job (`test_replay_command.py`), `ci.yml`
+  api job (`test_replay_evaluation.py`), `ci.yml` agents job
+  (`test_replay_route.py`), `ci.yml` actions job
+  (`test_replay_history_route.py`), and
+  `scripts/sync_vendored_benchmark.py --check`. Claim-to-gate matrix 156 rows
+  to 159, GATED 148 to 151.
+
 - **Replay evaluation: the production triage path, run over a customer's own
   closed findings, writing nothing** (gap-closure Phase 1.2 and 1.3). Phase
   1.1 made an operator's analyst labels readable. Nothing could grade against

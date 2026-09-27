@@ -331,6 +331,13 @@ jobs:
       # non-importable copy is how the gap silently returns.
       - name: Verify vendored llm_contract_rules is in sync
         run: python scripts/sync_vendored_llm_contract.py --check
+      # Same reasoning again, for the replay scorer. The API orchestrates
+      # replay evaluation and grades the result, and `packages/aisoc-benchmark`
+      # is not on the image's build context. A drifted mirror would mean two
+      # definitions of "hallucination rate" in the tree, both calling
+      # themselves the same published number.
+      - name: Verify vendored aisoc_benchmark is in sync
+        run: python scripts/sync_vendored_benchmark.py --check
       # Fabricated security data must never render as a tenant's real state.
       # Around three dozen console components served a `MOCK_*` / `DEMO_*`
       # array of plausible alerts, connectors and coverage numbers whenever the

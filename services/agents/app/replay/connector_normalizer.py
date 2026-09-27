@@ -50,6 +50,19 @@ __all__ = ["PrenormalizedRows", "fetch_normalized", "row_key"]
 _SERVICE_URL = os.getenv("CONNECTORS_SERVICE_URL", "http://connectors:8003")
 _TIMEOUT_S = float(os.getenv("AISOC_REPLAY_NORMALIZE_TIMEOUT_S", "60"))
 
+#: The connectors service mounts its router under this prefix
+#: (``app/main.py``: ``include_router(router, prefix="/api/v1")``), and
+#: ``CONNECTORS_SERVICE_URL`` is the bare origin. The API's own caller in
+#: ``endpoints/connectors.py`` appends the same segment for the same reason.
+#:
+#: This was wrong when the route shipped: the URL was built without it, so
+#: every normalize request would have 404'd. Nothing called this path until
+#: Phase 1.4 wired the CLI to it, which is the failure shape this program
+#: keeps finding - a mechanism that exists, is unit-tested, and has no caller
+#: on the path that needs it. ``test_the_normalize_url_matches_where_the_route_is_mounted``
+#: pins it against the connectors service's own mount.
+_API_PREFIX = "/api/v1"
+
 
 def row_key(row: Mapping[str, Any]) -> str:
     """Stable identity for a vendor row, independent of dict ordering."""
@@ -107,7 +120,7 @@ async def fetch_normalized(
             "and replay cannot reach the production normalizer"
         )
 
-    url = f"{base}/connectors/{connector_id}/normalize"
+    url = f"{base}{_API_PREFIX}/connectors/{connector_id}/normalize"
     payload = {"rows": [dict(row) for row in rows]}
     # A service token must declare the tenant it acts for; the connectors
     # service refuses one that does not. The tenant comes from the caller's

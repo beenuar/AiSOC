@@ -14,9 +14,12 @@ from typing import Any
 import pytest  # type: ignore[import-not-found]
 from aisoc_benchmark.metrics import extract_checkable_indicators
 from aisoc_benchmark.replay import (
+    LATENCY_FIELDS,
+    LATENCY_LINE_PREFIX,
     MIN_MALICIOUS_FOR_HEADLINE,
     format_replay_report,
     score_replay,
+    strip_latency,
 )
 
 MALICIOUS = "true_positive"
@@ -303,3 +306,77 @@ def test_a_history_with_no_labels_at_all_says_so() -> None:
     assert score.headline_accuracy is None
     assert "nothing to grade against" in (score.headline_withheld_reason or "")
     assert score.unlabeled == 50
+
+
+# --------------------------------------------------------------------------
+# The reproducibility claim, stated precisely
+# --------------------------------------------------------------------------
+#
+# Gap-closure Phase 1.4. Everything in this report is a property of the input
+# and the code apart from the two wall-clock latency figures, and the claim is
+# worth nothing if it is stated loosely. `strip_latency` is what produces the
+# artefact the claim is about, so it is checked in both directions: it must
+# remove the line the renderer emits, and it must remove nothing else.
+
+
+def test_two_runs_differing_only_in_latency_are_identical_once_it_is_excluded() -> None:
+    """The exact shape of what changes between two runs on one history.
+
+    Latency is the only field that moves, and it moves every time. Everything
+    downstream of that fact depends on this holding.
+    """
+    fast = _corpus(malicious=40, benign=60, hits=31)
+    slow = [{**row, "latency_ms": row["latency_ms"] + 137} for row in fast]
+
+    assert format_replay_report(score_replay(fast)) != format_replay_report(score_replay(slow))
+    assert strip_latency(format_replay_report(score_replay(fast))) == strip_latency(format_replay_report(score_replay(slow)))
+
+
+def test_stripping_latency_changes_exactly_one_line() -> None:
+    report = format_replay_report(score_replay(_corpus(malicious=40, benign=60, hits=31)))
+
+    stripped = strip_latency(report)
+
+    original_lines = report.split("\n")
+    stripped_lines = stripped.split("\n")
+    # The line is replaced rather than dropped, so a diff of two reports
+    # points at content rather than at an offset.
+    assert len(original_lines) == len(stripped_lines)
+    differing = [(a, b) for a, b in zip(original_lines, stripped_lines, strict=True) if a != b]
+    assert len(differing) == 1
+    assert differing[0][0].startswith(LATENCY_LINE_PREFIX)
+
+
+def test_the_renderer_emits_the_line_the_stripper_looks_for() -> None:
+    """Both directions, because a prefix that drifted would silently strip nothing.
+
+    The producer and the remover share one constant. This asserts the
+    constant is actually what lands in the rendered report, so a renderer
+    change that stopped using it fails here rather than leaving
+    `--exclude-latency` a no-op that still claims to have excluded something.
+    """
+    report = format_replay_report(score_replay(_corpus(malicious=40, benign=60, hits=31)))
+
+    assert sum(1 for line in report.split("\n") if line.startswith(LATENCY_LINE_PREFIX)) == 1
+
+
+def test_prose_mentioning_latency_elsewhere_is_not_deleted() -> None:
+    """Anchored on the line prefix, not on the word.
+
+    A future section discussing latency must not be silently removed from an
+    operator's export.
+    """
+    report = "## Cost and latency\n\n- Tokens: 0\n" + LATENCY_LINE_PREFIX + " 4 ms, p95 9 ms\n\nLatency is reported, not scored.\n"
+
+    stripped = strip_latency(report)
+
+    assert "## Cost and latency" in stripped
+    assert "Latency is reported, not scored." in stripped
+    assert "4 ms" not in stripped
+
+
+def test_the_latency_fields_named_for_the_json_export_exist_on_the_score() -> None:
+    score = score_replay(_corpus(malicious=40, benign=60, hits=31)).as_dict()
+
+    for field in LATENCY_FIELDS:
+        assert field in score

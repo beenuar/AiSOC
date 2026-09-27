@@ -16,6 +16,7 @@ from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.metrics import router as metrics_router
 from app.api.playbooks import router as playbook_router
+from app.api.replay_router import router as replay_router
 from app.api.router import router
 from app.api.triage import router as triage_router
 from app.core.telemetry import instrument_app
@@ -204,6 +205,9 @@ app.include_router(hunts_router)  # prefix: /api/v1/hunts
 app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)
 app.include_router(copilot_router)  # prefix: /api/v1/copilot
 app.include_router(explain_router)  # prefix: /api/v1  (POST /explain — NDJSON stream)
+# Gap-closure Phase 1.4: POST /api/v1/replay/run. The runner shipped in 1.2
+# with no caller; this is what the API's evaluation job drives.
+app.include_router(replay_router, prefix="/api/v1")
 
 
 @app.get("/health")

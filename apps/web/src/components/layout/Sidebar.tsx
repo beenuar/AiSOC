@@ -194,6 +194,11 @@ const navSections: NavSection[] = [
         icon: <SearchIcon />,
       },
       {
+        label: 'Evaluate on History',
+        href: '/evaluate',
+        icon: <ChartBarIcon />,
+      },
+      {
         label: 'Explore',
         href: '/explore',
         icon: <SearchIcon />,

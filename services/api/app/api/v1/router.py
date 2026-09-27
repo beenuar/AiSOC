@@ -30,6 +30,7 @@ from app.api.v1.endpoints import (
     easm,
     effective_permissions,
     email_approval,
+    evaluations,
     federated,
     feedback,
     fusion,
@@ -245,6 +246,11 @@ api_router.include_router(phishing.router)
 # allowed; uploading a customer file is off by default, per tenant per
 # provider, and air-gapped mode permits local providers only.
 api_router.include_router(sandbox.router)
+
+# Gap-closure Phase 1.4 — replay evaluation: triage measured against this
+# tenant's own analysts on their own closed findings. Distinct from
+# `replay.router` above, which publishes a redacted ledger to a share link.
+api_router.include_router(evaluations.router)
 
 # Knowledge-base + RAG over org docs/runbooks (Tier 3)
 api_router.include_router(knowledge_base.router)

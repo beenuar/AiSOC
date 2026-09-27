@@ -72,6 +72,7 @@ jobs:
       migrations: ${{ steps.areas.outputs.migrations }}
       backup: ${{ steps.areas.outputs.backup }}
       upgrade: ${{ steps.areas.outputs.upgrade }}
+      replay: ${{ steps.areas.outputs.replay }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -90,6 +91,11 @@ jobs:
           # encryption works.
           backup_paths='scripts/backup.sh scripts/restore.sh scripts/backup_crypt.py .github/workflows/integration.yml'
           upgrade_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py .github/workflows/integration.yml'
+          # Replay evaluation spans four services, the CLI and the scorer, and
+          # the only thing that proves the whole chain is the end-to-end run.
+          # Every tree it crosses is listed, because a change to any one of
+          # them can break a link none of the unit suites can see.
+          replay_paths='services/api/app/services/replay_evaluation/ services/api/app/api/v1/endpoints/evaluations.py services/api/app/_vendor/aisoc_benchmark/ services/agents/app/replay/ services/agents/app/api/replay_router.py services/actions/app/api/replay_history_router.py services/actions/app/services/alert_history.py services/connectors/app/api/router.py packages/aisoc-benchmark/ packages/aisoc-cli/ tests/e2e/test_replay_cli_end_to_end.py .github/workflows/integration.yml'
 
           base_ref=""
           if [ -n "${{ github.base_ref }}" ]; then
@@ -100,7 +106,7 @@ jobs:
           fi
 
           emit_all_true() {
-            for area in spine migrations backup upgrade; do
+            for area in spine migrations backup upgrade replay; do
               echo "${area}=true" >> "$GITHUB_OUTPUT"
             done
           }
@@ -139,6 +145,7 @@ jobs:
           decide migrations  "${migration_paths}"
           decide backup      "${backup_paths}"
           decide upgrade     "${upgrade_paths}"
+          decide replay      "${replay_paths}"
 
   # ── The spine, end to end ──────────────────────────────────────────────────
   spine:
@@ -411,6 +418,89 @@ jobs:
       - name: Teardown
         if: always()
         run: docker compose down -v --remove-orphans
+
+  # ── Replay evaluation, end to end ──────────────────────────────────────────
+  # Phase 1's acceptance bar: the CLI, run against a mocked Splunk ES holding
+  # 200 recorded closed notables, produces a report that reproduces byte for
+  # byte on a second run with the deterministic model path.
+  #
+  # It cannot be a unit test in any service's suite. The chain crosses
+  # `services/actions` (the SIEM credentials and the closed-finding readers),
+  # `services/connectors` (the production `normalize()`), `services/agents`
+  # (triage) and `services/api` (the orchestration, the vault and the tenant
+  # session), and all four package their code as a top-level `app`, so one
+  # process can hold exactly one of them. The harness starts each from the
+  # working tree rather than from a published image, so this proves the code
+  # in the diff.
+  #
+  # The end-to-end run is also what found the defect that made this necessary:
+  # `POST /connectors/{id}/normalize` shipped with no caller and its client
+  # built a URL missing the prefix the connectors service mounts under, so
+  # every request would have 404'd. Three green unit suites could not see it.
+  #
+  # AISOC_REPLAY_E2E_REQUIRED turns an unreachable database into a failure
+  # rather than a skip, for the same reason as the jobs below: a gate that
+  # quietly declines to run looks identical to one that passed.
+  replay-e2e:
+    name: Replay evaluation (CLI to API to report, four services)
+    needs: changes
+    if: needs.changes.outputs.replay == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_secret
+          POSTGRES_DB: aisoc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AISOC_E2E_DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      AISOC_REPLAY_E2E_REQUIRED: '1'
+      ENVIRONMENT: development
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # The union of what the four services import on this path. Same version
+      # bounds as ci.yml's per-service jobs, because a chain that only works
+      # on a different resolution is not the chain that ships.
+      - name: Install the four services' shared dependencies
+        run: >-
+          pip install --quiet
+          pytest pytest-asyncio uvicorn
+          "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
+          structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
+          prometheus-client "opentelemetry-sdk" "opentelemetry-api"
+          "opentelemetry-exporter-otlp-proto-grpc"
+          "opentelemetry-instrumentation-fastapi"
+          "opentelemetry-instrumentation-httpx"
+          "strawberry-graphql[fastapi]"
+          neo4j redis celery httpx aiofiles email-validator
+          "sqlglot>=30,<31" aiosqlite "croniter>=2.0,<7.0"
+          aiokafka apscheduler qdrant-client bcrypt
+          langgraph langchain-core langchain-openai
+          click rich jsonschema
+
+      # The CLI is driven as an installed console script would be, off its own
+      # source tree, so the command under test is the one the package ships.
+      - name: Replay evaluation, CLI to API to report
+        run: python -m pytest tests/e2e/test_replay_cli_end_to_end.py -v --tb=short
+
+      - name: Service logs on failure
+        if: failure()
+        run: for log in .e2e-*.log; do echo "::group::${log}"; tail -n 200 "${log}"; echo "::endgroup::"; done
 
   # ── Migration correctness ──────────────────────────────────────────────────
   migrations:
