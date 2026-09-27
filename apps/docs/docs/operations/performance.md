@@ -16,8 +16,7 @@ Every figure below was produced by `scripts/perf/load_harness.py` against a
 running stack: real events through the real ingest endpoint with a real
 credential, through Kafka, through fusion, into the `alerts` table in
 PostgreSQL. Nothing is simulated and nothing is extrapolated. The raw JSON for
-each run is committed under [`docs/perf/results/`](https://github.com/beenuar/AiSOC/tree/main/docs/perf/results)
-and `scripts/check_perf_results.py` fails the build if a published figure loses
+each run is committed under `docs/perf/results/` in the repository, and `scripts/check_perf_results.py` fails the build if a published figure loses
 its hardware, its date or this disclaimer.
 
 ## The machine
