@@ -23,6 +23,11 @@ on:
         description: 'Existing release tag whose images should be (re)published, e.g. v11.0.0'
         required: true
         type: string
+      promote_stable:
+        description: 'Move the `stable` tag onto this release. A major does not move it automatically, because a major means an operator must act.'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -39,6 +44,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+
+      # Before anything publishes. A release whose version and notes disagree
+      # is far cheaper to stop than to withdraw: images carry the tag,
+      # registries refuse a re-upload of a package version, and the release
+      # note is the first thing an operator reads. Both directions are
+      # checked: a major with no BREAKING section, and a BREAKING section on
+      # something that is not a major.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: The tag and its changelog section agree about breakage
+        run: python3 scripts/check_release_policy.py --tag "${GITHUB_REF_NAME}"
 
       - name: Extract version from tag
         id: version
@@ -506,19 +523,49 @@ jobs:
       # — which is the defect this whole workflow was being changed to fix,
       # inflicted by the tool built to fix it. The first republish of v11.0.0
       # did exactly that to eight images before this was caught.
+      #
+      # `stable` is the third tag, and it is not a synonym for `latest`.
+      # `latest` moves on every release, majors included. A deployment that
+      # pulls by tag would therefore be dragged across a breaking change by a
+      # tag whose name promises the opposite, with no operator decision in
+      # between, and the release policy says a major means an operator must
+      # act. So `stable` moves on a minor or a patch automatically and stops
+      # at a major until someone dispatches the workflow with
+      # `promote_stable: true`. See apps/docs/docs/operations/release-policy.md.
+      #
+      # tests/test_release_channel_tags.py runs this exact block under bash
+      # with each combination, because a tag-selection rule expressed only in
+      # a workflow is a rule nothing checks.
       - id: image-tags
         env:
           VERSION: ${{ inputs.tag || github.ref_name }}
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          IMAGE: ${{ matrix.image }}
+          IS_DEMO: ${{ matrix.demo }}
         run: |
+          set -euo pipefail
+          # A major is `vX.0.0`. Anything else in the line is a minor or a
+          # patch and carries no operator action by policy.
+          IS_MAJOR=false
+          case "${VERSION#v}" in
+            *.0.0) IS_MAJOR=true ;;
+          esac
           {
             echo 'tags<<EOF'
-            if [ "${{ matrix.demo }}" = "true" ]; then
-              echo "${{ matrix.image }}:${VERSION}-demo"
-              [ "$REPUBLISH" = "true" ] || echo "${{ matrix.image }}:demo"
+            if [ "$IS_DEMO" = "true" ]; then
+              echo "${IMAGE}:${VERSION}-demo"
+              [ "$REPUBLISH" = "true" ] || echo "${IMAGE}:demo"
             else
-              echo "${{ matrix.image }}:${VERSION}"
-              [ "$REPUBLISH" = "true" ] || echo "${{ matrix.image }}:latest"
+              echo "${IMAGE}:${VERSION}"
+              [ "$REPUBLISH" = "true" ] || echo "${IMAGE}:latest"
+              # Automatic on a non-major push; deliberate on a dispatch. The
+              # dispatch arm is the only way `stable` ever reaches a major,
+              # and it is separate from the republish arm above so repairing
+              # an old tag cannot drag `stable` backwards with it.
+              if { [ "$REPUBLISH" != "true" ] && [ "$IS_MAJOR" != "true" ]; } || [ "$PROMOTE_STABLE" = "true" ]; then
+                echo "${IMAGE}:stable"
+              fi
             fi
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
@@ -664,19 +711,43 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to npm
-        if: steps.exists.outputs.already == 'false' && env.NPM_TOKEN != ''
+      # Trusted publishing (OIDC) needs npm 11.5.1 or newer. Node 22 ships
+      # npm 10, which silently falls back to token authentication and then
+      # fails with ENEEDAUTH when there is no token, so the upgrade is what
+      # makes the token-free path reachable at all rather than a nicety.
+      - name: Upgrade npm for trusted publishing
+        if: vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      # Token-free. npm exchanges the workflow's OIDC token for a short-lived
+      # publish credential, which cannot be exfiltrated from a log or left
+      # unrotated in repository settings. Provenance is generated
+      # automatically on this path, so `--provenance` is not passed.
+      - name: Publish to npm (trusted publishing)
+        if: steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --access public
+
+      # The fallback, for as long as it is needed. npm configures a trusted
+      # publisher on a package's settings page, so a package that has never
+      # been published has no settings page and no way to register one: the
+      # very first upload of each package needs a token, and every upload
+      # after it does not.
+      - name: Publish to npm (token)
+        if: steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish "${{ steps.pack.outputs.tarball }}" --access public --provenance
 
       - name: Explain a skipped publish
-        if: steps.exists.outputs.already == 'true' || env.NPM_TOKEN == ''
+        if: steps.exists.outputs.already == 'true' || (vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN == '')
         run: |
           if [ "${{ steps.exists.outputs.already }}" = "true" ]; then
-            echo "::notice title=npm::${{ matrix.pkg }}@${{ steps.pack.outputs.version }} is already published — nothing to do."
+            echo "::notice title=npm::${{ matrix.pkg }}@${{ steps.pack.outputs.version }} is already published, nothing to do."
           else
-            echo "::warning title=npm::NPM_TOKEN is not configured, so ${{ matrix.pkg }} was built and packed but not uploaded. See docs/operations/publishing.md."
+            echo "::warning title=npm::Neither trusted publishing nor NPM_TOKEN is configured, so ${{ matrix.pkg }} was built and packed but not uploaded. See docs/operations/publishing.md."
           fi
 
   # ── Publish the PyPI packages ──────────────────────────────────────────────
@@ -735,6 +806,88 @@ jobs:
         if: vars.AISOC_PYPI_TRUSTED_PUBLISHING != 'true'
         run: |
           echo "::warning title=PyPI::Trusted publishing is not enabled, so ${{ matrix.pkg }} was built and validated but not uploaded. Set the AISOC_PYPI_TRUSTED_PUBLISHING repository variable to 'true' once the pending publishers exist — see docs/operations/publishing.md."
+
+  # ── Publish the Helm chart ────────────────────────────────────────────────
+  #
+  # `apps/docs/docs/deployment/kubernetes.md` told operators to run
+  # `helm show chart oci://ghcr.io/beenuar/aisoc` to find out what a default
+  # install resolves to, and no chart has ever been pushed there: the command
+  # answers `not found`. A published command is a claim, and this is the job
+  # that makes it true rather than the sentence that deletes it.
+  #
+  # Package and lint run unconditionally so the job fails the moment the chart
+  # stops being publishable, rather than only discovering it on a tag. Only
+  # the push is conditional, and only on the event: GITHUB_TOKEN already has
+  # `packages: write`, so unlike npm and PyPI there is no missing credential
+  # here.
+  chart-publish:
+    name: Helm - publish the chart
+    runs-on: ubuntu-latest
+    needs: release
+    if: always() && (github.event_name == 'push' || needs.release.result == 'success')
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
+
+      - name: Fetch dependencies, lint and package
+        id: package
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          helm dependency build infra/helm/aisoc
+          helm lint infra/helm/aisoc
+          # The chart's own version, not the release tag. They move
+          # independently: appVersion names the images, version names the
+          # chart, and pinning one to the other would force a chart release
+          # for a change that did not touch it.
+          version=$(helm show chart infra/helm/aisoc | awk '/^version:/ {print $2}')
+          test -n "$version"
+          helm package infra/helm/aisoc --destination "$RUNNER_TEMP"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "package=$RUNNER_TEMP/aisoc-$version.tgz" >> "$GITHUB_OUTPUT"
+
+      # The chart's appVersion is what every unpinned image tag in values.yaml
+      # falls back to. A chart published naming a version no image carries is
+      # an install that goes straight to ImagePullBackOff, which is what
+      # appVersion 5.2.0 would have done for months.
+      - name: The appVersion names images that exist
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pyyaml
+          python3 scripts/check_published_images.py --require-network --list
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to the OCI registry
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          helm push "${{ steps.package.outputs.package }}" oci://ghcr.io/beenuar/charts
+          echo "::notice title=Helm::Published oci://ghcr.io/beenuar/charts/aisoc:${{ steps.package.outputs.version }}"
+
+      - name: Prove it resolves
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          helm show chart "oci://ghcr.io/beenuar/charts/aisoc" --version "${{ steps.package.outputs.version }}"
+
+      - name: Explain a packaged-but-unpushed chart
+        if: github.event_name != 'push'
+        run: |
+          echo "::notice title=Helm::Chart ${{ steps.package.outputs.version }} was packaged and linted but not pushed; this run was not a tag push."
 
   # ── Prove the release actually published every image ────────────────────
   #

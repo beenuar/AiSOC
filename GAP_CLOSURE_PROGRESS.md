@@ -473,8 +473,8 @@ suites' job, and anything at all against a live vendor MCP server.
 
 - [x] **12.1 Load harness** measuring sustained throughput and latency percentiles against compose and kind, published with hardware and date. `services/demo-producer --load` pushes one attributable event shape (run id, sequence number and send time in the title, a distinct host per event so the `{tenant}:{entity}:{tactic}` correlation key does not collapse the run), and `scripts/perf/load_harness.py` reads the `alerts` table and times each event to the row it became, correcting for the measured offset between the two clocks rather than assuming they agree. Measured on an Apple M5 Max, 8 CPUs and 15.6 GiB to the container runtime, on 2026-09-27: Compose drained **176.9 alerts/s** at saturation and ran **p50 976 / p95 1,091 / p99 1,156 ms** paced; a three-node kind deployment drained **214.0 alerts/s** and ran **p50 982 / p95 1,317 / p99 1,437 ms** paced. Zero loss, zero duplicates and a zero dead-letter rate in all four runs. Published at `apps/docs/docs/operations/performance.md`, raw JSON under `docs/perf/results/`, both labelled **not a service-level objective**. Two things worth keeping: the producer used to count `len(batch)` as sent the moment `Do()` returned, so a stack refusing every batch reported full throughput, and per-pod CPU and memory on kind read **"not measured"** rather than zero because `kubectl top` needs metrics-server and kind ships none.
 - [x] **12.2 Reference HA deployment** with a chaos test asserting no loss and no duplicates. `values-ha.yaml` runs three KRaft brokers at replication factor 3 with `min.insync.replicas=2`, multi-replica ingest, fusion, agents and API, and PDBs that will not take a second broker down voluntarily; PostgreSQL and ClickHouse stay external with managed options documented. `scripts/chaos/fusion_restart.py` destroys a replica with `--grace-period=0 --force` mid-stream and asserts **against PostgreSQL** that every accepted event produced exactly one row; on kind on 2026-09-27, 6,000 events with a replica killed 24.3 s in gave 6,000 rows, 0 missing, 0 duplicated. Running the chart found four defects rendering could not: `KAFKA_BOOTSTRAP_SERVERS` set on the UEBA deployment alone so ingest and fusion defaulted to `localhost:9092`, the first batch after an install lost to topic auto-creation, readiness probes on `/health` (always 200) instead of `/readyz` (which reports the subscription), and `ueba.enabled` with no reader. **Only kind was exercised**: no managed Kubernetes, no bare metal, no PVCs, no ingress controller, no NetworkPolicy-enforcing CNI, no managed datastores and nothing longer than a few minutes; `docs/audit/REPOSITORY_REALITY.md` states each of those as UNVERIFIED beside the claim.
-- [ ] **12.3 Release policy**, including the gate that a major bump requires a BREAKING section and a BREAKING section requires a major bump.
-- [ ] **12.4 Package publishing**: token-free trusted publishing prepared in `release.yml` and `publish-cli.yml`. The one-time registry steps are maintainer-only and recorded below.
+- [x] **12.3 Release policy**, including the gate that a major bump requires a BREAKING section and a BREAKING section requires a major bump. `apps/docs/docs/operations/release-policy.md` states all four rules the plan names: a major only when an operator must act, a `stable` image tag and an OCI chart channel, security fixes on the current minor and the previous one for 90 days after it is superseded, and a deprecation that warns at the point of use one minor ahead of removal. `scripts/check_release_policy.py` enforces **both** arms and proves each by injecting that violation, and proves they are independent by asserting that breaking one leaves the other silent; it runs per pull request through `governance.yml` and again with `--tag` in `release.yml` before any artefact publishes. Eight pre-floor majors carry no BREAKING section and are **printed as exempt every run** rather than skipped. `stable` advances on a minor or a patch and stops at a major until `promote_stable: true` is dispatched, and `tests/test_release_channel_tags.py` executes the workflow's own tag block under bash rather than re-describing it. The upgrade test applies the **previous minor's published image** twice, once with its own chain and once with this tree's `migrations/` bind-mounted over it, with a tenant, a user, one alert per severity tier and a case already present; it asserts the rows survive **by id**, that the DML-only runtime role can still read them, and that a second run applies nothing. Exercised locally across 81 migrations from v11.1.0. The `chart-publish` job closes a dead claim: `kubernetes.md` told operators to run `helm show chart oci://ghcr.io/beenuar/aisoc`, which answers `not found`.
+- [x] **12.4 Package publishing**: token-free trusted publishing prepared in `release.yml` and `publish-cli.yml`. The one-time registry steps are maintainer-only and recorded below. PyPI already had OIDC; npm now takes the OIDC path when `AISOC_NPM_TRUSTED_PUBLISHING` is `true`, falls back to `NPM_TOKEN`, and says plainly when neither is configured. **Nothing is published and no upload has been attempted.** Three constraints are load-bearing and each fails with a bare `ENEEDAUTH`: npm needs 11.5.1 or later while Node 22 ships npm 10, so the OIDC path upgrades npm first; npm validates the **workflow filename** exactly, so `aisoc` needs a second trusted publisher registered for `publish-cli.yml`; and provenance is automatic on the OIDC path, so `--provenance` must not be passed. Unlike PyPI, npm has **no pending-publisher concept** (a trusted publisher is configured on a package's settings page and an unpublished package has none), so the first upload of each npm package needs a token and every upload after it does not.
 
 ## Phase 13: Enterprise identity and MSSP plumbing
 
@@ -497,10 +497,49 @@ as a number that was not measured.
   measured" and never `0`. This is the same blocker that keeps hardening Phase 4
   deliberately unchecked.
 - [!] **Registry accounts and trusted-publisher setup for npm and PyPI.**
-  Request: create the npm organization and the PyPI trusted publisher, then
-  confirm so `release.yml` and `publish-cli.yml` can arm their upload steps.
-  The build, pack and check steps already run unconditionally, so only the
-  upload is gated.
+  The workflows are ready and nothing is published. The build, pack and check
+  steps run unconditionally, so only the upload is gated. These are the exact
+  steps, in order; `docs/operations/publishing.md` carries the same list with
+  the reasoning.
+
+  **PyPI (token-free from the very first upload).** PyPI supports *pending*
+  publishers, so the trust can be registered before the project exists.
+  1. At <https://pypi.org/manage/account/publishing/>, add a pending publisher
+     for each of `aisoc-sandbox`, `aisoc-cli`, `aisoc-sdk`,
+     `aisoc-plugin-sdk` and `aisoc-detections`, with Owner `beenuar`,
+     Repository name `AiSOC`, Workflow name `release.yml`, and Environment
+     name left blank.
+  2. Set the repository **variable** (not a secret)
+     `AISOC_PYPI_TRUSTED_PUBLISHING` to `true`.
+  3. Push a `v*.*.*` tag. There is no token to store or rotate.
+
+  **npm (one token, once, then token-free forever).** npm configures a trusted
+  publisher on a package's *settings page*, and a package that has never been
+  published has no settings page, so the first upload cannot be token-free.
+  1. Create the npm account that will own the packages and the `@aisoc`
+     organisation, so the scoped packages have a home.
+  2. Create a **granular access token** scoped to `aisoc`, `@aisoc/mcp` and
+     `@aisoc/sdk`, read/write, with the shortest expiry that covers one
+     release. Add it as the `NPM_TOKEN` repository secret.
+  3. Push a `v*.*.*` tag. That first publish claims the `aisoc` name, which is
+     still unregistered.
+  4. For each of the three packages, on npmjs.com open **Settings → Trusted
+     publisher → GitHub Actions** and enter Organization or user `beenuar`,
+     Repository `AiSOC`, Workflow filename `release.yml` (the filename only,
+     with the extension, not a path), Environment name blank.
+  5. For `aisoc` only, add a **second** trusted publisher with the workflow
+     filename `publish-cli.yml`, because the CLI also releases on its own
+     `cli-v*` tag and npm validates the workflow filename rather than the
+     repository alone.
+  6. Set the repository **variable** `AISOC_NPM_TRUSTED_PUBLISHING` to `true`,
+     **delete the `NPM_TOKEN` secret**, and on each package set **Publishing
+     access → Require two-factor authentication and disallow tokens**.
+
+  Two things that will waste an afternoon if missed, because both fail with a
+  bare `ENEEDAUTH` and nothing more specific: npm does not validate a trusted
+  publisher configuration when you save it, so a typo in the workflow filename
+  only surfaces at the next release; and renaming `release.yml` or
+  `publish-cli.yml` breaks publishing and nothing else.
 - [!] **Third-party penetration test, SOC 2 and ISO 27001** for the hosted
   offering (see ADR-0002), and ISO 42001 if hosted AI is sold. Request: engage
   the assessors. This is a procurement action, not an engineering task.

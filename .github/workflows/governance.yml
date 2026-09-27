@@ -24,6 +24,10 @@ on:
       - "TRADEMARK.md"
       - "scripts/check_slos.py"
       - "scripts/check_governance.py"
+      - "scripts/check_release_policy.py"
+      - "CHANGELOG.md"
+      - "VERSION"
+      - "apps/docs/docs/operations/release-policy.md"
       - ".github/workflows/governance.yml"
   pull_request:
     paths:
@@ -38,6 +42,10 @@ on:
       - "TRADEMARK.md"
       - "scripts/check_slos.py"
       - "scripts/check_governance.py"
+      - "scripts/check_release_policy.py"
+      - "CHANGELOG.md"
+      - "VERSION"
+      - "apps/docs/docs/operations/release-policy.md"
       - ".github/workflows/governance.yml"
   workflow_dispatch:
 
@@ -60,3 +68,10 @@ jobs:
         run: python3 scripts/check_slos.py --print
       - name: Governance completeness gate
         run: python3 scripts/check_governance.py
+
+      # Two directions, and the self-test runs first because a gate nobody has
+      # proven can fail is indistinguishable from one that cannot.
+      - name: Self-test the release-policy gate
+        run: python3 scripts/check_release_policy.py --self-test
+      - name: A major declares what it breaks, and nothing else declares a break
+        run: python3 scripts/check_release_policy.py

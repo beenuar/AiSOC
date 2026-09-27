@@ -77,6 +77,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parses its own source and asserts it imports neither the hunt engine nor the
   loader, so it cannot score even if someone later wanted it to.
 
+- **A release policy, enforced in both directions, and a `stable` channel that
+  does not cross a major on its own** (gap-closure Phase 12.3).
+
+  **The gap.** Nothing stated what a version number meant, which tags moved on
+  their own, how long a release kept getting security fixes, or how much
+  warning a removal carried. `apps/docs/docs/operations/release-policy.md` now
+  says all four: a major only when an operator must act, `stable` alongside
+  `latest`, security fixes on the current minor and the previous one for 90
+  days after it is superseded, and a deprecation that warns at the point of
+  use one minor ahead of removal.
+
+  **The gate is two-directional**, because the one-directional gate is this
+  repository's most common failure. A major bump requires a `### BREAKING`
+  section, **and** a `### BREAKING` section requires a major bump. The second
+  arm matters at least as much: semantic versioning is the only signal most
+  automated upgrade tooling reads, and a minor is the version people let a bot
+  merge unattended, so a break announced on a minor arrives through an
+  unreviewed dependency update. `scripts/check_release_policy.py` proves each
+  arm by injecting that exact violation, and proves they are independent by
+  checking that breaking one leaves the other silent. It runs on every pull
+  request through `governance.yml` and again with `--tag` in `release.yml`
+  before any artefact is published. Eight majors below the 10.0.0 policy floor
+  carry no breaking section; they are printed as exempt on every run rather
+  than skipped quietly, because published history is not rewritten.
+
+  **`stable` is not a synonym for `latest`.** `latest` moves on every release,
+  majors included, so a deployment that pulls by tag is dragged across a
+  breaking change by a tag whose name promises the opposite. `stable` advances
+  on a minor or a patch and stops at a major until a maintainer dispatches the
+  release workflow with `promote_stable: true`. The rule lives in a shell
+  block that runs a handful of times a year, so
+  `tests/test_release_channel_tags.py` lifts that block out of the workflow
+  and executes it under bash for each combination rather than describing it a
+  second time.
+
+- **An upgrade test that carries data across the migration chain** (gap-closure
+  Phase 12.3). A fresh install applies every migration to an empty schema,
+  which is the one case that cannot go wrong. `.github/workflows/upgrade-test.yml`
+  runs on every pull request touching a migration: the previous minor's
+  **published image** applies its own chain, `scripts/upgrade_fixture.sql`
+  seeds a tenant, a user, one alert per severity tier and a case, and then
+  this tree's chain is applied over the populated schema by that same runner.
+  It asserts every migration on disk is recorded as applied, that the
+  pre-upgrade rows are still readable **by id** rather than only by count
+  (a table dropped and repopulated passes a count check), that the DML-only
+  runtime role can still read them, and that a second run applies nothing.
+  Exercised locally across 81 migrations from v11.1.0 to this tree.
+
+- **The Helm chart is published where the documentation says it is**
+  (gap-closure Phase 12.3). `apps/docs/docs/deployment/kubernetes.md` told
+  operators to run `helm show chart oci://ghcr.io/beenuar/aisoc`, and no chart
+  has ever been pushed there: the command answers `not found`. A published
+  command is a claim like any other. `release.yml` gained a `chart-publish`
+  job that packages and lints on every run so the chart cannot quietly stop
+  being publishable, re-checks that `appVersion` names images that exist,
+  pushes to `oci://ghcr.io/beenuar/charts` on a tag, and then resolves the
+  pushed chart rather than trusting the push step's exit code.
+
+### Changed
+
+- **npm publishing is prepared for trusted publishing (OIDC), token-free**
+  (gap-closure Phase 12.4). PyPI already used it. npm's equivalent is
+  configured on a package's settings page, and a package that has never been
+  published has no settings page, so unlike PyPI there is no pending-publisher
+  path: the first upload of each package needs a token and every upload after
+  it does not. `release.yml` and `publish-cli.yml` now take the OIDC path when
+  the `AISOC_NPM_TRUSTED_PUBLISHING` repository variable is `true`, fall back
+  to `NPM_TOKEN`, and explain honestly when neither is configured. Three
+  things make that path work and each fails with a bare `ENEEDAUTH` if missed:
+  trusted publishing needs npm 11.5.1 or later and Node 22 ships npm 10, so
+  the workflow upgrades npm on that path; npm matches the **workflow
+  filename** exactly, so `aisoc` needs a second publisher registered for
+  `publish-cli.yml`; and provenance is generated automatically on the OIDC
+  path, so `--provenance` must not be passed. The one-time registry steps are
+  recorded as maintainer-only in `GAP_CLOSURE_PROGRESS.md` and in
+  `docs/operations/publishing.md`. **No package has been uploaded and none of
+  the eight is published.**
 
 ### Fixed
 

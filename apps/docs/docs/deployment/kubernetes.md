@@ -54,8 +54,20 @@ ghcr.io/beenuar/aisoc-web:v11.2.0
 ```
 
 The tags above are an example pinned to a release. The current one is whatever
-the chart's `appVersion` says — a default install needs no tag at all, and
-`helm show chart oci://ghcr.io/beenuar/aisoc` reports what it resolves to.
+the chart's `appVersion` says, and a default install needs no tag at all.
+
+The chart itself is published to an OCI registry from v11.3.0 onward:
+
+```bash
+helm show chart oci://ghcr.io/beenuar/charts/aisoc
+```
+
+This page previously named `oci://ghcr.io/beenuar/aisoc`, where no chart has
+ever been pushed: the command answered `not found`. A published command is a
+claim like any other, so `release.yml` now packages, lints and pushes the
+chart on every tag, and re-checks that its `appVersion` names images that
+exist. Until the first release carrying that job, install from a checkout as
+shown below.
 
 `scripts/check_published_images.py` resolves every one of these against GHCR
 daily, so a name or tag that stops existing fails a build rather than a

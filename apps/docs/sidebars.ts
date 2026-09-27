@@ -202,6 +202,7 @@ const sidebars: SidebarsConfig = {
         "operations/theming",
         "operations/ha-deployment",
         "operations/performance",
+        "operations/release-policy",
         "operations/upgrades",
         "operations/notifications",
         "operations/action-approvals",

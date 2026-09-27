@@ -47,22 +47,56 @@ that one is actively maintained.
 
 ## One-time setup: npm
 
+npm's trusted publishing is configured **on a package's settings page**, and a
+package that has never been published has no settings page. So unlike PyPI,
+which supports pending publishers, npm cannot be made token-free before the
+first upload. The sequence is therefore: one token, one release, then the
+token is deleted and never used again.
+
+**Step 1: the first publish, with a token.**
+
 1. Create (or sign in to) the npm account that will own the packages, and
    create the `@aisoc` organisation so the scoped packages have a home.
 2. Generate a **granular access token** scoped to just these three packages,
-   with read/write permission and a sensible expiry.
+   with read/write permission and the shortest expiry that covers the release.
 3. Add it as the `NPM_TOKEN` repository secret.
 4. Tag a release. The first publish claims `aisoc`.
 
-After the first release, switch to trusted publishing and delete the token:
-on npmjs.com, open each package's settings, add a trusted publisher pointing
-at `beenuar/AiSOC` and the `release.yml` workflow, then remove the `NPM_TOKEN`
-secret. The publish step already requests an OIDC token (`id-token: write`),
-so nothing in the workflow needs to change.
+**Step 2: move to trusted publishing, and delete the token.**
 
-Every upload is published with `--provenance`, which requires the
-`repository` field in each `package.json` to point at this repo. If you add a
-fourth npm package, set that field or the publish will fail.
+For each of `aisoc`, `@aisoc/mcp` and `@aisoc/sdk`, on npmjs.com open
+**Settings → Trusted publisher → GitHub Actions** and enter:
+
+- Organization or user: `beenuar`
+- Repository: `AiSOC`
+- Workflow filename: `release.yml` (the **filename only**, with the
+  extension, not a path)
+- Environment name: leave blank
+
+For `aisoc` add a **second** trusted publisher with the workflow filename
+`publish-cli.yml`, because the CLI also releases on its own `cli-v*` tag and
+npm validates the workflow filename rather than the repository alone. A
+package may carry up to ten.
+
+Then set the repository **variable** (not a secret)
+`AISOC_NPM_TRUSTED_PUBLISHING` to `true`, delete the `NPM_TOKEN` secret, and
+on each package set **Publishing access → Require two-factor authentication
+and disallow tokens**.
+
+Three things that will bite, all of which fail with `ENEEDAUTH` and nothing
+more specific:
+
+- Trusted publishing needs **npm 11.5.1 or later**. Node 22 ships npm 10, so
+  the workflow runs `npm install -g npm@latest` on the OIDC path. That step is
+  the reason the path works at all, not a tidiness measure.
+- The workflow **filename** is matched exactly and is case-sensitive.
+  Renaming `release.yml` or `publish-cli.yml` breaks publishing and nothing
+  else, and npm does not validate the configuration when you save it.
+- Each `package.json`'s `repository.url` must match this repository exactly.
+  All three already do; a fourth package must set it too.
+
+On the OIDC path npm generates provenance automatically, so `--provenance` is
+not passed and must not be.
 
 ## One-time setup: PyPI
 
