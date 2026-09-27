@@ -822,11 +822,21 @@ services:
     restart: unless-stopped
 
   actions:
-    # Response execution. Governed and copilot-default; nothing in CORE
-    # dispatches to it, so it is not part of the minimal pipeline. Carries the
-    # `chatops` profile too because slack-bot depends on it, and a profile
-    # whose dependency is not in the same profile fails to render at all.
-    profiles: ["full", "chatops"]
+    # Response execution, and the only service that holds the read-only vendor
+    # verbs an investigation pivots through.
+    #
+    # This was `profiles: ["full", "chatops"]` on the reasoning that nothing in
+    # CORE dispatches to it. Two things were wrong with that. The `api` service
+    # in CORE already sets AISOC_ACTIONS_BASE_URL to this hostname, so the
+    # live-actions surface was enabled and pointed at a name that does not
+    # resolve; and the investigation agent's vendor read tools dispatch here,
+    # so on the default profile the agent had no way to reach a customer's EDR
+    # or IdP at all. Measured cost of moving it: 48.3 MiB resident, 539 MB of
+    # image. See docs/decisions/0007-connectors-and-actions-in-core.md.
+    #
+    # No `profiles:` key rather than a longer list: a service in no profile is
+    # included in every profile run, so `chatops` still gets it and
+    # slack-bot's dependency still renders.
     build:
       context: ./services/actions
       dockerfile: Dockerfile
@@ -856,8 +866,19 @@ services:
     restart: unless-stopped
 
   connectors:
-    # full profile — Scheduled vendor polling. CORE accepts events over the ingest HTTP API instead.
-    profiles: ["full"]
+    # Scheduled vendor polling, the 84-connector registry, and the fan-out
+    # target for federated SIEM search.
+    #
+    # This was `profiles: ["full"]` on the reasoning that CORE accepts events
+    # over the ingest HTTP API instead. That is true of ingest and says nothing
+    # about the other two jobs: `api` in CORE sets CONNECTORS_SERVICE_URL to
+    # this hostname and AISOC_FEATURE_FED_SEARCH defaults on, so federated
+    # search fanned out to a name that does not resolve. Measured cost of
+    # moving it: 76.5 MiB resident, 586 MB of image. See
+    # docs/decisions/0007-connectors-and-actions-in-core.md.
+    #
+    # The poll scheduler is per-instance, so a fresh install schedules nothing
+    # until an operator saves a connector.
     build:
       context: ./services/connectors
       dockerfile: Dockerfile

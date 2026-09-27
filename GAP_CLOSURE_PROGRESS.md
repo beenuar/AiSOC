@@ -313,7 +313,7 @@ through `audit_hash.verify_chain`.
 - [ ] **4.2 Vendor read tools**, plus new read verbs for SentinelOne, Microsoft Entra ID, Google Workspace, AWS CloudTrail and Microsoft Defender.
 - [ ] **4.3 Tool handling**: advertise only configured backends, project and cap results, mark them untrusted, and surface a read failure as "could not check".
 - [ ] **4.4 Strategies** updated so `check_investigation_depth.py` still holds.
-- [ ] **4.5 CORE decision**: measure the memory cost of `connectors` and `actions` in CORE, decide in an ADR, implement the decision.
+- [x] **4.5 CORE decision**: measured, decided in [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md), implemented. Both services join CORE. Measured with images pulled fresh from GHCR and `docker stats`, the same method as ADR-0006: `actions` 539 MB image / 45.99 MiB cold-start / 48.3 MiB at 40 hours, `connectors` 586 MB / 71.45 MiB / 76.51 MiB, together **124.8 MiB against an 8 GB budget, 1.5%**. Cross-checked against `litellm` at 471 MiB on the same host, which ADR-0006 measured at 451 MiB. ADR-0006's misleading-idle trap was checked for and is absent: neither moves more than 0.6 MiB under 100 requests, because both are network front ends with no model and no index. Both verified to boot and serve with zero configuration. The decision turned on something stronger than a feature gap, recorded as D17: CORE was already *configured* for both and started neither. The README's ~8 GB figure is deliberately not moved, and the lake and graph deliberately stay in `full`.
 
 ## Phase 5: MCP client
 
@@ -534,6 +534,45 @@ already take, and for the same reason: one process cannot hold two services
 that both package their code as top-level `app`. It was not hurried into this
 phase because a cross-service route added under time pressure is exactly the
 half-wired feature the correction above is about.
+
+### D17. CORE was not missing `connectors` and `actions`. It was configured for both and started neither
+
+The plan's framing of 4.5 is a capability gap: "the default profile has no
+evidence source". Measuring it found something worse than absence, and the
+difference is what made the decision easy rather than a judgement call about
+124.8 MiB.
+
+`api` in CORE carries `CONNECTORS_SERVICE_URL: http://connectors:8003` and
+`AISOC_ACTIONS_BASE_URL: http://actions:8085`, and
+`AISOC_FEATURE_FED_SEARCH` defaults to `True` in the API's settings. So on
+the profile `make up` starts, the federated-search route was enabled and
+fanning out to a hostname that does not resolve, and the live-actions proxy
+answered 502 with a message naming the two compose profiles an operator would
+have had to know to switch to. The capability was not switched off in CORE.
+It was switched on and pointed at nothing.
+
+That reframes the alternative. "Leave both in `full`" is not "CORE stays
+lean", it is "CORE keeps advertising a capability it cannot perform", and the
+only other honest option would have been to delete the configuration, which
+trades a broken capability for an absent one.
+
+**Two things were also corrected while the profile table was open,** on the
+precedent ADR-0006 set when it found the published `full` count was 30:
+
+- The counts were published in ten figures across four documents and nothing
+  compared any of them to `docker-compose.yml`. That is now
+  `scripts/check_profile_service_counts.py`, wired into `ci.yml`, failing in
+  both directions. `docs/testing/CLEAN_INSTALL.md` also says 14 and is
+  **left alone** deliberately: it records a dated run on 2026-09-23 and
+  rewriting it would be revisionism.
+- The ADR index in `docs/decisions/README.md` was missing 0005 and 0006.
+
+**What is not decided, so nobody reads 4.5 as having closed the whole gap.**
+ClickHouse and Neo4j stay in `full`. They are stateful stores with their own
+memory floors rather than network front ends, so they are a separate decision
+needing its own measurement. After this change a CORE agent can reach a
+configured vendor and still cannot reach an event lake, and the eleven lake
+pivots report their data class is unavailable rather than returning empty.
 
 ### D12. `unified_decision` had no production caller, and the plan names it anyway
 

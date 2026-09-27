@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`connectors` and `actions` now start on the default CORE profile, so the
+  investigation agent has somewhere to reach** (gap-closure Phase 4.5,
+  [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md)).
+
+  **The gap, stated exactly.** The plan's finding was that on the profile
+  `make up` starts, the agent has no evidence source at all. The sharper
+  version is that CORE was not missing the capability, it was advertising
+  one it could not perform: `api` in CORE already sets
+  `CONNECTORS_SERVICE_URL: http://connectors:8003` and
+  `AISOC_ACTIONS_BASE_URL: http://actions:8085`, and
+  `AISOC_FEATURE_FED_SEARCH` defaults on, so federated search was enabled
+  and fanning out to a hostname that does not resolve while the live-actions
+  surface answered 502 naming two compose profiles.
+
+  **How it was measured, because CORE's 8 GB budget is not a suggestion.**
+  Images pulled fresh from GHCR and resident memory read with `docker stats`,
+  the same method as ADR-0006 on the same class of machine. `actions` is
+  539 MB of image and 45.99 MiB resident at cold start, 48.3 MiB after 40
+  hours; `connectors` is 586 MB and 71.45 MiB, 76.51 MiB after 40 hours.
+  Together **124.8 MiB, which is 1.5% of the budget**. Cross-checked against
+  `litellm` on the same host at 471 MiB, which ADR-0006 measured at 451 MiB,
+  so the method reproduces within about 4%. ADR-0006's trap was checked for
+  and is absent: `ollama` idles at 9.6 MiB and measures 2.96 GiB while
+  inferring, whereas neither service here moves more than 0.6 MiB under 100
+  requests, because both are network front ends holding no model and no
+  index. Both were also verified to boot and serve with **no configuration**:
+  `actions` answers its capability list and `connectors` all 84 connectors.
+
+  **What it does not fix, said plainly.** The lake and the graph are the
+  other half of the plan's sentence and they stay in `full`, because
+  ClickHouse and Neo4j are stateful stores with their own memory floors
+  rather than front ends, which is a different decision needing its own
+  measurement. So a CORE deployment's agent can now reach a configured
+  vendor and still cannot reach an event lake. And what an evaluator with no
+  vendor account gains is the path, not the data: tool advertisement is
+  scoped to the tenant's configured backends, so a fresh CORE install offers
+  the agent no customer tools and says so.
+
+  `actions` is now in **no** profile rather than a longer list, because a
+  service in no profile is included in every profile run, which keeps
+  `slack-bot`'s `chatops` dependency renderable. CORE goes from 14 services
+  to 16; `full` stays at 22 because both were already in it.
+
+- **A gate on the published compose-profile service counts**
+  (`scripts/check_profile_service_counts.py`). Four documents publish how
+  many services each profile starts, across ten separate figures, and nothing
+  compared any of them to `docker-compose.yml`. ADR-0006 found exactly this
+  while editing the same table for another reason: the published `full` count
+  was 30, which is every profile at once rather than what `make up-full`
+  starts. The gate parses profile membership out of the compose YAML rather
+  than shelling out to `docker compose`, because CI has no daemon in that job
+  and `docker compose` resolves `.env`, which would make the answer depend on
+  the caller's environment instead of on the tree. It fails in both
+  directions, so deleting a claim fails as a stale entry rather than passing
+  because nothing matched, and it asserts `actions` stays reachable from the
+  `chatops` profile since compose refuses to render a file whose dependency
+  sits outside the profile being started. Proven able to fail by re-staling
+  the README's core figure to 14.
+
 - **Replay evaluation reaches an operator: `aisoc replay`, an async API job,
   an "Evaluate on your history" console page, and JSON, Markdown and PDF
   export** (gap-closure Phase 1.4 and 1.5). Phases 1.1 through 1.3 built

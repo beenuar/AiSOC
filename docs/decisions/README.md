@@ -18,6 +18,9 @@ ADRs are immutable once accepted. If a decision changes, write a new ADR that su
 | [ADR-0002](./0002-compliance-claims.md) | Compliance claims — "controls aligned to" until a Type I audit lands | accepted | 2026-06-28 |
 | [ADR-0003](./0003-mssp-pricing-shape.md) | MSSP pricing — keep three public tiers, treat MSSP as an Enterprise mode with its own narrative page | accepted | 2026-06-28 |
 | [ADR-0004](./0004-live-demo-strategy.md) | Live demo — replace the Cloudflare Tunnel with an always-on Fly.io deploy via the managed-mode pipeline | accepted | 2026-06-28 |
+| [ADR-0005](./0005-storage-consolidation.md) | Tiered storage consolidation + a $/TB cost model | accepted | 2026-07-12 |
+| [ADR-0006](./0006-llm-gateway-in-core.md) | The LLM gateway belongs in the CORE profile | accepted | 2026-09-24 |
+| [ADR-0007](./0007-connectors-and-actions-in-core.md) | `connectors` and `actions` belong in the CORE profile | accepted | 2026-09-26 |
 
 ## Authoring conventions
 

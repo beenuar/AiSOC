@@ -638,6 +638,16 @@ jobs:
           python scripts/generate_slo_alerts.py --check
       - name: Grafana dashboards query metrics that exist
         run: python scripts/check_grafana_dashboards.py
+      # Five documents publish how many services each compose profile starts
+      # and nothing compared any of them to docker-compose.yml. ADR-0006 hit
+      # this while editing the table for another reason: the published `full`
+      # count was 30, which is every profile at once rather than what
+      # `make up-full` starts. ADR-0007 moved two services into CORE, so the
+      # figure now has a reason to move again.
+      - name: Published profile service counts match the compose file
+        run: |
+          python3 scripts/check_profile_service_counts.py --self-test
+          python3 scripts/check_profile_service_counts.py
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest

@@ -321,11 +321,11 @@ the word "autonomous" in this project.
 
 | Profile | Command | Long-running services | Memory | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 14 | ~8 GB | Steps 1–10, plus the LLM gateway, the local model behind it, and the CISA KEV feed with its vector store |
-| **full** | `make up-full` | 22 | ~12 GB | Core plus the event lake, entity graph, full-text search, enrichment and scheduled connectors |
-| **demo** | `make up && make demo` | 14 | ~8 GB | Core plus clearly-labelled synthetic data |
+| **core** | `make up` | 16 | ~8 GB | Steps 1–10, plus the LLM gateway, the local model behind it, the CISA KEV feed with its vector store, and the connector and response services the investigation agent's vendor tools reach |
+| **full** | `make up-full` | 22 | ~12 GB | Core plus the event lake, entity graph, full-text search and enrichment |
+| **demo** | `make up && make demo` | 16 | ~8 GB | Core plus clearly-labelled synthetic data |
 
-CORE is 14 long-running containers; `ollama-pull` is a fifteenth that fetches
+CORE is 16 long-running containers; `ollama-pull` is a seventeenth that fetches
 the model once and exits. `full` is 22 long-running containers — not 30, which
 is every profile including `monitoring`, `chatops`, `extras` and `osquery`,
 none of which `make up-full` starts.
