@@ -35,9 +35,10 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from app.clients.aws_cloudtrail_client import AWSCloudTrailClient, CloudTrailLookupError
+from app.clients import google_workspace_client as gws_module
+from app.clients.aws_cloudtrail_client import AWSCloudTrailClient, CloudTrailLookupError, _signing_key
 from app.clients.defender_client import _HUNT_TEMPLATES
-from app.live_actions import dispatch
+from app.live_actions import dispatch, investigation_reads, register_builtin_executors
 from app.live_actions.investigation_reads import (
     AWSLookupCloudAudit,
     DefenderGetDetections,
@@ -475,8 +476,6 @@ async def test_entra_escapes_the_principal_into_the_odata_literal() -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_google_workspace_login_audit_projects_and_counts(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.clients import google_workspace_client as gws_module
-
     async def _no_token(self, client):  # noqa: ANN001, ANN202
         self._token = "gws-token"
 
@@ -527,7 +526,6 @@ async def test_google_workspace_login_audit_projects_and_counts(monkeypatch: pyt
 @respx.mock
 async def test_google_workspace_403_names_the_missing_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     """A scope gap is a configuration fact, not an account with no logins."""
-    from app.clients import google_workspace_client as gws_module
 
     async def _no_token(self, client):  # noqa: ANN001, ANN202
         self._token = "gws-token"
@@ -626,8 +624,6 @@ def test_cloudtrail_signing_key_derivation_is_sensitive_to_every_input() -> None
     Without this the chain could drop a link and every signature would still
     be a plausible-looking hex string.
     """
-    from app.clients.aws_cloudtrail_client import _signing_key
-
     base = _signing_key("secret", "20260926", "us-east-1")
     assert base != _signing_key("other", "20260926", "us-east-1")
     assert base != _signing_key("secret", "20260927", "us-east-1")
@@ -754,7 +750,7 @@ async def test_cloudtrail_refuses_an_empty_value() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cloudtrail_executor_reports_failure_rather_than_no_activity() -> None:
+async def test_cloudtrail_executor_reports_failure_rather_than_no_activity(monkeypatch: pytest.MonkeyPatch) -> None:
     """An AccessDenied must never read as a principal that did nothing."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -763,18 +759,21 @@ async def test_cloudtrail_executor_reports_failure_rather_than_no_activity() -> 
     executor = AWSLookupCloudAudit()
     request = _request("svc_deploy", {**AWS_CREDS, "attribute_key": "Username"})
 
-    # The executor builds its own client from credentials, so the transport
-    # is injected by patching the factory it calls. Patched at the executor's
+    # The executor builds its own client from credentials, so the transport is
+    # injected by patching the factory it calls. Patched at the executor's
     # import site rather than at the factory module, because that is the name
     # the executor actually resolves.
-    import app.live_actions.investigation_reads as reads
-
-    original = reads._cloudtrail_client
-    reads._cloudtrail_client = lambda params: _ct_client(httpx.MockTransport(handler))  # type: ignore[assignment]
-    try:
-        result = await executor.execute(request)
-    finally:
-        reads._cloudtrail_client = original  # type: ignore[assignment]
+    #
+    # Through `monkeypatch` on the from-imported module rather than
+    # `import app.live_actions.investigation_reads as reads`: this file already
+    # from-imports the executors, and mixing the two styles for one module is
+    # what `py/import-and-import-from` flags.
+    monkeypatch.setattr(
+        investigation_reads,
+        "_cloudtrail_client",
+        lambda params: _ct_client(httpx.MockTransport(handler)),
+    )
+    result = await executor.execute(request)
 
     assert result.status is LiveActionStatus.FAILED
     assert "AccessDenied" in (result.error or "")
@@ -793,8 +792,6 @@ async def test_every_new_read_verb_is_automatic_and_needs_no_approval() -> None:
     assertion covers the door an agent actually comes through: the contract,
     the approval matrix and the dispatcher composing.
     """
-    from app.live_actions import register_builtin_executors
-
     register_builtin_executors(overwrite=True)
 
     cases = [
