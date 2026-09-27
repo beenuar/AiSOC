@@ -25,6 +25,7 @@ service has already constructed with decrypted auth_config.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -67,6 +68,28 @@ class QueryError(ValueError):
     """
 
 
+#: What a field name may contain.
+#:
+#: Every translator interpolates ``indicator.field`` into its query language
+#: **raw**, because a field name is an identifier rather than a value and no
+#: query language quotes identifiers the way it quotes strings. That is fine
+#: for an identifier and not fine for arbitrary text: ``x=1 | delete`` is a
+#: perfectly good field name as far as string formatting is concerned, and in
+#: SPL it is a second pipeline stage.
+#:
+#: Checked here, once, because this is the only path into any translator
+#: (``parse_unified_query`` builds every ``Indicator``, and ``__post_init__``
+#: runs however one is constructed). Four translators each doing their own
+#: check is four chances for one of them to be written subtly differently.
+#:
+#: The character set is the union of what the four backends actually use in
+#: field names: letters, digits, underscore, dot (ECS ``source.ip``), dash and
+#: ``@`` (ECS ``@timestamp``). Anything else is refused rather than escaped,
+#: because a field name containing a pipe or a quote is not a field name and
+#: there is no reading of it worth preserving.
+_FIELD_NAME = re.compile(r"^[A-Za-z_@][A-Za-z0-9_.@-]{0,199}$")
+
+
 @dataclass(frozen=True)
 class Indicator:
     """A single ``field <op> value`` triple."""
@@ -78,6 +101,13 @@ class Indicator:
     def __post_init__(self) -> None:
         if not isinstance(self.field, str) or not self.field.strip():
             raise QueryError("indicator.field must be a non-empty string")
+        if not _FIELD_NAME.match(self.field):
+            raise QueryError(
+                f"indicator.field {self.field!r} is not a field name. A field name is an identifier: "
+                f"letters, digits, underscore, dot, dash or @, starting with a letter, underscore or @. "
+                f"Every translator interpolates it into its query language unquoted, because no query "
+                f"language quotes identifiers, so anything else would be query syntax rather than a field."
+            )
         if self.operator not in _VALID_OPERATORS:
             raise QueryError(f"indicator.operator '{self.operator}' is not one of {sorted(_VALID_OPERATORS)}")
         if self.operator == "in":

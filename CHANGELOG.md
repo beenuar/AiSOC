@@ -9,6 +9,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The investigation agent can reach the customer's own tools, and says so
+  when it cannot** (gap-closure Phase 4.1, 4.3 and 4.4). Six typed tools:
+  federated search across every SIEM a tenant has connected, and reads of
+  their EDR host record, EDR detections, identity sign-ins, cloud audit trail
+  and endpoint telemetry.
+
+  **The gap.** Deep investigation bound eleven lake pivots and four enrichment
+  calls and nothing else, so the agent could reason only over AiSOC's own
+  event lake. Anything the estate held and AiSOC never ingested was invisible,
+  and on the default `core` profile there is no lake at all.
+
+  **The model never composes query text, and that is a security boundary.** An
+  indicator an agent passes came out of a process command line, a file name or
+  a ticket body, all of which are attacker-influenced, so a model relaying one
+  into SPL, KQL or ES-QL is one injected instruction away from an arbitrary
+  query over a customer's telemetry. No tool accepts a query, a field name or
+  free text. The agent names an indicator *type* from a closed set of nine and
+  the API resolves the field per backend, from each vendor's own normalized
+  schema. Tested on the JSON schema the model is handed rather than on the
+  implementation, because the schema is what constrains a model. Defender
+  advanced hunting genuinely takes KQL, so the KQL is four named templates the
+  executor owns and an unknown template is refused before the credential is
+  read.
+
+  **Hardened at the shared choke point while we were there.** Every federated
+  translator interpolated `indicator.field` into its query language unquoted,
+  which is correct for an identifier and not for arbitrary text, and three of
+  the four interpolated the *value* unquoted for `contains`, `starts_with` and
+  `ends_with` so the wildcard would work. `Indicator.__post_init__` now
+  refuses a field name that is not an identifier, and the three substring
+  operators quote their pattern. Fixed at the one place every translator goes
+  through rather than four times, and it protects the console path too, which
+  is where a human already types a free-form field name.
+
+  **A read failure reaches the model as "could not check".** Every failure
+  path says so in words, and the tests assert the wording as well as the
+  flag, because the flag is for code and the wording is what the model reads:
+  the reason must contain "lookup failure" and "NOT checked" and must not
+  contain "no results". A genuine zero-row answer says it IS evidence of
+  absence *for the sources that answered and that window*, and a partly-failed
+  search keeps its own outcome rather than being rounded to a clean one.
+
+  **Only configured backends are advertised.** A tenant with a Splunk and an
+  Okta is offered those two tools and no EDR tools. What is not connected goes
+  into the prompt as prose, and a tenant with nothing connected gets no tools
+  plus two gap sentences, because a model offered a tool that answers
+  "no integration" burns a turn of a bounded loop and some models narrate the
+  attempt as though it returned something.
+
+  **Tool calls now reach the Investigation Ledger.** `run_with_tools` built a
+  trace and nothing carried it anywhere durable, so an investigation's own
+  record held a narrative and a pivot count with no evidence of which tools
+  produced them. Each call is now a `tool_call` ledger row with its arguments.
+  The obvious route was `InvestigatorState.log_tool_call`, and it would have
+  been a no-op: two similarly-named state classes exist and the production
+  caller passes the one with no audit log, so a version written behind a
+  `hasattr` guard would have passed a test that constructed the other.
+
+  **The acceptance bar, and the three ways it could have passed vacuously.**
+  A recorded CrowdStrike detection with Splunk and CrowdStrike mocked reaches
+  at least three pivots, and the assertion counts distinct **sources** rather
+  than tool names so three pivots on one source fails; a tool that answered
+  "could not check" is asserted absent from the pivot list so the bar cannot
+  be met by calling tools that all failed; and the ledger is asserted to hold
+  one row per call with its arguments, at sequence numbers that cannot collide
+  with the graph runner's, since `record_event` drops a conflicting row
+  silently and the ledger would still look complete.
+
 - **An investigation can now read the vendor a tenant actually runs**
   (gap-closure Phase 4.2). Seven new read-only executors: SentinelOne agents
   and threats, Microsoft Defender alerts and an endpoint-telemetry search,

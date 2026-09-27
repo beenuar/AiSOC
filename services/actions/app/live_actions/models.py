@@ -188,3 +188,20 @@ class LiveActionDescriptor(BaseModel):
     description: str
     source: str  # "builtin" | "plugin"
     requires_credentials: bool = True
+    #: What this verb does to the estate if the finding is wrong, and whether
+    #: a human has to authorise it. Both read from ``CAPABILITY_CONTRACTS``
+    #: at discovery time rather than declared per executor, because the
+    #: contract belongs to the capability and a per-executor copy is how one
+    #: vendor's arm comes to be graded more generously than another's.
+    #:
+    #: Published here because ``services/api`` needs to know which verbs are
+    #: reads before it will let an investigation agent call one, and the
+    #: alternative was a second copy of the classification in that service.
+    #: A mirror of a safety classification is a mirror that eventually
+    #: disagrees, and the generous copy is the one that gets used.
+    #:
+    #: Empty for a capability with no contract entry, which is a plugin verb.
+    #: An empty impact must never be read as read-only; the API's read door
+    #: requires the exact string ``read_only``.
+    impact: str = ""
+    approval: str = ""

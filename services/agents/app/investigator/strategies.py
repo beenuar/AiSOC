@@ -29,9 +29,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Pivots a strategy can ask for. Must match tool names in
-# ``app.tools.investigation``; the drift test asserts it.
+# ``app.tools.investigation`` and ``app.tools.customer_tools``; the drift test
+# and ``scripts/check_investigation_depth.py`` assert it in both directions.
 KNOWN_PIVOTS = frozenset(
     {
+        # AiSOC's own event lake.
         "process_activity",
         "historical_execution",
         "network_connections",
@@ -43,6 +45,16 @@ KNOWN_PIVOTS = frozenset(
         "mailbox_activity",
         "oauth_grants",
         "persistence_mechanisms",
+        # Gap-closure Phase 4: the customer's own security products. The lake
+        # holds only what AiSOC ingested, and on the default CORE profile
+        # there is no lake at all, so a strategy that names only lake pivots
+        # is a strategy with nothing to follow on most deployments.
+        "siem_indicator_search",
+        "edr_host_details",
+        "edr_host_detections",
+        "identity_user_activity",
+        "cloud_audit_lookup",
+        "endpoint_telemetry_sightings",
     }
 )
 
@@ -107,6 +119,10 @@ STRATEGIES: tuple[Strategy, ...] = (
             "first-seen timestamps clustered in one morning mean something different "
             "from a binary present for a year.",
             "Check the host's outbound connections for the same window.",
+            "Ask the customer's own EDR what it already knows about the host and what it has "
+            "already detected there, and search their SIEM and endpoint telemetry for the hash. "
+            "The lake holds only what AiSOC ingested, and the EDR usually knows more about an "
+            "endpoint than AiSOC does.",
             "If a user is associated, check where that account authenticated from.",
             "Reconstruct the host timeline once the entities are known.",
         ),
@@ -116,6 +132,10 @@ STRATEGIES: tuple[Strategy, ...] = (
             "historical_execution",
             "network_connections",
             "entity_timeline",
+            "edr_host_details",
+            "edr_host_detections",
+            "endpoint_telemetry_sightings",
+            "siem_indicator_search",
         ),
         min_pivots=3,
         techniques=("T1059", "T1204", "T1543", "T1055"),
@@ -133,6 +153,8 @@ STRATEGIES: tuple[Strategy, ...] = (
         plan=(
             "Pull the account's authentication events and look at the distinct source addresses and the intervals between them.",
             "Check for OAuth consent grants and mailbox rule changes on the account — the usual post-compromise steps.",
+            "Ask the customer's identity provider directly for the account's recent sign-ins "
+            "and its own risk assessment. The provider sees attempts AiSOC may never have ingested.",
             "Build the account's timeline across every source to see what followed the suspicious sign-in.",
             "If any host is associated, check what ran on it.",
         ),
@@ -141,6 +163,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "oauth_grants",
             "mailbox_activity",
             "entity_timeline",
+            "identity_user_activity",
+            "siem_indicator_search",
         ),
         min_pivots=2,
         techniques=("T1078", "T1621", "T1556", "T1098"),
@@ -157,6 +181,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "Hunt the URL or attachment hash across the fleet to find who else received or fetched it.",
             "For any host that did, list what executed shortly afterwards.",
             "Check outbound connections from those hosts.",
+            "Search the customer's SIEM and endpoint telemetry for the URL or hash, which often reaches further than the lake does.",
             "Check the recipient account's mailbox for rules added after delivery.",
         ),
         expected_pivots=(
@@ -164,6 +189,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "process_activity",
             "network_connections",
             "mailbox_activity",
+            "siem_indicator_search",
+            "endpoint_telemetry_sightings",
         ),
         min_pivots=2,
         techniques=("T1566", "T1204", "T1598"),
@@ -182,6 +209,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "Hunt the destination across the fleet — how many distinct hosts reach it.",
             "For each, list the connections and look at the intervals.",
             "Identify the process responsible on at least one host.",
+            "Search the customer's SIEM and endpoint telemetry for the destination, to find hosts the lake does not cover.",
             "Check whether that binary appears elsewhere.",
         ),
         expected_pivots=(
@@ -189,6 +217,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "network_connections",
             "process_activity",
             "historical_execution",
+            "siem_indicator_search",
+            "endpoint_telemetry_sightings",
         ),
         min_pivots=3,
         techniques=("T1071", "T1095", "T1573", "T1008"),
@@ -205,6 +235,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "Pull the account's authentication events to enumerate the hosts it reached.",
             "For each host, list what executed after the authentication.",
             "Hunt any tooling found across the rest of the fleet.",
+            "Ask the identity provider for the account's sign-ins and the EDR for detections on the hosts it reached.",
             "Build the timeline across the account to order the hops.",
         ),
         expected_pivots=(
@@ -212,6 +243,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "process_activity",
             "historical_execution",
             "entity_timeline",
+            "identity_user_activity",
+            "edr_host_detections",
         ),
         min_pivots=3,
         techniques=("T1021", "T1570", "T1550", "T1563"),
@@ -228,6 +261,8 @@ STRATEGIES: tuple[Strategy, ...] = (
         ),
         plan=(
             "Check the principal's authentication and API activity for the window.",
+            "Look the principal up in the customer's cloud audit trail directly, which records "
+            "control-plane calls the lake may not hold, and note which calls were denied.",
             "Hunt the calling source address across the fleet.",
             "Build the principal's timeline to order the API calls.",
             "Look for the same technique elsewhere in the account.",
@@ -237,6 +272,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "fleet_ioc_hunt",
             "entity_timeline",
             "technique_activity",
+            "cloud_audit_lookup",
+            "siem_indicator_search",
         ),
         min_pivots=2,
         techniques=("T1078.004", "T1552", "T1580", "T1098.001"),
@@ -255,6 +292,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "List the outbound connections and identify the destination.",
             "Hunt the destination across the fleet — is anyone else reaching it.",
             "Check the account's recent activity for the access that preceded it.",
+            "Search the customer's SIEM for the destination, which may see egress the lake does not.",
             "Build the timeline to establish order.",
         ),
         expected_pivots=(
@@ -262,6 +300,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "fleet_ioc_hunt",
             "entity_timeline",
             "authentication_events",
+            "siem_indicator_search",
         ),
         min_pivots=3,
         techniques=("T1041", "T1567", "T1048", "T1030"),
@@ -280,6 +319,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "Check the account's authentication trail before the change.",
             "Build the timeline after the grant to see what the new privilege was used for.",
             "If a host is involved, list what executed on it.",
+            "Ask the identity provider about the account and, for a cloud grant, the cloud audit trail about the principal.",
             "Check whether the same technique appears elsewhere.",
         ),
         expected_pivots=(
@@ -287,6 +327,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "entity_timeline",
             "process_activity",
             "technique_activity",
+            "identity_user_activity",
+            "cloud_audit_lookup",
         ),
         min_pivots=2,
         techniques=("T1068", "T1078.003", "T1098", "T1548"),
@@ -304,6 +346,7 @@ STRATEGIES: tuple[Strategy, ...] = (
             "Enumerate persistence mechanisms on the host.",
             "List what executed around the time it was created.",
             "Hunt the installing binary across the fleet.",
+            "Ask the customer's EDR about the host and what it has already detected there.",
             "Build the host timeline to establish the entry point.",
         ),
         expected_pivots=(
@@ -311,6 +354,8 @@ STRATEGIES: tuple[Strategy, ...] = (
             "process_activity",
             "historical_execution",
             "entity_timeline",
+            "edr_host_details",
+            "edr_host_detections",
         ),
         min_pivots=2,
         techniques=("T1053", "T1543", "T1547", "T1546"),
@@ -328,10 +373,10 @@ STRATEGIES: tuple[Strategy, ...] = (
         plan=(
             "Identify the entities named in the alert: host, account, indicator.",
             "For each entity, pull its recent timeline.",
-            "Hunt any indicator across the fleet.",
+            "Hunt any indicator across the fleet, and search the customer's own SIEM for it as well.",
             "Check whether the mapped technique appears elsewhere recently.",
         ),
-        expected_pivots=("entity_timeline", "fleet_ioc_hunt", "technique_activity"),
+        expected_pivots=("entity_timeline", "fleet_ioc_hunt", "technique_activity", "siem_indicator_search"),
         min_pivots=2,
         keywords=(),
     ),

@@ -78,7 +78,15 @@ def test_status_enum_round_trip(status_value: str):
 def test_descriptor_shape():
     """The discovery API response shape must include vendor_id,
     capability, description, source, requires_credentials. Anything
-    less and the frontend can't render the action menu correctly."""
+    less and the frontend can't render the action menu correctly.
+
+    ``impact`` and ``approval`` joined the payload in gap-closure Phase 4.2,
+    populated from ``CAPABILITY_CONTRACTS`` at discovery time. ``services/api``
+    filters on ``impact`` to decide which verbs an investigation agent may
+    call, and publishing the classification was the alternative to keeping a
+    second copy of it in that service, where the generous copy is the one that
+    would get used.
+    """
     d = LiveActionDescriptor(
         vendor_id="okta",
         capability="disable_user",
@@ -93,4 +101,12 @@ def test_descriptor_shape():
         "description",
         "source",
         "requires_credentials",
+        "impact",
+        "approval",
     }
+    # Defaults, not guesses. A descriptor built without a contract lookup
+    # publishes empty strings, and the API's read door requires the exact
+    # string "read_only", so an unclassified verb cannot become
+    # agent-reachable by omission.
+    assert payload["impact"] == ""
+    assert payload["approval"] == ""

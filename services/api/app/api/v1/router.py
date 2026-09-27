@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    agent_tools,
     agents,
     airgap,
     alert_explain,
@@ -121,6 +122,12 @@ api_router.include_router(detection_proposals.router)
 # Mutations stamp suppression_config and write detection.tuning.* audit log.
 api_router.include_router(rule_tuning.router)
 api_router.include_router(federated.router)
+# The typed surface an investigation agent reaches a customer's SIEM, EDR,
+# IdP and cloud audit trail through. Deliberately beside `federated`: it
+# reuses that endpoint's fan-out rather than building a second one, and adds
+# the typed query, the per-tenant advertisement and the caps an agent needs
+# and a console does not.
+api_router.include_router(agent_tools.router)
 api_router.include_router(graph.router)
 api_router.include_router(playbooks.router)
 # One playbook step, graded on its own capability, through the same governed

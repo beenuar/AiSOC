@@ -44,12 +44,17 @@ def _indicator_to_spl(indicator: Indicator) -> str:
         return f"{field_token}={_spl_quote(value)}"
     if op == "ne":
         return f"NOT {field_token}={_spl_quote(value)}"
+    # The three substring operators previously interpolated `value` *unquoted*
+    # so the `*` would be read as a wildcard rather than as a literal. That
+    # also left the value as SPL: a value of `* | delete` was a second
+    # pipeline stage. SPL honours wildcards inside a quoted string, so
+    # quoting keeps the wildcard behaviour and takes the syntax away.
     if op == "contains":
-        return f"{field_token}=*{value}*"
+        return f"{field_token}={_spl_quote(f'*{value}*')}"
     if op == "starts_with":
-        return f"{field_token}={value}*"
+        return f"{field_token}={_spl_quote(f'{value}*')}"
     if op == "ends_with":
-        return f"{field_token}=*{value}"
+        return f"{field_token}={_spl_quote(f'*{value}')}"
     if op == "gt":
         return f"{field_token}>{_spl_quote(value)}"
     if op == "gte":

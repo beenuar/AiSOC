@@ -87,12 +87,29 @@ def check_strategies(errors: list[str]) -> None:
     return None
 
 
+def _all_tools() -> list:
+    """Every tool the product can offer an investigation.
+
+    Two sources, because gap-closure Phase 4 added a second: the lake pivots
+    bound per tenant, and the customer-tool **catalog**. The catalog rather
+    than the scoped toolset, deliberately. What a given tenant is offered
+    depends on which connectors they have saved, which is configuration;
+    whether every tool the product ships is reachable from a strategy is a
+    property of the code, and that is the question this gate asks. Grading
+    the scoped set would mean the gate reported clean on a tenant with no
+    connectors, which is every fresh install.
+    """
+    from app.tools.customer_tools import customer_tool_catalog
+    from app.tools.investigation import investigation_tools
+
+    return [*investigation_tools("test-tenant"), *customer_tool_catalog()]
+
+
 def check_tool_coverage(errors: list[str]) -> None:
     """Every tool the model is offered must be worth its context cost."""
     from app.investigator.strategies import STRATEGIES
-    from app.tools.investigation import investigation_tools
 
-    tool_names = {t.name for t in investigation_tools("test-tenant")}
+    tool_names = {t.name for t in _all_tools()}
     expected = {p for s in STRATEGIES for p in s.expected_pivots}
 
     orphaned = tool_names - expected
@@ -111,7 +128,7 @@ def check_tool_coverage(errors: list[str]) -> None:
             f"strategies expect tools that do not exist: {', '.join(sorted(missing))}",
         )
 
-    for tool in investigation_tools("test-tenant"):
+    for tool in _all_tools():
         if len(tool.description) < 40:
             _fail(
                 errors,
@@ -158,6 +175,25 @@ def check_loop_is_wired(errors: list[str]) -> None:
             errors,
             "deep_investigation.py does not register the investigation tools onto "
             "the registry; the loop would run with enrichment tools only",
+        )
+
+    # Gap-closure Phase 4. The customer's own tools are a second binding, and
+    # dropping it would leave an agent that can only reach AiSOC's own lake,
+    # which on the default CORE profile is nothing at all. The same regression
+    # shape as the loop with no caller, one layer out.
+    if "scoped_customer_tools" not in driver_source:
+        _fail(
+            errors,
+            "deep_investigation.py does not bind the customer tool surface "
+            "(scoped_customer_tools); the agent would reach only AiSOC's own "
+            "event lake, which the default CORE profile does not run",
+        )
+    if "coverage_notes" not in driver_source:
+        _fail(
+            errors,
+            "deep_investigation.py does not carry coverage_notes into the prompt; "
+            "a tenant with no SIEM or EDR would get a silently shallower "
+            "investigation rather than one that records the gap",
         )
 
 
@@ -256,11 +292,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     from app.investigator.strategies import STRATEGIES
+    from app.tools.customer_tools import customer_tool_catalog
     from app.tools.investigation import investigation_tools
 
     print(
         f"investigation-depth: OK — {len(STRATEGIES)} strategies, "
-        f"{len(investigation_tools('t'))} tools, loop wired into the production path"
+        f"{len(investigation_tools('t'))} lake tools + {len(customer_tool_catalog())} customer tools, "
+        f"loop wired into the production path"
     )
     return 0
 

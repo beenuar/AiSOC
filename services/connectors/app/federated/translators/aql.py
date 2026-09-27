@@ -33,12 +33,15 @@ def _indicator_to_aql(indicator: Indicator) -> str:
         return f"{field} = {_aql_quote(value)}"
     if op == "ne":
         return f"{field} <> {_aql_quote(value)}"
+    # The pattern goes through the same quoting as every other value. It used
+    # to be interpolated raw, which left a single quote in the value able to
+    # close the literal and append clauses of its own.
     if op == "contains":
-        return f"{field} ILIKE '%{value}%'"
+        return f"{field} ILIKE {_aql_quote(f'%{value}%')}"
     if op == "starts_with":
-        return f"{field} ILIKE '{value}%'"
+        return f"{field} ILIKE {_aql_quote(f'{value}%')}"
     if op == "ends_with":
-        return f"{field} ILIKE '%{value}'"
+        return f"{field} ILIKE {_aql_quote(f'%{value}')}"
     if op == "gt":
         return f"{field} > {_aql_quote(value)}"
     if op == "gte":

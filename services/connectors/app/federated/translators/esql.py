@@ -39,13 +39,16 @@ def _indicator_to_esql(indicator: Indicator) -> str:
         return f"{field_token} == {_esql_quote(value)}"
     if op == "ne":
         return f"{field_token} != {_esql_quote(value)}"
+    # ES|QL has no native CONTAINS; LIKE with %...% is the canonical port. The
+    # pattern goes through the same quoting as every other value. It used to be
+    # interpolated raw, which left a double quote in the value able to close
+    # the literal and append clauses of its own.
     if op == "contains":
-        # ES|QL has no native CONTAINS; LIKE with %...% is the canonical port.
-        return f'{field_token} LIKE "%{value}%"'
+        return f"{field_token} LIKE {_esql_quote(f'%{value}%')}"
     if op == "starts_with":
-        return f'{field_token} LIKE "{value}%"'
+        return f"{field_token} LIKE {_esql_quote(f'{value}%')}"
     if op == "ends_with":
-        return f'{field_token} LIKE "%{value}"'
+        return f"{field_token} LIKE {_esql_quote(f'%{value}')}"
     if op == "gt":
         return f"{field_token} > {_esql_quote(value)}"
     if op == "gte":

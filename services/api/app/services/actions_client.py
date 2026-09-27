@@ -136,6 +136,38 @@ async def vendors_for_capability(capability: str) -> list[str]:
     return [str(v) for v in body]
 
 
+async def read_only_capabilities() -> frozenset[str]:
+    """Capability verbs the action registry declares ``read_only``.
+
+    Asked of the registry rather than mirrored in this service, and that is
+    the whole point. The alternative was a second copy of the impact
+    classification here, and a mirrored safety classification is one that
+    eventually disagrees with the original, with the *generous* copy being
+    whichever one the caller happens to consult.
+
+    Fails closed by raising. A caller that treats an unreachable registry as
+    "nothing is read-only" refuses a read it should have allowed, which is
+    inconvenient; one that treats it as "everything is read-only" would let a
+    containment through the investigation door. Only the first is acceptable,
+    so this raises and the caller declines.
+
+    The empty string is **not** read-only. A capability with no contract
+    entry publishes ``impact: ""``, and folding that into the read set would
+    make an unclassified plugin verb agent-reachable by omission.
+    """
+    body = await _get("/api/v1/live-actions")
+    if not isinstance(body, dict):
+        raise ActionsServiceError("actions service returned an unexpected body shape")
+    executors = body.get("executors")
+    if not isinstance(executors, list):
+        raise ActionsServiceError("actions service discovery carried no executors list")
+    return frozenset(
+        str(entry.get("capability"))
+        for entry in executors
+        if isinstance(entry, dict) and entry.get("impact") == "read_only" and entry.get("capability")
+    )
+
+
 def _detail(response: httpx.Response) -> str:
     try:
         payload = response.json()

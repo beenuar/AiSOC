@@ -309,10 +309,23 @@ through `audit_hash.verify_chain`.
 
 ## Phase 4: Let the investigation agent reach the customer's tools
 
-- [ ] **4.1 Federated search tool** as a typed agent tool; the model never writes SPL, KQL or ES|QL.
-- [~] **4.2 Vendor read tools**, plus new read verbs for SentinelOne, Microsoft Entra ID, Google Workspace, AWS CloudTrail and Microsoft Defender. The verbs half is shipped: seven new executors, five of them vendor arms on the three existing read verbs so they inherit the `READ_ONLY` contract and cannot drift low, and two new verbs (`lookup_cloud_audit`, `lookup_endpoint_telemetry`) whose subject is neither a host nor a principal. 25 tests against vendor-shaped synthetic payloads on the real HTTP path, asserting the pair that must never collapse: not-found is `SUCCEEDED` with `found: False`, a vendor 5xx is `FAILED` and carries no `count`, `detections` or `found` key at all. CloudTrail is read with hand-rolled SigV4 rather than boto3, which is measurably absent from the `aisoc-actions` image; the live AWS path is unverified and recorded as such (see D18). Exposing them **as agent tools through the API** is the other half and lands with 4.1 and 4.3.
-- [ ] **4.3 Tool handling**: advertise only configured backends, project and cap results, mark them untrusted, and surface a read failure as "could not check".
-- [ ] **4.4 Strategies** updated so `check_investigation_depth.py` still holds.
+- [x] **4.1 Federated search tool** as a typed agent tool; the model never writes SPL, KQL or ES-QL. `/federated/search` was reused, not rebuilt: `_fetch_target_connectors` and `_query_one_backend` are imported from the endpoint that owns them. What the agent surface adds is the typed query (a closed set of nine indicator types, with the field resolved per backend from each vendor's own normalized schema), a projection and two caps, and an honest split between a source that found nothing and a source that could not be searched. The translators were hardened at the same time (see D20).
+- [x] **4.2 Vendor read tools**, plus new read verbs for SentinelOne, Microsoft Entra ID, Google Workspace, AWS CloudTrail and Microsoft Defender. Both halves shipped. The verbs: seven new executors, five of them vendor arms on the three existing read verbs so they inherit the `READ_ONLY` contract and cannot drift low, and two new verbs (`lookup_cloud_audit`, `lookup_endpoint_telemetry`) whose subject is neither a host nor a principal. 25 tests against vendor-shaped synthetic payloads on the real HTTP path, asserting the pair that must never collapse: not-found is `SUCCEEDED` with `found: False`, a vendor 5xx is `FAILED` and carries no `count`, `detections` or `found` key at all. CloudTrail is read with hand-rolled SigV4 rather than boto3, which is measurably absent from the `aisoc-actions` image; the live AWS path is unverified and recorded as such (see D18). Exposed as agent tools through a new API surface (`GET /agent-tools/backends`, `POST /agent-tools/siem-search`, `POST /agent-tools/vendor-read`) that reuses `playbook_step_dispatch.dispatch_step` for vendor resolution, credential decryption and governed dispatch rather than adding a second dispatcher.
+- [x] **4.3 Tool handling**: advertise only configured backends, project and cap results, mark them untrusted, and surface a read failure as "could not check". All four. Advertisement is per connector type from the tenant's saved connectors, and what is **not** connected goes into the prompt as prose so the model records a gap rather than investigating quietly with less. Results are projected to a union of the four backends' signal fields, capped at 40 rows **and** 24 KB (a row cap is not a size cap), and every payload carries an explicit untrusted-data notice. Every failure path returns `could_not_check` with wording the tests assert on, not just a flag.
+- [x] **4.4 Strategies** updated so `check_investigation_depth.py` still holds. All ten strategies name the customer tools in their expected pivots and their plans, `KNOWN_PIVOTS` grew from 11 to 17, and the gate was extended to grade the customer-tool **catalog** alongside the lake pivots (the catalog, not the scoped set: what a tenant is offered is configuration, whether every shipped tool is reachable from a strategy is a property of the code, and grading the scoped set would report clean on every fresh install). Two new assertions in the gate cover the bindings this phase adds, and both were proven able to fail by removing them.
+**Done when:** on the profile the ADR settles on, investigating a recorded
+CrowdStrike detection, with Splunk and CrowdStrike mocked, reaches at least
+three pivots across both sources, and the ledger shows every call.
+
+**Met at the agent boundary; no end-to-end run exists.** The bar's substance
+is proven: a recorded CrowdStrike detection reaches four pivots across the
+customer's EDR, their SIEM and the lake, and the ledger holds one `tool_call`
+row per call with its arguments. Three vacuous passes are refused explicitly
+(three pivots on one source, three pivots that all failed, a ledger with a
+summary and no calls). What is **not** proven is the whole chain over HTTP
+against live services. See D22 for the decomposition and for the shape that
+closes it.
+
 - [x] **4.5 CORE decision**: measured, decided in [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md), implemented. Both services join CORE. Measured with images pulled fresh from GHCR and `docker stats`, the same method as ADR-0006: `actions` 539 MB image / 45.99 MiB cold-start / 48.3 MiB at 40 hours, `connectors` 586 MB / 71.45 MiB / 76.51 MiB, together **124.8 MiB against an 8 GB budget, 1.5%**. Cross-checked against `litellm` at 471 MiB on the same host, which ADR-0006 measured at 451 MiB. ADR-0006's misleading-idle trap was checked for and is absent: neither moves more than 0.6 MiB under 100 requests, because both are network front ends with no model and no index. Both verified to boot and serve with zero configuration. The decision turned on something stronger than a feature gap, recorded as D17: CORE was already *configured* for both and started neither. The README's ~8 GB figure is deliberately not moved, and the lake and graph deliberately stay in `full`.
 
 ## Phase 5: MCP client
@@ -633,6 +646,104 @@ The verb is named `lookup_endpoint_telemetry` rather than `run_hunting_query`
 deliberately. A verb named for running a query invites a later contributor to
 add a `query` parameter, and the name is the cheapest place to encode the
 constraint.
+
+### D22. Phase 4's "Done when" is met at the agent boundary and has no end-to-end run
+
+Recorded as an open item rather than closed, because D8's lesson applies
+exactly: three proven links are not the same claim as one end-to-end run, and
+D16 is what happens when that distinction is glossed.
+
+The bar reads: on the profile the ADR settles on, investigating a recorded
+CrowdStrike detection with Splunk and CrowdStrike mocked reaches at least
+three pivots across both sources, and the ledger shows every call.
+
+| Link | Status |
+|---|---|
+| A recorded CrowdStrike detection reaches 3+ pivots across both sources, with one ledger row per call | Proven in `services/agents/tests/test_deep_investigation_customer_tools.py`, against the API's HTTP boundary with a scripted model |
+| The URL the agent builds is one the API serves | Proven in `services/api/tests/test_agent_tools.py`, by parsing the API's own router wiring with `ast`, and checked against the pre-fix value from both sides |
+| A typed query becomes a tenant-scoped federated search | Proven in `services/api/tests/test_agent_tools.py` for the vocabulary, the field map and the caps; the fan-out itself is the existing endpoint's, already covered |
+| A read verb reaches a mocked vendor | Proven in `services/actions/tests/test_investigation_reads_phase4.py` against vendor-shaped payloads on the real HTTP path |
+| The whole chain over HTTP, against live services | **Not built, therefore not proven** |
+
+**What closes it,** in the shape the architecture forces and the shape
+`tests/e2e/test_replay_cli_end_to_end.py` already established: a live
+Postgres with the migration chain applied, `api`, `actions` and `connectors`
+started from the working tree with uvicorn, a mock Splunk serving the
+connector's `query()` path and a mock CrowdStrike serving OAuth plus devices
+plus detections, two connector rows saved through the real API so their
+credentials go through the real vault, an API key minted for the agent, and
+the **agent** driven in process with a scripted model so `AISOC_API_URL`
+points at the real API. Only the agent is in process, which is legitimate:
+every other service is behind a real HTTP hop, and the model has to be
+injected because grading a live model's tool choices would measure the model.
+
+It was not hurried in. An end-to-end harness written under time pressure is
+the half-wired feature the rest of this file is about, and the four links
+above are each proven in the direction that drifts.
+
+### D20. The thing that made the agent tool safe was a defect in the console path too
+
+4.1's requirement is that the model supplies a structured query and the API
+owns translation. Working out what "owns translation" has to mean found
+something about the existing surface.
+
+Every federated translator interpolates `indicator.field` into its query
+language **unquoted**, because a field name is an identifier and no query
+language quotes identifiers the way it quotes strings. That is correct for an
+identifier and wrong for arbitrary text: `x=1 | delete` is a perfectly good
+field name as far as string formatting is concerned, and in SPL it is a second
+pipeline stage. Three of the four translators also interpolated the *value*
+unquoted for `contains`, `starts_with` and `ends_with`, so the `*` or `%` would
+be read as a wildcard.
+
+On the console path the caller is a human with `connectors:read` typing into a
+free-form field box against their own SIEM credential, so this was low
+severity. It stops being low severity the moment a model can reach it.
+
+**The agent-side control is the closed field map**, and it is the primary one:
+the model names an indicator type and never a field. But fixing only that
+would have left the underlying hole, so both were fixed:
+
+- `Indicator.__post_init__` refuses a field name that is not an identifier,
+  at the single choke point every translator goes through. One check rather
+  than four, because four is four chances for one to be written differently.
+- The three substring operators quote their pattern. SPL honours wildcards
+  inside a quoted string, so the behaviour is unchanged and the syntax is gone.
+
+All 970 connectors tests still pass, which is the useful signal: no existing
+caller relied on either shape.
+
+### D21. Two state classes with similar names, and the obvious ledger write was a no-op
+
+The phase's "Done when" requires the ledger to show every call.
+`run_with_tools` built a `tool_trace` and returned it, and nothing carried it
+anywhere durable, so this was new work rather than newly gated work.
+
+The obvious implementation is `InvestigatorState.log_tool_call`, which already
+records a `TOOL_CALL` audit entry with hashed input and output, and the
+orchestrator already drains audit entries into the ledger. Two halves, no
+building required.
+
+It would have been a no-op on every real investigation. **Two state classes
+exist**: `app.investigator.state.InvestigatorState`, which has the
+`audit_log`, and `app.models.state.InvestigationState`, which has neither an
+`audit_log` nor `log_tool_call`. The production caller
+(`agents/investigation_agent.py`) passes the **second**. Written behind the
+`hasattr` guard that duck typing invites, it would have returned early every
+time while passing a test that constructed the first class, which is this
+repository's most-repeated defect shape.
+
+Found by writing the test against the class the production caller passes, and
+noticing that `mitre_mappings` (which the driver reads for strategy selection)
+exists on `InvestigationState` and not on `InvestigatorState`. The driver was
+right; the test was about to be wrong.
+
+**Resolution:** write to `ledger.record_event` directly. One further trap in
+doing so: `record_event` carries `ON CONFLICT (run_id, seq) DO NOTHING`, and
+the graph runner numbers its own events from 0 upward, so a colliding sequence
+number is a **silently dropped row**. The ledger would have looked complete
+and been missing calls. Tool calls are numbered from 10,000, and the test
+asserts the floor.
 
 ### D12. `unified_decision` had no production caller, and the plan names it anyway
 

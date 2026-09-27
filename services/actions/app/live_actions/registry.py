@@ -22,6 +22,7 @@ from __future__ import annotations
 import structlog
 
 from .capabilities import KNOWN_CAPABILITIES
+from .capability_contracts import CAPABILITY_CONTRACTS
 from .executor import LiveActionExecutor
 from .models import LiveActionDescriptor
 
@@ -116,6 +117,11 @@ def list_descriptors() -> list[LiveActionDescriptor]:
     """
     descriptors: list[LiveActionDescriptor] = []
     for (vendor_id, capability), (executor, source) in sorted(_REGISTRY.items()):
+        # Read from the contract rather than from the executor, so every arm
+        # of a verb publishes the same classification and a plugin cannot
+        # declare its own. A capability with no contract entry publishes
+        # empty strings, which the API's read door refuses.
+        contract = CAPABILITY_CONTRACTS.get(capability)
         descriptors.append(
             LiveActionDescriptor(
                 vendor_id=vendor_id,
@@ -123,6 +129,8 @@ def list_descriptors() -> list[LiveActionDescriptor]:
                 description=executor.description or "",
                 source=source,
                 requires_credentials=executor.requires_credentials,
+                impact=contract.impact.value if contract else "",
+                approval=contract.approval.value if contract else "",
             )
         )
     return descriptors

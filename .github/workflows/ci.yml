@@ -648,6 +648,15 @@ jobs:
         run: |
           python3 scripts/check_profile_service_counts.py --self-test
           python3 scripts/check_profile_service_counts.py
+      # The one door in this product a model can open by emitting a sentence.
+      # Three things have to stay true and nothing at runtime fails loudly if
+      # they stop: every agent-reachable verb is graded READ_ONLY, every one
+      # has an executor, and the two indicator vocabularies agree across two
+      # services that cannot import each other.
+      - name: The agent's vendor-read door stays read-only
+        run: |
+          python3 scripts/check_agent_read_tools.py --self-test
+          python3 scripts/check_agent_read_tools.py
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest
