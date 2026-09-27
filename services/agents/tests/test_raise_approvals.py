@@ -62,7 +62,7 @@ class TestWhatGetsQueued:
     @pytest.mark.asyncio
     async def test_an_approval_requiring_action_is_queued(self, raised):
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
-        ids = await worker._raise_approvals(_state(_action()))
+        ids = await worker._raise_approvals(_state(_action()), writer=worker._writer)
 
         assert len(ids) == 1
         assert len(raised) == 1
@@ -75,7 +75,7 @@ class TestWhatGetsQueued:
         nothing either way; it queues the subset that was always meant to
         reach a human."""
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
-        ids = await worker._raise_approvals(_state(_action(requires_approval=False)))
+        ids = await worker._raise_approvals(_state(_action(requires_approval=False)), writer=worker._writer)
 
         assert ids == []
         assert raised == []
@@ -85,14 +85,14 @@ class TestWhatGetsQueued:
         """The approval is what the actions service is later rebuilt from, so
         losing parameters here means approving a different action."""
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
-        await worker._raise_approvals(_state(_action()))
+        await worker._raise_approvals(_state(_action()), writer=worker._writer)
 
         assert raised[0]["action"]["parameters"] == {"reason": "c2"}
 
     @pytest.mark.asyncio
     async def test_the_rationale_becomes_the_summary_a_human_reads(self, raised):
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
-        await worker._raise_approvals(_state(_action()))
+        await worker._raise_approvals(_state(_action()), writer=worker._writer)
 
         assert raised[0]["summary"] == "Confirmed C2 beacon."
 
@@ -103,7 +103,8 @@ class TestWhatGetsQueued:
             _state(
                 _action(),
                 _action(action_type="disable_user", target="alice@example.com"),
-            )
+            ),
+            writer=worker._writer,
         )
 
         assert len(ids) == 2
@@ -116,7 +117,7 @@ class TestItStaysOptional:
         monkeypatch.setenv("AISOC_AGENT_RAISE_APPROVALS", "0")
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
 
-        assert await worker._raise_approvals(_state(_action())) == []
+        assert await worker._raise_approvals(_state(_action()), writer=worker._writer) == []
         assert raised == []
 
     @pytest.mark.asyncio
@@ -130,7 +131,7 @@ class TestItStaysOptional:
         monkeypatch.setattr(ledger_module, "raise_approval", _raise_approval)
         worker = FusedAlertTriageWorker.__new__(FusedAlertTriageWorker)
 
-        assert await worker._raise_approvals(_state(_action())) == []
+        assert await worker._raise_approvals(_state(_action()), writer=worker._writer) == []
 
 
 class TestIdempotency:

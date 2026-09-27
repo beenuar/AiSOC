@@ -196,6 +196,7 @@ const sidebars: SidebarsConfig = {
         "operations/upgrades",
         "operations/notifications",
         "operations/action-approvals",
+        "operations/shadow-mode",
         "operations/case-reports",
         "operations/troubleshooting",
         "operations/faq",

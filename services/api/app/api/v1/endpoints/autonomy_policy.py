@@ -22,11 +22,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 
+from app._vendor.autonomy_evidence_rules import PromotionThresholds
 from app.api.v1.deps import AuthUser, DBSession
+from app.db.rls import TenantDBSession
+from app.services.shadow_agreement import (
+    SCOPE_COLUMNS,
+    agreement_for,
+    breakdown_for,
+    reconcile_local_closures,
+)
 
 logger = structlog.get_logger()
 
@@ -468,4 +476,271 @@ async def reset_action_threshold(
         tenant_id=str(user.tenant_id),
         action=action,
         reset_by=user.email,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shadow mode and rolling agreement (gap-closure Phase 2.1 and 2.2)
+#
+# The thresholds above answer "how confident must the agent be". These answer
+# a different question the same admin screen has to carry: "has it earned the
+# right to be believed". They live in this module rather than beside it
+# because an operator raising an autonomy threshold and an operator reading
+# the track record that justifies it are the same person on the same visit,
+# and splitting the two across routers would mean neither surface shows both.
+# ---------------------------------------------------------------------------
+
+#: Matches every class. What a tenant turns on first, before they know which
+#: classes their own queue contains.
+WILDCARD = "*"
+
+#: An alert class is an `alerts.category` value. Constrained here so a caller
+#: cannot write a 2 KB string into a primary key, and lower-cased so `Identity`
+#: and `identity` are not two classes with half the evidence each.
+_MAX_CLASS_LEN = 100
+
+
+class ShadowModeEntry(BaseModel):
+    alert_class: str
+    enabled: bool
+    enabled_at: str | None = None
+    updated_at: str | None = None
+    updated_by: str | None = None
+
+
+class ShadowModeResponse(BaseModel):
+    tenant_id: str
+    entries: list[ShadowModeEntry]
+
+
+class ShadowModeUpdateRequest(BaseModel):
+    enabled: bool
+
+
+class AgreementWindowModel(BaseModel):
+    """Counts, and the rates derived from them.
+
+    Every rate is optional and is ``null`` when its denominator was zero. The
+    console renders that as "not measured". A zero here would say the agent
+    was wrong every time, which is a different fact with a different remedy,
+    and it is the more flattering of the two to print by accident in the
+    abstention column and the more damning in the agreement column.
+    """
+
+    resolved: int
+    labelled: int
+    unlabeled: int
+    answered: int
+    abstained: int
+    agreed: int
+    malicious_support: int
+    malicious_caught: int
+    agreement_rate: float | None = None
+    malicious_recall: float | None = None
+    abstention_rate: float | None = None
+
+
+class AgreementScopeModel(BaseModel):
+    key: str
+    window: AgreementWindowModel
+
+
+class AgreementResponse(BaseModel):
+    tenant_id: str
+    scope_kind: str
+    scope_key: str
+    window: AgreementWindowModel
+    #: The trailing slice of the most recent decisions, scored separately.
+    #: A window average is where a gradual decline hides, so the surface that
+    #: justifies a promotion has to show both or it is showing the flattering
+    #: half.
+    recent: AgreementWindowModel
+    window_start: str
+    window_end: str
+    thresholds: dict[str, float | int]
+    reconciled: int
+    by_alert_class: list[AgreementScopeModel]
+    by_rule: list[AgreementScopeModel]
+    by_source: list[AgreementScopeModel]
+    by_model: list[AgreementScopeModel]
+
+
+def _normalise_class(value: str) -> str:
+    cleaned = (value or "").strip().lower()
+    if cleaned == WILDCARD:
+        return WILDCARD
+    if not cleaned or len(cleaned) > _MAX_CLASS_LEN or not cleaned.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"alert class must be '{WILDCARD}' or an alphanumeric category name of at most {_MAX_CLASS_LEN} characters",
+        )
+    return cleaned
+
+
+@router.get("/shadow-mode", response_model=ShadowModeResponse)
+async def get_shadow_mode(
+    user: AuthUser,
+    db: TenantDBSession,
+) -> ShadowModeResponse:
+    """Which alert classes this tenant is measuring rather than acting on."""
+    await user.require_permission_db("settings:read", db)
+
+    rows = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT alert_class, enabled, enabled_at, updated_at, updated_by
+                FROM aisoc_shadow_mode
+                WHERE tenant_id = :tenant_id
+                ORDER BY alert_class
+                """
+                ),
+                {"tenant_id": str(user.tenant_id)},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    return ShadowModeResponse(
+        tenant_id=str(user.tenant_id),
+        entries=[
+            ShadowModeEntry(
+                alert_class=row["alert_class"],
+                enabled=bool(row["enabled"]),
+                enabled_at=row["enabled_at"].isoformat() if row["enabled_at"] else None,
+                updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
+                updated_by=str(row["updated_by"]) if row["updated_by"] else None,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.put("/shadow-mode/{alert_class}", response_model=ShadowModeEntry)
+async def set_shadow_mode(
+    alert_class: str,
+    payload: ShadowModeUpdateRequest,
+    user: AuthUser,
+    db: TenantDBSession,
+) -> ShadowModeEntry:
+    """Start or stop measuring one alert class.
+
+    ``enabled_at`` is stamped on the transition into shadow and cleared on the
+    way out, rather than being set on every write. A promotion window that
+    reaches further back than the day measurement started is reaching back
+    before there was anything to measure, and the only way a later reader can
+    tell is if this column records the real start.
+    """
+    await user.require_permission_db("settings:write", db)
+    cleaned = _normalise_class(alert_class)
+
+    row = (
+        (
+            await db.execute(
+                text(
+                    """
+                INSERT INTO aisoc_shadow_mode (tenant_id, alert_class, enabled, enabled_at, updated_by, updated_at)
+                VALUES (:tenant_id, :alert_class, :enabled, CASE WHEN :enabled THEN now() ELSE NULL END, :updated_by, now())
+                ON CONFLICT (tenant_id, alert_class) DO UPDATE SET
+                    enabled = EXCLUDED.enabled,
+                    enabled_at = CASE
+                        WHEN EXCLUDED.enabled AND NOT aisoc_shadow_mode.enabled THEN now()
+                        WHEN EXCLUDED.enabled THEN aisoc_shadow_mode.enabled_at
+                        ELSE NULL
+                    END,
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = now()
+                RETURNING alert_class, enabled, enabled_at, updated_at, updated_by
+                """
+                ),
+                {
+                    "tenant_id": str(user.tenant_id),
+                    "alert_class": cleaned,
+                    "enabled": payload.enabled,
+                    "updated_by": str(user.user_id),
+                },
+            )
+        )
+        .mappings()
+        .one()
+    )
+    await db.commit()
+
+    logger.info(
+        "autonomy_policy.shadow_mode_set",
+        tenant_id=str(user.tenant_id),
+        alert_class=cleaned,
+        enabled=payload.enabled,
+        updated_by=user.email,
+    )
+    return ShadowModeEntry(
+        alert_class=row["alert_class"],
+        enabled=bool(row["enabled"]),
+        enabled_at=row["enabled_at"].isoformat() if row["enabled_at"] else None,
+        updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
+        updated_by=str(row["updated_by"]) if row["updated_by"] else None,
+    )
+
+
+@router.get("/agreement", response_model=AgreementResponse)
+async def get_agreement(
+    user: AuthUser,
+    db: TenantDBSession,
+    scope_kind: str = Query("tenant", description="tenant, alert_class, rule, source or model"),
+    scope_key: str = Query(WILDCARD, max_length=200),
+) -> AgreementResponse:
+    """Rolling agreement between the agent and this tenant's own analysts.
+
+    The tenant comes from the credential. ``scope_kind`` and ``scope_key``
+    narrow *within* that tenant and cannot widen beyond it: the scope names a
+    dimension from a fixed vocabulary, never a column, and the tenant
+    predicate is applied whatever the scope says.
+
+    Closures made in this console are reconciled on the way in rather than by
+    a background job. The sweep is bounded and indexed, and doing it here
+    means the number an operator is looking at includes the alert they closed
+    a minute ago, which is exactly when they come to look.
+    """
+    await user.require_permission_db("settings:read", db)
+
+    if scope_kind != "tenant" and scope_kind not in SCOPE_COLUMNS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"scope_kind must be 'tenant' or one of {sorted(SCOPE_COLUMNS)}",
+        )
+
+    reconciled = await reconcile_local_closures(db, user.tenant_id)
+    if reconciled:
+        await db.commit()
+
+    thresholds = PromotionThresholds()
+    evidence = await agreement_for(
+        db,
+        user.tenant_id,
+        scope_kind=scope_kind,
+        scope_key=scope_key,
+        thresholds=thresholds,
+    )
+
+    breakdowns: dict[str, list[AgreementScopeModel]] = {}
+    for dimension in ("alert_class", "rule", "source", "model"):
+        rows = await breakdown_for(db, user.tenant_id, scope_kind=dimension, thresholds=thresholds)
+        breakdowns[dimension] = [AgreementScopeModel(key=row.key, window=AgreementWindowModel(**row.window.as_dict())) for row in rows]
+
+    return AgreementResponse(
+        tenant_id=str(user.tenant_id),
+        scope_kind=evidence.scope_kind,
+        scope_key=evidence.scope_key,
+        window=AgreementWindowModel(**evidence.window.as_dict()),
+        recent=AgreementWindowModel(**evidence.recent.as_dict()),
+        window_start=evidence.window_start.isoformat(),
+        window_end=evidence.window_end.isoformat(),
+        thresholds=thresholds.as_dict(),
+        reconciled=reconciled,
+        by_alert_class=breakdowns["alert_class"],
+        by_rule=breakdowns["rule"],
+        by_source=breakdowns["source"],
+        by_model=breakdowns["model"],
     )

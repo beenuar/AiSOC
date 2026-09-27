@@ -259,8 +259,8 @@ the decomposition and what each link rests on are in D8 above.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 
-- [ ] **2.1 Shadow mode**, per tenant and per alert class.
-- [ ] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard.
+- [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
+- [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
 - [ ] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log.
 
 ## Phase 3: Prompt-injection evaluation suite
@@ -387,6 +387,71 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   [#904](https://github.com/beenuar/AiSOC/pull/904). Suites: `services/agents`
   1252 to 1280, `packages/aisoc-benchmark` 35 to 57, `services/connectors` 880
   to 886. Every other suite unchanged and passing.
+
+### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
+
+Recorded because the obvious implementation of shadow mode is wrong in a way
+that looks right and produces a flattering number.
+
+`ledger.persist_auto_triage` writes the agent's verdict to
+`alerts.disposition`. That column is described in the model as the analyst's,
+set from the feedback endpoint, and it is the column Phase 2.1 reconciliation
+reads to learn what the analyst decided. A shadow run that forwarded that
+write unchanged would have the agent filling in the answer it was about to be
+graded against: every alert an analyst did not explicitly re-dispose would
+score as perfect agreement, and the scorecard would climb toward a promotion
+on no evidence at all.
+
+This is the Phase 1 leakage lesson arriving by a different route. Phase 1's
+version was a verdict written as an outcome prior that suppressed the next
+alert; this one is a verdict written into the field the next measurement
+reads. Both are the evaluation answering itself, and neither shows up as an
+error.
+
+**Resolution:** `persist_auto_triage` gained a `shadow` flag, and the guard is
+written into the statement rather than left to the caller:
+
+    SET disposition = CASE WHEN $10 THEN disposition ELSE $3 END,
+        status      = CASE WHEN $7 AND NOT $10 THEN 'resolved' ELSE status END,
+        resolved_at = CASE WHEN $7 AND NOT $10 THEN now() ELSE resolved_at END
+
+`NOT $10` is the load-bearing part. The shadow sink already forces
+`auto_closed` off, so the `$7` arm would be enough today; relying on that
+alone would mean a second caller added later closes alerts it was only meant
+to observe, and the symptom would be a tenant's queue emptying itself during
+an evaluation.
+
+### D10. The sink is chosen per alert, and the writer is passed rather than swapped
+
+Shadow mode is per tenant *and* per alert class, and the class is not known
+until the alert is in hand, so the choice cannot be made in the worker's
+constructor. Two ways not to do it: assigning to `self._writer` per message
+leaks across concurrently triaged alerts, and it would also break the Phase
+1.2 AST test that asserts the deployed worker overrides neither sink, which
+is a test worth keeping.
+
+So `triage()` resolves the sink once and passes it down. Five helpers took a
+keyword-only `writer` parameter, and it is **required** on all of them
+including `_record`, with no fallback to `self._writer`. A default would mean
+a future caller who forgets the keyword silently gets the live sink, which is
+the unsafe direction for this particular control: the failure would be a
+shadow run writing the analyst's disposition column.
+
+### D11. The gate logic is vendored, not fetched over HTTP
+
+`services/actions` enforces autonomy at dispatch and `services/api` decides
+promotions and owns the hash-chained audit log. Both package their code as
+top-level `app`, so one process holds one of them, and each image is built
+with only its own directory as build context.
+
+The Phase 1.4 precedent (D6, D8) is a round trip to the service that owns the
+thing. That is right for a *mapping* held by another service. It is wrong
+here: this is a safety control on a latency-sensitive path, and a control that
+fails open when a second service is unreachable is not a control. So the pure
+rules are a standard-library-only module vendored byte-identically, following
+the five mirrors already in the tree, with
+`sync_vendored_autonomy_evidence.py --check` wired into `ci.yml`. Two copies
+allowed to differ means the control is off in whichever one is more generous.
 
 ### Notes for the next session
 

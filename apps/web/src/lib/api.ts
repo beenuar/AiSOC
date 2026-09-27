@@ -5025,7 +5025,104 @@ export const autonomyPolicyApi = {
       `/api/v1/autonomy-policy/${encodeURIComponent(action)}`,
       { method: 'DELETE' },
     ),
+
+  /** Which alert classes this tenant is measuring rather than acting on. */
+  shadowMode: () =>
+    request<ShadowModeResponse>('/api/v1/autonomy-policy/shadow-mode'),
+
+  /** Start or stop measuring one alert class. */
+  setShadowMode: (alertClass: string, enabled: boolean) =>
+    request<ShadowModeEntry>(
+      `/api/v1/autonomy-policy/shadow-mode/${encodeURIComponent(alertClass)}`,
+      { method: 'PUT', body: JSON.stringify({ enabled }) },
+    ),
+
+  /** Rolling agreement between the agent and this tenant's own analysts. */
+  agreement: (params?: { scope_kind?: string; scope_key?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.scope_kind) query.set('scope_kind', params.scope_kind);
+    if (params?.scope_key) query.set('scope_key', params.scope_key);
+    const suffix = query.toString();
+    return request<AgreementResponse>(
+      `/api/v1/autonomy-policy/agreement${suffix ? `?${suffix}` : ''}`,
+    );
+  },
 };
+
+// ─── Shadow mode and rolling agreement (gap-closure Phase 2.1 / 2.2) ─────────
+//
+// Every rate below is `number | null`, and `null` means there was no
+// denominator. It renders as "not measured", never as 0: a zero in the
+// agreement column says the agent was wrong every time, and "it was never
+// asked" is a different fact calling for a different response. The counts
+// travel with the rates for the same reason — 100% over four answers is not
+// the claim 100% over four hundred is.
+
+export interface ShadowModeEntry {
+  alert_class: string;
+  enabled: boolean;
+  enabled_at?: string | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+}
+
+export interface ShadowModeResponse {
+  tenant_id: string;
+  entries: ShadowModeEntry[];
+}
+
+export interface AgreementWindow {
+  resolved: number;
+  labelled: number;
+  unlabeled: number;
+  answered: number;
+  abstained: number;
+  agreed: number;
+  malicious_support: number;
+  malicious_caught: number;
+  agreement_rate: number | null;
+  malicious_recall: number | null;
+  abstention_rate: number | null;
+}
+
+export interface AgreementScope {
+  key: string;
+  window: AgreementWindow;
+}
+
+export interface AgreementThresholds {
+  min_decisions: number;
+  min_malicious: number;
+  min_agreement: number;
+  min_malicious_recall: number;
+  max_abstention_rate: number;
+  window_days: number;
+  demotion_agreement: number;
+  demotion_malicious_recall: number;
+  drift_sample: number;
+  drift_min_answered: number;
+}
+
+export interface AgreementResponse {
+  tenant_id: string;
+  scope_kind: string;
+  scope_key: string;
+  window: AgreementWindow;
+  /**
+   * The trailing slice of the most recent decisions, scored on its own. A
+   * window average is where a gradual decline hides, so any surface showing
+   * one has to show both or it is showing the flattering half.
+   */
+  recent: AgreementWindow;
+  window_start: string;
+  window_end: string;
+  thresholds: AgreementThresholds;
+  reconciled: number;
+  by_alert_class: AgreementScope[];
+  by_rule: AgreementScope[];
+  by_source: AgreementScope[];
+  by_model: AgreementScope[];
+}
 
 // ─── Analyst override feedback loop (Tier 1.5) ───────────────────────────────
 //

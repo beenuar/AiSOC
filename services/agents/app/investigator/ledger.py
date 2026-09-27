@@ -438,6 +438,7 @@ async def persist_auto_triage(
     unpriced_call_count: int = 0,
     groundedness: float | None = None,
     ungrounded: bool | None = None,
+    shadow: bool = False,
 ) -> bool:
     """Durably record an auto-triage outcome (issue #571) in ONE transaction:
 
@@ -455,6 +456,16 @@ async def persist_auto_triage(
     configured, or an unknown tenant — neither is retryable). Raises
     :class:`LedgerPersistError` on a real DB error so the caller can retry /
     dead-letter. A completed run therefore always carries a non-null verdict.
+
+    ``shadow`` (gap-closure Phase 2.1) leaves the analyst's own columns alone:
+    ``disposition``, ``status`` and ``resolved_at`` keep whatever they held,
+    while the run, the event and the ``ai_*`` columns are written exactly as
+    they would be otherwise. ``alerts.disposition`` is the field an analyst
+    fills in and the field agreement is later measured against, so a shadow
+    verdict landing there would have the agent answering the question it is
+    about to be graded on. The guard is in the statement rather than left to
+    the caller, so a future caller that forgets to force ``auto_closed`` off
+    still cannot close an alert it was only meant to observe.
     """
     pool = await get_pool()
     if pool is None:
@@ -564,12 +575,12 @@ async def persist_auto_triage(
                     await conn.execute(
                         """
                         UPDATE alerts
-                           SET disposition = $3,
+                           SET disposition = CASE WHEN $10 THEN disposition ELSE $3 END,
                                ai_score = $4,
                                ai_summary = $5,
                                ai_recommendations = $6::jsonb,
-                               status = CASE WHEN $7 THEN 'resolved' ELSE status END,
-                               resolved_at = CASE WHEN $7 THEN now() ELSE resolved_at END,
+                               status = CASE WHEN $7 AND NOT $10 THEN 'resolved' ELSE status END,
+                               resolved_at = CASE WHEN $7 AND NOT $10 THEN now() ELSE resolved_at END,
                                -- Nullable on purpose: NULL is "not scored",
                                -- which is a different fact from "scored zero".
                                -- The deterministic path never assesses
@@ -589,12 +600,14 @@ async def persist_auto_triage(
                         auto_closed,
                         float(groundedness) if groundedness is not None else None,
                         ungrounded,
+                        shadow,
                     )
         logger.info(
             "ledger.auto_triage_persisted",
             run_id=str(run_id),
             verdict=verdict,
             auto_closed=auto_closed,
+            shadow=shadow,
             alert_id=str(alert_id or ""),
         )
         return True

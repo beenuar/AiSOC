@@ -392,6 +392,15 @@ jobs:
       # something leaks. The script existed and passed; nothing ran it.
       - name: Verify vendored redactor is in sync
         run: python scripts/sync_vendored_redactor.py --check
+      # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
+      # safety failure rather than an inconsistency. These rules decide what a
+      # tenant's track record has to show before the agent may act unattended:
+      # `services/actions` reads them at dispatch and `services/api` reads them
+      # when a promotion is decided. Two copies that disagree means the control
+      # is off in whichever one is more generous, and nobody finds out until
+      # something executes that the other half would have refused.
+      - name: Verify vendored autonomy evidence rules are in sync
+        run: python scripts/sync_vendored_autonomy_evidence.py --check
       # Phase 1.1 — the registry at
       # `services/connectors/app/connectors/__init__.py` is the single source
       # of truth for the "N connectors" claim. The check verifies that:
