@@ -87,7 +87,10 @@ def _load_policy(root: Path) -> tuple[Any, Any] | Finding:
     for name in ("app", "app.services", "app.services.sandbox"):
         if name not in sys.modules:
             stub = types.ModuleType(name)
-            stub.__path__ = []  # type: ignore[attr-defined] - namespace-package stub
+            # A `__path__` is what makes this a package rather than a module,
+            # so a submodule can be registered under it. `ModuleType` does not
+            # declare the attribute, hence the narrow ignore.
+            stub.__path__ = []  # type: ignore[attr-defined]
             sys.modules[name] = stub
 
     loaded: dict[str, Any] = {}
