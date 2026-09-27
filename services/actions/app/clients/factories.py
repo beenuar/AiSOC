@@ -21,6 +21,7 @@ does not move anyone's patch target.
 
 from __future__ import annotations
 
+from app.clients.aws_cloudtrail_client import AWSCloudTrailClient
 from app.clients.aws_security_groups import AWSSecurityGroupsClient
 from app.clients.azure_entra_client import AzureEntraClient
 from app.clients.cloudflare_client import CloudflareClient
@@ -46,6 +47,27 @@ def _aws_client(params: dict) -> AWSSecurityGroupsClient | None:
         region=params.get("aws_region", "us-east-1"),
         role_arn=params.get("aws_role_arn"),
         session_name=params.get("aws_session_name", "aisoc-action"),
+    )
+
+
+def _cloudtrail_client(params: dict) -> AWSCloudTrailClient | None:
+    """Build a CloudTrail read client from request-scoped credentials.
+
+    Separate from ``_aws_client`` on purpose. That factory returns ``None``
+    unless ``aws_security_group_id`` is present, which is correct for a
+    firewall action and wrong for an audit read: a tenant with AWS keys and no
+    security group would have had a CloudTrail verb answer "credentials not
+    configured" while holding perfectly good credentials.
+    """
+    access_key = params.get("aws_access_key_id")
+    secret_key = params.get("aws_secret_access_key")
+    if not (access_key and secret_key):
+        return None
+    return AWSCloudTrailClient(
+        access_key_id=str(access_key),
+        secret_access_key=str(secret_key),
+        region=str(params.get("aws_region") or "us-east-1"),
+        session_token=params.get("aws_session_token"),
     )
 
 
@@ -171,6 +193,7 @@ def _s1_client(params: dict) -> SentinelOneClient | None:
 __all__ = [
     "_aws_client",
     "_cloudflare_client",
+    "_cloudtrail_client",
     "_cortex_client",
     "_cs_client",
     "_entra_client",

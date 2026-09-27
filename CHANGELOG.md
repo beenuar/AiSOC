@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An investigation can now read the vendor a tenant actually runs**
+  (gap-closure Phase 4.2). Seven new read-only executors: SentinelOne agents
+  and threats, Microsoft Defender alerts and an endpoint-telemetry search,
+  Microsoft Entra ID sign-ins with the ID Protection risk record, Google
+  Workspace login audit, and AWS CloudTrail `LookupEvents`.
+
+  **The gap.** Three read verbs existed with one vendor arm each, which is a
+  CrowdStrike-and-Okta surface rather than a vendor-read surface. A tenant on
+  SentinelOne and Entra ID had the same investigation reach as a tenant with
+  no EDR at all, because the verb existed and nothing implemented it for
+  them: governed dispatch answered `executor_not_found`, which reads as a
+  broken deployment rather than as a capability nobody wrote.
+
+  **Five of the seven are new vendor arms on the three existing verbs**,
+  which is what declaring a contract per capability rather than per vendor
+  buys: they inherit the `READ_ONLY` classification automatically and cannot
+  drift low. Only the two whose subject is neither a host nor a principal
+  needed their own contract, `lookup_cloud_audit` and
+  `lookup_endpoint_telemetry`.
+
+  **A read failure is never an empty result**, and the tests assert the shape
+  rather than the intent. A host the vendor does not hold is `SUCCEEDED` with
+  `found: False`; a vendor that 5xxs is `FAILED` and carries **no** `count`,
+  `detections` or `found` key at all, because a `count: 0` reaching a model
+  is the strongest exonerating evidence there is and would be false. Entra's
+  ID Protection leg is licensed, so it may fail without taking the sign-ins
+  down and its absence reads as unknown rather than as no risk. Google
+  Workspace's 403 names the missing `admin.reports.audit.readonly` scope,
+  which is a configuration fact rather than an account with no logins.
+
+  **No caller supplies query text.** Defender advanced hunting takes KQL, and
+  these verbs are reachable from an investigation agent whose indicator was
+  lifted out of attacker-influenced alert text. So the KQL lives in the
+  executor as a closed set of four named templates, the caller passes a
+  template name plus one indicator plus a window, and an unknown template is
+  refused before the credential is even read. The accepted path is asserted
+  on the KQL that reaches the wire rather than on the argument, with a
+  hostile indicator appearing only in its escaped form. The same discipline
+  applies per grammar: OData doubles a single quote for Entra, and the
+  CloudTrail attribute key is checked against AWS's own closed vocabulary
+  rather than escaped at all.
+
+  **CloudTrail is read without adding boto3.** boto3 is not in the
+  `aisoc-actions` image (measured: `ModuleNotFoundError`, against 1.43.101 in
+  `aisoc-connectors`), and ADR-0007 has just published that image at 539 MB
+  after moving the service into CORE. `LookupEvents` is one signed JSON POST,
+  so the SigV4 signing is about sixty lines of `hmac` and `hashlib` and needs
+  nothing outside the standard library. The canonical request is pinned line
+  by line against the documented shape, `SignedHeaders` is parsed back out of
+  the header the client produced and every name asserted present on the
+  request, and the signing-key derivation is asserted sensitive to secret,
+  date and region in turn so a dropped link cannot pass as a plausible hex
+  string. **The live AWS path is unverified**: there is no funded AWS account
+  here, so a signature AWS itself accepts has not been observed, and the
+  documentation says so rather than implying otherwise.
+
 - **`connectors` and `actions` now start on the default CORE profile, so the
   investigation agent has somewhere to reach** (gap-closure Phase 4.5,
   [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md)).

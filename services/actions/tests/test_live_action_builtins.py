@@ -60,8 +60,13 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # of a two-way SIEM integration: AiSOC's verdict back onto the notable,
     # signal, incident or offense that produced the alert. Plus 3 for the
     # verbs that were reachable from a recommendation and not from dispatch:
-    # Defender evidence acquisition, and the two ChatOps transports.
-    assert count == 66
+    # Defender evidence acquisition, and the two ChatOps transports. Plus 7
+    # from gap-closure Phase 4.2: five new vendor arms on the three existing
+    # read verbs (SentinelOne agents and threats, Defender alerts, Entra
+    # sign-ins, Google Workspace login audit) and two verbs whose subject is
+    # neither a host nor a principal (AWS CloudTrail lookup, Defender
+    # endpoint-telemetry search).
+    assert count == 73
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -119,6 +124,18 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("okta", "disable_user"),
         ("okta", "force_mfa"),
         ("okta", "get_user_activity"),
+        # Gap-closure Phase 4.2. Five of these are new vendor arms on the
+        # three read verbs above, which is what declaring a contract per
+        # capability buys: they inherit the READ_ONLY classification and
+        # cannot drift low. The two `lookup_*` verbs needed their own
+        # contract because their subject is neither a host nor a principal.
+        ("sentinelone", "get_host"),
+        ("sentinelone", "get_detections"),
+        ("defender", "get_detections"),
+        ("entra", "get_user_activity"),
+        ("google_workspace", "get_user_activity"),
+        ("aws", "lookup_cloud_audit"),
+        ("defender", "lookup_endpoint_telemetry"),
         ("okta", "reset_password"),
         ("okta", "suspend_session"),
         ("pagerduty", "create_ticket"),
@@ -172,7 +189,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 66
+    assert count == 73
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

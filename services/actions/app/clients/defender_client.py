@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 import structlog
@@ -22,6 +23,58 @@ logger = structlog.get_logger()
 _AUTHORITY = "https://login.microsoftonline.com"
 _MDE_SCOPE = "https://api.securitycenter.microsoft.com/.default"
 _MDE_BASE = "https://api.securitycenter.microsoft.com/api"
+
+
+def _kql_escape(value: str) -> str:
+    """Escape a value for a double-quoted KQL string literal.
+
+    KQL escapes backslash and double quote inside a quoted string, and that
+    is the whole grammar. Control characters are dropped rather than escaped:
+    a newline in an indicator is not an indicator, and preserving it buys
+    nothing while giving a crafted value somewhere to hide.
+
+    The value is also length-capped. A multi-kilobyte "indicator" is not one,
+    and an unbounded literal is a cheap way to make a query the service
+    refuses, which reads to a caller as the telemetry being unavailable.
+    """
+    cleaned = "".join(ch for ch in str(value)[:512] if ch.isprintable())
+    return cleaned.replace("\\", "\\\\").replace('"', '\\"')
+
+
+#: The only advanced-hunting queries this client will run.
+#:
+#: A closed set, because the caller is reachable from an investigation agent
+#: and the plan forbids a model composing query text against a customer's
+#: estate. Each template reads `target` and `window`, which `hunt_indicator`
+#: binds as KQL `let` statements, and compares by equality only, so a value
+#: has no way to become an operator. Adding a template is a reviewable change
+#: to this dict rather than a string built at call time.
+_HUNT_TEMPLATES: dict[str, str] = {
+    "file_hash_sightings": (
+        "DeviceFileEvents\n"
+        "| where Timestamp > ago(window)\n"
+        "| where SHA256 =~ target or SHA1 =~ target or MD5 =~ target\n"
+        "| project Timestamp, DeviceName, FileName, FolderPath, InitiatingProcessAccountName, ActionType"
+    ),
+    "process_sightings": (
+        "DeviceProcessEvents\n"
+        "| where Timestamp > ago(window)\n"
+        "| where FileName =~ target or SHA256 =~ target\n"
+        "| project Timestamp, DeviceName, FileName, AccountName, InitiatingProcessFileName, ProcessCommandLine"
+    ),
+    "network_sightings": (
+        "DeviceNetworkEvents\n"
+        "| where Timestamp > ago(window)\n"
+        "| where RemoteIP =~ target or RemoteUrl =~ target\n"
+        "| project Timestamp, DeviceName, RemoteIP, RemoteUrl, RemotePort, InitiatingProcessFileName, ActionType"
+    ),
+    "logon_sightings": (
+        "DeviceLogonEvents\n"
+        "| where Timestamp > ago(window)\n"
+        "| where AccountName =~ target or AccountUpn =~ target\n"
+        "| project Timestamp, DeviceName, AccountName, AccountDomain, LogonType, RemoteIP, ActionType"
+    ),
+}
 
 
 class DefenderClient:
@@ -99,6 +152,98 @@ class DefenderClient:
                 params = None
         logger.info("defender.resolved_alerts", count=len(results))
         return results[:limit]
+
+    async def list_alerts_for_host(self, hostname: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Recent Defender alerts on one machine, whatever their status.
+
+        Gap-closure Phase 4.2. Read-only.
+
+        Resolved alerts are included on purpose. "This host raised the same
+        alert three times last month and an analyst closed each as benign" is
+        one of the few pieces of evidence that reliably settles a repeat
+        finding, and a filter on open alerts throws it away.
+        """
+        machine = await self.find_machine(hostname)
+        if machine is None:
+            return []
+        machine_id = str(machine.get("id") or "")
+        if not machine_id:
+            return []
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_MDE_BASE}/machines/{quote(machine_id, safe='')}/alerts",
+                headers=self._headers(),
+                params={"$top": min(limit, 100), "$orderby": "alertCreationTime desc"},
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("value", []) or []
+        return [self._project_alert(entry) for entry in raw if isinstance(entry, dict)]
+
+    @staticmethod
+    def _project_alert(entry: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "alert_id": entry.get("id"),
+            "title": entry.get("title"),
+            "severity": entry.get("severity"),
+            "category": entry.get("category"),
+            "status": entry.get("status"),
+            "classification": entry.get("classification"),
+            "determination": entry.get("determination"),
+            "detection_source": entry.get("detectionSource"),
+            "threat_family": entry.get("threatFamilyName"),
+            "created_at": entry.get("alertCreationTime"),
+            "resolved_at": entry.get("resolvedTime"),
+        }
+
+    async def hunt_indicator(
+        self,
+        template: str,
+        indicator: str,
+        *,
+        hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Run one of a fixed set of advanced-hunting queries for an indicator.
+
+        Gap-closure Phase 4.2, and the constraint is the whole design.
+
+        Defender's advanced hunting takes KQL. The plan is explicit that a
+        model must never compose query text against a customer's estate, and
+        that is a security boundary rather than a style preference: the
+        indicator reaching this method was lifted out of a process command
+        line or a file name, which is attacker-influenced, so a model relaying
+        it into a query is one injected instruction away from an arbitrary
+        query over the tenant's telemetry.
+
+        So the KQL lives **here**, as a closed set of named templates, and the
+        caller supplies a template name, one indicator and a window. An
+        unknown template name is a ``ValueError``, not a fallback: falling
+        back to a default query would answer a question nobody asked and the
+        answer would look like evidence.
+
+        The indicator is bound through a KQL ``let`` statement with a quoted
+        string literal, and the quoting escapes backslash and double quote,
+        which is the whole of KQL's string escape grammar. The templates
+        compare against it by equality only, so there is no place for a
+        value to become an operator.
+        """
+        query = _HUNT_TEMPLATES.get(template)
+        if query is None:
+            raise ValueError(f"unknown hunting template {template!r}; known templates are {', '.join(sorted(_HUNT_TEMPLATES))}")
+        window = max(1, min(hours, 720))
+        kql = f'let target = "{_kql_escape(indicator)}";\nlet window = {window}h;\n{query}\n| limit {min(limit, 200)}'
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            await self._ensure_token(client)
+            resp = await client.post(
+                f"{_MDE_BASE}/advancedqueries/run",
+                headers=self._headers(),
+                json={"Query": kql},
+            )
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        rows = body.get("Results") or []
+        return [row for row in rows if isinstance(row, dict)]
 
     async def find_machine(self, hostname: str) -> dict[str, Any] | None:
         """Look up a machine by hostname in Defender for Endpoint."""

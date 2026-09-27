@@ -107,6 +107,48 @@ class SentinelOneClient:
             agents = resp.json().get("data", [])
             return agents[0] if agents else None
 
+    async def list_threats(self, hostname: str, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Recent threats SentinelOne has recorded for a host.
+
+        Gap-closure Phase 4.2. Read-only: the endpoint is a GET over
+        ``/threats`` filtered by ``computerName``, and nothing here mitigates,
+        dismisses or annotates a threat.
+
+        The projection is deliberate and the list is short. A SentinelOne
+        threat record nests ``threatInfo``, ``agentRealtimeInfo``,
+        ``agentDetectionInfo``, ``mitigationStatus`` and more, which is a few
+        kilobytes of JSON per threat for about eight fields of signal. An
+        investigation wants to know what the EDR already concluded, not to
+        re-derive it from the vendor's schema, and the rest is unbounded token
+        cost on the hot path of every escalated alert.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{self._base_url}/threats",
+                headers=self._headers(),
+                params={"computerName": hostname, "limit": min(limit, 100), "sortBy": "createdAt", "sortOrder": "desc"},
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("data", []) or []
+        return [self._project_threat(entry) for entry in raw if isinstance(entry, dict)]
+
+    @staticmethod
+    def _project_threat(entry: dict[str, Any]) -> dict[str, Any]:
+        info = entry.get("threatInfo") if isinstance(entry.get("threatInfo"), dict) else {}
+        return {
+            "threat_id": entry.get("id"),
+            "name": info.get("threatName"),
+            "classification": info.get("classification"),
+            "confidence": info.get("confidenceLevel"),
+            "verdict": info.get("analystVerdict"),
+            "mitigation_status": info.get("mitigationStatus"),
+            "sha256": info.get("sha256"),
+            "file_path": info.get("filePath"),
+            "process_user": info.get("processUser"),
+            "detected_at": info.get("createdAt") or entry.get("createdAt"),
+            "storyline": info.get("storyline"),
+        }
+
     async def _resolve_agent_uuid(self, client: httpx.AsyncClient, hostname: str) -> str:
         resp = await client.get(
             f"{self._base_url}/agents",

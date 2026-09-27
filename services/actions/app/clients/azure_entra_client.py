@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import secrets
 import string
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -54,6 +55,27 @@ logger = structlog.get_logger()
 _AUTHORITY = "https://login.microsoftonline.com"
 _GRAPH = "https://graph.microsoft.com/v1.0"
 _GRAPH_BETA = "https://graph.microsoft.com/beta"
+
+
+def _quote_odata_string(value: str) -> str:
+    """Escape a value for a single-quoted OData string literal.
+
+    OData escapes a single quote by doubling it, and that is the whole of the
+    grammar's escaping rule. Everything else inside the quotes is literal.
+
+    This matters because the read methods below are reachable, through the
+    live-action registry, from an investigation agent, and the value it passes
+    is a principal name lifted out of alert text. Alert text is
+    attacker-influenced. A raw interpolation would let a crafted
+    ``userPrincipalName`` close the literal and append a clause, which on a
+    read endpoint means reading another principal's sign-ins.
+
+    Control characters are dropped rather than escaped: a newline in a UPN is
+    not a principal name, and there is no reading of it that is worth
+    preserving.
+    """
+    cleaned = "".join(ch for ch in str(value) if ch.isprintable())
+    return cleaned.replace("'", "''")
 
 
 def _gen_temp_password(length: int = 16) -> str:
@@ -138,6 +160,103 @@ class AzureEntraClient:
         except Exception as exc:  # noqa: BLE001 - indeterminate, never a false VERIFIED
             logger.warning("entra.get_user_enabled.failed", upn=user_principal_name, error=str(exc))
             return None
+
+    async def list_sign_ins(
+        self,
+        user_principal_name: str,
+        *,
+        hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Recent sign-in attempts for one principal, successes and failures.
+
+        Gap-closure Phase 4.2. Read-only: a GET over ``/auditLogs/signIns``.
+
+        Both outcomes are returned rather than only failures, because the
+        question an identity investigation asks is not "did anything fail" but
+        "what did the pattern look like": a single success from an unusual
+        address after a run of failures is the finding, and filtering to
+        failures hides exactly the event that matters.
+
+        The filter is built here from a validated UPN and an integer window,
+        never from caller-supplied text. ``$filter`` is OData rather than KQL,
+        but it is still a query language and a principal name interpolated raw
+        would be an injection point on a surface an agent can reach.
+        """
+        since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 720)))
+        upn = _quote_odata_string(user_principal_name)
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_GRAPH}/auditLogs/signIns",
+                headers=self._headers(),
+                params={
+                    "$filter": (f"userPrincipalName eq '{upn}' and createdDateTime ge {since.strftime('%Y-%m-%dT%H:%M:%SZ')}"),
+                    "$top": min(limit, 100),
+                    "$orderby": "createdDateTime desc",
+                },
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("value", []) or []
+        return [self._project_sign_in(entry) for entry in raw if isinstance(entry, dict)]
+
+    @staticmethod
+    def _project_sign_in(entry: dict[str, Any]) -> dict[str, Any]:
+        status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
+        location = entry.get("location") if isinstance(entry.get("location"), dict) else {}
+        code = status.get("errorCode")
+        return {
+            "at": entry.get("createdDateTime"),
+            "ip": entry.get("ipAddress"),
+            "app": entry.get("appDisplayName"),
+            "client": entry.get("clientAppUsed"),
+            # errorCode 0 is Graph's "success". Rendered as a boolean so a
+            # model is not invited to interpret a vendor error number, and
+            # `None` stays None rather than becoming a confident False.
+            "succeeded": (code == 0) if code is not None else None,
+            "failure_reason": status.get("failureReason") if code else None,
+            "conditional_access": entry.get("conditionalAccessStatus"),
+            "risk_level": entry.get("riskLevelDuringSignIn"),
+            "risk_state": entry.get("riskState"),
+            "country": location.get("countryOrRegion"),
+            "city": location.get("city"),
+        }
+
+    async def get_risky_user(self, user_principal_name: str) -> dict[str, Any] | None:
+        """Entra ID Protection's own risk assessment for one principal.
+
+        Gap-closure Phase 4.2. Read-only.
+
+        ``None`` means Graph answered and holds no risk record for this
+        principal, which is a real answer. It is **not** the same as a failed
+        read, and the executor above keeps the two apart: a caller that cannot
+        tell them apart will report an account as unremarkable because the
+        lookup broke.
+
+        ``/identityProtection/riskyUsers`` is a beta endpoint. Microsoft
+        publishes it as such, so it is named here rather than being quietly
+        pinned to v1.0, where it does not exist.
+        """
+        upn = _quote_odata_string(user_principal_name)
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_GRAPH_BETA}/identityProtection/riskyUsers",
+                headers=self._headers(),
+                params={"$filter": f"userPrincipalName eq '{upn}'", "$top": 1},
+            )
+            resp.raise_for_status()
+            rows = resp.json().get("value", []) or []
+        if not rows or not isinstance(rows[0], dict):
+            return None
+        row = rows[0]
+        return {
+            "risk_level": row.get("riskLevel"),
+            "risk_state": row.get("riskState"),
+            "risk_detail": row.get("riskDetail"),
+            "last_updated": row.get("riskLastUpdatedDateTime"),
+            "is_deleted": row.get("isDeleted"),
+        }
 
     async def disable_user(self, user_id: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=20.0) as client:

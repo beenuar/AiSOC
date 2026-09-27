@@ -133,6 +133,15 @@ class Capability(str, Enum):
     GET_HOST = "get_host"
     GET_DETECTIONS = "get_detections"
     GET_USER_ACTIVITY = "get_user_activity"
+    # Gap-closure Phase 4.2. Two reads that do not fit the three above
+    # because their subject is neither a host nor a principal: a cloud
+    # control-plane audit trail, and endpoint telemetry searched by
+    # indicator. Both take typed arguments and build their own query text
+    # server-side, which is the point: an investigation agent can reach
+    # these, and the plan forbids a model composing query text against a
+    # customer's estate.
+    LOOKUP_CLOUD_AUDIT = "lookup_cloud_audit"
+    LOOKUP_ENDPOINT_TELEMETRY = "lookup_endpoint_telemetry"
     SEARCH_SIEM = "search_siem"
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"

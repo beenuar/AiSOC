@@ -81,12 +81,19 @@ from . import registry
 from .capability_contracts import apply_contract
 from .executor import LiveActionExecutor
 from .investigation_reads import (
+    AWSLookupCloudAudit,
     CrowdStrikeGetDetections,
     CrowdStrikeGetHost,
     CrowdStrikeUnisolateHost,
+    DefenderGetDetections,
     DefenderGetHost,
+    DefenderLookupEndpointTelemetry,
     DefenderUnisolateHost,
+    EntraGetUserActivity,
+    GoogleWorkspaceGetUserActivity,
     OktaGetUserActivity,
+    SentinelOneGetDetections,
+    SentinelOneGetHost,
 )
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
 from .vendor_breadth import VENDOR_BREADTH_EXECUTORS
@@ -938,6 +945,18 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     CrowdStrikeGetDetections,
     DefenderGetHost,
     OktaGetUserActivity,
+    # Gap-closure Phase 4.2. Three read verbs with one vendor arm each is a
+    # CrowdStrike-and-Okta surface, not a vendor-read surface: a tenant on
+    # SentinelOne and Entra ID had the same investigation reach as a tenant
+    # with no EDR at all, because dispatch answered executor_not_found, which
+    # reads as a broken deployment rather than as a capability nobody wrote.
+    SentinelOneGetHost,
+    SentinelOneGetDetections,
+    DefenderGetDetections,
+    EntraGetUserActivity,
+    GoogleWorkspaceGetUserActivity,
+    AWSLookupCloudAudit,
+    DefenderLookupEndpointTelemetry,
     # Rollback for the most disruptive action, which had no executor.
     CrowdStrikeUnisolateHost,
     DefenderUnisolateHost,

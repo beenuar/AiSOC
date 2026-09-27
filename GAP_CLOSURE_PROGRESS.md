@@ -310,7 +310,7 @@ through `audit_hash.verify_chain`.
 ## Phase 4: Let the investigation agent reach the customer's tools
 
 - [ ] **4.1 Federated search tool** as a typed agent tool; the model never writes SPL, KQL or ES|QL.
-- [ ] **4.2 Vendor read tools**, plus new read verbs for SentinelOne, Microsoft Entra ID, Google Workspace, AWS CloudTrail and Microsoft Defender.
+- [~] **4.2 Vendor read tools**, plus new read verbs for SentinelOne, Microsoft Entra ID, Google Workspace, AWS CloudTrail and Microsoft Defender. The verbs half is shipped: seven new executors, five of them vendor arms on the three existing read verbs so they inherit the `READ_ONLY` contract and cannot drift low, and two new verbs (`lookup_cloud_audit`, `lookup_endpoint_telemetry`) whose subject is neither a host nor a principal. 25 tests against vendor-shaped synthetic payloads on the real HTTP path, asserting the pair that must never collapse: not-found is `SUCCEEDED` with `found: False`, a vendor 5xx is `FAILED` and carries no `count`, `detections` or `found` key at all. CloudTrail is read with hand-rolled SigV4 rather than boto3, which is measurably absent from the `aisoc-actions` image; the live AWS path is unverified and recorded as such (see D18). Exposing them **as agent tools through the API** is the other half and lands with 4.1 and 4.3.
 - [ ] **4.3 Tool handling**: advertise only configured backends, project and cap results, mark them untrusted, and surface a read failure as "could not check".
 - [ ] **4.4 Strategies** updated so `check_investigation_depth.py` still holds.
 - [x] **4.5 CORE decision**: measured, decided in [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md), implemented. Both services join CORE. Measured with images pulled fresh from GHCR and `docker stats`, the same method as ADR-0006: `actions` 539 MB image / 45.99 MiB cold-start / 48.3 MiB at 40 hours, `connectors` 586 MB / 71.45 MiB / 76.51 MiB, together **124.8 MiB against an 8 GB budget, 1.5%**. Cross-checked against `litellm` at 471 MiB on the same host, which ADR-0006 measured at 451 MiB. ADR-0006's misleading-idle trap was checked for and is absent: neither moves more than 0.6 MiB under 100 requests, because both are network front ends with no model and no index. Both verified to boot and serve with zero configuration. The decision turned on something stronger than a feature gap, recorded as D17: CORE was already *configured* for both and started neither. The README's ~8 GB figure is deliberately not moved, and the lake and graph deliberately stay in `full`.
@@ -573,6 +573,66 @@ memory floors rather than network front ends, so they are a separate decision
 needing its own measurement. After this change a CORE agent can reach a
 configured vendor and still cannot reach an event lake, and the eleven lake
 pivots report their data class is unavailable rather than returning empty.
+
+### D18. Two of Phase 4.2's five vendors needed a client, not a read method, and one of them needed a signer
+
+The plan says to "add read verbs for clients that already exist". Three of the
+five were exactly that: `sentinelone_client.py`, `azure_entra_client.py` and
+`google_workspace_client.py` each gained read methods beside the response
+methods already there, and `defender_client.py` gained two.
+
+**AWS was not.** The AWS client in `services/actions` is
+`aws_security_groups.py`, which manages firewall rules and has no audit read.
+Worse, it is built on boto3, and boto3 **is not installed in the actions
+image**: measured on the published artefact, `import boto3` raises
+`ModuleNotFoundError` in `aisoc-actions` and succeeds at 1.43.101 in
+`aisoc-connectors`. So every live security-group call in that client already
+degrades to "boto3 not installed in actions service", and a CloudTrail verb
+built the same way would have been a declared capability that could never run.
+
+Adding boto3 was the obvious fix and is the wrong one here. botocore is tens
+of megabytes, and ADR-0007 in the PR immediately before this one has just
+published this image at 539 MB and moved it into CORE on the strength of that
+number. `LookupEvents` is a single signed JSON POST, so SigV4 by hand is about
+sixty lines of `hmac` and `hashlib` with nothing outside the standard library.
+
+**What that costs in honesty, stated rather than hidden.** A hand-rolled
+signer is one header-ordering mistake from 403 on every call, and there is no
+funded AWS account in this repository, so no signature has ever been offered
+to AWS. What the tests pin is the algorithm against its specification: the
+canonical request line by line, `SignedHeaders` parsed back out of the header
+the client produced with every name asserted present on the request, and the
+signing-key chain asserted sensitive to secret, date and region in turn so a
+dropped link cannot pass as a plausible hex string. The live path is
+**unverified**, and the claim-matrix row and the docs say so in those words.
+That is the same position the plan takes for vendor MCP servers in 5.5.
+
+The second one worth recording is the Google Workspace scope. The existing
+client requests two directory scopes, and the login audit lives behind
+`admin.reports.audit.readonly`, which is a third. A deployment whose service
+account has not been granted it domain-wide gets a 403, and the executor's
+error names the scope, because an operator reading "no logins" would conclude
+the account was quiet.
+
+### D19. Defender advanced hunting takes KQL, which is the one thing a caller may not supply
+
+The plan asks for "a read-only advanced hunting query" and separately forbids
+a model composing query text against a customer's estate. Both are right and
+the naive reading of the first breaks the second, so the resolution is
+recorded here.
+
+The verb takes a **template name**, one indicator and a window. The KQL lives
+in `_HUNT_TEMPLATES` in `defender_client.py` as four named queries, each
+reading a `target` and a `window` the client binds as KQL `let` statements
+and comparing by equality only, so a value has no way to become an operator.
+An unknown template name is refused **before the credential is read**, so an
+operator is not sent to look at their Azure app registration for a caller's
+mistake, and the test asserts the vendor route was never called.
+
+The verb is named `lookup_endpoint_telemetry` rather than `run_hunting_query`
+deliberately. A verb named for running a query invites a later contributor to
+add a `query` parameter, and the name is the cheapest place to encode the
+constraint.
 
 ### D12. `unified_decision` had no production caller, and the plan names it anyway
 

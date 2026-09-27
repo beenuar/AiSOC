@@ -84,6 +84,11 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "get_detections",
         "get_user_activity",
         "search_siem",
+        # Gap-closure Phase 4.2: a cloud control-plane audit lookup and an
+        # indicator search over endpoint telemetry. Neither subject is a host
+        # or a principal, so neither fits the three verbs above.
+        "lookup_cloud_audit",
+        "lookup_endpoint_telemetry",
         "suspend_session",
         "sync_detection_rule",
         # The return leg of a two-way SIEM integration: AiSOC's verdict

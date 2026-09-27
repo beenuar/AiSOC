@@ -29,7 +29,17 @@ from typing import Any
 
 import structlog
 
-from app.clients.factories import _cs_client, _mde_client, _okta_client
+from app.clients.aws_cloudtrail_client import CloudTrailLookupError
+from app.clients.defender_client import _HUNT_TEMPLATES
+from app.clients.factories import (
+    _cloudtrail_client,
+    _cs_client,
+    _entra_client,
+    _gws_client,
+    _mde_client,
+    _okta_client,
+    _s1_client,
+)
 from app.live_actions.capability_contracts import apply_contract
 from app.live_actions.executor import LiveActionExecutor
 from app.live_actions.models import LiveActionRequest, LiveActionResult, LiveActionStatus
@@ -313,6 +323,426 @@ class OktaGetUserActivity(LiveActionExecutor):
                 "Okta read failed",
                 error=f"Okta read failed: {exc}",
             )
+
+
+# ─── Phase 4.2: the vendors an investigation could not reach ─────────────────
+#
+# Three verbs with one vendor arm each is not a vendor-read surface, it is a
+# CrowdStrike-and-Okta surface. A tenant on SentinelOne and Entra ID had the
+# same investigation reach as a tenant with no EDR at all, because the verb
+# existed and nothing implemented it for them: dispatch answered
+# `executor_not_found`, which reads as a broken deployment rather than as a
+# capability nobody wrote.
+#
+# Five of the seven executors below are new *vendor arms on existing verbs*,
+# which is the whole point of declaring a contract per capability rather than
+# per vendor: they inherit `get_host` / `get_detections` / `get_user_activity`
+# classifications automatically and cannot drift low. Only the two verbs whose
+# subject is neither a host nor a principal needed a new contract.
+
+
+@apply_contract
+class SentinelOneGetHost(LiveActionExecutor):
+    vendor_id = "sentinelone"
+    capability = "get_host"
+    description = "Read an agent record from SentinelOne."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        target = str(request.target or params.get("hostname") or "")
+        if request.dry_run:
+            return _preview(self, request, target, "SentinelOne")
+
+        client = _s1_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "SentinelOne")
+
+        try:
+            agent = await client.find_agent(target)
+            if agent is None:
+                return _result(
+                    self,
+                    request,
+                    LiveActionStatus.SUCCEEDED,
+                    f"no SentinelOne agent matches {target}",
+                    details={"found": False, "hostname": target},
+                )
+            return _result(
+                self,
+                request,
+                LiveActionStatus.SUCCEEDED,
+                (
+                    f"{target}: {agent.get('osName') or 'unknown platform'}, "
+                    f"network {'disconnected' if agent.get('networkStatus') == 'disconnected' else agent.get('networkStatus') or 'unknown'}"
+                ),
+                details={
+                    "found": True,
+                    "agent_uuid": agent.get("uuid"),
+                    "hostname": agent.get("computerName"),
+                    "platform": agent.get("osName"),
+                    "os_version": agent.get("osRevision"),
+                    "agent_version": agent.get("agentVersion"),
+                    "local_ip": agent.get("lastIpToMgmt"),
+                    "external_ip": agent.get("externalIp"),
+                    "last_seen": agent.get("lastActiveDate"),
+                    "network_status": agent.get("networkStatus"),
+                    "infected": agent.get("infected"),
+                    "active_threats": agent.get("activeThreats"),
+                    "is_up_to_date": agent.get("isUpToDate"),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - a vendor error is FAILED, never empty
+            logger.warning("get_host.failed", vendor="sentinelone", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "SentinelOne read failed",
+                error=f"SentinelOne read failed: {exc}",
+            )
+
+
+@apply_contract
+class SentinelOneGetDetections(LiveActionExecutor):
+    vendor_id = "sentinelone"
+    capability = "get_detections"
+    description = "Read recent SentinelOne threats for a host."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        target = str(request.target or params.get("hostname") or "")
+        if request.dry_run:
+            return _preview(self, request, target, "SentinelOne")
+
+        client = _s1_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "SentinelOne")
+
+        try:
+            threats = await client.list_threats(target, limit=int(params.get("limit", 20)))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.SUCCEEDED,
+                f"{len(threats)} recent threat(s) on {target}",
+                details={"found": True, "hostname": target, "count": len(threats), "detections": threats},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("get_detections.failed", vendor="sentinelone", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "SentinelOne read failed",
+                error=f"SentinelOne read failed: {exc}",
+            )
+
+
+@apply_contract
+class DefenderGetDetections(LiveActionExecutor):
+    vendor_id = "defender"
+    capability = "get_detections"
+    description = "Read recent Microsoft Defender alerts for a host."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        target = str(request.target or params.get("hostname") or "")
+        if request.dry_run:
+            return _preview(self, request, target, "Defender")
+
+        client = _mde_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "Defender")
+
+        try:
+            # `list_alerts_for_host` resolves the machine first and returns an
+            # empty list when there is none. That is indistinguishable from a
+            # machine with no alerts, and the two are different answers, so the
+            # resolution is done here where it can be reported.
+            machine = await client.find_machine(target)
+            if machine is None:
+                return _result(
+                    self,
+                    request,
+                    LiveActionStatus.SUCCEEDED,
+                    f"no Defender machine matches {target}",
+                    details={"found": False, "hostname": target, "detections": []},
+                )
+            alerts = await client.list_alerts_for_host(target, limit=int(params.get("limit", 20)))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.SUCCEEDED,
+                f"{len(alerts)} recent Defender alert(s) on {target}",
+                details={"found": True, "hostname": target, "count": len(alerts), "detections": alerts},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("get_detections.failed", vendor="defender", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "Defender read failed",
+                error=f"Defender read failed: {exc}",
+            )
+
+
+@apply_contract
+class EntraGetUserActivity(LiveActionExecutor):
+    vendor_id = "entra"
+    capability = "get_user_activity"
+    description = "Read recent sign-ins and the risk assessment for an Entra ID principal."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        target = str(request.target or params.get("user_principal_name") or params.get("user_name") or "")
+        if request.dry_run:
+            return _preview(self, request, target, "Entra ID")
+
+        client = _entra_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "Entra ID")
+
+        try:
+            sign_ins = await client.list_sign_ins(
+                target,
+                hours=int(params.get("hours", 24)),
+                limit=int(params.get("limit", 50)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("get_user_activity.failed", vendor="entra", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "Entra ID read failed",
+                error=f"Entra ID sign-in read failed: {exc}",
+            )
+
+        # The risk record is a second call against a beta endpoint, and it is
+        # allowed to fail without taking the sign-ins with it. Its absence is
+        # reported as unknown rather than as "not at risk", because ID
+        # Protection is a licensed feature and a tenant without it would
+        # otherwise read as a tenant with a clean principal.
+        risk: dict[str, Any] | None = None
+        risk_error: str | None = None
+        try:
+            risk = await client.get_risky_user(target)
+        except Exception as exc:  # noqa: BLE001
+            risk_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("get_user_activity.risk_unavailable", vendor="entra", error=risk_error)
+
+        distinct_ips = sorted({str(row.get("ip")) for row in sign_ins if row.get("ip")})
+        failures = sum(1 for row in sign_ins if row.get("succeeded") is False)
+        details: dict[str, Any] = {
+            "found": True,
+            "user": target,
+            "count": len(sign_ins),
+            "sign_ins": sign_ins,
+            "distinct_source_ips": distinct_ips,
+            "failed_sign_ins": failures,
+        }
+        if risk is not None:
+            details["risk"] = risk
+        else:
+            details["risk"] = None
+            details["risk_unavailable_reason"] = risk_error or (
+                "Entra ID Protection holds no risk record for this principal, which may mean "
+                "no risk was detected or that the tenant is not licensed for it. Treat as "
+                "unknown rather than clear."
+            )
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            (f"{len(sign_ins)} sign-in(s) for {target} from {len(distinct_ips)} distinct address(es), {failures} failed"),
+            details=details,
+        )
+
+
+@apply_contract
+class GoogleWorkspaceGetUserActivity(LiveActionExecutor):
+    vendor_id = "google_workspace"
+    capability = "get_user_activity"
+    description = "Read recent Google Workspace login audit events for an account."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        target = str(request.target or params.get("user_email") or params.get("user_name") or "")
+        if request.dry_run:
+            return _preview(self, request, target, "Google Workspace")
+
+        client = _gws_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "Google Workspace")
+
+        try:
+            events = await client.list_login_events(
+                target,
+                hours=int(params.get("hours", 24)),
+                limit=int(params.get("limit", 50)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("get_user_activity.failed", vendor="google_workspace", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "Google Workspace read failed",
+                error=(
+                    f"Google Workspace login audit read failed: {exc}. A 403 here usually means the "
+                    f"service account has not been granted admin.reports.audit.readonly domain-wide, "
+                    f"which is a configuration gap and not a statement about this account."
+                ),
+            )
+
+        distinct_ips = sorted({str(row.get("ip")) for row in events if row.get("ip")})
+        suspicious = sum(1 for row in events if row.get("is_suspicious") in (True, "true"))
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            (f"{len(events)} login event(s) for {target} from {len(distinct_ips)} distinct address(es)"),
+            details={
+                "found": True,
+                "user": target,
+                "count": len(events),
+                "logins": events,
+                "distinct_source_ips": distinct_ips,
+                "flagged_suspicious_by_google": suspicious,
+            },
+        )
+
+
+@apply_contract
+class AWSLookupCloudAudit(LiveActionExecutor):
+    vendor_id = "aws"
+    capability = "lookup_cloud_audit"
+    description = "Look up AWS CloudTrail management events for a principal, resource or API call."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        attribute_key = str(params.get("attribute_key") or "Username")
+        target = str(request.target or params.get("attribute_value") or "")
+        if request.dry_run:
+            return _preview(self, request, f"{attribute_key}={target}", "AWS CloudTrail")
+
+        client = _cloudtrail_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "AWS CloudTrail")
+
+        try:
+            events = await client.lookup_events(
+                attribute_key=attribute_key,
+                attribute_value=target,
+                hours=int(params.get("hours", 24)),
+                limit=int(params.get("limit", 50)),
+            )
+        except CloudTrailLookupError as exc:
+            # Deliberately FAILED, including for a refused attribute key. An
+            # empty list here would be read as "this principal made no API
+            # calls", which is a statement about the customer's account rather
+            # than about our request.
+            logger.warning("lookup_cloud_audit.failed", vendor="aws", error=str(exc))
+            return _result(self, request, LiveActionStatus.FAILED, "CloudTrail lookup failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("lookup_cloud_audit.failed", vendor="aws", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "CloudTrail lookup failed",
+                error=f"CloudTrail lookup failed: {exc}",
+            )
+
+        errors = sorted({str(row["error_code"]) for row in events if row.get("error_code")})
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            f"{len(events)} CloudTrail event(s) for {attribute_key} {target}",
+            details={
+                "found": True,
+                "attribute_key": attribute_key,
+                "attribute_value": target,
+                "count": len(events),
+                "events": events,
+                "api_error_codes": errors,
+            },
+        )
+
+
+@apply_contract
+class DefenderLookupEndpointTelemetry(LiveActionExecutor):
+    vendor_id = "defender"
+    capability = "lookup_endpoint_telemetry"
+    description = "Search Microsoft Defender endpoint telemetry for sightings of one indicator."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        template = str(params.get("template") or "")
+        target = str(request.target or params.get("indicator") or "")
+        if request.dry_run:
+            return _preview(self, request, f"{template}:{target}", "Defender")
+
+        # Checked before the credential, because an unknown template is a
+        # caller error and reporting it as a credential problem would send an
+        # operator to look at their Azure app registration.
+        if template not in _HUNT_TEMPLATES:
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "unknown telemetry template",
+                error=(
+                    f"{template!r} is not one of the telemetry templates this verb can run. "
+                    f"Known templates: {', '.join(sorted(_HUNT_TEMPLATES))}. Query text is not accepted."
+                ),
+            )
+
+        client = _mde_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "Defender")
+
+        try:
+            rows = await client.hunt_indicator(
+                template,
+                target,
+                hours=int(params.get("hours", 24)),
+                limit=int(params.get("limit", 50)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("lookup_endpoint_telemetry.failed", vendor="defender", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "Defender telemetry search failed",
+                error=f"Defender telemetry search failed: {exc}",
+            )
+
+        hosts = sorted({str(row["DeviceName"]) for row in rows if row.get("DeviceName")})
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            f"{len(rows)} sighting(s) of {target} across {len(hosts)} host(s)",
+            details={
+                "found": True,
+                "template": template,
+                "indicator": target,
+                "count": len(rows),
+                "distinct_hosts": hosts,
+                "sightings": rows,
+            },
+        )
 
 
 # ─── Rollback ────────────────────────────────────────────────────────────────

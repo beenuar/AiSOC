@@ -88,6 +88,40 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_INVESTIGATE,
         note="Recent authentication events for a principal, from the IdP.",
     ),
+    "lookup_cloud_audit": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back, so there is no write "
+            "for a probe to confirm. Recorded rather than left blank so this "
+            "reads as the answer it is and not as an omission."
+        ),
+        note=(
+            "Cloud control-plane audit events for one principal, resource or "
+            "API call. The window and the attribute are typed arguments; the "
+            "caller never supplies query text."
+        ),
+    ),
+    "lookup_endpoint_telemetry": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "Sightings of one indicator in endpoint telemetry, through the "
+            "EDR's own hunting index. The query is one of a closed set of "
+            "templates the executor owns; a caller supplies a template name, "
+            "an indicator and a window, never a query string. That is a "
+            "security boundary rather than a convenience: this verb is "
+            "reachable from an investigation agent, and the indicator it "
+            "passes was lifted out of attacker-influenced alert text."
+        ),
+    ),
     "search_siem": CapabilityContract(
         impact=ActionImpact.READ_ONLY,
         approval=ApprovalRequirement.AUTOMATIC,
