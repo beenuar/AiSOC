@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.organization import Organization
+from app.models.tenant import Tenant
 from app.services import usage_metering
 from app.services.branding.resolver import owning_org_id
 from app.services.entitlements import headroom_for_tenant
@@ -64,6 +65,11 @@ async def get_usage(
     days = await usage_metering.measure_range(db, current_user.tenant_id, start_day, end_day)
     point_in_time = await usage_metering.measure_point_in_time(db, current_user.tenant_id)
 
+    # The per-tenant override, not the plan default. `limit_for` reads this
+    # first, so omitting it reports plan headroom to a tenant whose limits were
+    # deliberately raised, which is the opposite of what the row says.
+    tenant_limits = await db.scalar(select(Tenant.limits).where(Tenant.id == current_user.tenant_id))
+
     return {
         "tenant_id": str(current_user.tenant_id),
         "start": start_day.isoformat(),
@@ -80,7 +86,7 @@ async def get_usage(
         "not_measured": usage_metering.UNMEASURED,
         # The limits these counts run against, so a usage screen and a quota
         # screen cannot disagree about the same rows.
-        "entitlements": [h.as_dict() for h in await headroom_for_tenant(db, current_user.tenant_id)],
+        "entitlements": [h.as_dict() for h in await headroom_for_tenant(db, current_user.tenant_id, tenant_limits)],
     }
 
 

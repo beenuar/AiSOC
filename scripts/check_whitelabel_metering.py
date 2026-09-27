@@ -124,10 +124,16 @@ def _meters(tree: ast.Module, name: str) -> list[dict[str, str]]:
             fields: dict[str, str] = {}
             for index, arg in enumerate(call.args):
                 key = ("key", "label", "description", "source", "sql")[index] if index < 5 else str(index)
-                fields[key] = arg.value if isinstance(arg, ast.Constant) else _join(arg)
+                # A constant that is not a string goes through `_join` rather
+                # than into a `dict[str, str]`; the fields this reads are
+                # string literals, and a number here means the file changed
+                # shape, not that the gate should carry a non-string.
+                fields[key] = arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else _join(arg)
             for kw in call.keywords:
                 if kw.arg:
-                    fields[kw.arg] = kw.value.value if isinstance(kw.value, ast.Constant) else _join(kw.value)
+                    fields[kw.arg] = (
+                        kw.value.value if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str) else _join(kw.value)
+                    )
             found.append(fields)
     return found
 
