@@ -28,9 +28,10 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from app.models.retro_hunt import RetroHuntSettings
 from app.services.retro_hunt import ioc_fields
 from app.services.retro_hunt.intel_types import route_feed_type
 from app.services.retro_hunt.service import (
@@ -46,6 +47,7 @@ from app.services.retro_hunt.sweep import (
     SweepOutcome,
     build_sweep_sql,
 )
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: F401  (referenced by the casts in _budget)
 
 TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -196,13 +198,24 @@ class _FakeSettings:
     updated_at: datetime = datetime.now(UTC)
 
 
+async def _budget(row: _FakeSettings, *, now: datetime) -> bool:
+    """``_consume_budget`` against the in-memory double.
+
+    The session is ``None`` because the budget path never reaches it, and
+    ``_FakeSettings`` stands in for the ORM row. Both are deliberate doubles,
+    so the casts are stated once here rather than as sixteen ignores spread
+    across eight call sites.
+    """
+    return await _consume_budget(cast("AsyncSession", None), cast("RetroHuntSettings", row), now=now)
+
+
 @pytest.mark.asyncio
 async def test_budget_refuses_once_the_hourly_allowance_is_spent() -> None:
     row = _FakeSettings()
     now = datetime.now(UTC)
-    assert await _consume_budget(None, row, now=now) is True
-    assert await _consume_budget(None, row, now=now) is True
-    assert await _consume_budget(None, row, now=now) is False
+    assert await _budget(row, now=now) is True
+    assert await _budget(row, now=now) is True
+    assert await _budget(row, now=now) is False
     assert row.sweeps_skipped_budget == 1
 
 
@@ -210,7 +223,7 @@ async def test_budget_refuses_once_the_hourly_allowance_is_spent() -> None:
 async def test_a_refused_sweep_is_counted_so_a_quiet_feed_is_distinguishable() -> None:
     """An operator must be able to tell an empty budget from an empty feed."""
     row = _FakeSettings(max_sweeps_per_hour=0)
-    assert await _consume_budget(None, row, now=datetime.now(UTC)) is False
+    assert await _budget(row, now=datetime.now(UTC)) is False
     assert row.sweeps_skipped_budget == 1
     assert row.sweeps_this_hour == 0
 
@@ -219,7 +232,7 @@ async def test_a_refused_sweep_is_counted_so_a_quiet_feed_is_distinguishable() -
 async def test_the_hourly_window_resets_lazily_without_a_scheduled_job() -> None:
     now = datetime.now(UTC)
     row = _FakeSettings(sweeps_this_hour=2, hour_started_at=now - timedelta(hours=2))
-    assert await _consume_budget(None, row, now=now) is True
+    assert await _budget(row, now=now) is True
     assert row.sweeps_this_hour == 1
 
 
@@ -228,9 +241,9 @@ async def test_the_daily_ceiling_holds_even_when_hours_keep_resetting() -> None:
     """The two windows are independent, so the wider one must still bind."""
     row = _FakeSettings(max_sweeps_per_hour=100, max_sweeps_per_day=2)
     base = datetime.now(UTC)
-    assert await _consume_budget(None, row, now=base) is True
-    assert await _consume_budget(None, row, now=base + timedelta(hours=1, minutes=1)) is True
-    assert await _consume_budget(None, row, now=base + timedelta(hours=2, minutes=2)) is False
+    assert await _budget(row, now=base) is True
+    assert await _budget(row, now=base + timedelta(hours=1, minutes=1)) is True
+    assert await _budget(row, now=base + timedelta(hours=2, minutes=2)) is False
 
 
 # ------------------------------------------------------------------- dedup

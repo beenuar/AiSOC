@@ -463,7 +463,10 @@ def _self_test() -> int:
     extra.append(
         (
             f"all {len(emitted)} feed type(s) this tree emits are routable",
-            emitted and all(not intel_types.route_feed_type(t).unknown for t in emitted),
+            # `bool(emitted)` rather than `emitted`: an empty set must fail this
+            # check rather than pass it vacuously, and spelling the conversion
+            # keeps the value a bool instead of the set itself.
+            bool(emitted) and all(not intel_types.route_feed_type(t).unknown for t in emitted),
         )
     )
 

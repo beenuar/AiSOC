@@ -167,7 +167,9 @@ def clickhouse_client() -> Any:
     # unprefixed names are the fallback so a developer can point it at a local
     # container without inventing a second set of variables.
     host = os.getenv("ISOLATION_CLICKHOUSE_HOST") or os.getenv("CLICKHOUSE_HOST", "localhost")
-    port = int(os.getenv("ISOLATION_CLICKHOUSE_PORT") or os.getenv("CLICKHOUSE_PORT", "9000"))
+    # Chained `or` with the default last, so an env var set to the empty string
+    # falls through to the default rather than reaching `int("")`.
+    port = int(os.getenv("ISOLATION_CLICKHOUSE_PORT") or os.getenv("CLICKHOUSE_PORT") or "9000")
     try:
         client = driver.Client(
             host=host,
