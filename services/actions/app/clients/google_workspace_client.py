@@ -206,14 +206,16 @@ class GoogleWorkspaceClient:
 
     @staticmethod
     def _project_login(entry: dict[str, Any]) -> dict[str, Any]:
-        events = entry.get("events") if isinstance(entry.get("events"), list) else []
-        first = events[0] if events and isinstance(events[0], dict) else {}
+        raw_events = entry.get("events")
+        events: list[Any] = raw_events if isinstance(raw_events, list) else []
+        first: dict[str, Any] = events[0] if events and isinstance(events[0], dict) else {}
         params = {
             p.get("name"): (p.get("value") if p.get("value") is not None else p.get("boolValue"))
             for p in (first.get("parameters") or [])
             if isinstance(p, dict) and p.get("name")
         }
-        identity = entry.get("id") if isinstance(entry.get("id"), dict) else {}
+        raw_identity = entry.get("id")
+        identity: dict[str, Any] = raw_identity if isinstance(raw_identity, dict) else {}
         return {
             "at": identity.get("time"),
             "event": first.get("name"),

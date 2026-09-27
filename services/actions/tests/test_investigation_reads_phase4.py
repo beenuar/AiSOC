@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 import httpx
 import pytest
@@ -75,13 +77,16 @@ GWS_CREDS = {
 TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
-def _request(target: str, params: dict[str, object]) -> LiveActionRequest:
+def _request(target: str, params: Mapping[str, Any]) -> LiveActionRequest:
+    """Build a request. ``Mapping`` because ``dict`` is invariant in its value
+    type, so a ``dict[str, str]`` credential bag is not a ``dict[str, object]``
+    and every call site would need a cast."""
     return LiveActionRequest(
         request_id=uuid.uuid4(),
         capability="unused",
         vendor_id="unused",
         target=target,
-        params=params,
+        params=dict(params),
         dry_run=False,
         tenant_id=TENANT,
     )

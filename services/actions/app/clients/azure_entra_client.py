@@ -202,8 +202,10 @@ class AzureEntraClient:
 
     @staticmethod
     def _project_sign_in(entry: dict[str, Any]) -> dict[str, Any]:
-        status = entry.get("status") if isinstance(entry.get("status"), dict) else {}
-        location = entry.get("location") if isinstance(entry.get("location"), dict) else {}
+        raw_status = entry.get("status")
+        status: dict[str, Any] = raw_status if isinstance(raw_status, dict) else {}
+        raw_location = entry.get("location")
+        location: dict[str, Any] = raw_location if isinstance(raw_location, dict) else {}
         code = status.get("errorCode")
         return {
             "at": entry.get("createdDateTime"),
