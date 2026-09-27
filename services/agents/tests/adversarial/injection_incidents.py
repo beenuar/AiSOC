@@ -40,9 +40,10 @@ caller; the corpus does not depend on it.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -78,12 +79,17 @@ class Surface:
 
     name: str
     source: str
+    #: Declaring an attribute called ``field`` shadows ``dataclasses.field``
+    #: for the rest of this class body. It happens to work, because an
+    #: annotation with no assignment binds nothing at runtime, so the call
+    #: below still resolves to the module global. It reads as a bug either
+    #: way, so the default is spelled ``dataclasses.field`` explicitly.
     field: str
     shape: str
     #: Written into the telemetry record when the base event does not
     #: already carry this field, so the twins are still well-formed events
     #: of their source rather than dicts with a stray key.
-    scaffold: dict[str, Any] = field(default_factory=dict)
+    scaffold: dict[str, Any] = dataclasses.field(default_factory=dict)
     #: What this field ordinarily holds. Applied to the *clean* twin whenever
     #: the base incident does not already carry the field, so both twins have
     #: the same shape and differ only in this field's value. Without it the
