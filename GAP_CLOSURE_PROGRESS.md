@@ -188,6 +188,58 @@ every report's method section, and `confidence_score` is deliberately left
 unset rather than invented, since a fabricated fusion confidence would enter
 the prompt that decides the verdict being graded.
 
+### D8. Phase 1.4 has to be orchestrated by the API, and the "Done when" decomposes
+
+Recorded before building it, because the obvious design does not work and the
+reason is structural rather than a matter of taste.
+
+**No process can hold two of these services.** `services/actions` owns the SIEM
+credential path and the history readers. `services/agents` owns triage.
+`services/connectors` owns `normalize()`. All three package their code as
+top-level `app`. A CLI that imported the reader and the runner would import two
+modules called `app` and get one of them.
+
+**So the API orchestrates.** It is already the service that does this: it holds
+the vault and the tenant session, and it already proxies
+`/cases/{id}/investigate` to agents and dispatches live actions to actions. The
+job is `POST /api/v1/evaluations/replay` (new module, **not**
+`endpoints/replay.py`, which is share-link publishing and unrelated - see D3),
+calling actions for history and agents for the shadow triage, and scoring with
+`packages/aisoc-benchmark`. The benchmark package is a distribution rather than
+a service, so the API can import it directly; that is the one link in the chain
+with no round trip.
+
+What remains, in dependency order:
+
+1. An internal route on `services/actions` returning `ClosedFinding` rows for a
+   connector instance and a window. The readers exist; nothing exposes them.
+2. An internal route on `services/agents` accepting findings plus a context
+   snapshot and returning `ReplayDecision` rows. `ReplayRunner` exists; nothing
+   exposes it.
+3. Migration **064** for a tenant-scoped `aisoc_replay_evaluations` table, with
+   an RLS policy satisfying `check_rls_policy_shape.py` and `aisoc_app` grants.
+4. The two API routes, default-deny, tenant from the credential.
+5. `aisoc replay` in `packages/aisoc-cli`, driving the API. The CLI already
+   discovers a repo root for `serve` and `db upgrade`.
+6. The console page and the PDF export, on the existing report pipeline.
+
+**The phase's "Done when" decomposes into four links, and three are already
+proven.** It reads: the CLI, against a mocked Splunk ES holding 200 recorded
+closed notables, produces a report that reproduces byte for byte on a second
+run with the deterministic model path.
+
+| Link | Status |
+|---|---|
+| Mocked Splunk to 200 closed findings | Proven in `services/actions/tests/test_alert_history.py` (Phase 1.1), against vendor-shaped payloads on the real HTTP path |
+| Findings to decisions, reproducibly | Proven in `services/agents/tests/test_replay_runner.py::test_two_runs_over_one_history_produce_identical_decisions`, identical on every field but wall-clock latency |
+| Decisions to a byte-identical report | Proven in `packages/aisoc-benchmark/tests/test_replay_metrics.py::test_scoring_the_same_decisions_twice_gives_the_same_report`; the bootstrap seed and resample count travel in the report |
+| CLI to API to report, end to end | **Not built, therefore not proven** |
+
+Three proven links are not the same claim as one end-to-end run, and the phase
+must not be recorded as done until the fourth exists. Note also that a true
+end-to-end run spans three services, so its home is an integration test with
+containers rather than any service's unit suite.
+
 ---
 
 ## Phase 1: Replay evaluation on a customer's own history
@@ -195,12 +247,15 @@ the prompt that decides the verdict being graded.
 - [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [x] **1.2 Replay runner.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `services/agents/app/replay/` holds the split, the shadow sinks and the runner; it holds no triage. Persistence is injected through `app/workers/triage_persistence.py`, whose default is `LiveTriageWriter` doing exactly what the worker did inline, so the measured path is the production one rather than a copy. `CostTracker` gained a `persist` flag so a replay measures spend without billing it. Normalisation reaches the real connector through a new `POST /connectors/{id}/normalize`, because both services package their code as top-level `app` and one process can hold one of them. Verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency are all recorded per decision. See D6 and D7 below for the two places the plan and the tree disagreed.
 - [x] **1.3 Scoring.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `packages/aisoc-benchmark/aisoc_benchmark/replay.py` reuses the existing `_INDICATOR_PATTERNS` for hallucination so there is one definition, and adds per-class precision and recall with malicious recall first, a confusion matrix, abstention rate, reliability bins with an expected calibration error, per-rule and per-source breakdowns, and seeded bootstrap intervals. Below 30 malicious cases the headline accuracy is withheld with the count and the reason. A rate with no denominator reads "not measured".
-- [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export. Markdown rendering already ships with 1.3 (`format_replay_report`).
+- [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export. Markdown and JSON rendering already ship with 1.3 (`format_replay_report`, `ReplayScore.as_dict`). The remaining work is scoped in D8 below, because the shape it has to take is not the obvious one and rediscovering that would cost a session.
 - [~] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position. What remains is the documentation of the 1.4 surfaces once they exist.
 
 **Done when:** the CLI, run against a mocked Splunk ES holding 200 recorded
 closed notables, produces a report that reproduces byte for byte on a second run
 with the deterministic model path.
+
+**Not yet met.** Three of its four links are proven and the fourth is not built;
+the decomposition and what each link rests on are in D8 above.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 
