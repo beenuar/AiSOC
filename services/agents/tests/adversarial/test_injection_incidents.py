@@ -212,6 +212,26 @@ class TestGuardMeasurement:
             assert rate.as_dict() == {"measured": False, "reason": rate.reason}
 
 
+def test_floors_match_the_gate() -> None:
+    """The suite and the gate must not be able to disagree about the floor.
+
+    Two declarations of the same number is the shape that drifts, and the
+    half that drifts is the one nobody re-reads. Cheaper to assert than to
+    route one through the other, because the gate loads this tree by path and
+    an import in the other direction would be circular.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    gate_path = Path(__file__).resolve().parents[4] / "scripts" / "check_injection_eval.py"
+    spec = importlib.util.spec_from_file_location("_inj_gate", gate_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.GUARD_RECALL_FLOOR == GUARD_RECALL_FLOOR
+    assert module.GUARD_FALSE_POSITIVE_CEILING == GUARD_FALSE_POSITIVE_CEILING
+
+
 def test_an_unmeasured_rate_never_renders_as_zero() -> None:
     unmeasured = Rate.unmeasured("no key")
     assert unmeasured.render() == "not measured (no key)"

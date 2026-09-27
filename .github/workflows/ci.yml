@@ -1522,6 +1522,28 @@ jobs:
           else
             python3 scripts/run_evals.py --ci --out eval_report.json
           fi
+      # Phase 3. The deterministic half of the prompt-injection suite: a
+      # floor on guard detection over the twinned incident corpus, a ceiling
+      # on benign controls flagged, and an exact ratchet over the payloads
+      # the guard is known to miss. `--benchmark-md` without
+      # `--write-benchmark` fails when the published page has drifted from
+      # the measurement, so a number copied into prose cannot go stale.
+      #
+      # This measures the guard, not a model. The live rates are the weekly
+      # wet eval's job and read "not measured" here rather than zero.
+      - name: Prompt-injection eval (deterministic guard floor)
+        run: |
+          python3 scripts/check_injection_eval.py \
+            --check \
+            --benchmark-md apps/docs/docs/benchmark.md \
+            --json-out injection_eval.json \
+            --markdown-out injection_eval.md
+          {
+            echo "## Prompt-injection resistance (deterministic)"
+            echo
+            cat injection_eval.md
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Post job summary
         if: always()
         run: |

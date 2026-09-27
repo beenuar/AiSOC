@@ -19,12 +19,14 @@ role — see ``services/api/app/core/security.py``).
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
+from starlette.convertors import Convertor, register_url_convertor
 
 from app._vendor.autonomy_evidence_rules import PromotionThresholds
 from app.api.v1.deps import AuthUser, DBSession
@@ -46,6 +48,66 @@ from app.services.shadow_agreement import (
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/autonomy-policy", tags=["autonomy-policy"])
+
+
+# ---------------------------------------------------------------------------
+# `{action}` sits at this router's root, so it competes with every literal
+# sub-resource the router has. `DELETE /grants` lost that competition: FastAPI
+# matches in registration order, `DELETE /{action}` is declared several hundred
+# lines earlier, and so the revocation handler was unreachable. An operator
+# could earn an autonomy grant and not hand it back, which is a safety control
+# failing in the one direction that matters.
+#
+# Ordering the literals first would fix the symptom, but the constraint would
+# live nowhere except the order of the file and the next edit could silently
+# undo it. Constraining the parameter instead puts the exclusion in the route's
+# own matching regex, which is what Starlette compares a request against:
+# `/autonomy-policy/grants` no longer matches `/{action}` at all, so the
+# literal route is reached wherever either one is declared.
+#
+# FastAPI's `Path(pattern=...)` cannot do this. It is validation applied after
+# a route has already matched, so a reserved name would answer 422 instead of
+# falling through, and pydantic's regex engine rejects look-around outright.
+# Only a path convertor takes part in matching.
+#
+# The reserved set has to stay in step with the literals the router actually
+# serves; `test_route_shadowing.py` asserts that against the running app rather
+# than leaving it to be remembered here.
+# ---------------------------------------------------------------------------
+
+#: Literal sub-resources of this router. Not action names.
+RESERVED_SEGMENTS = ("agreement", "grants", "shadow-mode")
+
+#: Same shape `upsert_action_threshold` enforces on the body of an action name.
+_MAX_ACTION_LEN = 100
+
+#: The two routes that take an action spell this out rather than sharing a
+#: constant, because a decorator given a variable is a path no static reader
+#: can resolve, and `check_route_shadowing.py` would skip the pair silently.
+#: Drift is not a risk: Starlette raises on an unknown convertor at import.
+ACTION_CONVERTOR_NAME = "autonomy_action"
+
+
+class _ActionNameConvertor(Convertor):
+    """An action name: alphanumeric and underscores, and never a sub-resource.
+
+    Built from `RESERVED_SEGMENTS` rather than written out, so the tuple above
+    and the regex here cannot come to disagree.
+    """
+
+    regex = r"(?!(?:{})\Z)[A-Za-z0-9_]{{1,{}}}".format(
+        "|".join(re.escape(segment) for segment in RESERVED_SEGMENTS),
+        _MAX_ACTION_LEN,
+    )
+
+    def convert(self, value: str) -> str:
+        return value
+
+    def to_string(self, value: str) -> str:
+        return value
+
+
+register_url_convertor(ACTION_CONVERTOR_NAME, _ActionNameConvertor())
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +381,7 @@ async def get_autonomy_policy(
     return AutonomyPolicyResponse(tenant_id=str(user.tenant_id), actions=actions)
 
 
-@router.put("/{action}", response_model=ThresholdUpdateResponse)
+@router.put("/{action:autonomy_action}", response_model=ThresholdUpdateResponse)
 async def upsert_action_threshold(
     action: str,
     payload: ThresholdUpdateRequest,
@@ -445,7 +507,7 @@ async def upsert_action_threshold(
     )
 
 
-@router.delete("/{action}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete("/{action:autonomy_action}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def reset_action_threshold(
     action: str,
     user: AuthUser,
