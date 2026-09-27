@@ -610,6 +610,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the wrong side of the train/test split and leak the answer into its own
   evaluation.
 
+### Fixed
+
+- **An operator could earn an autonomy grant and had no working way to hand it
+  back.** `DELETE /api/v1/autonomy-policy/grants` has been unreachable since it
+  shipped. `DELETE /{action}` is declared several hundred lines earlier in the
+  same router, FastAPI matches in registration order, and so the request was
+  taken by the threshold-reset handler with `action="grants"`. It answered 204,
+  so the caller was told the revocation had happened. What actually happened was
+  a `DELETE` against `aisoc_autonomy_thresholds`: the wrong table, no audit row,
+  and a capability the tenant still held. A capability outside the shared
+  vocabulary was accepted the same way, because the request never reached the
+  validator that would have refused it.
+
+  `{action}` is now constrained by a path convertor that excludes this router's
+  literal sub-resources. A convertor takes part in matching, so
+  `/autonomy-policy/grants` no longer matches `/{action}` at all and the literal
+  route is reached wherever either one is declared. Ordering the declarations
+  would have fixed the symptom while leaving the constraint written nowhere
+  except the order of the file; the two routes are deliberately left in the
+  order that failed, so the tests prove the constraint rather than the ordering.
+  FastAPI's `Path(pattern=...)` cannot do this: it is validation applied after a
+  route has already matched, so a reserved name would answer 422 rather than
+  falling through, and pydantic's regex engine rejects look-around outright. No
+  published path changed.
+
+- **The gate written for this exact bug class had never seen a route.**
+  `test_route_shadowing.py` read `app.routes` and filtered for `APIRoute`. On
+  the FastAPI version these services pin, `include_router` does not put routes
+  there: it appends a single `_IncludedRouter`, and the only `APIRoute`s in the
+  list are the handful of docs and probe routes the app was born with. Filtering
+  yielded zero routes, so the check compared zero pairs, found zero problems and
+  reported success, over an app serving 456 operations.
+
+  The corpus now comes from `app.openapi()`, and reachability is decided by
+  sending a request for every published operation and reading back which route
+  Starlette matched, which is the app as deployed rather than an internal list
+  whose meaning changed underneath. It refuses a corpus below a floor rather
+  than reporting an empty app clean, and it is proven against the defect: run
+  on the pre-fix tree it names `DELETE /api/v1/autonomy-policy/grants` as
+  answered by `reset_action_threshold`.
+
+### Added
+
+- **`scripts/check_route_shadowing.py`**, the breadth half of the same
+  question. The runtime check needs a service's whole driver stack importable
+  and so can only speak for one service; this is one AST pass over `services/`
+  covering all thirteen, 628 routes in 138 files. It is the weaker instrument
+  and says so in its own output: it pairs routes within a module and router,
+  and a parameter carrying a convertor is counted and named as deferred to the
+  runtime check rather than being judged or silently dropped. Routes whose path
+  is not a string literal are counted too, because the first draft of the fix
+  used a shared constant and the gate went on printing OK while skipping the
+  very pair it exists for.
+
 ## [11.2.0] — 2026-09-26
 
 ### Added

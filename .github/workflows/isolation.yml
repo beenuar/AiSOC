@@ -22,6 +22,7 @@ on:
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
+      - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
@@ -40,6 +41,7 @@ on:
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
+      - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
@@ -146,6 +148,18 @@ jobs:
 
       - name: Every route authenticates or records why it is public
         run: python scripts/check_route_auth.py
+
+      # A route can authenticate perfectly and still never run. `DELETE
+      # /autonomy-policy/grants` sat behind `DELETE /{action}` from the day it
+      # shipped, so an operator could earn an autonomy grant and had no
+      # working path to hand it back. This is the breadth half of that check;
+      # the fidelity half builds the app and sends a request for every
+      # published operation (services/api/tests/test_route_shadowing.py).
+      - name: Route-shadowing gate self-test (the defect, and four near misses)
+        run: python scripts/check_route_shadowing.py --self-test
+
+      - name: No literal route is unreachable behind a parameterised one
+        run: python scripts/check_route_shadowing.py
 
       # The predicate question, which the parameter gate structurally cannot
       # ask: a route that matches on an id takes no tenant, which is exactly
