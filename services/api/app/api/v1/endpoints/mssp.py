@@ -1077,13 +1077,31 @@ async def add_tenants_to_portfolio(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, object]:
-    """Bring tenants under management.
+    """Bring tenants under management, with the tenant's consent.
 
     A tenant already managed by another organisation is rejected rather than
     reassigned: `organization_tenants` carries a unique constraint on
     `tenant_id` precisely so a customer cannot end up in two portfolios, and
     silently moving one would be a cross-tenant transfer performed by
     whoever asked last.
+
+    **Consent is required and comes from the tenant's own side.** This route
+    previously accepted any tenant UUID whose row was unclaimed, checking only
+    that the caller administers their *own* organisation — and creating an
+    organisation is self-service. So three requests let any authenticated user,
+    including one holding only `viewer`, pull an unrelated tenant's alerts,
+    cases and posture into a portfolio they control (GHSA-mcg9-8pxf-j98v). On a
+    deployment not using MSSP no tenant is claimed, so every tenant was
+    attachable.
+
+    The consent mechanism is the one `onboard_child_tenant` already uses: an
+    admin of the tenant sets `settings["mssp_parent_invite"]` to the managing
+    tenant's id through `PATCH /api/v1/tenants/me/settings`, which is gated on
+    `settings:write` and so cannot be forged from outside that tenant. The
+    invite is single-use and is cleared on acceptance.
+
+    A caller attaching their *own* tenant needs no invite — they already
+    administer it, and requiring them to invite themselves would be ceremony.
     """
     added: list[str] = []
     rejected: dict[str, str] = {}
@@ -1097,6 +1115,23 @@ async def add_tenants_to_portfolio(
         if claim is not None:
             rejected[str(tenant_id)] = "already in this portfolio" if claim.org_id == scope.org_id else "managed by another organisation"
             continue
+
+        tenant_settings = dict(tenant.settings or {})
+        invited = str(tenant_settings.get(_MSSP_INVITE_SETTING) or "")
+        is_own_tenant = tenant_id == current_user.tenant_id
+        if not is_own_tenant and invited != str(current_user.tenant_id):
+            # Does not disclose whether an invite exists for someone else.
+            logger.warning(
+                "mssp.portfolio.refused_without_invite org=%s tenant=%s",
+                str(scope.org_id).replace("\r", "").replace("\n", " ")[:64],
+                str(tenant_id).replace("\r", "").replace("\n", " ")[:64],
+            )
+            rejected[str(tenant_id)] = "not invited: an admin of that tenant must invite you first"
+            continue
+        if invited:
+            tenant_settings.pop(_MSSP_INVITE_SETTING, None)
+            tenant.settings = tenant_settings  # type: ignore[assignment]
+
         db.add(
             OrganizationTenant(
                 org_id=scope.org_id,
