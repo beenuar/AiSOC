@@ -409,7 +409,11 @@ def _served_paths(service: str, *, endpoint_module: str | None = None) -> set[st
             if name not in [t.id for t in node.targets if isinstance(t, ast.Name)]:
                 continue
             for keyword in node.value.keywords:
-                if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant):
+                # The string check is on the constant's *value*, not just on
+                # the node: `ast.Constant` also covers bytes and numbers, and
+                # interpolating those would build a path nothing serves while
+                # looking like it had read one.
+                if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
                     aggregate_prefixes.add(f"{mount}{keyword.value.value}")
 
     served: set[str] = set()

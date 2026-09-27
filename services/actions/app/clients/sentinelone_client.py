@@ -134,7 +134,8 @@ class SentinelOneClient:
 
     @staticmethod
     def _project_threat(entry: dict[str, Any]) -> dict[str, Any]:
-        info = entry.get("threatInfo") if isinstance(entry.get("threatInfo"), dict) else {}
+        raw_info = entry.get("threatInfo")
+        info: dict[str, Any] = raw_info if isinstance(raw_info, dict) else {}
         return {
             "threat_id": entry.get("id"),
             "name": info.get("threatName"),

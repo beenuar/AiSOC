@@ -288,6 +288,23 @@ class AWSCloudTrailClient:
         return projected
 
 
+def _mfa_authenticated(identity: dict[str, Any]) -> Any:
+    """Whether the session was MFA-authenticated, or ``None`` if not stated.
+
+    Pulled out rather than inlined as a chained conditional. Three levels of
+    `.get(...) or {}` in one expression is unreadable, and the inline form
+    re-fetched `sessionContext` so the value the guard inspected was not the
+    value that was used.
+    """
+    session = identity.get("sessionContext")
+    if not isinstance(session, dict):
+        return None
+    attributes = session.get("attributes")
+    if not isinstance(attributes, dict):
+        return None
+    return attributes.get("mfaAuthenticated")
+
+
 def _project_event(entry: dict[str, Any]) -> dict[str, Any]:
     """Reduce one CloudTrail event to what an investigation reads.
 
@@ -310,7 +327,8 @@ def _project_event(entry: dict[str, Any]) -> dict[str, Any]:
             # below still answer the question; the detail is simply absent.
             logger.warning("cloudtrail.event_detail_unparseable", event_id=entry.get("EventId"))
 
-    identity = detail.get("userIdentity") if isinstance(detail.get("userIdentity"), dict) else {}
+    raw_identity = detail.get("userIdentity")
+    identity: dict[str, Any] = raw_identity if isinstance(raw_identity, dict) else {}
     return {
         "event_id": entry.get("EventId"),
         "event_name": entry.get("EventName"),
@@ -324,7 +342,5 @@ def _project_event(entry: dict[str, Any]) -> dict[str, Any]:
         "error_code": detail.get("errorCode"),
         "principal_type": identity.get("type"),
         "principal_arn": identity.get("arn"),
-        "mfa_authenticated": (identity.get("sessionContext") or {}).get("attributes", {}).get("mfaAuthenticated")
-        if isinstance(identity.get("sessionContext"), dict)
-        else None,
+        "mfa_authenticated": _mfa_authenticated(identity),
     }
