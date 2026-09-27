@@ -360,9 +360,9 @@ in D20.
 ## Phase 5: MCP client
 
 - [x] **5.1 Client** on the official MCP Python SDK, pinned, streamable HTTP only by default. `services/agents/app/mcp/`, on `mcp==1.30.0` exact-pinned. The 1.x line rather than 2.x deliberately: mcp 2.x depends on `httpx2`, a second HTTP client alongside the `httpx` this service already pins, and two TLS stacks inside the one service that reaches third-party servers is a cost with no return. Exact rather than ranged because the version is the behaviour: this library parses replies from third parties straight into the prompt, and a change in what `readOnlyHint` and `destructiveHint` mean would move what `policy.py` decides.
-- [x] **5.2 Registry** in `services/api`: migration **069**, `/api/v1/mcp-servers`, credential in the existing `CredentialVault` under the connector convention rather than a bespoke column. The console never sees a credential (`has_credential: bool`); the agents service reads it over one internal route that is **service-token only with no session fallback**, unlike every other dual-mode route in this service, because a console user who can read their tenant's alerts must not thereby be able to read their operator's vendor token. See D20 for why the credential travels at all.
-- [x] **5.3 Read-only by default.** A tool is callable only if the tenant allowlisted it *and* the server did not annotate it `destructiveHint: true` or `readOnlyHint: false`. Both halves, because they are different assertions: the allowlist is the tenant's, the annotation is the vendor's, and either saying no is a no. The allowlist defaults empty, so a newly registered server offers nothing. A destructive tool is refused outright and the refusal names governed dispatch; see D21 for why "or not at all" is the honest half of the plan's sentence today.
-- [x] **5.4 Untrusted by default.** Socket-level byte cap, per-run nonce fence, injection guard, an inline first-party boundary sentence, and a ledger row for every call, refusal and failure. The SSRF guard and air-gap policy run immediately before the socket, not at save time; see D22.
+- [x] **5.2 Registry** in `services/api`: migration **069**, `/api/v1/mcp-servers`, credential in the existing `CredentialVault` under the connector convention rather than a bespoke column. The console never sees a credential (`has_credential: bool`); the agents service reads it over one internal route that is **service-token only with no session fallback**, unlike every other dual-mode route in this service, because a console user who can read their tenant's alerts must not thereby be able to read their operator's vendor token. See D21 for why the credential travels at all.
+- [x] **5.3 Read-only by default.** A tool is callable only if the tenant allowlisted it *and* the server did not annotate it `destructiveHint: true` or `readOnlyHint: false`. Both halves, because they are different assertions: the allowlist is the tenant's, the annotation is the vendor's, and either saying no is a no. The allowlist defaults empty, so a newly registered server offers nothing. A destructive tool is refused outright and the refusal names governed dispatch; see D22 for why "or not at all" is the honest half of the plan's sentence today.
+- [x] **5.4 Untrusted by default.** Socket-level byte cap, per-run nonce fence, injection guard, an inline first-party boundary sentence, and a ledger row for every call, refusal and failure. The SSRF guard and air-gap policy run immediately before the socket, not at save time; see D23.
 - [x] **5.5 Tests and docs.** 40 tests across three files against a real `FastMCP` server over the SDK's memory transport, so nothing mocks `ClientSession` or `McpClient`. `apps/docs/docs/operations/mcp-client.md` marks all five vendor servers unverified against a live vendor, and says the tool names given are examples to be replaced with what the vendor's own `tools/list` publishes.
 - [ ] **5.6 AiSOC's own MCP server** gains read tools for triage verdicts, the ledger and replay reports, plus a dry-run-only action preview.
 
@@ -522,7 +522,7 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   to 182, GATED 168 to 174. New gate
   `scripts/check_mcp_client_policy.py`, wired into `ci.yml`, proven able to
   fail against eight injected regressions rather than merely observed passing.
-  See D20 to D22.
+  See D21 to D23.
 
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
@@ -985,7 +985,7 @@ stays recorded: suppressing it needs a rule that reads a containment verb in
 flag position as a tool invocation, and a suppression rule is the one kind
 whose failure mode is silence.
 =======
-### D20. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
+### D21. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
 
 The plan puts the client in `services/agents` and the registry in
 `services/api`. Both package their code as top-level `app`, so one process
@@ -1015,7 +1015,7 @@ produce an unauthenticated call to a third party that the operator believes is
 authenticated, and the vendor's 401 would reach the agent as "that tool is
 unavailable", which is indistinguishable from the tool not existing.
 
-### D21. "Or not at all" is the honest half of 5.3 today, and saying so is the point
+### D22. "Or not at all" is the honest half of 5.3 today, and saying so is the point
 
 The plan says a state-changing MCP tool is reachable only through governed
 dispatch, as a live action with a declared contract, **or not at all**. The
@@ -1041,7 +1041,7 @@ the model cannot see is one it cannot be talked into naming. Both happen, and
 the dispatch-time check re-runs the same pure function over the same discovered
 descriptor rather than a weaker restatement of it.
 
-### D22. The SSRF guard belongs at the socket, and putting a copy at save time nearly made it worse
+### D23. The SSRF guard belongs at the socket, and putting a copy at save time nearly made it worse
 
 The plan says server URLs pass the SSRF guard. The obvious place is the
 registry, when an operator presses save, and that is where a reader looks for
