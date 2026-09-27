@@ -95,8 +95,40 @@ exactly the deployments that could not answer. URLs are swept through connected
 SIEMs, which do carry a URL field.
 
 **CVEs are not swept against telemetry.** A CVE identifier does not appear in
-event data, so searching for one would match nothing anywhere. KEV entries are
-checked against asset and vulnerability inventory instead.
+event data, so searching for one would match nothing anywhere. KEV entries take
+a different path, described next.
+
+## KEV exposure
+
+When the CISA catalogue publishes a vulnerability as actively exploited, AiSOC
+asks a different question: **do we run the affected thing?**
+
+Exposure means the tenant's own vulnerability findings contain an unremediated
+entry whose CVE matches. That is narrow on purpose. AiSOC does **not** infer
+exposure by matching the catalogue's vendor and product strings against an
+asset's operating system field: that produces a plausible-looking answer built
+on string similarity, and a case task an analyst has to disprove costs more
+than no task at all, because the second one they disprove is the last one they
+read.
+
+A match does three things:
+
+1. opens a case with a task naming the affected assets, most critical first;
+2. sets `is_exploited` on the matching findings, because CISA is a better
+   source for that field than most scanners and many lag it;
+3. records the CVE in the same dedup ledger an IOC sighting uses, so the
+   catalogue republishing its whole contents on every fetch does not open a
+   task a day.
+
+A tenant with no vulnerability data is told **exposure could not be checked**,
+not that they are unaffected. The task body also says the count is a floor
+rather than a total, because assets with no scan coverage cannot appear in it.
+
+The exposure check is not charged against the sweep budget. It is two indexed
+queries against the tenant's own Postgres rows rather than a warehouse scan,
+and charging it against a budget sized for the latter would starve the cheaper
+check that has the clearer action attached to it. The per-tenant opt-in still
+applies.
 
 All three hash types read the same column. The lake writer stores the first
 fingerprint an event carries whatever algorithm produced it, so an MD5 lands in

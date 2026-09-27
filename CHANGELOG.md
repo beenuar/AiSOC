@@ -348,6 +348,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minted before this change fail closed rather than outliving the revocation
   meant to end them. The refresh path checks it too, and matters more there: a
   refresh token outlives an access token by days.
+- **A CISA KEV entry is now checked against the tenant's own vulnerability
+  findings** (gap-closure Phase 8.2).
+
+  A CVE takes a different path from every other indicator, and the reason is
+  the point. A hash or an address appears in event telemetry, so "have we seen
+  this" is a question for the event lake. A CVE never appears there, so
+  sweeping the lake for `CVE-2024-3400` would return zero on every tenant
+  forever while looking exactly like a sweep that worked. The router sends a
+  vulnerability to the exposure check instead, and records that as a decision
+  rather than leaving it as an omission.
+
+  Exposure means an **unremediated finding in the tenant's own vulnerability
+  data** whose CVE matches. Inferring it by matching the catalogue's vendor and
+  product strings against an asset's operating system field is deliberately not
+  done: that produces a plausible-looking answer built on string similarity,
+  and a case task an analyst has to disprove costs more than no task, because
+  the second one they disprove is the last one they read.
+
+  A tenant with no vulnerability data is told exposure **could not be checked**,
+  never that they are unaffected. `checked` and `exposed_asset_count` are
+  separate fields and `exposed` requires both, so a caller reading the result
+  cannot render an unscanned tenant as clean. The task body also says the count
+  is a floor rather than a total, because assets with no scan coverage cannot
+  appear in it.
+
+  A match additionally sets `is_exploited` on the matching findings. CISA is a
+  better source for that field than a scanner that has not caught up, and it is
+  the one write on this path that is not a case task.
+
+  Dedup shares the `retro_hunt_sightings` ledger under indicator type `cve`, so
+  the catalogue republishing its whole contents on every fetch opens one task
+  rather than one a day. It is not charged against the sweep budget: two
+  indexed Postgres queries are not a warehouse scan, and charging them against
+  a budget sized for the latter would starve the cheaper check that has the
+  clearer action attached to it.
+
 - **The `NEW_IOC` events the threat-intel pipeline has always emitted now have
   a consumer** (gap-closure Phase 8.1).
 

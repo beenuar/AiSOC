@@ -49,6 +49,7 @@ from app.core.config import settings
 from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.services.retro_hunt.intel_types import route_feed_type
+from app.services.retro_hunt.kev_exposure import handle_kev_entry
 from app.services.retro_hunt.service import (
     IntelIndicator,
     TenantSweepReport,
@@ -114,6 +115,87 @@ def _first_seen(data: dict[str, Any], envelope_ts: Any) -> datetime | None:
         with contextlib.suppress(ValueError):
             return datetime.fromisoformat(envelope_ts.replace("Z", "+00:00")).astimezone(UTC)
     return None
+
+
+def cve_from_event(payload: dict[str, Any]) -> tuple[str, str, datetime | None] | None:
+    """Pull a CVE out of a ``NEW_IOC`` that routes to the exposure check.
+
+    Returns ``(cve_id, feed_source, first_seen)`` or ``None``. A CVE takes a
+    different path from every other indicator because it never appears in
+    event telemetry: sweeping the lake for one would return zero on every
+    tenant while looking exactly like a sweep that worked. See
+    :mod:`app.services.retro_hunt.kev_exposure`.
+    """
+    data = payload.get("data") or {}
+    value = str(data.get("value") or "").strip()
+    if not value:
+        return None
+    if not route_feed_type(str(data.get("type") or "")).is_vulnerability:
+        return None
+    source = str(payload.get("source") or data.get("source") or "unknown feed")
+    return value, source, _first_seen(data, payload.get("timestamp"))
+
+
+async def handle_kev_indicator(cve_id: str, feed_source: str, first_seen: datetime | None) -> list[TenantSweepReport]:
+    """Fan one KEV entry out to every tenant that opted in.
+
+    Same session and tenant-binding shape as :func:`handle_indicator`: the
+    read of who opted in is genuinely cross-tenant, and every write after it
+    rebinds the tenant so the case and task inserts are RLS-enforced.
+    """
+    reports: list[TenantSweepReport] = []
+    async with AsyncSessionLocal() as db:
+        await assert_cross_tenant_session(db, "retro-hunt KEV fan-out")
+        tenants = await opted_in_tenants(db)
+        if not tenants:
+            return reports
+
+        for settings_row in tenants:
+            try:
+                await db.execute(
+                    text("SELECT set_config('app.current_tenant_id', :t, true)"),
+                    {"t": str(settings_row.tenant_id)},
+                )
+                result = await handle_kev_entry(
+                    db,
+                    settings_row=settings_row,
+                    cve_id=cve_id,
+                    feed_source=feed_source,
+                    intel_first_seen_at=first_seen,
+                )
+            except Exception as exc:  # noqa: BLE001 - one tenant must not stop the rest
+                logger.exception(
+                    "retro_hunt.kev_check_failed tenant=%s err=%s",
+                    settings_row.tenant_id,
+                    type(exc).__name__,
+                )
+                reports.append(
+                    TenantSweepReport(
+                        tenant_id=settings_row.tenant_id,
+                        outcome="failed",
+                        detail=type(exc).__name__,
+                    )
+                )
+                continue
+
+            reports.append(
+                TenantSweepReport(
+                    tenant_id=settings_row.tenant_id,
+                    outcome="swept" if result.checked else "skipped_unsupported",
+                    matched=result.exposed,
+                    deduplicated=result.deduplicated,
+                    detail=(
+                        result.unavailable_reason
+                        or (
+                            f"{result.exposed_asset_count} exposed asset(s); case task opened."
+                            if result.exposed
+                            else "No unremediated findings for this CVE."
+                        )
+                    ),
+                )
+            )
+        await db.commit()
+    return reports
 
 
 def indicator_from_event(payload: dict[str, Any]) -> IntelIndicator | None:
@@ -247,6 +329,14 @@ async def run_forever() -> None:
                     # subscription: one bad message is not a reason to stop
                     # consuming a topic that is otherwise fine.
                     continue
+                kev = cve_from_event(payload)
+                if kev is not None:
+                    try:
+                        await handle_kev_indicator(*kev)
+                    except Exception as exc:  # noqa: BLE001 - keep consuming
+                        logger.exception("retro_hunt.kev_fan_out_failed err=%s", type(exc).__name__)
+                    continue
+
                 indicator = indicator_from_event(payload)
                 if indicator is None:
                     routing = route_feed_type(str((payload.get("data") or {}).get("type") or ""))
