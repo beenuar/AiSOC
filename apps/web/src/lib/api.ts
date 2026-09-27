@@ -405,6 +405,35 @@ export interface TenantUser {
   created_at: string;
 }
 
+/**
+ * What the product is called and what it looks like, for this tenant.
+ *
+ * Resolved server-side from the organisation the tenant belongs to, so the
+ * console never has to know whether a deployment is white-labelled: an
+ * unbranded one gets the platform defaults from the same endpoint. One code
+ * path rather than a branded one and an unbranded one that drift.
+ */
+export interface Branding {
+  product_name: string;
+  primary_color: string;
+  accent_color: string;
+  support_email: string | null;
+  support_url: string | null;
+  sender_name: string;
+  footer_text: string;
+  /** A path on this deployment, never a third-party address. */
+  logo_url: string | null;
+  org_id: string | null;
+  is_white_labelled: boolean;
+}
+
+export const brandingApi = {
+  /** Readable by any authenticated member; the console calls it per page load. */
+  async get(): Promise<Branding> {
+    return request<Branding>('/api/v1/branding');
+  },
+};
+
 export const tenantsApi = {
   /**
    * Lightweight tenant identity for the SOC console TopBar.

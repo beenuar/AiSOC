@@ -3,6 +3,7 @@
 from app.db.database import Base
 from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
+from app.models.branding import OrgBrandAsset, OrgBranding
 from app.models.case import Case, CaseTask, CaseTimeline
 from app.models.connector import Connector
 from app.models.detection_proposal import DetectionEvalBaseline, DetectionRuleProposal
@@ -84,6 +85,8 @@ __all__ = [
     "MSSPTenantMetrics",
     "MSSPTenantNote",
     "OAuthAppCredential",
+    "OrgBrandAsset",
+    "OrgBranding",
     "Organization",
     "ScimGroup",
     "ScimGroupMember",

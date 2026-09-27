@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 
+from app.services.branding.resolver import Branding
 from app.services.digest_html import render_digest_html
 from app.services.executive_digest import ExecutiveDigest
 
@@ -27,7 +28,7 @@ class WeasyPrintUnavailableError(RuntimeError):
     """Raised when the WeasyPrint native stack is not installed."""
 
 
-def render_digest_pdf(digest: ExecutiveDigest) -> bytes:
+def render_digest_pdf(digest: ExecutiveDigest, branding: Branding | None = None) -> bytes:
     """Render *digest* as a PDF byte string.
 
     Converts the ``ExecutiveDigest`` model to a self-contained, print-ready
@@ -59,7 +60,7 @@ def render_digest_pdf(digest: ExecutiveDigest) -> bytes:
             "required apt packages."
         ) from exc
 
-    html_content = render_digest_html(digest)
+    html_content = render_digest_html(digest, branding)
     logger.info(
         "rendering executive digest PDF tenant_id=%s period_start=%s",
         digest.tenant_id,

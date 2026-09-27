@@ -19,6 +19,7 @@ from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.report import ReportArtefact, ReportTemplate
+from app.services.branding.resolver import resolve_branding
 from app.services.digest_html import render_digest_html
 from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 from app.services.executive_digest import ExecutiveDigest, build_weekly_digest
@@ -243,11 +244,18 @@ async def weekly_digest(
     )
 
     if fmt == "html":
-        return HTMLResponse(content=render_digest_html(digest))
+        # Resolved from the caller's tenant, so a white-labelled
+        # organisation's report carries its own product name, palette and
+        # logo. The logo is inlined because this HTML becomes a PDF rendered
+        # server-side, and a remote reference there is an outbound request
+        # made by the server to a customer-supplied address.
+        branding = await resolve_branding(db, current_user.tenant_id, inline_logo=True)
+        return HTMLResponse(content=render_digest_html(digest, branding))
 
     if fmt == "pdf":
         try:
-            pdf_bytes = render_digest_pdf(digest)
+            branding = await resolve_branding(db, current_user.tenant_id, inline_logo=True)
+            pdf_bytes = render_digest_pdf(digest, branding)
         except WeasyPrintUnavailableError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

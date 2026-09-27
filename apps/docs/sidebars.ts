@@ -187,6 +187,8 @@ const sidebars: SidebarsConfig = {
         "operations/credentials",
         "operations/secrets",
         "operations/scim",
+        "operations/white-label",
+        "operations/usage-metering",
         "operations/ingest-authentication",
         "operations/airgap",
         "operations/air-gapped",

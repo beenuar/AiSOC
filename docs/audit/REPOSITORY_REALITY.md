@@ -203,6 +203,28 @@ principal, OIDC or SAML authenticates them.
 
 ---
 
+## White-label and usage metering
+
+**White-label — WORKING on two of five surfaces, and the tracker says which.**
+Console and the executive digest in HTML and PDF carry a white-labelled
+organisation's product name, palette and logo, asserted in CI. Email approvals
+and ChatOps resolve the same `sender_name` from the same resolver and have **no
+end-to-end test**, so they are recorded as unverified rather than working. The
+plan lists five surfaces and its own acceptance names two; marking the item
+done because a field resolves would be the failure this audit exists to catch.
+
+Brand assets are held as bytes in Postgres and served from this deployment.
+Nothing is fetched from a third-party URL, in the console or in the
+server-side PDF renderer. Uploaded SVGs are rewritten against an allowlist and
+a document declaring a DTD or an entity is refused before parsing.
+
+**Usage metering — WORKING, and it equals the rows by construction.** Ten
+meters, each a query against the table holding the evidence, with no counter
+table to drift. `events_ingested` is the one meter with no source on a CORE
+deployment and reports "not measured" with its reason rather than zero.
+
+---
+
 ## Data integrity
 
 The project's rule is that fabricated security data must never render as a

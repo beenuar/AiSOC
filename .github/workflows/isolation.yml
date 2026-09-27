@@ -31,6 +31,7 @@ on:
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
       - "scripts/check_scim_contract.py"
+      - "scripts/check_whitelabel_metering.py"
       - "docker-compose.yml"
       - "infra/**"
       - ".env.example"
@@ -51,6 +52,7 @@ on:
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
       - "scripts/check_scim_contract.py"
+      - "scripts/check_whitelabel_metering.py"
       - "docker-compose.yml"
       - "infra/**"
       - ".env.example"
@@ -205,6 +207,16 @@ jobs:
 
       - name: The SCIM surface matches what it advertises, audits and grants
         run: python scripts/check_scim_contract.py
+
+      # An uploaded logo renders in the console and inside PDF reports other
+      # people open, so the SVG allowlist is a security control under steady
+      # pressure to widen. And a meter added later with its tenant formatted
+      # in would count every tenant's rows while its own test passed.
+      - name: White-label and metering gate self-test (four injected drifts)
+        run: python scripts/check_whitelabel_metering.py --self-test
+
+      - name: The SVG allowlist admits nothing executable and every meter binds its tenant
+        run: python scripts/check_whitelabel_metering.py
 
       - name: Start Redis for the two-tenant route replay
         run: |
