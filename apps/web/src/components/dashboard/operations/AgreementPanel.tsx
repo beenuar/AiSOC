@@ -31,7 +31,7 @@
 
 import useSWR from 'swr';
 import { clsx } from 'clsx';
-import { autonomyPolicyApi, type AgreementScope, type AgreementWindow } from '@/lib/api';
+import { autonomyPolicyApi, type AgreementScope } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 
@@ -211,17 +211,13 @@ function Breakdown({ title, rows }: { title: string; rows: AgreementScope[] }) {
           <li key={row.key} className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
             <span className="truncate text-gray-300">{row.key}</span>
             <span className="shrink-0 font-mono text-xs tabular-nums text-gray-400">
-              {formatRate(row.window.agreement_rate)} · {sampleOf(row.window)}
+              {formatRate(row.window.agreement_rate)} · {row.window.answered} answered
             </span>
           </li>
         ))}
       </ul>
     </div>
   );
-}
-
-function sampleOf(window: AgreementWindow): string {
-  return `${window.answered} answered`;
 }
 
 export default AgreementPanel;
