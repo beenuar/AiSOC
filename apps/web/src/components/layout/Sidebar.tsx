@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import packageJson from '../../../package.json';
 import { LiveQueueBadge } from './LiveQueueBadge';
+import { useBranding } from '@/hooks/useBranding';
 
 const APP_VERSION = packageJson.version;
 
@@ -353,6 +354,10 @@ const navSections: NavSection[] = [
 ];
 
 export function Sidebar() {
+  // Resolved server-side from the organisation this tenant belongs to. An
+  // unbranded deployment gets the platform defaults from the same call, so
+  // there is one code path rather than two that drift.
+  const { branding } = useBranding();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -392,15 +397,29 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-surface-border">
-        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
-          <span className="text-brand-400">
-            <ShieldIcon />
-          </span>
+        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-600/30 flex items-center justify-center overflow-hidden">
+          {branding.logo_url ? (
+            // Served from this deployment. The API never returns a
+            // third-party address, so this cannot become a request to
+            // somebody else's host on every page load.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.logo_url} alt="" className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-brand-400">
+              <ShieldIcon />
+            </span>
+          )}
         </div>
         <div>
-          <span className="text-fg-primary font-bold text-base tracking-tight">Ai</span>
-          <span className="text-brand-400 font-bold text-base tracking-tight">SOC</span>
-          <p className="text-xs text-fg-subtle -mt-0.5">open-source</p>
+          {branding.is_white_labelled ? (
+            <span className="text-fg-primary font-bold text-base tracking-tight">{branding.product_name}</span>
+          ) : (
+            <>
+              <span className="text-fg-primary font-bold text-base tracking-tight">Ai</span>
+              <span className="text-brand-400 font-bold text-base tracking-tight">SOC</span>
+              <p className="text-xs text-fg-subtle -mt-0.5">open-source</p>
+            </>
+          )}
         </div>
         {/* Live indicator — decorative, status conveyed by the green dot label */}
           <div className="ml-auto flex items-center gap-1" aria-hidden="true">

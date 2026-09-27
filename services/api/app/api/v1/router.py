@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     audit,
     auth,
     autonomy_policy,
+    branding,
     business_context,
     cases,
     community,
@@ -85,6 +86,7 @@ from app.api.v1.endpoints import (
     tenants,
     threat_intel,
     translation,
+    usage,
     waitlist,
 )
 
@@ -114,6 +116,7 @@ api_router.include_router(connectors.router)
 # operator back on /onboarding.
 api_router.include_router(oauth.router)
 api_router.include_router(tenants.router)
+api_router.include_router(usage.router)
 api_router.include_router(detection_rules.router)
 # Frontend-shape facade: /api/v1/detection/rules + /api/v1/detection/test
 api_router.include_router(detection_compat.router)
@@ -149,6 +152,7 @@ api_router.include_router(mcp_servers.router)
 api_router.include_router(tenant_skills.router)
 api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
+api_router.include_router(branding.router)
 api_router.include_router(compliance.router)
 api_router.include_router(metrics.router)
 # Pipeline health snapshot — v1.5 SOC Console parity.

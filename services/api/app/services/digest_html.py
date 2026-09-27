@@ -20,6 +20,8 @@ from __future__ import annotations
 import html
 from datetime import UTC, datetime
 
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding
+
 from .executive_digest import (
     AutomationSummary,
     DigestRecommendation,
@@ -191,16 +193,38 @@ def _recommendation_cards(recs: list[DigestRecommendation]) -> str:
     return cards
 
 
-def render_digest_html(digest: ExecutiveDigest) -> str:
-    """Render an ``ExecutiveDigest`` to a self-contained HTML document."""
+def render_digest_html(digest: ExecutiveDigest, branding: Branding | None = None) -> str:
+    """Render an ``ExecutiveDigest`` to a self-contained HTML document.
+
+    ``branding`` defaults to the platform appearance, so every existing
+    caller keeps working and an unbranded deployment is unchanged. A
+    white-labelled organisation's report carries its product name, its
+    palette and its own logo, which is the document a customer forwards to
+    their board.
+
+    The logo is embedded as a data URI rather than referenced, because this
+    HTML is handed to WeasyPrint: a remote `<img src>` would be an outbound
+    request made by the server, to an address a customer administrator
+    supplied. The bytes are already sanitised at upload.
+    """
+    brand = branding or DEFAULT_BRANDING
     headline = _esc(digest.headline)
     period = digest.period
+    product = _esc(brand.product_name)
+    primary = _esc(brand.primary_color)
+    logo_block = ""
+    if brand.logo_data_uri:
+        logo_block = f'<img src="{_esc(brand.logo_data_uri)}" alt="{product}" style="max-height:40px;max-width:200px;margin-bottom:10px;">'
+    support_block = ""
+    if brand.support_email or brand.support_url:
+        where = _esc(brand.support_url or brand.support_email or "")
+        support_block = f'<div style="margin-top:4px;">Support: {where}</div>'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AiSOC Executive Digest — {_esc(period.label)}</title>
+<title>{product} Executive Digest — {_esc(period.label)}</title>
 <style>
   @page {{ margin: 18mm; }}
   body {{
@@ -213,6 +237,7 @@ def render_digest_html(digest: ExecutiveDigest) -> str:
   }}
   h1, h2, h3 {{ color: #0f172a; margin-top: 0; }}
   h1 {{ font-size: 22px; margin-bottom: 4px; }}
+  h2 {{ border-top-color: {primary}; }}
   h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
        color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
   table th, table td {{ border-bottom: 1px solid #f1f5f9; }}
@@ -224,8 +249,9 @@ def render_digest_html(digest: ExecutiveDigest) -> str:
 </head>
 <body>
   <header>
-    <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;">
-      AiSOC weekly executive digest
+    {logo_block}
+    <div style="font-size:11px;color:{primary};text-transform:uppercase;letter-spacing:0.08em;">
+      {product} weekly executive digest
     </div>
     <h1>{_esc(period.label)}</h1>
     <div style="color:#334155;font-size:14px;margin-top:6px;">{headline}</div>
@@ -267,8 +293,8 @@ def render_digest_html(digest: ExecutiveDigest) -> str:
   {_recommendation_cards(digest.recommendations)}
 
   <footer style="margin-top:32px;color:#94a3b8;font-size:11px;text-align:center;">
-    AiSOC — open-source AI Security Operations Center.
-    Print this page (Ctrl/Cmd-P → Save as PDF) for board-ready archival.
+    {_esc(brand.footer_text)}
+    {support_block}
   </footer>
 </body>
 </html>"""

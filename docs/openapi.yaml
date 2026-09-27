@@ -2566,6 +2566,133 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/usage:
+    get:
+      tags:
+      - usage
+      summary: Get Usage
+      description: Daily usage for the caller's tenant, defaulting to the last 30
+        days.
+      operationId: get_usage_api_v1_usage_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: start
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start
+      - name: end
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Usage Api V1 Usage Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/usage/reconciliation:
+    get:
+      tags:
+      - usage
+      summary: Get Reconciliation
+      description: 'Compare the daily sum against one query over the whole window.
+
+
+        Exposed rather than kept in a test so an operator disputing an invoice
+
+        can run the same check the test runs, against their own rows.'
+      operationId: get_reconciliation_api_v1_usage_reconciliation_get
+      parameters:
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      - name: start
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Start
+      - name: end
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: End
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Reconciliation Api V1 Usage Reconciliation Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/usage/export.csv:
+    get:
+      tags:
+      - usage
+      summary: Export Month
+      description: A month of usage as CSV, labelled with the organisation it belongs
+        to.
+      operationId: export_month_api_v1_usage_export_csv_get
+      parameters:
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      - name: month
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: YYYY-MM; defaults to the current month
+          title: Month
+        description: YYYY-MM; defaults to the current month
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/rules:
     get:
       tags:
@@ -6749,6 +6876,174 @@ paths:
           minimum: 1
           default: 10000
           title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/branding:
+    get:
+      tags:
+      - branding
+      summary: Get Branding
+      description: 'What the product looks like for the caller''s tenant.
+
+
+        Readable by any authenticated member. The console calls it on every page
+
+        load, and gating it behind an administrative permission would leave an
+
+        analyst looking at a differently-branded product from their colleague.'
+      operationId: get_branding_api_v1_branding_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Branding Api V1 Branding Get
+    put:
+      tags:
+      - branding
+      summary: Put Branding
+      description: Set branding for the organisation the caller's tenant belongs to.
+      operationId: put_branding_api_v1_branding_put
+      parameters:
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandingIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Put Branding Api V1 Branding Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/branding/assets/{kind}:
+    post:
+      tags:
+      - branding
+      summary: Upload Asset
+      description: 'Upload a logo or favicon.
+
+
+        An SVG goes through the sanitiser and what is stored is the sanitised
+
+        output. Nothing re-sanitises at render time, so this handler is the only
+
+        writer and the stored bytes are trusted thereafter.'
+      operationId: upload_asset_api_v1_branding_assets__kind__post
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Kind
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_asset_api_v1_branding_assets__kind__post'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Upload Asset Api V1 Branding Assets  Kind  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - branding
+      summary: Delete Asset
+      description: Remove an asset, returning that surface to the wordmark.
+      operationId: delete_asset_api_v1_branding_assets__kind__delete
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Kind
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/branding/assets/{asset_id}:
+    get:
+      tags:
+      - branding
+      summary: Get Asset
+      description: 'Serve a brand asset from this deployment.
+
+
+        Scoped to the caller''s own organisation. The bytes are not secret, but
+
+        an unscoped read would let any authenticated user enumerate every
+
+        operator''s logo, which is a customer list.'
+      operationId: get_asset_api_v1_branding_assets__asset_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: asset_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Asset Id
       responses:
         '200':
           description: Successful Response
@@ -19013,6 +19308,64 @@ components:
       - type_breakdown
       - blast_radius_score
       title: BlastRadiusResponse
+    Body_upload_asset_api_v1_branding_assets__kind__post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_asset_api_v1_branding_assets__kind__post
+    BrandingIn:
+      properties:
+        product_name:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Product Name
+        primary_color:
+          anyOf:
+          - type: string
+            pattern: ^#[0-9A-Fa-f]{6}$
+          - type: 'null'
+          title: Primary Color
+        accent_color:
+          anyOf:
+          - type: string
+            pattern: ^#[0-9A-Fa-f]{6}$
+          - type: 'null'
+          title: Accent Color
+        support_email:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Support Email
+        support_url:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Support Url
+        sender_name:
+          anyOf:
+          - type: string
+            maxLength: 80
+            minLength: 1
+          - type: 'null'
+          title: Sender Name
+        footer_text:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Footer Text
+      type: object
+      title: BrandingIn
     BuildTimelineRequest:
       properties:
         identity_kind:

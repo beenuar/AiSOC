@@ -460,9 +460,9 @@ suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 13: Enterprise identity and MSSP plumbing
 
-- [x] **13.1 SCIM 2.0** with Users, Groups, ServiceProviderConfig, ResourceTypes and Schemas, per-organization hashed rotatable tokens, and audited deprovisioning. Migration `071_scim_provisioning.sql`; router at `/scim/v2` (17 routes); `scripts/check_scim_contract.py` wired into `isolation.yml`; Okta-shaped and Entra-shaped sequences pass in `test_scim_provisioning.py` (54 tests). See D28, D29 and D30.
-- [ ] **13.2 MSSP white-label** per organization across console, PDF, digests, email approvals and ChatOps, with SVGs sanitized and assets stored locally.
-- [ ] **13.3 Usage metering** from real rows, exposed through an API and a monthly CSV, with no pricing logic.
+- [x] **13.1 SCIM 2.0** with Users, Groups, ServiceProviderConfig, ResourceTypes and Schemas, per-organization hashed rotatable tokens, and audited deprovisioning. Migration `070_scim_provisioning.sql`; router at `/scim/v2` (17 routes); `scripts/check_scim_contract.py` wired into `isolation.yml`; Okta-shaped and Entra-shaped sequences pass in `test_scim_provisioning.py` (54 tests). See D26, D27 and D28.
+- [~] **13.2 MSSP white-label** per organization. Console and PDF/digest are implemented and gated; assets are held as bytes in `aisoc_org_brand_assets` and SVGs are allowlist-sanitised (migration `072_org_branding.sql`, `app/services/branding/`). Email approvals and ChatOps read the resolved `sender_name` but are **not** covered end to end, and the doc says so. See D29.
+- [x] **13.3 Usage metering** from real rows: `app/services/usage_metering.py`, ten meters each a query against the table holding the evidence, `GET /api/v1/usage`, `/usage/reconciliation` and `/usage/export.csv`. Linked to `entitlements.headroom_for_tenant`. No pricing logic, gated. See D30.
 - [ ] **13.4 Console i18n** with a pilot locale, RTL, locale-aware formatting and a missing-keys gate.
 
 ---
@@ -1481,3 +1481,56 @@ a revocation exists, so credentials minted before this change fail closed.
 
 Both the access-token path and the refresh path check it. The refresh path
 matters more: a refresh token outlives an access token by days.
+
+### D29. White-label reaches the two surfaces the acceptance names, and not the other three
+
+13.2 lists five surfaces: console, PDF reports, digests, email approvals and
+ChatOps. The phase's own "Done when" names two of them, "a white-labelled
+organization's PDF report and console show its branding", and those two are
+implemented and gated end to end.
+
+The digest *is* the PDF path, so it comes with them: `render_digest_pdf` runs
+`render_digest_html` through WeasyPrint, and the test asserts on the HTML,
+which is what the PDF contains.
+
+Email approvals and ChatOps resolve the same `sender_name` from the same
+resolver, and there is no end-to-end test that an outbound message carries it.
+Recorded as `[~]` rather than `[x]`, and
+`apps/docs/docs/operations/white-label.md` says "treat those as unverified
+rather than working" instead of implying coverage that does not exist. The
+alternative, marking the item done because the field resolves, is the shape
+this program exists to prevent.
+
+**The design decision worth keeping:** asset bytes live in Postgres and are
+served from this deployment. A logo referenced by URL is an outbound request
+made by whatever renders it, and for a PDF that renderer is the *server*, so a
+customer-supplied address becomes a server-side request forgery primitive. The
+test asserts the rendered report contains no external URL at all rather than
+asserting the specific attribute is absent.
+
+### D30. Metering is computed, not counted, and that is what makes it testable
+
+The obvious design for 13.3 is a `usage_daily` table incremented as things
+happen. Every meter here is instead a `SELECT` against the table that holds
+the evidence, evaluated when somebody asks.
+
+The reason is the acceptance itself. "Metering matches row counts in a test"
+cannot be demonstrated against a counter table, because the only thing
+available to compare it with is the counter. Against a query, the test counts
+rows independently and compares, which is the arrangement where a
+disagreement can actually surface. It is also the failure this repository has
+already paid for twice: `cases_closed_7d` filtered an intermediate status and
+`mttr_hours` averaged a column ordinary case work never writes, and both
+passed tests that compared a producer against a copy of itself.
+
+The second property a naive implementation gets wrong is day boundaries. The
+windows are half-open, the daily series summed is asserted equal to one query
+over the whole range, and the fixture puts an alert at exactly 00:00 so a
+closed interval would double-count it. `GET /usage/reconciliation` exposes the
+same comparison, so an operator disputing a figure can run it against their
+own rows rather than taking a test's word for it.
+
+`events_ingested` is in the ClickHouse lake, which is a `full`-profile
+service. It reads "not measured" with the reason, in the API response and in
+the CSV header, and a test asserts it is not *also* declared as a meter so it
+can never be reported as a number.

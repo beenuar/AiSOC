@@ -95,6 +95,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
 ### Added
 
+- **Per-organisation white-label branding, with uploaded assets treated as a
+  security boundary** (gap-closure Phase 13.2).
+
+  **The gap.** A managed-service provider had no way to present AiSOC as its
+  own product. The name, the palette and the support contacts were the
+  platform's, in every console its customers opened and on every report it
+  forwarded to their board.
+
+  **What ships.** One row per operator organisation sets product name, colours,
+  support contacts and sender name, resolved field by field so an organisation
+  that sets a name and no colours renders its name against the platform
+  palette rather than losing the one field it configured. Applied to the
+  console shell and to the executive digest in HTML and PDF.
+
+  **Why the assets are bytes and not a URL.** The plan says stored locally and
+  never fetched from a third party, and the reason is not convenience. A remote
+  logo is an outbound request made by whatever renders it: by every console
+  that draws it, and for a PDF by the *server*, which turns a customer-supplied
+  address into a server-side request forgery primitive. The test asserts the
+  rendered report contains no external URL at all, rather than asserting one
+  particular attribute is absent.
+
+  **Why an SVG is sanitised against an allowlist.** SVG is XML with a scripting
+  model, and a logo uploaded by a customer administrator is rendered inside
+  consoles and inside reports other people open. A denylist of `<script>`
+  passes while `<foreignObject>` renders arbitrary HTML, so only drawing
+  elements and presentation attributes survive; everything else is dropped with
+  its subtree. Event handlers go by shape rather than enumeration, a paint
+  reference may only point inside the same document, and a file declaring a
+  `DOCTYPE` or an `ENTITY` is refused on a byte scan **before** parsing, which
+  removes both entity-expansion denial-of-service variants rather than bounding
+  them. Detection is on the bytes as well as the declared content type, because
+  the uploader controls that header and skipping the sanitiser is the whole
+  attack. 29 cases, written as attacks; a benign logo is asserted to survive
+  intact, because a sanitiser that removes everything is safe and useless.
+
+- **Usage metering computed from the rows that record the work** (gap-closure
+  Phase 13.3).
+
+  **The gap.** There was no per-tenant record of what a deployment had
+  actually done: alerts, triages by path, investigations, tokens, measured
+  model cost, response actions, connectors and seats.
+
+  **How it is measured, and why that shape.** Ten meters, each a `SELECT`
+  against the table holding the evidence, evaluated when somebody asks. Not a
+  counter table incremented as things happen: a counter drifts from the table
+  it summarises and nothing notices, which is what made `cases_closed_7d` and
+  `mttr_hours` wrong on real data while their tests passed. It is also what
+  makes the acceptance checkable, since a counter can only be tested against
+  itself. Every assertion in the test counts rows independently and compares;
+  the daily series summed must equal one query over the whole window, and the
+  fixture seeds an alert at exactly midnight so a closed interval would
+  double-count it. `GET /api/v1/usage/reconciliation` exposes the same
+  comparison so an operator can run it against their own rows.
+
+  **Honesty.** `events_ingested` lives in the ClickHouse lake, a `full`-profile
+  service, and reads "not measured" with the reason in both the API response
+  and the CSV header. Never `0`: zero is a measurement, and a reader who sees
+  it concludes no events arrived rather than that nothing looked. No pricing
+  logic, gated by `check_whitelabel_metering.py` reading the meter
+  declarations. Linked to the existing entitlement limits, returned alongside
+  the counts, so a usage screen and a quota screen cannot disagree about the
+  same rows.
+
 - **SCIM 2.0 provisioning, scoped by its credential and tested against two
   identity providers that disagree with each other** (gap-closure Phase 13.1).
 
