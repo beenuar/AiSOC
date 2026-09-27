@@ -259,7 +259,7 @@ the decomposition and what each link rests on are in D8 above.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 
-- [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
+- [~] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906), with one half of the closure path still open (see D15). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from a bounded sweep over alerts closed in this console. The reader and matcher for closures made in the customer's own SIEM ship too, on the five Phase 1.1 readers unchanged, and nothing calls them on a schedule yet. See D9 for the one property everything else rests on.
 - [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
 - [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#908](https://github.com/beenuar/AiSOC/pull/908). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
 
@@ -473,6 +473,40 @@ rules are a standard-library-only module vendored byte-identically, following
 the five mirrors already in the tree, with
 `sync_vendored_autonomy_evidence.py --check` wired into `ci.yml`. Two copies
 allowed to differ means the control is off in whichever one is more generous.
+
+### D15. The SIEM half of reconciliation has no scheduled caller, and the docs said it did
+
+Found by grepping for callers of the code this program had just written, which
+is the check this repository's own history says to run before claiming
+anything.
+
+`services/actions/app/services/shadow_reconcile.py` exists, reuses the five
+Phase 1.1 readers unchanged, matches a vendor closure to the decision it
+grades on the vendor finding id, keeps `unmatched` and `already_resolved`
+apart, and has eleven tests. **Nothing calls it.** The AiSOC-side half is
+wired and runs on every read of the agreement endpoint; the SIEM-side half is
+a library with no driver.
+
+The docs page shipped in #906 said closures "are polled back out" of the five
+vendors, which is a claim about a thing with no scheduler. An operator whose
+analysts work entirely in Splunk would have waited for a scorecard that was
+never going to fill in, and concluded the agent was not being evaluated rather
+than that we were not looking.
+
+**Resolution:** the claim is corrected rather than the code hurried. The page
+now says in those words that this half is not automatic, names what exists and
+what does not, and says agreement is measured on AiSOC closures until it
+lands. 2.1 moves from `[x]` to `[~]`.
+
+**What closes it,** in the shape the architecture already forces: `services/api`
+owns the vault and the tenant session, so it resolves the connector's
+credentials and posts them with a window to a new internal route on
+`services/actions`, which calls the reader and then `reconcile_findings`. That
+is the same round trip `siem_writeback` and `/connectors/{id}/normalize`
+already take, and for the same reason: one process cannot hold two services
+that both package their code as top-level `app`. It was not hurried into this
+phase because a cross-service route added under time pressure is exactly the
+half-wired feature the correction above is about.
 
 ### D12. `unified_decision` had no production caller, and the plan names it anyway
 

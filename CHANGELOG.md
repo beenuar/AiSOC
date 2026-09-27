@@ -104,9 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approval raised, no outcome prior recorded, no escalation. It still writes
   the ledger run, the `ai_*` columns and a decision row, and it still bills
   the spend, because a shadow run is the product running rather than a
-  measurement the tenant asked for. When an analyst later closes the alert,
-  here or in the source SIEM, the closure is matched to the decision it
-  grades and the pair becomes evidence.
+  measurement the tenant asked for. When an analyst later closes the alert in
+  AiSOC, a bounded sweep matches the closure to the decision it grades and the
+  pair becomes evidence. The reader and the matcher for closures made in the
+  customer's own SIEM ship here too, reusing the Phase 1.1 readers unchanged,
+  but **nothing calls them on a schedule yet**, so that half is not automatic
+  and the documentation says so in those words rather than leaving an operator
+  to work it out from an empty scorecard.
 
   **The property the whole thing rests on.** `alerts.disposition` is the
   analyst's column and it is the column agreement is read back from. A shadow

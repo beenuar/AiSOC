@@ -96,16 +96,23 @@ can be closed from the feedback endpoint, by a case being resolved, by a bulk
 action or by a playbook, and a hook on one of those would silently grade the
 subset of alerts closed the way the hook was written for.
 
-**Closures made in your SIEM.** Most analysts evaluating AiSOC keep working
-where they always have. The same readers that power
-[replay evaluation](../evaluation/replay.md) poll closed findings back out of
-Splunk ES, Microsoft Sentinel, Elastic Security, IBM QRadar and Microsoft
-Defender XDR, and each closure is matched to the decision it grades by the
-vendor's own finding id. A tenant whose analysts work entirely in Splunk will
-still see their scorecard fill in.
+**Closures made in your SIEM. Not automatic yet.** Most analysts evaluating
+AiSOC keep working where they always have, so a closure recorded in Splunk ES,
+Microsoft Sentinel, Elastic Security, IBM QRadar or Microsoft Defender XDR
+should count. The readers exist and are the same ones that power
+[replay evaluation](../evaluation/replay.md), and
+`services/actions/app/services/shadow_reconcile.py` matches each closure to the
+decision it grades by the vendor's own finding id.
 
-Either way, a closure carrying a disposition this platform cannot name becomes
-`unlabeled`. It is counted as resolved and excluded from every rate. Splunk ES
+**What does not exist is a scheduler that calls them.** Nothing polls your SIEM
+for shadow reconciliation on a timer today, so a tenant whose analysts work
+entirely in their own console will see a scorecard that does not fill in. That
+is a gap in this feature, not a property of your deployment, and it is recorded
+as such rather than left for you to discover from an empty page. Until it
+lands, agreement is measured on closures made in AiSOC.
+
+Whichever route a closure arrives by, one carrying a disposition this platform
+cannot name becomes `unlabeled`. It is counted as resolved and excluded from every rate. Splunk ES
 ships two dispositions that literally mean "I do not know", and so do Sentinel
 and Defender; folding those into a verdict because the finding happened to be
 closed would manufacture agreement out of an analyst's uncertainty.
