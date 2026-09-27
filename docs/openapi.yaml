@@ -11836,6 +11836,163 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sandbox/providers:
+    get:
+      tags:
+      - sandbox
+      summary: Analysis providers and this tenant's upload consent
+      operationId: providers_api_v1_sandbox_providers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvidersResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/sandbox/lookup:
+    post:
+      tags:
+      - sandbox
+      summary: Look a file hash up (nothing is uploaded)
+      operationId: lookup_api_v1_sandbox_lookup_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LookupRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxResultResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/sandbox/files:
+    post:
+      tags:
+      - sandbox
+      summary: Analyse a file, uploading only if policy allows
+      operationId: submit_file_api_v1_sandbox_files_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitFileRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxResultResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/sandbox/urls:
+    post:
+      tags:
+      - sandbox
+      summary: Submit a URL for analysis
+      operationId: submit_url_api_v1_sandbox_urls_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitUrlRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxResultResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/sandbox/analyses/{provider_name}/{handle}:
+    get:
+      tags:
+      - sandbox
+      summary: Poll an analysis
+      operationId: get_analysis_api_v1_sandbox_analyses__provider_name___handle__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider Name
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Handle
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxResultResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sandbox/consent:
+    put:
+      tags:
+      - sandbox
+      summary: Allow or refuse file uploads to a provider
+      operationId: put_consent_api_v1_sandbox_consent_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/kb/ingest:
     post:
       tags:
@@ -18016,6 +18173,46 @@ components:
         knobs (poll interval, region, log filters) that the wizard surfaces
 
         so an operator can tweak them without re-pasting credentials.'
+    ConsentRequest:
+      properties:
+        provider:
+          type: string
+          title: Provider
+        uploads_enabled:
+          type: boolean
+          title: Uploads Enabled
+        consent_text_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Consent Text Version
+      type: object
+      required:
+      - provider
+      - uploads_enabled
+      title: ConsentRequest
+    ConsentResponse:
+      properties:
+        provider:
+          type: string
+          title: Provider
+        uploads_enabled:
+          type: boolean
+          title: Uploads Enabled
+        consent_text_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Consent Text Version
+        consent_text:
+          type: string
+          title: Consent Text
+      type: object
+      required:
+      - provider
+      - uploads_enabled
+      - consent_text
+      title: ConsentResponse
     ContextImportRequest:
       properties:
         departments:
@@ -22486,6 +22683,21 @@ components:
       - email
       - password
       title: LoginRequest
+    LookupRequest:
+      properties:
+        sha256:
+          type: string
+          title: Sha256
+          description: The file's SHA-256 digest. Nothing but the digest is sent.
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      type: object
+      required:
+      - sha256
+      title: LookupRequest
     MarketplaceItemSummary:
       properties:
         id:
@@ -24893,6 +25105,75 @@ components:
       - created_at
       - updated_at
       title: ProposalResponse
+    ProviderInfo:
+      properties:
+        name:
+          type: string
+          title: Name
+        local:
+          type: boolean
+          title: Local
+        usable:
+          type: boolean
+          title: Usable
+        supports_file_submission:
+          type: boolean
+          title: Supports File Submission
+        supports_url_submission:
+          type: boolean
+          title: Supports Url Submission
+        submissions_are_public_by_default:
+          type: boolean
+          title: Submissions Are Public By Default
+        description:
+          type: string
+          title: Description
+        uploads_enabled_for_tenant:
+          type: boolean
+          title: Uploads Enabled For Tenant
+        consent_text:
+          type: string
+          title: Consent Text
+        consent_text_version:
+          type: string
+          title: Consent Text Version
+        authentication_verified:
+          type: boolean
+          title: Authentication Verified
+        unusable_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unusable Reason
+      type: object
+      required:
+      - name
+      - local
+      - usable
+      - supports_file_submission
+      - supports_url_submission
+      - submissions_are_public_by_default
+      - description
+      - uploads_enabled_for_tenant
+      - consent_text
+      - consent_text_version
+      - authentication_verified
+      title: ProviderInfo
+    ProvidersResponse:
+      properties:
+        airgapped:
+          type: boolean
+          title: Airgapped
+        providers:
+          items:
+            $ref: '#/components/schemas/ProviderInfo'
+          type: array
+          title: Providers
+      type: object
+      required:
+      - airgapped
+      - providers
+      title: ProvidersResponse
     PublicReplay:
       properties:
         slug:
@@ -26965,6 +27246,65 @@ components:
       - pattern
       - valid_from
       title: STIXIndicatorWithPush
+    SandboxResultResponse:
+      properties:
+        outcome:
+          type: string
+          enum:
+          - known
+          - pending
+          - not_seen
+          - upload_refused
+          - could_not_check
+          title: Outcome
+        provider:
+          type: string
+          title: Provider
+        detail:
+          type: string
+          title: Detail
+        sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sha256
+        uploaded:
+          type: boolean
+          title: Uploaded
+          default: false
+        report:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Report
+        handle:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Handle
+        poll_after_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll After Seconds
+        decision:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Decision
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+      type: object
+      required:
+      - outcome
+      - provider
+      - detail
+      title: SandboxResultResponse
     SavedHuntModel:
       properties:
         id:
@@ -27517,6 +27857,30 @@ components:
       - submitted_at
       - triaged_at
       title: SubmissionResponse
+    SubmitFileRequest:
+      properties:
+        file_base64:
+          type: string
+          title: File Base64
+          description: The file contents, base64-encoded.
+        file_name:
+          type: string
+          maxLength: 512
+          title: File Name
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+        confirm_upload:
+          type: boolean
+          title: Confirm Upload
+          default: false
+      type: object
+      required:
+      - file_base64
+      - file_name
+      title: SubmitFileRequest
     SubmitRequest:
       properties:
         artifact_kind:
@@ -27549,8 +27913,34 @@ components:
             type: string
           type: array
           title: Urls
+        attachment_hashes:
+          items:
+            type: string
+          type: array
+          title: Attachment Hashes
+          description: 'SHA-256 digests of the message''s attachments. Digests only:
+            the attachment itself is never accepted here, because this route runs
+            unattended on submitted mail and an unattended path that can upload is
+            one misconfiguration away from disclosing every attachment a tenant receives.
+            To have a file analysed, POST it to /sandbox/files, which enforces the
+            tenant''s upload policy.'
       type: object
       title: SubmitRequest
+    SubmitUrlRequest:
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          title: Url
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      type: object
+      required:
+      - url
+      title: SubmitUrlRequest
     SuggestRequest:
       properties:
         alert_id:
