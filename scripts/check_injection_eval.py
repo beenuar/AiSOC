@@ -247,6 +247,35 @@ def _live_outcomes(pairs: list[Any], metrics: ModuleType, limit: int | None) -> 
     return outcomes, (note + f", {failures} dropped" if failures else note)
 
 
+def render_lead(tuned: Any, holdout: Any) -> str:
+    """The first thing a reader meets, and deliberately the weaker number.
+
+    Both rates were already published, but the tuned one came first, followed
+    by a per-surface table reading 21/21 and 14/14. A reader who stopped there
+    left with the figure that describes the guard against payloads it was
+    written for, which is the one case an attacker does not present.
+
+    The house rule is that a caveat reached later is not a caveat, and the
+    same reasoning already governs the unmeasured fidelity floors: lead with
+    the weaker measurement and let the stronger one qualify it, never the
+    other way round.
+    """
+    if not (tuned.guard_detection.measured and holdout.guard_detection.measured):
+        return (
+            "Detection is reported twice: once on the corpus the guard was hardened against, "
+            "and once on payloads authored after it was frozen. Read the held-out rate first."
+        )
+    points = (tuned.guard_detection.value - holdout.guard_detection.value) * 100
+    return (
+        f"**Against payloads it has not seen, this guard detects "
+        f"{holdout.guard_detection.render()}.** That is the number to carry away. It scores "
+        f"{tuned.guard_detection.render()} on the corpus it was hardened against, and the "
+        f"{points:.0f}-point gap is the honest measure of how much of that hardening was "
+        f"pattern-fitting rather than threat coverage. Both are published below, tuned first "
+        f"for continuity with earlier runs; neither means anything read alone."
+    )
+
+
 def render_holdout_markdown(score: Any, tuned: Any) -> str:
     """The held-out block, published beside the tuned one and never instead of it.
 
@@ -397,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     payload["floors"] = {"guard_recall_floor": GUARD_RECALL_FLOOR, "guard_false_positive_ceiling": GUARD_FALSE_POSITIVE_CEILING}
     payload["holdout"] = holdout_score.as_dict()
 
-    block = render_markdown(score) + "\n\n" + render_holdout_markdown(holdout_score, score)
+    block = render_lead(score, holdout_score) + "\n\n" + render_markdown(score) + "\n\n" + render_holdout_markdown(holdout_score, score)
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

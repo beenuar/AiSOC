@@ -234,6 +234,8 @@ detection number describes nothing.
 ### Latest results
 
 <!-- BEGIN:injection-eval -->
+**Against payloads it has not seen, this guard detects 7.1% (2/28).** That is the number to carry away. It scores 98.1% (53/54) on the corpus it was hardened against, and the 91-point gap is the honest measure of how much of that hardening was pattern-fitting rather than threat coverage. Both are published below, tuned first for continuity with earlier runs; neither means anything read alone.
+
 Corpus: **54 injected incidents** and **17 benign controls**, each paired with a clean twin (71 pairs, 142 incidents). Synthetic, generated deterministically. Digest `d67f4eb82e74fc3e`.
 
 | Metric | Measures | Rate | What it is |

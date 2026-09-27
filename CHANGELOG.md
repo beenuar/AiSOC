@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The injection benchmark led with the number that describes the guard least.**
+  Both the tuned and the held-out detection rates were published, but the tuned
+  98.1% came first, followed by a per-surface table reading 21/21 and 14/14, and
+  the held-out 7.1% sat below it. A reader who stopped there left with the rate
+  the guard scores against payloads it was hardened for, which is the one case an
+  attacker does not present. The generated block now opens with the held-out
+  rate and the 91-point gap, and says plainly that the gap measures how much of
+  the hardening was pattern-fitting rather than threat coverage. Both rates are
+  still published, tuned first for continuity with earlier runs. This is the same
+  rule the unmeasured fidelity floors already follow: lead with the weaker
+  measurement and let the stronger one qualify it.
+
 ### Fixed
 
 - **The prompt-injection guard now reads a constrained field as the
