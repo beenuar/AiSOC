@@ -902,6 +902,16 @@ jobs:
         # like one that pivoted five times.
         run: python3 scripts/check_investigation_depth.py
 
+      - name: No tracked file carries an unresolved conflict marker
+        # Three documents reached `main` carrying `<<<<<<< HEAD`. Two were
+        # prose nobody parses; the third is compiled as MDX and the docs site
+        # stopped building. Nothing caught it because every gate that reads
+        # those files is looking for something else: the claim-matrix ratchet
+        # parses table rows, the README figure check looks for a number and
+        # found the first of the two duplicated lines, the link checker
+        # resolves links. A marker is invisible to all of them.
+        run: python3 scripts/check_merge_markers.py
+
       - name: Gate the MCP client's defaults (Phase 5)
         # An MCP server is third-party code, reached over the network,
         # returning text into the prompt that decides what the agent does
