@@ -234,12 +234,12 @@ detection number describes nothing.
 ### Latest results
 
 <!-- BEGIN:injection-eval -->
-Corpus: **54 injected incidents** and **11 benign controls**, each paired with a clean twin (65 pairs, 130 incidents). Synthetic, generated deterministically. Digest `8f881084f7082565`.
+Corpus: **54 injected incidents** and **17 benign controls**, each paired with a clean twin (71 pairs, 142 incidents). Synthetic, generated deterministically. Digest `d67f4eb82e74fc3e`.
 
 | Metric | Measures | Rate | What it is |
 |---|---|---|---|
-| Guard detection rate | deterministic | 66.7% (36/54) | Guard flagged the payload at the field it was written into, and did not flag the clean twin there. |
-| Guard false-positive rate | deterministic | 18.2% (2/11) | Benign controls flagged. Legitimate telemetry an analyst has to be able to read. |
+| Guard detection rate | deterministic | 98.1% (53/54) | Guard flagged the payload at the field it was written into, and did not flag the clean twin there. |
+| Guard false-positive rate | deterministic | 5.9% (1/17) | Benign controls flagged. Legitimate telemetry an analyst has to be able to read. |
 | Verdict flip rate | live model | not measured (deterministic run; behavioural rates need the weekly wet eval) | Injected twin closed as benign where the clean twin did not. |
 | Unsafe action proposal rate | live model | not measured (deterministic run; behavioural rates need the weekly wet eval) | Containment proposed against the deployment's own estate that the clean twin did not propose. |
 | Tool-call deviation rate | live model | not measured (deterministic run; behavioural rates need the weekly wet eval) | Tool sequence differs from the clean twin's. |
@@ -248,13 +248,34 @@ Guard detection by surface, which is where the result is actionable:
 
 | Surface | Detected |
 |---|---|
-| `command_line` | 1/5 |
+| `command_line` | 4/5 |
+| `dns_name` | 5/5 |
+| `email_body` | 14/14 |
+| `email_subject` | 3/3 |
+| `file_name` | 3/3 |
+| `ticket_text` | 21/21 |
+| `user_agent` | 3/3 |
+
+Held-out corpus: **28 injected incidents** and **6 benign controls**, authored after the guard was frozen and never consulted while its patterns were written. Synthetic, generated deterministically. Digest `4601dada34b78726`.
+
+| Metric | Measures | Rate | What it is |
+|---|---|---|---|
+| Guard detection rate, held out | deterministic | 7.1% (2/28) | Payloads written to evade the shipped rules, in the same seven surfaces. |
+| Guard false-positive rate, held out | deterministic | 0.0% (0/6) | Benign controls authored alongside them. |
+
+Held-out detection by surface:
+
+| Surface | Detected |
+|---|---|
+| `command_line` | 0/3 |
 | `dns_name` | 1/5 |
-| `email_body` | 12/14 |
-| `email_subject` | 2/3 |
+| `email_body` | 0/5 |
+| `email_subject` | 0/2 |
 | `file_name` | 0/3 |
-| `ticket_text` | 18/21 |
-| `user_agent` | 2/3 |
+| `ticket_text` | 1/7 |
+| `user_agent` | 0/3 |
+
+These payloads were written by someone who could read the patterns, which is the correct threat model for a guard published under an open-source licence rather than a pessimistic one. The gap between the two is **91 points**. There is no floor on this rate and CI does not enforce one: a target on a held-out set is an instruction to tune against it. CI checks only that the measurement happens and that this page matches it.
 <!-- END:injection-eval -->
 
 The block above is rewritten from a live measurement by

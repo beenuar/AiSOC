@@ -730,11 +730,21 @@ def _prose_injections() -> tuple[Injection, ...]:
     return tuple(convert(p) for p in (*PROSE_ADVERSARIAL, *PROSE_BENIGN))
 
 
-def build_pairs(incidents: list[dict[str, Any]] | None = None) -> list[IncidentPair]:
-    """Every injection, paired with its clean twin. Deterministic and sorted."""
+def build_pairs(
+    incidents: list[dict[str, Any]] | None = None,
+    injections: tuple[Injection, ...] | None = None,
+) -> list[IncidentPair]:
+    """Every injection, paired with its clean twin. Deterministic and sorted.
+
+    ``injections`` exists so the held-out corpus in ``injection_holdout.py``
+    is paired by *this* function rather than by a copy of it. A second
+    implementation of the pairing would be a second definition of what a
+    twin is, and the held-out rate would then measure a different thing than
+    the rate it is meant to be compared against.
+    """
     base = incidents if incidents is not None else load_base_incidents()
     pairs: list[IncidentPair] = []
-    for injection in (*INJECTIONS, *_prose_injections()):
+    for injection in injections if injections is not None else (*INJECTIONS, *_prose_injections()):
         surface = _SURFACE_BY_NAME[injection.surface]
         clean, injected, field_path = _make_twins(_pick_base(injection.id, _eligible(base, surface)), surface, injection.payload)
         pairs.append(

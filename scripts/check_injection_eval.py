@@ -115,17 +115,28 @@ def _load(name: str, path: Path) -> ModuleType:
     return module
 
 
-def _corpus_modules(root: Path) -> tuple[ModuleType, ModuleType]:
+def _corpus_modules(root: Path) -> tuple[ModuleType, ModuleType, ModuleType]:
     base = root / "services" / "agents" / "tests" / "adversarial"
-    missing = [
-        p.name for p in (base / "injection_corpus.py", base / "injection_incidents.py", base / "injection_metrics.py") if not p.exists()
-    ]
+    sources = (
+        base / "injection_corpus.py",
+        base / "injection_incidents.py",
+        base / "injection_metrics.py",
+        base / "injection_holdout.py",
+    )
+    missing = [p.name for p in sources if not p.exists()]
     if missing:
         raise FileNotFoundError(f"injection corpus is not in this tree: missing {', '.join(missing)} under {base}")
-    # The incidents module imports its payloads from the payload corpus, so
-    # that one has to be registered under the name the relative import will
-    # resolve to before the incidents module is executed.
-    names = ("injection_pkg", "injection_pkg.injection_corpus", "injection_pkg.injection_incidents", "injection_pkg.injection_metrics")
+    # The incidents module imports its payloads from the payload corpus, and
+    # the holdout module imports its pairing from the incidents module, so
+    # each has to be registered under the name the relative import will
+    # resolve to before the next one is executed.
+    names = (
+        "injection_pkg",
+        "injection_pkg.injection_corpus",
+        "injection_pkg.injection_incidents",
+        "injection_pkg.injection_metrics",
+        "injection_pkg.injection_holdout",
+    )
     with _borrowed_module_names(*names):
         package = ModuleType("injection_pkg")
         package.__path__ = [str(base)]  # type: ignore[attr-defined]
@@ -133,7 +144,28 @@ def _corpus_modules(root: Path) -> tuple[ModuleType, ModuleType]:
         _load("injection_pkg.injection_corpus", base / "injection_corpus.py")
         incidents = _load("injection_pkg.injection_incidents", base / "injection_incidents.py")
         metrics = _load("injection_pkg.injection_metrics", base / "injection_metrics.py")
-    return incidents, metrics
+        holdout = _load("injection_pkg.injection_holdout", base / "injection_holdout.py")
+    return incidents, metrics, holdout
+
+
+def grade_holdout(holdout: ModuleType, metrics: ModuleType, scan: Any) -> tuple[Any, list[str], list[str]]:
+    """Measure the frozen guard against payloads authored after it was frozen.
+
+    Returns the score plus the two directions the record can be wrong in:
+    payloads missed that the file does not list, and payloads the file lists
+    that are now detected. Both are findings, because the file's whole value
+    is that it describes this tree.
+
+    There is deliberately no floor here. See the holdout module's docstring:
+    a floor on a held-out set is an instruction to tune against it, and the
+    number is only worth reading while nobody has.
+    """
+    pairs = holdout.build_holdout_pairs()
+    hits = metrics.attributable_hits(pairs, scan)
+    score = metrics.score(pairs, hits, holdout.holdout_digest(pairs))
+    missed = {p.injection_id for p in pairs if p.must_flag and not hits[p.pair_id]}
+    recorded = set(holdout.HOLDOUT_UNDETECTED)
+    return score, sorted(missed - recorded), sorted(recorded - missed)
 
 
 def _guard_scanner(root: Path) -> Any:
@@ -215,6 +247,48 @@ def _live_outcomes(pairs: list[Any], metrics: ModuleType, limit: int | None) -> 
     return outcomes, (note + f", {failures} dropped" if failures else note)
 
 
+def render_holdout_markdown(score: Any, tuned: Any) -> str:
+    """The held-out block, published beside the tuned one and never instead of it.
+
+    Both rates describe the same guard, and reading either alone misleads.
+    The tuned rate says the hardening did what it was written to do; the
+    held-out rate says how much of that reaches a payload nobody wrote a
+    pattern for. The gap is the useful quantity and it is stated here rather
+    than left for a reader to subtract.
+    """
+    gap = ""
+    if score.guard_detection.measured and tuned.guard_detection.measured:
+        points = (tuned.guard_detection.value - score.guard_detection.value) * 100
+        gap = f" The gap between the two is **{points:.0f} points**."
+    return "\n".join(
+        [
+            f"Held-out corpus: **{score.adversarial} injected incidents** and **{score.benign_controls} benign controls**, "
+            f"authored after the guard was frozen and never consulted while its patterns were written. "
+            f"Synthetic, generated deterministically. Digest `{score.corpus_digest[:16]}`.",
+            "",
+            "| Metric | Measures | Rate | What it is |",
+            "|---|---|---|---|",
+            f"| Guard detection rate, held out | deterministic | {score.guard_detection.render()} | "
+            "Payloads written to evade the shipped rules, in the same seven surfaces. |",
+            f"| Guard false-positive rate, held out | deterministic | {score.guard_false_positive.render()} | "
+            "Benign controls authored alongside them. |",
+            "",
+            "Held-out detection by surface:",
+            "",
+            "| Surface | Detected |",
+            "|---|---|",
+            *(f"| `{s}` | {c['caught']}/{c['total']} |" for s, c in sorted(score.guard_by_surface.items())),
+            "",
+            "These payloads were written by someone who could read the patterns, which is the correct threat "
+            "model for a guard published under an open-source licence rather than a pessimistic one."
+            + gap
+            + " There is no floor on this rate and CI does not enforce one: a target on a held-out set is an "
+            "instruction to tune against it. CI checks only that the measurement happens and that this page "
+            "matches it.",
+        ]
+    )
+
+
 def render_markdown(score: Any) -> str:
     """The published block. Every rate travels with the count behind it."""
     metrics = (
@@ -293,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = repo_root()
-    incidents_mod, metrics_mod = _corpus_modules(root)
+    incidents_mod, metrics_mod, holdout_mod = _corpus_modules(root)
     scan = _guard_scanner(root)
 
     pairs = incidents_mod.build_pairs()
@@ -316,11 +390,14 @@ def main(argv: list[str] | None = None) -> int:
         live_reason=live_reason,
     )
 
+    holdout_score, holdout_unrecorded, holdout_stale = grade_holdout(holdout_mod, metrics_mod, scan)
+
     payload = score.as_dict()
     payload["live"] = {"requested": args.live, "measured": outcomes is not None, "reason": live_reason, "limit": args.limit}
     payload["floors"] = {"guard_recall_floor": GUARD_RECALL_FLOOR, "guard_false_positive_ceiling": GUARD_FALSE_POSITIVE_CEILING}
+    payload["holdout"] = holdout_score.as_dict()
 
-    block = render_markdown(score)
+    block = render_markdown(score) + "\n\n" + render_holdout_markdown(holdout_score, score)
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -355,12 +432,23 @@ def main(argv: list[str] | None = None) -> int:
             "KNOWN_UNDETECTED lists payloads the guard now catches; remove them so the list keeps describing this tree: "
             + ", ".join(score.newly_detected)
         )
+    # Both directions, for the same reason the corpus ratchet checks both: a
+    # record of where a guard does not generalise is worthless the moment it
+    # stops describing the guard. This is not a floor and never becomes one.
+    if holdout_unrecorded:
+        findings.append("held-out payloads missed that HOLDOUT_UNDETECTED does not list: " + ", ".join(holdout_unrecorded))
+    if holdout_stale:
+        findings.append("HOLDOUT_UNDETECTED lists payloads the guard now catches; remove them: " + ", ".join(holdout_stale))
 
     print(
         f"guard detection {score.guard_detection.render()} (floor {GUARD_RECALL_FLOOR:.0%}), "
         f"benign flagged {score.guard_false_positive.render()} (ceiling {GUARD_FALSE_POSITIVE_CEILING:.0%})"
     )
     print(f"recorded blind spots: {len(score.undetected)} payloads, {len(score.unexpected_misses)} of them off the ratchet")
+    print(
+        f"held out (no floor, never tuned against): detection {holdout_score.guard_detection.render()}, "
+        f"benign flagged {holdout_score.guard_false_positive.render()}"
+    )
 
     if not args.check:
         return 0

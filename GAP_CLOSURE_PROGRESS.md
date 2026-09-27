@@ -328,10 +328,26 @@ its preflight, so an unconfigured repository shows *skipped* rather than
 passed. That last property is now asserted by a test, and the test was proven
 by deleting the `if:` and watching it go red.
 
-**The guard's measured rate against this corpus is 66.7% (36 of 54)**, where
-the prose payload corpus measures the same guard at 0.852. Both are published
-with the distinction stated. The gap is a finding, not a regression, and
-closing it is the next work this evaluation makes possible (D19).
+**The guard's measured rate against this corpus was 66.7% (36 of 54)** when
+the corpus was built, where the prose payload corpus measured the same guard
+at 0.852. Both were published with the distinction stated. The gap was a
+finding rather than a regression, and 3.4 below is the work it made possible.
+
+- [x] **3.4 Close the field-native gap, and measure whether closing it generalised.** Shipped in [#916](https://github.com/beenuar/AiSOC/pull/916). The guard now reads a **segmented view** of every string in which identifier punctuation is a word separator, so a rule written for an email body reaches a DNS label without being rewritten, and each rule declares which views it is valid on. Containment aimed at a *named target* is matched by the argument's shape rather than by a noun list, on the literal view only, because segmentation is what makes an identifier readable and also what destroys the target's shape. Corpus detection **66.7% to 98.1% (53/54)**, prose corpus **0.852 to 0.96** with false positives still at 0.00, benign controls flagged **2/11 to 1/11** like for like. The offboarding script that cost an analyst automation on every true positive is fixed: tool names match on token boundaries, which `\b` could not do because `_` is a word character. Seventeen of the eighteen ratchet entries are closed and the last is refused with its reason. **The generalisation result is the important one and it is bad: 7.1% (2/28) on held-out payloads (D20).**
+
+**Done when (3.4):** the field-native families are closed on the corpus, the
+offboarding false positive is gone, and the change is graded against payloads
+authored after it.
+
+**Met, and the held-out grading is the part worth reading.**
+`services/agents/tests/adversarial/injection_holdout.py` is 28 adversarial
+payloads and 6 benign controls in the same seven surfaces, written after the
+guard was committed and never consulted while its patterns were written. The
+guard scores **7.1% (2/28)** on it against 98.1% on the corpus it was
+hardened against, and the guard *before* this change scores 3.6% (1/28). The
+hardening moved the tuned corpus by 31 points and unseen payloads by one
+payload. That corpus carries no floor and never will, for the reason stated
+in D20.
 
 ## Phase 4: Let the investigation agent reach the customer's tools
 
@@ -851,3 +867,81 @@ more than it looks: `disable_user_offboarding_batch.ps1` is a legitimate
 script name, `disable_user` is in the guard's tool-name list, and a
 tool-name match is **high** severity, which demotes the case to L0. So an
 ordinary offboarding script takes automation away from a true positive.
+
+### D20. The hardening worked on the corpus and barely generalised, and the second number is the one that matters
+
+D19 left the field-native gap open on the grounds that tuning a guard against
+the corpus that grades it produces a flattering number and no information.
+That reasoning was right, so the work in 3.4 was graded twice: once on the
+corpus it was written against, and once on payloads authored after the guard
+was committed and never consulted while its patterns were written.
+
+| | tuned corpus | held out |
+|---|---|---|
+| guard before 3.4 | 66.7% (36/54) | 3.6% (1/28) |
+| guard after 3.4 | 98.1% (53/54) | 7.1% (2/28) |
+
+The change moved the corpus it was written against by 31 points and moved
+unseen payloads by a single payload. **It fitted the corpus far more than it
+closed the threat, and that is the finding**, not the 98.1%.
+
+The two held-out payloads that are caught say why. One is caught by unicode
+normalisation and one by a rule whose vocabulary happened to fit. Every other
+held-out payload asks for exactly what the tuned corpus asks for, in words no
+rule enumerates: `ho-ticket-pull-off-network` wants a named host taken off the
+network and is missed because "pull off the network" is not in a verb list,
+and `ho-ticket-cab-signoff` claims sign-off from a change advisory board,
+which the authority rule does not list.
+
+So the structural half of 3.4 did generalise and it was not enough.
+Segmentation genuinely made every prose rule reach an identifier field, and a
+rule added tomorrow will reach one too, which a longer pattern list would not
+have achieved. But what segmentation carries into those fields is still a set
+of word lists, and a word list is exactly the thing an attacker routes around
+without effort. The guard is a vocabulary matcher that can now read more
+fields.
+
+**The next structural step is named here and deliberately not taken here.**
+The property that separates almost every held-out miss from its benign
+control is not vocabulary at all: it is that an imperative addressed to a
+reader appears in a field that carries machine-generated data. A DNS label, a
+command line, a user agent and a file name are emitted by software and never
+contain requests, so sentence-shaped second-person content in one of them is
+anomalous whatever it says. Ticket text and an email body are written by
+people and are full of requests, so the same test cannot apply there and a
+different one is needed. That is a field-class prior rather than another word
+list, and the field classes come from the platform's own OCSF schema rather
+than from an attacker's thesaurus.
+
+It is not taken here because the held-out corpus has now been read. Anything
+built after reading it and graded against it is tuned against it, and the
+number would be worthless in precisely the way this decision exists to
+prevent. Doing it properly needs a **new** held-out set authored after that
+change lands.
+
+For the same reason `HOLDOUT_UNDETECTED` is **not a ratchet** and the
+held-out corpus carries **no floor**. CI checks that the measurement happens
+and that the published page matches it, and checks the recorded misses in
+both directions so the record keeps describing the tree. It does not check
+that the rate is good, because a target on a held-out set is an instruction
+to tune against it, and the first person to satisfy that target by writing
+one pattern per miss would leave the repository with a number that means
+nothing and no way to tell.
+
+One thing the held-out figure is *not*: a pessimistic bound. These payloads
+were written by someone who could read the patterns, and for a guard shipped
+under an MIT licence in a public repository, so can an attacker. White box is
+the correct threat model here, so 7.1% is the number to plan against.
+
+The false-positive side moved the right way and is reported like for like.
+On the eleven benign controls that existed before this change, 2 flagged and
+1 does now: `disable_user_offboarding_batch.ps1` no longer trips a
+high-severity tool-name match, so an ordinary offboarding script no longer
+takes automation away from a true positive. Six controls were added, four of
+which flag the un-narrowed draft of the rule they sit beside, which is what
+makes them evidence rather than decoration. Two of those six flagged `main`
+itself through bare nouns in `injected_containment` that matched their own
+verb, and both nouns are gone. `benign-edr-response-cmdline` still flags and
+stays recorded: suppressing it needs a rule that reads a containment verb in
+flag position as a tool invocation, and a suppression rule is the one kind
+whose failure mode is silence.
