@@ -10798,6 +10798,127 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/autonomy-policy/shadow-mode:
+    get:
+      tags:
+      - autonomy-policy
+      summary: Get Shadow Mode
+      description: Which alert classes this tenant is measuring rather than acting
+        on.
+      operationId: get_shadow_mode_api_v1_autonomy_policy_shadow_mode_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShadowModeResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/autonomy-policy/shadow-mode/{alert_class}:
+    put:
+      tags:
+      - autonomy-policy
+      summary: Set Shadow Mode
+      description: 'Start or stop measuring one alert class.
+
+
+        ``enabled_at`` is stamped on the transition into shadow and cleared on the
+
+        way out, rather than being set on every write. A promotion window that
+
+        reaches further back than the day measurement started is reaching back
+
+        before there was anything to measure, and the only way a later reader can
+
+        tell is if this column records the real start.'
+      operationId: set_shadow_mode_api_v1_autonomy_policy_shadow_mode__alert_class__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_class
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Alert Class
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShadowModeUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShadowModeEntry'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/autonomy-policy/agreement:
+    get:
+      tags:
+      - autonomy-policy
+      summary: Get Agreement
+      description: 'Rolling agreement between the agent and this tenant''s own analysts.
+
+
+        The tenant comes from the credential. ``scope_kind`` and ``scope_key``
+
+        narrow *within* that tenant and cannot widen beyond it: the scope names a
+
+        dimension from a fixed vocabulary, never a column, and the tenant
+
+        predicate is applied whatever the scope says.
+
+
+        Closures made in this console are reconciled on the way in rather than by
+
+        a background job. The sweep is bounded and indexed, and doing it here
+
+        means the number an operator is looking at includes the alert they closed
+
+        a minute ago, which is exactly when they come to look.'
+      operationId: get_agreement_api_v1_autonomy_policy_agreement_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: scope_kind
+        in: query
+        required: false
+        schema:
+          type: string
+          description: tenant, alert_class, rule, source or model
+          default: tenant
+          title: Scope Kind
+        description: tenant, alert_class, rule, source or model
+      - name: scope_key
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+          default: '*'
+          title: Scope Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgreementResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/business-context/rules:
     get:
       tags:
@@ -15527,6 +15648,149 @@ components:
       - connector_count
       title: AgentToolsResponse
       description: Tenant-wide tool catalogue surfaced to the agent layer.
+    AgreementResponse:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        scope_kind:
+          type: string
+          title: Scope Kind
+        scope_key:
+          type: string
+          title: Scope Key
+        window:
+          $ref: '#/components/schemas/AgreementWindowModel'
+        recent:
+          $ref: '#/components/schemas/AgreementWindowModel'
+        window_start:
+          type: string
+          title: Window Start
+        window_end:
+          type: string
+          title: Window End
+        thresholds:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: integer
+          type: object
+          title: Thresholds
+        reconciled:
+          type: integer
+          title: Reconciled
+        by_alert_class:
+          items:
+            $ref: '#/components/schemas/AgreementScopeModel'
+          type: array
+          title: By Alert Class
+        by_rule:
+          items:
+            $ref: '#/components/schemas/AgreementScopeModel'
+          type: array
+          title: By Rule
+        by_source:
+          items:
+            $ref: '#/components/schemas/AgreementScopeModel'
+          type: array
+          title: By Source
+        by_model:
+          items:
+            $ref: '#/components/schemas/AgreementScopeModel'
+          type: array
+          title: By Model
+      type: object
+      required:
+      - tenant_id
+      - scope_kind
+      - scope_key
+      - window
+      - recent
+      - window_start
+      - window_end
+      - thresholds
+      - reconciled
+      - by_alert_class
+      - by_rule
+      - by_source
+      - by_model
+      title: AgreementResponse
+    AgreementScopeModel:
+      properties:
+        key:
+          type: string
+          title: Key
+        window:
+          $ref: '#/components/schemas/AgreementWindowModel'
+      type: object
+      required:
+      - key
+      - window
+      title: AgreementScopeModel
+    AgreementWindowModel:
+      properties:
+        resolved:
+          type: integer
+          title: Resolved
+        labelled:
+          type: integer
+          title: Labelled
+        unlabeled:
+          type: integer
+          title: Unlabeled
+        answered:
+          type: integer
+          title: Answered
+        abstained:
+          type: integer
+          title: Abstained
+        agreed:
+          type: integer
+          title: Agreed
+        malicious_support:
+          type: integer
+          title: Malicious Support
+        malicious_caught:
+          type: integer
+          title: Malicious Caught
+        agreement_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Agreement Rate
+        malicious_recall:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Malicious Recall
+        abstention_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Abstention Rate
+      type: object
+      required:
+      - resolved
+      - labelled
+      - unlabeled
+      - answered
+      - abstained
+      - agreed
+      - malicious_support
+      - malicious_caught
+      title: AgreementWindowModel
+      description: 'Counts, and the rates derived from them.
+
+
+        Every rate is optional and is ``null`` when its denominator was zero. The
+
+        console renders that as "not measured". A zero here would say the agent
+
+        was wrong every time, which is a different fact with a different remedy,
+
+        and it is the more flattering of the two to print by accident in the
+
+        abstention column and the more damning in the agreement column.'
     AirgapStatus:
       properties:
         ready:
@@ -28023,6 +28287,58 @@ components:
       - findings_closed
       - error_message
       title: ScanRunOut
+    ShadowModeEntry:
+      properties:
+        alert_class:
+          type: string
+          title: Alert Class
+        enabled:
+          type: boolean
+          title: Enabled
+        enabled_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Enabled At
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+        updated_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated By
+      type: object
+      required:
+      - alert_class
+      - enabled
+      title: ShadowModeEntry
+    ShadowModeResponse:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        entries:
+          items:
+            $ref: '#/components/schemas/ShadowModeEntry'
+          type: array
+          title: Entries
+      type: object
+      required:
+      - tenant_id
+      - entries
+      title: ShadowModeResponse
+    ShadowModeUpdateRequest:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+      type: object
+      required:
+      - enabled
+      title: ShadowModeUpdateRequest
     ShiftAnalyst:
       properties:
         id:

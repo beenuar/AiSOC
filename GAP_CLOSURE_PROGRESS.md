@@ -240,37 +240,9 @@ must not be recorded as done until the fourth exists. Note also that a true
 end-to-end run spans three services, so its home is an integration test with
 containers rather than any service's unit suite.
 
-### D9. The route Phase 1.2 added could never have been reached, and only the end-to-end run could tell
-
-D8 predicted that three proven links are not the same claim as one end-to-end
-run. This is what the fourth link found the first time it ran.
-
-`POST /connectors/{id}/normalize` shipped in 1.2 as the resolution to D6: both
-services package their code as top-level `app`, so the agents service reaches
-the production connector mapping over HTTP rather than copying it. The client
-built its URL as `{CONNECTORS_SERVICE_URL}/connectors/{id}/normalize`. The
-connectors service mounts that router with `prefix="/api/v1"`, and the API's
-own caller in `endpoints/connectors.py` appends the same segment for exactly
-that reason. So every normalize request the agents service could have made
-would have returned 404, and no replay could have run on any deployment.
-
-Three suites were green over it. The unit test covering `fetch_normalized`
-asserted the URL the code produced rather than the URL the service serves,
-which is the one-directional shape this repository keeps finding: it compared
-the producer against a copy of itself and printed OK. Nothing else called the
-function, so nothing else could notice.
-
-**Resolution:** the prefix is a named constant with the reason recorded beside
-it, and the test now parses `services/connectors/app/main.py` and
-`app/api/router.py` with `ast`, derives what that service actually serves, and
-asserts the requested URL is in that set. It was proven against the pre-fix
-value: with the prefix removed it fails naming both URLs. This service cannot
-import that one, so reading the other tree's source is the only way to compare
-in the direction that drifts.
-
-The durable lesson is D8's, sharpened: an end-to-end test is not a slower
-version of the unit tests underneath it. It is the only thing that exercises
-the joins, and the joins are where a caller-less mechanism hides.
+Deviations D9 onward were recorded after the phase sections below and sit
+at the end of this file. The numbering is one sequence; only the placement
+differs, because two phases were in flight at once.
 
 ---
 
@@ -279,8 +251,8 @@ the joins, and the joins are where a caller-less mechanism hides.
 - [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [x] **1.2 Replay runner.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `services/agents/app/replay/` holds the split, the shadow sinks and the runner; it holds no triage. Persistence is injected through `app/workers/triage_persistence.py`, whose default is `LiveTriageWriter` doing exactly what the worker did inline, so the measured path is the production one rather than a copy. `CostTracker` gained a `persist` flag so a replay measures spend without billing it. Normalisation reaches the real connector through a new `POST /connectors/{id}/normalize`, because both services package their code as top-level `app` and one process can hold one of them. Verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency are all recorded per decision. See D6 and D7 below for the two places the plan and the tree disagreed.
 - [x] **1.3 Scoring.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `packages/aisoc-benchmark/aisoc_benchmark/replay.py` reuses the existing `_INDICATOR_PATTERNS` for hallucination so there is one definition, and adds per-class precision and recall with malicious recall first, a confusion matrix, abstention rate, reliability bins with an expected calibration error, per-rule and per-source breakdowns, and seeded bootstrap intervals. Below 30 malicious cases the headline accuracy is withheld with the count and the reason. A rate with no denominator reads "not measured".
-- [x] **1.4 Surfaces.** Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Built to the shape D8 records: the API orchestrates, driving two new internal routes (`POST /replay/history` on actions, `POST /replay/run` on agents) and scoring in process through a byte-identical mirror of `packages/aisoc-benchmark` under `services/api/app/_vendor/`, since the API image's build context excludes `packages/`. `aisoc replay` drives the API and renders nothing of its own; progress goes to stderr so `aisoc replay ... > report.md` is the report and nothing else. The console page shows every rate beside the count it was computed over, and prints the withheld-headline sentence in place of a number rather than a dash or a zero. Export reuses `format_replay_report` and `ReplayScore.as_dict` from 1.3 and serves the stored artefact rather than re-rendering it; the PDF is that same Markdown through WeasyPrint, and answers 503 naming the native libraries when they are absent rather than serving an empty file. Migration **065**, not the 064 D8 names: `064_sandbox_upload_policy.sql` landed from Phase 11 while this was in flight, which is exactly why D8 says to check the directory. See D9 for the defect the end-to-end run found.
-- [x] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position, and now the three surfaces as well: a "Running one" section for the console, the CLI and the API, and a "Reproducibility, stated precisely" section that names what is excluded and why. Its "what exists today" note no longer hedges, because nothing on the page is unbuilt. Three more claim-to-gate rows added for 1.4, matrix 156 rows to 159, GATED 148 to 151.
+- [x] **1.4 Surfaces.** Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Built to the shape D8 records: the API orchestrates, driving two new internal routes (`POST /replay/history` on actions, `POST /replay/run` on agents) and scoring in process through a byte-identical mirror of `packages/aisoc-benchmark` under `services/api/app/_vendor/`, since the API image's build context excludes `packages/`. `aisoc replay` drives the API and renders nothing of its own; progress goes to stderr so `aisoc replay ... > report.md` is the report and nothing else. The console page shows every rate beside the count it was computed over, and prints the withheld-headline sentence in place of a number rather than a dash or a zero. Export reuses `format_replay_report` and `ReplayScore.as_dict` from 1.3 and serves the stored artefact rather than re-rendering it; the PDF is that same Markdown through WeasyPrint, and answers 503 naming the native libraries when they are absent rather than serving an empty file. Migration **065**, not the 064 D8 names: `064_sandbox_upload_policy.sql` landed from Phase 11 while this was in flight, which is exactly why D8 says to check the directory. See D12 for the defect the end-to-end run found.
+- [x] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position, and now the three surfaces as well: a "Running one" section for the console, the CLI and the API, and a "Reproducibility, stated precisely" section that names what is excluded and why. Its "what exists today" note no longer hedges, because nothing on the page is unbuilt. Three more claim-to-gate rows added for 1.4, all GATED. The absolute tally moves with whatever else lands, so recount it with `scripts/check_claim_gate_matrix.py` rather than reading a number off this line.
 
 **Done when:** the CLI, run against a mocked Splunk ES holding 200 recorded
 closed notables, produces a report that reproduces byte for byte on a second run
@@ -314,8 +286,8 @@ window on a second run, and a hosted model may legitimately differ.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 
-- [ ] **2.1 Shadow mode**, per tenant and per alert class.
-- [ ] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard.
+- [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
+- [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
 - [ ] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log.
 
 ## Phase 3: Prompt-injection evaluation suite
@@ -443,6 +415,71 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   1252 to 1280, `packages/aisoc-benchmark` 35 to 57, `services/connectors` 880
   to 886. Every other suite unchanged and passing.
 
+### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
+
+Recorded because the obvious implementation of shadow mode is wrong in a way
+that looks right and produces a flattering number.
+
+`ledger.persist_auto_triage` writes the agent's verdict to
+`alerts.disposition`. That column is described in the model as the analyst's,
+set from the feedback endpoint, and it is the column Phase 2.1 reconciliation
+reads to learn what the analyst decided. A shadow run that forwarded that
+write unchanged would have the agent filling in the answer it was about to be
+graded against: every alert an analyst did not explicitly re-dispose would
+score as perfect agreement, and the scorecard would climb toward a promotion
+on no evidence at all.
+
+This is the Phase 1 leakage lesson arriving by a different route. Phase 1's
+version was a verdict written as an outcome prior that suppressed the next
+alert; this one is a verdict written into the field the next measurement
+reads. Both are the evaluation answering itself, and neither shows up as an
+error.
+
+**Resolution:** `persist_auto_triage` gained a `shadow` flag, and the guard is
+written into the statement rather than left to the caller:
+
+    SET disposition = CASE WHEN $10 THEN disposition ELSE $3 END,
+        status      = CASE WHEN $7 AND NOT $10 THEN 'resolved' ELSE status END,
+        resolved_at = CASE WHEN $7 AND NOT $10 THEN now() ELSE resolved_at END
+
+`NOT $10` is the load-bearing part. The shadow sink already forces
+`auto_closed` off, so the `$7` arm would be enough today; relying on that
+alone would mean a second caller added later closes alerts it was only meant
+to observe, and the symptom would be a tenant's queue emptying itself during
+an evaluation.
+
+### D10. The sink is chosen per alert, and the writer is passed rather than swapped
+
+Shadow mode is per tenant *and* per alert class, and the class is not known
+until the alert is in hand, so the choice cannot be made in the worker's
+constructor. Two ways not to do it: assigning to `self._writer` per message
+leaks across concurrently triaged alerts, and it would also break the Phase
+1.2 AST test that asserts the deployed worker overrides neither sink, which
+is a test worth keeping.
+
+So `triage()` resolves the sink once and passes it down. Five helpers took a
+keyword-only `writer` parameter, and it is **required** on all of them
+including `_record`, with no fallback to `self._writer`. A default would mean
+a future caller who forgets the keyword silently gets the live sink, which is
+the unsafe direction for this particular control: the failure would be a
+shadow run writing the analyst's disposition column.
+
+### D11. The gate logic is vendored, not fetched over HTTP
+
+`services/actions` enforces autonomy at dispatch and `services/api` decides
+promotions and owns the hash-chained audit log. Both package their code as
+top-level `app`, so one process holds one of them, and each image is built
+with only its own directory as build context.
+
+The Phase 1.4 precedent (D6, D8) is a round trip to the service that owns the
+thing. That is right for a *mapping* held by another service. It is wrong
+here: this is a safety control on a latency-sensitive path, and a control that
+fails open when a second service is unreachable is not a control. So the pure
+rules are a standard-library-only module vendored byte-identically, following
+the five mirrors already in the tree, with
+`sync_vendored_autonomy_evidence.py --check` wired into `ci.yml`. Two copies
+allowed to differ means the control is off in whichever one is more generous.
+
 ### Notes for the next session
 
 Two traps this program hit that are worth not re-learning.
@@ -469,3 +506,35 @@ the fix was proven by re-staling `ROADMAP.md` and watching the test fail.
 **Backgrounding a long run kills it here.** The first baseline attempt was
 started with `nohup ... &` and was dead within a minute, having written 41
 progress dots. Long suites run in the foreground.
+
+### D12. The route Phase 1.2 added could never have been reached, and only the end-to-end run could tell
+
+D8 predicted that three proven links are not the same claim as one end-to-end
+run. This is what the fourth link found the first time it ran.
+
+`POST /connectors/{id}/normalize` shipped in 1.2 as the resolution to D6: both
+services package their code as top-level `app`, so the agents service reaches
+the production connector mapping over HTTP rather than copying it. The client
+built its URL as `{CONNECTORS_SERVICE_URL}/connectors/{id}/normalize`. The
+connectors service mounts that router with `prefix="/api/v1"`, and the API's
+own caller in `endpoints/connectors.py` appends the same segment for exactly
+that reason. So every normalize request the agents service could have made
+would have returned 404, and no replay could have run on any deployment.
+
+Three suites were green over it. The unit test covering `fetch_normalized`
+asserted the URL the code produced rather than the URL the service serves,
+which is the one-directional shape this repository keeps finding: it compared
+the producer against a copy of itself and printed OK. Nothing else called the
+function, so nothing else could notice.
+
+**Resolution:** the prefix is a named constant with the reason recorded beside
+it, and the test now parses `services/connectors/app/main.py` and
+`app/api/router.py` with `ast`, derives what that service actually serves, and
+asserts the requested URL is in that set. It was proven against the pre-fix
+value: with the prefix removed it fails naming both URLs. This service cannot
+import that one, so reading the other tree's source is the only way to compare
+in the direction that drifts.
+
+The durable lesson is D8's, sharpened: an end-to-end test is not a slower
+version of the unit tests underneath it. It is the only thing that exercises
+the joins, and the joins are where a caller-less mechanism hides.

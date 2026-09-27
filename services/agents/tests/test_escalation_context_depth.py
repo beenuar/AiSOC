@@ -35,6 +35,11 @@ from app.llm import tool_loop
 from app.models.state import AgentStatus, InvestigationState
 from app.workers import fused_alert_consumer as consumer
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker
+from app.workers.triage_persistence import LiveTriageWriter
+
+
+def _worker() -> FusedAlertTriageWorker:
+    return FusedAlertTriageWorker(bootstrap_servers="localhost:9092")
 
 
 def _state() -> InvestigationState:
@@ -70,7 +75,7 @@ async def test_escalation_prefetches_the_context_bundle(monkeypatch: pytest.Monk
     monkeypatch.setenv("AISOC_AGENT_ESCALATION", "1")
 
     state = _state()
-    await FusedAlertTriageWorker(bootstrap_servers="localhost:9092")._maybe_escalate(state)
+    await _worker()._maybe_escalate(state, writer=LiveTriageWriter())
 
     assert seen["case_id"] == str(state.incident_id)
     assert seen["tenant_id"] == str(state.tenant_id)
@@ -97,7 +102,7 @@ async def test_a_context_failure_never_blocks_the_escalation(
     monkeypatch.setattr(consumer, "run_escalation", _run_escalation)
     monkeypatch.setenv("AISOC_AGENT_ESCALATION", "1")
 
-    await FusedAlertTriageWorker(bootstrap_servers="localhost:9092")._maybe_escalate(_state())
+    await _worker()._maybe_escalate(_state(), writer=LiveTriageWriter())
     assert ran
 
 

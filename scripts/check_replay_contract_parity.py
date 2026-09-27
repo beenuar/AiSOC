@@ -6,9 +6,12 @@ Gap-closure Phase 1.2 and 1.3.
 ``services/actions`` reads a customer's closed findings and produces
 ``ClosedFinding``. ``services/agents`` replays them and consumes
 ``HistoricalFinding``. ``packages/aisoc-benchmark`` grades the result against
-``GRADED_DISPOSITIONS``. All three package their code as top-level ``app`` or
-as a standalone distribution, so none of them can import the others, and the
-contract between them is three declarations that agree by convention.
+``GRADED_DISPOSITIONS``. Phase 2.2 added a fourth: live shadow-mode agreement,
+measured against the same taxonomy in
+``services/actions/app/services/autonomy_evidence_rules.py``. All of them
+package their code as top-level ``app`` or as a standalone distribution, so
+none can import the others, and the contract between them is a handful of
+declarations that agree by convention.
 
 Conventions drift. This gate reads all three with ``ast`` and compares them
 **in both directions**, because the failure this tree keeps finding is a gate
@@ -43,6 +46,25 @@ _REPLAY = ("services/agents/app/replay/findings.py", "HistoricalFinding")
 _TAXONOMY_SOURCE = ("services/actions/app/services/disposition_writeback.py", "CANONICAL_DISPOSITIONS")
 _GRADER_SOURCE = ("packages/aisoc-benchmark/aisoc_benchmark/replay.py", "GRADED_DISPOSITIONS")
 
+#: Gap-closure Phase 2.2 added a fourth tree. Live shadow-mode agreement is
+#: measured in ``services/actions`` and rendered by ``services/api``, and the
+#: plan says to use the Phase 1 metrics rather than to write a second set.
+#: "Use" is a claim, and this is what makes it enforceable: the three
+#: definitions that decide what agreement *means* must be the same strings in
+#: the live module and in the grader. If they diverge, the replay report and
+#: the live scorecard describe different agents while both look right, and the
+#: promotion gate reads whichever one it happens to import.
+_LIVE_METRICS = ("services/actions/app/services/autonomy_evidence_rules.py", "GRADED_DISPOSITIONS")
+_LIVE_ABSTENTIONS = (_LIVE_METRICS[0], "ABSTENTION_VERDICTS")
+_GRADER_ABSTENTIONS = (_GRADER_SOURCE[0], "ABSTENTION_VERDICTS")
+
+#: The one disposition whose spelling the promotion thresholds are written in
+#: terms of ("at least 30 of them malicious"). A rename on one side alone
+#: would leave the gate counting a class nothing produces, and a count of zero
+#: refuses every promotion, which looks like a conservative gate rather than a
+#: broken one.
+_MALICIOUS = "MALICIOUS"
+
 #: ``CANONICAL_DISPOSITIONS`` covers everything a verdict may be, including the
 #: two that route to a human. The grader's ``GRADED_DISPOSITIONS`` is only the
 #: subset an analyst can *close* a finding as, because "needs review" is not an
@@ -51,9 +73,9 @@ _GRADER_SOURCE = ("packages/aisoc-benchmark/aisoc_benchmark/replay.py", "GRADED_
 #: a third does not silently widen the exemption.
 _NOT_A_CLOSING_LABEL = frozenset({"needs_review", "escalate"})
 
-#: The spelling of "the analyst declined to classify", which both trees hold
-#: as a module constant and neither may rename alone.
-_UNLABELED = ("unlabeled", [_READER[0], _REPLAY[0]])
+#: The spelling of "the analyst declined to classify", which every tree holds
+#: as a module constant and none may rename alone.
+_UNLABELED = ("unlabeled", [_READER[0], _REPLAY[0], _LIVE_METRICS[0]])
 
 
 def _module(root: Path, relative: str) -> ast.Module:
@@ -145,6 +167,29 @@ def main(argv: list[str] | None = None) -> int:
     if invented:
         failures.append(f"{_GRADER_SOURCE[1]} holds {invented}, which the canonical taxonomy does not define")
 
+    live_graded = _string_members(_module(root, _LIVE_METRICS[0]), _LIVE_METRICS[1], _LIVE_METRICS[0])
+    checked += len(live_graded)
+    if live_graded != graded:
+        failures.append(
+            f"{_LIVE_METRICS[0]} grades {sorted(live_graded)} and {_GRADER_SOURCE[0]} grades {sorted(graded)}: "
+            f"live agreement and replay scoring would report on different populations"
+        )
+
+    live_abstentions = _string_members(_module(root, _LIVE_ABSTENTIONS[0]), _LIVE_ABSTENTIONS[1], _LIVE_ABSTENTIONS[0])
+    grader_abstentions = _string_members(_module(root, _GRADER_ABSTENTIONS[0]), _GRADER_ABSTENTIONS[1], _GRADER_ABSTENTIONS[0])
+    checked += len(live_abstentions) + len(grader_abstentions)
+    if live_abstentions != grader_abstentions:
+        failures.append(
+            f"ABSTENTION_VERDICTS differ: {_LIVE_ABSTENTIONS[0]} holds {sorted(live_abstentions)}, "
+            f"{_GRADER_ABSTENTIONS[0]} holds {sorted(grader_abstentions)}. A verdict that is an abstention on one "
+            f"side and an answer on the other is scored as wrong by exactly one of them"
+        )
+
+    malicious = {relative: _constant(_module(root, relative), _MALICIOUS, relative) for relative in (_LIVE_METRICS[0], _GRADER_SOURCE[0])}
+    checked += len(malicious)
+    if len(set(malicious.values())) != 1:
+        failures.append(f"MALICIOUS is spelled inconsistently across the trees that count it: {malicious}")
+
     name, files = _UNLABELED
     spellings = {relative: _constant(_module(root, relative), "UNLABELED", relative) for relative in files}
     checked += len(spellings)
@@ -162,8 +207,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"OK: replay contract agrees across three trees "
-        f"({len(reader_fields)} finding fields, {len(graded)} graded dispositions, {len(spellings)} UNLABELED spellings)"
+        f"OK: replay contract agrees across four trees "
+        f"({len(reader_fields)} finding fields, {len(graded)} graded dispositions, "
+        f"{len(live_abstentions)} abstention verdicts, {len(spellings)} UNLABELED spellings)"
     )
     return 0
 

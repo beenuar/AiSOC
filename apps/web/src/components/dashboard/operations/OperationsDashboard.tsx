@@ -15,6 +15,7 @@
  *   - alert severity + disposition       GET /api/v1/alerts/stats
  *   - agent runs, tokens, spend          GET /api/v1/costs/dashboard
  *   - actions awaiting approval          GET /api/v1/approvals?status=pending
+ *   - agreement with analysts            GET /api/v1/autonomy-policy/agreement
  *
  * Plus the existing funnel strip and detection-coverage summary, which are
  * already real-data-driven and are reused rather than re-implemented.
@@ -33,6 +34,7 @@ import { AlertPosturePanel } from './AlertPosturePanel';
 import { AgentThroughputPanel } from './AgentThroughputPanel';
 import { ResponseActionsPanel } from './ResponseActionsPanel';
 import { DetectionCoveragePanel } from './DetectionCoveragePanel';
+import { AgreementPanel } from './AgreementPanel';
 
 export function OperationsDashboard() {
   return (
@@ -65,6 +67,8 @@ export function OperationsDashboard() {
         <AgentThroughputPanel />
         <ResponseActionsPanel />
       </div>
+
+      <AgreementPanel />
     </div>
   );
 }

@@ -78,8 +78,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   api job (`test_replay_evaluation.py`), `ci.yml` agents job
   (`test_replay_route.py`), `ci.yml` actions job
   (`test_replay_history_route.py`), and
-  `scripts/sync_vendored_benchmark.py --check`. Claim-to-gate matrix 156 rows
-  to 159, GATED 148 to 151.
+  `scripts/sync_vendored_benchmark.py --check`. Claim-to-gate matrix gains
+  three rows, all GATED.
+- **Shadow mode on the live queue, and agreement measured against your own
+  analysts** (gap-closure Phase 2.1 and 2.2). Phase 1 made a customer's closed
+  history gradeable. This makes the live queue gradeable too, which is the
+  half that has to exist before autonomy can be earned rather than switched
+  on.
+
+  **The gap.** Nothing measured whether this platform's verdicts matched the
+  people using it. The published benchmark scores a synthetic corpus that is
+  balanced by construction; a real queue is mostly false positives, so an
+  agent that calls everything benign scores well on one and is worth nothing
+  on the other. An operator deciding whether to let the agent act had no
+  figure taken on their own alerts.
+
+  **How it was measured.** Shadow mode is per tenant and per alert class. For
+  an enabled class, triage runs exactly as it would in production and then
+  acts on none of it: no disposition set, no auto-closure, no writeback, no
+  approval raised, no outcome prior recorded, no escalation. It still writes
+  the ledger run, the `ai_*` columns and a decision row, and it still bills
+  the spend, because a shadow run is the product running rather than a
+  measurement the tenant asked for. When an analyst later closes the alert,
+  here or in the source SIEM, the closure is matched to the decision it
+  grades and the pair becomes evidence.
+
+  **The property the whole thing rests on.** `alerts.disposition` is the
+  analyst's column and it is the column agreement is read back from. A shadow
+  verdict landing there would mean the agent filled in the answer it was
+  about to be graded against, and every alert nobody explicitly re-disposed
+  would score as perfect agreement. `persist_auto_triage` grew a `shadow`
+  flag, and the guard sits in the SQL (`SET disposition = CASE WHEN $10 THEN
+  disposition ELSE $3 END`) rather than in the caller, so a future code path
+  that forgets to force `auto_closed` off still cannot close an alert it was
+  only meant to observe.
+
+  **Agreement is computed over answered decisions only.** This is the part a
+  plausible implementation gets wrong. If an abstention counted as "not a
+  disagreement", an agent that answered a tenth of the queue confidently and
+  routed the rest to a human would post a near-perfect record on a population
+  it never attempted. Declining removes a decision from the numerator and the
+  denominator together, so the rate does not move; the abstention rate does,
+  and it is reported beside it. Recall on malicious runs the other way, with
+  every true positive in its denominator whether answered or not, because an
+  alert routed to a human was not caught by the agent. A rate with no
+  denominator reads "not measured", never 0, and every rate travels with the
+  count it was computed over.
+
+  **Both the window and the slice inside it.** A 30-day average is where a
+  gradual decline hides: 99% for three weeks and 70% this week still averages
+  about 95%. Every surface shows the trailing 50 decisions beside the window,
+  and the trailing slice is a count rather than a date range so it means the
+  same thing at ten alerts a day and at ten thousand.
+
+  **Reuse rather than rebuild.** The closure readers are Phase 1.1's five,
+  unchanged, including their rule that a vendor label outside the taxonomy
+  becomes `unlabeled` and is excluded from accuracy rather than guessed at.
+  The metric definitions are Phase 1.3's, and "uses the Phase 1 metrics" is
+  now enforced rather than asserted: `check_replay_contract_parity.py` was
+  extended from three trees to four and compares `GRADED_DISPOSITIONS`,
+  `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions. The
+  shared rules module is vendored into `services/api` byte-identically
+  (`sync_vendored_autonomy_evidence.py --check`), because a safety control
+  defined twice is off in whichever copy is more generous.
+
+  **The gates.** Three new claim-to-gate rows, taking the matrix to 159 rows
+  and 151 GATED. The parity gate was proven capable of failing by drifting
+  each collection in turn and watching it fire, rather than by having never
+  fired. Migration `066_shadow_autonomy.sql` adds `aisoc_shadow_mode` and
+  `aisoc_shadow_decisions` with RLS policies carrying the fail-open arm the
+  cross-tenant workers need, `FORCE`, and `aisoc_app` grants. Surfaced on the
+  SOC operations dashboard and on the autonomy scorecard; documented at
+  `apps/docs/docs/operations/shadow-mode.md`, including what the numbers are
+  not, which is a measure of agreement with your analysts rather than of
+  correctness.
 
 - **Replay evaluation: the production triage path, run over a customer's own
   closed findings, writing nothing** (gap-closure Phase 1.2 and 1.3). Phase
