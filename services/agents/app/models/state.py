@@ -70,6 +70,14 @@ class InvestigationState(BaseModel):
     # the worker's own timeline, and so a test can set it directly.
     organisation_memory: list[dict[str, Any]] = Field(default_factory=list)
 
+    # The tenant skill that matched this alert, if any, and the version of it.
+    # Carried for the same reason organisation memory is, plus one more: this
+    # is the provenance a disputed verdict is explained from months later, so
+    # it travels with the verdict rather than being recoverable only by
+    # re-running the resolver against a store that has since changed.
+    # `{"skill_id": ..., "version": N, "ref": "id@vN", "owner": ...}`.
+    tenant_skill: dict[str, Any] | None = None
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)

@@ -6034,6 +6034,306 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenant-skills:
+    get:
+      tags:
+      - tenant-skills
+      summary: Every skill this tenant has authored
+      operationId: list_tenant_skills_api_v1_tenant_skills_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - tenant-skills
+      summary: Create or update a skill from its YAML
+      description: 'Save the document. A content change bumps the version and drops
+        to draft.
+
+
+        ``PUT`` with no id in the path because the id is inside the document: a
+
+        skill''s identity is the author''s slug, and taking it from a path as well
+
+        would create two authorities that can disagree.'
+      operationId: save_tenant_skill_api_v1_tenant_skills_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSkillRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/tenant-skills/{skill_id}:
+    get:
+      tags:
+      - tenant-skills
+      summary: One skill
+      operationId: get_tenant_skill_api_v1_tenant_skills__skill_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - tenant-skills
+      summary: Delete a skill and its history
+      description: 'For a skill created by mistake. To stop using a working one, retire
+        it.
+
+
+        Deleting removes the version history, which is what explains verdicts the
+
+        skill already steered. The docs say so beside this route.'
+      operationId: delete_tenant_skill_api_v1_tenant_skills__skill_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenant-skills/{skill_id}/versions:
+    get:
+      tags:
+      - tenant-skills
+      summary: Every version of one skill, newest first
+      description: 'Resolve a ``skill@vN`` recorded on an investigation back to its
+        text.
+
+
+        This is the read that makes the version recorded on a verdict mean
+
+        something. Without it the pair is a number pointing at nothing.'
+      operationId: list_skill_versions_api_v1_tenant_skills__skill_id__versions_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SkillVersionModel'
+                title: Response List Skill Versions Api V1 Tenant Skills  Skill Id  Versions
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenant-skills/validate:
+    post:
+      tags:
+      - tenant-skills
+      summary: Parse and validate without saving
+      description: 'Back the editor''s validate button with the same call the save
+        makes.
+
+
+        A 200 carrying ``valid: false`` rather than a 422: the editor asks this on
+
+        every keystroke pause, and an error status on a document the author is
+
+        still typing is a failed request in their network tab every few seconds.
+
+        The save route returns the 422.'
+      operationId: validate_tenant_skill_api_v1_tenant_skills_validate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveSkillRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/tenant-skills/{skill_id}/backtest:
+    post:
+      tags:
+      - tenant-skills
+      summary: Grade this skill against the tenant's own closed findings, with and
+        without it
+      description: 'Start the two Phase 1 replay runs that grade this version.
+
+
+        202 for the same reason ``POST /evaluations/replay`` is: replaying a few
+
+        hundred findings through a model twice is not a request-response
+
+        operation. The ids come back immediately and the console polls both.
+
+
+        ``connectors:write`` rather than ``settings:write``, because what this
+
+        actually does is reach a customer''s own SIEM with stored credentials,
+
+        which is the bar every other route that does that clears.'
+      operationId: backtest_tenant_skill_api_v1_tenant_skills__skill_id__backtest_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillBacktestRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillBacktestResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenant-skills/{skill_id}/activate:
+    post:
+      tags:
+      - tenant-skills
+      summary: Put a backtested skill into service
+      description: 'Activate, refusing anything that would put untested guidance in
+        front of alerts.
+
+
+        The refusals live in the store and are restated by the database
+
+        constraint, so neither this route nor a future caller can be the only
+
+        place the rule holds.'
+      operationId: activate_tenant_skill_api_v1_tenant_skills__skill_id__activate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/tenant-skills/{skill_id}/retire:
+    post:
+      tags:
+      - tenant-skills
+      summary: Take a skill out of service, keeping its history
+      operationId: retire_tenant_skill_api_v1_tenant_skills__skill_id__retire_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: skill_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/rbac/permissions:
     get:
       tags:
@@ -17835,6 +18135,44 @@ components:
       - tenant_id
       - actions
       title: AutonomyPolicyResponse
+    AvailableTools:
+      properties:
+        builtin:
+          items:
+            type: string
+          type: array
+          title: Builtin
+        customer:
+          items:
+            type: string
+          type: array
+          title: Customer
+        mcp:
+          items:
+            type: string
+          type: array
+          title: Mcp
+        customer_unknown:
+          type: boolean
+          title: Customer Unknown
+          default: false
+        customer_unknown_reason:
+          type: string
+          title: Customer Unknown Reason
+          default: ''
+      type: object
+      title: AvailableTools
+      description: 'What an author may name in ``expected_pivots`` on this tenant
+        today.
+
+
+        Returned with the list so the editor can offer the vocabulary rather than
+
+        making the author discover it by being refused. ``customer_unknown`` is
+
+        part of the contract: an editor that read an unreachable action registry
+
+        as "this tenant has no products" would grey out tools the tenant has.'
     BacktestProposalRequest:
       properties:
         window_days:
@@ -28804,6 +29142,17 @@ components:
       - provider
       - detail
       title: SandboxResultResponse
+    SaveSkillRequest:
+      properties:
+        source_yaml:
+          type: string
+          maxLength: 32768
+          minLength: 1
+          title: Source Yaml
+      type: object
+      required:
+      - source_yaml
+      title: SaveSkillRequest
     SavedHuntModel:
       properties:
         id:
@@ -29182,6 +29531,231 @@ components:
         against the shape that type requires, so a model cannot pass query text
 
         by claiming it is an indicator.'
+    SkillBacktestRequest:
+      properties:
+        connector_id:
+          type: string
+          format: uuid
+          title: Connector Id
+        since:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Since
+        until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Until
+        train_fraction:
+          type: number
+          exclusiveMaximum: 1.0
+          exclusiveMinimum: 0.0
+          title: Train Fraction
+          default: 0.7
+        limit:
+          type: integer
+          maximum: 2000.0
+          minimum: 1.0
+          title: Limit
+          default: 1000
+        bootstrap_seed:
+          type: integer
+          title: Bootstrap Seed
+          default: 20260926
+        bootstrap_resamples:
+          type: integer
+          title: Bootstrap Resamples
+          default: 1000
+      type: object
+      required:
+      - connector_id
+      title: SkillBacktestRequest
+      description: Which connector and window to grade the skill over.
+    SkillBacktestResponse:
+      properties:
+        skill_id:
+          type: string
+          title: Skill Id
+        version:
+          type: integer
+          title: Version
+        baseline_evaluation_id:
+          type: string
+          title: Baseline Evaluation Id
+        candidate_evaluation_id:
+          type: string
+          title: Candidate Evaluation Id
+        note:
+          type: string
+          title: Note
+      type: object
+      required:
+      - skill_id
+      - version
+      - baseline_evaluation_id
+      - candidate_evaluation_id
+      - note
+      title: SkillBacktestResponse
+      description: The two runs the console polls, and how to read them together.
+    SkillListResponse:
+      properties:
+        skills:
+          items:
+            $ref: '#/components/schemas/SkillModel'
+          type: array
+          title: Skills
+        available_tools:
+          $ref: '#/components/schemas/AvailableTools'
+      type: object
+      required:
+      - skills
+      - available_tools
+      title: SkillListResponse
+    SkillModel:
+      properties:
+        skill_id:
+          type: string
+          title: Skill Id
+        version:
+          type: integer
+          title: Version
+        status:
+          type: string
+          title: Status
+        name:
+          type: string
+          title: Name
+        owner:
+          type: string
+          title: Owner
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        expired:
+          type: boolean
+          title: Expired
+        body:
+          additionalProperties: true
+          type: object
+          title: Body
+        source_yaml:
+          type: string
+          title: Source Yaml
+        backtest_evaluation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Backtest Evaluation Id
+        backtest_baseline_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Backtest Baseline Id
+        backtest_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Backtest Version
+        activated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Activated At
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - skill_id
+      - version
+      - status
+      - name
+      - owner
+      - expires_at
+      - expired
+      - body
+      - source_yaml
+      title: SkillModel
+      description: One skill as the console sees it.
+    SkillVersionModel:
+      properties:
+        skill_id:
+          type: string
+          title: Skill Id
+        version:
+          type: integer
+          title: Version
+        name:
+          type: string
+          title: Name
+        owner:
+          type: string
+          title: Owner
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        body:
+          additionalProperties: true
+          type: object
+          title: Body
+        source_yaml:
+          type: string
+          title: Source Yaml
+        backtest_evaluation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Backtest Evaluation Id
+        backtest_baseline_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Backtest Baseline Id
+        authored_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Authored At
+        activated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Activated At
+        retired_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Retired At
+      type: object
+      required:
+      - skill_id
+      - version
+      - name
+      - owner
+      - expires_at
+      - body
+      - source_yaml
+      title: SkillVersionModel
+      description: One immutable version, which is what a recorded ``skill@vN`` resolves
+        to.
     SourceLinkResponse:
       properties:
         vendor:
@@ -31664,6 +32238,37 @@ components:
       - role_id
       - role_name
       title: UserRoleOut
+    ValidateResponse:
+      properties:
+        valid:
+          type: boolean
+          title: Valid
+        skill_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Skill Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        expected_pivots:
+          items:
+            type: string
+          type: array
+          title: Expected Pivots
+        available_tools:
+          $ref: '#/components/schemas/AvailableTools'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - valid
+      title: ValidateResponse
     ValidationError:
       properties:
         loc:

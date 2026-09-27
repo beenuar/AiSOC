@@ -7,7 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A tenant can now teach the investigation agent what is normal in its own
+  estate, and every verdict that guidance steered says which version of it
+  steered them** (gap-closure Phase 6.1 and 6.2).
+
+  **The gap.** Investigation strategies were hard-coded. The ten built-ins
+  encode how an attack behaves in general, which is the only thing a built-in
+  can encode, and there was no way for a customer to write down the thing a
+  built-in cannot know: that the encoded PowerShell on FIN-APP-03 at 03:00 is
+  the finance reconciliation batch. A tenant with that knowledge had nowhere
+  to put it and re-learned it by hand on every repeat.
+
+  **What shipped.** A skill is a YAML document authored in the console,
+  following the business-context pattern. It carries match conditions
+  (techniques, rule ids, sources, keywords), the plan and expected pivots a
+  `Strategy` carries, plus the four things that are statements about one
+  organisation rather than about attackers: what is normal here, what verdict
+  that normality implies, what evidence has to be in hand before the verdict is
+  allowed, and what pulls the alert back to a human anyway. When a skill
+  matches it supplies the investigation plan instead of the built-in and its
+  guidance reaches the triage prompt; when none matches, selection is
+  untouched.
+
+  **Shaped like a detection rule, not like a settings page.** A skill steers a
+  verdict, so six months after a disputed auto-close "which text was steering
+  the agent that day" has to have an answer. It has an owner, a server-assigned
+  version and a required expiry, and `aisoc_tenant_skill_versions` is an
+  append-only history so the `skill@vN` recorded on the verdict resolves back
+  to the text. `version:` is refused as a document key, because two authorities
+  for what version 3 is would eventually disagree.
+
+  **The lifecycle refusals are the point.** A content edit bumps the version,
+  drops the skill to draft and detaches its reports, because a backtest is a
+  statement about specific text and carrying it across an edit is how a report
+  comes to describe something nobody is running. Activation requires a backtest
+  of the exact version being activated, and both halves of it, since a
+  candidate score with no baseline beside it is a number rather than a
+  comparison. The rule is written into a database CHECK, into the store's
+  refusal and onto the docs page, and `scripts/check_tenant_skill_contract.py`
+  fails the build if it leaves any of the three.
+
+  **The backtest is the Phase 1 replay, not a second one.** Two evaluations
+  over the same window, seed and resample count: baseline with the tenant's
+  other active skills, candidate with those plus this one. Nothing here
+  re-implements replay, scoring or reporting.
+
+  **Validation reads the tenant's real tools.** `expected_pivots` must name a
+  built-in lake pivot, a Phase 4 customer-product tool whose product this
+  tenant has connected, or a tool on an MCP server this tenant has registered,
+  enabled and allowlisted. The customer half makes the same three reads
+  `GET /agent-tools/backends` makes, so the set a skill is validated against is
+  the set the agent binds rather than a second opinion about it. When the
+  action registry is unreachable a known tool name is accepted and the response
+  says the check could not be made, because refusing would tell an author their
+  EDR is not connected when a different service was briefly down.
+
+  **Measured:** the offline eval harness is unchanged on every axis
+  (`mitre_accuracy` 0.970, macro 0.964; `alert_reduction` 0.753;
+  `investigation_completeness` 0.943; `response_quality` 1.000), which is the
+  expected result and the one worth stating: the synthetic corpus has no tenant
+  skills, so a skill-free deployment behaves byte for byte as it did.
+  `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
+
 ### Changed
+
+- **A skill is a fourth context store, so the replay freeze grew to cover it,
+  and the one thing that bypasses the freeze now has to say so** (gap-closure
+  Phase 6.2).
+
+  Tenant skills carry `activated_at`, so unlike organisation-memory statements
+  they can be tested against the replay split and are: a skill activated after
+  the split never reaches a replayed prompt. The exception is a skill backtest,
+  which exists to apply a candidate to a window that closed before it was
+  written. Freezing it out would measure nothing and applying it silently would
+  publish an accuracy number an author could raise by restating the labels, so
+  the candidate travels in `ContextSnapshot.skills_under_test`, and the report's
+  method note names it and carries the caveat that the figure describes that
+  window rather than forecasting new alerts.
+
+  `scripts/check_triage_context_freeze.py` is the new control and it is the one
+  that matters for what comes next: a verdict may depend on durable state only
+  through `TriageContextReader`, because that protocol is the seam the freeze
+  acts on. It requires both readers to implement every declared source and
+  every snapshot store to be filtered by `capture_context` and to publish its
+  kept and dropped counts. It was proven against seven injected regressions
+  rather than observed passing, and the seventh found a real hole: a substring
+  match over the method note passed when `skills_frozen` was deleted while
+  `skills_dropped_after_split` remained, leaving a note that said what was
+  thrown away and never what was kept.
 
 - **The injection benchmark led with the number that describes the guard least.**
   Both the tuned and the held-out detection rates were published, but the tuned

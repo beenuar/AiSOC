@@ -927,6 +927,32 @@ jobs:
         # destructive tool is still refused when the policy is asked directly.
         run: python3 scripts/check_mcp_client_policy.py
 
+      - name: Gate the tenant-skill contract (Phase 6)
+        # A skill is authored in services/api, validated against a tool
+        # vocabulary that lives in services/agents, and activated under a rule
+        # written in SQL, in Python and in prose. None of those trees can
+        # import the others, so the contract between them is a set of
+        # declarations that agree by convention. This asserts the pivot
+        # vocabulary matches in both directions, that the
+        # backtest-before-activation rule survives in all three places, and
+        # that both the triage state and the investigation result still record
+        # which skill version guided them.
+        run: python3 scripts/check_tenant_skill_contract.py
+
+      - name: Gate the triage context freeze (Phase 6)
+        # A verdict may depend on durable state only through
+        # TriageContextReader, because that protocol is the seam the replay
+        # freeze acts on. A context source read any other way is live during a
+        # replay no matter what the snapshot says, and the report then
+        # measures a world the split point does not describe while looking
+        # exactly like one that worked. This asserts both readers implement
+        # every source the protocol declares, and that every store the
+        # snapshot holds is filtered against the split and published in the
+        # method note, including the one that deliberately bypasses the
+        # filter, because an unfiltered store nobody is told about is
+        # indistinguishable from a leak.
+        run: python3 scripts/check_triage_context_freeze.py
+
       - name: Every check in the tree is reachable from a workflow
         # The gate on the gates. A conformance script with no workflow cannot
         # fail, which is indistinguishable from no gate at all — while its

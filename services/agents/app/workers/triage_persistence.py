@@ -51,7 +51,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from app.context import organisation_memory
+from app.context import organisation_memory, tenant_skills
 from app.investigator import ledger as ledger_module
 from app.investigator import siem_writeback
 from app.memory import outcomes as outcomes_module
@@ -164,9 +164,14 @@ class TriageWriter(Protocol):
 class TriageContextReader(Protocol):
     """The durable state a verdict is allowed to depend on.
 
-    Both methods must be total. Production's implementations already are:
-    neither ``fetch_statements`` nor ``lookup_prior`` may take triage down
-    when the store behind it is unreachable.
+    Every method must be total. Production's implementations already are: none
+    of them may take triage down when the store behind it is unreachable.
+
+    This protocol is the seam the replay freeze acts on, so **a new context
+    source belongs here or it is not point-in-time**. A source read directly
+    from the worker would be live during a replay no matter what the snapshot
+    said, and the report would be measuring a world the split point does not
+    describe.
     """
 
     async def fetch_statements(self, tenant_id: str | None) -> list[dict[str, Any]]:
@@ -174,6 +179,9 @@ class TriageContextReader(Protocol):
 
     async def lookup_prior(self, tenant_id: str, signature: str) -> dict[str, Any] | None:
         """The durable outcome prior for an evidence signature, or ``None``."""
+
+    async def fetch_skills(self, tenant_id: str | None) -> list[dict[str, Any]]:
+        """The tenant's active, unexpired investigation skills."""
 
 
 class LiveTriageWriter:
@@ -277,3 +285,6 @@ class LiveTriageContextReader:
 
     async def lookup_prior(self, tenant_id: str, signature: str) -> dict[str, Any] | None:
         return await outcomes_module.lookup_prior(tenant_id, signature)
+
+    async def fetch_skills(self, tenant_id: str | None) -> list[dict[str, Any]]:
+        return await tenant_skills.fetch_skills(tenant_id)

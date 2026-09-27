@@ -214,6 +214,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "constant time and fails closed when unset. Deliberately no session fallback, unlike the other dual-mode routes: this one "
         "returns plaintext third-party credentials, and a console session is not a credential to read those",
     ),
+    "services/api/app/api/v1/endpoints/tenant_skills.py::resolve_tenant_skills": (
+        "service_token_valid",
+        "the agents service reads its tenant's active investigation skills here on the path of an investigation and holds no session; "
+        "the shared X-AiSOC-Service-Token is compared in constant time and fails closed when unset. No session fallback, on a simpler "
+        "ground than the MCP registry's: this route exists for one caller, and a route with one caller should accept one kind of "
+        "credential. The console reads the same rows through GET /tenant-skills, which returns more",
+    ),
 }
 
 

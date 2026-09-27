@@ -56,6 +56,7 @@ const sidebars: SidebarsConfig = {
         "console/rule-tuning",
         "console/investigation-rail",
         "console/public-replay",
+        "console/tenant-skills",
       ],
     },
     {

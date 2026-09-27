@@ -33,6 +33,8 @@ from typing import Any
 
 import structlog
 
+from app.context import tenant_skills
+from app.context.tenant_skills import ResolvedSkill
 from app.core.cost_governor import get_governor
 from app.investigator import ledger
 from app.investigator.strategies import Strategy, select_strategy
@@ -118,6 +120,12 @@ class DeepInvestigationResult:
     #: without going to the ledger to find out.
     mcp_tools: list[str] = field(default_factory=list)
     mcp_refusals: list[str] = field(default_factory=list)
+    #: The tenant skill that supplied this run's plan, if one matched, and the
+    #: version of it. Recorded on the result rather than derivable from
+    #: ``strategy_id`` alone, because the id names which skill and a verdict
+    #: disputed six months later needs to know which *text*, and the version
+    #: history is what turns the pair back into text.
+    tenant_skill: dict[str, Any] | None = None
     error: str | None = None
 
     @property
@@ -147,6 +155,7 @@ class DeepInvestigationResult:
             "ledger_rows": self.ledger_rows,
             "mcp_tools": self.mcp_tools,
             "mcp_refusals": self.mcp_refusals,
+            "tenant_skill": self.tenant_skill,
             "error": self.error,
         }
 
@@ -161,6 +170,12 @@ class DeepInvestigationResult:
         if self.narrative:
             out.append(self.narrative.strip())
 
+        if self.tenant_skill:
+            out.append(
+                f"Investigation plan came from this organisation's own skill "
+                f"{self.tenant_skill.get('ref')} (owner: {self.tenant_skill.get('owner') or 'unrecorded'}), "
+                f"which outranks the built-in strategy for alerts of this shape."
+            )
         if self.pivots:
             out.append(
                 f"Investigation depth: {self.distinct_pivots} distinct pivots "
@@ -191,6 +206,62 @@ class DeepInvestigationResult:
 
 
 _STRATEGY_CACHE: dict[str, Strategy] = {}
+
+
+async def _resolve_tenant_skill(
+    state: Any,
+    *,
+    tenant_id: str,
+    summary: str,
+    techniques: list[str],
+) -> ResolvedSkill | None:
+    """The tenant skill matching this alert, or ``None``.
+
+    Prefers a skill the triage path already resolved onto the state, so one
+    investigation cannot be steered by one version of a skill and triaged
+    under another: the fetch is cached, but a cache expiry between the two
+    reads is exactly the window in which an activation would split them. When
+    the state carries no skill the resolver runs here, because deep
+    investigation is also reachable from the case path, which never went
+    through triage.
+
+    Failure is a ``None`` and a log line. The built-in strategy library is the
+    fallback, which is the behaviour before this phase.
+    """
+    carried = getattr(state, "tenant_skill", None)
+    rows: list[dict[str, Any]]
+    try:
+        rows = await tenant_skills.fetch_skills(tenant_id)
+    except Exception as exc:  # noqa: BLE001 - guidance is advisory, the investigation is not
+        logger.warning("deep_investigation.skill_lookup_failed", error=str(exc)[:200])
+        return None
+
+    if isinstance(carried, dict) and carried.get("skill_id"):
+        pinned = [
+            row
+            for row in rows
+            if str(row.get("skill_id")) == str(carried["skill_id"]) and int(row.get("version") or 0) == int(carried.get("version") or 0)
+        ]
+        if pinned:
+            rows = pinned
+        else:
+            # The version triage used is no longer served. Saying so is the
+            # point: the alternative is silently investigating under a
+            # different version than the verdict will be explained by.
+            logger.warning(
+                "deep_investigation.skill_version_moved",
+                skill=carried.get("ref"),
+                hint="triage and investigation would otherwise run under different versions of this skill",
+            )
+
+    raw = getattr(state, "raw_alert", {}) or {}
+    return tenant_skills.select_skill(
+        rows,
+        summary=summary,
+        techniques=techniques,
+        rule_id=str(raw.get("rule_id") or "") or None,
+        source=str(raw.get("connector_type") or raw.get("source") or "") or None,
+    )
 
 
 _SYSTEM_PREAMBLE = """You are a senior SOC analyst investigating a security alert.
@@ -377,9 +448,22 @@ async def run_deep_investigation(
     summary = getattr(state, "alert_summary", "") or ""
     techniques = list(getattr(state, "mitre_mappings", None) or [])
 
-    strategy = select_strategy(summary=summary, techniques=techniques)
+    # Phase 6.2: a tenant skill outranks a built-in strategy when it matches.
+    # The two are different kinds of claim: a built-in encodes how an attack
+    # behaves in general, a skill encodes what is true in this estate, and the
+    # specific one wins. When nothing matches, selection is exactly what it
+    # was, which is what keeps the existing strategy-selection tests honest.
+    skill = await _resolve_tenant_skill(state, tenant_id=tenant_id, summary=summary, techniques=techniques)
+    if skill is not None:
+        strategy = skill.strategy()
+        system_guidance = skill.system_guidance()
+    else:
+        strategy = select_strategy(summary=summary, techniques=techniques)
+        system_guidance = strategy.system_guidance()
     _STRATEGY_CACHE[strategy.id] = strategy
     result = DeepInvestigationResult(strategy_id=strategy.id)
+    if skill is not None:
+        result.tenant_skill = skill.as_provenance()
 
     if not ENABLED:
         result.error = "deep investigation disabled (AISOC_DEEP_INVESTIGATION)"
@@ -419,7 +503,7 @@ async def run_deep_investigation(
         # One `system` string that both of the bindings below extend. Two
         # f-strings each composing their own would mean whichever ran second
         # silently dropped the first one's addition.
-        system = f"{_SYSTEM_PREAMBLE}\n\n{strategy.system_guidance()}{coverage}"
+        system = f"{_SYSTEM_PREAMBLE}\n\n{system_guidance}{coverage}"
 
         # Third-party MCP servers this tenant registered, if any. The toolset
         # carries its own nonce, and the standing data-only rule for that

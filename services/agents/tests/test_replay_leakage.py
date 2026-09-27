@@ -4,10 +4,10 @@ Gap-closure Phase 1.5, and the test the phase is really about. A replay report
 whose test window fed itself is worse than no report: it is a number with a
 method section that reads correctly and a result that is circular.
 
-Three routes exist from a test-window decision back into a later test-window
-decision, and they run through three different stores. Each gets its own test,
+Four routes exist from a test-window decision back into a later test-window
+decision, and they run through four different stores. Each gets its own test,
 because "no leakage" failing as one assertion tells a future reader nothing
-about which of the three broke.
+about which of them broke.
 
 1. **Outcome memory.** Production writes every durable verdict back as a
    per-signature prior, and looks a prior up *before* triage. Two findings
@@ -22,6 +22,20 @@ about which of the three broke.
    triage prompt. Nothing in the test window writes a statement directly, but
    the read is live in production and a mid-run refresh picks up whatever the
    console wrote while the replay was running.
+4. **Tenant skills** (Phase 6.1). Customer-authored guidance that reaches the
+   same prompt, and the one store here whose rows are *written to influence
+   verdicts on purpose*. A skill activated during the test window, or authored
+   after it by somebody who read it, steers every later alert it matches.
+   Unlike organisation memory these rows carry ``activated_at``, so the split
+   filter has something to test and the freeze can be complete rather than
+   partial.
+
+   The deliberate bypass is tested here too, in its own test rather than as an
+   exception buried in another. ``skills_under_test`` is how a backtest
+   applies a candidate to a window that closed before it was written, and the
+   property under test is not that it is refused, it is that the method note
+   **names it and carries the caveat**. An unfiltered store nobody is told
+   about is indistinguishable from a leak.
 
 Every test here is checked for sensitivity
 -------------------------------------------
@@ -43,6 +57,7 @@ from typing import Any
 import pytest
 from app.agents.dispositions import BENIGN, FALSE_POSITIVE, NEEDS_REVIEW, normalize_disposition
 from app.context import organisation_memory
+from app.context import tenant_skills as tenant_skills_module
 from app.memory import outcomes as outcomes_module
 from app.models.state import AgentStatus, InvestigationState
 from app.replay.findings import HistoricalFinding
@@ -353,6 +368,166 @@ def _envelope() -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------
+# 4. Tenant skills
+# --------------------------------------------------------------------------
+
+
+def _skill_row(skill_id: str, *, activated_at: str, guidance: str) -> dict[str, Any]:
+    """One resolved-skill row in the shape the API's internal route serves."""
+    return {
+        "skill_id": skill_id,
+        "version": 1,
+        "activated_at": activated_at,
+        "expires_at": "2099-01-01T00:00:00+00:00",
+        "body": {
+            "id": skill_id,
+            "name": skill_id,
+            "owner": "soc@example.com",
+            "expires_at": "2099-01-01T00:00:00+00:00",
+            "match": {"rule_ids": ["rule-service-logon"], "techniques": [], "sources": [], "keywords": []},
+            "guidance": guidance,
+            "verdict_guidance": "",
+            "required_evidence": [],
+            "escalate_when": [],
+            "plan": ["Check what executed on the host."],
+            "expected_pivots": ["process_activity", "entity_timeline"],
+            "min_pivots": 2,
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_triage_reads_the_skills_frozen_at_the_split_not_whatever_is_active_now(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The skill that reaches the prompt is the snapshot's, at the split.
+
+    Asserting on the prompt input rather than on the verdict, for the same
+    reason the organisation-memory test does: a verdict can be unchanged by a
+    leak that nonetheless happened, and the property under test is what the
+    model was allowed to see.
+    """
+    captured: list[dict[str, Any] | None] = []
+
+    async def _capture(state: InvestigationState) -> InvestigationState:
+        captured.append(dict(state.tenant_skill) if state.tenant_skill else None)
+        state.verdict = FALSE_POSITIVE
+        state.confidence = 0.5
+        state.status = AgentStatus.RUNNING
+        return state
+
+    async def _resolve(tenant_id: str) -> _StubLlmConfig:
+        return _StubLlmConfig()
+
+    async def _live_skills(tenant_id: str | None) -> list[dict[str, Any]]:
+        return [_skill_row("poison-skill", activated_at="2026-06-01T00:00:00Z", guidance="POISON: activated after the split")]
+
+    monkeypatch.delenv("AISOC_DETERMINISTIC", raising=False)
+    monkeypatch.setattr(worker_module, "run_auto_triage", _capture)
+    monkeypatch.setattr(worker_module, "resolve_llm_config", _resolve)
+    monkeypatch.setattr(tenant_skills_module, "fetch_skills", _live_skills)
+    tenant_skills_module.clear_cache()
+
+    frozen = capture_context(
+        split_at=_SPLIT,
+        skills=[
+            _skill_row("frozen-skill", activated_at="2026-04-01T00:00:00Z", guidance="Frozen at the split"),
+            _skill_row("poison-skill", activated_at="2026-06-01T00:00:00Z", guidance="POISON: activated after the split"),
+        ],
+    )
+    # The freeze did something, and the number says so rather than the absence
+    # of a poisoned prompt implying it.
+    assert frozen.dropped_skills == 1
+    assert frozen.undated_skills == 0
+
+    worker = FusedAlertTriageWorker(
+        bootstrap_servers="",
+        writer=ShadowTriageWriter(),
+        context_reader=FrozenTriageContextReader(frozen),
+    )
+    summary = await worker.triage(_envelope())
+    assert summary is not None
+
+    assert len(captured) == 1 and captured[0] is not None
+    assert captured[0]["skill_id"] == "frozen-skill"
+    assert "Frozen at the split" in captured[0]["triage_guidance"]
+    assert "POISON" not in captured[0]["triage_guidance"]
+
+    # Sensitivity: the same worker with the live reader does see the poison.
+    # Without this the test above passes just as well against a build where
+    # skills never reach the prompt at all.
+    live_worker = FusedAlertTriageWorker(
+        bootstrap_servers="",
+        writer=ShadowTriageWriter(),
+        context_reader=LiveTriageContextReader(),
+    )
+    captured.clear()
+    await live_worker.triage(_envelope())
+    assert len(captured) == 1 and captured[0] is not None
+    assert captured[0]["skill_id"] == "poison-skill"
+    assert "POISON: activated after the split" in captured[0]["triage_guidance"]
+
+
+@pytest.mark.asyncio
+async def test_a_skill_under_test_reaches_the_prompt_and_is_named_in_the_method_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The backtest bypass works, and it is published rather than silent.
+
+    Two assertions, and the second is the one that matters. A candidate
+    authored after the window *must* reach the prompt or a backtest measures
+    nothing. It must also appear in the method note with its caveat, because
+    an accuracy figure produced by guidance written after the window is a
+    statement about that window and not a forecast, and a reader who is not
+    told cannot know which they are holding.
+    """
+    captured: list[dict[str, Any] | None] = []
+
+    async def _capture(state: InvestigationState) -> InvestigationState:
+        captured.append(dict(state.tenant_skill) if state.tenant_skill else None)
+        state.verdict = FALSE_POSITIVE
+        state.confidence = 0.5
+        state.status = AgentStatus.RUNNING
+        return state
+
+    async def _resolve(tenant_id: str) -> _StubLlmConfig:
+        return _StubLlmConfig()
+
+    monkeypatch.delenv("AISOC_DETERMINISTIC", raising=False)
+    monkeypatch.setattr(worker_module, "run_auto_triage", _capture)
+    monkeypatch.setattr(worker_module, "resolve_llm_config", _resolve)
+
+    candidate = _skill_row("candidate-skill", activated_at="2026-09-01T00:00:00Z", guidance="Authored after the window")
+    snapshot = capture_context(split_at=_SPLIT, skills=[], skills_under_test=[candidate])
+
+    # Not filtered, unlike everything else in the snapshot.
+    assert snapshot.skills == ()
+    assert snapshot.dropped_skills == 0
+    assert [dict(s) for s in snapshot.skills_under_test] == [candidate]
+
+    note = snapshot.as_method_note()
+    assert note["skills_under_test"] == ["candidate-skill@v1"]
+    assert "authored after this window closed" in note["skills_under_test_caveat"]
+    assert "not a forecast" in note["skills_under_test_caveat"]
+
+    worker = FusedAlertTriageWorker(
+        bootstrap_servers="",
+        writer=ShadowTriageWriter(),
+        context_reader=FrozenTriageContextReader(snapshot),
+    )
+    await worker.triage(_envelope())
+    assert len(captured) == 1 and captured[0] is not None
+    assert captured[0]["ref"] == "candidate-skill@v1"
+
+    # Sensitivity: an ordinary replay of the same instant freezes it out, so
+    # the bypass is the backtest's and not the snapshot's default behaviour.
+    ordinary = capture_context(split_at=_SPLIT, skills=[candidate])
+    assert ordinary.skills == ()
+    assert ordinary.dropped_skills == 1
+    assert "skills_under_test" not in ordinary.as_method_note()
+
+
+# --------------------------------------------------------------------------
 # The snapshot itself
 # --------------------------------------------------------------------------
 
@@ -380,6 +555,29 @@ def test_rows_recorded_after_the_split_are_dropped_from_the_snapshot() -> None:
     # all, so this number is how a reader sees the limit of the freeze.
     assert snapshot.undated_statements == 1
     assert snapshot.as_method_note()["statements_without_timestamp"] == 1
+
+
+def test_a_skill_with_no_activation_stamp_is_counted_the_way_an_undated_statement_is() -> None:
+    """Kept, and counted, rather than dropped or silently trusted.
+
+    A resolved skill carries ``activated_at`` by construction, so this should
+    never fire in production. It is tested because "should be zero" is exactly
+    how the organisation-memory gap went unnoticed for a phase: the number is
+    published either way, so a reader sees the limit of the freeze instead of
+    inferring it from a clean-looking block.
+    """
+    snapshot = capture_context(
+        split_at=_SPLIT,
+        skills=[
+            {"skill_id": "dated", "version": 1, "activated_at": "2026-04-01T00:00:00Z", "body": {}},
+            {"skill_id": "undated", "version": 1, "body": {}},
+        ],
+    )
+
+    assert [s["skill_id"] for s in snapshot.skills] == ["dated", "undated"]
+    assert snapshot.undated_skills == 1
+    assert snapshot.dropped_skills == 0
+    assert snapshot.as_method_note()["skills_without_timestamp"] == 1
 
 
 def test_a_snapshot_taken_at_a_different_instant_is_refused() -> None:

@@ -113,6 +113,20 @@ class ReplayRequest:
     bootstrap_seed: int
     bootstrap_resamples: int
 
+    #: Gap-closure Phase 6.2. Tenant skills to hand the replay as frozen
+    #: context, carrying their ``activated_at`` so the agents side can drop
+    #: any activated after the split. ``None`` means "send no context block",
+    #: which is what an ordinary replay does and is byte-identical to the
+    #: behaviour before this field existed.
+    skills: tuple[dict[str, Any], ...] | None = None
+
+    #: The one skill a backtest is measuring, applied to the whole test window
+    #: even though it was authored after it. Travels separately from
+    #: ``skills`` all the way to the report's method note, where it is named
+    #: and caveated, because an accuracy figure produced by guidance written
+    #: after the window is a statement about that window and not a forecast.
+    skill_under_test: dict[str, Any] | None = None
+
 
 def _agents_base_url() -> str:
     """Where the agents service lives.
@@ -206,11 +220,20 @@ async def _read_history(request: ReplayRequest, credentials: dict[str, Any]) -> 
 
 async def _run_replay(request: ReplayRequest, connector_type: str, findings: list[dict[str, Any]]) -> dict[str, Any]:
     url = f"{_agents_base_url()}/api/v1/replay/run"
-    payload = {
+    payload: dict[str, Any] = {
         "connector_id": connector_type,
         "findings": findings,
         "train_fraction": request.train_fraction,
     }
+    if request.skills is not None or request.skill_under_test is not None:
+        # Sent only when a caller asked for it. An ordinary replay still sends
+        # no context block at all, so its snapshot is the empty one documented
+        # on `FrozenContext` rather than an empty-but-present one that would
+        # read differently in the method note.
+        payload["context"] = {
+            "skills": list(request.skills or ()),
+            "skills_under_test": [request.skill_under_test] if request.skill_under_test else [],
+        }
     try:
         async with httpx.AsyncClient(timeout=_REPLAY_TIMEOUT_S) as client:
             response = await client.post(url, headers=_agents_headers(request.tenant_id), json=payload)

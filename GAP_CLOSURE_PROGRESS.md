@@ -408,8 +408,8 @@ suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 6: Tenant skills and better triage context
 
-- [ ] **6.1 Tenant-authored skills** in YAML in the console editor, validated against the tenant's actual tools.
-- [ ] **6.2 Lifecycle**: draft, backtest through the Phase 1 replay, active; every investigation records the skill version that guided it.
+- [x] **6.1 Tenant-authored skills** in YAML in the console editor, validated against the tenant's actual tools. Migration **070**, two tables: `aisoc_tenant_skills` (current state) and `aisoc_tenant_skill_versions` (append-only history). A skill carries match conditions, a plan and expected pivots like a `Strategy`, plus the four fields a built-in cannot have because they are statements about one organisation: guidance, verdict guidance, required evidence and escalation conditions, with owner, server-assigned version and a **required** expiry. The parser refuses unknown top-level keys rather than ignoring them, because `verdict_guidence` otherwise produces a skill that silently does half its job. Tool validation reads the tenant's own rows and their own registry: the built-in lake pivots, the Phase 4 customer-product tools whose product they have connected, and the tools on an **enabled** MCP server's allowlist, so a registered-but-disabled server contributes nothing. The customer half makes the same three reads `GET /agent-tools/backends` makes. See D26, where the gate caught Phase 4.3 landing underneath this work and a known tool name is accepted rather than refused while the registry is unknown.
+- [x] **6.2 Lifecycle**: draft, backtest through the Phase 1 replay, active; every investigation records the skill version that guided it. Two refusals carry the phase: a content edit bumps the version, drops to draft and **detaches both reports**, and activation requires a backtest of the exact version plus both halves of it. The rule is written in the migration's CHECK, in the store and on the docs page, and `scripts/check_tenant_skill_contract.py` fails if it leaves any of the three. The backtest is two Phase 1 replay evaluations over one window, seed and resample count; nothing re-implements replay, scoring or reporting. Skills became the fourth frozen context store, and the deliberate backtest bypass is published rather than silent: see D27.
 - [ ] **6.3 Triage context**: knowledge-base runbooks with citations, the last N analyst dispositions with reasons, and identity context, all point-in-time.
 - [ ] **6.4 Measure it**: replay before and after on the synthetic corpus and at least one recorded history fixture, and publish the delta.
 
@@ -535,6 +535,17 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   fail against eight injected regressions rather than merely observed passing.
   See D21 to D23.
 
+- [x] **Phase 6.1 and 6.2, tenant skills.** Migration **070**, two tables.
+  Suites: `services/agents` 1390 to 1423 (33 new), `services/api` 2970 to
+  3007 (37 new). Claim matrix 193 rows to 198, GATED 185 to 190. Two new
+  gates, `scripts/check_tenant_skill_contract.py` and
+  `scripts/check_triage_context_freeze.py`, both wired into `ci.yml` and both
+  **proven against injected regressions rather than observed passing**: seven
+  were injected into detached copies of the tree and all seven caught, and the
+  seventh found a real hole in the freeze gate before it merged. The offline
+  eval harness is unchanged on every axis, which is the expected and the
+  reportable result: the synthetic corpus has no tenant skills, so a
+  skill-free deployment behaves as it did. See D26 and D27.
 - [x] **Phase 5.6, AiSOC's own MCP server.** `services/mcp` 13 tools to 18,
   suite 124 to 135. Every tool now publishes MCP behaviour annotations, and
   the published tool count is compared against the registry across seven
@@ -1310,3 +1321,87 @@ stated. `tests/published-count.test.ts` now compares all seven figures against
 the registry in both directions, proven by staling one figure and by deleting
 another. `plans/cyble-aisoc/platform/README.md` also carries the old figure
 and is deliberately left alone: plan files are never edited.
+
+### D26. The per-tenant tool surface 6.1 validates against landed one commit after this phase was cut
+
+Recorded because the first version of 6.1 was built against a tree where it
+did not exist, and the gate written to notice that is what caught it.
+
+The brief said "Phase 4 just landed per-tenant tool advertisement". At the
+commit this phase was cut from, `147f89cc`, it had not: that commit is 4.2's
+verbs half plus 4.5's CORE decision, and 4.3 was unticked above. So the first
+implementation validated `expected_pivots` against the two per-tenant surfaces
+that did exist, the built-in lake pivots and Phase 5.2's MCP allowlists, and
+refused a vendor read verb with a sentence saying the surface was not built.
+
+Phase 4.3 then merged as [#916](https://github.com/beenuar/AiSOC/pull/916)
+while this was in review, adding `GET /api/v1/agent-tools/backends` and six
+customer tools to `KNOWN_PIVOTS`. The rebase surfaced it as a gate failure
+rather than as a silent divergence: `check_tenant_skill_contract.py` compares
+the two vocabularies in both directions and named all six. The validator now
+reads the real thing, making the same three reads the backends route makes, so
+the set a skill is checked against is the set the agent binds rather than a
+second opinion about it. The gate also compares each tool's **capability**,
+because a name that matched while its capability drifted would check the
+tenant against a verb the agent never asks the registry for, and the skill
+would save while the tool never bound.
+
+One judgement worth keeping. The registry can be unreachable, and refusing a
+skill then would tell an author their EDR is not connected because a different
+service was briefly down; they would delete a correct line from their
+document. So a **known** customer tool name is accepted while the registry is
+unknown, `ToolInventory.customer_unknown` says so and the console surfaces it,
+and a name that is no tool at all is still refused, because that is a typo
+rather than an outage. Same distinction Phase 4.3 draws for the prompt:
+unknown and absent send a reader to different places.
+
+The durable lesson is the one this file keeps recording from the other
+direction: **probe the tree rather than trusting a handed-down description of
+it**, and write the gate that will notice when the tree moves underneath you.
+Five agents have now been handed a stale migration number; this is the same
+shape with a capability instead of a number, and the difference is that this
+time a gate caught it before it merged.
+
+### D27. A skill backtest has to bypass the replay freeze, and the honest move is to publish the bypass
+
+Phase 1.5 established that a replay can only measure honestly if durable
+context is frozen as of the split point. Phase 6.2 adds a store that breaks
+that rule on purpose, and working out *how* to break it is most of the phase's
+judgement.
+
+A skill authored today, backtested against last quarter's closed findings, is
+guidance whose author may have read the very alerts being graded. Three
+options, and two are wrong:
+
+* **Freeze it out.** The candidate is activated after the split by
+  construction, so the filter drops it and the backtest measures nothing. Two
+  identical reports, a delta of zero, and the feature looks broken.
+* **Apply it silently.** The number is then raisable by writing a skill that
+  restates the labels, and nothing on the report says so. This is the Phase 1
+  leakage failure arriving by a new route: an evaluation answering its own
+  question, with a method section that reads correctly.
+* **Apply it and say so.** `ContextSnapshot.skills_under_test` is separate from
+  `skills`, is not filtered, and is named in `as_method_note` alongside a
+  sentence saying the skill was authored after the window and the result
+  measures the skill against that window rather than forecasting new alerts.
+
+The third is what shipped, and the property under test in
+`test_replay_leakage.py` is not that the bypass is refused but that it is
+**published**: an unfiltered store nobody is told about is indistinguishable
+from a leak. `scripts/check_triage_context_freeze.py` enforces the same thing
+structurally, so a later store cannot be added to the snapshot and quietly left
+out of the note.
+
+Two things worth keeping from building that gate. First, the ordinary replay
+path still freezes skills, so an operator's general accuracy number is not
+inflated by guidance written after the fact; the bypass belongs to the backtest
+route and nowhere else, and the test asserts that by running an ordinary
+`capture_context` at the same instant and watching the candidate drop.
+
+Second, the gate's first version was too loose and the proof caught it rather
+than a reviewer. It searched the method note for any key mentioning the store,
+so deleting `skills_frozen` passed while `skills_dropped_after_split` remained,
+leaving a note that said what the freeze threw away and never what it kept. It
+now requires `<store>_frozen` and `<store>_dropped_after_split` by exact name.
+Seven regressions were injected into a detached copy of the tree and all seven
+are caught; the seventh is that one.

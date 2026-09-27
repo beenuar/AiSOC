@@ -47,6 +47,12 @@ logger = structlog.get_logger()
 
 AUTO_CLOSE_THRESHOLD: float = float(os.getenv("AISOC_AUTO_CLOSE_THRESHOLD", "0.85"))
 
+#: Ceiling on the tenant-skill block in the triage prompt. The API caps each
+#: field at authoring time; this is the floor under a body written before
+#: those caps existed, and under a skill whose individually-legal fields sum
+#: to more prompt than the evidence gets.
+_MAX_SKILL_PROMPT_CHARS = 4000
+
 
 class AutoTriageError(RuntimeError):
     """Raised when the LLM auto-triage call or its response parsing fails.
@@ -151,6 +157,14 @@ def _build_alert_context(state: InvestigationState) -> str:
     sanitised and length-capped — the statements interpolate alert-derived
     values like a process name, so they are tenant-authored but not
     operator-typed.
+
+    ``state.tenant_skill`` sits beside it on the same reasoning and with the
+    same treatment. It is typed into the console by a user holding
+    ``settings:write``, which is the same trust class, and it is capped for
+    the reason that applies regardless of trust: the prompt budget is shared
+    with the evidence the verdict is supposed to rest on. The block the
+    resolver rendered is used verbatim rather than re-rendered here, so the
+    text that steered the verdict is the text the provenance record names.
     """
     raw = state.raw_alert
     parts = [
@@ -184,10 +198,18 @@ def _build_alert_context(state: InvestigationState) -> str:
 
     telemetry = wrap_untrusted("\n".join(parts), label="alert_telemetry")
 
+    preamble: list[str] = []
+    skill = state.tenant_skill or {}
+    skill_guidance = str(skill.get("triage_guidance") or "").strip()
+    if skill_guidance:
+        preamble.append(sanitize_text(skill_guidance)[:_MAX_SKILL_PROMPT_CHARS])
     memory = render_for_prompt(state.organisation_memory)
-    if not memory:
+    if memory:
+        preamble.append(sanitize_text(memory))
+
+    if not preamble:
         return telemetry
-    return f"{sanitize_text(memory)}\n\n{telemetry}"
+    return "\n\n".join([*preamble, telemetry])
 
 
 def _close_truncated_json(fragment: str) -> str:
@@ -410,6 +432,14 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         f"LLM confidence: {confidence:.2f}",
         f"Rationale: {rationale}",
     ]
+    # Which version of which skill was in the prompt that produced this
+    # verdict. On the basis rather than only in a log line, because this is
+    # the field a disputed auto-close is explained from, and a log line is
+    # gone long before the dispute arrives.
+    skill_ref = str((state.tenant_skill or {}).get("ref") or "")
+    if skill_ref:
+        owner = str((state.tenant_skill or {}).get("owner") or "unrecorded")
+        state.confidence_basis.append(f"Tenant skill applied: {skill_ref} (owner: {owner})")
 
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")

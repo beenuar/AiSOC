@@ -45,6 +45,7 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
+from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
 from app.graph.runner import default_budget, run_escalation
@@ -110,6 +111,11 @@ _METRICS = {
     # symptom of that is a scorecard that stays empty rather than an error.
     "shadow_triaged": 0,
     "shadow_decisions_recorded": 0,
+    # Phase 6.1. An operator who authored, backtested and activated a skill
+    # needs to see that it is reaching alerts; zero here with an active skill
+    # is the difference between "my guidance is not helping" and "my guidance
+    # was never read".
+    "tenant_skill_applied": 0,
     "errors": 0,
 }
 
@@ -545,6 +551,12 @@ class FusedAlertTriageWorker:
                 # LLM call is going to happen. Never raises; an empty list just
                 # means the prompt is what it was before.
                 state.organisation_memory = await self._reader.fetch_statements(str(state.tenant_id))
+                # Phase 6.1: the tenant's own skill for this shape of alert.
+                # Read through the same port for the same reason: it is durable
+                # state a verdict depends on, so the replay freeze has to be
+                # able to reach it. Selection is per alert and cheap; the fetch
+                # behind it is cached.
+                await self._attach_tenant_skill(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -794,6 +806,40 @@ class FusedAlertTriageWorker:
                 raised.append(str(approval_id))
                 _METRICS["approvals_raised"] += 1
         return raised
+
+    async def _attach_tenant_skill(self, state: InvestigationState) -> None:
+        """Resolve the tenant skill matching this alert and record it on the state.
+
+        Best-effort in exactly one direction: a lookup that fails leaves the
+        state without a skill and triage proceeds as it did before. The
+        opposite failure, a skill that matched and was not recorded, is the one
+        that matters, because the verdict would then carry guidance with no
+        provenance. So the selection and the record happen together.
+        """
+        try:
+            rows = await self._reader.fetch_skills(str(state.tenant_id))
+        except Exception as exc:  # noqa: BLE001 - guidance is advisory, triage is not
+            logger.warning("auto_triage_worker.skill_lookup_failed", error=str(exc)[:200])
+            return
+        if not rows:
+            return
+
+        raw = state.raw_alert or {}
+        skill = select_skill(
+            rows,
+            summary=state.alert_summary or "",
+            techniques=list(state.mitre_mappings or []),
+            rule_id=str(raw.get("rule_id") or "") or None,
+            source=str(raw.get("connector_type") or raw.get("source") or "") or None,
+        )
+        if skill is None:
+            return
+
+        state.tenant_skill = skill.as_provenance()
+        guidance = skill.triage_guidance()
+        if guidance:
+            state.tenant_skill["triage_guidance"] = guidance
+        _METRICS["tenant_skill_applied"] += 1
 
     async def _maybe_suppress_from_memory(
         self,

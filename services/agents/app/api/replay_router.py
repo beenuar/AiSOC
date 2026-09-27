@@ -76,10 +76,18 @@ class FrozenContext(BaseModel):
     anywhere. A human-authored prior suppresses a matching repeat without
     re-triage, so seeding priors from ground truth would score the ground
     truth.
+
+    ``skills`` is filtered against the split on ``activated_at`` like every
+    other store. ``skills_under_test`` is not, and that is the whole of a
+    skill backtest: the candidate is applied to a window that closed before it
+    was written. The snapshot counts and names it separately, and the method
+    note carries the caveat, so the bypass is published rather than assumed.
     """
 
     statements: list[dict[str, Any]] = Field(default_factory=list)
     priors: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    skills: list[dict[str, Any]] = Field(default_factory=list)
+    skills_under_test: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
 
 
 class ReplayRequest(BaseModel):
@@ -148,6 +156,8 @@ async def run_replay(body: ReplayRequest, principal: ScopedPrincipal) -> ReplayR
             split_at=split.split_at,
             statements=body.context.statements,
             priors=body.context.priors,
+            skills=body.context.skills,
+            skills_under_test=body.context.skills_under_test,
         )
 
     try:

@@ -483,6 +483,15 @@ jobs:
       # The union of what the four services import on this path. Same version
       # bounds as ci.yml's per-service jobs, because a chain that only works
       # on a different resolution is not the chain that ships.
+      #
+      # `mcp` is here because `app/main.py` imports the replay router, which
+      # reaches `deep_investigation`, which imports `app.mcp.tools` at module
+      # scope. It was added to the agents service and to ci.yml's agents job
+      # and not to this list, and this job only runs when the replay paths
+      # change, so the first pull request to touch them since was the first to
+      # see the agents service fail to boot at all. That is the stale-green
+      # shape: a path-filtered job cannot report a breaker it never ran for.
+      # Pinned exactly, matching `services/agents/pyproject.toml`.
       - name: Install the four services' shared dependencies
         run: >-
           pip install --quiet
@@ -499,6 +508,7 @@ jobs:
           aiokafka apscheduler qdrant-client bcrypt
           langgraph langchain-core langchain-openai
           click rich jsonschema
+          "mcp==1.30.0"
 
       # The CLI is driven as an installed console script would be, off its own
       # source tree, so the command under test is the one the package ships.

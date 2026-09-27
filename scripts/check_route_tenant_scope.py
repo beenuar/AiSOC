@@ -204,6 +204,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "than a narrowing of one, because a service token carries no tenant to intersect with, and this route refuses a "
         "console session outright so no user's scope can reach it",
     ),
+    "services/api/app/api/v1/endpoints/tenant_skills.py::resolve_tenant_skills": (
+        "service_token_valid",
+        "the agents service reads its tenant's active investigation skills here and holds no session; the shared service "
+        "token is the credential, compared in constant time and failing closed when unset. The named tenant is the scope "
+        "rather than a narrowing of one, for the same reason as the MCP registry above, and the RLS context is set from "
+        "that same value so the policy and the query predicate cannot disagree",
+    ),
 }
 
 #: Routes that are public by design. Each entry is (service, reason) and the
