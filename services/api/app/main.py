@@ -38,8 +38,8 @@ from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
-from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
 from app.workers.retention_purge import run_forever as run_retention_purge
+from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
 from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 

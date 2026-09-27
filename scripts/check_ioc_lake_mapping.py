@@ -90,11 +90,9 @@ _INTEL_TYPES = Path("services/api/app/services/retro_hunt/intel_types.py")
 _INDICATORS = Path("services/api/app/services/agent_tools/indicators.py")
 _API_CONFIG = Path("services/api/app/core/config.py")
 _TI_CONFIG = Path("services/threatintel/app/config.py")
-_TI_CLIENTS = (
-    Path("services/threatintel/app/clients/otx.py"),
-    Path("services/threatintel/app/clients/cisa_kev.py"),
-    Path("services/threatintel/app/parsers/stix.py"),
-)
+_TI_OTX = Path("services/threatintel/app/clients/otx.py")
+_TI_KEV = Path("services/threatintel/app/clients/cisa_kev.py")
+_TI_STIX = Path("services/threatintel/app/parsers/stix.py")
 
 REQUIRED = (
     _LAKE_WRITER,
@@ -104,6 +102,9 @@ REQUIRED = (
     _INDICATORS,
     _API_CONFIG,
     _TI_CONFIG,
+    _TI_OTX,
+    _TI_KEV,
+    _TI_STIX,
 )
 
 
@@ -237,21 +238,21 @@ def feed_emitted_types(root: Path) -> set[str]:
     """
     out: set[str] = set()
 
-    otx = _module(root, root and Path("services/threatintel/app/clients/otx.py"))
+    otx = _module(root, _TI_OTX)
     for node in ast.walk(otx):
         if isinstance(node, ast.FunctionDef) and node.name == "_map_indicator_type":
             for sub in ast.walk(node):
                 if isinstance(sub, ast.Dict):
                     out |= {v.value for v in sub.values if isinstance(v, ast.Constant) and isinstance(v.value, str) and v.value}
 
-    stix = _module(root, Path("services/threatintel/app/parsers/stix.py"))
+    stix = _module(root, _TI_STIX)
     for node in ast.walk(stix):
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "_IOC_TYPES" for t in node.targets):
             if isinstance(node.value, ast.Set | ast.List | ast.Tuple):
                 out |= {e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
     # `_observable_to_ioc` builds `f"file-hash:{hash_type}"` over a literal
     # tuple of algorithms. Read the tuple rather than hardcoding the three.
-    stix_src = (root / Path("services/threatintel/app/parsers/stix.py")).read_text(encoding="utf-8")
+    stix_src = (root / _TI_STIX).read_text(encoding="utf-8")
     if 'f"file-hash:{hash_type}"' in stix_src:
         algs = re.search(r"for hash_type in \(([^)]*)\)", stix_src)
         if algs:
@@ -260,7 +261,7 @@ def feed_emitted_types(root: Path) -> set[str]:
                 if name:
                     out.add(f"file-hash:{name}")
 
-    kev = _module(root, Path("services/threatintel/app/clients/cisa_kev.py"))
+    kev = _module(root, _TI_KEV)
     for node in ast.walk(kev):
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values, strict=False):
