@@ -426,7 +426,11 @@ suites' job, and anything at all against a live vendor MCP server.
 - [ ] **8.1 Retro-hunts** consuming the `NEW_IOC` events nothing consumes today, with provenance, dedup, rate limits and budgets.
 - [ ] **8.2 KEV exposure** checked against asset and vulnerability data, opening a case task when exposed.
 - [ ] **8.3 Hunting agent** turning a hypothesis into a plan, read-only queries and evidence-backed findings; new `aisoc-hunt` role alias.
-- [ ] **8.4 Hunt library** grown from 5 to at least 50, each with positive and negative synthetic scenarios, and `hunts/README.md` corrected where it cites a script that does not exist.
+- [x] **8.4 Hunt library** grown from 5 to at least 50, each with positive and negative synthetic scenarios, and `hunts/README.md` corrected where it cites a script that does not exist.
+  - **68 hunts**, 63 new, across the ATT&CK tactics and the log sources AiSOC ships connectors for. Executable means replayed against a scenario and observed to fire; it is not a claim a hunt fires on a given deployment's telemetry, and `hunts/README.md` states the distinction.
+  - `scripts/check_hunt_scenarios.py` is the anti-tautology gate: a negative must differ from its positive in **exactly one indicator field**, and that field must not be the log-source selector. The existing grading could not see this, because a negative from an unrelated log source never fires on anything.
+  - The gate found **8 violations on its first run** against a corpus that was passing the existing grading, **3 of them in the 5 hunts that predate this phase**. All were rewritten to invert one clause.
+  - `scripts/run_hunt_evals.py` now exists (`hunts/README.md` had cited it for months). A thin wrapper over `run_evals.py --suite hunt_corpus`, with a `--self-test` that parses its own source and asserts it cannot score.
 
 ## Phase 9: Detection-engineering loop
 

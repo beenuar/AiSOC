@@ -1,0 +1,43 @@
+id: hunt-rdp-from-workstation-to-workstation
+name: Remote desktop session between two workstations
+description: |
+  Support staff reach workstations from jump hosts. Workstation-to-workstation RDP bypasses that path and is one of the clearest lateral-movement shapes in Windows telemetry.
+version: 1.0.0
+severity: medium
+category: network
+tags:
+  - mitre.attack.t1021.001
+  - hunt.network
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did one workstation open a remote desktop session to another workstation?
+  indicators:
+    - field: "source"
+      equals: "windows_security"
+    - field: "EventID"
+      in: [4624]
+    - field: "LogonType"
+      in: [10]
+    - field: "sourceHostClass"
+      equals: "workstation"
+    - field: "targetHostClass"
+      equals: "workstation"
+expected:
+  positive_incident_id: INC-HUNT-033
+  positive_template_id: hunt-rdp-from-workstation-to-workstation
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-033-NEG
+  # The negative inverts sourceHostClass, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1021/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

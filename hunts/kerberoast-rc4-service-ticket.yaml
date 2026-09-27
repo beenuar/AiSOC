@@ -1,0 +1,41 @@
+id: hunt-kerberoast-rc4-service-ticket
+name: Kerberos service ticket requested with RC4 encryption
+description: |
+  Service tickets issued with RC4 (0x17) rather than AES are the precondition for offline Kerberoasting. Modern domains issue AES by default, so a downgrade on a non-krbtgt service principal is worth a look.
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1558.003
+  - hunt.identity
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any account request a Kerberos service ticket with downgraded RC4 encryption?
+  indicators:
+    - field: "source"
+      equals: "windows_security"
+    - field: "EventID"
+      in: [4769]
+    - field: "TicketEncryptionType"
+      equals: "0x17"
+    - field: "ServiceName"
+      regex: "^(?!krbtgt).+"
+expected:
+  positive_incident_id: INC-HUNT-006
+  positive_template_id: hunt-kerberoast-rc4-service-ticket
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-006-NEG
+  # The negative inverts TicketEncryptionType, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1558/003/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

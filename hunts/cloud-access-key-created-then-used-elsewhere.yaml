@@ -1,0 +1,39 @@
+id: hunt-cloud-access-key-created-then-used-elsewhere
+name: New access key used from a different network than the one that created it
+description: |
+  Key creation is routine in any automated estate. A key whose first use comes from a different network than its creation is the shape of a stolen credential rather than a rotation.
+version: 1.0.0
+severity: high
+category: cloud
+tags:
+  - mitre.attack.t1098.001
+  - hunt.cloud
+log_sources:
+  - aws_cloudtrail
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a new access key created and then used from a different source address?
+  indicators:
+    - field: "source"
+      equals: "aws_cloudtrail"
+    - field: "eventName"
+      in: ["CreateAccessKey"]
+    - field: "firstUseFromDifferentAsn"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-010
+  positive_template_id: hunt-cloud-access-key-created-then-used-elsewhere
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-010-NEG
+  # The negative inverts firstUseFromDifferentAsn, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1098/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

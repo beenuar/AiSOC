@@ -5,10 +5,17 @@ single threat hypothesis the agent layer can run on a schedule, scoring the
 target telemetry corpus against a set of expected indicators.
 
 The corpus is part of the same **eval-graded** pipeline as detections and
-prompts: every hunt ships with a synthetic positive scenario in
-`services/agents/tests/eval_data/synthetic_telemetry.jsonl` and is scored by
-`scripts/run_hunt_evals.py` (or as part of `scripts/run_evals.py` when run in
-`--all` mode).
+prompts. Every hunt ships with a synthetic positive **and** negative scenario
+in `services/agents/tests/eval_data/synthetic_hunt_telemetry.jsonl`, and both
+are graded by `scripts/run_hunt_evals.py` (or by
+`scripts/run_evals.py --suite hunt_corpus`, which owns the floors CI gates on;
+the hunt script is a thin wrapper over it rather than a second scorer).
+
+There are **68 hunts** at the time of writing. Every one of them is executable
+in the sense the rest of this repository uses the word: it was replayed
+against a scenario and observed to fire. That is not a claim any of them will
+fire on your telemetry, which depends on whether your connectors emit the
+fields the hunt names.
 
 ## Schema
 
@@ -86,11 +93,21 @@ On each fire the hunt agent:
 ## Adding a hunt
 
 1. Drop a new YAML into `hunts/`.
-2. Add at least one synthetic positive scenario to
-   `services/agents/tests/eval_data/synthetic_telemetry.jsonl` with the matching
-   `incident_id` and `template_id`.
-3. Add a synthetic negative scenario (benign events that match *some* but not
-   all indicators).
-4. Run `python scripts/run_hunt_evals.py` locally to confirm the hunt scores
-   100% true-positive and 0% false-positive.
-5. Open a PR — CI will re-run the hunt evals and gate on regression.
+2. Add a synthetic positive scenario to
+   `services/agents/tests/eval_data/synthetic_hunt_telemetry.jsonl` with the
+   matching `incident_id` and `template_id`. Every event there carries
+   `is_synthetic: true`, and the id must start with `INC-HUNT-`.
+3. Add a synthetic negative scenario, and **invert the clause the hunt is
+   about**. This is the part that is easy to get wrong in a way nothing
+   notices: a negative drawn from a different log source will never fire on
+   any hunt, so a corpus of those reports a perfect false-positive rate while
+   testing nothing. `scripts/check_hunt_scenarios.py` enforces the rule that
+   makes a negative meaningful — it must differ from its positive in
+   **exactly one indicator field**, and that field must not be the one
+   selecting the log source. A near miss is the only negative that grades a
+   hunt's discrimination rather than its aim.
+4. Run `python scripts/run_hunt_evals.py` to confirm the hunt fires on its
+   positive and stays quiet on its negative, then
+   `python scripts/check_hunt_scenarios.py` to confirm the negative is a near
+   miss rather than an unrelated event. The first cannot tell you the second.
+5. Open a PR. CI runs both.

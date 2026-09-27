@@ -1,0 +1,42 @@
+id: hunt-defender-exclusion-added
+name: Anti-malware exclusion path added
+description: |
+  Exclusions are a normal part of endpoint policy. Set by the management agent they are policy; set by reg.exe on one host they are an attacker making room.
+version: 1.0.0
+severity: high
+category: endpoint
+tags:
+  - mitre.attack.t1562.001
+  - hunt.endpoint
+log_sources:
+  - sysmon
+  - defender
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was an anti-malware exclusion added by something other than the management platform?
+  indicators:
+    - field: "source"
+      equals: "sysmon"
+    - field: "EventID"
+      in: [13]
+    - field: "TargetObject"
+      regex: "(?i)\\\\Windows Defender\\\\Exclusions\\\\"
+    - field: "writtenByManagementAgent"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-020
+  positive_template_id: hunt-defender-exclusion-added
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-020-NEG
+  # The negative inverts writtenByManagementAgent, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1562/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

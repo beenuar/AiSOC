@@ -1,0 +1,44 @@
+id: hunt-docker-privileged-container-launched
+name: Privileged container started on a production node
+description: |
+  Production schedules pods continuously. A privileged one can reach the host's namespaces and is a container escape waiting for a reason.
+version: 1.0.0
+severity: high
+category: cloud
+tags:
+  - mitre.attack.t1610
+  - hunt.cloud
+log_sources:
+  - kubernetes_audit
+  - docker
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a privileged container scheduled onto a production node?
+  indicators:
+    - field: "source"
+      equals: "kubernetes_audit"
+    - field: "verb"
+      equals: "create"
+    - field: "resource"
+      equals: "pods"
+    - field: "podIsPrivileged"
+      equals: true
+    - field: "namespaceClass"
+      equals: "production"
+expected:
+  positive_incident_id: INC-HUNT-064
+  positive_template_id: hunt-docker-privileged-container-launched
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-064-NEG
+  # The negative inverts podIsPrivileged, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1610/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

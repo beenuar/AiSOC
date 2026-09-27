@@ -1,0 +1,39 @@
+id: hunt-ai-gateway-spend-spike
+name: Model spend for one identity far above its own baseline
+description: |
+  A busy pipeline makes many requests legitimately, so volume alone says little. Spend far above the identity's own baseline is what a leaked key looks like.
+version: 1.0.0
+severity: medium
+category: application
+tags:
+  - mitre.attack.t1496
+  - hunt.ai
+log_sources:
+  - ai_gateway
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did one identity's model spend jump far above its own recent baseline?
+  indicators:
+    - field: "source"
+      equals: "ai_gateway"
+    - field: "spendRatioToBaseline"
+      gte: 20
+    - field: "requestsLastHour"
+      gte: 500
+expected:
+  positive_incident_id: INC-HUNT-066
+  positive_template_id: hunt-ai-gateway-spend-spike
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-066-NEG
+  # The negative inverts spendRatioToBaseline, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1496/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

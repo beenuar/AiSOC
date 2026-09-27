@@ -1,0 +1,39 @@
+id: hunt-gcp-audit-sink-removed
+name: Cloud logging sink deleted
+description: |
+  Sinks are managed as code in most estates. A sink deleted by a person is the cloud equivalent of clearing the event log.
+version: 1.0.0
+severity: critical
+category: cloud
+tags:
+  - mitre.attack.t1562.008
+  - hunt.cloud
+log_sources:
+  - gcp_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a logging sink deleted or redirected away from the security project?
+  indicators:
+    - field: "source"
+      equals: "gcp_audit"
+    - field: "methodName"
+      regex: "(?i)ConfigServiceV2\\.(Delete|Update)Sink$"
+    - field: "performedByPipeline"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-023
+  positive_template_id: hunt-gcp-audit-sink-removed
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-023-NEG
+  # The negative inverts performedByPipeline, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1562/008/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

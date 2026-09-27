@@ -1,0 +1,40 @@
+id: hunt-newly-registered-domain-contact
+name: Connection to a domain registered within the last week
+description: |
+  New domains appear constantly and most are ordinary. A new domain that no categorisation service recognises is the combination phishing and staging infrastructure share.
+version: 1.0.0
+severity: medium
+category: network
+tags:
+  - mitre.attack.t1071
+  - hunt.network
+log_sources:
+  - proxy
+  - dns
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any host contact a domain registered in the last seven days?
+  indicators:
+    - field: "source"
+      equals: "proxy"
+    - field: "domain_age_days"
+      lte: 7
+    - field: "destination_category"
+      equals: "uncategorised"
+expected:
+  positive_incident_id: INC-HUNT-043
+  positive_template_id: hunt-newly-registered-domain-contact
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-043-NEG
+  # The negative inverts destination_category, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1071/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

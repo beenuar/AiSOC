@@ -1,0 +1,41 @@
+id: hunt-office-child-process-script-host
+name: Office application spawned a script interpreter
+description: |
+  A document that starts a shell has almost always been made to. The parent alone is unremarkable: Office spawns printing and updater helpers constantly.
+version: 1.0.0
+severity: high
+category: endpoint
+tags:
+  - mitre.attack.t1566.001
+  - hunt.endpoint
+log_sources:
+  - sysmon
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did an Office application start a scripting host or shell?
+  indicators:
+    - field: "source"
+      equals: "sysmon"
+    - field: "EventID"
+      in: [1]
+    - field: "ParentImage"
+      regex: "(?i)\\\\(winword|excel|powerpnt|outlook)\\.exe$"
+    - field: "Image"
+      regex: "(?i)\\\\(powershell|cmd|wscript|cscript|mshta)\\.exe$"
+expected:
+  positive_incident_id: INC-HUNT-025
+  positive_template_id: hunt-office-child-process-script-host
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-025-NEG
+  # The negative inverts Image, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1566/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

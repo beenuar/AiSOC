@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The hunt corpus grew from 5 hunts to 68, and the grading that covers it
+  stopped being satisfiable by accident** (gap-closure Phase 8.4).
+
+  **The corpus.** 63 new hunts across the ATT&CK tactics and the log sources
+  AiSOC ships connectors for: Windows Security and Sysmon, Linux auditd, AWS
+  CloudTrail, GCP audit, Kubernetes audit, Okta and Entra ID, Microsoft 365
+  and Google Workspace, Snowflake, Salesforce, Slack, Zoom, Confluence,
+  GitHub and GitLab audit, Vault, Duo, Jamf, Netskope, Tailscale, osquery,
+  DNS, proxy, firewall, VPN and the AI gateway. Every one ships a positive
+  and a negative synthetic scenario and is graded by
+  `services/agents/tests/test_hunt_corpus.py`.
+
+  **What 68 means, and what it does not.** Each hunt was replayed against its
+  scenario and observed to fire. That is not a claim any of them fires on a
+  given deployment's telemetry, which depends on whether that deployment's
+  connectors emit the fields the hunt names. `hunts/README.md` says so rather
+  than leaving the count to imply the stronger claim.
+
+  **The grading was satisfiable without testing anything.** A hunt passed when
+  it fired on its positive scenario and not on its negative, and the second
+  half is free: a negative drawn from a different log source never fires on
+  any hunt, so a corpus of those reports a perfect false-positive rate while
+  grading only the hunt's aim. This is the same circularity as the roughly
+  600 detection fixtures synthesised from the rule they test.
+
+  `scripts/check_hunt_scenarios.py` closes it. It runs the production hunt
+  matcher over both scenarios and requires the negative to differ from its
+  positive in **exactly one indicator field**, that field not being the one
+  selecting the log source, with a near-miss floor beneath it. The rule is the
+  one the adversarial injection corpus already uses for its clean twins. It
+  found **8 violations on its first run against a corpus that was passing the
+  existing grading**, three of them in hunts that predate this phase: the DNS
+  tunnelling, OAuth mass-consent and anomalous role-assumption negatives each
+  differed from their positive in two clauses, so none of them said which
+  clause the hunt was actually discriminating on. All eight were rewritten to
+  invert one clause and hold the rest constant.
+
+  **`scripts/run_hunt_evals.py` now exists.** `hunts/README.md` had told
+  contributors to run it before opening a PR for months, and it had never been
+  written, so the one instruction a contributor was most likely to follow
+  failed at the shell. It is a thin wrapper over the `hunt_corpus` suite in
+  `scripts/run_evals.py` rather than a second scorer, for the reason
+  `scripts/run_model_matrix.py` is a wrapper: two scorers for one corpus drift,
+  and then two numbers describe the same thing and disagree. Its `--self-test`
+  parses its own source and asserts it imports neither the hunt engine nor the
+  loader, so it cannot score even if someone later wanted it to.
+
+
 ### Fixed
 
 - **Five surfaces kept publishing 14 CORE services after ADR-0007 moved it to

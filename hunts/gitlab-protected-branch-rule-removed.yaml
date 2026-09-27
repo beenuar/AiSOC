@@ -1,0 +1,39 @@
+id: hunt-gitlab-protected-branch-rule-removed
+name: Branch protection removed from a production repository
+description: |
+  Protection rules change as teams reorganise. Removing them from a repository that ships to production removes the review that stands between a commit and a customer.
+version: 1.0.0
+severity: high
+category: application
+tags:
+  - mitre.attack.t1195.001
+  - hunt.supplychain
+log_sources:
+  - gitlab_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was branch protection removed from a repository that deploys to production?
+  indicators:
+    - field: "source"
+      equals: "gitlab_audit"
+    - field: "action"
+      in: ["protected_branch_removed", "protected_branch_updated"]
+    - field: "repoDeploysToProduction"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-061
+  positive_template_id: hunt-gitlab-protected-branch-rule-removed
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-061-NEG
+  # The negative inverts repoDeploysToProduction, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1195/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

@@ -1,0 +1,42 @@
+id: hunt-beacon-regular-interval
+name: Outbound connections at a suspiciously regular interval
+description: |
+  Telemetry agents beacon on a fixed timer too. Whether the destination is a known service is what separates monitoring from a command channel.
+version: 1.0.0
+severity: high
+category: network
+tags:
+  - mitre.attack.t1071.001
+  - hunt.network
+log_sources:
+  - proxy
+  - firewall
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did a host make outbound connections at near-constant intervals over hours?
+  indicators:
+    - field: "source"
+      equals: "proxy"
+    - field: "connection_count_last_6h"
+      gte: 100
+    - field: "interval_jitter_ratio"
+      lte: 0.05
+    - field: "destination_is_known_service"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-041
+  positive_template_id: hunt-beacon-regular-interval
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-041-NEG
+  # The negative inverts destination_is_known_service, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1071/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

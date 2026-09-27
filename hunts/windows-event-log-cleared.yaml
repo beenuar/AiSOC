@@ -1,0 +1,39 @@
+id: hunt-windows-event-log-cleared
+name: Security event log cleared
+description: |
+  Re-imaging and provisioning clear logs legitimately. The same event outside a maintenance window has no ordinary explanation.
+version: 1.0.0
+severity: high
+category: endpoint
+tags:
+  - mitre.attack.t1070.001
+  - hunt.endpoint
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was an event log cleared outside a maintenance window?
+  indicators:
+    - field: "source"
+      equals: "windows_security"
+    - field: "EventID"
+      in: [1102, 104]
+    - field: "duringMaintenanceWindow"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-019
+  positive_template_id: hunt-windows-event-log-cleared
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-019-NEG
+  # The negative inverts duringMaintenanceWindow, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1070/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

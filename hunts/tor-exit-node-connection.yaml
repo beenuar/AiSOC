@@ -1,0 +1,39 @@
+id: hunt-tor-exit-node-connection
+name: Outbound connection to a known anonymising relay
+description: |
+  Blocked attempts are the control working. An allowed connection to a relay means egress policy has a hole an operator should know about.
+version: 1.0.0
+severity: high
+category: network
+tags:
+  - mitre.attack.t1090.003
+  - hunt.network
+log_sources:
+  - firewall
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any internal host connect to an anonymising relay?
+  indicators:
+    - field: "source"
+      equals: "firewall"
+    - field: "action"
+      equals: "allow"
+    - field: "destination_is_anonymising_relay"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-044
+  positive_template_id: hunt-tor-exit-node-connection
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-044-NEG
+  # The negative inverts action, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1090/003/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

@@ -1,0 +1,41 @@
+id: hunt-smb-admin-share-write-executable
+name: Executable written to a remote administrative share
+description: |
+  Reading a binary from a share is ordinary software distribution. Writing one to another machine's ADMIN$ is how remote execution starts.
+version: 1.0.0
+severity: high
+category: network
+tags:
+  - mitre.attack.t1021.002
+  - hunt.network
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was an executable written to another host's administrative share?
+  indicators:
+    - field: "source"
+      equals: "windows_security"
+    - field: "EventID"
+      in: [5145]
+    - field: "RelativeTargetName"
+      regex: "(?i)\\.(exe|dll|ps1|bat|scr)$"
+    - field: "AccessMask"
+      regex: "(?i)WriteData|0x2"
+expected:
+  positive_incident_id: INC-HUNT-032
+  positive_template_id: hunt-smb-admin-share-write-executable
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-032-NEG
+  # The negative inverts AccessMask, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1021/002/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

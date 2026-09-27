@@ -1,0 +1,42 @@
+id: hunt-oauth-refresh-token-long-lived-grant
+name: Long-lived OAuth grant issued to an application with no prior use
+description: |
+  offline_access is what turns a session into durable access. Consent without it expires; consent with it survives a password reset.
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1550.001
+  - hunt.identity
+log_sources:
+  - azure_ad
+  - m365_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a long-lived token granted to an application nobody in the tenant had used before?
+  indicators:
+    - field: "source"
+      equals: "azure_ad"
+    - field: "operation"
+      equals: "Consent to application"
+    - field: "appFirstSeenInTenant"
+      equals: true
+    - field: "grantIncludesOfflineAccess"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-018
+  positive_template_id: hunt-oauth-refresh-token-long-lived-grant
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-018-NEG
+  # The negative inverts grantIncludesOfflineAccess, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1550/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

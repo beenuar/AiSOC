@@ -1,0 +1,39 @@
+id: hunt-tailscale-device-key-expiry-disabled
+name: Device key expiry disabled on a tailnet node
+description: |
+  Network operators disable expiry on gateways deliberately. An ordinary user doing it to their own device turns a rotating credential into a permanent one.
+version: 1.0.0
+severity: medium
+category: network
+tags:
+  - mitre.attack.t1556
+  - hunt.network
+log_sources:
+  - tailscale
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was key expiry turned off on a node, making its credential permanent?
+  indicators:
+    - field: "source"
+      equals: "tailscale"
+    - field: "action"
+      equals: "device.keyExpiry.disable"
+    - field: "actorIsTailnetAdmin"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-035
+  positive_template_id: hunt-tailscale-device-key-expiry-disabled
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-035-NEG
+  # The negative inverts actorIsTailnetAdmin, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1556/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

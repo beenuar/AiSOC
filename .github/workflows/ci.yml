@@ -657,6 +657,18 @@ jobs:
         run: |
           python3 scripts/check_agent_read_tools.py --self-test
           python3 scripts/check_agent_read_tools.py
+      # A hunt's negative scenario has to fail for the reason the hunt is
+      # about. A negative drawn from an unrelated log source never fires on
+      # anything, so a corpus of those scores a perfect false-positive rate
+      # while grading nothing. `run_evals.py --suite hunt_corpus` cannot see
+      # that, because it only asks whether the negative fired; this reads both
+      # scenarios and compares them field by field.
+      - name: Hunt negatives invert the clause their hunt is about
+        run: |
+          python3 -m pip install --quiet pyyaml pydantic
+          python3 scripts/check_hunt_scenarios.py --self-test
+          python3 scripts/check_hunt_scenarios.py
+          python3 scripts/run_hunt_evals.py --self-test
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest

@@ -125,6 +125,7 @@ SSRF allow-list entry, and is commented as such.
 | Rules the engine loads | **2603** | **WORKING** — each was replayed through its real connector and the real engine and watched to fire |
 | Detection rules on disk | **6991** | the rest are imports in languages with **no evaluator** here (Splunk SPL, Chronicle YARA-L, CAR pseudocode); the engine never reads them |
 | YAML files under `detections/` | **7016** | the extra 25 are response playbooks, not rules — see `detections/playbooks/` |
+| Hunts under `hunts/` | **68** | **WORKING** — each replayed against a synthetic scenario and observed to fire, and each graded in the other direction too. Not a claim a hunt fires on a given deployment's telemetry, which depends on whether its connectors emit the fields the hunt names. The negative half of that grading was satisfiable without testing anything until Phase 8.4: a negative drawn from a different log source never fires on any hunt, so `check_hunt_scenarios.py` now requires it to differ from its positive in exactly one indicator field. It found 8 violations on first run, 3 in the 5 hunts that predate the phase |
 
 The gap matters and has been published both ways in the past. `make stats`
 reports the first two numbers side by side so they cannot be conflated again.

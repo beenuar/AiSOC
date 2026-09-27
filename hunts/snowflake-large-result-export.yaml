@@ -1,0 +1,41 @@
+id: hunt-snowflake-large-result-export
+name: Unusually large query result exported from the warehouse
+description: |
+  Nightly pipelines unload tens of millions of rows by design. The same volume under an interactive analyst account is a different event entirely.
+version: 1.0.0
+severity: high
+category: data-exfil
+tags:
+  - mitre.attack.t1567
+  - hunt.data
+log_sources:
+  - snowflake
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any user export an unusually large result set?
+  indicators:
+    - field: "source"
+      equals: "snowflake"
+    - field: "query_type"
+      in: ["UNLOAD", "COPY"]
+    - field: "rows_unloaded"
+      gte: 1000000
+    - field: "performedByPipeline"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-037
+  positive_template_id: hunt-snowflake-large-result-export
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-037-NEG
+  # The negative inverts performedByPipeline, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1567/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'
