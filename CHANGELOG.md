@@ -93,6 +93,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expected result and the one worth stating: the synthetic corpus has no tenant
   skills, so a skill-free deployment behaves byte for byte as it did.
   `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
+### Added
+
+- **SCIM 2.0 provisioning, scoped by its credential and tested against two
+  identity providers that disagree with each other** (gap-closure Phase 13.1).
+
+  **The gap.** AiSOC already had OIDC and SAML, so a person could sign in from
+  a corporate directory. Nothing created the account first, kept its
+  attributes current, or ended its access when the person left. An
+  administrator did that by hand, per tenant, and a leaver kept whatever they
+  had until somebody remembered.
+
+  **What ships.** `/scim/v2` serves Users, Groups, ServiceProviderConfig,
+  ResourceTypes and Schemas with filtering and PATCH, authenticated by a
+  per-organisation bearer token stored as a SHA-256 digest and rotatable with
+  a grace window so a rotation does not take the integration down while an
+  administrator pastes the new secret across. Directory groups map onto the
+  roles `ROLE_PERMISSIONS` enforces; a group whose name resolves to nothing is
+  recorded, audited and confers no privilege, and no group name can reach
+  `platform_admin`, `admin` or `api_service`. Every operation writes to the
+  hash-chained audit log naming the credential that performed it, because the
+  actor of a SCIM change is a machine.
+
+  **How it was measured.** Not against a paraphrase of RFC 7644. Okta and
+  Entra both implement the specification and differ in five places, and
+  `test_scim_provisioning.py` carries their request shapes verbatim: `op`
+  lowercase against capitalised, a missing `path` with an object value against
+  an explicit path, member removal through a path filter against a value
+  array, `userName` omitted in favour of `emails`, and a deactivation arriving
+  as the string `"False"` rather than the boolean. That last one is the
+  consequential difference: `bool("False")` is `True`, so the obvious
+  implementation accepts the request, deactivates nothing, and returns 200
+  while the provider records the deprovisioning as successful. Both providers'
+  full sequences (create, update, group membership, deactivate) run end to
+  end, 54 tests in all.
+
+  **The gates that keep it closed.** `scripts/check_scim_contract.py`
+  (`isolation.yml`) compares the discovery documents against the route table
+  in both directions, so a capability advertised with no route and a route no
+  document advertises both fail; it asserts each of the eight mutating
+  handlers still reaches the audit helper, and that `main.py` mounts the
+  router at all. `test_scim_mounted.py` reads `app.openapi()` from the real
+  application, refusing an empty inventory before asserting membership,
+  because `include_router` does not populate `app.routes` on the pinned
+  FastAPI and an inventory assertion can otherwise measure nothing.
+  `docs/decisions/0008-scim-trust-boundary.md` records why the tenant comes
+  from the credential and can come from nowhere else.
+
+### Fixed
+
+- **A deactivated user's API keys kept working, so deprovisioning ended
+  sessions and not programmatic access** (found while building Phase 13.1).
+
+  **The defect.** `_resolve_api_key` looked up a key's owning user with
+  `User.is_active == True` and, when that returned nothing, fell through with
+  `role = "api_service"` instead of refusing. A key belonging to a deactivated
+  principal therefore went on authenticating indefinitely, under a generic
+  role, with nothing in the request or the logs looking wrong. Deactivating an
+  account stopped that person's sessions, which is what anyone testing it
+  would have checked, and left every credential they had minted for themselves
+  live.
+
+  **The half that was already sound, and its limit.** `get_current_user`
+  re-reads `is_active` on every request, so a session stops at the next call
+  rather than at the next token expiry. What it cannot do is survive
+  re-activation: an access token minted before the deactivation is still
+  inside its expiry window and resumes working the moment the row flips back.
+  Access and refresh tokens now carry `iat`, `users.sessions_revoked_at`
+  records the cutoff, and a token issued at or before it is refused however
+  active the principal currently is. A token carrying no `iat` predates the
+  claim and is treated as revoked whenever a revocation exists, so credentials
+  minted before this change fail closed rather than outliving the revocation
+  meant to end them. The refresh path checks it too, and matters more there: a
+  refresh token outlives an access token by days.
 
 ### Changed
 

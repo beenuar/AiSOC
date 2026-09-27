@@ -203,6 +203,10 @@ RATCHET: dict[str, str] = {
     "services/api/app/api/v1/deps.py::_resolve_api_key::ApiKey": (
         "API-key hash lookup; the key row is the credential that carries the tenant"
     ),
+    "services/api/app/services/scim/tokens.py::verify_token::ScimToken": (
+        "SCIM bearer-token digest lookup; the token row is what assigns the tenant, "
+        "and RFC 7643 defines no tenant attribute a caller could have supplied"
+    ),
     "services/api/app/api/v1/endpoints/graph_ws.py::_authenticate_ws::User": (
         "websocket ticket verification, same pre-auth shape as get_current_user"
     ),
@@ -299,7 +303,14 @@ RATCHET: dict[str, str] = {
 
 #: Raising this is a deliberate act with a diff attached. Appending to RATCHET
 #: without raising it fails the gate, which is the whole point.
-MAX_RATCHET = 32
+#:
+#: 32 -> 33 for the SCIM bearer-token lookup. It belongs to the first group
+#: above, the lookups that *establish* a tenant rather than operate inside one:
+#: a SCIM request carries no tenant and RFC 7643 defines no attribute that
+#: could carry one, so the token row is the only thing that assigns it. The
+#: other seven unscoped statements the SCIM surface introduced were given real
+#: predicates instead of entries here.
+MAX_RATCHET = 33
 
 
 # ---------------------------------------------------------------------------

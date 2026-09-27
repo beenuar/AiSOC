@@ -131,6 +131,13 @@ AUTH_DEPENDENCY_NAMES = {
     "PortfolioScope",
     "_scope",
     "_admin_scope",
+    # SCIM resolves a hashed per-organisation bearer token to a principal
+    # carrying the tenant. The credential is the only source of the tenant on
+    # that surface: RFC 7643 defines no tenant attribute, so there is no
+    # request field for a handler to read one from.
+    "ScimPrincipal",
+    "scim_principal",
+    "ScimAuth",
 }
 
 #: Helpers that intersect a caller-supplied tenant with authorised scope.

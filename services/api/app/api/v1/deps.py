@@ -38,7 +38,7 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
-from app.core.security import decode_token, has_permission, hash_api_key
+from app.core.security import decode_token, has_permission, hash_api_key, token_is_revoked
 from app.db.database import get_db
 from app.models.tenant import ApiKey, User
 
@@ -166,10 +166,21 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
             select(User).where(User.id == api_key.user_id, User.is_active == True)  # noqa: E712
         )
         user = user_res.scalar_one_or_none()
-        if user is not None:
-            role = user.role
-            email = user.email
-            user_id = user.id
+        if user is None:
+            # The key names a principal who is deactivated or gone. Falling
+            # through here left the key working under the generic
+            # ``api_service`` role, so deprovisioning a user did not end the
+            # programmatic access they had minted for themselves. A key
+            # belongs to whoever owns it, and an owner who cannot sign in
+            # cannot act through it either.
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or revoked API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        role = user.role
+        email = user.email
+        user_id = user.id
 
     return CurrentUser(
         user_id=user_id,
@@ -230,6 +241,18 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # A token minted before the principal's sessions were revoked stays
+    # refused even after the principal is re-activated. Without this, the
+    # `is_active` check above ends a session only for as long as the flag is
+    # down, and re-enabling a deprovisioned account resurrects every token
+    # still inside its expiry window.
+    if token_is_revoked(payload.get("iat"), user.sessions_revoked_at):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return CurrentUser(
         user_id=user.id,

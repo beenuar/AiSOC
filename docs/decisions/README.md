@@ -21,6 +21,7 @@ ADRs are immutable once accepted. If a decision changes, write a new ADR that su
 | [ADR-0005](./0005-storage-consolidation.md) | Tiered storage consolidation + a $/TB cost model | accepted | 2026-07-12 |
 | [ADR-0006](./0006-llm-gateway-in-core.md) | The LLM gateway belongs in the CORE profile | accepted | 2026-09-24 |
 | [ADR-0007](./0007-connectors-and-actions-in-core.md) | `connectors` and `actions` belong in the CORE profile | accepted | 2026-09-26 |
+| [ADR-0008](./0008-scim-trust-boundary.md) | SCIM is a third-party write surface into identity, and is scoped by its credential | accepted | 2026-09-27 |
 
 ## Authoring conventions
 

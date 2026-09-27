@@ -48,6 +48,12 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Access and refresh tokens issued at or before this instant are refused
+    # (migration 071). Deactivating already stops a session, because the
+    # request path re-reads `is_active`; this is what makes the revocation
+    # survive a later re-activation, when tokens minted before it are still
+    # inside their expiry window.
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     preferences: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(

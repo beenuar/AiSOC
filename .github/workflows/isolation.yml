@@ -30,6 +30,7 @@ on:
       # a gate that stops running exactly when somebody edits what it checks.
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
+      - "scripts/check_scim_contract.py"
       - "docker-compose.yml"
       - "infra/**"
       - ".env.example"
@@ -49,6 +50,7 @@ on:
       # a gate that stops running exactly when somebody edits what it checks.
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
+      - "scripts/check_scim_contract.py"
       - "docker-compose.yml"
       - "infra/**"
       - ".env.example"
@@ -192,6 +194,17 @@ jobs:
 
       - name: Every RLS policy admits an unbound session and reads the GUC the tree sets
         run: python scripts/check_rls_policy_shape.py
+
+      # SCIM is an authentication-adjacent write surface whose client decides
+      # what to attempt by reading a document this service publishes. The
+      # documents, the routes, the audit trail and the group-to-role mapping
+      # therefore have to agree, and the self-test proves the gate still
+      # notices when they stop agreeing.
+      - name: SCIM-contract gate self-test (four injected drifts)
+        run: python scripts/check_scim_contract.py --self-test
+
+      - name: The SCIM surface matches what it advertises, audits and grants
+        run: python scripts/check_scim_contract.py
 
       - name: Start Redis for the two-tenant route replay
         run: |

@@ -165,6 +165,41 @@ These were not visible from the code alone:
    order rather than as extra map entries, because Go randomises map
    iteration and three entries pointing at one destination would pick a
    different winner per process.
+5. **A deactivated user's API keys kept authenticating.** Not visible from a
+   session test, which is what anyone would have run: `get_current_user`
+   re-reads `users.is_active` per request, so deactivating did stop sessions
+   immediately. `_resolve_api_key` took a different path. It looked up the
+   owning user with `is_active == True` and, when that returned nothing, fell
+   through to a generic `api_service` role instead of refusing, so every key
+   a departing principal had minted for themselves went on working
+   indefinitely. Fixed in Phase 13.1, alongside a session-revocation
+   timestamp checked against a new `iat` claim, because the `is_active` check
+   is reversible: re-enabling an account resurrected any token minted before
+   the deactivation that had not yet expired.
+
+---
+
+## Identity and provisioning
+
+**SCIM 2.0 — WORKING, no external dependency to verify against in CI.**
+`/scim/v2` on the API service serves Users, Groups, ServiceProviderConfig,
+ResourceTypes and Schemas, authenticated by a per-tenant bearer token held as
+a SHA-256 digest. What is proven in CI is that the handlers behave correctly
+against request bodies transcribed from Okta and Microsoft Entra ID
+provisioning, including the five shapes where the two providers disagree.
+
+What that does **not** prove, and is worth stating plainly: no live identity
+provider has been pointed at this build. The payloads are synthetic
+reproductions of documented request shapes, not captures from a running
+integration, so a provider quirk outside those five would not be caught here.
+The honest claim is that the implementation handles both dialects as
+documented, not that either vendor's connector has been run against it end to
+end.
+
+OIDC (`services/api/app/auth/oidc.py`, PKCE on by default) and SAML
+(`services/api/app/auth/saml.py`) handle sign-in and predate this work.
+Provisioning and sign-in are separate concerns: SCIM creates and removes the
+principal, OIDC or SAML authenticates them.
 
 ---
 

@@ -9174,6 +9174,131 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/scim-tokens:
+    get:
+      tags:
+      - scim
+      summary: List Scim Tokens
+      description: List this tenant's SCIM credentials. Secrets are never returned.
+      operationId: list_scim_tokens_api_v1_scim_tokens_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScimTokenOut'
+                title: Response List Scim Tokens Api V1 Scim Tokens Get
+    post:
+      tags:
+      - scim
+      summary: Create Scim Token
+      description: Mint a SCIM credential for this tenant.
+      operationId: create_scim_token_api_v1_scim_tokens_post
+      parameters:
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScimTokenRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedScimTokenOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/scim-tokens/{token_id}/rotate:
+    post:
+      tags:
+      - scim
+      summary: Rotate Scim Token
+      description: Replace a credential, leaving the old one working for a grace window.
+      operationId: rotate_scim_token_api_v1_scim_tokens__token_id__rotate_post
+      parameters:
+      - name: token_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Token Id
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateScimTokenRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedScimTokenOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/scim-tokens/{token_id}:
+    delete:
+      tags:
+      - scim
+      summary: Revoke Scim Token
+      description: 'Revoke a credential immediately.
+
+
+        The row stays, because ``aisoc_scim_users.token_id`` references it and
+
+        the audit trail answers "which integration provisioned this principal"
+
+        through it.'
+      operationId: revoke_scim_token_api_v1_scim_tokens__token_id__delete
+      parameters:
+      - name: token_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Token Id
+      - name: current_user
+        in: query
+        required: true
+        schema:
+          title: Current User
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/assets:
     get:
       tags:
@@ -16030,6 +16155,547 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/ServiceProviderConfig:
+    get:
+      tags:
+      - scim
+      summary: Get Service Provider Config
+      operationId: get_service_provider_config_scim_v2_ServiceProviderConfig_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /scim/v2/ResourceTypes:
+    get:
+      tags:
+      - scim
+      summary: List Resource Types
+      operationId: list_resource_types_scim_v2_ResourceTypes_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /scim/v2/ResourceTypes/{resource_type_id}:
+    get:
+      tags:
+      - scim
+      summary: Get Resource Type
+      operationId: get_resource_type_scim_v2_ResourceTypes__resource_type_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: resource_type_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Resource Type Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/Schemas:
+    get:
+      tags:
+      - scim
+      summary: List Schemas
+      operationId: list_schemas_scim_v2_Schemas_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - HTTPBearer: []
+  /scim/v2/Schemas/{schema_id}:
+    get:
+      tags:
+      - scim
+      summary: Get Schema
+      operationId: get_schema_scim_v2_Schemas__schema_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: schema_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Schema Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/Users:
+    get:
+      tags:
+      - scim
+      summary: List Users
+      description: 'List or look up principals.
+
+
+        A provider calls this with a filter before every create, so the
+
+        filter path is the hot one and an unsupported filter must be an error
+
+        rather than a full listing.'
+      operationId: list_users_scim_v2_Users_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: filter
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filter
+      - name: startIndex
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Startindex
+      - name: count
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 100
+          title: Count
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - scim
+      summary: Create User
+      description: 'Create a principal, or return the existing one.
+
+
+        A repeated create for a ``userName`` that already exists is answered
+
+        409, which is what RFC 7644 specifies and what a provider uses to
+
+        reconcile. Creating a second principal for the same address instead
+
+        would give one person two accounts with two sets of permissions.'
+      operationId: create_user_scim_v2_Users_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/Users/{user_id}:
+    get:
+      tags:
+      - scim
+      summary: Get User
+      operationId: get_user_scim_v2_Users__user_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - scim
+      summary: Replace User
+      description: 'Replace a principal''s attributes.
+
+
+        One provider sends PUT for ordinary profile updates and for
+
+        deactivation, so this path has to handle ``active: false`` with the same
+
+        consequences the PATCH path gives it.'
+      operationId: replace_user_scim_v2_Users__user_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - scim
+      summary: Patch User
+      description: 'Apply a PATCH, which is how both providers deactivate a principal.
+
+
+        The body shapes differ between providers in five ways, all resolved by
+
+        ``app.services.scim.patch``.'
+      operationId: patch_user_scim_v2_Users__user_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - scim
+      summary: Delete User
+      description: 'Deprovision a principal.
+
+
+        Deactivates rather than deletes. A deleted row takes its audit
+
+        attribution, case ownership and approval history with it, and this
+
+        platform''s own records reference the principal. Access ends completely
+
+        either way, which is what DELETE means here.'
+      operationId: delete_user_scim_v2_Users__user_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/Groups:
+    get:
+      tags:
+      - scim
+      summary: List Groups
+      operationId: list_groups_scim_v2_Groups_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: filter
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Filter
+      - name: startIndex
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Startindex
+      - name: count
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 100
+          title: Count
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - scim
+      summary: Create Group
+      description: 'Create a directory group and resolve what it confers.
+
+
+        The resolved role is recorded at create time and returned in the
+
+        response, so an administrator can see immediately whether the group they
+
+        pushed grants anything.'
+      operationId: create_group_scim_v2_Groups_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /scim/v2/Groups/{group_id}:
+    get:
+      tags:
+      - scim
+      summary: Get Group
+      operationId: get_group_scim_v2_Groups__group_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Group Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - scim
+      summary: Replace Group
+      description: 'Replace a group, including its entire membership.
+
+
+        PUT on a group is a *set* operation: members absent from the body are
+
+        removed. One provider uses it to reconcile a group wholesale.'
+      operationId: replace_group_scim_v2_Groups__group_id__put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Group Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - scim
+      summary: Patch Group
+      description: 'Apply a group PATCH, which is how membership changes arrive.
+
+
+        Both providers express member removal two ways, and one of those puts
+
+        the member id in the path filter rather than the value. Both shapes are
+
+        normalised before they reach this handler.'
+      operationId: patch_group_scim_v2_Groups__group_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Group Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - scim
+      summary: Delete Group
+      description: Delete a group and recompute what its members are left holding.
+      operationId: delete_group_scim_v2_Groups__group_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Group Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /graphql:
     get:
       tags:
@@ -20321,6 +20987,26 @@ components:
       - view_type
       - name
       title: CreateSavedViewRequest
+    CreateScimTokenRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+          description: Which identity provider this credential is for
+        expires_in_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Expires In Days
+          description: Optional lifetime; omit for no expiry
+      type: object
+      required:
+      - name
+      title: CreateScimTokenRequest
     CreateTaskRequest:
       properties:
         title:
@@ -20372,6 +21058,73 @@ components:
       - username
       - password
       title: CreateUserRequest
+    CreatedScimTokenOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        prefix:
+          type: string
+          title: Prefix
+        org_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Org Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        last_used_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Used At
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        revoked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Revoked At
+        rotated_from_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Rotated From Id
+        active:
+          type: boolean
+          title: Active
+        token:
+          type: string
+          title: Token
+          description: The raw credential. Shown once and not recoverable.
+      type: object
+      required:
+      - id
+      - name
+      - prefix
+      - org_id
+      - created_at
+      - last_used_at
+      - expires_at
+      - revoked_at
+      - rotated_from_id
+      - active
+      - token
+      title: CreatedScimTokenOut
     CredentialsListResponse:
       properties:
         items:
@@ -27954,6 +28707,18 @@ components:
           title: Permission Ids
       type: object
       title: RoleUpdate
+    RotateScimTokenRequest:
+      properties:
+        grace_hours:
+          type: integer
+          maximum: 168.0
+          minimum: 0.0
+          title: Grace Hours
+          description: How long the superseded credential keeps working. Zero revokes
+            it at once, for rotation after a disclosure.
+          default: 24
+      type: object
+      title: RotateScimTokenRequest
     RuleActionWire:
       properties:
         set_severity:
@@ -29354,6 +30119,68 @@ components:
       - findings_closed
       - error_message
       title: ScanRunOut
+    ScimTokenOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        prefix:
+          type: string
+          title: Prefix
+        org_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Org Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        last_used_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Used At
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        revoked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Revoked At
+        rotated_from_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Rotated From Id
+        active:
+          type: boolean
+          title: Active
+      type: object
+      required:
+      - id
+      - name
+      - prefix
+      - org_id
+      - created_at
+      - last_used_at
+      - expires_at
+      - revoked_at
+      - rotated_from_id
+      - active
+      title: ScimTokenOut
     ShadowModeEntry:
       properties:
         alert_class:

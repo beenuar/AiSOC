@@ -10,10 +10,13 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request, Response, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app._health import install_health_routes
+from app.api.v1.endpoints.scim import ScimAuthFailed
+from app.api.v1.endpoints.scim import router as scim_router
 from app.api.v1.router import api_router
 from app.auth.oidc import router as oidc_router
 from app.auth.saml import router as saml_router
@@ -31,6 +34,8 @@ from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
+from app.services.scim.resources import SCIM_CONTENT_TYPE
+from app.services.scim.resources import error_response as scim_error_response
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.retention_purge import run_forever as run_retention_purge
@@ -598,7 +603,29 @@ def create_application() -> FastAPI:
     app.include_router(api_router)
     app.include_router(saml_router)
     app.include_router(oidc_router)
+    # SCIM is mounted at /scim/v2 rather than under /api/v1. An identity
+    # provider is configured with a base URL and appends /Users and /Groups
+    # to it, and the discovery documents this service publishes name that
+    # same base, so the path has to be the one an administrator can paste.
+    app.include_router(scim_router)
     app.include_router(graphql_router, prefix="/graphql", tags=["graphql"])
+
+    # A SCIM client that presents a bad credential must receive a SCIM error
+    # document, not FastAPI's default. A provider shows an administrator
+    # whatever it got back, and `{"detail": "..."}` gives them nothing to act
+    # on while looking like the service is broken rather than the secret wrong.
+    @app.exception_handler(ScimAuthFailed)
+    async def _scim_auth_failed(request: Request, exc: ScimAuthFailed) -> JSONResponse:
+        # The reason is logged, never returned: telling an unauthenticated
+        # caller whether a secret was wrong, revoked or expired tells it
+        # which secrets exist.
+        logger.warning("scim: refused a request — %s", str(exc).replace("\r", "").replace("\n", " ")[:200])
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=scim_error_response(status.HTTP_401_UNAUTHORIZED, "Invalid SCIM credential"),
+            media_type=SCIM_CONTENT_TYPE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return app
 

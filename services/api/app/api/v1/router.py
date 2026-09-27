@@ -76,6 +76,7 @@ from app.api.v1.endpoints import (
     sandbox,
     saved_hunts,
     saved_views,
+    scim_tokens,
     shifts,
     sla,
     stix_taxii,
@@ -208,6 +209,9 @@ api_router.include_router(live_actions.router)
 # list pages. Per-user-per-tenant CRUD; tenant scoping via RLS, user
 # scoping in the API layer (every query filters on user_id).
 api_router.include_router(saved_views.router)
+# Administering SCIM credentials, which is a console action. The SCIM
+# surface those credentials authenticate is mounted at /scim/v2 in main.py.
+api_router.include_router(scim_tokens.router)
 
 # Wave 3 — operational maturity
 api_router.include_router(assets.router)

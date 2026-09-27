@@ -460,7 +460,7 @@ suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 13: Enterprise identity and MSSP plumbing
 
-- [ ] **13.1 SCIM 2.0** with Users, Groups, ServiceProviderConfig, ResourceTypes and Schemas, per-organization hashed rotatable tokens, and audited deprovisioning.
+- [x] **13.1 SCIM 2.0** with Users, Groups, ServiceProviderConfig, ResourceTypes and Schemas, per-organization hashed rotatable tokens, and audited deprovisioning. Migration `071_scim_provisioning.sql`; router at `/scim/v2` (17 routes); `scripts/check_scim_contract.py` wired into `isolation.yml`; Okta-shaped and Entra-shaped sequences pass in `test_scim_provisioning.py` (54 tests). See D28, D29 and D30.
 - [ ] **13.2 MSSP white-label** per organization across console, PDF, digests, email approvals and ChatOps, with SVGs sanitized and assets stored locally.
 - [ ] **13.3 Usage metering** from real rows, exposed through an API and a monthly CSV, with no pricing logic.
 - [ ] **13.4 Console i18n** with a pilot locale, RTL, locale-aware formatting and a missing-keys gate.
@@ -555,6 +555,7 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   178, and the existing "MCP server exposes 13 tools" row was corrected
   rather than only renumbered, because the gate it named had never read a
   document. See D24 and D25.
+
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
 Recorded because the obvious implementation of shadow mode is wrong in a way
@@ -1172,6 +1173,7 @@ verb, and both nouns are gone. `benign-edr-response-cmdline` still flags and
 stays recorded: suppressing it needs a rule that reads a containment verb in
 flag position as a tool invocation, and a suppression rule is the one kind
 whose failure mode is silence.
+
 ### D21. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
 
 The plan puts the client in `services/agents` and the registry in
@@ -1407,3 +1409,75 @@ leaving a note that said what the freeze threw away and never what it kept. It
 now requires `<store>_frozen` and `<store>_dropped_after_split` by exact name.
 Seven regressions were injected into a detached copy of the tree and all seven
 are caught; the seventh is that one.
+
+### D28. The migration number the brief carried was six behind the tree
+
+The kickoff brief for this phase repeated the plan's capture-time note that
+`063` was the latest migration. `services/api/migrations/` actually ends at
+`069_mcp_servers.sql`, because Phases 1 through 5 landed their own tables
+while this brief was being written. Phase 13's tables take **071** and **072**: `070` was taken by 6.1's `070_tenant_skills.sql`, which merged while this branch was in flight, and the collision only surfaced on the rebase.
+
+Recorded because it is the sixth time in this program a handed-down migration
+number has been stale, and the failure it causes is a duplicate number that
+only shows up when two branches merge.
+
+### D29. The seven-role set the brief described does not exist in this tree
+
+The brief stated that six of seven roles already exist as `viewer`, `hunter`,
+`responder`, `detection_engineer`, `tenant_admin` and `platform_admin`, that
+`triage_analyst` is missing, and that it should be added as part of 13.1.
+
+The enforced vocabulary is `ROLE_PERMISSIONS` in
+`services/api/app/core/security.py`, which `CurrentUser.require_permission`
+reads on every guarded request. It holds eight keys: `platform_admin`,
+`admin`, `tenant_admin`, `soc_lead`, `soc_analyst`, `threat_hunter`, `viewer`
+and `api_service`. Only three of the brief's seven names appear in it.
+`hunter` is `threat_hunter`; `responder`, `detection_engineer` and
+`triage_analyst` do not exist under any spelling, and `soc_lead` and
+`soc_analyst` have no counterpart in the brief's list.
+
+**Resolution: map to the vocabulary that is enforced, and do not add
+`triage_analyst`.** The plan itself says only "Groups map to roles in the
+existing RBAC" and names no roles, so the plan is satisfied. Adding a seventh
+role would mean either a duplicate of `soc_analyst` under a second name, or a
+role with no permissions attached: a string in a column that grants nothing
+and reads in a console as though it grants something. That is the "exists but
+nothing calls it" shape this program has hit five times, and it would be
+self-inflicted.
+
+`app/services/scim/roles.py` maps group names onto the real keys, and
+`check_scim_contract.py` compares the two in **both** directions, so a role
+renamed in `ROLE_PERMISSIONS` cannot leave a mapping pointing at nothing, and
+a *new* role must be classified as assignable or recorded as deliberately
+unreachable from a directory group.
+
+**Adjacent, unfixed, and worth a separate look:** `packages/types/src/tenant.ts`
+declares a `UserRole` union of nine entirely different names
+(`security_manager`, `analyst_tier1`, `analyst_tier2`, `analyst_tier3`,
+`auditor`, `readonly` and three that overlap). Nothing in the Python enforces
+any of them. This is the same shape as the playbook `StepType` drift: a
+TypeScript union that looks authoritative, mirrors nothing, and has no gate.
+It is out of Phase 13's scope and is left as found rather than half-corrected.
+
+### D30. Deactivating a user did not end the programmatic access they had minted
+
+Found while building 13.1's deprovisioning path, and fixed in the same change
+because it is the difference between deprovisioning and the appearance of it.
+
+`_resolve_api_key` in `services/api/app/api/v1/deps.py` looked up the owning
+user with `User.is_active == True` and, when that returned nothing, **fell
+through** with `role = "api_service"` and the key's own `user_id`. So a key
+belonging to a deactivated principal kept authenticating, under a generic
+role, indefinitely. Nothing about the request looked wrong and no log said
+anything.
+
+The JWT half was already sound: `get_current_user` re-reads `is_active` on
+every request, so a session stops at the next call. What it could not do is
+survive re-activation, since an access token minted before the deactivation
+is still inside its expiry window. Tokens now carry `iat`,
+`users.sessions_revoked_at` records the cutoff, and a token issued at or
+before it is refused. A token with **no** `iat` is treated as revoked whenever
+a revocation exists, so credentials minted before this change fail closed.
+
+Both the access-token path and the refresh path check it. The refresh path
+matters more: a refresh token outlives an access token by days.

@@ -16,6 +16,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    token_is_revoked,
     verify_password,
 )
 from app.models.tenant import User
@@ -103,6 +104,12 @@ async def refresh_token(request: RefreshRequest, db: DBSession) -> TokenResponse
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # A refresh token outlives an access token by days, so without this a
+    # deprovisioned principal who is later re-activated could mint a fresh
+    # session from a token issued before the revocation.
+    if token_is_revoked(payload.get("iat"), user.sessions_revoked_at):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked")
 
     token_data = {
         "sub": str(user.id),
