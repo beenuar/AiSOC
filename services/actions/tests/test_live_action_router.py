@@ -89,13 +89,16 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     this router dispatches real vendor containment and until now carried no
     authentication at all.
     """
-    monkeypatch.delenv("AISOC_ACTIONS_SERVICE_TOKEN", raising=False)
+    # A real caller authenticates; these tests pin the REST contract, so they
+    # hold a token rather than relying on a dev-mode exemption that no longer
+    # exists (GHSA-g4h7-p63q-r8r4). The auth boundary has its own tests.
+    monkeypatch.setenv("AISOC_ACTIONS_SERVICE_TOKEN", "test-actions-service-token")
     monkeypatch.setenv("AISOC_DEV_MODE", "true")
     get_settings.cache_clear()
     reset_for_tests()
     register_executor(_StubIsolateHost(), source="builtin")
     register_executor(_StubBlockIP(), source="builtin")
-    with TestClient(app) as c:
+    with TestClient(app, headers={"Authorization": "Bearer test-actions-service-token"}) as c:
         # The startup hook re-registered the real builtins on top of our
         # stubs. Wipe again and re-seed so the assertions below see only
         # what we expect.

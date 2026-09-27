@@ -20,6 +20,50 @@ logger = structlog.get_logger()
 _DEFAULT_BASE = "https://api.crowdstrike.com"
 _TOKEN_PATH = "/oauth2/token"
 
+#: Characters that can leave a single-quoted RTR argument. Deliberately small.
+#:
+#: Every interpolation below sits *inside* single quotes, where `&`, `|`, `;`,
+#: `$`, `(`, `)` and `\` are literal — they were in the published payloads only
+#: because the payload closed the quote with `'` first. Refusing them too would
+#: reject `C:\Program Files (x86)\vendor\agent.exe`, an ordinary path on the
+#: platform this verb is most used against, and a containment action that
+#: refuses real Windows paths is not a usable control.
+#:
+#: So the set is the characters that actually break out:
+#:   '   closes the quoted argument — the mechanism in all three reports
+#:   `   delimits the -Raw=``` ``` block the runscript path wraps a body in
+#:   \n \r  end the command line
+#:   \x00   truncates it
+_RTR_FORBIDDEN = frozenset("'`\n\r\x00")
+
+
+class RtrArgumentError(ValueError):
+    """An argument cannot be rendered as a single RTR argument.
+
+    Raised rather than sanitised. These values name a file to delete or a
+    script to run on a customer endpoint at the agent's privilege, so a
+    silently-altered path is a wrong action taken on a real host, which is
+    worse than a refusal an operator can read.
+    """
+
+
+def quote_rtr_argument(value: str, *, field: str) -> str:
+    """Render ``value`` as one single-quoted RTR argument, or refuse it.
+
+    RTR command strings are assembled as text and parsed by the agent, so an
+    unescaped value is command injection executing as SYSTEM/root on the
+    endpoint. Legitimate inputs here are filesystem paths, script names and
+    argument strings; none of them need a quote or a shell operator, so the
+    safe set is large enough to be practical and small enough to be provable.
+    """
+    if not isinstance(value, str):
+        raise RtrArgumentError(f"{field} must be a string, got {type(value).__name__}")
+    bad = sorted(_RTR_FORBIDDEN.intersection(value))
+    if bad:
+        printable = ", ".join(repr(c) for c in bad)
+        raise RtrArgumentError(f"{field} contains characters that cannot appear in an RTR argument: {printable}")
+    return f"'{value}'"
+
 
 class CrowdStrikeRTRClient:
     """Thin async wrapper over the CrowdStrike Falcon RTR REST API."""
@@ -260,6 +304,9 @@ class CrowdStrikeRTRClient:
 
     async def quarantine_file(self, device_id: str, file_path: str) -> dict[str, Any]:
         """Remove (quarantine) a file from the host via RTR rm command."""
+        # Before the session is opened, so a refused path costs no RTR session
+        # and the caller sees the reason rather than a half-performed action.
+        quoted_path = quote_rtr_argument(file_path, field="file_path")
         async with httpx.AsyncClient(timeout=60.0) as client:
             await self._ensure_token(client)
             batch_id = await self._init_rtr_session(client, device_id)
@@ -270,7 +317,7 @@ class CrowdStrikeRTRClient:
                 json={
                     "base_command": "rm",
                     "batch_id": batch_id,
-                    "command_string": f"rm '{file_path}'",
+                    "command_string": f"rm {quoted_path}",
                     "optional_hosts": [device_id],
                 },
             )
@@ -389,7 +436,11 @@ class CrowdStrikeRTRClient:
         load-bearing, which is why ``_read_only_command`` distinguishes it
         from ``None``.
         """
-        stdout = await self._read_only_command(device_id, "ls", f"ls '{path}'")
+        # This probe runs automatically after a quarantine and solicits no
+        # approval of its own, so an unescaped path here executes on the
+        # endpoint with nobody having agreed to it.
+        quoted_path = quote_rtr_argument(path, field="path")
+        stdout = await self._read_only_command(device_id, "ls", f"ls {quoted_path}")
         if stdout is None:
             return None
         return bool(stdout.strip())

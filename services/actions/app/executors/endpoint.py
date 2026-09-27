@@ -34,7 +34,7 @@ from datetime import datetime
 
 import structlog
 
-from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
+from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient, quote_rtr_argument
 
 # Re-exported from app.clients.factories, which is where these now live so
 # app.services.rollback can import them without creating a cycle back into
@@ -439,7 +439,18 @@ class RunScriptExecutor(BaseExecutor):
                 # PowerShell body, not a registered script_name +
                 # args. We accept either shape from the playbook
                 # layer and prefer raw content when supplied.
-                body = script_content or f"runscript -CloudFile='{script_name}' -CommandLine='{script_args}'"
+                #
+                # Both halves are quoted or refused. `script_content` is not:
+                # it is a script body by definition, its contract is
+                # MANDATORY_HUMAN approval, and there is no subset of
+                # PowerShell that is safe to allow and useful to run.
+                # `script_name` and `script_args` are different — they name a
+                # pre-staged script and its arguments, so a quote in either is
+                # an attempt to reach past the argument, not a legitimate value.
+                body = script_content or (
+                    f"runscript -CloudFile={quote_rtr_argument(script_name, field='script_name')} "
+                    f"-CommandLine={quote_rtr_argument(script_args, field='script_args')}"
+                )
                 result = await cs.run_script(device_id, body)
                 return ActionResult(
                     action_id=request.id,

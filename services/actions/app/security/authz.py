@@ -107,11 +107,17 @@ async def require_service_auth(authorization: str | None = Header(default=None))
     settings = get_settings()
     token = settings.AISOC_ACTIONS_SERVICE_TOKEN.strip()
     if not token:
-        if settings.AISOC_DEV_MODE:
-            return
+        # No dev-mode exemption. This branch used to return early when
+        # AISOC_DEV_MODE was set, and AISOC_DEV_MODE defaults to 1 in the
+        # shipped compose file while nothing generated the token — so the
+        # exemption was not a developer convenience, it was the state every
+        # stock install ran in, leaving isolate_host, disable_user, block_ip
+        # and run_script dispatchable by anything that could reach the port.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="actions service auth is not configured",
+            detail=(
+                "actions service auth is not configured: set AISOC_ACTIONS_SERVICE_TOKEN (run `make env`, which generates it, and restart)"
+            ),
         )
     expected = f"Bearer {token}"
     if not authorization or not hmac.compare_digest(authorization, expected):

@@ -92,6 +92,19 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Shared bearer for service-to-service calls (API -> connectors, ueba, honeytokens, purple-team).",
     ),
+    # Distinct from AISOC_SERVICE_TOKEN: the actions service reaches vendor
+    # APIs and can isolate a host or disable an account, so it does not share
+    # a credential with the read-mostly services above.
+    #
+    # It was absent here while docker-compose.yml said it "must match" on the
+    # api and actions services, so no install had one, and the guard that
+    # reads it exempted itself whenever it was empty and AISOC_DEV_MODE was
+    # set — which it is by default. Generating it is what lets that guard
+    # fail closed without breaking the documented path.
+    "AISOC_ACTIONS_SERVICE_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Shared bearer for the actions service (API -> actions). Gates every response action.",
+    ),
 }
 
 

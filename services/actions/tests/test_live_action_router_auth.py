@@ -79,9 +79,18 @@ def test_unconfigured_token_fails_closed_in_production(monkeypatch: pytest.Monke
     assert client.post("/live-actions/dispatch", json=_BODY).status_code == 503
 
 
-def test_dev_mode_keeps_the_local_stack_usable(monkeypatch: pytest.MonkeyPatch):
+def test_dev_mode_does_not_open_the_route_when_no_token_is_set(monkeypatch: pytest.MonkeyPatch):
+    """GHSA-g4h7-p63q-r8r4. This asserted 200 and was the vulnerability.
+
+    Dev mode used to exempt the route entirely when the token was empty. That
+    reads as a local convenience, but `docker-compose.yml` defaults
+    `AISOC_DEV_MODE` to 1 and nothing generated the token, so it was the state
+    every stock install ran in — `isolate_host` and `run_script` dispatchable
+    by anything that could reach the port. The local stack stays usable
+    because `make up` now generates the token, not because the guard yields.
+    """
     client = _client(monkeypatch, AISOC_DEV_MODE="true")
-    assert client.post("/live-actions/dispatch", json=_BODY).status_code == 200
+    assert client.post("/live-actions/dispatch", json=_BODY).status_code == 503
 
 
 def test_the_dry_run_route_is_protected_too(monkeypatch: pytest.MonkeyPatch):

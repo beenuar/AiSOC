@@ -62,11 +62,14 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # so the tests exercise the handler rather than the shared auth dependency,
     # which has its own coverage.
     monkeypatch.setenv("AISOC_DEV_MODE", "1")
-    monkeypatch.setenv("AISOC_ACTIONS_SERVICE_TOKEN", "")
+    # A real caller authenticates; these tests pin the REST contract, so they
+    # hold a token rather than relying on a dev-mode exemption that no longer
+    # exists (GHSA-g4h7-p63q-r8r4). The auth boundary has its own tests.
+    monkeypatch.setenv("AISOC_ACTIONS_SERVICE_TOKEN", "test-actions-service-token")
     from app.core.config import get_settings
 
     get_settings.cache_clear()
-    yield TestClient(app)
+    yield TestClient(app, headers={"Authorization": "Bearer test-actions-service-token"})
     get_settings.cache_clear()
 
 

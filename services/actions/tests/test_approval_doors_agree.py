@@ -107,6 +107,10 @@ def client(monkeypatch: pytest.MonkeyPatch, touches: _VendorTouches) -> TestClie
     test — authz, both gates, the contract, the tier resolution — is the real
     production code path.
     """
+    # A real caller authenticates; these tests pin the REST contract, so they
+    # hold a token rather than relying on a dev-mode exemption that no longer
+    # exists (GHSA-g4h7-p63q-r8r4). The auth boundary has its own tests.
+    monkeypatch.setenv("AISOC_ACTIONS_SERVICE_TOKEN", "test-actions-service-token")
     monkeypatch.setenv("AISOC_DEV_MODE", "true")
 
     class _LegacyRecorder:
@@ -146,7 +150,7 @@ def client(monkeypatch: pytest.MonkeyPatch, touches: _VendorTouches) -> TestClie
     app = FastAPI()
     app.include_router(legacy_router)
     app.include_router(live_router)
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": "Bearer test-actions-service-token"})
 
 
 @pytest.fixture(autouse=True)

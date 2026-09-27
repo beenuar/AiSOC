@@ -117,9 +117,15 @@ def test_route_requires_token_when_configured(monkeypatch):
     assert ok.status_code != 401
 
 
-def test_route_open_in_dev_without_token(monkeypatch):
+def test_route_is_not_open_in_dev_without_token(monkeypatch):
+    """GHSA-g4h7-p63q-r8r4. This asserted 200 and was the vulnerability.
+
+    Dev mode is not a reason to skip authentication on a route that dispatches
+    containment, because dev mode is on by default in the shipped compose file
+    and the token it looks for was never generated.
+    """
     client = _client(monkeypatch, AISOC_DEV_MODE="true")
-    assert client.post("/actions", json=_BODY).status_code == 200
+    assert client.post("/actions", json=_BODY).status_code == 503
 
 
 def test_route_fails_closed_in_prod_without_token(monkeypatch):
