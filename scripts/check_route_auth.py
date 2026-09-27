@@ -214,6 +214,19 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "constant time and fails closed when unset. Deliberately no session fallback, unlike the other dual-mode routes: this one "
         "returns plaintext third-party credentials, and a console session is not a credential to read those",
     ),
+    "services/api/app/api/v1/endpoints/feedback.py::recent_dispositions": (
+        "service_token_valid",
+        "the agents service reads this tenant's last few analyst decisions here on the path of a triage and holds no session; the "
+        "shared X-AiSOC-Service-Token is compared in constant time and fails closed when unset. No session fallback, unlike "
+        "/feedback/context-statements next door, because that route serves a console panel as well and this one has a single "
+        "caller",
+    ),
+    "services/api/app/api/v1/endpoints/graph.py::identity_context_for_triage": (
+        "service_token_valid",
+        "the agents service reads directory context for the principals an alert names here and holds no session; the shared "
+        "X-AiSOC-Service-Token is compared in constant time and fails closed when unset. An analyst reaches the same data through "
+        "GET /graph/incident-context/{alert_id}, which authenticates by session and traverses from the alert",
+    ),
     "services/api/app/api/v1/endpoints/knowledge_base.py::retrieve_runbooks_for_triage": (
         "service_token_valid",
         "the agents service retrieves this tenant's runbooks here on the path of a triage and holds no session; the shared "

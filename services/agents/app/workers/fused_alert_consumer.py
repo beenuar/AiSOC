@@ -45,6 +45,8 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
+from app.context import dispositions as dispositions_module
+from app.context import identity as identity_module
 from app.context import knowledge_base
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
@@ -123,6 +125,8 @@ _METRICS = {
     # why triage never cites the runbook they wrote.
     "runbooks_retrieved": 0,
     "runbooks_refused_for_injection": 0,
+    "recent_dispositions_read": 0,
+    "identity_context_read": 0,
     "errors": 0,
 }
 
@@ -569,6 +573,12 @@ class FusedAlertTriageWorker:
                 # a server-side cutoff rather than by capture, which is why
                 # the worker passes a query and never a point in time.
                 await self._attach_runbooks(state)
+                # Phase 6.3: what this tenant's analysts decided the last few
+                # times, and who is behind the account. Both are cutoff-frozen
+                # sources like runbooks, so neither takes a point in time from
+                # here.
+                await self._attach_recent_dispositions(state)
+                await self._attach_identity_context(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -879,6 +889,47 @@ class FusedAlertTriageWorker:
             _METRICS["runbooks_retrieved"] += len(retrieval.runbooks)
         if retrieval.dropped_for_injection:
             _METRICS["runbooks_refused_for_injection"] += retrieval.dropped_for_injection
+
+    async def _attach_recent_dispositions(self, state: InvestigationState) -> None:
+        """Record what this tenant's analysts decided the last few times.
+
+        Best-effort in one direction, like the two above: a lookup that fails
+        leaves the state without decisions and triage proceeds as it did.
+        """
+        raw = state.raw_alert or {}
+        rule_id = str(raw.get("rule_id") or "").strip()
+        entities = dispositions_module.entities_for(raw)
+        if not rule_id and not entities:
+            return
+        try:
+            found = await self._reader.recent_dispositions(str(state.tenant_id), rule_id=rule_id, entities=entities)
+        except Exception as exc:  # noqa: BLE001 - past decisions are advisory, triage is not
+            logger.warning("auto_triage_worker.disposition_lookup_failed", error=str(exc)[:200])
+            return
+        if not found.decisions:
+            return
+        state.recent_dispositions = found.as_state()
+        _METRICS["recent_dispositions_read"] += len(found.decisions)
+
+    async def _attach_identity_context(self, state: InvestigationState) -> None:
+        """Record who is behind the accounts this alert names, if anyone knows.
+
+        A tenant with no directory connector gets nothing here and nothing in
+        the prompt, which is the correct outcome: an empty block is silence,
+        and a block saying the principal is unidentified is a claim.
+        """
+        accounts = identity_module.accounts_for(state.raw_alert)
+        if not accounts:
+            return
+        try:
+            found = await self._reader.fetch_identity_context(str(state.tenant_id), accounts=accounts)
+        except Exception as exc:  # noqa: BLE001 - directory context is advisory, triage is not
+            logger.warning("auto_triage_worker.identity_lookup_failed", error=str(exc)[:200])
+            return
+        if not found.identities:
+            return
+        state.identity_context = found.as_state()
+        _METRICS["identity_context_read"] += len(found.identities)
 
     async def _maybe_suppress_from_memory(
         self,

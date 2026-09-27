@@ -49,6 +49,16 @@ about which of them broke.
    the split, and the count of what the server refused must reach the method
    note. A cutoff that matched nothing and a cutoff that refused fifty
    documents produce the same empty list.
+6. **Recent analyst decisions** (Phase 6.3), and the most direct leak of the
+   seven. A decision recorded inside the test window *is* an analyst's answer
+   to an alert in that window, so a replay that could see them would grade the
+   agent against the labels it is about to be marked on.
+7. **Directory context** (Phase 6.3), whose freeze is deliberately partial. An
+   ``Employee`` node carries when it was imported, never when the fact became
+   true, so a provably late import is refused and every surviving row is
+   counted as untestable. The property under test is that the partial freeze
+   is *published as partial*, the same discipline
+   ``statements_without_timestamp`` established.
 
 Every test here is checked for sensitivity
 -------------------------------------------
@@ -69,6 +79,8 @@ from typing import Any
 
 import pytest
 from app.agents.dispositions import BENIGN, FALSE_POSITIVE, NEEDS_REVIEW, normalize_disposition
+from app.context import dispositions as dispositions_module
+from app.context import identity as identity_module
 from app.context import knowledge_base as kb_module
 from app.context import organisation_memory
 from app.context import tenant_skills as tenant_skills_module
@@ -763,6 +775,197 @@ async def test_a_store_that_ignores_the_cutoff_is_recorded_as_unhonoured_not_as_
         mp.setattr(kb_module, "fetch_runbooks", _KbServer([_kb_chunk("doc-y", "Fine", "body", "2026-04-01T00:00:00+00:00")]))
         await honest.retrieve_runbooks("t-1", query="anything")
     assert "runbooks_cutoff_not_honoured" not in honest.as_method_note()
+
+
+# --------------------------------------------------------------------------
+# 6. Recent analyst decisions, and 7. directory context
+# --------------------------------------------------------------------------
+
+
+class _CutoffServer:
+    """A stand-in that honours ``as_of`` on a named timestamp field.
+
+    One class for both sources, because the failure it guards against is the
+    same: a stub that ignored the parameter would make every assertion below
+    pass against a frozen reader that never sent one.
+    """
+
+    def __init__(self, rows: list[dict[str, Any]], *, stamp: str, key: str, shape: Any) -> None:
+        self.rows = rows
+        self.stamp = stamp
+        self.key = key
+        self.shape = shape
+        self.asked: list[str | None] = []
+
+    async def __call__(self, tenant_id: str | None, *, as_of: datetime | None = None, limit: int = 5, **_: Any) -> Any:
+        self.asked.append(as_of.isoformat() if as_of else None)
+        if as_of is None:
+            kept, excluded = list(self.rows), 0
+        else:
+            kept = [r for r in self.rows if datetime.fromisoformat(str(r[self.stamp])) <= as_of]
+            excluded = len(self.rows) - len(kept)
+        return self.shape(
+            {
+                "as_of": as_of.isoformat() if as_of else None,
+                self.key: kept[:limit],
+                "excluded_after_cutoff": excluded,
+                # Identity publishes every served row as untestable. Mirrored
+                # here so the note assertions below read the real semantics
+                # rather than a stub's simplification.
+                "without_timestamp": len(kept[:limit]) if self.key == "identities" else 0,
+            },
+            limit=limit,
+        )
+
+
+@pytest.mark.asyncio
+async def test_an_analyst_decision_made_inside_the_test_window_never_reaches_the_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The leakiest of the seven routes, and the most direct.
+
+    A decision recorded during the test window *is* an analyst's answer to an
+    alert in that window. A replay that could see them would be grading the
+    agent against the labels it is about to be marked on, which is the Phase 1
+    outcome-prior leak by a shorter route.
+    """
+    captured: list[dict[str, Any] | None] = []
+
+    async def _capture(state: InvestigationState) -> InvestigationState:
+        captured.append(dict(state.recent_dispositions) if state.recent_dispositions else None)
+        state.verdict = FALSE_POSITIVE
+        state.confidence = 0.5
+        state.status = AgentStatus.RUNNING
+        return state
+
+    async def _resolve(tenant_id: str) -> _StubLlmConfig:
+        return _StubLlmConfig()
+
+    server = _CutoffServer(
+        [
+            {
+                "analyst_disposition": "benign",
+                "ai_disposition": "true_positive",
+                "reason_code": "known_admin_tool",
+                "reason_label": "Known administrative tool",
+                "note": "Before the split.",
+                "scope": "rule",
+                "scope_value": "rule-service-logon",
+                "rule_id": "rule-service-logon",
+                "decided_at": "2026-04-02T00:00:00+00:00",
+            },
+            {
+                "analyst_disposition": "benign",
+                "ai_disposition": "true_positive",
+                "reason_code": "known_admin_tool",
+                "reason_label": "Known administrative tool",
+                "note": "POISON: decided inside the test window.",
+                "scope": "rule",
+                "scope_value": "rule-service-logon",
+                "rule_id": "rule-service-logon",
+                "decided_at": "2026-06-01T00:00:00+00:00",
+            },
+        ],
+        stamp="decided_at",
+        key="dispositions",
+        shape=dispositions_module._shape,
+    )
+
+    monkeypatch.delenv("AISOC_DETERMINISTIC", raising=False)
+    monkeypatch.setattr(worker_module, "run_auto_triage", _capture)
+    monkeypatch.setattr(worker_module, "resolve_llm_config", _resolve)
+    monkeypatch.setattr(dispositions_module, "fetch_recent_dispositions", server)
+    dispositions_module.clear_cache()
+
+    reader = FrozenTriageContextReader(capture_context(split_at=_SPLIT))
+    worker = FusedAlertTriageWorker(bootstrap_servers="", writer=ShadowTriageWriter(), context_reader=reader)
+    assert await worker.triage(_envelope()) is not None
+
+    assert len(captured) == 1 and captured[0] is not None
+    assert [d["note"] for d in captured[0]["decisions"]] == ["Before the split."]
+    assert server.asked == [_SPLIT.isoformat()]
+
+    note = reader.as_method_note()
+    assert note["dispositions_frozen"] == 1
+    assert note["dispositions_dropped_after_split"] == 1
+
+    # Sensitivity: the same worker with the live reader does see the poison.
+    live_worker = FusedAlertTriageWorker(bootstrap_servers="", writer=ShadowTriageWriter(), context_reader=LiveTriageContextReader())
+    captured.clear()
+    await live_worker.triage(_envelope())
+    assert len(captured) == 1 and captured[0] is not None
+    assert "POISON: decided inside the test window." in str(captured[0]["decisions"])
+    assert server.asked[-1] is None
+
+
+@pytest.mark.asyncio
+async def test_a_directory_record_imported_after_the_split_is_dropped_and_the_rest_counted_untestable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The partial freeze, asserted as partial rather than as complete.
+
+    An ``Employee`` node carries when it was *imported*, never when the fact
+    it records became true. So an import provably after the split is refused,
+    because that much is establishable, and every surviving row is counted as
+    untestable, because surviving an import-time cutoff is not evidence that
+    the fact predates the split.
+
+    Publishing a count that equals the number served, every time, is the
+    point. ``statements_without_timestamp`` set the precedent, and this is the
+    reason it exists: a reader sees the limit of the freeze instead of
+    inferring it from a clean-looking block.
+    """
+    captured: list[dict[str, Any] | None] = []
+
+    async def _capture(state: InvestigationState) -> InvestigationState:
+        captured.append(dict(state.identity_context) if state.identity_context else None)
+        state.verdict = FALSE_POSITIVE
+        state.confidence = 0.5
+        state.status = AgentStatus.RUNNING
+        return state
+
+    async def _resolve(tenant_id: str) -> _StubLlmConfig:
+        return _StubLlmConfig()
+
+    server = _CutoffServer(
+        [
+            {"account": "svc_logon", "employee": "Known Before", "is_active": True, "imported_at": "2026-04-01T00:00:00+00:00"},
+            {"account": "svc_logon", "employee": "POISON Imported After", "is_active": True, "imported_at": "2026-06-01T00:00:00+00:00"},
+        ],
+        stamp="imported_at",
+        key="identities",
+        shape=identity_module._shape,
+    )
+
+    monkeypatch.delenv("AISOC_DETERMINISTIC", raising=False)
+    monkeypatch.setattr(worker_module, "run_auto_triage", _capture)
+    monkeypatch.setattr(worker_module, "resolve_llm_config", _resolve)
+    monkeypatch.setattr(identity_module, "fetch_identity_context", server)
+    identity_module.clear_cache()
+
+    reader = FrozenTriageContextReader(capture_context(split_at=_SPLIT))
+    worker = FusedAlertTriageWorker(bootstrap_servers="", writer=ShadowTriageWriter(), context_reader=reader)
+    envelope = _envelope()
+    envelope["alert"]["username"] = "svc_logon"
+    assert await worker.triage(envelope) is not None
+
+    assert len(captured) == 1 and captured[0] is not None
+    assert [i["employee"] for i in captured[0]["identities"]] == ["Known Before"]
+
+    note = reader.as_method_note()
+    assert note["identities_frozen"] == 1
+    assert note["identities_dropped_after_split"] == 1
+    # Equal to what was served, always, and published rather than hidden
+    # because the count is what tells a reader the freeze here is partial.
+    assert note["identities_without_timestamp"] == note["identities_frozen"]
+
+    # Sensitivity: the live reader sees the record imported after the split.
+    live_worker = FusedAlertTriageWorker(bootstrap_servers="", writer=ShadowTriageWriter(), context_reader=LiveTriageContextReader())
+    captured.clear()
+    await live_worker.triage(envelope)
+    assert len(captured) == 1 and captured[0] is not None
+    assert "POISON Imported After" in str(captured[0]["identities"])
+    assert server.asked[-1] is None
 
 
 def test_a_snapshot_taken_at_a_different_instant_is_refused() -> None:

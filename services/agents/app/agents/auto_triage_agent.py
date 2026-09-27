@@ -34,6 +34,10 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.context.dispositions import basis as disposition_basis
+from app.context.dispositions import render_for_prompt as render_dispositions
+from app.context.identity import basis as identity_basis
+from app.context.identity import render_for_prompt as render_identity
 from app.context.knowledge_base import citation_basis, unresolvable_citations
 from app.context.knowledge_base import render_for_prompt as render_runbooks
 from app.context.organisation_memory import render_for_prompt
@@ -54,6 +58,13 @@ AUTO_CLOSE_THRESHOLD: float = float(os.getenv("AISOC_AUTO_CLOSE_THRESHOLD", "0.8
 #: those caps existed, and under a skill whose individually-legal fields sum
 #: to more prompt than the evidence gets.
 _MAX_SKILL_PROMPT_CHARS = 4000
+
+#: Ceiling on each first-party context block. Every renderer caps its own
+#: fields; this is the ceiling on the assembled block, and it exists because
+#: the default `sanitize_text` cap of 2000 would silently cut five analyst
+#: decisions mid-sentence. A truncated list of decisions reads to the model
+#: like a complete one.
+_MAX_CONTEXT_BLOCK_CHARS = 3000
 
 
 class AutoTriageError(RuntimeError):
@@ -220,6 +231,19 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     memory = render_for_prompt(state.organisation_memory)
     if memory:
         preamble.append(sanitize_text(memory))
+
+    # Both first-party, so both sit in the preamble beside organisation memory
+    # rather than inside the fence. A disposition and a reason code come from
+    # a closed server-owned vocabulary and the note is typed by an
+    # authenticated analyst; a directory record comes from the tenant's own
+    # import. Each renderer sanitises and caps its own fields, and
+    # `sanitize_text` here is the second pass the memory block already gets.
+    decisions = render_dispositions(state.recent_dispositions)
+    if decisions:
+        preamble.append(sanitize_text(decisions, max_len=_MAX_CONTEXT_BLOCK_CHARS))
+    who = render_identity(state.identity_context)
+    if who:
+        preamble.append(sanitize_text(who, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
     # Not sanitised again on the way in: the retrieval already capped and
     # sanitised each chunk, and `render_runbooks` fences the result. Running
@@ -466,6 +490,8 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # a citation whose target nobody can find is not a citation, and the
     # retrieval that produced it is cached and gone by the time anyone asks.
     state.confidence_basis.extend(citation_basis(state.knowledge_base))
+    state.confidence_basis.extend(disposition_basis(state.recent_dispositions))
+    state.confidence_basis.extend(identity_basis(state.identity_context))
     unresolvable = unresolvable_citations(rationale, state.knowledge_base)
     if unresolvable:
         # The model cited a runbook that was never retrieved. Named rather

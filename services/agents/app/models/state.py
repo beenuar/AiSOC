@@ -88,6 +88,14 @@ class InvestigationState(BaseModel):
     # `bundle.py`. A type annotation is not worth an import cycle.
     knowledge_base: dict[str, Any] | None = None
 
+    # The last few analyst decisions on alerts of this shape, as
+    # `app.context.dispositions.RecentDispositions.as_state()` renders them,
+    # and the directory record for the principals this alert names, as
+    # `app.context.identity.IdentityContext.as_state()` renders it. Dicts
+    # rather than the dataclasses for the same import-cycle reason as above.
+    recent_dispositions: dict[str, Any] | None = None
+    identity_context: dict[str, Any] | None = None
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)

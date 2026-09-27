@@ -218,6 +218,19 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "rather than a narrowing of one, for the same reason as the MCP registry above, and the RLS context is set from "
         "that same value so the policy and the query predicate cannot disagree",
     ),
+    "services/api/app/api/v1/endpoints/feedback.py::recent_dispositions": (
+        "service_token_valid",
+        "the agents service reads this tenant's last few analyst decisions here and holds no session; the shared service token is "
+        "the credential, compared in constant time and failing closed when unset. The named tenant is the scope rather than a "
+        "narrowing of one, and the RLS context is set from that same value so the policy and the query predicate cannot disagree",
+    ),
+    "services/api/app/api/v1/endpoints/graph.py::identity_context_for_triage": (
+        "service_token_valid",
+        "the agents service reads directory context for an alert's principals here and holds no session; the shared service token "
+        "is the credential, compared in constant time and failing closed when unset. The named tenant is the scope rather than a "
+        "narrowing of one, and it is bound into every node of the Cypher through the same _scoped() predicate the incident-context "
+        "traversal uses, so a shared Identity node cannot bridge two tenants",
+    ),
     "services/api/app/api/v1/endpoints/knowledge_base.py::retrieve_runbooks_for_triage": (
         "service_token_valid",
         "the agents service retrieves this tenant's runbooks here on the path of a triage and holds no session; the "

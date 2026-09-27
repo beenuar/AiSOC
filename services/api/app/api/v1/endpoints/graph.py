@@ -10,14 +10,15 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.api.v1.deps import CurrentUser, DBSession, get_current_user, require_permission
+from app.api.v1.endpoints.alert_writeback import service_token_valid
 from app.services import graph_service
 from app.services.context_import import import_context
-from app.services.incident_context import get_incident_context
+from app.services.incident_context import get_identity_context_for_accounts, get_incident_context
 from app.services.investigation_tools import BACKED_TOOLS, TOOLS, dispatch
 
 logger = logging.getLogger(__name__)
@@ -948,3 +949,118 @@ async def upsert_case_graph(
         alert_ids=payload.alert_ids,
     )
     return {"status": "ok", "case_id": payload.case_id}
+
+
+# ---------------------------------------------------------------------------
+# Internal route: identity context for the agents service
+# ---------------------------------------------------------------------------
+
+
+class IdentityContextResponse(BaseModel):
+    tenant_id: str
+    as_of: datetime | None
+    identities: list[dict[str, Any]]
+    #: Rows refused for carrying an import stamp later than the cutoff.
+    excluded_after_cutoff: int
+    #: Rows served whose age the cutoff could not meaningfully test. For this
+    #: source that is **every row served**, and the reason is in the route's
+    #: docstring: an ``Employee`` node carries when it was imported, never
+    #: when the fact it records became true.
+    without_timestamp: int
+
+
+@router.get(
+    "/identity-context",
+    response_model=IdentityContextResponse,
+    include_in_schema=False,
+    summary="Who is behind these accounts, for the agents service, as of a point in time",
+)
+async def identity_context_for_triage(
+    tenant_id: uuid.UUID,
+    accounts: Annotated[list[str], Query()],
+    as_of: datetime | None = None,
+    limit: Annotated[int, Query(ge=1, le=25)] = 5,
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> IdentityContextResponse:
+    """HR and directory context for the principals an alert names.
+
+    Gap-closure Phase 6.3. Distinct from ``/incident-context/{alert_id}``
+    above, which traverses from an ``Alert`` node: triage runs before that node
+    exists, and a replayed historical finding never has one, so the only
+    version of this question triage can ask is keyed on the account names.
+
+    **The cutoff here is weaker than the other two, and that is published
+    rather than smoothed over.** An ``Employee`` node carries ``updated_at``,
+    which ``context_import`` sets when a directory or CMDB snapshot was
+    loaded. That is an *import* stamp, not a business-effective one. A record
+    imported yesterday may describe an employee who left last year, and a
+    record imported before the split may since have been updated in place to
+    reflect a change that happened after it.
+
+    So both things are done and both are reported. Rows whose import stamp is
+    provably later than the cutoff are refused, because that much can be
+    established. Every row that survives is counted as
+    ``without_timestamp``, because surviving an import-time cutoff is not
+    evidence that the fact predates the split. Claiming a tighter freeze than
+    the data supports is the failure this programme keeps recording; the
+    precedent is ``statements_without_timestamp``, published for a store where
+    the count is always the whole set.
+
+    Service-token only, and ``tenant_id`` is the scope rather than a narrowing
+    of one, for the same reasons as the sibling internal routes.
+    """
+    if not service_token_valid(x_aisoc_service_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="this route is reachable only by an AiSOC service holding the shared service token",
+        )
+
+    rows = await get_identity_context_for_accounts(str(tenant_id), list(accounts), limit=limit)
+
+    kept: list[dict[str, Any]] = []
+    excluded = 0
+    for row in rows:
+        imported = _imported_at(row.get("imported_at"))
+        if as_of is not None and imported is not None and imported > as_of:
+            excluded += 1
+            continue
+        kept.append(row)
+
+    return IdentityContextResponse(
+        tenant_id=str(tenant_id),
+        as_of=as_of,
+        identities=kept,
+        excluded_after_cutoff=excluded,
+        # Every served row, not just the ones with no stamp at all. See the
+        # docstring: the stamp that exists does not answer the question the
+        # cutoff is asking.
+        without_timestamp=len(kept),
+    )
+
+
+def _imported_at(value: Any) -> datetime | None:
+    """The import stamp as a comparable instant, or ``None``.
+
+    The driver returns a Neo4j ``DateTime`` for ``datetime()`` properties and
+    a string for anything a loader wrote as text, so both are read. A value
+    that parses as neither is treated as absent, which lands the row in the
+    kept set and therefore in the untestable count, which is the conservative
+    direction for a freeze that already declares itself partial.
+    """
+    if value is None:
+        return None
+    to_native = getattr(value, "to_native", None)
+    if callable(to_native):
+        try:
+            value = to_native()
+        except Exception:  # noqa: BLE001 - a driver type that will not convert is an absent stamp
+            return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return None

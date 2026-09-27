@@ -95,7 +95,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.context import dispositions as dispositions_module
+from app.context import identity as identity_module
 from app.context import knowledge_base
+from app.context.dispositions import RecentDispositions
+from app.context.identity import IdentityContext
 from app.context.knowledge_base import RunbookRetrieval
 
 __all__ = [
@@ -110,7 +114,7 @@ __all__ = [
 #: for each one before the first read, and a store whose counter was created
 #: lazily would be absent from the method note precisely when it was never
 #: consulted, which is the case worth seeing.
-_CUTOFF_STORES: tuple[str, ...] = ("runbooks",)
+_CUTOFF_STORES: tuple[str, ...] = ("runbooks", "dispositions", "identities")
 
 #: Keys that may carry a row's recorded time, newest-authority first. The
 #: outcome-prior shape (``first_seen`` / ``last_seen``), the tenant-skill
@@ -476,3 +480,30 @@ class FrozenTriageContextReader:
         )
         self._account("runbooks", retrieval, served=len(retrieval.runbooks))
         return retrieval
+
+    async def recent_dispositions(
+        self,
+        tenant_id: str | None,
+        *,
+        rule_id: str,
+        entities: list[str],
+    ) -> RecentDispositions:
+        self.reads["recent_dispositions"] += 1
+        found = await dispositions_module.fetch_recent_dispositions(
+            tenant_id,
+            rule_id=rule_id,
+            entities=entities,
+            as_of=self._snapshot.split_at,
+        )
+        self._account("dispositions", found, served=len(found.decisions))
+        return found
+
+    async def fetch_identity_context(self, tenant_id: str | None, *, accounts: list[str]) -> IdentityContext:
+        self.reads["fetch_identity_context"] += 1
+        found = await identity_module.fetch_identity_context(
+            tenant_id,
+            accounts=accounts,
+            as_of=self._snapshot.split_at,
+        )
+        self._account("identities", found, served=len(found.identities))
+        return found

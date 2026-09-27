@@ -314,6 +314,91 @@ async def _run_dimension(session: Any, cypher: str, params: dict[str, Any]) -> l
     return [{k: v for k, v in row.items() if v not in (None, [], "")} for row in rows]
 
 
+#: Identity context keyed on the account names an alert carries, rather than
+#: traversed from an ``Alert`` node. Gap-closure Phase 6.3.
+#:
+#: The dimension query above starts at ``(a:Alert {id: $alert_id})``, which is
+#: the right shape for an escalated alert whose node the ingest writer has
+#: already created. Triage runs earlier than that, and a replayed historical
+#: finding has no ``Alert`` node at all, so keying on the account names is the
+#: only version of this question triage can ask.
+#:
+#: ``updated_at`` is the *import* stamp, set by ``context_import`` when the
+#: directory or CMDB snapshot was loaded. It is returned so the caller can
+#: apply a cutoff with it, and the caller must not mistake it for a
+#: business-effective date. See ``fetch_identity_context`` in the agents
+#: service for what is done with that distinction.
+_IDENTITY_BY_ACCOUNT_CYPHER = f"""
+MATCH (i:Identity)
+WHERE {_scoped("i")} AND toLower(i.external_id) IN $accounts
+OPTIONAL MATCH (e:Employee)-[:AUTHENTICATES_AS]->(i)
+WHERE {_scoped("e")}
+OPTIONAL MATCH (e)-[:BELONGS_TO]->(d:Department)
+WHERE {_scoped("d")}
+OPTIONAL MATCH (mgr:Employee)-[:MANAGES]->(e)
+WHERE {_scoped("mgr")}
+RETURN DISTINCT
+    i.external_id      AS account,
+    i.provider         AS provider,
+    e.display_name     AS employee,
+    e.title            AS title,
+    e.is_active        AS is_active,
+    e.employment_type  AS employment_type,
+    e.start_date       AS start_date,
+    e.end_date         AS end_date,
+    e.updated_at       AS imported_at,
+    d.name             AS department,
+    mgr.display_name   AS manager,
+    mgr.email          AS manager_email
+LIMIT $limit
+"""
+
+
+async def get_identity_context_for_accounts(
+    tenant_id: str,
+    accounts: list[str],
+    *,
+    limit: int = LIMIT_IDENTITIES,
+    session: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Who is behind these account names, for this tenant. Never raises.
+
+    Fail-soft like every other context read on the triage path: an
+    investigation without HR context is degraded, and one that dies because
+    the graph was unreachable is worse than the gap it was closing. An empty
+    list therefore means either "no identity data" or "the graph did not
+    answer", and the caller reports which by counting its own reads rather
+    than by inspecting this return value.
+    """
+    normalised = sorted({a.strip().lower() for a in accounts if isinstance(a, str) and a.strip()})
+    if not normalised:
+        return []
+
+    async def _run(sess: Any) -> list[dict[str, Any]]:
+        return await asyncio.wait_for(
+            _run_dimension(
+                sess,
+                _IDENTITY_BY_ACCOUNT_CYPHER,
+                {
+                    "tenant_id": tenant_id,
+                    "global_labels": list(GLOBAL_LABELS),
+                    "accounts": normalised,
+                    "limit": limit,
+                },
+            ),
+            timeout=QUERY_TIMEOUT_SECONDS,
+        )
+
+    try:
+        if session is not None:
+            return await _run(session)
+        async with get_session() as sess:
+            return await _run(sess)
+    except Exception as exc:  # noqa: BLE001 - identity context is advisory
+        logger.warning("identity_context.unavailable error=%s", str(exc).replace("\r", "").replace("\n", " ")[:300])
+        return []
+
+
 async def get_incident_context(
     alert_id: str,
     tenant_id: str,

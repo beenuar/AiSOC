@@ -41,12 +41,13 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, select, text, update
 
 from app.api.v1.deps import AuthUser, CurrentUser, DBSession
 from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
+from app.db.rls import set_rls_context
 from app.models.alert import Alert
 from app.security.tenant_scope import scoped_tenant_or_403
 from app.services.analyst_feedback import (
@@ -484,4 +485,179 @@ async def get_context_statements(
             )
             for r in rows
         ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal route: the last N analyst decisions, with a point-in-time cutoff
+# ---------------------------------------------------------------------------
+
+
+class RecentDispositionModel(BaseModel):
+    """One analyst decision, with the part that generalises."""
+
+    analyst_disposition: str
+    ai_disposition: str
+    reason_code: str
+    reason_label: str
+    note: str
+    scope: str
+    scope_value: str
+    rule_id: str | None
+    decided_at: str
+
+
+class RecentDispositionsResponse(BaseModel):
+    tenant_id: str
+    as_of: datetime | None
+    dispositions: list[RecentDispositionModel]
+    #: Matching decisions refused for post-dating the cutoff. Zero when no
+    #: cutoff was asked for. Without it a cutoff that matched nothing and a
+    #: cutoff that refused fifty decisions are the same empty list.
+    excluded_after_cutoff: int
+    #: Matching rows with no ``created_at``. The column is ``NOT NULL`` with a
+    #: default so this should stay zero, and it is published anyway for the
+    #: same reason ``statements_without_timestamp`` is.
+    without_timestamp: int
+
+
+#: Match a decision to this alert the two ways an author's decision
+#: generalises. The rule is the stronger claim, so it comes first in the
+#: ordering below; an entity match is the fallback that makes a decision about
+#: one host or principal reachable from a different rule.
+#:
+#: ``{cutoff}`` and ``{excluded}`` are fixed literals, not caller data, and
+#: they are the only thing that varies. See ``recent_dispositions_sql``.
+_RECENT_DISPOSITIONS_SQL = """
+WITH matches AS (
+    SELECT analyst_disposition, ai_disposition, reason_code, scope, scope_value,
+           note, created_at, context ->> 'rule_id' AS rule_id,
+           (context ->> 'rule_id' IS NOT NULL AND context ->> 'rule_id' = :rule_id) AS by_rule
+    FROM aisoc_analyst_feedback
+    WHERE tenant_id = :tenant_id
+      AND (
+            (context ->> 'rule_id' IS NOT NULL AND context ->> 'rule_id' = :rule_id)
+         OR (scope_value <> '' AND lower(scope_value) = ANY(CAST(:entities AS text[])))
+      )
+),
+counted AS (
+    SELECT
+        count(*) FILTER (WHERE {excluded}) AS excluded_after_cutoff,
+        count(*) FILTER (WHERE created_at IS NULL) AS without_timestamp
+    FROM matches
+)
+SELECT c.excluded_after_cutoff, c.without_timestamp,
+       m.analyst_disposition, m.ai_disposition, m.reason_code, m.scope,
+       m.scope_value, m.note, m.created_at, m.rule_id
+FROM counted c
+LEFT JOIN LATERAL (
+    SELECT * FROM matches
+    {cutoff}
+    ORDER BY by_rule DESC, created_at DESC
+    LIMIT :limit
+) m ON TRUE
+"""
+
+
+def recent_dispositions_sql(*, cutoff: bool) -> str:
+    """The statement the route runs, with or without the point-in-time predicate.
+
+    A function rather than two constants for the same reason
+    ``knowledge_base.triage_retrieval_sql`` is one: the live-Postgres test has
+    to run *this* statement, and a test that formats the template with its own
+    idea of the cutoff clause keeps passing after the clause is deleted.
+    """
+    if not cutoff:
+        return _RECENT_DISPOSITIONS_SQL.format(excluded="FALSE", cutoff="")
+    return _RECENT_DISPOSITIONS_SQL.format(excluded="created_at > :as_of", cutoff="WHERE created_at <= :as_of")
+
+
+@router.get(
+    "/recent-dispositions",
+    response_model=RecentDispositionsResponse,
+    include_in_schema=False,
+    summary="Recent analyst decisions for this rule or entity, as of a point in time",
+)
+async def recent_dispositions(
+    db: DBSession,
+    tenant_id: uuid.UUID,
+    rule_id: str = "",
+    entities: Annotated[list[str] | None, Query()] = None,
+    as_of: datetime | None = None,
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> RecentDispositionsResponse:
+    """The last few times an analyst decided an alert of this shape, and why.
+
+    Gap-closure Phase 6.3. Distinct from ``/context-statements`` next door,
+    which serves *compiled* organisation memory: a statement needs two
+    analysts agreeing on a reason before it is trusted, by design, so a
+    disagreement that has been recorded once is invisible there. These are the
+    raw decisions, including the ones that have not yet crossed corroboration,
+    which is the signal an analyst reading the queue by hand would have.
+
+    ``aisoc_analyst_feedback`` is append-only, one row per tagged
+    disagreement, so unlike the override row in institutional memory (one per
+    signature, upserted) it can answer "the last N" at all.
+
+    Service-token only, same shape as ``/tenant-skills/resolved/active``: the
+    caller is a service with no session, and ``tenant_id`` is the scope rather
+    than a narrowing of one because a service token carries no tenant to
+    intersect with.
+
+    ``as_of`` has no default. A default of "now" would let an unfrozen caller
+    look frozen in a replay report; a default of the epoch would silently
+    return nothing on every live triage.
+    """
+    if not service_token_valid(x_aisoc_service_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="this route is reachable only by an AiSOC service holding the shared service token",
+        )
+
+    await set_rls_context(db, tenant_id)
+
+    params: dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "rule_id": (rule_id or "").strip(),
+        "entities": sorted({e.strip().lower() for e in (entities or []) if e and e.strip()}),
+        "limit": limit,
+    }
+    if as_of is not None:
+        params["as_of"] = as_of
+
+    try:
+        rows = (await db.execute(text(recent_dispositions_sql(cutoff=as_of is not None)).bindparams(**params))).fetchall()
+    except Exception as exc:
+        logger.warning("recent_dispositions.query_failed", error=str(exc)[:300])
+        raise HTTPException(status_code=503, detail="Database error") from exc
+
+    excluded = int(rows[0].excluded_after_cutoff) if rows else 0
+    undated = int(rows[0].without_timestamp) if rows else 0
+    return RecentDispositionsResponse(
+        tenant_id=str(tenant_id),
+        as_of=as_of,
+        dispositions=[
+            RecentDispositionModel(
+                analyst_disposition=str(r.analyst_disposition),
+                ai_disposition=str(r.ai_disposition),
+                reason_code=str(r.reason_code),
+                # The label rather than only the code, because "the rule is
+                # wrong, not the environment" is what a reader of the prompt
+                # needs and `bad_detection_logic` is a key in a table they do
+                # not have.
+                reason_label=REASON_CODES[r.reason_code].label if r.reason_code in REASON_CODES else str(r.reason_code),
+                note=str(r.note or ""),
+                scope=str(r.scope),
+                scope_value=str(r.scope_value or ""),
+                rule_id=str(r.rule_id) if r.rule_id else None,
+                decided_at=r.created_at.isoformat() if r.created_at else "",
+            )
+            # The LATERAL yields one all-NULL row when nothing survives the
+            # cutoff, which is the case the counts above exist to describe.
+            for r in rows
+            if r.analyst_disposition is not None
+        ],
+        excluded_after_cutoff=excluded,
+        without_timestamp=undated,
     )

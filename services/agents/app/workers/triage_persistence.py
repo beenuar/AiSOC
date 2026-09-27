@@ -51,7 +51,11 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from app.context import dispositions as dispositions_module
+from app.context import identity as identity_module
 from app.context import knowledge_base, organisation_memory, tenant_skills
+from app.context.dispositions import RecentDispositions
+from app.context.identity import IdentityContext
 from app.context.knowledge_base import RunbookRetrieval
 from app.investigator import ledger as ledger_module
 from app.investigator import siem_writeback
@@ -99,6 +103,8 @@ CONTEXT_FREEZE_KINDS: dict[str, str] = {
     "lookup_prior": SNAPSHOT,
     "fetch_skills": SNAPSHOT,
     "retrieve_runbooks": CUTOFF,
+    "recent_dispositions": CUTOFF,
+    "fetch_identity_context": CUTOFF,
 }
 
 
@@ -233,6 +239,28 @@ class TriageContextReader(Protocol):
         the split, which is exactly the division that keeps a replay honest.
         """
 
+    async def recent_dispositions(
+        self,
+        tenant_id: str | None,
+        *,
+        rule_id: str,
+        entities: list[str],
+    ) -> RecentDispositions:
+        """The last few analyst decisions on alerts of this shape, with reasons.
+
+        A ``CUTOFF`` source, and the leakiest of the three by construction: a
+        decision recorded inside the test window is literally an analyst's
+        answer to an alert in that window.
+        """
+
+    async def fetch_identity_context(self, tenant_id: str | None, *, accounts: list[str]) -> IdentityContext:
+        """Directory context for the principals this alert names.
+
+        A ``CUTOFF`` source whose freeze is partial and says so: an
+        ``Employee`` node carries when it was imported, never when the fact it
+        records became true.
+        """
+
 
 class LiveTriageWriter:
     """The production sink. Every method is the call the worker used to make inline.
@@ -345,3 +373,20 @@ class LiveTriageContextReader:
         # one line that differs from the frozen reader is visible in a diff of
         # the two classes.
         return await knowledge_base.fetch_runbooks(tenant_id, query=query, as_of=None)
+
+    async def recent_dispositions(
+        self,
+        tenant_id: str | None,
+        *,
+        rule_id: str,
+        entities: list[str],
+    ) -> RecentDispositions:
+        return await dispositions_module.fetch_recent_dispositions(
+            tenant_id,
+            rule_id=rule_id,
+            entities=entities,
+            as_of=None,
+        )
+
+    async def fetch_identity_context(self, tenant_id: str | None, *, accounts: list[str]) -> IdentityContext:
+        return await identity_module.fetch_identity_context(tenant_id, accounts=accounts, as_of=None)

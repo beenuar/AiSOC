@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auto-triage now sees the last few analyst decisions on an alert of this
+  shape, and the identity behind it** (gap-closure Phase 6.3, completing the
+  three context sources).
+
+  **What this adds that organisation memory does not.** Institutional memory
+  already reads compiled statements, and compiling is the point of it: a reason
+  has to recur across independent analysts before it becomes a durable claim
+  about the estate, and that threshold should not be lowered. It also means a
+  disagreement recorded **once** is invisible there. `aisoc_analyst_feedback`
+  is append-only, one row per tagged disagreement, so it can answer "the last
+  N" at all — the override row cannot, because it is upserted per signature and
+  holds the latest decision with no history.
+
+  A decision tagged against the same **rule** is ordered ahead of one matched
+  on a shared entity, because the rule is the more specific claim.
+
+  Both sources are point-in-time under replay, on the same `TriageContextReader`
+  seam the runbooks use, and the cutoff is proven against a **live store**
+  rather than a stub — an ORM-level filter that a stub satisfies is the half
+  that has already been wrong once in this programme.
+
 - **The hunt corpus grew from 5 hunts to 68, and the grading that covers it
   stopped being satisfiable by accident** (gap-closure Phase 8.4).
 
