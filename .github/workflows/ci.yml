@@ -657,7 +657,6 @@ jobs:
         run: |
           python3 scripts/check_agent_read_tools.py --self-test
           python3 scripts/check_agent_read_tools.py
-<<<<<<< HEAD
       # A hunt's negative scenario has to fail for the reason the hunt is
       # about. A negative drawn from an unrelated log source never fires on
       # anything, so a corpus of those scores a perfect false-positive rate
@@ -670,7 +669,6 @@ jobs:
           python3 scripts/check_hunt_scenarios.py --self-test
           python3 scripts/check_hunt_scenarios.py
           python3 scripts/run_hunt_evals.py --self-test
-=======
       # A retro-hunt sweeps a column or it sweeps nothing, and the failure is
       # a confident zero rather than an error. This reads the lake writer, the
       # ClickHouse DDL and the three threat-intel clients and fails when the
@@ -679,7 +677,6 @@ jobs:
         run: |
           python3 scripts/check_ioc_lake_mapping.py --self-test
           python3 scripts/check_ioc_lake_mapping.py
->>>>>>> 72e1f9ea (feat(retro-hunt): consume the NEW_IOC events nothing consumed)
       - name: Support bundle must not leak
         run: |
           python3 -m pip install --quiet pytest

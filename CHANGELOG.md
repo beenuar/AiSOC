@@ -213,7 +213,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
 ### Added
 
-<<<<<<< HEAD
 - **Per-organisation white-label branding, with uploaded assets treated as a
   security boundary** (gap-closure Phase 13.2).
 
@@ -349,7 +348,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minted before this change fail closed rather than outliving the revocation
   meant to end them. The refresh path checks it too, and matters more there: a
   refresh token outlives an access token by days.
-=======
 - **The `NEW_IOC` events the threat-intel pipeline has always emitted now have
   a consumer** (gap-closure Phase 8.1).
 
@@ -413,7 +411,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a CVE is not swept against telemetry because it does not appear there; and a
   feed type nobody has mapped is refused by name and counted rather than
   defaulted to a plausible one.
->>>>>>> 5bc33969 (feat(retro-hunt): consume the NEW_IOC events nothing consumed)
 
 ### Changed
 
