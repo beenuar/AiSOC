@@ -98,6 +98,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AiSOC's own MCP server gains triage verdicts, replay reports and a
+  dry-run-only action preview** (gap-closure Phase 5.6). Five new tools, 13 to
+  18.
+
+  The Investigation Ledger half of this phase was **already built**:
+  `aisoc_list_investigations`, `aisoc_get_investigation`,
+  `aisoc_replay_decision` and `aisoc_explain_step` have shipped for months.
+  Checking before building is the whole point, so it is recorded rather than
+  re-implemented.
+
+  New: `aisoc_get_triage_verdict` answers "what did AiSOC decide about this
+  alert, and should I believe it" without 30 unrelated columns competing for
+  the answer, keeps `confidence` (0 to 100) and `ai_score` (0 to 1) apart by
+  name with the scale stated, and says in words when nothing has triaged the
+  alert yet, because an absent verdict is not a benign verdict.
+  `aisoc_list_replay_reports` and `aisoc_get_replay_report` expose the one
+  number in this product measured on real data, serving the stored artefact
+  rather than re-rendering it so a withheld headline stays withheld.
+
+  **`aisoc_preview_action` previews and cannot perform.** The path it requests
+  is a module constant naming the dry-run route; `/dispatch` appears nowhere
+  in the server's source, and a test asserts that by reading the source rather
+  than by driving the handler, so a second action tool added later is caught
+  too. The API route behind it already forces `dry_run: true` server-side
+  whatever the body says. An MCP key is credential material that lives in an
+  editor's configuration file, and the distance between "preview" and
+  "perform" should not be one careless string.
+
+  **Every tool now publishes MCP behaviour annotations.** A client that takes
+  annotations seriously cannot tell "read-only" from "nobody said", and the
+  safe reading of silence is "not read-only", so a server publishing nothing
+  forces every operator to vouch for every tool by name. Seventeen of the
+  eighteen are read-only; `aisoc_run_investigation` is annotated as not
+  read-only rather than quietly marked otherwise, because that is the
+  direction of dishonesty a client cannot detect.
+
+  **The published tool count was ungated.** "13 tools" was written into six
+  documents and nothing compared any of them to the registry, while the claim
+  matrix named a CI job that pins the tool *set* and had never read a
+  document. `tests/published-count.test.ts` now compares all seven figures
+  against `ALL_TOOLS.length` in both directions, so a stale figure and a
+  deleted claim both fail.
+
 - **An MCP client, so an investigation can reach the tools a tenant already
   runs, read-only and untrusted by default** (gap-closure Phase 5).
 

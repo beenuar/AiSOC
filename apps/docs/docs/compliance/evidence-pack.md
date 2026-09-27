@@ -34,9 +34,9 @@ and says so.
 | Claim-to-gate traceability | Every product claim mapped to the CI job that fails when it stops being true | `docs/audit/CLAIM_TO_GATE_MATRIX.md` |
 
 <<<<<<< HEAD
-The last row is the one worth reading first. It is the honest index: 178 rows
+The last row is the one worth reading first. It is the honest index: 180 rows
 =======
-The last row is the one worth reading first. It is the honest index: 178 rows
+The last row is the one worth reading first. It is the honest index: 180 rows
 >>>>>>> 54de0d37 (feat(agents): reach a tenant's own MCP servers, read-only and untrusted by default)
 `GATED`, 8 `PARTIAL` with the specific gap named, and a ratchet that refuses
 to let a row sit at `NO GATE`.

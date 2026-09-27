@@ -212,6 +212,10 @@ export const lakeQueryTool: ToolDefinition<typeof LakeQuerySchema> = {
         + "(ClickHouse). Tenant isolation, table allowlisting, and LIMIT clamping "
         + "are enforced server-side. Use `aisoc_lake_schema` to discover columns.",
     inputSchema: zodToJsonSchema(LakeQuerySchema),
+    // SELECT only, rewritten with a tenant predicate server-side, so it
+    // reads and cannot write. Not idempotent as a claim about results:
+    // the same query over a live lake returns more rows later.
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   schema: LakeQuerySchema,
   async handle(ctx, args) {
@@ -318,6 +322,7 @@ export const lakeSchemaTool: ToolDefinition<typeof LakeSchemaSchema> = {
       "List columns + types for the lake's allowlisted tables. Use this "
         + "before calling `aisoc_lake_query` so you don't guess column names.",
     inputSchema: zodToJsonSchema(LakeSchemaSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: LakeSchemaSchema,
   async handle(ctx, args) {

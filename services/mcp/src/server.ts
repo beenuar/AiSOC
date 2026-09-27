@@ -87,6 +87,10 @@ export function buildServer(cfg: ServerConfig, log: Logger): Server {
           string,
           unknown
         >,
+        // Advertised because a client that takes annotations seriously
+        // cannot tell "read-only" from "nobody said" without them, and the
+        // safe reading of silence is "not read-only".
+        annotations: t.metadata.annotations,
       })),
     };
   });

@@ -14,6 +14,33 @@ import type { z } from "zod";
 import type { AisocClient } from "../client.js";
 import type { Logger } from "../config.js";
 
+/**
+ * MCP tool behaviour hints, as the protocol defines them.
+ *
+ * These are the fields a *client* reads to decide whether it may call a
+ * tool at all. AiSOC's own MCP client refuses a tool whose server sets
+ * `destructiveHint: true` or `readOnlyHint: false`, and an absent
+ * annotation is not read as a claim to be read-only, so a server that
+ * publishes nothing here forces every operator to vouch for every tool by
+ * name. Declaring them is how this server becomes usable by a client that
+ * takes the annotations seriously, including ours.
+ *
+ * They have to be honest in both directions. A read tool marked
+ * state-changing gets refused for nothing; a state-changing tool marked
+ * read-only is a lie a client cannot detect, which is the direction that
+ * costs something.
+ */
+export interface ToolAnnotations {
+  /** The tool does not modify anything. */
+  readOnlyHint?: boolean;
+  /** The tool may perform a destructive update. Meaningless when read-only. */
+  destructiveHint?: boolean;
+  /** Repeating the call with the same arguments has no additional effect. */
+  idempotentHint?: boolean;
+  /** The tool reaches systems outside this deployment. */
+  openWorldHint?: boolean;
+}
+
 /** Minimal MCP "tool" descriptor — name + JSON schema for ListToolsResult. */
 export interface ToolMetadata {
   /** Tool ID surfaced to the agent. Convention: `aisoc_<verb>_<resource>`. */
@@ -22,6 +49,13 @@ export interface ToolMetadata {
   description: string;
   /** JSON Schema for the input arguments (pre-converted from zod). */
   inputSchema: Record<string, unknown>;
+  /**
+   * Behaviour hints. Required on every tool in this registry: a test
+   * enforces it, because an omission is indistinguishable from a tool
+   * nobody thought about, and the client-side default for a missing
+   * `readOnlyHint` is "not read-only".
+   */
+  annotations: ToolAnnotations;
 }
 
 /**

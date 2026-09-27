@@ -8,6 +8,7 @@
  * tools so an agent reading the listing top-to-bottom builds an
  * intuition of how to navigate the surface.
  */
+import { listActionsTool, previewActionTool } from "./actions.js";
 import { getAlertTool, listAlertsTool } from "./alerts.js";
 import {
   getCaseTool,
@@ -25,6 +26,8 @@ import {
   replayDecisionTool,
 } from "./investigations.js";
 import { lakeQueryTool, lakeSchemaTool } from "./lake.js";
+import { getReplayReportTool, listReplayReportsTool } from "./replay.js";
+import { getTriageVerdictTool } from "./triage.js";
 import type { ToolDefinition } from "./types.js";
 
 export const ALL_TOOLS: ToolDefinition[] = [
@@ -33,20 +36,28 @@ export const ALL_TOOLS: ToolDefinition[] = [
   listCasesTool,
   queryDetectionsTool,
   listInvestigationsTool,
+  listReplayReportsTool,
+  listActionsTool,
   lakeSchemaTool,
   // Deep-dive
   getAlertTool,
   getCaseTool,
   getDetectionRuleTool,
   getInvestigationTool,
+  getTriageVerdictTool,
+  getReplayReportTool,
   // Lake query (warm tier — gated by lake:query permission server-side).
   // Listed near the bottom because it's the most expensive surface and
   // the schema tool above is the recommended discovery path; agents that
   // read the listing top-to-bottom should reach for SELECT only after
   // they've seen the structured tools.
   lakeQueryTool,
-  // Action / replay
+  // Action / replay. `previewActionTool` is the only tool here that touches
+  // the response surface, and it is dry-run only: it names the dry-run path
+  // and nothing in `src/` names `/dispatch`. `tests/actions.test.ts` asserts
+  // that against the source rather than trusting this comment.
   runInvestigationTool,
+  previewActionTool,
   replayDecisionTool,
   explainStepTool,
 ];

@@ -88,7 +88,7 @@ If the assistant asks for permission to call `aisoc_*` tools, that's expected â€
 
 ## Tools exposed
 
-The server advertises **13 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning:
+The server advertises **18 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning:
 
 ```mermaid
 graph LR
@@ -98,18 +98,23 @@ graph LR
     A3[aisoc_query_detections]
     A4[aisoc_list_investigations]
     A5[aisoc_lake_schema]
+    A6[aisoc_list_replay_reports]
+    A7[aisoc_list_actions]
   end
   subgraph Deep-dive
     B1[aisoc_get_alert]
     B2[aisoc_get_case]
     B3[aisoc_get_detection_rule]
     B4[aisoc_get_investigation]
+    B5[aisoc_get_triage_verdict]
+    B6[aisoc_get_replay_report]
   end
   subgraph Lake query
     D1[aisoc_lake_query]
   end
   subgraph Action / replay
     C1[aisoc_run_investigation]
+    C4[aisoc_preview_action]
     C2[aisoc_replay_decision]
     C3[aisoc_explain_step]
   end
@@ -127,13 +132,32 @@ graph LR
 | `aisoc_get_detection_rule` | Inspect a single rule (logic, fixtures, FP notes). |
 | `aisoc_list_investigations` | Page through agent investigation runs. |
 | `aisoc_get_investigation` | Run summary (status, duration, agents involved, cost). |
+| `aisoc_get_triage_verdict` | What the agent decided about one alert: verdict, recommended actions, confidence with its rationale, and the analyst disposition. Says so explicitly when nothing has triaged the alert yet, because an absent verdict is not a benign one. |
+| `aisoc_list_replay_reports` | Replay evaluations: runs that graded AiSOC triage against this tenant's own analysts' past decisions. |
+| `aisoc_get_replay_report` | One replay report, served as stored rather than re-rendered. A withheld headline stays withheld. |
+| `aisoc_list_actions` | Response actions this deployment can perform, and the vendor behind each. Listing one neither performs nor schedules it. |
 | `aisoc_lake_schema` | Discover allowlisted tables and column names in the warm tier â€” call this *before* `aisoc_lake_query` so the agent doesn't guess column names. |
 | `aisoc_lake_query` | Run a read-only SELECT against the warm tier (lake). Per-tenant RLS, row caps, and the `lake:query` permission are enforced server-side. |
-| **`aisoc_run_investigation`** | Kick off the agent on a case and stream events back. |
+| **`aisoc_run_investigation`** | Kick off the agent on a case and stream events back. The one tool here that is not read-only. |
+| **`aisoc_preview_action`** | Preview a response action: blast radius, reversibility, verification probe, approval tier. **Dry run only**, see below. |
 | **`aisoc_replay_decision`** | Walk the agent ledger step-by-step (recon, forensic, responder, reporter). |
 | **`aisoc_explain_step`** | Why-did-the-agent-do-this for a single step: prompt, response, tool I/O. |
 
 `aisoc_replay_decision` and `aisoc_explain_step` read the investigation ledger, so the prompt, the response and the tool I/O behind any single agent step are retrievable from chat rather than only from the console.
+
+### Annotations, and what is read-only
+
+Every tool carries MCP behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`). A client that takes annotations seriously cannot tell "read-only" from "nobody said", and the safe reading of silence is "not read-only", so publishing them is what lets such a client decide for itself instead of making an operator vouch for each tool by name.
+
+**Seventeen of the eighteen are read-only.** The exception is `aisoc_run_investigation`, which starts an agent run: it writes ledger rows, spends model budget and can reach whatever the tenant has configured. It is annotated as such rather than quietly marked read-only, because that is the direction of dishonesty a client cannot detect. No tool is annotated destructive, because none is.
+
+### Actions are previewed, never performed
+
+`aisoc_preview_action` is the only tool that touches the response surface, and it cannot perform an action. The path it requests is a module constant naming `/api/v1/live-actions/dry-run`; the sibling `/dispatch`, which performs an action against a live vendor, appears nowhere in the server's source, and a test asserts that by reading the source rather than by driving the handler, so a second action tool added later is caught too. The API route behind it forces `dry_run: true` server-side whatever the body says.
+
+The boundary is deliberate. An MCP key is credential material that ends up in an editor's configuration file, and the distance between "preview" and "perform" should not be one careless string. Performing an action needs the AiSOC console or API with an approval.
+
+A preview returns the capability contract: blast radius, whether the action is reversible, the verification probe that would confirm it worked, and the approval tier it would need. That is what lets an assistant tell an analyst what containing a host would actually mean before anybody clicks anything.
 
 ## Configuration
 

@@ -53,7 +53,7 @@ Key facts a summary should get right:
 
 ## Integrating with AiSOC
 
-- [MCP server](https://beenuar.github.io/AiSOC/docs/integrations/mcp): connect Claude Desktop, Cursor, Continue.dev or Cody to AiSOC. Exposes 13 tools.
+- [MCP server](https://beenuar.github.io/AiSOC/docs/integrations/mcp): connect Claude Desktop, Cursor, Continue.dev or Cody to AiSOC. Exposes 18 tools.
 - [API reference](https://beenuar.github.io/AiSOC/docs/api/rest): the REST surface.
 - [Python plugin SDK](https://beenuar.github.io/AiSOC/docs/plugins/python-sdk): build a connector or plugin in Python.
 - [Go plugin SDK](https://beenuar.github.io/AiSOC/docs/plugins/go-sdk): build a connector or plugin in Go.

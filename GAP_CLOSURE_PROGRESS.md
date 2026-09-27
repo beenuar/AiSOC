@@ -364,12 +364,12 @@ in D20.
 - [x] **5.3 Read-only by default.** A tool is callable only if the tenant allowlisted it *and* the server did not annotate it `destructiveHint: true` or `readOnlyHint: false`. Both halves, because they are different assertions: the allowlist is the tenant's, the annotation is the vendor's, and either saying no is a no. The allowlist defaults empty, so a newly registered server offers nothing. A destructive tool is refused outright and the refusal names governed dispatch; see D22 for why "or not at all" is the honest half of the plan's sentence today.
 - [x] **5.4 Untrusted by default.** Socket-level byte cap, per-run nonce fence, injection guard, an inline first-party boundary sentence, and a ledger row for every call, refusal and failure. The SSRF guard and air-gap policy run immediately before the socket, not at save time; see D23.
 - [x] **5.5 Tests and docs.** 40 tests across three files against a real `FastMCP` server over the SDK's memory transport, so nothing mocks `ClientSession` or `McpClient`. `apps/docs/docs/operations/mcp-client.md` marks all five vendor servers unverified against a live vendor, and says the tool names given are examples to be replaced with what the vendor's own `tools/list` publishes.
-- [ ] **5.6 AiSOC's own MCP server** gains read tools for triage verdicts, the ledger and replay reports, plus a dry-run-only action preview.
+- [x] **5.6 AiSOC's own MCP server.** Extended, not duplicated: `services/mcp` goes from 13 tools to 18. **The ledger half already existed** (`aisoc_list_investigations`, `aisoc_get_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`), which is recorded rather than re-implemented. New: `aisoc_get_triage_verdict`, `aisoc_list_replay_reports`, `aisoc_get_replay_report`, `aisoc_list_actions` and `aisoc_preview_action`. The preview is dry-run only and cannot become anything else; see D24. Every tool now publishes MCP behaviour annotations, and the published tool count is gated for the first time; see D25.
 
 **Done when:** against a mock MCP server, an investigation calls an allowlisted
 read tool, refuses a destructive one, and the ledger records both.
 
-**Met for 5.1 to 5.5.** `services/agents/tests/test_mcp_investigation.py::test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destructive_one`
+**Met.** `services/agents/tests/test_mcp_investigation.py::test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destructive_one`
 runs exactly that: a real `FastMCP` server publishing `get_detections`
 (read-only) and `isolate_host` (destructive), both allowlisted by the operator
 **on purpose** so the annotation is what refuses rather than the allowlist; the
@@ -524,6 +524,13 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   fail against eight injected regressions rather than merely observed passing.
   See D21 to D23.
 
+- [x] **Phase 5.6, AiSOC's own MCP server.** `services/mcp` 13 tools to 18,
+  suite 124 to 135. Every tool now publishes MCP behaviour annotations, and
+  the published tool count is compared against the registry across seven
+  documents for the first time. Claim matrix 184 rows to 186, GATED 176 to
+  178, and the existing "MCP server exposes 13 tools" row was corrected
+  rather than only renumbered, because the gate it named had never read a
+  document. See D24 and D25.
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
 Recorded because the obvious implementation of shadow mode is wrong in a way
@@ -1066,3 +1073,74 @@ which would have read like the real check to every future reader while ageing
 into a false one, and would have made the agents-side guard look like a
 belt-and-braces duplicate that a later cleanup could reasonably delete.
 >>>>>>> 54de0d37 (feat(agents): reach a tenant's own MCP servers, read-only and untrusted by default)
+
+### D24. Two thirds of 5.6 already existed, and the third needed a boundary in code rather than in prose
+
+5.6 names three read surfaces and one preview. Checking first, which is the
+thing this repository's history says to do before building anything:
+
+**The Investigation Ledger half was already shipped.**
+`aisoc_list_investigations`, `aisoc_get_investigation`, `aisoc_replay_decision`
+and `aisoc_explain_step` have been in `services/mcp/src/tools/investigations.ts`
+for months. Nothing was rebuilt and nothing was wrapped.
+
+**The triage-verdict half half-existed.** `aisoc_get_alert` already returns
+every verdict field, so the new tool is a focused projection rather than a new
+capability. It earns its place by handling two things the raw record does not:
+`confidence` (an integer 0 to 100) and `ai_score` (a float 0 to 1) are kept
+apart by name with the scale stated, because a consumer that treats one as the
+other renders `2100%`, which this tree has shipped once; and a null verdict is
+reported in words as "nothing has triaged this yet" rather than left as a null
+field an agent reads as "no threat found".
+
+**Replay reports had no tool at all.** Phase 1.4's surfaces exist; nothing
+exposed them over MCP. The report is served **as stored**, not re-rendered,
+so a withheld headline (below 30 malicious cases, Phase 1.3 refuses to print a
+number) stays withheld. Re-rendering would eventually mean two definitions of
+what a replay report says, and the one an agent quotes would not be the one
+the operator exported.
+
+**The preview is the part that needed care.** It is the only tool in this
+server that touches the response surface, and an MCP key is credential
+material that lives in an editor's configuration file. So the boundary is in
+code: `DRY_RUN_PATH` is a module constant and the only action path the module
+names, `/live-actions/dispatch` appears nowhere in `src/`, and the test asserts
+that by **reading the source** rather than by driving the handler, so a second
+action tool added later is caught rather than only the one under test. The
+schema is strict, so a caller-supplied `dry_run: false` is a validation error
+rather than a field forwarded to the API. The enforcing control is still
+upstream, where the route forces `dry_run: true` whatever the body says; this
+is the second lock, on the side an agent can see.
+
+Proven able to fail by pointing the constant at the dispatch path, which reds
+both the source scan and the request assertion.
+
+### D25. The server published no annotations, which is the gap its own client complains about
+
+Phase 5.1's client refuses an MCP tool whose server sets `destructiveHint:
+true` or `readOnlyHint: false`, and treats an absent annotation as no claim
+rather than as a claim to be read-only. AiSOC's own MCP server published
+**none at all**, so by its own client's rules every one of its 13 tools was a
+tool an operator would have had to vouch for by name.
+
+Fixed by declaring them on all 18 and advertising them in `ListTools`. The
+test pins the set of not-read-only tools to exactly `aisoc_run_investigation`,
+in both directions: a future write tool cannot arrive annotated read-only, and
+a read tool cannot drift into looking state-changing. `readOnlyHint` is
+required as a boolean rather than optional, because an omission is
+indistinguishable from a tool nobody thought about.
+
+`aisoc_run_investigation` is the one honest exception. It starts an agent run:
+it writes ledger rows, spends model budget and can reach whatever the tenant
+configured. Annotating it read-only would be the direction of dishonesty a
+client cannot detect.
+
+**And the published tool count was ungated.** "13 tools" was written into six
+documents and nothing compared any of them to `ALL_TOOLS`. The claim matrix
+carried a row saying the count was gated by `ci.yml :: mcp`; that job runs the
+registry tests, which pin the tool *set*, and had never read a document. The
+row's Status column was therefore true about a different claim than the one it
+stated. `tests/published-count.test.ts` now compares all seven figures against
+the registry in both directions, proven by staling one figure and by deleting
+another. `plans/cyble-aisoc/platform/README.md` also carries the old figure
+and is deliberately left alone: plan files are never edited.

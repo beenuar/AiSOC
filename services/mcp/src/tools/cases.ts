@@ -75,6 +75,7 @@ export const listCasesTool: ToolDefinition<typeof ListCasesSchema> = {
     description:
       "List security cases (incidents). Filter by status, priority, or assigned-to-me. Cases are higher-level groupings of related alerts.",
     inputSchema: zodToJsonSchema(ListCasesSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ListCasesSchema,
   async handle(ctx, args) {
@@ -117,6 +118,7 @@ export const getCaseTool: ToolDefinition<typeof GetCaseSchema> = {
     description:
       "Fetch a case by id. Optionally include the timeline of comments, status changes, and analyst actions.",
     inputSchema: zodToJsonSchema(GetCaseSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: GetCaseSchema,
   async handle(ctx, args) {
@@ -151,6 +153,11 @@ export const runInvestigationTool: ToolDefinition<typeof RunInvestigationSchema>
     description:
       "Kick off the AiSOC multi-agent investigator on a case. Returns a run_id immediately; use `aisoc_replay_decision` to fetch the resulting decision ledger.",
     inputSchema: zodToJsonSchema(RunInvestigationSchema),
+    // Starts a multi-agent run: it writes ledger rows, spends model
+    // budget and can reach whatever the tenant has configured. Not
+    // read-only, and not destructive either: it creates a record of an
+    // investigation rather than changing anything about the estate.
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   },
   schema: RunInvestigationSchema,
   async handle(ctx, args) {

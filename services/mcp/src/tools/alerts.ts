@@ -89,6 +89,7 @@ export const listAlertsTool: ToolDefinition<typeof ListAlertsSchema> = {
     description:
       "List security alerts in the connected AiSOC tenant. Filter by severity, status, category, or free-text search. Results are paginated; default page_size 25.",
     inputSchema: zodToJsonSchema(ListAlertsSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ListAlertsSchema,
   async handle(ctx, args) {
@@ -134,6 +135,7 @@ export const getAlertTool: ToolDefinition<typeof GetAlertSchema> = {
     description:
       "Fetch the full record for a single alert: AI summary, MITRE mappings, affected assets, and current case linkage.",
     inputSchema: zodToJsonSchema(GetAlertSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: GetAlertSchema,
   async handle(ctx, args) {
