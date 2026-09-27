@@ -345,6 +345,17 @@ made a `ruff format --check` comparison against `main` look like `main` had two
 unformatted files: `git stash` leaves untracked files in place, so the "base"
 run was still seeing the new ones.
 
+**A test that reconfigures a gate before pointing it at production is not
+testing production.** `tests/test_readme_figures_gate.py::test_live_repo_is_consistent`
+passed against this tree while `scripts/readme_gates.py --skip-sandbox` failed
+against the same commit in CI. Its helper narrows `FIGURE_DOCS` to the one
+scratch path its fixtures write, and passing the real repository root through
+that helper left the narrowing in place, so the "real tree" check read the
+compliance page and neither `ROADMAP.md` nor `RELEASES.md`. Both had gone stale
+and the test had never been able to say so. Fixed by importing the gate
+unmodified for that one test and pinning the surface at three documents, and
+the fix was proven by re-staling `ROADMAP.md` and watching the test fail.
+
 **Backgrounding a long run kills it here.** The first baseline attempt was
 started with `nohup ... &` and was dead within a minute, having written 41
 progress dots. Long suites run in the foreground.

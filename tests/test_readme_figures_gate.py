@@ -19,13 +19,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GATES = REPO_ROOT / "scripts" / "readme_gates.py"
 
 
-def _load_gates(tmp_root: Path):
-    """Import readme_gates.py with REPO_ROOT pointed at a scratch tree."""
+def _import_gates():
+    """Import readme_gates.py exactly as it ships, pointed at the real tree."""
     spec = importlib.util.spec_from_file_location("_readme_gates_under_test", GATES)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    return module
+
+
+def _load_gates(tmp_root: Path):
+    """Import readme_gates.py with REPO_ROOT pointed at a scratch tree."""
+    module = _import_gates()
 
     module.REPO_ROOT = tmp_root
     module.README = tmp_root / "README.md"
@@ -111,8 +117,25 @@ def test_missing_sources_do_not_crash_the_gate(tmp_path: Path) -> None:
 
 
 def test_live_repo_is_consistent() -> None:
-    """The gate must pass against the real tree, not only fixtures."""
-    module = _load_gates(REPO_ROOT)
+    """The gate must pass against the real tree, not only fixtures.
+
+    Loaded unmodified, which is the whole point of this test and was not true
+    of it before. ``_load_gates`` narrows ``FIGURE_DOCS`` to the one scratch
+    path its fixtures write, and passing the real root through it left that
+    narrowing in place: the "real tree" check read the compliance page and
+    neither ``ROADMAP.md`` nor ``RELEASES.md``. Both went stale, this test
+    stayed green, and ``scripts/readme_gates.py`` failed in CI over the same
+    repository this had just called consistent.
+
+    A test that reconfigures the gate before pointing it at production is not
+    testing production.
+    """
+    module = _import_gates()
+
+    assert module.REPO_ROOT == REPO_ROOT
+    # Pin the surface, so shrinking it is a visible edit rather than a silent
+    # one. Three documents publish the tally today.
+    assert len(module.FIGURE_DOCS) == 3
     assert module.gate_readme_figures() == []
 
 
