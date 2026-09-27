@@ -48,8 +48,7 @@ def test_marker_matches_the_producer_that_writes_it() -> None:
     declared = re.search(r'const MarkerPrefix = "([^"]+)"', source)
     assert declared, "services/demo-producer no longer declares MarkerPrefix"
     assert declared.group(1) == harness.MARKER_PREFIX, (
-        "the producer stamps a different marker than the harness matches on, so every run "
-        "would report total loss"
+        "the producer stamps a different marker than the harness matches on, so every run would report total loss"
     )
 
 
@@ -60,7 +59,9 @@ def test_the_title_the_producer_formats_is_the_title_the_harness_parses() -> Non
     # changed separator has to fail here.
     fmt = re.search(r'"title":\s*fmt\.Sprintf\("([^"]+)"', source)
     assert fmt, "the load event no longer formats its title with a recognisable Sprintf"
-    concrete = fmt.group(1).replace("%s %s", f"{harness.MARKER_PREFIX} run1", 1).replace("%d", "7", 1).replace("%d", "1700000000123456789", 1)
+    concrete = (
+        fmt.group(1).replace("%s %s", f"{harness.MARKER_PREFIX} run1", 1).replace("%d", "7", 1).replace("%d", "1700000000123456789", 1)
+    )
     match = harness._TITLE_RE.match(concrete)
     assert match, f"the harness cannot parse a title the producer would write: {concrete!r}"
     assert match.group("run") == "run1"

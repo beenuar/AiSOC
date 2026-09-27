@@ -305,6 +305,10 @@ def hardware_fingerprint() -> dict[str, Any]:
                     info["memory_bytes"] = str(int(line.split()[1]) * 1024)
                     break
         except OSError:
+            # Host CPU and memory are descriptive context printed beside the
+            # measurement, not inputs to it. /proc is absent on macOS and on
+            # some containers, and a run that cannot name the hardware is still
+            # a valid run — so the keys stay unset rather than failing here.
             pass
     if shutil.which("docker"):
         out = subprocess.run(  # noqa: S603

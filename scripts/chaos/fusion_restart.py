@@ -79,7 +79,6 @@ from load_harness import (  # noqa: E402
     kubernetes_target,
 )
 
-_FUSION_COMPOSE_SERVICE = "fusion"
 _FUSION_K8S_SELECTOR = "app.kubernetes.io/component=alert-fusion"
 
 
