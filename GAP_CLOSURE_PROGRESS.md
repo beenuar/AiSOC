@@ -261,7 +261,18 @@ the decomposition and what each link rests on are in D8 above.
 
 - [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
 - [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
-- [ ] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log.
+- [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
+
+**Done when:** on recorded data, a test tenant cannot enable auto-close for a
+class with 20 shadow decisions, can once the thresholds are met, and is demoted
+when injected disagreements cross the drift threshold.
+
+**Met.** `tests/isolation/test_autonomy_promotion_live.py`, 13 tests against
+`postgres:16` with the full API migration chain applied: refused at 20 with
+`insufficient_sample` and `insufficient_malicious` and nothing written, granted
+at 150 with the full snapshot, demoted after 30 injected disagreements with
+`recent_drift` among the reasons, and the promotion and demotion replayed
+through `audit_hash.verify_chain`.
 
 ## Phase 3: Prompt-injection evaluation suite
 
@@ -452,6 +463,74 @@ rules are a standard-library-only module vendored byte-identically, following
 the five mirrors already in the tree, with
 `sync_vendored_autonomy_evidence.py --check` wired into `ci.yml`. Two copies
 allowed to differ means the control is off in whichever one is more generous.
+
+### D12. `unified_decision` had no production caller, and the plan names it anyway
+
+The plan says to wire the promotion gate into
+`services/actions/app/services/unified_autonomy.py`. Doing only that would
+have wired it into nothing.
+
+`unified_decision` is referenced in exactly one place in the tree:
+`services/actions/tests/test_unified_autonomy.py`. The live path is
+`live_actions/dispatcher.py::_govern`, which composes a different
+`AutonomyDecision` (the one in `autonomy_safety`) from `decide()`, the tenant
+policy and `_apply_capability_contract`. This is the repository's most-repeated
+shape: a mechanism that exists, is unit-tested, and is not on the path that
+needs it.
+
+**Resolution:** both. `unified_decision` takes the grant and is kept
+consistent, because the plan names it and because a second grader that
+disagreed with the first would be worse than the unwired one. And the grant is
+wired into `_govern`, where it raises the tier ceiling exactly as the existing
+`force_auto` override does and then passes through `_apply_capability_contract`
+unchanged, so the contract's floors still apply. Adding a third grader beside
+the two that already compose would have re-created the "same verb graded
+differently depending on which door it came through" defect this tree already
+fixed once.
+
+### D13. A grant stops at L3 where `force_auto` goes to L4
+
+`force_auto` lifts the ceiling to L4, which permits HIGH blast radius. An
+earned grant lifts it to L3, which stops at MEDIUM.
+
+The two are not the same kind of thing. `force_auto` is a human writing down a
+decision about one verb. A grant is an inference from agreement on *triage
+verdicts*, which is evidence about the agent's judgement and is not evidence
+that isolating a host was the right call. Letting one number unlock both is how
+a measurement of one thing becomes permission for another, and it would be
+invisible afterwards because the resulting action looks identical either way.
+
+`test_earned_autonomy_wiring.py` pins the ceiling, pins that a grant never
+lowers a bar (a 40-case sweep over blast radius, confidence and reversibility
+asserting the only permitted movement is queued to auto on the reversible
+MEDIUM branch), and pins that confidence is still required, since a grant is
+evidence about the agent in general and confidence is what it says about this
+decision.
+
+### D14. The live database is not optional for this phase
+
+The unit suites prove the arithmetic and prove the statements are built
+correctly. Between them they would still miss the failure that matters most: an
+aggregate that counts something slightly different from what the evaluator
+expects. The SQL and the evaluator agree by convention, and a convention is
+what drifts.
+
+One instance of exactly that was found by running it. `to_named_params` turns
+`$2::text[]` into `:graded::text[]`, and SQLAlchemy's `text()` parser reads the
+second colon pair as the start of another bind parameter, so a stray colon
+reached Postgres and every agreement query on the API side failed to parse.
+Both unit suites were green. The cast is gone from the shared SQL (both drivers
+infer the array type from the column) and the SQLAlchemy caller declares it
+with `bindparam(..., type_=ARRAY(Text))` instead.
+
+The live suite is also the only place the hash chain over the transitions can
+be checked, since `entry_hash` is computed on insert from the previous row for
+the same tenant. It cleans up the evidence and the grants and deliberately
+leaves the tenant, the operator and the audit rows: `audit_log` refuses a
+DELETE by trigger, `audit_log.tenant_id` cascades from `tenants` and
+`audit_log.actor_id` is `ON DELETE SET NULL` from `users`, so removing either
+reaches the trigger and is refused. Working around that in a test would mean
+demonstrating the hole the trigger closes, so the refusal is asserted instead.
 
 ### Notes for the next session
 

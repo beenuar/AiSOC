@@ -22,13 +22,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 
 from app._vendor.autonomy_evidence_rules import PromotionThresholds
 from app.api.v1.deps import AuthUser, DBSession
 from app.db.rls import TenantDBSession
+from app.services.autonomy_grants import (
+    GrantScopeError,
+    list_grants,
+    reconcile_grants,
+    request_promotion,
+    revoke_grant,
+)
 from app.services.shadow_agreement import (
     SCOPE_COLUMNS,
     agreement_for,
@@ -744,3 +751,170 @@ async def get_agreement(
         by_source=breakdowns["source"],
         by_model=breakdowns["model"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Evidence-gated autonomy (gap-closure Phase 2.3)
+#
+# The thresholds at the top of this module are a setting. These routes are
+# not: a tenant asks for a capability and the answer comes from their measured
+# track record. The gate refuses more often than it grants, which is the
+# point, so every refusal names what would change the answer.
+# ---------------------------------------------------------------------------
+
+
+class GrantModel(BaseModel):
+    id: str
+    scope_kind: str
+    scope_key: str
+    capability: str
+    state: str
+    source: str
+    #: Surfaced as its own field so no client has to compare a string to know
+    #: it is looking at autonomy somebody overruled into existence.
+    is_override: bool
+    evidence: dict | None = None
+    granted_at: str | None = None
+    demoted_at: str | None = None
+    demoted_reason: str | None = None
+    override_reason: str | None = None
+
+
+class GrantListResponse(BaseModel):
+    tenant_id: str
+    grants: list[GrantModel]
+    #: Grants demoted by this request's reconciliation pass. Returned rather
+    #: than left to be noticed, because an operator who just lost a capability
+    #: should find out on the page that took it, not from a dashboard later.
+    demoted_now: list[dict]
+
+
+class PromotionRequest(BaseModel):
+    scope_kind: str = Field(..., description="alert_class or action_verb")
+    scope_key: str = Field(..., min_length=1, max_length=200)
+    capability: str = Field(..., description="auto_close or auto_execute")
+    #: Ask for the capability even though the evidence refuses. The gate still
+    #: runs and still records what it refused; what changes is that the grant
+    #: is written and labelled an override.
+    override: bool = False
+    override_reason: str | None = Field(None, max_length=500)
+
+
+class PromotionResponse(BaseModel):
+    granted: bool
+    state: str
+    source: str
+    is_override: bool
+    #: Empty on an earned grant. On a refusal these are what to fix; on an
+    #: override they are what was waived, and they travel into the audit log
+    #: alongside the grant.
+    refusals: list[str]
+    evidence: dict
+    changed: bool
+
+
+@router.get("/grants", response_model=GrantListResponse)
+async def list_autonomy_grants(
+    user: AuthUser,
+    db: TenantDBSession,
+    request: Request,
+) -> GrantListResponse:
+    """Every capability this tenant holds or has held, re-checked on the way out.
+
+    Reconciliation runs first. A grant whose evidence has slipped below the
+    demotion floors is demoted here rather than being listed as current and
+    quietly failing at dispatch, which would leave an operator reading a page
+    that disagrees with the product.
+    """
+    await user.require_permission_db("settings:read", db)
+
+    await reconcile_local_closures(db, user.tenant_id)
+    demoted = await reconcile_grants(db, user.tenant_id, request=request)
+    grants = await list_grants(db, user.tenant_id)
+
+    return GrantListResponse(
+        tenant_id=str(user.tenant_id),
+        grants=[GrantModel(**row.as_dict()) for row in grants],
+        demoted_now=[transition.as_dict() for transition in demoted],
+    )
+
+
+@router.post("/grants", response_model=PromotionResponse)
+async def request_autonomy_grant(
+    payload: PromotionRequest,
+    user: AuthUser,
+    db: TenantDBSession,
+    request: Request,
+) -> PromotionResponse:
+    """Ask for a capability. The evidence decides; an operator may overrule.
+
+    A refusal is a 200 carrying `granted: false` and the reasons, not an
+    error. Being told no by a safety control is the control working, and
+    rendering it as a failure invites a client to retry it.
+
+    The tenant comes from the credential. `scope_key` narrows within that
+    tenant and cannot reach past it.
+    """
+    await user.require_permission_db("settings:write", db)
+
+    if payload.override and not (payload.override_reason or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="an override requires a reason: an override nobody can review is not reviewable later either",
+        )
+
+    # Closures first. An operator who has just finished working a queue should
+    # be judged on those decisions, not on the state before them.
+    await reconcile_local_closures(db, user.tenant_id)
+
+    try:
+        transition = await request_promotion(
+            db,
+            tenant_id=user.tenant_id,
+            actor_id=user.user_id,
+            actor_email=user.email,
+            scope_kind=payload.scope_kind,
+            scope_key=payload.scope_key,
+            capability=payload.capability,
+            override=payload.override,
+            override_reason=payload.override_reason,
+            request=request,
+        )
+    except GrantScopeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return PromotionResponse(**transition.as_dict())
+
+
+@router.delete("/grants", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def revoke_autonomy_grant(
+    user: AuthUser,
+    db: TenantDBSession,
+    request: Request,
+    scope_kind: str = Query(...),
+    scope_key: str = Query(..., max_length=200),
+    capability: str = Query(...),
+) -> None:
+    """Hand a capability back.
+
+    Audited as a revocation rather than as a demotion. A human deciding to
+    stop and the evidence deciding for them are different events, and one word
+    for both would make "was this taken away because the numbers slipped"
+    unanswerable from the log.
+    """
+    await user.require_permission_db("settings:write", db)
+    try:
+        revoked = await revoke_grant(
+            db,
+            tenant_id=user.tenant_id,
+            actor_id=user.user_id,
+            actor_email=user.email,
+            scope_kind=scope_kind,
+            scope_key=scope_key,
+            capability=capability,
+            request=request,
+        )
+    except GrantScopeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not revoked:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no standing grant for that scope")

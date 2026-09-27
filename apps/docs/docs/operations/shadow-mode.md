@@ -180,3 +180,134 @@ change makes every figure before it a description of something else.
 They say nothing about **response actions**. Shadow mode measures triage
 verdicts. Whether a containment action would have been correct is a different
 question this does not answer.
+
+## Earning autonomy
+
+Measurement exists so that autonomy can be earned rather than switched on. Once
+a class has a track record, a tenant can ask for a capability and the evidence
+decides.
+
+Two capabilities can be earned:
+
+* `auto_close` on an alert class: the agent closes alerts of that class without
+  a human.
+* `auto_execute` on a response verb: that verb's autonomy tier ceiling rises.
+
+```bash
+curl -X POST "$AISOC/api/v1/autonomy-policy/grants" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"scope_kind": "alert_class", "scope_key": "identity", "capability": "auto_close"}'
+```
+
+A refusal comes back as a `200` with `granted: false` and the reasons. Being
+told no by a safety control is the control working, and returning it as an
+error would invite a client to retry it.
+
+### What has to be true
+
+| Threshold | Default | Why |
+|---|---|---|
+| Decisions in the window | 100 | A handful of agreements is not a track record. |
+| Of those, closed as malicious | 30 | A real queue reaches 100 decisions with two true positives in it. Agreement over that says the agent recognises noise, which is not the question. Same floor replay uses before printing a headline accuracy. |
+| Agreement, over answered decisions | 95% | |
+| Recall on malicious | 90% | An abstention counts as a miss here. |
+| Abstention rate | at most 30% | Caps the share of the queue the agent may decline. |
+| The trailing slice | not in decline | Checked against the demotion floors, so a grant is never issued into a decline it would immediately be revoked for. |
+
+Every check runs and every failure comes back. An operator told one thing at a
+time fixes it, re-asks, is told the next thing, and overrides out of
+frustration rather than on the merits.
+
+### Demotion is automatic
+
+Standing grants are re-checked whenever they are read and whenever the
+dispatch path refreshes. A grant is demoted when agreement falls below 90%,
+malicious recall below 80%, the abstention rate rises above the cap, or the
+trailing slice of recent decisions has slipped below those floors even though
+the window average has not.
+
+The demotion floors sit below the promotion thresholds on purpose. Equal values
+would flip a grant on every decision that moved the rate across the line, and
+the audit log would fill with churn nobody reads, which is how a real demotion
+gets missed.
+
+One asymmetry worth knowing, because it looks like an inconsistency:
+**promotion refuses an unmeasured rate and demotion ignores one.** For a
+promotion, nothing has been shown, so the answer is no. For a demotion, a week
+in which no malicious alert arrived is not evidence the agent got worse, and
+revoking a grant over an empty denominator would make quiet weeks dangerous.
+
+### What a grant can and cannot unlock
+
+A grant on a response verb raises the tier ceiling to **L3**, which permits
+MINIMAL, LOW and MEDIUM blast radius. It stops there. No track record on triage
+agreement makes `isolate_host` unattended, because agreement on triage verdicts
+is evidence about the agent's judgement and is not evidence that a high-blast
+containment was the right call.
+
+The capability contract still applies on top. A verb declared `analyst` or
+`mandatory_human`, or one whose impact is never autonomous, stays gated however
+good the numbers are: a contract's floors may be raised and never lowered.
+
+### Overrides
+
+An operator can grant a capability the evidence refuses:
+
+```bash
+curl -X POST "$AISOC/api/v1/autonomy-policy/grants" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"scope_kind": "alert_class", "scope_key": "identity", "capability": "auto_close",
+       "override": true, "override_reason": "Accepted for a two-week pilot"}'
+```
+
+A gate with no override is a gate that gets worked around by people who then
+stop telling you. What must not happen is an override becoming
+indistinguishable from earned autonomy once it is a week old, so it is a
+different word in four places:
+
+* a different audit action, `autonomy:overridden` rather than `autonomy:granted`
+* a `source` of `operator_override` on the grant row
+* the refusals that were waived, recorded in the evidence snapshot
+* an amber "operator override" label on the autonomy scorecard, beside the
+  reason the operator gave
+
+A reason is required. An override nobody can review now is not reviewable later
+either.
+
+An override is re-checked and demoted on the same floors as an earned grant. It
+means "I accept this today", not "stop measuring"; exempting it would make the
+override permanent, which is the one thing that would turn it back into the
+settings toggle this replaces.
+
+### The evidence snapshot
+
+Every promotion and demotion is written to the hash-chained audit log with the
+numbers frozen at the moment it was made. Not a reference to them, and not a
+flag that lets them be recomputed later.
+
+Six months after a disputed auto-closure, "why was this tenant allowed to do
+that" has to be answerable against the numbers as they stood on the day. By
+then the window has moved, decisions have aged out, the thresholds may have
+been retuned and the model has probably changed, so a recomputed justification
+would describe a different world while looking authoritative doing it.
+
+The snapshot holds:
+
+* the counts and the rates derived from them, for the window and the trailing
+  slice
+* the thresholds **by value**, so a threshold retuned next quarter does not
+  rewrite the justification for every promotion granted under the old one
+* the window as absolute timestamps, because "the last 30 days" stops meaning
+  anything the moment it is read on a different day
+* the first and last decision id, so the rows behind the summary can still be
+  found after the window has moved on
+* the models that produced the verdicts, and whether the closures came from
+  this console, a vendor, or both
+* a digest of the rules that judged it, so a later reader can tell "the gate
+  was more lenient then" from "the numbers were better"
+
+The audit log refuses deletion by trigger and each entry chains onto the
+previous one for the same tenant, so the record of a grant cannot be quietly
+removed.

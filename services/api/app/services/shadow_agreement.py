@@ -48,13 +48,15 @@ same way, because "closed, reason not recorded" is exactly that shrug.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import Text
 
 from app._vendor.autonomy_evidence_rules import (
     ABSTENTION_VERDICTS,
@@ -75,10 +77,32 @@ logger = structlog.get_logger(__name__)
 __all__ = [
     "AgreementEvidence",
     "ScopeBreakdown",
+    "WindowProvenance",
     "agreement_for",
     "breakdown_for",
     "reconcile_local_closures",
 ]
+
+
+#: Parameters that carry a list and therefore need a declared type. Without it
+#: SQLAlchemy binds a Python list as a scalar of unknown type and Postgres
+#: refuses the comparison. Declaring it here rather than casting inside the
+#: shared SQL keeps that statement identical for the asyncpg caller, which
+#: infers the type from the column and needs no help.
+_ARRAY_PARAMS = ("graded", "abstentions")
+
+
+def _statement(sql: str):
+    """``text()`` with whichever array parameters this statement actually binds.
+
+    Only the ones present, because ``bindparams`` raises on a name the
+    statement does not contain: the reconcile sweep binds ``graded`` and not
+    ``abstentions``, and declaring both unconditionally took it down.
+    """
+    declared = [bindparam(name, type_=ARRAY(Text)) for name in _ARRAY_PARAMS if f":{name}" in sql]
+    statement = text(sql)
+    return statement.bindparams(*declared) if declared else statement
+
 
 #: The placeholder names the two aggregates bind, in ``$1 … $7`` order.
 _PARAM_NAMES = [
@@ -103,6 +127,22 @@ SCOPE_COLUMNS: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class WindowProvenance:
+    """Where the window's rows came from, for the audit snapshot.
+
+    Counts summarise; these let somebody find the rows again. A promotion
+    disputed six months later resolves into a list of alerts an operator can
+    open, and without the decision ids at both ends of the window there is no
+    way back to them once the window has moved on.
+    """
+
+    first_decision_id: str | None = None
+    last_decision_id: str | None = None
+    models: tuple[str, ...] = ()
+    resolution_sources: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class AgreementEvidence:
     """One scope's track record: the window, and the trailing slice of it."""
 
@@ -112,6 +152,7 @@ class AgreementEvidence:
     recent: AgreementWindow
     window_start: datetime
     window_end: datetime
+    provenance: WindowProvenance = field(default_factory=WindowProvenance)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -167,7 +208,7 @@ async def reconcile_local_closures(
     was known at the time is the thing an audit needs; a later correction is a
     new fact, and it arrives as new decisions rather than by editing old ones.
     """
-    statement = text(
+    statement = _statement(
         """
         UPDATE aisoc_shadow_decisions d
            SET analyst_disposition = CASE
@@ -221,6 +262,40 @@ def _scope_predicate(scope_kind: str, scope_key: str) -> tuple[str, dict[str, An
     return f"AND d.{column} = :scope_key", {"scope_key": scope_key}
 
 
+async def _provenance(
+    db: AsyncSession,
+    predicate: str,
+    params: dict[str, Any],
+) -> WindowProvenance:
+    """The ends of the window, and what produced the verdicts inside it."""
+    row = (
+        await db.execute(
+            text(
+                f"""
+                SELECT
+                    (ARRAY_AGG(d.id ORDER BY d.resolved_at ASC))[1]::text  AS first_decision_id,
+                    (ARRAY_AGG(d.id ORDER BY d.resolved_at DESC))[1]::text AS last_decision_id,
+                    ARRAY_REMOVE(ARRAY_AGG(DISTINCT d.model), NULL)             AS models,
+                    ARRAY_REMOVE(ARRAY_AGG(DISTINCT d.resolution_source), NULL) AS resolution_sources
+                FROM aisoc_shadow_decisions d
+                WHERE d.tenant_id = :tenant_id
+                  AND d.resolved_at IS NOT NULL
+                  AND d.resolved_at >= :window_start
+                  AND d.resolved_at <= :window_end
+                  {predicate}
+                """
+            ),
+            params,
+        )
+    ).mappings().first() or {}
+    return WindowProvenance(
+        first_decision_id=row.get("first_decision_id"),
+        last_decision_id=row.get("last_decision_id"),
+        models=tuple(sorted(row.get("models") or ())),
+        resolution_sources=tuple(sorted(row.get("resolution_sources") or ())),
+    )
+
+
 async def agreement_for(
     db: AsyncSession,
     tenant_id: uuid.UUID | str,
@@ -229,6 +304,7 @@ async def agreement_for(
     scope_key: str = "*",
     thresholds: PromotionThresholds | None = None,
     now: datetime | None = None,
+    with_provenance: bool = False,
 ) -> AgreementEvidence:
     """The tenant's rolling agreement for one scope, plus its trailing slice.
 
@@ -236,6 +312,10 @@ async def agreement_for(
     nothing and gets the wall clock. The window bounds are returned as
     absolute timestamps rather than as "the last 30 days", because the second
     form stops meaning anything the moment somebody reads it on a later day.
+
+    ``with_provenance`` adds the decision ids at each end of the window, the
+    models that produced the verdicts and where the closures came from. It is
+    off by default because only the audit snapshot needs them.
     """
     limits = thresholds or PromotionThresholds()
     window_end = now or datetime.now(UTC)
@@ -245,10 +325,12 @@ async def agreement_for(
     params = {**_bind(tenant_id, window_start, window_end, limits.drift_sample), **extra}
 
     window_row = (
-        (await db.execute(text(to_named_params(scoped_sql(AGREEMENT_COUNTS_SQL, predicate), _PARAM_NAMES)), params)).mappings().first()
+        (await db.execute(_statement(to_named_params(scoped_sql(AGREEMENT_COUNTS_SQL, predicate), _PARAM_NAMES)), params))
+        .mappings()
+        .first()
     )
     recent_row = (
-        (await db.execute(text(to_named_params(scoped_sql(RECENT_COUNTS_SQL, predicate), _PARAM_NAMES)), params)).mappings().first()
+        (await db.execute(_statement(to_named_params(scoped_sql(RECENT_COUNTS_SQL, predicate), _PARAM_NAMES)), params)).mappings().first()
     )
 
     return AgreementEvidence(
@@ -258,6 +340,11 @@ async def agreement_for(
         recent=window_from_counts(dict(recent_row or {})),
         window_start=window_start,
         window_end=window_end,
+        # Only fetched when a snapshot is about to be written. The console
+        # reads this endpoint on every visit and does not need the decision
+        # ids, and an extra aggregate on a hot read for a field nobody renders
+        # is the kind of cost that never gets attributed back to its cause.
+        provenance=(await _provenance(db, predicate, params) if with_provenance else WindowProvenance()),
     )
 
 
@@ -289,7 +376,7 @@ async def breakdown_for(
     # scoped. Kept beside the caller instead of in the rules module because
     # only the console needs it: the dispatch gate asks about one scope at a
     # time and must never pull a whole table across to answer that.
-    statement = text(
+    statement = _statement(
         f"""
         SELECT
             COALESCE(NULLIF(d.{column}, ''), 'unattributed') AS key,

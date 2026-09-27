@@ -65,6 +65,22 @@ class TenantPolicy:
     #: audit trail so an operator can tell a real tenant choice from a default.
     from_store: bool = False
     source: str = "environment"
+    #: Gap-closure Phase 2.3. Response verbs this tenant has *earned* the right
+    #: to run unattended, keyed by verb, with the source the grant carries.
+    #: Read-only here: this service enforces grants and never issues them, and
+    #: keeping the write path in one place is what stops a dispatch-time
+    #: convenience from turning into a second way to become autonomous.
+    earned_verbs: dict[str, str] = field(default_factory=dict)
+
+    def earned_autonomy_for(self, action_type: str) -> str | None:
+        """The grant source for this verb, or ``None`` when none is held.
+
+        Returns the *source* rather than a boolean so a caller can put the
+        distinction in a rationale. "Auto-executed on a measured track record"
+        and "auto-executed because somebody overruled the gate" are the same
+        action and very different sentences in an incident review.
+        """
+        return self.earned_verbs.get(action_type)
 
     def is_whitelisted(self, action_type: str, target: str | None) -> bool:
         """True when an unexpired whitelist entry covers this action/target.
@@ -148,6 +164,12 @@ async def _load_from_store(tenant_id: str, dsn: str) -> TenantPolicy | None:
             """,
             UUID(tenant_id),
         )
+        # Read on the same connection, before it closes. A second connection
+        # for three columns would double the round trips on a latency-
+        # sensitive path, and the two reads have to describe the same instant
+        # anyway: a tier read before a demotion and a grant list read after it
+        # would compose into a posture neither half ever held.
+        earned_verbs = await _load_earned_verbs(conn, tenant_id)
     finally:
         await conn.close()
 
@@ -179,7 +201,40 @@ async def _load_from_store(tenant_id: str, dsn: str) -> TenantPolicy | None:
         whitelist=whitelist,
         from_store=True,
         source="tenant_policy",
+        earned_verbs=earned_verbs,
     )
+
+
+async def _load_earned_verbs(conn: Any, tenant_id: str) -> dict[str, str]:
+    """Which response verbs this tenant has earned the right to run unattended.
+
+    Gap-closure Phase 2.3. Only rows in the ``granted`` state count; a demoted
+    grant keeps its row so the history survives, and reading it as current is
+    exactly the mistake that would let a revoked capability keep executing.
+
+    A read failure returns nothing rather than raising. That is the safe
+    direction here and it is the opposite of the choice made for the tier: an
+    unreadable *tier* falls back to a conservative floor because the tier
+    permits, while an unreadable *grant list* simply grants nothing, so the
+    caller falls back to whatever the tier alone allows. Failing loudly would
+    take the dispatch path down to avoid being too cautious.
+    """
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT scope_key, source
+            FROM aisoc_autonomy_grants
+            WHERE tenant_id = $1
+              AND state = 'granted'
+              AND scope_kind = 'action_verb'
+              AND capability = 'auto_execute'
+            """,
+            UUID(tenant_id),
+        )
+    except Exception as exc:  # noqa: BLE001 - no grant is the safe answer
+        logger.warning("tenant_policy.grants_unreadable", tenant_id=tenant_id, error=str(exc)[:300])
+        return {}
+    return {str(row["scope_key"]): str(row["source"]) for row in rows}
 
 
 async def resolve_tenant_policy(tenant_id: str | UUID | None) -> TenantPolicy:

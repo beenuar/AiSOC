@@ -10919,6 +10919,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/autonomy-policy/grants:
+    get:
+      tags:
+      - autonomy-policy
+      summary: List Autonomy Grants
+      description: 'Every capability this tenant holds or has held, re-checked on
+        the way out.
+
+
+        Reconciliation runs first. A grant whose evidence has slipped below the
+
+        demotion floors is demoted here rather than being listed as current and
+
+        quietly failing at dispatch, which would leave an operator reading a page
+
+        that disagrees with the product.'
+      operationId: list_autonomy_grants_api_v1_autonomy_policy_grants_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantListResponse'
+    post:
+      tags:
+      - autonomy-policy
+      summary: Request Autonomy Grant
+      description: 'Ask for a capability. The evidence decides; an operator may overrule.
+
+
+        A refusal is a 200 carrying `granted: false` and the reasons, not an
+
+        error. Being told no by a safety control is the control working, and
+
+        rendering it as a failure invites a client to retry it.
+
+
+        The tenant comes from the credential. `scope_key` narrows within that
+
+        tenant and cannot reach past it.'
+      operationId: request_autonomy_grant_api_v1_autonomy_policy_grants_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromotionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - autonomy-policy
+      summary: Revoke Autonomy Grant
+      description: 'Hand a capability back.
+
+
+        Audited as a revocation rather than as a demotion. A human deciding to
+
+        stop and the evidence deciding for them are different events, and one word
+
+        for both would make "was this taken away because the numbers slipped"
+
+        unanswerable from the log.'
+      operationId: revoke_autonomy_grant_api_v1_autonomy_policy_grants_delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: scope_kind
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Scope Kind
+      - name: scope_key
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+          title: Scope Key
+      - name: capability
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Capability
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/business-context/rules:
     get:
       tags:
@@ -21313,6 +21424,87 @@ components:
       - period_start
       - period_end
       title: GenerateRequest
+    GrantListResponse:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        grants:
+          items:
+            $ref: '#/components/schemas/GrantModel'
+          type: array
+          title: Grants
+        demoted_now:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Demoted Now
+      type: object
+      required:
+      - tenant_id
+      - grants
+      - demoted_now
+      title: GrantListResponse
+    GrantModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        scope_kind:
+          type: string
+          title: Scope Kind
+        scope_key:
+          type: string
+          title: Scope Key
+        capability:
+          type: string
+          title: Capability
+        state:
+          type: string
+          title: State
+        source:
+          type: string
+          title: Source
+        is_override:
+          type: boolean
+          title: Is Override
+        evidence:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Evidence
+        granted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Granted At
+        demoted_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Demoted At
+        demoted_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Demoted Reason
+        override_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Override Reason
+      type: object
+      required:
+      - id
+      - scope_kind
+      - scope_key
+      - capability
+      - state
+      - source
+      - is_override
+      title: GrantModel
     GraphEdge:
       properties:
         source:
@@ -25237,6 +25429,73 @@ components:
       - suppressed
       - changed
       title: PreviewRow
+    PromotionRequest:
+      properties:
+        scope_kind:
+          type: string
+          title: Scope Kind
+          description: alert_class or action_verb
+        scope_key:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Scope Key
+        capability:
+          type: string
+          title: Capability
+          description: auto_close or auto_execute
+        override:
+          type: boolean
+          title: Override
+          default: false
+        override_reason:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Override Reason
+      type: object
+      required:
+      - scope_kind
+      - scope_key
+      - capability
+      title: PromotionRequest
+    PromotionResponse:
+      properties:
+        granted:
+          type: boolean
+          title: Granted
+        state:
+          type: string
+          title: State
+        source:
+          type: string
+          title: Source
+        is_override:
+          type: boolean
+          title: Is Override
+        refusals:
+          items:
+            type: string
+          type: array
+          title: Refusals
+        evidence:
+          additionalProperties: true
+          type: object
+          title: Evidence
+        changed:
+          type: boolean
+          title: Changed
+      type: object
+      required:
+      - granted
+      - state
+      - source
+      - is_override
+      - refusals
+      - evidence
+      - changed
+      title: PromotionResponse
     ProposalResponse:
       properties:
         id:
