@@ -312,6 +312,40 @@ _NAMED_TARGET = (
 #: reference that has nothing to do with the verb.
 _TARGET_FILLER = r"(?:(?:the|this|that|host|machine|endpoint|account|user|device|node|server|asset|vm)[-_:=\s]{1,3})?"
 
+#: A claim of human authority, or a directive to stop working the case. Either
+#: one carries the weight in `asserted_verdict`; neither is enough alone.
+_VERDICT_AUTHORITY = (
+    r"\b(?:analyst\s+note|soc\s+(?:lead|manager|analyst)|tier\s*[123]"
+    r"|reviewed\s+by|triaged\s+by|approved\s+by|signed\s+off"
+    r"|previously\s+(?:triaged|reviewed|assessed|investigated)"
+    r"|assessment\s+was\s+superseded|per\s+the\s+(?:analyst|soc)"
+    r"|no\s+further\s+action|safe\s+to\s+close|can\s+be\s+closed"
+    r"|close\s+this\s+(?:alert|case|incident)|suppress\s+this\s+(?:alert|detection))\b"
+)
+
+#: Language that *reverses* a disposition rather than asserting it. An analyst
+#: writing "previous triage marked this benign in error; reopening" is doing
+#: the opposite of what this rule exists to catch, and that exact sentence is
+#: in the benign corpus. Excluded by proximity rather than globally, so an
+#: attacker cannot disarm the rule by appending the word "reopening" to an
+#: otherwise closing assertion — the exclusion only applies when the reversal
+#: sits next to the disposition it reverses.
+_VERDICT_REVERSAL = r"\b(?:in\s+error|reopen(?:ing|ed)?|incorrectl?y?|mistakenl?y?|was\s+wrong|disagree|overturn|escalat)"
+
+#: A disposition an attacker wants the case to carry, not followed closely by
+#: language reversing it.
+_VERDICT_DISPOSITION = (
+    r"\b(?:false[\s-]?positive|benign|not\s+malicious|no\s+threat"
+    r"|authoriz(?:ed|ation)\s+activity|expected\s+behaviou?r|known[\s-]good)\b"
+    rf"(?![\s\S]{{0,40}}{_VERDICT_REVERSAL})"
+)
+
+#: Authority/closure and disposition within 160 characters, in either order.
+_ASSERTED_VERDICT = (
+    rf"(?:{_VERDICT_AUTHORITY}[\s\S]{{0,160}}{_VERDICT_DISPOSITION})"
+    rf"|(?:{_VERDICT_DISPOSITION}[\s\S]{{0,160}}{_VERDICT_AUTHORITY})"
+)
+
 #: Every detection rule, with the views each is valid on.
 #:
 #: One table rather than two keyed by severity, because severity and view
@@ -319,10 +353,17 @@ _TARGET_FILLER = r"(?:(?:the|this|that|host|machine|endpoint|account|user|device
 #: to both; the rules that opt out of the segmented view carry the reason.
 _RULES: tuple[_Rule, ...] = (
     _Rule(
+        # The gaps are `[\s\S]` and 80, not `[^\n]` and 40 (GHSA-mg2q-gvr3-rjh8).
+        # Two mechanical evasions were measured against the old bounds and both
+        # produced zero signals: a newline between "previous" and
+        # "instructions", which `[^\n]` cannot cross, and 57 characters of
+        # plausible clause between "Ignore," and "all previous instructions",
+        # which overran 40. Neither needed any understanding of the pattern —
+        # only a line break or a longer sentence.
         "ignore_previous",
         "high",
         re.compile(
-            r"\b(?:ignore|disregard|forget|override)\b[^\n]{0,40}\b(?:previous|prior|above|earlier|all|the)\b[^\n]{0,40}\b(?:instructions?|prompt|rules?|system|context)\b",
+            r"\b(?:ignore|disregard|forget|override)\b[\s\S]{0,80}\b(?:previous|prior|above|earlier|all|the)\b[\s\S]{0,80}\b(?:instructions?|prompt|rules?|system|context)\b",
             re.IGNORECASE,
         ),
     ),
@@ -349,6 +390,36 @@ _RULES: tuple[_Rule, ...] = (
             r"|(?:initial|original|hidden|prior|preceding)\s+(?:instructions?|prompt|rules?)"
             r"|prompt\s+(?:text|contents?)"
             r"|configuration\s+(?:prompt|instructions?))\b",
+            re.IGNORECASE,
+        ),
+    ),
+    _Rule(
+        # The class every other high rule misses, because every other high rule
+        # looks for an imperative aimed at the model (GHSA-mg2q-gvr3-rjh8).
+        #
+        # A payload that issues no instruction and simply *asserts* that this
+        # case was already decided produces zero signals — and that assertion
+        # is precisely the outcome an attacker wants, because the guard's only
+        # job here is to stop `should_auto_close`. Nothing has to be
+        # exfiltrated and no fence has to be escaped: the attacker influences
+        # one enriched field and the verdict comes out `false_positive` above
+        # the auto-close threshold.
+        #
+        # Two of three components are required, not one, and that is the whole
+        # design. A disposition alone is ordinary text — a runbook legitimately
+        # says "if the hash matches the vendor's, this is a false positive",
+        # and the knowledge-base retrieval added in Phase 6.3 puts runbooks
+        # through this same guard. Demoting on that would let anyone who can
+        # write a runbook switch off auto-close for the tenant, which is the
+        # inverse failure and just as bad. What is not ordinary is a
+        # *disposition carried by a claim of authority or a closure directive*,
+        # inside a field a connector populated.
+        "asserted_verdict",
+        "high",
+        re.compile(
+            # (authority | closure) near disposition, in either order, with
+            # reversal language excluded — see _ASSERTED_VERDICT below.
+            _ASSERTED_VERDICT,
             re.IGNORECASE,
         ),
     ),
