@@ -208,6 +208,12 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "osqueryd holds no bearer token at enrolment — this call is what establishes one — and the per-tenant enroll secret is checked "
         "before any write",
     ),
+    "services/api/app/api/v1/endpoints/mcp_servers.py::resolve_mcp_servers": (
+        "service_token_valid",
+        "the agents service reads its tenant's MCP servers here and holds no session; the shared X-AiSOC-Service-Token is compared in "
+        "constant time and fails closed when unset. Deliberately no session fallback, unlike the other dual-mode routes: this one "
+        "returns plaintext third-party credentials, and a console session is not a credential to read those",
+    ),
 }
 
 

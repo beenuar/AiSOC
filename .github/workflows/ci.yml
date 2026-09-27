@@ -824,9 +824,13 @@ jobs:
           # test_router_report.py was in neither the install list nor the file
           # list below, so two of its assertions failed on every developer
           # machine and CI never ran them either way.
+          # mcp is exact-pinned to match services/agents/pyproject.toml. The
+          # MCP client tests run a real server in-process over memory streams
+          # rather than mocking the SDK, so the version CI exercises has to be
+          # the version the image ships.
           pip install --quiet pytest pytest-asyncio respx \
             'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
-            jsonschema 'markdown>=3.5,<4'
+            jsonschema 'markdown>=3.5,<4' 'mcp==1.30.0'
           cd services/agents
           python3 -m pytest tests/ -v --tb=short -rs
 
@@ -897,6 +901,21 @@ jobs:
         # not prose: an investigation that summarises the alert reads exactly
         # like one that pivoted five times.
         run: python3 scripts/check_investigation_depth.py
+
+      - name: Gate the MCP client's defaults (Phase 5)
+        # An MCP server is third-party code, reached over the network,
+        # returning text into the prompt that decides what the agent does
+        # next. Everything that makes that safe is a default rather than a
+        # feature, and a default is what a refactor moves without anybody
+        # noticing: an allowlist check drifting one line below the connection,
+        # a Tool built with a raw callable so the dispatch re-check and the
+        # ledger write are both skipped, a description passed through because
+        # sanitising it broke a formatting test. This asserts the policy
+        # module can reach no socket at all, that the allowlist is the first
+        # decision taken, that the SSRF guard runs ahead of the transport,
+        # that stdio stays off behind two separate switches, and that a
+        # destructive tool is still refused when the policy is asked directly.
+        run: python3 scripts/check_mcp_client_policy.py
 
       - name: Every check in the tree is reachable from a workflow
         # The gate on the gates. A conformance script with no workflow cannot

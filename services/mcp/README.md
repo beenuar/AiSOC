@@ -89,7 +89,9 @@ Print the resolved paths for your own machine with `node dist/index.js install -
 
 ## Tools exposed
 
-The server advertises **13 tools**. Discovery tools list things, deep-dive tools fetch one thing, the lake pair runs governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning.
+The server advertises **18 tools**. Discovery tools list things, deep-dive tools fetch one thing, the lake pair runs governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning.
+
+Every tool carries MCP behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so a client that takes them seriously can decide what it may call without an operator vouching for each tool by name. **Seventeen of the eighteen are read-only.** The exception is `aisoc_run_investigation`, which starts an agent run, and it is annotated as such rather than being quietly marked read-only. No tool is annotated destructive, because none is.
 
 | Tool | Required arguments | Purpose |
 |---|---|---|
@@ -97,17 +99,28 @@ The server advertises **13 tools**. Discovery tools list things, deep-dive tools
 | `aisoc_list_cases` | — | Page through cases with filters (status, owner, priority). |
 | `aisoc_query_detections` | — | Search detection rules by name, MITRE technique, or tag. |
 | `aisoc_list_investigations` | — | Page through agent investigation runs. |
+| `aisoc_list_replay_reports` | — | Replay evaluations: runs that graded AiSOC triage against this tenant's own analysts' past decisions. |
+| `aisoc_list_actions` | — | Response actions this deployment can perform, and the vendor behind each. Listing one neither performs nor schedules it. |
 | `aisoc_lake_schema` | — | Discover allowlisted tables and columns in the warm tier. Call this *before* `aisoc_lake_query` so the agent does not guess column names. |
 | `aisoc_get_alert` | `alert_id` | Full alert detail including enrichments and matched detections. |
 | `aisoc_get_case` | `case_id` | Full case detail including timeline and linked alerts. |
 | `aisoc_get_detection_rule` | `rule_id` | Inspect a single rule (logic, fixtures, false-positive notes). |
 | `aisoc_get_investigation` | `run_id` | Run summary (status, duration, agents involved, cost). |
+| `aisoc_get_triage_verdict` | `alert_id` | What the agent decided about one alert: verdict, recommended actions, confidence with its rationale, and the analyst disposition. Says so explicitly when nothing has triaged it yet. |
+| `aisoc_get_replay_report` | `evaluation_id` | One replay report, served as stored rather than re-rendered. A withheld headline stays withheld. |
 | `aisoc_lake_query` | `sql` | Read-only SELECT against the warm tier. Per-tenant RLS, row caps, and the `lake:query` permission are enforced server-side. |
-| `aisoc_run_investigation` | `case_id` | Start the agent on a case and stream events back. |
+| `aisoc_run_investigation` | `case_id` | Start the agent on a case and stream events back. The one tool here that is not read-only. |
+| `aisoc_preview_action` | `capability` | Preview a response action: blast radius, reversibility, verification probe, approval tier. **Dry run only.** |
 | `aisoc_replay_decision` | `run_id` | Walk the agent ledger step by step (recon, forensic, responder, reporter). |
 | `aisoc_explain_step` | `run_id`, `step` | Prompt, response, and tool I/O for a single step. |
 
 Tools are advertised in that order deliberately: an agent reading the listing top-to-bottom meets the cheap discovery surface before the expensive one.
+
+### Actions are previewed, never performed
+
+`aisoc_preview_action` is the only tool that touches the response surface, and it cannot perform an action. The path it requests is a module constant naming `/api/v1/live-actions/dry-run`; the sibling `/dispatch`, which performs an action against a live vendor, appears nowhere in `src/`, and `tests/actions.test.ts` asserts that by reading the source rather than by driving the handler, so a second action tool added later is caught too. The API route behind it also forces `dry_run: true` server-side whatever the body says.
+
+That boundary is deliberate. An MCP key is read-scoped credential material that ends up in an editor's configuration file, and the distance between "preview" and "perform" should not be one careless string. Performing an action needs the AiSOC console or API with an approval.
 
 ## Configuration
 

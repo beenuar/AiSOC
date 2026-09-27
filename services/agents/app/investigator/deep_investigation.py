@@ -38,6 +38,8 @@ from app.investigator import ledger
 from app.investigator.strategies import Strategy, select_strategy
 from app.llm.factory import make_chat_model
 from app.llm.tool_loop import run_with_tools
+from app.mcp.tools import build_mcp_toolset
+from app.prompting.envelope import system_rule
 from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
@@ -110,6 +112,12 @@ class DeepInvestigationResult:
     #: than assumed: "every call is in the ledger" is a claim, and a run with
     #: four pivots and zero rows written is the failure it would hide.
     ledger_rows: int = 0
+    #: Namespaced MCP tools bound for this run, and what was refused and why.
+    #: Recorded on the result as well as in the ledger so an operator reading
+    #: one investigation can see that a tool they configured was not offered,
+    #: without going to the ledger to find out.
+    mcp_tools: list[str] = field(default_factory=list)
+    mcp_refusals: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -137,6 +145,8 @@ class DeepInvestigationResult:
             "customer_tools": self.customer_tools,
             "coverage_notes": self.coverage_notes,
             "ledger_rows": self.ledger_rows,
+            "mcp_tools": self.mcp_tools,
+            "mcp_refusals": self.mcp_refusals,
             "error": self.error,
         }
 
@@ -406,10 +416,28 @@ async def run_deep_investigation(
         result.coverage_notes = coverage_notes
 
         coverage = ("\n\n" + "\n".join(f"- {note}" for note in coverage_notes)) if coverage_notes else ""
+        # One `system` string that both of the bindings below extend. Two
+        # f-strings each composing their own would mean whichever ran second
+        # silently dropped the first one's addition.
+        system = f"{_SYSTEM_PREAMBLE}\n\n{strategy.system_guidance()}{coverage}"
+
+        # Third-party MCP servers this tenant registered, if any. The toolset
+        # carries its own nonce, and the standing data-only rule for that
+        # nonce is appended to the system message here: an MCP result is
+        # fenced with it, and a fence the system prompt never explains is a
+        # delimiter rather than a boundary.
+        mcp = await build_mcp_toolset(tenant_id, run_id=getattr(state, "run_id", None))
+        if mcp.tools:
+            for tool in mcp.tools:
+                registry.register(tool)
+            system = f"{system}\n\n{system_rule(mcp.nonce)}"
+            result.mcp_tools = [t.name for t in mcp.tools]
+        result.mcp_refusals = [f"{name}: {classification}" for name, classification, _ in mcp.refusals]
+
         loop = await asyncio.wait_for(
             run_with_tools(
                 model,
-                system=f"{_SYSTEM_PREAMBLE}\n\n{strategy.system_guidance()}{coverage}",
+                system=system,
                 user=_summarise_alert(state),
                 registry=registry,
                 max_iters=max_iterations or MAX_ITERATIONS,

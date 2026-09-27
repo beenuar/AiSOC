@@ -33,6 +33,15 @@ const EXPECTED_TOOLS = [
   // we ship and lives in the action cluster.
   "aisoc_lake_schema",
   "aisoc_lake_query",
+  // Gap-closure Phase 5.6. Triage verdicts and replay reports are read
+  // tools over surfaces that already existed; the two action tools are the
+  // only ones that touch the response surface, and the preview is dry-run
+  // only (see tests/actions.test.ts).
+  "aisoc_get_triage_verdict",
+  "aisoc_list_replay_reports",
+  "aisoc_get_replay_report",
+  "aisoc_list_actions",
+  "aisoc_preview_action",
 ] as const;
 
 describe("tool registry", () => {
@@ -115,9 +124,13 @@ describe("tool registry", () => {
 
   it("places action/replay tools last", () => {
     const names = ALL_TOOLS.map((t) => t.metadata.name);
-    const last3 = names.slice(-3);
-    expect(last3).toEqual([
+    // Phase 5.6 added `aisoc_preview_action` to this cluster, so the tail is
+    // four rather than three. Asserted as a slice rather than as "contains"
+    // because the ordering is the point: an agent reading the listing
+    // top-to-bottom should meet discovery before anything that acts.
+    expect(names.slice(-4)).toEqual([
       "aisoc_run_investigation",
+      "aisoc_preview_action",
       "aisoc_replay_decision",
       "aisoc_explain_step",
     ]);

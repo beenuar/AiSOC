@@ -26,7 +26,7 @@ gate = importlib.util.module_from_spec(spec)
 sys.modules["check_injection_eval"] = gate
 spec.loader.exec_module(gate)
 
-_INCIDENTS, _METRICS = gate._corpus_modules(REPO_ROOT)
+_INCIDENTS, _METRICS, _HOLDOUT = gate._corpus_modules(REPO_ROOT)
 
 
 class _Signal:
@@ -95,6 +95,16 @@ def pairs() -> list[Any]:
     return _INCIDENTS.build_pairs()
 
 
+def _holdout_caught() -> set[str]:
+    """The held-out payloads the record says the guard catches.
+
+    A stand-in scanner has to reproduce the whole recorded state, not just
+    this corpus's half, or every assertion below fails on the half nobody was
+    testing.
+    """
+    return {p.payload for p in _HOLDOUT.build_holdout_pairs() if p.must_flag and p.injection_id not in _HOLDOUT.HOLDOUT_UNDETECTED}
+
+
 def _run(monkeypatch: pytest.MonkeyPatch, scan, argv: list[str]) -> int:
     monkeypatch.setattr(gate, "_guard_scanner", lambda root: scan)
     return gate.main(argv)
@@ -117,8 +127,11 @@ class TestTheGateFails:
         caught = {p.payload for p in pairs if p.must_flag and p.injection_id not in _INCIDENTS.KNOWN_UNDETECTED}
         # Reproducing the recorded state first, so the failure below is
         # attributable to the one payload removed and not to the stand-in.
-        assert _run(monkeypatch, _scanner(caught), ["--check"]) == 0
-        assert _run(monkeypatch, _scanner(caught - {sorted(caught)[0]}), ["--check"]) == 1
+        # The held-out corpus is part of that state: the gate checks its
+        # record too, so a stand-in that knows only this corpus fails for a
+        # reason that has nothing to do with what is being tested.
+        assert _run(monkeypatch, _scanner(caught | _holdout_caught()), ["--check"]) == 0
+        assert _run(monkeypatch, _scanner((caught | _holdout_caught()) - {sorted(caught)[0]}), ["--check"]) == 1
         assert "not on the recorded ratchet" in capsys.readouterr().err
 
     def test_a_stale_ratchet_entry_fails(self, monkeypatch: pytest.MonkeyPatch, pairs, capsys) -> None:
@@ -134,6 +147,42 @@ class TestTheGateFails:
 
     def test_flagging_every_benign_control_fails_the_ceiling(self, monkeypatch: pytest.MonkeyPatch, pairs) -> None:
         assert _run(monkeypatch, _scanner({p.payload for p in pairs}), ["--check"]) == 1
+
+
+class TestTheHeldOutRecordIsChecked:
+    """The held-out corpus has no floor, and that is the point.
+
+    A floor on a held-out set is an instruction to tune against it, so what
+    CI enforces is narrower and different: that the recorded misses describe
+    this tree, in both directions. Both arms are driven red here rather than
+    merely observed passing, because a gate that has never failed is a gate
+    nobody has shown to work.
+    """
+
+    def test_a_held_out_miss_absent_from_the_record_fails(self, monkeypatch: pytest.MonkeyPatch, pairs, capsys) -> None:
+        recorded = {p.payload for p in pairs if p.must_flag and p.injection_id not in _INCIDENTS.KNOWN_UNDETECTED}
+        extra = next(p.payload for p in _HOLDOUT.build_holdout_pairs() if p.injection_id in _HOLDOUT.HOLDOUT_UNDETECTED)
+        # A guard that starts catching a payload it used to miss is good news
+        # and still has to be recorded, so this is the *stale* direction.
+        assert _run(monkeypatch, _scanner(recorded | _holdout_caught() | {extra}), ["--check"]) == 1
+        assert "now catches" in capsys.readouterr().err
+
+    def test_a_held_out_payload_the_record_calls_caught_but_is_missed_fails(self, monkeypatch: pytest.MonkeyPatch, pairs, capsys) -> None:
+        recorded = {p.payload for p in pairs if p.must_flag and p.injection_id not in _INCIDENTS.KNOWN_UNDETECTED}
+        silenced = sorted(_holdout_caught())[0]
+        assert _run(monkeypatch, _scanner(recorded | (_holdout_caught() - {silenced})), ["--check"]) == 1
+        assert "HOLDOUT_UNDETECTED does not list" in capsys.readouterr().err
+
+    def test_the_held_out_rate_is_published_with_its_count(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Every rate travels with the rows it was computed over, and the
+        held-out block is published beside the tuned one rather than instead
+        of it: reading either alone misleads."""
+        out = tmp_path / "report.json"
+        assert gate.main(["--json-out", str(out)]) == 0
+        holdout = json.loads(out.read_text())["holdout"]
+        assert holdout["metrics"]["guard_detection_rate"]["measured"] is True
+        assert holdout["metrics"]["guard_detection_rate"]["denominator"] > 0
+        assert holdout["corpus"]["is_synthetic"] is True and holdout["corpus"]["substrate"] is True
 
 
 class TestAttribution:
