@@ -22,27 +22,27 @@
 
 Telemetry arrives from your security tools. AiSOC normalizes it, runs the 2603 executable
 rules of its 6991-rule library, groups what fires into incidents, investigates each one with
-an AI agent whose every prompt and tool call is recorded, and proposes an action. A human
-approves before anything executes.
+an AI agent whose every prompt and tool call is recorded, and proposes an action. New threat
+intelligence re-sweeps the history you already collected. A human approves before anything runs.
 
 ## What it looks like running
 
 <a href="apps/web/public/demo/demo.mp4"><img src="apps/web/public/demo/hero.gif" alt="AiSOC on one host: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent" /></a>
 
-**[Watch the full three minutes](apps/web/public/demo/demo.mp4)** — install to AI verdict on
-one server, against the published images. Terminal waits are shortened, which the recording
-says on screen. ([step by step](apps/docs/docs/deployment/walkthrough.mdx))
+**[Watch the full three minutes](apps/web/public/demo/demo.mp4)** — install to AI verdict on one
+server, against the published images. Terminal waits are shortened, which the recording says on
+screen. ([step by step](apps/docs/docs/deployment/walkthrough.mdx))
 
-Stills from earlier runs under the same rules — no seeded rows, no demo mode, no mockups. The
-events were authored to be representative; everything downstream of them is the product doing
-its job. ([what is real](apps/web/public/screenshots/README.md))
+Stills from earlier runs under the same rules — no seeded rows, no demo mode, no mockups. The events
+were authored to be representative; everything downstream is the product doing its job.
+([what is real](apps/web/public/screenshots/README.md))
 
 | | |
 |---|---|
 | <img src="apps/web/public/screenshots/alerts-queue.png" alt="Alerts queue" /> | <img src="apps/web/public/screenshots/ai-triage-verdict.png" alt="AI triage verdict in the Investigation Rail" /> |
 | **Alerts** — each attributed to the connector that fed it. | **Automated triage** — the bundled local model's verdict, confidence and rationale, verbatim. |
 | <img src="apps/web/public/screenshots/threat-intel-kev.png" alt="Threat intelligence page showing CISA KEV entries" /> | <img src="apps/web/public/screenshots/soc-operations.png" alt="SOC operations dashboard with honest empty states" /> |
-| **Threat intelligence** — 1,725 real CISA KEV entries, minutes after boot, with no API key. | **SOC operations** — with nothing connected yet, and it says so rather than showing a placeholder. |
+| **Threat intelligence** — the real CISA KEV catalog, minutes after boot, with no API key. | **SOC operations** — with nothing connected yet, and it says so rather than showing a placeholder. |
 
 ## Quick start
 
@@ -80,9 +80,7 @@ actually browse to. Stuck? `make doctor`.
 
 ## Try it without connecting anything
 
-`make demo` loads a dataset. **It is synthetic**: it shows the pipeline shape, not real
-activity. Every row is marked `is_synthetic = true` in the database and labelled in the
-console. It is not a benchmark, a customer, or an incident.
+`make demo` loads a **synthetic** dataset — the pipeline shape, not real activity, and never a benchmark, a customer or an incident. Every row is `is_synthetic = true` and labelled in the console.
 
 ## Connect real data
 
@@ -109,7 +107,10 @@ and source IP from the usual spellings.
 Ingest normalizes to a common shape and Kafka carries it. Then
 fusion runs 2603 executable detection rules, of 6991 on disk, and decides what becomes an
 alert, correlation groups related alerts, an agent investigates and writes its reasoning to
-the Investigation Ledger, and a human approves any response.
+the Investigation Ledger, and a human approves any response. Separately, new threat intelligence
+sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt without
+anyone writing a query — the model fills a closed schema and every value it supplies is bound
+as a parameter, so it cannot express a query at all.
 
 **Executable is earned, not declared.** A rule enters the compiled ruleset only after a
 vendor-shaped event has been replayed through the real connector and this engine and that
@@ -135,21 +136,20 @@ CORE is the smallest deployment that takes a real event and produces a real
 alert, and **it needs no credentials to do either** — for two reasons.
 
 **The model ships with the gateway.** Ollama runs a pinned ~2 GB
-`llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up` produces
-real triage verdicts with real token counts in the Investigation Ledger — not a
-stub. It is not a frontier model: over 50 alerts it gave triage usable output 44
-times before the reply was constrained to JSON and 50 after
-([method](scripts/measure_triage_reliability.py)); the rail labels which path
-answered. To upgrade, set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`,
-`AISOC_LLM_MODEL_DEEP` and an empty `AISOC_LLM_API_BASE`. **No hosted provider has
-ever been exercised here** — there is no funded key, so per-model rows read *not
-measured* rather than zero. ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
+`llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up` produces real triage
+verdicts with real token counts in the Investigation Ledger — not a stub. It is not a frontier
+model: over 50 alerts it gave triage usable output 44 times before the reply was constrained to
+JSON and 50 after ([method](scripts/measure_triage_reliability.py)); the rail labels which path
+answered. To upgrade, set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP` and an
+empty `AISOC_LLM_API_BASE`. **No hosted provider has ever been exercised here** — there is no
+funded key, so per-model rows read *not measured* rather than zero.
+([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
 
-**One real external feed ships too.** `services/threatintel` polls the
-[CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
-catalog — authoritative, public, no API key — into the console's Threat
-Intelligence page: the one thing in a fresh install that is neither synthetic
-nor yours.
+**One real external feed ships too.** `services/threatintel` polls the CISA Known Exploited
+Vulnerabilities catalog — authoritative, public, no API key — into the console's Threat
+Intelligence page: the one thing in a fresh install that is neither synthetic nor yours.
+`cisa.gov` answers 403 to whole networks regardless of user agent, so it falls back to CISA's
+own GitHub mirror rather than sitting at zero rows and calling that a clean estate.
 
 ## Real vs synthetic data
 
@@ -195,6 +195,9 @@ rail shows which one answered — it never fabricates a verdict.
 | REST API + web console | Stable | Unit + integration | Yes |
 | AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
+| Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
+| Hunting agent + 68-hunt library | Beta | Unit + boundary gate | Yes, `full` profile |
+| SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Scheduled connectors | Beta | Contract tests | `full` profile |
@@ -216,10 +219,9 @@ rail shows which one answered — it never fabricates a verdict.
 ## Troubleshooting
 
 `make doctor` checks the host tools, memory and disk in the Docker VM, every port, each
-datastore by querying it rather than by asking whether its container is up, and whether
-`.env` still holds placeholders — then prints the command to run next. The six failures it
-is most often right about are tabulated under
-[Installation → Troubleshooting](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
+datastore by querying it rather than by asking whether its container is up, and whether `.env`
+still holds placeholders — then prints the command to run next. The six failures it is most
+often right about are tabulated under [Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
 
 ## Security
 
@@ -240,9 +242,8 @@ make stats       # recount every figure this README publishes
 Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
 [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
 [plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
-[contributing](CONTRIBUTING.md). The connector and detection-rule counts above
-are recounted from the tree by `scripts/project_stats.py`, which CI fails if
-this README disagrees with it.
+[contributing](CONTRIBUTING.md). Every count above is recounted from the tree by
+`scripts/project_stats.py`, and CI fails if this README disagrees with it.
 
 ## Roadmap · Contributing · License
 
