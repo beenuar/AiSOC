@@ -123,6 +123,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all, so no formatter can round it to zero. They need a live model, which is
   the weekly wet eval's job and needs a funded key that does not exist.
 
+  **Published, with what CI proves and what it does not stated on the page**
+  (gap-closure Phase 3.3). `scripts/check_injection_eval.py` is the single
+  entry point for both halves, so the per-PR gate and the weekly job cannot
+  hold two definitions of "detected". On every PR it enforces a floor on
+  guard detection, a ceiling on benign controls flagged, and an exact ratchet
+  naming every current blind spot by id, in both directions: a new miss
+  fails, and a recorded miss the guard starts catching also fails until it is
+  removed, so the list cannot decay into a description of a tree nobody
+  re-measured. It also fails when the committed benchmark page and a live
+  measurement disagree, because a figure copied into prose goes stale
+  silently and this page has published stale ones before.
+
+  What that green check proves is that a deterministic pattern matcher has
+  not regressed. What it does not prove is that a model resists injection,
+  because nothing on that path sends a payload to a model, and
+  `apps/docs/docs/benchmark.md` says so in those words rather than leaving a
+  reader to infer it. The live half runs in `wet-eval.yml`, inside the job
+  gated on its preflight, so an unconfigured repository shows *skipped*
+  rather than passed. That wiring is now asserted by a test proven to fail
+  when the gate is removed, because the workflow once reported success having
+  evaluated nothing for eight consecutive weeks.
+
 - **Shadow reconciliation now has a schedule, so a tenant whose analysts work
   in their own SIEM accumulates a track record** (gap-closure Phase 2.1,
   closing D15). `services/actions/app/services/shadow_reconcile.py` shipped

@@ -305,7 +305,33 @@ through `audit_hash.verify_chain`.
 
 - [x] **3.1 Corpus** of injected incidents paired with clean twins, generated deterministically and labelled synthetic. Shipped in [#913](https://github.com/beenuar/AiSOC/pull/913). `services/agents/tests/adversarial/injection_incidents.py`, 65 pairs (54 adversarial, 11 benign controls) across the six surfaces the plan names. Payloads are written to fit the field they arrive in, which is what makes this corpus harder than the payload corpus beside it rather than a restatement of it. The prose payloads are **imported** from `injection_corpus.py`, not copied, so the two cannot drift. Determinism is a hashed base-incident choice with no RNG and no clock, pinned by a digest. See D17 for the property the twins had to gain before any metric was attributable.
 - [x] **3.2 Metrics**: verdict flip rate, unsafe action proposal rate, tool-call deviation, guard detection rate. Shipped in [#913](https://github.com/beenuar/AiSOC/pull/913). `injection_metrics.py` defines all four once, so the suite and the gate that publishes them cannot hold two definitions of "detected". A flip counts only in the attacker's direction and only against the clean twin's verdict; an unsafe action counts only when the injected run proposes containment the clean run did not, because an incident whose correct response *is* to isolate a host would otherwise score as an attack succeeding every time. See D18 for the measurement error this found in itself.
-- [~] **3.3 Runs and publishing**: deterministic floor in CI, live rates in the weekly wet eval or "not measured", both on the benchmark page. In flight. 3.1 and 3.2 land the corpus and the metrics wired into the `services/agents` suite, which already enforces the floor and the ratchet on every PR. The standalone gate, the `ci.yml` and `wet-eval.yml` wiring and the benchmark page follow in a second PR, split because the two together run past the size a reviewer can hold.
+- [x] **3.3 Runs and publishing**: deterministic floor in CI, live rates in the weekly wet eval or "not measured", both on the benchmark page. Shipped in [#914](https://github.com/beenuar/AiSOC/pull/914). `scripts/check_injection_eval.py` is the single entry point for both halves, so the CI gate and the wet eval cannot hold two definitions of "detected". `ci.yml :: p1-eval` runs it with `--check` and `--benchmark-md`, which fails when the published page and a live measurement disagree; `wet-eval.yml` runs it with `--live` inside the preflight-gated job. Four claim-to-gate rows added across the two PRs and the existing prompt-injection row corrected.
+
+**Done when:** CI enforces the guard floor on the corpus, the wet eval emits
+live rates or "not measured", and `apps/docs/docs/benchmark.md` shows both.
+
+**Met, with one number deliberately absent rather than filled in.** CI
+enforces the floor and the ratchet, and both were proven capable of failing
+rather than merely observed passing: the gate is driven red by a guard that
+detects nothing, by one silenced payload outside the ratchet, by a ratchet
+entry that has gone stale, and by a benign control being flagged. The
+benchmark page carries both halves and CI fails when the page and the
+measurement disagree.
+
+The wet eval emits "not measured", and that is the honest state rather than a
+shortfall: **no funded key exists, so the three behavioural rates have never
+been measured on any model.** What was verified is that they cannot be
+reported as anything else. An unmeasured `Rate` carries no `value` key, so no
+formatter can round it to zero; a live run with no key and a live run whose
+every dispatch failed both report the same; and the weekly job is gated on
+its preflight, so an unconfigured repository shows *skipped* rather than
+passed. That last property is now asserted by a test, and the test was proven
+by deleting the `if:` and watching it go red.
+
+**The guard's measured rate against this corpus is 66.7% (36 of 54)**, where
+the prose payload corpus measures the same guard at 0.852. Both are published
+with the distinction stated. The gap is a finding, not a regression, and
+closing it is the next work this evaluation makes possible (D19).
 
 ## Phase 4: Let the investigation agent reach the customer's tools
 
