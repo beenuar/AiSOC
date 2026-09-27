@@ -219,7 +219,12 @@ def _validate_allowlist(tool_allowlist: list[str] | None) -> list[str]:
     # Order preserved, duplicates dropped. An allowlist is a set; keeping the
     # operator's order makes the console read back the way it was typed.
     seen: set[str] = set()
-    return [e for e in cleaned if not (e in seen or seen.add(e))]
+    unique: list[str] = []
+    for entry_name in cleaned:
+        if entry_name not in seen:
+            seen.add(entry_name)
+            unique.append(entry_name)
+    return unique
 
 
 def _validate_bounds(timeout_seconds: int, max_response_bytes: int) -> None:

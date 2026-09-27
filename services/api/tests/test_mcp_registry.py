@@ -26,6 +26,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.endpoints import mcp_servers as endpoint_module
 from app.api.v1.endpoints.mcp_servers import router as mcp_router
 from app.db.database import Base, get_db
 from app.db.rls import get_tenant_db
@@ -405,7 +406,6 @@ def _no_set_config(monkeypatch):
     proven by ``check_rls_policy_shape.py`` over the migration and by the
     live-container isolation suite; asserting it here would need a Postgres.
     """
-    import app.api.v1.endpoints.mcp_servers as endpoint_module
 
     async def _noop(_session, _tenant_id):
         return None

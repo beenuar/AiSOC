@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 from app.llm.tool_loop import run_with_tools
+from app.mcp import tools as tools_module
 from app.mcp.config import McpServerConfig
 from app.mcp.tools import LEDGER_SEQ_BASE, build_mcp_toolset
 from app.tools.registry import ToolRegistry
@@ -102,8 +103,6 @@ def recorded_ledger(monkeypatch) -> list[dict[str, Any]]:
     async def _record_event(**kwargs):
         rows.append(kwargs)
         return uuid.uuid4()
-
-    import app.mcp.tools as tools_module
 
     monkeypatch.setattr(tools_module.ledger_module, "resolve_tenant", _resolve_tenant)
     monkeypatch.setattr(tools_module.ledger_module, "record_event", _record_event)
@@ -217,8 +216,6 @@ async def test_an_unresolvable_tenant_writes_nothing_and_says_so(monkeypatch, ca
     async def _record_event(**kwargs):  # pragma: no cover - must never be reached
         rows.append(kwargs)
 
-    import app.mcp.tools as tools_module
-
     monkeypatch.setattr(tools_module.ledger_module, "resolve_tenant", _resolve_tenant)
     monkeypatch.setattr(tools_module.ledger_module, "record_event", _record_event)
 
@@ -242,8 +239,6 @@ async def test_a_run_with_no_run_id_still_works_and_writes_nothing(monkeypatch) 
 
     async def _record_event(**kwargs):  # pragma: no cover - must never be reached
         rows.append(kwargs)
-
-    import app.mcp.tools as tools_module
 
     monkeypatch.setattr(tools_module.ledger_module, "record_event", _record_event)
 

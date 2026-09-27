@@ -31,6 +31,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
+from app.mcp import tools as tools_module
 from app.mcp.client import McpClient, McpTransportRefused
 from app.mcp.config import McpServerConfig, server_configs_from_payload
 from app.mcp.policy import stdio_enabled, vet_server, vet_tool
@@ -130,17 +131,28 @@ def memory_session_factory(server: FastMCP):
     return factory
 
 
-def config(**overrides: Any) -> McpServerConfig:
-    base = {
-        "name": "vendor",
-        "transport": "streamable_http",
-        "url": "https://mcp.vendor.example/mcp",
-        "tool_allowlist": ["get_host"],
-        "timeout_seconds": 5.0,
-        "max_response_bytes": 65536,
-    }
-    base.update(overrides)
-    return McpServerConfig(**base)
+def config(
+    *,
+    name: str = "vendor",
+    transport: str = "streamable_http",
+    url: str | None = "https://mcp.vendor.example/mcp",
+    command: str | None = None,
+    auth: dict[str, str] | None = None,
+    tool_allowlist: list[str] | None = None,
+    timeout_seconds: float = 5.0,
+    max_response_bytes: int = 65536,
+) -> McpServerConfig:
+    """One server's configuration, with the defaults these tests mostly want."""
+    return McpServerConfig(
+        name=name,
+        transport=transport,
+        url=url,
+        command=command,
+        auth=auth or {},
+        tool_allowlist=tool_allowlist if tool_allowlist is not None else ["get_host"],
+        timeout_seconds=timeout_seconds,
+        max_response_bytes=max_response_bytes,
+    )
 
 
 class RecordingLedger:
@@ -173,8 +185,6 @@ def ledger(monkeypatch) -> RecordingLedger:
     ``services/agents/tests/test_mcp_investigation.py`` drives the real writer
     and captures at the database boundary instead.
     """
-    import app.mcp.tools as tools_module
-
     recorder = RecordingLedger()
     monkeypatch.setattr(tools_module, "_LedgerWriter", lambda **_kwargs: recorder)
     return recorder

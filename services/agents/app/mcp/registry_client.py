@@ -48,8 +48,13 @@ API_PREFIX = "/api/v1"
 _TIMEOUT_S = float(os.getenv("AISOC_MCP_REGISTRY_TIMEOUT_S", "5"))
 
 
+#: Where the API answers when nothing says otherwise. The compose service
+#: name, because that is what resolves inside the deployment.
+DEFAULT_API_URL = "http://api:8000"
+
+
 def registry_url(base: str | None = None) -> str:
-    origin = (base or os.getenv("AISOC_API_URL", "http://api:8000")).rstrip("/")
+    origin = (base or os.getenv("AISOC_API_URL") or DEFAULT_API_URL).rstrip("/")
     return f"{origin}{API_PREFIX}/mcp-servers/resolved"
 
 

@@ -249,23 +249,23 @@ def check_the_policy_actually_refuses(errors: list[str]) -> int:
         errors.append(f"cannot import the MCP policy module: {exc}")
         return 0
 
-    cases = [
-        (
-            "destructive",
-            {"read_only_hint": False, "destructive_hint": True, "allowlist": ["probe"]},
-        ),
-        (
-            "state_changing",
-            {"read_only_hint": False, "destructive_hint": None, "allowlist": ["probe"]},
-        ),
-        (
-            "not_allowlisted",
-            {"read_only_hint": True, "destructive_hint": False, "allowlist": []},
-        ),
+    #: ``(expected classification, read_only_hint, destructive_hint, allowlist)``
+    cases: list[tuple[str, bool | None, bool | None, list[str]]] = [
+        ("destructive", False, True, ["probe"]),
+        ("state_changing", False, None, ["probe"]),
+        ("not_allowlisted", True, False, []),
     ]
     checked = 0
-    for expected, kwargs in cases:
-        verdict = vet_tool(server="probe", name="probe", description="A probe.", input_schema={}, **kwargs)
+    for expected, read_only, destructive, allowlist in cases:
+        verdict = vet_tool(
+            server="probe",
+            name="probe",
+            description="A probe.",
+            input_schema={},
+            read_only_hint=read_only,
+            destructive_hint=destructive,
+            allowlist=allowlist,
+        )
         checked += 1
         if verdict.admitted or verdict.classification != expected:
             errors.append(

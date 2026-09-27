@@ -36,21 +36,19 @@ nobody can reason about.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-import structlog
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 from app.mcp.config import McpServerConfig
 from app.mcp.policy import vet_server
 from app.playbook.ssrf_guard import SSRFError, validate_outbound_url
-
-logger = structlog.get_logger()
 
 __all__ = ["McpCallError", "McpClient", "McpTransportRefused", "ResponseTooLarge"]
 
@@ -85,11 +83,11 @@ def _airgap_blocked(url: str) -> str | None:
         return None
     try:
         # A literal private address is the other legitimate on-prem case.
-        import ipaddress  # noqa: PLC0415 - only needed on the air-gapped branch
-
         if ipaddress.ip_address(host).is_private:
             return None
     except ValueError:
+        # Not an IP literal, which is the ordinary case: a hostname reaches
+        # here and is decided by the suffix and allowlist checks above.
         pass
     return f"air-gap mode is on and {host!r} is not an internal host or on AISOC_AIRGAP_ALLOWLIST"
 
