@@ -286,7 +286,7 @@ window on a second run, and a hosted model may legitimately differ.
 
 ## Phase 2: Live shadow mode and evidence-gated autonomy
 
-- [~] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906), with one half of the closure path still open (see D15). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from a bounded sweep over alerts closed in this console. The reader and matcher for closures made in the customer's own SIEM ship too, on the five Phase 1.1 readers unchanged, and nothing calls them on a schedule yet. See D9 for the one property everything else rests on.
+- [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906), and its second closure path in [#911](https://github.com/beenuar/AiSOC/pull/911), which closes D15. The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures now arrive from both routes the plan names: a bounded sweep over alerts closed in this console, and a scheduled sweep over each measuring tenant's own SIEM on the five Phase 1.1 readers unchanged. See D9 for the one property everything else rests on, and D15 for what the second path cost.
 - [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
 - [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#908](https://github.com/beenuar/AiSOC/pull/908). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
 
@@ -435,6 +435,14 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   `services/actions` 801 to 835, `apps/web` settings vitest 32 to 36, and
   `tests/isolation/test_autonomy_promotion_live.py` 13 passing against live
   `postgres:16`. Claim matrix 159 rows to 164, GATED 151 to 156.
+- [x] **Phase 2.1's second closure path, closing D15.**
+  [#911](https://github.com/beenuar/AiSOC/pull/911). Migration 068. Suites:
+  `services/actions` 888 to 908 (20 new, plus the vendored `test_tenant_scope`
+  that travels with the tenth copy of the module), `services/api` 2877 to 2904
+  (27 new). Claim matrix 167 rows to 170, GATED 159 to 162. The registration
+  gate was proven against the pre-fix tree: run against `main`'s
+  `services/api/app/main.py`, both `test_the_deployed_lifespan_registers_the_sweep`
+  and `test_the_sweep_is_off_by_default_and_says_so` fail.
 
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
@@ -520,20 +528,45 @@ analysts work entirely in Splunk would have waited for a scorecard that was
 never going to fill in, and concluded the agent was not being evaluated rather
 than that we were not looking.
 
-**Resolution:** the claim is corrected rather than the code hurried. The page
-now says in those words that this half is not automatic, names what exists and
-what does not, and says agreement is measured on AiSOC closures until it
-lands. 2.1 moves from `[x]` to `[~]`.
+**First resolution:** the claim was corrected rather than the code hurried. The
+page said in those words that this half was not automatic, named what existed
+and what did not, and said agreement was measured on AiSOC closures until it
+landed. 2.1 moved from `[x]` to `[~]`.
 
-**What closes it,** in the shape the architecture already forces: `services/api`
-owns the vault and the tenant session, so it resolves the connector's
-credentials and posts them with a window to a new internal route on
-`services/actions`, which calls the reader and then `reconcile_findings`. That
-is the same round trip `siem_writeback` and `/connectors/{id}/normalize`
-already take, and for the same reason: one process cannot hold two services
-that both package their code as top-level `app`. It was not hurried into this
-phase because a cross-service route added under time pressure is exactly the
-half-wired feature the correction above is about.
+**Closed in [#911](https://github.com/beenuar/AiSOC/pull/911)**, in exactly the
+shape recorded above: `services/api` owns the vault and the tenant session, so
+it resolves the connector's credentials and posts them with a window to
+`POST /api/v1/shadow/reconcile` on `services/actions`, which calls the reader
+and then `reconcile_findings`. Same round trip as `siem_writeback` and
+`/connectors/{id}/normalize`, for the same reason D8 records. 2.1 is `[x]`.
+
+Three things the build settled that the note above did not anticipate:
+
+**The tenant had nowhere to come from.** `/replay/history` needs no tenant at
+all: the credentials it is handed are the scope, and it writes nothing. This
+route writes to one tenant's decision rows, so it needs one, and taking it
+from a request field would be a value the caller chose that nothing checked.
+`services/actions` was the one service of ten with no vendored
+`app/security/tenant_scope.py`, so it got the tenth copy through
+`sync_vendored_tenant_scope.py` rather than a bespoke guard, and the tenant
+travels on `X-AiSOC-Tenant-ID` exactly as it does to `/replay/run`.
+
+**The matcher had a silent no-op in it.** With no `DATABASE_URL`,
+`reconcile_findings` logs at `debug` and returns a result reporting the
+findings it considered and zero matched. Reported upward that is
+indistinguishable from a window whose join key never arrives, and the two send
+an operator to entirely different places. `database_configured()` is now
+checked by the route *before* the vendor is called, so a missing environment
+variable is a 503 naming it rather than a customer's search quota spent on a
+window nothing could be written from.
+
+**A watermark was not optional.** Without one the sweep re-reads the same hours
+every tick forever. Migration **068** adds `aisoc_shadow_reconcile_state`, and
+the column that turned out to matter most is `blocked_connector_updated_at`: a
+revoked credential is permanent until somebody acts, and comparing that value
+against `connectors.updated_at` makes "somebody saved the connector" the only
+thing that resumes polling. A timer would have been the churn the state exists
+to avoid, and a manual reset would have been a support ticket.
 
 ### D12. `unified_decision` had no production caller, and the plan names it anyway
 

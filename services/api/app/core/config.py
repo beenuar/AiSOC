@@ -322,6 +322,42 @@ class Settings(BaseSettings):
     )
     RETENTION_WORKER_INTERVAL_SECONDS: int = 21600  # 6h
 
+    # Shadow-reconciliation sweep (gap-closure Phase 2.1, D15). Polls each
+    # measuring tenant's own SIEM for the closures their analysts made there,
+    # so a tenant whose queue lives in Splunk ES still accumulates the track
+    # record autonomy is earned on.
+    #
+    # Default **off**, per the standing rule that a feature which calls out
+    # ships off by default. Two different people are involved: a tenant
+    # enabling shadow mode has asked to be measured, and the operator of the
+    # deployment is the one who decides whether the platform may reach a
+    # third-party API on a timer. `GET /api/v1/health/shadow-reconciliation`
+    # reports "disabled" in those words rather than looking like a healthy
+    # idle sweep.
+    #
+    # Every other value here bounds what this deployment does to somebody
+    # else's SIEM: the tick cadence, a per-connector floor so a short cadence
+    # cannot become a poll storm, a cap on connectors per pass so a large
+    # estate is spread across passes, and a cap on one window so a connector
+    # that was blocked for a month catches up in steps rather than asking for
+    # the month in a single search.
+    SHADOW_RECONCILE_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("SHADOW_RECONCILE_ENABLED", "AISOC_SHADOW_RECONCILE_ENABLED"),
+    )
+    SHADOW_RECONCILE_INTERVAL_SECONDS: int = 900  # 15m
+    SHADOW_RECONCILE_MIN_CONNECTOR_INTERVAL_SECONDS: int = 3600  # 1h
+    SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK: int = 10
+    # Re-read this much of the previous window. A vendor's search index lags
+    # its own close events, so a window starting exactly where the last one
+    # ended steps over anything indexed late. Re-reading is free of
+    # consequence: an already-graded finding comes back as already_resolved.
+    SHADOW_RECONCILE_OVERLAP_SECONDS: int = 900  # 15m
+    # How far a first pass may reach back when a connector has no watermark.
+    SHADOW_RECONCILE_MAX_LOOKBACK_HOURS: int = 168  # 7d
+    SHADOW_RECONCILE_MAX_WINDOW_HOURS: int = 24
+    SHADOW_RECONCILE_LIMIT: int = 1000
+
     # Database
     # The default points at the bundled compose Postgres with its dev password.
     # In docker-compose.yml and .env.example the password is parameterised via

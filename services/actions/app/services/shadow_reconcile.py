@@ -61,7 +61,7 @@ from app.services.disposition_writeback import CANONICAL_DISPOSITIONS
 
 logger = structlog.get_logger(__name__)
 
-__all__ = ["ReconcileResult", "reconcile_findings"]
+__all__ = ["ReconcileResult", "database_configured", "reconcile_findings"]
 
 
 @dataclass(frozen=True)
@@ -102,6 +102,19 @@ def _dsn() -> str | None:
     if not raw:
         return None
     return raw.replace("postgresql+asyncpg://", "postgresql://").replace("postgres+asyncpg://", "postgresql://")
+
+
+def database_configured() -> bool:
+    """Whether this service can reach the database the decisions live in.
+
+    Asked by the route before it reads a vendor window, because the no-database
+    path below returns a result rather than raising: it reports ``considered``
+    findings and ``matched`` zero, which is indistinguishable from a window
+    whose join key never arrives. One of those is a wiring fault in ingest and
+    the other is a missing ``DATABASE_URL`` on this container, and a sweep that
+    reported them the same way would send an operator to debug the wrong one.
+    """
+    return _dsn() is not None
 
 
 async def _connect(dsn: str) -> Any:
