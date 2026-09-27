@@ -62,6 +62,11 @@ TARGETS: dict[str, str] = {
     # bearer-only guard the browser could not satisfy.
     "connectors": "CONNECTORS",
     "threatintel": "THREATINTEL",
+    # The shadow-reconciliation sweep in services/api posts a window and a
+    # tenant's decrypted SIEM credentials here. The read is scoped by the
+    # credentials, but the write lands on that tenant's shadow decisions, so
+    # this service needs a tenant it did not take from a request field.
+    "actions": "ACTIONS",
 }
 
 _SERVICE_NAME_RE = re.compile(r'^SERVICE_NAME = ".*"$', re.MULTILINE)

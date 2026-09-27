@@ -87,6 +87,7 @@ from app.models.alert import Alert
 from app.models.connector import Connector
 from app.services.connector_freshness import compute_freshness
 from app.services.fleet_health import assess_fleet
+from app.services.replay_evaluation.vendors import replayable_connector_ids
 
 logger = logging.getLogger(__name__)
 
@@ -614,6 +615,154 @@ async def get_dead_letters(
                 "source_event_id": r["source_event_id"],
                 "occurred_at": r["occurred_at"].isoformat() if r["occurred_at"] else None,
                 "acknowledged": r["acknowledged_at"] is not None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/shadow-reconciliation")
+async def get_shadow_reconciliation_health(
+    user: AuthUser,
+    db: DBSession,
+) -> dict[str, Any]:
+    """Whether closures made in this tenant's own SIEM are being polled back.
+
+    Gap-closure Phase 2.1 (D15).
+
+    A sweep that silently stopped and a sweep with nothing to do look identical
+    from outside, and that ambiguity is what made the original gap invisible:
+    the reconciler existed, nothing called it, and the only symptom available
+    to an operator was a scorecard that never filled in. So this reports the
+    subscription in every state, including the healthy one and the idle one,
+    and names which it is.
+
+    ``state`` is one of:
+
+    ``disabled``    the operator has not switched the sweep on. Not a fault,
+                    and not a healthy idle sweep either.
+    ``not_measuring`` the sweep runs, but this tenant has no alert class in
+                    shadow mode, so there is nothing to reconcile.
+    ``no_connector``  this tenant is measuring and has no enabled connector of
+                    a type with a closed-finding reader. Agreement is being
+                    measured on AiSOC closures only, which is the honest answer
+                    and is stated rather than left to be inferred.
+    ``blocked``     at least one connector needs an operator. The reason is a
+                    sentence, and it will not clear by waiting.
+    ``degraded``    at least one connector is failing transiently and is being
+                    retried.
+    ``ok``          every configured connector polled.
+    """
+    enabled = bool(settings.SHADOW_RECONCILE_ENABLED)
+
+    measuring = (
+        (
+            await db.execute(
+                text(
+                    """
+                    SELECT alert_class, COALESCE(enabled_at, updated_at) AS since
+                    FROM aisoc_shadow_mode
+                    WHERE tenant_id = :tid AND enabled IS TRUE
+                    ORDER BY alert_class
+                    """
+                ),
+                {"tid": user.tenant_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    rows = (
+        (
+            await db.execute(
+                text(
+                    """
+                    SELECT s.connector_id, s.vendor, s.watermark_at, s.last_run_at, s.last_status,
+                           s.last_detail, s.last_considered, s.last_matched, s.consecutive_failures,
+                           s.blocked_reason, s.blocked_at, s.retry_after, c.name AS connector_name
+                    FROM aisoc_shadow_reconcile_state s
+                    LEFT JOIN connectors c ON c.id = s.connector_id AND c.tenant_id = s.tenant_id
+                    WHERE s.tenant_id = :tid
+                    ORDER BY s.last_run_at DESC NULLS LAST
+                    """
+                ),
+                {"tid": user.tenant_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    # Which of this tenant's connectors the sweep *could* poll, asked of the
+    # same table the sweep asks so the two cannot disagree about what counts.
+    pollable = int(
+        (
+            await db.execute(
+                text(
+                    """
+                    SELECT COUNT(*)::int FROM connectors
+                    WHERE tenant_id = :tid AND is_enabled IS TRUE AND connector_type = ANY(:replayable)
+                    """
+                ),
+                {"tid": user.tenant_id, "replayable": replayable_connector_ids()},
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    blocked = [r for r in rows if r["blocked_reason"]]
+    failing = [r for r in rows if r["last_status"] == "transient"]
+
+    if not enabled:
+        state = "disabled"
+        summary = (
+            "The shadow-reconciliation sweep is switched off, so closures your analysts make in your own "
+            "SIEM are not being polled back. Agreement is measured on closures made in AiSOC only."
+        )
+    elif not measuring:
+        state = "not_measuring"
+        summary = "No alert class is in shadow mode for this tenant, so there is nothing to reconcile."
+    elif pollable == 0:
+        state = "no_connector"
+        summary = (
+            "This tenant is measuring but has no enabled connector of a type with a closed-finding reader "
+            f"({', '.join(replayable_connector_ids())}). Agreement is measured on closures made in AiSOC only."
+        )
+    elif blocked:
+        state = "blocked"
+        summary = f"{len(blocked)} connector(s) need an operator before reconciliation can resume."
+    elif failing:
+        state = "degraded"
+        summary = f"{len(failing)} connector(s) are failing transiently and are being retried."
+    else:
+        state = "ok"
+        summary = f"Polling {pollable} connector(s) for closures made in your own SIEM."
+
+    return {
+        "state": state,
+        "summary": summary,
+        "enabled": enabled,
+        "interval_seconds": int(settings.SHADOW_RECONCILE_INTERVAL_SECONDS) if enabled else None,
+        "measuring_classes": [r["alert_class"] for r in measuring],
+        "pollable_connectors": pollable,
+        "supported_connector_types": replayable_connector_ids(),
+        "connectors": [
+            {
+                "connector_id": str(r["connector_id"]),
+                "connector_name": r["connector_name"],
+                "vendor": r["vendor"],
+                "status": r["last_status"],
+                "detail": r["last_detail"],
+                "watermark_at": r["watermark_at"].isoformat() if r["watermark_at"] else None,
+                "last_run_at": r["last_run_at"].isoformat() if r["last_run_at"] else None,
+                "closures_read": int(r["last_considered"] or 0),
+                "closures_matched": int(r["last_matched"] or 0),
+                "consecutive_failures": int(r["consecutive_failures"] or 0),
+                "needs_operator": bool(r["blocked_reason"]),
+                "blocked_reason": r["blocked_reason"],
+                "blocked_at": r["blocked_at"].isoformat() if r["blocked_at"] else None,
+                "retry_after": r["retry_after"].isoformat() if r["retry_after"] else None,
             }
             for r in rows
         ],
