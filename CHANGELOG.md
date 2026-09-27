@@ -129,10 +129,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   capped at 400 characters and marked as third-party text, and the schema is
   projected down to `type`, typed `properties` and `required`, so `$ref`,
   `default`, `examples` and arbitrary nesting never reach the prompt. The
-  projection is the load-bearing half: the injection guard measures 0.852 on
-  prose and **66.7% on payloads written to fit a constrained field**, so
-  roughly a third of field-shaped payloads get past it, and both figures are
-  published on the docs page rather than the flattering one.
+  projection is the load-bearing half, and the guard's own held-out
+  measurement is why: against 28 payloads authored after its last hardening
+  it detects **2**. It scores 0.96 on prose and 98.1% on the field-native
+  corpus it was tuned against, but an MCP server's payload is held-out data
+  by definition, so 7.1% is the figure that applies to a hostile server. The
+  docs page publishes the held-out figure beside the corpus one rather than
+  the flattering one alone.
 
   **Results are capped on the socket, fenced with the run nonce, scanned and
   ledgered.** The byte cap is enforced as bytes arrive rather than on the

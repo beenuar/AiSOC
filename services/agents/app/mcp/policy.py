@@ -37,11 +37,15 @@ legitimate use, so there is nothing to preserve. What survives is sanitised,
 length-capped, and its schema is projected down to the keys a tool schema
 needs, so a server cannot smuggle arbitrary JSON into what the model is shown.
 
-That last control is the load-bearing one. The injection guard measures 0.852
-on prose and 66.7% on payloads written to fit a constrained field, so a third
-of field-shaped payloads get through it. Dropping on a hit is worth having and
-is not what this rests on; the structural limits are, because they hold
-whatever the guard scores.
+That last control is the load-bearing one, and the guard's own measurements
+are why. The guard was hardened after this phase's corpus was built: it now
+scores 0.96 on prose and 98.1% on the corpus of payloads written to fit a
+constrained field, up from 0.852 and 66.7%. But graded against 28 payloads
+authored *after* the change, it catches **2**. An MCP server's payload is
+held-out data by definition, written by somebody who has read whatever the
+guard published, so 7.1% is the figure that applies here rather than 98.1%.
+The structural limits are what hold, because they hold whatever the guard
+scores.
 """
 
 from __future__ import annotations

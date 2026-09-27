@@ -114,11 +114,16 @@ Every result is:
 - **Scanned** by the prompt-injection guard. The verdict travels with the
   result and into the ledger.
 
-The guard is not a filter and is not what this rests on. It measures 0.852
-against prose and 66.7% against payloads written to fit a constrained field,
-so roughly a third of field-shaped payloads reach the model regardless. The
-fence and the system rule are the controls; the guard is what makes a miss
-visible afterwards.
+The guard is not a filter and is not what this rests on. Its own numbers are
+the reason. After the hardening that followed this phase's corpus it scores
+0.96 on prose and 98.1% on the field-native corpus it was tuned against, up
+from 0.852 and 66.7%. Graded against 28 payloads authored *after* that change
+it catches **2**, and an MCP server's payload is held-out data by definition:
+it is written by somebody who has read whatever the guard published. So 7.1%
+is the figure that applies to a hostile MCP server, not 98.1%.
+
+The fence, the size cap and the schema projection are the controls. The guard
+is what makes a miss visible afterwards.
 
 ### A malicious tool *description*
 

@@ -22,11 +22,12 @@ Three controls, in the order they run:
    so a leaked one cannot be reused within the run.
 
 3. **Scan.** The injection guard runs over the content and its verdict travels
-   with the result, in the return value and in the ledger. It is not a filter.
-   It measures 0.852 against prose and 66.7% against payloads written to fit a
-   constrained field, so roughly a third of field-shaped payloads reach the
-   model regardless. The fence and the standing system rule are what hold when
-   the guard misses; the guard is what makes a miss visible afterwards.
+   with the result, in the return value and in the ledger. It is not a filter,
+   and its own held-out measurement says why: against 28 payloads authored
+   after its last hardening it detects 2. It scores 0.96 on prose and 98.1% on
+   the corpus it was tuned against, but an MCP server's payload is held-out
+   data by definition. The fence and the standing system rule are what hold
+   when the guard misses; the guard is what makes a miss visible afterwards.
 
 The returned object also carries a first-party boundary sentence. The standing
 system rule is added to the system message by the caller that builds the
