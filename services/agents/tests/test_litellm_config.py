@@ -23,7 +23,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "infra" / "litellm" / "config.yaml"
 
 # AiSOC's distinct LLM workloads (issue #478). Keep in lockstep with the alias
-# table in apps/docs/docs/operations/llm-gateway.md.
+# table in apps/docs/docs/operations/llm-gateway.md, and with ROLES in
+# services/api/app/services/model_aliases.py — a role declared in one and not
+# the others resolves to no model and fails at the first call.
 EXPECTED_ALIASES = {
     "aisoc-triage",
     "aisoc-recon",
@@ -32,6 +34,7 @@ EXPECTED_ALIASES = {
     "aisoc-summary",
     "aisoc-report",
     "aisoc-nl",
+    "aisoc-hunt",
 }
 
 
@@ -47,7 +50,7 @@ def test_config_parses_and_has_model_list():
     assert isinstance(cfg.get("model_list"), list) and cfg["model_list"], "model_list must be a non-empty list"
 
 
-def test_shipped_aliases_are_the_seven_workloads():
+def test_shipped_aliases_are_the_declared_workloads():
     cfg = _load()
     aliases = {entry["model_name"] for entry in cfg["model_list"]}
     assert aliases == EXPECTED_ALIASES, f"alias drift: {aliases ^ EXPECTED_ALIASES}"

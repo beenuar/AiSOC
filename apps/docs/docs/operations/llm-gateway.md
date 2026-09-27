@@ -45,6 +45,7 @@ The shipped aliases mirror AiSOC's workloads. They live in
 | `aisoc-summary`       | Alert / incident summaries                 | `gpt-4o-mini`     |
 | `aisoc-report`        | Analyst-facing report write-ups            | `gpt-4o`          |
 | `aisoc-nl`            | NL→query / NL→detection translation        | `gpt-4o-mini`     |
+| `aisoc-hunt`          | Hypothesis → structured hunt plan          | `gpt-4o-mini`     |
 
 The "shipped default" is only the *example* mapping in the config — the whole
 point is that you change it. The alias names stay constant.
