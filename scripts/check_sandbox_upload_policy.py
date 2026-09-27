@@ -37,9 +37,12 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import sys
+import types
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -62,20 +65,65 @@ class Finding:
         return f"  {self.where}: {self.detail}"
 
 
+def _load_policy(root: Path) -> tuple[Any, Any] | Finding:
+    """Import ``policy`` and ``types`` without running the package ``__init__``.
+
+    ``import app.services.sandbox.policy`` executes the package's ``__init__``,
+    which pulls in the registry, the HTTP providers and the service layer, and
+    therefore ``structlog``, ``httpx`` and the API's settings object. None of
+    that is what this gate judges, and requiring it means the gate cannot run
+    on the lint job's interpreter. It failed there for exactly that reason:
+    ``No module named 'structlog'``, reported as ``0 checked``.
+
+    The two modules it does judge are pure. They are loaded straight from their
+    files under their real dotted names, behind stub parent packages, so the
+    absolute import inside ``policy.py`` resolves to the copy loaded here.
+
+    Returning a :class:`Finding` rather than raising keeps a load failure a
+    reported failure: the alternative is a traceback that a reader could mistake
+    for an environment problem rather than a gate that verified nothing.
+    """
+    sandbox = root / "services" / "api" / "app" / "services" / "sandbox"
+    for name in ("app", "app.services", "app.services.sandbox"):
+        if name not in sys.modules:
+            stub = types.ModuleType(name)
+            stub.__path__ = []  # type: ignore[attr-defined] - namespace-package stub
+            sys.modules[name] = stub
+
+    loaded: dict[str, Any] = {}
+    for module in ("types", "policy"):
+        path = sandbox / f"{module}.py"
+        if not path.is_file():
+            return Finding(str(path.relative_to(root)), "missing; there is no policy to verify")
+        dotted = f"app.services.sandbox.{module}"
+        spec = importlib.util.spec_from_file_location(dotted, path)
+        if spec is None or spec.loader is None:  # pragma: no cover - defensive
+            return Finding(str(path.relative_to(root)), "could not be loaded as a module")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[dotted] = mod
+        try:
+            spec.loader.exec_module(mod)
+        except Exception as exc:  # noqa: BLE001 - any import failure is a gate failure
+            return Finding(str(path.relative_to(root)), f"could not be imported: {type(exc).__name__}: {exc}")
+        loaded[module] = mod
+    return loaded["policy"], loaded["types"]
+
+
 # ---------------------------------------------------------------------------
 # Forward: drive the real policy function
 # ---------------------------------------------------------------------------
 
 
 def _check_policy_behaviour(root: Path) -> tuple[list[Finding], int]:
-    """Import the real policy and require a refusal for every unsafe combination."""
+    """Drive the real policy and require a refusal for every unsafe combination."""
     findings: list[Finding] = []
-    sys.path.insert(0, str(root / "services" / "api"))
-    try:
-        from app.services.sandbox.policy import UploadRefusal, evaluate_upload  # noqa: PLC0415
-        from app.services.sandbox.types import ProviderCapabilities  # noqa: PLC0415
-    except ImportError as exc:
-        return [Finding(str(SANDBOX / "policy.py"), f"could not import the policy module: {exc}")], 0
+    loaded = _load_policy(root)
+    if isinstance(loaded, Finding):
+        return [loaded], 0
+    policy, sandbox_types = loaded
+    UploadRefusal = policy.UploadRefusal
+    evaluate_upload = policy.evaluate_upload
+    ProviderCapabilities = sandbox_types.ProviderCapabilities
 
     hosted = ProviderCapabilities(name="hosted", local=False, supports_file_submission=True)
     local = ProviderCapabilities(name="local", local=True, supports_file_submission=True)
@@ -128,11 +176,12 @@ def _check_policy_behaviour(root: Path) -> tuple[list[Finding], int]:
 def _check_consent_text(root: Path) -> tuple[list[Finding], int]:
     """A provider that publishes submissions must say *public* in its consent text."""
     findings: list[Finding] = []
-    try:
-        from app.services.sandbox.policy import consent_text_for  # noqa: PLC0415
-        from app.services.sandbox.types import ProviderCapabilities  # noqa: PLC0415
-    except ImportError as exc:
-        return [Finding(str(SANDBOX / "policy.py"), f"could not import consent_text_for: {exc}")], 0
+    loaded = _load_policy(root)
+    if isinstance(loaded, Finding):
+        return [loaded], 0
+    policy, sandbox_types = loaded
+    consent_text_for = policy.consent_text_for
+    ProviderCapabilities = sandbox_types.ProviderCapabilities
 
     public = consent_text_for(
         ProviderCapabilities(name="p", local=False, supports_file_submission=True, submissions_are_public_by_default=True)
