@@ -96,26 +96,104 @@ can be closed from the feedback endpoint, by a case being resolved, by a bulk
 action or by a playbook, and a hook on one of those would silently grade the
 subset of alerts closed the way the hook was written for.
 
-**Closures made in your SIEM. Not automatic yet.** Most analysts evaluating
-AiSOC keep working where they always have, so a closure recorded in Splunk ES,
-Microsoft Sentinel, Elastic Security, IBM QRadar or Microsoft Defender XDR
-should count. The readers exist and are the same ones that power
-[replay evaluation](../evaluation/replay.md), and
-`services/actions/app/services/shadow_reconcile.py` matches each closure to the
-decision it grades by the vendor's own finding id.
+**Closures made in your SIEM.** Most analysts evaluating AiSOC keep working
+where they always have, so a closure recorded in Splunk ES, Microsoft Sentinel,
+Elastic Security, IBM QRadar or Microsoft Defender XDR counts too. A sweep
+polls each of them on a timer using the same readers that power
+[replay evaluation](../evaluation/replay.md), and matches each closure to the
+decision it grades by the vendor's own finding id. See
+[polling your SIEM](#polling-your-siem-for-closures) below for how to switch it
+on and what it reports.
 
-**What does not exist is a scheduler that calls them.** Nothing polls your SIEM
-for shadow reconciliation on a timer today, so a tenant whose analysts work
-entirely in their own console will see a scorecard that does not fill in. That
-is a gap in this feature, not a property of your deployment, and it is recorded
-as such rather than left for you to discover from an empty page. Until it
-lands, agreement is measured on closures made in AiSOC.
+Until you switch that sweep on, agreement is measured on closures made in
+AiSOC only. `GET /api/v1/health/shadow-reconciliation` says so in those words
+rather than leaving you to infer it from a scorecard that does not fill in.
 
 Whichever route a closure arrives by, one carrying a disposition this platform
 cannot name becomes `unlabeled`. It is counted as resolved and excluded from every rate. Splunk ES
 ships two dispositions that literally mean "I do not know", and so do Sentinel
 and Defender; folding those into a verdict because the finding happened to be
 closed would manufacture agreement out of an analyst's uncertainty.
+
+## Polling your SIEM for closures
+
+The sweep is **off by default**. It reaches a third party's API on a timer, and
+that is the deployment operator's decision rather than a tenant's, so it is
+switched on deliberately:
+
+```bash
+SHADOW_RECONCILE_ENABLED=true
+```
+
+It then polls, once per interval, every enabled connector belonging to a tenant
+with at least one alert class in shadow mode, for the five connector types that
+have a closed-finding reader: `splunk`, `microsoft_sentinel`, `elastic`,
+`qradar` and `azure_defender`. A connector of any other type is not an error
+and is not polled.
+
+### What it does to your SIEM
+
+Everything here bounds the load this places on somebody else's search head.
+
+| Setting | Default | What it bounds |
+|---|---|---|
+| `SHADOW_RECONCILE_INTERVAL_SECONDS` | 900 | How often a pass runs |
+| `SHADOW_RECONCILE_MIN_CONNECTOR_INTERVAL_SECONDS` | 3600 | The floor between two polls of the same connector |
+| `SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK` | 10 | Connectors polled in one pass, so a large estate spreads across passes |
+| `SHADOW_RECONCILE_MAX_WINDOW_HOURS` | 24 | The largest window asked for in one search |
+| `SHADOW_RECONCILE_MAX_LOOKBACK_HOURS` | 168 | How far a first pass reaches back |
+| `SHADOW_RECONCILE_OVERLAP_SECONDS` | 900 | How much of the previous window is re-read |
+| `SHADOW_RECONCILE_LIMIT` | 1000 | Findings read per window |
+
+Each connector carries a **watermark**: the latest close time a successful pass
+reached. The next window starts there minus the overlap, so the same hours are
+never re-read forever, and a vendor whose search index lags its own close
+events does not have those findings stepped over. Re-reading the overlap costs
+nothing, because a decision that already carries a closure is never rewritten.
+
+A vendor that returns `429` has its own `Retry-After` stored and honoured. The
+sweep waits the interval the vendor asked for rather than guessing one.
+
+### What stops it, and whether waiting helps
+
+A sweep that reports every fault the same way turns a revoked API key into
+churn nobody reads. So each connector is left in one of four states:
+
+| State | Meaning | What to do |
+|---|---|---|
+| `ok` | A window was read and reconciled | Nothing |
+| `idle` | Nothing to do: not due yet, or the window has not moved | Nothing |
+| `blocked` | Permanent until you act: the vendor refused the stored credentials, or the vault cannot decrypt them | Re-save the connector's credentials |
+| `transient` | The vendor timed out, rate-limited us, or the actions service was unreachable | Nothing; it retries |
+
+A `blocked` connector is not polled again on a timer. It resumes on the single
+event that could have fixed it, which is the connector being saved again. That
+is deliberate: retrying a revoked credential every hour is load on your SIEM
+that cannot succeed, and a log line nobody reads twice.
+
+### Checking it is running
+
+```bash
+curl -s "$AISOC/api/v1/health/shadow-reconciliation" -H "Authorization: Bearer $TOKEN"
+```
+
+The response names the state in every case, including the quiet ones, because
+a sweep that silently stopped and a sweep with nothing to do look identical
+from outside and that ambiguity is what this endpoint exists to remove:
+
+- `disabled`: the operator has not switched it on
+- `not_measuring`: no alert class is in shadow mode for this tenant
+- `no_connector`: measuring, but no connector of a type with a reader
+- `blocked`: at least one connector needs you
+- `degraded`: at least one connector is failing transiently
+- `ok`: polling
+
+Per connector it reports the watermark, the last run, how many closures were
+read and how many matched. Those two are separate on purpose: a healthy read
+count with zero matches means the vendor's finding id is not reaching
+`aisoc_shadow_decisions.external_id`, which is a wiring fault, while a read
+count of zero means your analysts closed nothing in that window, which is a
+fact about their week. One number could not tell you which.
 
 ## How the numbers are computed
 

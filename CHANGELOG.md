@@ -191,6 +191,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chatops` profile since compose refuses to render a file whose dependency
   sits outside the profile being started. Proven able to fail by re-staling
   the README's core figure to 14.
+- **Shadow reconciliation now has a schedule, so a tenant whose analysts work
+  in their own SIEM accumulates a track record** (gap-closure Phase 2.1,
+  closing D15). `services/actions/app/services/shadow_reconcile.py` shipped
+  complete with eleven tests and no caller. Half of shadow mode therefore
+  worked and half of it only appeared to: agreement filled in for tenants
+  closing alerts in the AiSOC console, and a tenant closing theirs in Splunk
+  ES watched a scorecard that could never move. Phase 2's premise is that
+  autonomy is earned on a measured track record, so a track record that cannot
+  accumulate is the difference between the feature working and appearing to.
+
+  **How it was measured.** By grepping for callers of code the programme had
+  just written. The only files referencing the module were the module and its
+  own test. That is the repository's most-repeated defect shape and the check
+  its own history says to run before claiming anything.
+
+  **The shape was forced, not chosen.** `services/api` owns the vault and the
+  tenant session, `services/actions` owns the five readers and the matcher,
+  and no process can hold both because all three services package their code
+  as a top-level `app`. So the API resolves a connector's credentials and
+  posts them with a window to a new internal route, `POST /shadow/reconcile`
+  on actions, which reads and reconciles in one hop. That is the same round
+  trip `siem_writeback`, `/connectors/{id}/normalize` and `/replay/history`
+  already take, rather than a third pattern. The tenant travels on
+  `X-AiSOC-Tenant-ID` and is resolved through the vendored `tenant_scope`,
+  now in its tenth service, where a service token with no tenant header
+  resolves to an empty scope that refuses rather than widening.
+
+  **Four outcomes, because two is not enough.** A sweep that reports every
+  fault the same way turns a revoked API key into churn nobody reads. The
+  vendor's own status decides: 400, 401, 403 and 404 are permanent, name the
+  operator action, and stop that connector being polled until the connector
+  row is saved again, which is the one event that could have fixed it. A
+  timeout or a 5xx is transient and retried. A 429 has the vendor's own
+  `Retry-After` stored and honoured rather than guessed. And "nothing to do"
+  is a recorded state rather than an absence, because a sweep that silently
+  stopped and one with nothing to poll are otherwise indistinguishable from
+  outside, which is precisely how the original gap stayed invisible.
+
+  **Bounded work against somebody else's API.** Migration **068** adds
+  `aisoc_shadow_reconcile_state`, keyed per connector because two SIEMs have
+  two index lags and two credential lifetimes. Each carries a watermark that
+  advances to the latest closure actually seen rather than to the end of the
+  window asked for, so a vendor that indexes late does not have findings
+  stepped over; an empty window still advances it, minus an overlap, so quiet
+  hours are not re-read forever. A pass is capped per tick, a connector has a
+  floor between polls, and one window is capped so a connector blocked for a
+  month catches up in steps rather than asking for the month in one search.
+
+  **Default off**, per the standing rule that a feature which calls out ships
+  off. Two different people are involved: a tenant enabling shadow mode has
+  asked to be measured, and the operator decides whether the platform may
+  reach a third party on a timer. `GET /api/v1/health/shadow-reconciliation`
+  reports the subscription in every state including `disabled`, `not_measuring`
+  and `no_connector`, and reports closures read separately from closures
+  matched, because a healthy read count with zero matches is a wiring fault
+  and a read count of zero is a fact about the customer's week.
+
+  **The gate.** `test_the_deployed_lifespan_registers_the_sweep` is an AST
+  pass over `services/api/app/main.py` as it ships, in the spirit of the Phase
+  1.2 sink test: the defect being closed is "exists and nothing calls it", so
+  a test asserting a scheduler a test built would close nothing. It checks the
+  import, the task, that the task's `worker=` is the sweep's own `run_forever`,
+  and the job name the Redis lease is keyed on. It was proven capable of
+  failing by running it against `main`'s `app/main.py`. Claim matrix 167 rows
+  to 170, GATED 159 to 162.
 
 - **Replay evaluation reaches an operator: `aisoc replay`, an async API job,
   an "Evaluate on your history" console page, and JSON, Markdown and PDF

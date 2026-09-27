@@ -34,6 +34,7 @@ from app.services.plugin_manager import get_plugin_manager
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.retention_purge import run_forever as run_retention_purge
+from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
 _metrics_bearer = HTTPBearer(auto_error=False)
@@ -55,6 +56,11 @@ _HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
 # ClickHouse mutation with mutations_sync=1 blocks until it lands. 30m keeps
 # a second replica from starting a concurrent sweep mid-delete.
 _RETENTION_PURGE_LOCK_TTL_SECONDS = 1800
+# A shadow-reconciliation pass makes up to SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK
+# vendor searches, each bounded at 120s. 30m covers a slow pass without letting
+# a second replica start one on top of it, which would double a customer's
+# search load for no extra evidence.
+_SHADOW_RECONCILE_LOCK_TTL_SECONDS = 1800
 
 
 async def _run_guarded_scheduler_worker(
@@ -432,6 +438,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("hunt_scheduler worker failed to start", error=str(exc))
 
+    # Gap-closure Phase 2.1 (D15). Polls each measuring tenant's own SIEM for
+    # the closures their analysts made there. Without this the shadow-agreement
+    # scorecard only ever fills in for tenants whose analysts close alerts in
+    # this console, and a tenant working entirely in Splunk ES sees an empty
+    # page that reads as "the agent is not being evaluated".
+    #
+    # Default off: this reaches a third party's API on a timer, and the plan's
+    # standing rule is that a feature which calls out ships off by default.
+    shadow_reconcile_task: asyncio.Task | None = None
+    if settings.SHADOW_RECONCILE_ENABLED:
+        try:
+            shadow_reconcile_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="shadow_reconcile",
+                    ttl_seconds=_SHADOW_RECONCILE_LOCK_TTL_SECONDS,
+                    worker=run_shadow_reconcile,
+                ),
+                name="shadow_reconcile_worker",
+            )
+            logger.info("shadow_reconcile worker started")
+        except Exception as exc:
+            logger.warning("shadow_reconcile worker failed to start", error=str(exc))
+    else:
+        # Said out loud, because the state this closes is one where an operator
+        # reads an empty scorecard and cannot tell a sweep that is off from one
+        # that is broken.
+        logger.info(
+            "shadow_reconcile worker disabled; closures made in a tenant's own SIEM will not be "
+            "reconciled. Set SHADOW_RECONCILE_ENABLED=true to poll them"
+        )
+
     # Phase 2.6 — flip /readyz to 200. All lifespan-managed
     # dependencies have been touched at this point (DB, Redis,
     # Neo4j, schedulers); the load balancer can route traffic
@@ -481,6 +518,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("retention_purge worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("retention_purge worker shutdown error", error=type(exc).__name__)
+
+    if shadow_reconcile_task is not None and not shadow_reconcile_task.done():
+        shadow_reconcile_task.cancel()
+        try:
+            await shadow_reconcile_task
+        except asyncio.CancelledError:
+            logger.debug("shadow_reconcile worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("shadow_reconcile worker shutdown error", error=type(exc).__name__)
 
     if demo_bootstrap_task is not None and not demo_bootstrap_task.done():
         demo_bootstrap_task.cancel()

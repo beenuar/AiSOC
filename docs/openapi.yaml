@@ -6860,6 +6860,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/health/shadow-reconciliation:
+    get:
+      tags:
+      - health
+      summary: Get Shadow Reconciliation Health
+      description: "Whether closures made in this tenant's own SIEM are being polled\
+        \ back.\n\nGap-closure Phase 2.1 (D15).\n\nA sweep that silently stopped and\
+        \ a sweep with nothing to do look identical\nfrom outside, and that ambiguity\
+        \ is what made the original gap invisible:\nthe reconciler existed, nothing\
+        \ called it, and the only symptom available\nto an operator was a scorecard\
+        \ that never filled in. So this reports the\nsubscription in every state,\
+        \ including the healthy one and the idle one,\nand names which it is.\n\n\
+        ``state`` is one of:\n\n``disabled``    the operator has not switched the\
+        \ sweep on. Not a fault,\n                and not a healthy idle sweep either.\n\
+        ``not_measuring`` the sweep runs, but this tenant has no alert class in\n\
+        \                shadow mode, so there is nothing to reconcile.\n``no_connector``\
+        \  this tenant is measuring and has no enabled connector of\n            \
+        \    a type with a closed-finding reader. Agreement is being\n           \
+        \     measured on AiSOC closures only, which is the honest answer\n      \
+        \          and is stated rather than left to be inferred.\n``blocked``   \
+        \  at least one connector needs an operator. The reason is a\n           \
+        \     sentence, and it will not clear by waiting.\n``degraded``    at least\
+        \ one connector is failing transiently and is being\n                retried.\n\
+        ``ok``          every configured connector polled."
+      operationId: get_shadow_reconciliation_health_api_v1_health_shadow_reconciliation_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Shadow Reconciliation Health Api V1 Health Shadow
+                  Reconciliation Get
+      security:
+      - HTTPBearer: []
   /api/v1/insights/soc:
     get:
       tags:
