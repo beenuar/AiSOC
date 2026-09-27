@@ -277,12 +277,16 @@ def _self_test() -> int:
 
     # The validator refuses what the schema forbids, proven by trying.
     refused = 0
-    for bad in (
+    # Annotated on the tuple rather than the loop variable so the empty-clause
+    # case is inferred as the same list type as the others rather than as
+    # list[Never], which no annotation on `bad` alone can reconcile.
+    rejected: tuple[dict[str, list[dict[str, str]]], ...] = (
         {"clauses": [{"field": "raw_payload", "operator": "contains", "value": "x"}]},
         {"clauses": [{"field": "user_name", "operator": "regex", "value": ".*"}]},
         {"clauses": [{"field": "user_name", "operator": "eq", "value": "x"}] * (plan.MAX_CLAUSES + 1)},
         {"clauses": []},
-    ):
+    )
+    for bad in rejected:
         try:
             plan.validate_plan(bad, hypothesis="probe")
         except plan.HuntPlanError:

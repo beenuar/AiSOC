@@ -4189,6 +4189,48 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/agent-tools/hunt-plan/execute:
+    post:
+      tags:
+      - agent-tools
+      summary: Run a hunting agent's structured plan against the event lake
+      description: 'Compile a validated plan and run it, tenant-scoped.
+
+
+        The tenant comes from the credential, never from the request, which is why
+
+        there is no tenant field on the model above. An unreachable lake is
+
+        reported as ``available: false`` with a reason rather than as zero rows:
+
+        an agent that reads the second as the first concludes an estate is clean
+
+        on evidence nobody gathered.'
+      operationId: execute_hunt_plan_api_v1_agent_tools_hunt_plan_execute_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HuntPlanExecuteRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Execute Hunt Plan Api V1 Agent Tools Hunt Plan Execute
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/graph:
     get:
       tags:
@@ -23815,6 +23857,63 @@ components:
       required:
       - notes
       title: HandoffNotes
+    HuntPlanClause:
+      properties:
+        field:
+          type: string
+          maxLength: 64
+          title: Field
+        operator:
+          type: string
+          maxLength: 16
+          title: Operator
+        value:
+          type: string
+          maxLength: 512
+          title: Value
+      type: object
+      required:
+      - field
+      - operator
+      - value
+      title: HuntPlanClause
+      description: 'One predicate of a hunting agent''s plan.
+
+
+        Three typed strings and nothing else. There is no property here that can
+
+        carry a query, a fragment of one, or free text, which is the property
+
+        ``scripts/check_hunt_agent_boundary.py`` reads this model to check. The
+
+        field and operator are validated against the closed sets in
+
+        ``app.services.retro_hunt.hunt_plan_sql`` before anything is compiled.'
+    HuntPlanExecuteRequest:
+      properties:
+        clauses:
+          items:
+            $ref: '#/components/schemas/HuntPlanClause'
+          type: array
+          maxItems: 7
+          minItems: 1
+          title: Clauses
+        lookback_hours:
+          type: integer
+          maximum: 2160.0
+          minimum: 1.0
+          title: Lookback Hours
+          default: 168
+        limit:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Limit
+          default: 200
+      type: object
+      required:
+      - clauses
+      title: HuntPlanExecuteRequest
     HuntPreviewItem:
       properties:
         id:
