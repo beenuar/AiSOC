@@ -313,11 +313,44 @@ def test_publish_images_keeps_demo_off_the_moving_tags() -> None:
 
 
 def test_release_publishes_the_demo_under_its_own_tag() -> None:
-    text = RELEASE_WORKFLOW.read_text()
-    assert "-demo" in text, "release.yml has no demo-suffixed tag for the demo build"
-    assert 'matrix.demo }}" = "true"' in text, (
-        "release.yml does not branch its tag list on `matrix.demo`, so `vX.Y.Z` and `latest` could carry the demo bundle again"
+    """The demo bundle must never ride on `vX.Y.Z` or `latest`.
+
+    Asserted as a property of the step rather than as a literal string. The
+    earlier version required the spelling ``matrix.demo }}" = "true"``, which
+    made a safety *improvement* look like a regression: binding the matrix
+    value through ``env:`` keeps a workflow expression out of the shell, and
+    the protection is identical. What matters is that the moving tags are
+    emitted only on the branch where this is not the demo build.
+    """
+    workflow = yaml.safe_load(RELEASE_WORKFLOW.read_text())
+    steps = [s for job in workflow["jobs"].values() for s in job.get("steps", []) if isinstance(s, dict)]
+    step = next((s for s in steps if s.get("id") == "image-tags"), None)
+    assert step is not None, "release.yml has no `image-tags` step, so there is no tag list to check"
+
+    script = step["run"]
+    # The demo flag reaches the script either inline or through an env binding;
+    # resolve the indirection rather than requiring one of the two spellings.
+    names = [name for name, value in (step.get("env") or {}).items() if "matrix.demo" in str(value)]
+    branches_on_demo = any(name in script for name in names) or "matrix.demo" in script
+    assert branches_on_demo, (
+        "release.yml does not branch its tag list on the demo flag, so `vX.Y.Z` and `latest` could carry the demo bundle again"
     )
+
+    assert "-demo" in script, "release.yml has no demo-suffixed tag for the demo build"
+
+    # Split on the shell keyword, which is a line of its own — not on the
+    # substring. The script's second line reads "Anything else in the line is
+    # a minor", so a substring partition cut at that comment and left a demo
+    # arm of two lines that could never contain `latest`. The check passed
+    # while a demo build tagged `latest` sat below it.
+    lines = script.splitlines()
+    keyword = [i for i, line in enumerate(lines) if line.strip() == "else"]
+    assert len(keyword) == 1, f"expected exactly one `else` keyword in the tag script, found {len(keyword)}"
+    demo_arm = "\n".join(lines[: keyword[0]])
+    other_arm = "\n".join(lines[keyword[0] :])
+
+    assert "latest" not in demo_arm, f"release.yml can tag the demo build `latest`:\n{demo_arm}"
+    assert "latest" in other_arm, "release.yml never tags a non-demo build `latest`, so this check proves nothing"
 
 
 def test_each_compose_file_pulls_the_image_built_for_it() -> None:

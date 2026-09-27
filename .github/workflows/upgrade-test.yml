@@ -90,6 +90,13 @@ jobs:
       - name: Install a psql client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
+      # `check_runtime_db_role.py --dsn` connects with asyncpg. Without it the
+      # check refuses rather than reporting a pass it did not earn, which is
+      # the right behaviour and is how this was found — so install it here
+      # rather than letting the job discover it three minutes in.
+      - name: Install the driver the role check connects with
+        run: python3 -m pip install --quiet "asyncpg>=0.29,<0.31"
+
       # Leg one: the schema an operator on the previous release has.
       - name: Apply the previous release's migration chain
         env:
