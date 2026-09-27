@@ -84,6 +84,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An MCP client, so an investigation can reach the tools a tenant already
+  runs, read-only and untrusted by default** (gap-closure Phase 5).
+
+  **The gap.** The investigation agent could reach AiSOC's own lake and
+  nothing else. Every security vendor now publishes an MCP server, and an
+  operator who has one had no way to let the agent use it.
+
+  **What shipped.** A per-tenant registry in `services/api` (migration
+  `069_mcp_servers.sql`, `/api/v1/mcp-servers`) holding the URL, a
+  vault-encrypted credential, an explicit tool allowlist, a timeout and a
+  response-size cap; and a client in `services/agents` on the official MCP
+  Python SDK, exact-pinned at `mcp==1.30.0`. Discovered tools map onto the
+  existing `Tool` dataclass as `mcp.<server>.<tool>` and are registered into
+  the existing tool loop, which is what makes them reachable from a real
+  investigation rather than from a test.
+
+  **The defaults, because an MCP server is third-party code reached over the
+  network whose replies land in the prompt that decides what the agent does
+  next.** Streamable HTTP only. stdio refused behind two separate switches,
+  because a stdio server is a local process this container would start, and
+  even then not implemented, so it is refused by name rather than silently
+  downgraded to HTTP. The tool allowlist defaults to empty, so a server saved
+  with no further thought advertises nothing. A tool the server annotates
+  `destructiveHint`, or which declares `readOnlyHint: false`, is refused
+  outright: the plan permits either a governed live action with a declared
+  capability contract or nothing at all, and since no MCP tool declares a
+  contract, the refusal names the door it would otherwise take.
+
+  **The allowlist is checked before dispatch, twice.** At discovery, where a
+  refused tool is never turned into something the model can see, and again at
+  dispatch through the same pure function over the same discovered
+  descriptor. `app/mcp/policy.py` is forbidden by gate from importing
+  anything that can open a socket, so no decision it takes can depend on
+  reaching the server, and a test hands the invoker a session factory that
+  raises on use to prove a refusal costs no network call.
+
+  **A malicious tool *description* is handled as an injection, not as
+  documentation.** The server supplies the description and the input schema,
+  and both are rendered into the prompt that chooses which tool to call, so
+  that payload arrives before any result does. The name, title, description
+  and every parameter description are scanned and a high-severity hit drops
+  the tool entirely rather than sanitising it. What survives is sanitised,
+  capped at 400 characters and marked as third-party text, and the schema is
+  projected down to `type`, typed `properties` and `required`, so `$ref`,
+  `default`, `examples` and arbitrary nesting never reach the prompt. The
+  projection is the load-bearing half: the injection guard measures 0.852 on
+  prose and **66.7% on payloads written to fit a constrained field**, so
+  roughly a third of field-shaped payloads get past it, and both figures are
+  published on the docs page rather than the flattering one.
+
+  **Results are capped on the socket, fenced with the run nonce, scanned and
+  ledgered.** The byte cap is enforced as bytes arrive rather than on the
+  parsed result, so an oversized reply is cut mid-response instead of read
+  into memory first, and a truncated result says so in words the model reads.
+  Every call, refusal and failure writes an Investigation Ledger event
+  carrying argument *names*, byte counts and the injection verdict, never
+  argument values or result text. Cost is recorded as
+  `not_applicable_no_model_call` rather than `0`, because an MCP call spends
+  a vendor's compute and no model tokens.
+
+  **The gate** is `scripts/check_mcp_client_policy.py`, wired into `ci.yml`.
+  It was proven able to fail against eight separate injected regressions,
+  including checking the annotation before the allowlist, defaulting stdio
+  on, removing the command allowlist, building a `Tool` with a raw callable
+  instead of the invoker, and deleting the SSRF guard from the connect path.
+
+  **Unverified, stated plainly.** `apps/docs/docs/operations/mcp-client.md`
+  lists the vendor MCP servers operators are most likely to have, and marks
+  every one of them unverified against a live vendor: none has been exercised
+  by this project, and the tool names given are examples to be replaced with
+  what the vendor's own `tools/list` publishes.
+
 - **`connectors` and `actions` now start on the default CORE profile, so the
   investigation agent has somewhere to reach** (gap-closure Phase 4.5,
   [ADR-0007](docs/decisions/0007-connectors-and-actions-in-core.md)).

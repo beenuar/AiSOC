@@ -197,6 +197,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "osqueryd bootstraps here and holds no bearer token; the per-tenant "
         "enroll secret is the credential and is checked before any write",
     ),
+    "services/api/app/api/v1/endpoints/mcp_servers.py::resolve_mcp_servers": (
+        "service_token_valid",
+        "the agents service reads its tenant's MCP servers here and holds no session; the shared service token is the "
+        "credential, compared in constant time and failing closed when unset. The tenant it names is the scope rather "
+        "than a narrowing of one, because a service token carries no tenant to intersect with, and this route refuses a "
+        "console session outright so no user's scope can reach it",
+    ),
 }
 
 #: Routes that are public by design. Each entry is (service, reason) and the

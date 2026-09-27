@@ -37,6 +37,8 @@ from app.core.cost_governor import get_governor
 from app.investigator.strategies import Strategy, select_strategy
 from app.llm.factory import make_chat_model
 from app.llm.tool_loop import run_with_tools
+from app.mcp.tools import build_mcp_toolset
+from app.prompting.envelope import system_rule
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
 
@@ -95,6 +97,12 @@ class DeepInvestigationResult:
     usd_cost: float = 0.0
     cost_capped: bool = False
     unavailable_data: list[str] = field(default_factory=list)
+    #: Namespaced MCP tools bound for this run, and what was refused and why.
+    #: Recorded on the result as well as in the ledger so an operator reading
+    #: one investigation can see that a tool they configured was not offered,
+    #: without going to the ledger to find out.
+    mcp_tools: list[str] = field(default_factory=list)
+    mcp_refusals: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -119,6 +127,8 @@ class DeepInvestigationResult:
             "cost_capped": self.cost_capped,
             "reached_depth": self.reached_depth,
             "unavailable_data": self.unavailable_data,
+            "mcp_tools": self.mcp_tools,
+            "mcp_refusals": self.mcp_refusals,
             "error": self.error,
         }
 
@@ -266,10 +276,24 @@ async def run_deep_investigation(
         for tool in investigation_tools(tenant_id):
             registry.register(tool)
 
+        # Third-party MCP servers this tenant registered, if any. The toolset
+        # carries its own nonce, and the standing data-only rule for that
+        # nonce is appended to the system message here: an MCP result is
+        # fenced with it, and a fence the system prompt never explains is a
+        # delimiter rather than a boundary.
+        system = f"{_SYSTEM_PREAMBLE}\n\n{strategy.system_guidance()}"
+        mcp = await build_mcp_toolset(tenant_id, run_id=getattr(state, "run_id", None))
+        if mcp.tools:
+            for tool in mcp.tools:
+                registry.register(tool)
+            system = f"{system}\n\n{system_rule(mcp.nonce)}"
+            result.mcp_tools = [t.name for t in mcp.tools]
+        result.mcp_refusals = [f"{name}: {classification}" for name, classification, _ in mcp.refusals]
+
         loop = await asyncio.wait_for(
             run_with_tools(
                 model,
-                system=f"{_SYSTEM_PREAMBLE}\n\n{strategy.system_guidance()}",
+                system=system,
                 user=_summarise_alert(state),
                 registry=registry,
                 max_iters=max_iterations or MAX_ITERATIONS,

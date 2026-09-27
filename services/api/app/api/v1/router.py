@@ -51,6 +51,7 @@ from app.api.v1.endpoints import (
     llm_credentials,
     llm_status,
     marketplace,
+    mcp_servers,
     metrics,
     mssp,
     nl_detection,
@@ -130,6 +131,7 @@ api_router.include_router(playbook_steps.router)
 api_router.include_router(plugins.router)
 api_router.include_router(community.router)
 api_router.include_router(marketplace.router)
+api_router.include_router(mcp_servers.router)
 api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(compliance.router)

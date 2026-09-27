@@ -33,7 +33,11 @@ and says so.
 | Prompt-injection resistance | Three adversarial corpora: 32 payloads scanned in isolation and 71 incident pairs whose payloads are placed in attacker-controllable fields, both against a clean twin with a recall floor and a false-positive ceiling, plus 34 held-out pairs authored after the guard was frozen and carrying no floor at all, on which the guard measures 7.1% | `services/agents/tests/adversarial/` |
 | Claim-to-gate traceability | Every product claim mapped to the CI job that fails when it stops being true | `docs/audit/CLAIM_TO_GATE_MATRIX.md` |
 
-The last row is the one worth reading first. It is the honest index: 172 rows
+<<<<<<< HEAD
+The last row is the one worth reading first. It is the honest index: 178 rows
+=======
+The last row is the one worth reading first. It is the honest index: 178 rows
+>>>>>>> 54de0d37 (feat(agents): reach a tenant's own MCP servers, read-only and untrusted by default)
 `GATED`, 8 `PARTIAL` with the specific gap named, and a ratchet that refuses
 to let a row sit at `NO GATE`.
 

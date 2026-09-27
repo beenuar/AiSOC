@@ -18,6 +18,7 @@ from app.models.investigation import (
     InvestigationRun,
 )
 from app.models.llm_credential import TenantLlmCredential
+from app.models.mcp_server import McpServer
 from app.models.mssp import (
     MSSPDelegation,
     MSSPRuleOverride,
@@ -89,6 +90,7 @@ __all__ = [
     "OAuthState",
     "TenantInboxToken",
     "TenantLlmCredential",
+    "McpServer",
     "PasskeyCredential",
     "PasskeyChallenge",
     "OnCallStatus",

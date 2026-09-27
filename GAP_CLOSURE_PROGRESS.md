@@ -359,12 +359,41 @@ in D20.
 
 ## Phase 5: MCP client
 
-- [ ] **5.1 Client** on the official MCP Python SDK, pinned, streamable HTTP only by default.
-- [ ] **5.2 Registry**: per-tenant server registry with vault credential, tool allowlist, timeout and response-size cap.
-- [ ] **5.3 Read-only by default**; a state-changing MCP tool is reachable only through governed dispatch.
-- [ ] **5.4 Untrusted by default**: contract boundary markers, injection guard, ledger, SSRF guard and air-gap policy.
-- [ ] **5.5 Tests and docs** against an in-process MCP test server, plus `apps/docs/docs/operations/mcp-client.md` marking each vendor server unverified until someone runs it.
+- [x] **5.1 Client** on the official MCP Python SDK, pinned, streamable HTTP only by default. `services/agents/app/mcp/`, on `mcp==1.30.0` exact-pinned. The 1.x line rather than 2.x deliberately: mcp 2.x depends on `httpx2`, a second HTTP client alongside the `httpx` this service already pins, and two TLS stacks inside the one service that reaches third-party servers is a cost with no return. Exact rather than ranged because the version is the behaviour: this library parses replies from third parties straight into the prompt, and a change in what `readOnlyHint` and `destructiveHint` mean would move what `policy.py` decides.
+- [x] **5.2 Registry** in `services/api`: migration **069**, `/api/v1/mcp-servers`, credential in the existing `CredentialVault` under the connector convention rather than a bespoke column. The console never sees a credential (`has_credential: bool`); the agents service reads it over one internal route that is **service-token only with no session fallback**, unlike every other dual-mode route in this service, because a console user who can read their tenant's alerts must not thereby be able to read their operator's vendor token. See D20 for why the credential travels at all.
+- [x] **5.3 Read-only by default.** A tool is callable only if the tenant allowlisted it *and* the server did not annotate it `destructiveHint: true` or `readOnlyHint: false`. Both halves, because they are different assertions: the allowlist is the tenant's, the annotation is the vendor's, and either saying no is a no. The allowlist defaults empty, so a newly registered server offers nothing. A destructive tool is refused outright and the refusal names governed dispatch; see D21 for why "or not at all" is the honest half of the plan's sentence today.
+- [x] **5.4 Untrusted by default.** Socket-level byte cap, per-run nonce fence, injection guard, an inline first-party boundary sentence, and a ledger row for every call, refusal and failure. The SSRF guard and air-gap policy run immediately before the socket, not at save time; see D22.
+- [x] **5.5 Tests and docs.** 40 tests across three files against a real `FastMCP` server over the SDK's memory transport, so nothing mocks `ClientSession` or `McpClient`. `apps/docs/docs/operations/mcp-client.md` marks all five vendor servers unverified against a live vendor, and says the tool names given are examples to be replaced with what the vendor's own `tools/list` publishes.
 - [ ] **5.6 AiSOC's own MCP server** gains read tools for triage verdicts, the ledger and replay reports, plus a dry-run-only action preview.
+
+**Done when:** against a mock MCP server, an investigation calls an allowlisted
+read tool, refuses a destructive one, and the ledger records both.
+
+**Met for 5.1 to 5.5.** `services/agents/tests/test_mcp_investigation.py::test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destructive_one`
+runs exactly that: a real `FastMCP` server publishing `get_detections`
+(read-only) and `isolate_host` (destructive), both allowlisted by the operator
+**on purpose** so the annotation is what refuses rather than the allowlist; the
+real tool loop `deep_investigation` drives; a scripted model that asks for both.
+The read tool returns the server's data fenced with the run nonce, the
+destructive tool was never bound so the loop's own registry refuses it, and the
+real `_LedgerWriter` produces one `mcp_tool_call` row and one
+`mcp_tool_refused` row carrying the run id, the resolved tenant and the
+classification.
+
+Three things stop that from being a vacuous pass. The destructive tool is
+asserted absent from the schemas handed to the provider, not merely absent from
+the trace, so "the model did not call it" and "the model was never offered it"
+are told apart. The ledger is captured at the **database boundary**
+(`ledger.record_event`) rather than by replacing the writer, so the sequence
+numbers, the tenant resolution and the payload shape are the ones that would
+reach Postgres, and a separate test asserts the sequence numbers are monotonic
+and above the graph range, because `ON CONFLICT (run_id, seq) DO NOTHING` drops
+a collision silently. And a refusal is separately proven to cost **no network
+call at all**, by handing the invoker a session factory that raises the moment
+anything asks it for a session.
+
+Not proven: a row landing in a real Postgres, which is the live-container
+suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 6: Tenant skills and better triage context
 
@@ -485,6 +514,15 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   gate was proven against the pre-fix tree: run against `main`'s
   `services/api/app/main.py`, both `test_the_deployed_lifespan_registers_the_sweep`
   and `test_the_sweep_is_off_by_default_and_says_so` fail.
+- [x] **Phase 5.1 to 5.5, the MCP client.** Migration 069. New dependency
+  `mcp==1.30.0`, exact-pinned in `services/agents/pyproject.toml`, re-locked
+  in `poetry.lock` and added to the agents CI install list so the version CI
+  exercises is the version the image ships. Suites: `services/agents` 1350 to
+  1390 (40 new), `services/api` 2924 to 2964 (40 new). Claim matrix 176 rows
+  to 182, GATED 168 to 174. New gate
+  `scripts/check_mcp_client_policy.py`, wired into `ci.yml`, proven able to
+  fail against eight injected regressions rather than merely observed passing.
+  See D20 to D22.
 
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
@@ -868,6 +906,7 @@ script name, `disable_user` is in the guard's tool-name list, and a
 tool-name match is **high** severity, which demotes the case to L0. So an
 ordinary offboarding script takes automation away from a true positive.
 
+<<<<<<< HEAD
 ### D20. The hardening worked on the corpus and barely generalised, and the second number is the one that matters
 
 D19 left the field-native gap open on the grounds that tuning a guard against
@@ -945,3 +984,85 @@ verb, and both nouns are gone. `benign-edr-response-cmdline` still flags and
 stays recorded: suppressing it needs a rule that reads a containment verb in
 flag position as a tool invocation, and a suppression rule is the one kind
 whose failure mode is silence.
+=======
+### D20. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
+
+The plan puts the client in `services/agents` and the registry in
+`services/api`. Both package their code as top-level `app`, so one process
+holds one of them, and the API is the service with the vault and the tenant
+session. The credential therefore travels, on the same round trip that already
+carries organisation memory, SIEM writeback, connector normalisation and shadow
+reconciliation. D15's version of this has the API *pushing* credentials to
+`services/actions`; this one reverses the direction, because the agent is the
+one that knows an investigation has started.
+
+What is deliberately different from every other internal route here: there is
+**no session fallback**. `/feedback/context-statements`, `/alerts/{id}/source-writeback`
+and the rest accept either a session or the service token, because the data
+behind them is the caller's own. This route returns plaintext third-party
+credentials. A console user who can read their tenant's alerts must not thereby
+be able to read the bearer token their operator configured for a vendor's MCP
+server, so a perfectly valid session gets a 401 and the console is given
+`has_credential: bool` instead. `test_a_valid_console_session_is_still_refused_plaintext`
+pins it.
+
+Two smaller decisions on the same route. `tenant_id` is **required**, because a
+service token carries no tenant of its own and defaulting an omitted parameter
+to "every tenant" on a route returning credentials is the widest possible
+reading of an absence. And a row whose credential will not decrypt is dropped
+with a warning rather than returned with an empty credential: the second would
+produce an unauthenticated call to a third party that the operator believes is
+authenticated, and the vendor's 401 would reach the agent as "that tool is
+unavailable", which is indistinguishable from the tool not existing.
+
+### D21. "Or not at all" is the honest half of 5.3 today, and saying so is the point
+
+The plan says a state-changing MCP tool is reachable only through governed
+dispatch, as a live action with a declared contract, **or not at all**. The
+first half cannot be built here. A capability contract declares impact,
+reversal and a verification probe for a *verb*, and it is graded by
+`approval_matrix.evaluate_contract`; an MCP tool is a name on somebody else's
+server with an annotation and a description. There is no verb to contract, no
+reversal to declare and no probe to write, and inventing one per vendor tool
+would be the "exists but nothing calls it" shape wearing a contract.
+
+So the shipped behaviour is refusal, and the refusal message names governed
+dispatch as the door it would otherwise take. This is recorded rather than
+left implicit because the opposite reading is available and wrong: a future
+session could read 5.3 as unfinished and wire MCP tools into the dispatcher
+without a contract, which would be worse than the refusal by exactly the margin
+this repository's playbook-step defect cost: steps that claimed to dispatch
+actions and reached no executor at all.
+
+The other half of the sentence is where the work went. Refusing at call time
+would have been the obvious implementation; refusing at *discovery*, so the
+tool is never put in front of the model, is strictly stronger, because a tool
+the model cannot see is one it cannot be talked into naming. Both happen, and
+the dispatch-time check re-runs the same pure function over the same discovered
+descriptor rather than a weaker restatement of it.
+
+### D22. The SSRF guard belongs at the socket, and putting a copy at save time nearly made it worse
+
+The plan says server URLs pass the SSRF guard. The obvious place is the
+registry, when an operator presses save, and that is where a reader looks for
+it. It is the wrong place to *rely* on: DNS is not a property of a URL. A
+hostname that resolves to a public address at save time can resolve to
+`169.254.169.254` an hour later, and by then the saved row has been validated
+and nothing re-asks.
+
+So there are two checks and they are deliberately not the same check.
+`services/api` runs a **structural** one at save time (scheme, userinfo,
+hostname shape, IP literals, the cloud-metadata blocklist, the air-gap policy)
+so an operator gets an immediate readable refusal, and its docstring says in as
+many words that it does not resolve DNS and is not the control. The enforcing
+one is `validate_outbound_url` in `services/agents`, called after the
+configuration is read and before the transport is constructed. The gate asserts
+the ordering by line number inside `session()`, because "the guard is called"
+and "the guard is called first" are different claims and only the second is a
+control.
+
+The near-miss worth recording: the first draft had the API resolving DNS too,
+which would have read like the real check to every future reader while ageing
+into a false one, and would have made the agents-side guard look like a
+belt-and-braces duplicate that a later cleanup could reasonably delete.
+>>>>>>> 54de0d37 (feat(agents): reach a tenant's own MCP servers, read-only and untrusted by default)
