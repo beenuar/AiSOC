@@ -200,6 +200,8 @@ const sidebars: SidebarsConfig = {
         "operations/mcp-client",
         "operations/codespaces",
         "operations/theming",
+        "operations/ha-deployment",
+        "operations/performance",
         "operations/upgrades",
         "operations/notifications",
         "operations/action-approvals",

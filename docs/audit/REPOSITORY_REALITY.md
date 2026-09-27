@@ -259,7 +259,7 @@ unless `AISOC_ALLOW_SEED=1`.
 
 | Component | Status |
 |---|---|
-| `services/demo-producer` | **DEMO-ONLY**. Emits randomised vendor events into the real ingest API. Not in any compose profile; invoked manually. |
+| `services/demo-producer` | **DEMO-ONLY** in its default mode: randomised vendor events into the real ingest API, not in any compose profile, invoked manually. `--load` is **WORKING** and is not demo data: it is the generator `scripts/perf/load_harness.py` drives, and its events are attributable per event so the harness can time each one to the alert it became. |
 | `seed_demo.py` | **DEMO-ONLY**. 15 hand-written incidents plus randomised alerts. |
 | `services/agents/app/api/hunt_search.py` | **DEMO-ONLY** but honest — returns `source: "sample"` and a notice saying it does not query the lake. |
 | `services/agents/app/api/copilot.py` | **PARTIAL** — real LLM path with a key; returns `source: "template"` and a notice without one. |
@@ -275,8 +275,36 @@ Stated rather than guessed:
   available. The deterministic offline path was exercised. Every published
   benchmark row is labelled `substrate: true` and must not be read as live
   agent accuracy.
-- **Kubernetes/Helm deployment** was not exercised in this audit. The chart
-  renders; whether it runs was not tested here.
+- **Kubernetes/Helm deployment: partly exercised on 2026-09-27, and only on
+  kind.** The chart was installed on a three-node kind cluster (Kubernetes
+  v1.34.0) on an Apple M5 Max with 8 CPUs and 15.6 GiB allocated to the
+  container runtime, using `values-ha.yaml` plus `ci/kind-values.yaml`. Three
+  Kafka brokers formed a KRaft quorum, two ingest and two fusion replicas came
+  up, the migration chain applied, 10,000 events pushed through the public
+  ingest endpoint all became alert rows, and a fusion pod destroyed mid-stream
+  cost neither a lost event nor a duplicated one. Figures:
+  `apps/docs/docs/operations/performance.md`.
+
+  **UNVERIFIED, in the same breath:** no managed Kubernetes service (EKS, GKE,
+  AKS) and no bare-metal cluster has been tried; kind nodes are containers on
+  one kernel, so this is not multi-machine evidence; no ingress controller or
+  cloud load balancer was in front of the release; PersistentVolumeClaims were
+  switched off for the run; NetworkPolicy enforcement needs a CNI that
+  implements it and was not exercised; managed PostgreSQL and ClickHouse were
+  not used, the run pointed at single ephemeral pods; and the longest run was
+  a few minutes, so nothing is known about sustained operation, compaction,
+  log growth or rolling upgrades. **"The chart installs and survives a pod
+  kill on kind" is not "Kubernetes is production-ready."**
+
+  Four defects were found by running it, none of which rendering could have
+  shown: `KAFKA_BOOTSTRAP_SERVERS` was set on the UEBA deployment and nowhere
+  else, so ingest and fusion defaulted to `localhost:9092` and the spine was
+  installed but not connected; the first batch after an install was lost to
+  Kafka auto-creation; readiness probes pointed at `/health`, which answers
+  200 regardless of whether the consumer is attached, instead of `/readyz`,
+  which reports the subscription; and `ueba.enabled` had no reader, so
+  switching UEBA off still scheduled it. All four are fixed and gated by
+  `helm.yml`.
 - **Whether migrations 050–053 apply** on an existing volume was not traced.
   Compose mounts `services/api/migrations` as `docker-entrypoint-initdb.d`,
   which runs only on a *fresh* volume. On a clean install the schema is

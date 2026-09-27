@@ -1,0 +1,124 @@
+# The slice of the chart a kind or k3d node can actually run, layered on
+# values-ha.yaml.
+#
+#   helm install aisoc infra/helm/aisoc -n aisoc \
+#     -f infra/helm/aisoc/values-ha.yaml \
+#     -f infra/helm/aisoc/ci/kind-values.yaml
+#
+# What it changes, and why each change is a test-rig concession rather than a
+# recommendation:
+#
+#   * The three Kafka brokers stay. They are the subject of the exercise:
+#     the chaos test's "no loss, no duplicates" claim rests on replication
+#     factor 3 with min.insync.replicas 2, and one broker would prove nothing.
+#   * Requests are cut to what three kind nodes on a laptop can schedule.
+#     Production requests live in values.yaml and values-ha.yaml.
+#   * Persistence is off. A kind cluster is deleted at the end of the run;
+#     a PersistentVolumeClaim would outlive nothing and slow every restart.
+#   * web, realtime and agents are dropped. Neither the load harness nor the
+#     chaos test touches a browser or the triage worker, and their images are
+#     the largest in the release.
+#   * ingest is published on a NodePort so a harness outside the cluster can
+#     push to it without a port-forward, which dies silently mid-run.
+
+global:
+  environment: development
+
+kafka:
+  deploy:
+    enabled: true
+    replicaCount: 3
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    numPartitions: 3
+    persistence:
+      enabled: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        cpu: 1500m
+        memory: 1536Mi
+
+ingress:
+  enabled: false
+
+ueba:
+  enabled: false
+honeytokens:
+  enabled: false
+purpleTeam:
+  enabled: false
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+
+services:
+  api:
+    replicaCount: 1
+    hpa:
+      enabled: false
+    pdb:
+      enabled: false
+    readinessPath: /readyz
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: 1500m
+        memory: 1536Mi
+    env:
+      AISOC_DISABLE_KAFKA: "false"
+
+  ingest:
+    replicaCount: 2
+    hpa:
+      enabled: false
+    pdb:
+      enabled: false
+    containerPort: 8080
+    service:
+      type: NodePort
+      port: 8080
+      nodePort: 30081
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+    env:
+      HTTP_PORT: "8080"
+      METRICS_PORT: "9090"
+      ENV: development
+      AISOC_GRAPH_ENABLED: "false"
+
+  # Two replicas, not one: the chaos test kills a pod and the claim is that
+  # the partitions it owned are picked up without loss or duplication. With a
+  # single replica there is nothing to rebalance onto and the test would be
+  # measuring restart time.
+  alert-fusion:
+    replicaCount: 2
+    hpa:
+      enabled: false
+    pdb:
+      enabled: false
+    containerPort: 8003
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+    env:
+      AISOC_LAKE_WRITER_ENABLED: "false"
+
+  web: null
+  realtime: null
+  agents: null
+  enrichment: null

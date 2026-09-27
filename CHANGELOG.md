@@ -447,6 +447,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a CVE is not swept against telemetry because it does not appear there; and a
   feed type nobody has mapped is refused by name and counted rather than
   defaulted to a plausible one.
+- **Throughput and latency are now measured end to end, against the deployment
+  rather than against one function** (gap-closure Phase 12.1 and 12.2).
+
+  **The gap.** The only performance evidence in the tree was
+  `scripts/perf/throughput_harness.py`, which times `promote_normalized_event`
+  in one process. That is the right shape for a regression floor on the
+  CPU-bound stage and it opens no socket, serialises nothing to Kafka and
+  writes no row, so it could not answer what the platform sustains. Nothing
+  published an events-per-second figure, an event-to-alert latency, a consumer
+  lag or a dead-letter rate at all.
+
+  **How it was measured.** `services/demo-producer` gained a `--load` mode
+  that pushes one deterministic event shape carrying a run id, a sequence
+  number and the send time in the title, with a distinct host per event so the
+  fusion correlation key does not collapse thousands of events into a handful
+  of alerts. `scripts/perf/load_harness.py` drives it against the real ingest
+  endpoint with a real credential, then reads the `alerts` table and times each
+  event to the row it became, correcting for the measured offset between the
+  producer's clock and the database's rather than assuming they agree.
+
+  On an Apple M5 Max with 8 CPUs and 15.6 GiB allocated to Docker, on
+  2026-09-27: a single-host Compose stack drained **176.9 alerts/s** at
+  saturation, and at a paced 80 events/s the event-to-alert latency was
+  **p50 976 ms, p95 1,091 ms, p99 1,156 ms** with consumer lag at zero. A
+  three-node kind deployment of the Helm chart drained **214.0 alerts/s** and
+  ran **p50 982 ms, p95 1,317 ms, p99 1,437 ms** paced. Every run delivered
+  every accepted event exactly once with a zero dead-letter rate. The figures
+  are published with their hardware and date at
+  `apps/docs/docs/operations/performance.md` and labelled explicitly as **not
+  a service-level objective**; the raw JSON is committed under
+  `docs/perf/results/`.
+
+  **The producer used to overstate itself.** It added `len(batch)` to one
+  counter as soon as `Do()` returned, without reading the status, so a stack
+  answering 401 or 500 to every batch still reported full throughput. It now
+  counts attempted, accepted, rejected, refused and transport-failed
+  separately, reads the `accepted`/`rejected` counters out of the ingest
+  response, and exits non-zero when nothing was accepted, because a run that
+  accepted nothing is a failed run rather than one that measured zero.
+
+  **The gates.** `scripts/check_perf_results.py` fails a committed result that
+  loses its hardware, its date or the not-an-SLO label, and fails an
+  unmeasured metric that carries a `value` key, which is how an absence gets
+  rendered as `0.00`. A measured zero is asserted to survive, because zero
+  dead letters and zero drained lag are real results. `perf.yml` runs the gate
+  and both harness self-tests on every relevant pull request, and the
+  end-to-end harness against a Compose spine nightly with floors two orders of
+  magnitude below the published figures, because a gate tuned near a
+  measurement flaps on shared runners and gets disabled.
+
+- **A reference high-availability Helm deployment, and a chaos test that
+  proves the claim it makes** (gap-closure Phase 12.2).
+
+  `infra/helm/aisoc/values-ha.yaml` runs three Kafka brokers in KRaft mode
+  with replication factor 3 and `min.insync.replicas=2`, multi-replica ingest,
+  fusion, agents, API, web and realtime, and PodDisruptionBudgets that refuse
+  to make a second broker unavailable voluntarily. PostgreSQL and ClickHouse
+  are deliberately left external, with managed options and their trade-offs
+  documented at `apps/docs/docs/operations/ha-deployment.md`: a chart that
+  shipped a single-pod database under a file called `values-ha.yaml` would be
+  claiming something it does not do.
+
+  `scripts/chaos/fusion_restart.py` pushes a paced stream, destroys a fusion
+  replica with `--grace-period=0 --force` part way through, and then asserts
+  **against PostgreSQL** that every event ingest accepted produced exactly one
+  alert row. It asserts nothing about what the replacement pod says about
+  itself, because a consumer that has silently detached reports healthy: the
+  UEBA consumer that had no `except` at all sat at `Running` with restarts 0
+  and `/health` at 200 permanently. Run against the kind deployment on
+  2026-09-27: 6,000 events, one replica destroyed 24.3 seconds in with 1,840
+  alerts already stored, 6,000 rows afterwards, no loss and no duplicates.
+
+### Fixed
+
+- **A Helm install created every object and connected nothing** (gap-closure
+  Phase 12.2). Four defects that only running the chart could surface:
+
+  `KAFKA_BOOTSTRAP_SERVERS` was set on the UEBA deployment and on no other.
+  `services/ingest` and `services/fusion` both fall back to an in-code default
+  of `localhost:9092`, which inside a pod resolves to the pod itself, so a
+  Helm install produced an ingest publishing into nothing and a fusion
+  consuming nothing, with every object created and every probe green. It is
+  now set in the shared ConfigMap from one helper, alongside `KAFKA_BROKERS`.
+
+  The chart ran no brokers at all: `kafka.bootstrapServers` named a Service
+  called `kafka` that the chart never creates. It can now deploy a three-node
+  KRaft StatefulSet, off by default because a default install should not
+  silently start a stateful quorum.
+
+  The first batch after an install was lost. Auto-creation is enabled, and the
+  produce that triggers creation is the one that fails with
+  `Unknown Topic Or Partition`; a retry succeeds, so the symptom is exactly
+  one dropped batch at install time. A post-install hook now creates the four
+  spine topics and pins their partitions and replication factor rather than
+  inheriting whatever the broker defaults were at boot.
+
+  Readiness probes pointed at `/health`, which answers 200 while the process
+  is alive whatever its consumer is doing. `api`, `ingest`, `alert-fusion`,
+  `agents` and `realtime` now use `/readyz`, which evaluates a probe per
+  subscription and names any that have detached. Because Kubernetes does not
+  restart on readiness failure, and deliberately should not, consumers also
+  gained an init container that holds them back until a broker answers: on a
+  cold install the brokers are still electing a controller when fusion's
+  lifespan runs, aiokafka's bootstrap raises, the worker task ends and nothing
+  retries. Observed on kind on 2026-09-27, with every event accepted by ingest
+  and none becoming an alert.
+
+- **`ueba.enabled` was a switch wired to nothing.** `honeytokens-deployment.yaml`
+  and `purple-team-deployment.yaml` each gate on their own flag;
+  `ueba-deployment.yaml` did not, so `--set ueba.enabled=false` rendered the
+  Deployment anyway. On a cluster without that image it is two pods in
+  `CreateContainerConfigError` for a subsystem the operator switched off, and
+  the switch reads as broken rather than as absent. Gated by `helm.yml` in
+  both directions.
 
 ### Changed
 

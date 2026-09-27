@@ -31,6 +31,7 @@ services:
     containerPort: 8000
     metricsPort: 9090
     healthCheckPath: /health
+    readinessPath: /readyz
     service:
       type: ClusterIP
       port: 80
@@ -62,6 +63,8 @@ services:
     replicaCount: 3
     containerPort: 8001
     healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
     service:
       type: ClusterIP
       port: 80
@@ -124,6 +127,8 @@ services:
     replicaCount: 2
     containerPort: 8003
     healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
     service:
       type: ClusterIP
       port: 80
@@ -155,6 +160,8 @@ services:
     replicaCount: 2
     containerPort: 8004
     healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
     service:
       type: ClusterIP
       port: 80
@@ -217,6 +224,8 @@ services:
     replicaCount: 2
     containerPort: 4000
     healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
     service:
       type: ClusterIP
       port: 80
@@ -341,9 +350,74 @@ purpleTeam:
       cpu: 500m
       memory: 1Gi
 
-# Referenced by ueba-deployment.yaml; also absent until now.
+# ─── Kafka ────────────────────────────────────────────────────────────────────
+#
+# `bootstrapServers` is the address of a broker the chart does NOT run. It is
+# the production shape: a managed broker (MSK, Confluent Cloud, Redpanda
+# Cloud) outlives any one release and is not something a SOC should be
+# operating by accident.
+#
+# `deploy` runs brokers inside the release instead. It is off by default
+# because a default install that silently starts a stateful quorum is the
+# wrong surprise, and because a single-replica broker with no persistence is
+# worse than none. Turn it on with values-ha.yaml, which sets three replicas,
+# replication factor 3 and min.insync.replicas 2, the settings that make
+# losing a broker survivable.
 kafka:
   bootstrapServers: "kafka:9092"
+  deploy:
+    enabled: false
+    replicaCount: 3
+    # Pinned rather than floating: a broker is the one component in this
+    # chart where the version is the on-disk format.
+    image:
+      repository: apache/kafka
+      tag: "3.9.1"
+      pullPolicy: IfNotPresent
+    # KRaft requires a cluster id at format time. Fixed here so a re-install
+    # against existing volumes rejoins its own cluster rather than refusing to
+    # start against log directories formatted for a different one.
+    clusterId: "aisoc-kraft-cluster-0"
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    numPartitions: 3
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 3Gi
+    extraEnv: {}
+    # A post-install hook that creates the spine's topics before anything
+    # publishes. Auto-creation alone loses the first batch after an install:
+    # the produce that triggers creation is the one that fails. It also pins
+    # partitions and replication factor instead of inheriting whatever the
+    # broker defaults were at boot.
+    createTopics:
+      enabled: true
+      names:
+        - aisoc.raw_events
+        - aisoc.alerts.fused
+        - aisoc.alerts.raw
+        - ueba.anomalies
+  # An init container on every service that declares `waitForKafka: true`,
+  # holding it back until a broker answers. A consumer whose bootstrap fails
+  # does not retry: the worker task ends, the pod keeps answering /health with
+  # 200, and the spine is silently unconsumed. Ordering is cheaper than
+  # detecting that afterwards.
+  waitForBroker:
+    enabled: true
+    attempts: 60
+    intervalSeconds: 5
+    image:
+      repository: apache/kafka
+      tag: "3.9.1"
+      pullPolicy: IfNotPresent
 
 otel:
   endpoint: ""

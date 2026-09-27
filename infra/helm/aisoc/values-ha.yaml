@@ -1,0 +1,127 @@
+# Reference high-availability deployment.
+#
+#   helm install aisoc infra/helm/aisoc -n aisoc \
+#     -f infra/helm/aisoc/values-ha.yaml
+#
+# What "HA" means here, precisely: losing one node, or one pod of any
+# component, costs neither availability nor data. It does not mean
+# multi-region, and it does not mean zero-downtime schema migrations.
+#
+# THE TWO STATEFUL THINGS THIS FILE DOES NOT MAKE HIGHLY AVAILABLE
+# ----------------------------------------------------------------
+# PostgreSQL and ClickHouse are left external on purpose. Replicated Postgres
+# with automated failover, and a sharded replicated ClickHouse, are each a
+# full operational discipline, and a chart that ships a single-pod database
+# under a file called values-ha.yaml would be claiming something it does not
+# do. Point the release at a managed service; the options and the trade-offs
+# are in apps/docs/docs/operations/ha-deployment.md.
+#
+# The chart consumes:
+#   database-url            runtime DSN, as the aisoc_app role
+#   database-migration-url  owner DSN, used by the migration job and nothing else
+#   redis-url
+# from the `<release>-secrets` Secret. The chart ships no Secret template, so
+# creating it is an operator step. See the note above `postgresql:` in
+# values.yaml for why the two DSNs are different roles, and why running the
+# services as the owner silently disables every row-level-security policy.
+
+global:
+  environment: production
+  logLevel: info
+
+# Three brokers, replication factor 3, min.insync.replicas 2. A write is
+# acknowledged once two brokers hold it, so one broker can be lost with
+# neither data loss nor a write stall. Swap to a managed broker by setting
+# kafka.deploy.enabled=false and kafka.bootstrapServers.
+kafka:
+  deploy:
+    enabled: true
+    replicaCount: 3
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    # One partition per fusion replica, so more than one replica can actually
+    # consume. A single-partition topic pins the whole consumer group to one
+    # pod and makes multi-replica fusion decorative.
+    numPartitions: 3
+    persistence:
+      enabled: true
+      size: 50Gi
+
+# Bundled single-pod datastores stay off. See the header.
+postgresql:
+  enabled: false
+redis:
+  enabled: false
+
+services:
+  api:
+    replicaCount: 3
+    pdb:
+      enabled: true
+      minAvailable: 2
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 12
+
+  # Ingest is the front door and the cheapest thing to scale, so it carries
+  # the most headroom: a burst that ingest cannot accept is data the platform
+  # never sees, which is not recoverable later.
+  ingest:
+    replicaCount: 3
+    pdb:
+      enabled: true
+      minAvailable: 2
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 24
+
+  # Fusion replicas are Kafka consumers in one group, so the ceiling is the
+  # partition count, not the HPA's maxReplicas: a fourth replica against three
+  # partitions idles. Raise kafka.deploy.numPartitions before raising this.
+  alert-fusion:
+    replicaCount: 3
+    pdb:
+      enabled: true
+      minAvailable: 2
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 3
+
+  agents:
+    replicaCount: 2
+    pdb:
+      enabled: true
+      minAvailable: 1
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+
+  web:
+    replicaCount: 3
+    pdb:
+      enabled: true
+      minAvailable: 2
+
+  realtime:
+    replicaCount: 3
+    pdb:
+      enabled: true
+      minAvailable: 2
+
+  enrichment:
+    replicaCount: 2
+    pdb:
+      enabled: true
+      minAvailable: 1
+
+# Egress default-deny. Off in the chart's own defaults because a CNI that
+# does not enforce NetworkPolicy ignores the object silently, and a control
+# that is silently ignored reads as protection while providing none. Check
+# your CNI, then set the CIDRs your vendor APIs and LLM endpoint live behind.
+networkPolicy:
+  enabled: false
+  allowedEgressCIDRs: []

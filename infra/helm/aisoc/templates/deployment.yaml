@@ -49,6 +49,54 @@ spec:
             matchLabels:
               {{- include "aisoc.selectorLabels" $ | nindent 14 }}
               app.kubernetes.io/component: {{ $name }}
+      {{- if and $svc.waitForKafka $.Values.kafka.waitForBroker.enabled }}
+      {{- /*
+        Hold a consumer or producer back until a broker answers.
+
+        Without this, a cold install races: the Kafka StatefulSet is still
+        forming its controller quorum when fusion's lifespan runs, aiokafka's
+        bootstrap raises KafkaConnectionError, the worker task ends, and
+        nothing retries. The pod stays Running and /health keeps answering
+        200, so the install looks complete with nothing consuming the spine.
+        Observed on a three-node kind cluster on 2026-09-27: every event was
+        accepted by ingest and none became an alert.
+
+        A readiness probe alone does not fix this, because Kubernetes does not
+        restart on readiness failure, by design, so that a broker fault is
+        not hidden behind a restart loop. Ordering is the chart's job.
+      */}}
+      initContainers:
+        - name: wait-for-kafka
+          image: "{{ $.Values.kafka.waitForBroker.image.repository }}:{{ $.Values.kafka.waitForBroker.image.tag }}"
+          imagePullPolicy: {{ $.Values.kafka.waitForBroker.image.pullPolicy }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              bootstrap="{{ include "aisoc.kafkaBootstrap" $ }}"
+              for attempt in $(seq 1 {{ $.Values.kafka.waitForBroker.attempts }}); do
+                if /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$bootstrap" >/dev/null 2>&1; then
+                  echo "broker reachable at $bootstrap"
+                  exit 0
+                fi
+                echo "waiting for $bootstrap (attempt $attempt)"
+                sleep {{ $.Values.kafka.waitForBroker.intervalSeconds }}
+              done
+              echo "no broker answered at $bootstrap; refusing to start a consumer that would detach silently" >&2
+              exit 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: "{{ $svc.image.repository }}:{{ $svc.image.tag | default $.Chart.AppVersion }}"

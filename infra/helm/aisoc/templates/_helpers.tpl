@@ -49,6 +49,40 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+The broker address every service in the release should dial.
+
+One definition rather than a string repeated per template: the release's own
+brokers when the chart deploys them, and whatever the operator named
+otherwise. `kafka.bootstrapServers` stays the escape hatch for a managed
+broker (MSK, Confluent Cloud, Redpanda), which is the production shape.
+*/}}
+{{- define "aisoc.kafkaBootstrap" -}}
+{{- if .Values.kafka.deploy.enabled -}}
+{{- printf "%s-kafka.%s.svc.cluster.local:9092" (include "aisoc.fullname" .) .Release.Namespace -}}
+{{- else -}}
+{{- .Values.kafka.bootstrapServers | default "kafka:9092" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+The KRaft controller quorum, as `<node-id>@<stable-dns>:9093` per broker.
+
+Every voter has to be listed on every broker or the quorum never forms, and
+the names have to be the StatefulSet's stable per-pod DNS rather than the
+client Service, which load-balances and would point a controller at a peer
+chosen at random.
+*/}}
+{{- define "aisoc.kafkaQuorumVoters" -}}
+{{- $fullname := include "aisoc.fullname" . -}}
+{{- $ns := .Release.Namespace -}}
+{{- $voters := list -}}
+{{- range $i := until (int .Values.kafka.deploy.replicaCount) -}}
+{{- $voters = append $voters (printf "%d@%s-kafka-%d.%s-kafka-headless.%s.svc.cluster.local:9093" $i $fullname $i $fullname $ns) -}}
+{{- end -}}
+{{- join "," $voters -}}
+{{- end }}
+
+{{/*
 Service account name
 */}}
 {{- define "aisoc.serviceAccountName" -}}

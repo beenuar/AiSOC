@@ -1,0 +1,241 @@
+{{- if .Values.kafka.deploy.enabled }}
+{{- /*
+  Three Kafka brokers, in KRaft combined mode.
+
+  Until this template the chart had no broker at all: `kafka.bootstrapServers`
+  pointed at a Service named `kafka` that nothing in the chart creates, and
+  only ueba-deployment.yaml read it. Every other pod fell through to the
+  in-code default of localhost:9092, which resolves inside a pod to the pod
+  itself, so ingest published into nothing and fusion consumed nothing, with
+  no object missing and no error at install time. `configmap.yaml` now sets
+  KAFKA_BOOTSTRAP_SERVERS for every deployment in the release.
+
+  Combined mode (broker + controller in one process) rather than dedicated
+  controllers: three pods instead of six for the same fault tolerance at this
+  size, which is what a reference deployment should cost. Separate controller
+  nodes are the right trade at a scale where a rebalance storm must not
+  contend with controller quorum, and that is a documented upgrade rather
+  than the default here.
+
+  The replication settings below are the reason a broker can be lost without
+  losing data: replication factor 3 with min.insync.replicas 2 means a write
+  is acknowledged only once it is on two brokers, so one failure costs
+  availability of neither writes nor reads. They apply to the internal topics
+  AND to auto-created ones, because every topic in this platform is
+  auto-created on first publish.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-kafka-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  clusterIP: None
+  # Brokers must resolve each other's stable DNS names for the controller
+  # quorum to form, and a pod is not Ready until it has joined that quorum.
+  # Without this the three pods wait for names that do not exist yet.
+  publishNotReadyAddresses: true
+  ports:
+    - name: client
+      port: 9092
+      targetPort: client
+    - name: controller
+      port: 9093
+      targetPort: controller
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  type: ClusterIP
+  ports:
+    - name: client
+      port: 9092
+      targetPort: client
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aisoc.fullname" . }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  # With replication factor 3 and min.insync.replicas 2, losing a second
+  # broker stops writes. A voluntary disruption must never be the cause.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aisoc.fullname" . }}-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  serviceName: {{ include "aisoc.fullname" . }}-kafka-headless
+  replicas: {{ .Values.kafka.deploy.replicaCount }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kafka
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kafka
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "aisoc.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: kafka
+      containers:
+        - name: kafka
+          image: "{{ .Values.kafka.deploy.image.repository }}:{{ .Values.kafka.deploy.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deploy.image.pullPolicy }}
+          ports:
+            - name: client
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              # The ordinal is the only per-pod value, and a StatefulSet does
+              # not expose it as a field ref. Deriving it from the hostname is
+              # the supported way; it is stable across restarts, which is what
+              # makes a node id safe to derive from it at all.
+              ordinal="${HOSTNAME##*-}"
+              export KAFKA_NODE_ID="${ordinal}"
+              export KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://${HOSTNAME}.${HEADLESS_SERVICE}.${POD_NAMESPACE}.svc.cluster.local:9092"
+              exec /etc/kafka/docker/run
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HEADLESS_SERVICE
+              value: {{ include "aisoc.fullname" . }}-kafka-headless
+            - name: CLUSTER_ID
+              value: {{ .Values.kafka.deploy.clusterId | quote }}
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: {{ include "aisoc.kafkaQuorumVoters" . | quote }}
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+            # Durability. A write is acknowledged when two of the three
+            # brokers hold it, so one broker can be lost without loss and
+            # without blocking producers.
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: {{ .Values.kafka.deploy.replicationFactor | quote }}
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: {{ .Values.kafka.deploy.minInsyncReplicas | quote }}
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: {{ .Values.kafka.deploy.replicationFactor | quote }}
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: {{ .Values.kafka.deploy.replicationFactor | quote }}
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: {{ .Values.kafka.deploy.minInsyncReplicas | quote }}
+            # Auto-created topics get more than one partition so multiple
+            # fusion replicas can consume in parallel. A single-partition
+            # topic pins the whole consumer group to one replica, which makes
+            # "multi-replica fusion" a claim with nothing behind it.
+            - name: KAFKA_NUM_PARTITIONS
+              value: {{ .Values.kafka.deploy.numPartitions | quote }}
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            {{- range $k, $v := .Values.kafka.deploy.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -c
+                - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: controller
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.kafka.deploy.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+      terminationGracePeriodSeconds: 60
+      {{- if not .Values.kafka.deploy.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.kafka.deploy.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.kafka.deploy.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.kafka.deploy.persistence.size }}
+  {{- else }}
+  # emptyDir means a restarted broker starts empty. Acceptable only for a
+  # throwaway cluster; with replication factor 3 the partition is re-fetched
+  # from its peers, and with one broker it is data loss.
+  {{- end }}
+{{- end }}

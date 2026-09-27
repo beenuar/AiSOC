@@ -15,6 +15,9 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+      {{- if and $svc.service.nodePort (eq ($svc.service.type | default "ClusterIP") "NodePort") }}
+      nodePort: {{ $svc.service.nodePort }}
+      {{- end }}
     {{- if $svc.metricsPort }}
     - port: {{ $svc.metricsPort }}
       targetPort: metrics

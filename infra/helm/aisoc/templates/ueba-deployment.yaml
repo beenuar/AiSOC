@@ -1,3 +1,13 @@
+{{- /*
+  `ueba.enabled` had no reader. honeytokens-deployment.yaml and
+  purple-team-deployment.yaml each gate on their own flag; this file did not,
+  so `--set ueba.enabled=false` rendered the Deployment anyway. On a cluster
+  without the UEBA image that is two pods in CreateContainerConfigError for a
+  subsystem the operator switched off, and the switch reads as broken rather
+  than as absent. Same shape as the AISOC_DISABLE_OPENSEARCH setting that
+  nothing read: a control wired to nothing is worse than no control.
+*/}}
+{{- if .Values.ueba.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,7 +41,7 @@ spec:
                   name: {{ include "aisoc.fullname" . }}-secrets
                   key: database-url
             - name: UEBA_KAFKA_BOOTSTRAP_SERVERS
-              value: {{ .Values.kafka.bootstrapServers | default "kafka:9092" | quote }}
+              value: {{ include "aisoc.kafkaBootstrap" . | quote }}
             - name: UEBA_OTEL_ENDPOINT
               value: {{ .Values.otel.endpoint | default "http://otel-collector:4317" | quote }}
           livenessProbe:
@@ -95,3 +105,4 @@ spec:
     matchLabels:
       {{- include "aisoc.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: ueba
+{{- end }}

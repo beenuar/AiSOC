@@ -1,0 +1,122 @@
+# Datastores for exercising the chart on kind or k3d. NOT a production shape.
+#
+# The chart deliberately does not run PostgreSQL or Redis in a highly
+# available configuration (see values-ha.yaml). These single pods stand in for
+# the managed services a real deployment points at, so that
+# `scripts/chaos/fusion_restart.py` and `scripts/perf/load_harness.py` have
+# something to run against. Storage is ephemeral and the passwords are in
+# plain text, both of which disqualify this from anything but a test cluster.
+#
+# The two-role split is preserved because it is what the chart expects and
+# what row-level security depends on: `aisoc` owns the schema and applies
+# migrations, `aisoc_app` is the DML-only runtime role that policies actually
+# filter. Collapsing them here would make a chart install that is subtly
+# unlike a real one, which is how the RLS-was-decorative defect survived.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/component: postgres
+spec:
+  selector:
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              value: aisoc
+            - name: POSTGRES_PASSWORD
+              value: aisoc_dev_secret
+            - name: POSTGRES_DB
+              value: aisoc
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "aisoc", "-d", "aisoc"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/component: redis
+spec:
+  selector:
+    app.kubernetes.io/component: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["redis-server", "--requirepass", "redis_dev_secret"]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-a", "redis_dev_secret", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
