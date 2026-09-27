@@ -33,6 +33,7 @@ import {
   type AutonomyActionPolicy,
   type AutonomyBlastRadius,
   type AutonomyPolicyResponse,
+  type GrantListResponse,
   type AutonomyThresholdTriple,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -109,6 +110,16 @@ export function AutonomyPolicyPanel() {
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
+  // Phase 2.3. Reading this also re-checks every standing grant against its
+  // current evidence, so a capability whose track record has slipped is
+  // demoted here rather than being listed as current while failing at
+  // dispatch, which would leave this page disagreeing with the product.
+  const { data: grantList } = useSWR<GrantListResponse>(
+    'settings:autonomy-grants',
+    () => autonomyPolicyApi.grants(),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
   return (
     <div>
       <PanelHeader
@@ -121,7 +132,7 @@ export function AutonomyPolicyPanel() {
             copilot). Rendered once the policy loads so the CISO sees the
             whole-SOC autonomy posture before drilling into per-action rows. */}
         {!isLoading && !error && actions.length > 0 ? (
-          <AutonomyScorecard actions={actions} agreement={agreement} />
+          <AutonomyScorecard actions={actions} agreement={agreement} grants={grantList?.grants} />
         ) : null}
 
         {/* Legend */}

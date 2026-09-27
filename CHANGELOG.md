@@ -80,6 +80,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`test_replay_history_route.py`), and
   `scripts/sync_vendored_benchmark.py --check`. Claim-to-gate matrix gains
   three rows, all GATED.
+- **Autonomy promoted by a measured track record, not by a settings toggle**
+  (gap-closure Phase 2.3). Phase 2.2 made agreement measurable. This is what
+  the measurement is for.
+
+  **The gap.** A tenant's autonomy posture was a number somebody typed. The
+  L0 to L4 tier, the per-action thresholds and the force-auto override were
+  all settings, and nothing anywhere connected what the agent had actually
+  got right to what it was allowed to do unattended.
+
+  **How it works.** A tenant asks for a capability, either auto-closing an
+  alert class or raising a response verb's autonomy tier, and the evidence
+  decides. Granting requires a configurable minimum sample (100 decisions by
+  default, at least 30 of them closed as malicious), 95% agreement over
+  answered decisions, 90% recall on malicious, an abstention rate at or below
+  30%, and a trailing slice of recent decisions that is not already in
+  decline. Every check runs and every failure comes back together: an
+  operator told one thing at a time fixes it, re-asks, is told the next
+  thing, and overrides out of frustration rather than on the merits.
+
+  **The four refusals it exists to make.** Too few decisions. Enough
+  decisions but too few malicious ones, which a real queue produces by itself
+  because it is mostly false positives, and where agreement says only that
+  the agent recognises noise. Agreement that is high only because the agent
+  abstains, closed by three independent guards: agreement's denominator
+  excludes abstentions so declining cannot inflate it, the abstention rate is
+  capped, and malicious recall counts an abstention as a miss. And drift that
+  arrives gradually, which a 30-day average absorbs: 99% for three weeks and
+  70% this week still posts about 95%, so the trailing 50 decisions are
+  scored separately and either one falling below the floors demotes.
+
+  **Demotion is automatic and is not the mirror of promotion.** Standing
+  grants are re-checked whenever they are read. The demotion floors sit below
+  the promotion thresholds on purpose, because equal values would flip a
+  grant on every decision that crossed the line and fill the audit log with
+  churn nobody reads. Promotion refuses an unmeasured rate, since "not
+  measured" must never be read as "met the threshold"; demotion ignores one,
+  since a week with no malicious alert is not evidence the agent got worse
+  and revoking over an empty denominator would make quiet weeks dangerous.
+
+  **An override stays visibly an override.** A gate with no override is a
+  gate that gets worked around by people who then stop telling you, so an
+  operator can grant over a refusal with a stated reason. It lands as a
+  different audit action (`autonomy:overridden`), a constrained `source`
+  column on the grant row, the waived refusals inside the evidence snapshot,
+  and an amber label on the scorecard. The source is derived from the gate's
+  own verdict and `evaluate_promotion` takes no override argument, so no
+  caller can have an override recorded as earned. An override is re-checked
+  and demoted on the same floors: it means "I accept this today", not "stop
+  measuring".
+
+  **The snapshot is the point.** Every transition is written to the
+  hash-chained audit log with the numbers frozen: the counts and the rates,
+  the thresholds by value so a later retune does not rewrite past
+  justifications, the window as absolute timestamps, the first and last
+  decision id so the rows can still be found, the models that produced the
+  verdicts, and a digest of the rules that judged it. A recomputed
+  justification would describe a different world while looking authoritative
+  doing it.
+
+  **What a track record cannot unlock.** A grant raises the tier ceiling to
+  L3, which permits MINIMAL, LOW and MEDIUM blast radius, and stops there.
+  Agreement on triage verdicts is evidence about the agent's judgement and is
+  not evidence that a high-blast containment was the right call. The
+  capability contract still applies on top, so a verb declared `analyst` or
+  `mandatory_human` stays gated however good the numbers are.
+
+  **The gates.** Five new claim-to-gate rows, taking the matrix to 164 rows
+  and 156 GATED. The phase's "Done when" runs against a real Postgres in
+  `integration.yml` rather than being reasoned about: 13 tests seed recorded
+  decisions, refuse a tenant at 20, grant it at 150, inject disagreements and
+  watch the demotion land, then replay the promotion and the demotion through
+  `audit_hash.verify_chain`. The live half exists because the aggregate SQL
+  and the evaluator agree by convention, and a convention is what drifts.
+  Migration `067_autonomy_grants.sql`. Documented at
+  `apps/docs/docs/operations/shadow-mode.md`.
+
 - **Shadow mode on the live queue, and agreement measured against your own
   analysts** (gap-closure Phase 2.1 and 2.2). Phase 1 made a customer's closed
   history gradeable. This makes the live queue gradeable too, which is the

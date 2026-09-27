@@ -625,6 +625,29 @@ jobs:
           POSTGRES_RLS_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/isolation/test_postgres_rls.py -v --tb=short
 
+      # Gap-closure Phase 2.3's "Done when", run rather than reasoned about: a
+      # test tenant with 20 shadow decisions cannot enable auto-close, can
+      # once the thresholds are met, and is demoted when injected
+      # disagreements cross the drift threshold.
+      #
+      # It belongs here and nowhere else. The unit suites prove the arithmetic
+      # and prove the statements are built correctly, and between them they
+      # would still miss the failure that matters most: an aggregate that
+      # counts something slightly different from what the evaluator expects.
+      # The SQL and the evaluator agree by convention, and a convention is
+      # what drifts. Only a real Postgres executing the real statement over
+      # real rows closes that. It is also the only place the hash chain over
+      # the transitions can be verified, since it is computed on insert from
+      # the previous row for the same tenant.
+      #
+      # AUTONOMY_PROMOTION_LIVE_REQUIRED turns an unreachable database into a
+      # failure rather than a skip, for the same reason as the two jobs above.
+      - name: Evidence-gated autonomy, end to end (live Postgres)
+        working-directory: services/api
+        env:
+          AUTONOMY_PROMOTION_LIVE_REQUIRED: '1'
+        run: python -m pytest ../../tests/isolation/test_autonomy_promotion_live.py -v --tb=short
+
       # The static half of this gate runs on every PR in security.yml. This is
       # the half that can only be answered by a database: the role the
       # deployment actually connects as, inspected in pg_roles and pg_class.

@@ -59,6 +59,13 @@ from .capability_contracts import CAPABILITY_CONTRACTS
 from .contract import ActionImpact, ApprovalRequirement, Reversal
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
 
+#: The highest tier an earned grant may lift a tenant to. L3 permits MINIMAL,
+#: LOW and MEDIUM blast radius and stops there, so no track record on triage
+#: agreement can make a HIGH-blast containment unattended. `force_auto`, which
+#: is a human writing down a decision about one verb rather than an inference
+#: from agreement, still goes to L4.
+EARNED_TIER_CEILING = MaturityTier.L3_REMEDIATE
+
 logger = structlog.get_logger(__name__)
 
 _TIER_ENV = "AISOC_MATURITY_TIER"
@@ -144,14 +151,50 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
             tier_label="L4",
         )
 
+    # Gap-closure Phase 2.3. A tenant that has run this verb's alert classes in
+    # shadow and agreed with its own analysts often enough, over a large enough
+    # sample with enough of it malicious, holds an earned grant. The grant
+    # raises the *tier ceiling* exactly as `force_auto` does, and for the same
+    # reason: it is the ceiling that is being argued about, not the contract.
+    #
+    # It stops at L3, where `force_auto` goes to L4. `force_auto` is a human
+    # writing down a decision about one verb; a grant is an inference from
+    # agreement on triage verdicts. That is evidence about the agent's
+    # judgement, and it is not evidence that a HIGH-blast containment was the
+    # right call. L3 permits MINIMAL, LOW and MEDIUM blast and stops there, so
+    # no track record can make `isolate_host` unattended.
+    #
+    # `_apply_capability_contract` still runs on top, so a verb declared
+    # `analyst` or `mandatory_human` stays gated however good the numbers are:
+    # the contract's floors may be raised and never lowered.
+    earned = policy.earned_autonomy_for(action_type.value)
+    effective_tier = policy.tier
+    if earned and policy.tier < EARNED_TIER_CEILING:
+        effective_tier = EARNED_TIER_CEILING
+
+    decision = decide(
+        action_request,
+        tier=effective_tier,
+        whitelisted=policy.is_whitelisted(action_type.value, request.target),
+    )
+    if effective_tier is not policy.tier:
+        # Say which grant did it, and whether it was earned or overruled into
+        # existence. An incident review quotes this sentence, and "autonomous
+        # on a measured track record" and "autonomous because somebody
+        # overruled the gate" are the same action and different findings.
+        earned_phrase = "an operator override of the promotion gate" if earned == "operator_override" else "a measured track record"
+        decision = replace(
+            decision,
+            reason=(
+                f"{decision.reason}; tier ceiling raised from {policy.tier.name} to "
+                f"{effective_tier.name} for '{action_type.value}' under {earned_phrase}"
+            ),
+        )
+
     return _apply_capability_contract(
         request,
-        decide(
-            action_request,
-            tier=policy.tier,
-            whitelisted=policy.is_whitelisted(action_type.value, request.target),
-        ),
-        tier_label=_tier_label(policy.tier),
+        decision,
+        tier_label=_tier_label(effective_tier),
     )
 
 

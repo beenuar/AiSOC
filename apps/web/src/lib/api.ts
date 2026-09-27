@@ -5037,6 +5037,27 @@ export const autonomyPolicyApi = {
       { method: 'PUT', body: JSON.stringify({ enabled }) },
     ),
 
+  /** Capabilities this tenant has earned, or that an operator overruled into place. */
+  grants: () => request<GrantListResponse>('/api/v1/autonomy-policy/grants'),
+
+  /**
+   * Ask for a capability. A refusal is a 200 with `granted: false` and the
+   * reasons: being told no by a safety control is the control working, and
+   * surfacing it as an error invites a client to retry it.
+   */
+  requestGrant: (payload: PromotionRequestBody) =>
+    request<PromotionResponse>('/api/v1/autonomy-policy/grants', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /** Hand a capability back. Audited as a revocation, not as a demotion. */
+  revokeGrant: (params: { scope_kind: string; scope_key: string; capability: string }) =>
+    request<void>(
+      `/api/v1/autonomy-policy/grants?${new URLSearchParams(params).toString()}`,
+      { method: 'DELETE' },
+    ),
+
   /** Rolling agreement between the agent and this tenant's own analysts. */
   agreement: (params?: { scope_kind?: string; scope_key?: string }) => {
     const query = new URLSearchParams();
@@ -5101,6 +5122,57 @@ export interface AgreementThresholds {
   demotion_malicious_recall: number;
   drift_sample: number;
   drift_min_answered: number;
+}
+
+// ─── Evidence-gated autonomy (gap-closure Phase 2.3) ────────────────────────
+//
+// `source` and `is_override` are both carried because the distinction has to
+// survive without anyone inferring it. An override is autonomy a human
+// overruled a refusal to grant, and six months later "was this earned" must
+// be answerable from the row rather than reconstructed from the numbers.
+
+export type GrantState = 'shadow' | 'granted' | 'demoted';
+export type GrantSource = 'earned' | 'operator_override';
+
+export interface AutonomyGrant {
+  id: string;
+  scope_kind: string;
+  scope_key: string;
+  capability: string;
+  state: GrantState;
+  source: GrantSource;
+  is_override: boolean;
+  evidence?: Record<string, unknown> | null;
+  granted_at?: string | null;
+  demoted_at?: string | null;
+  demoted_reason?: string | null;
+  override_reason?: string | null;
+}
+
+export interface GrantListResponse {
+  tenant_id: string;
+  grants: AutonomyGrant[];
+  /** Grants this request's reconciliation pass demoted. */
+  demoted_now: Array<Record<string, unknown>>;
+}
+
+export interface PromotionRequestBody {
+  scope_kind: string;
+  scope_key: string;
+  capability: string;
+  override?: boolean;
+  override_reason?: string | null;
+}
+
+export interface PromotionResponse {
+  granted: boolean;
+  state: GrantState;
+  source: GrantSource;
+  is_override: boolean;
+  /** What to fix on a refusal; what was waived on an override. */
+  refusals: string[];
+  evidence: Record<string, unknown>;
+  changed: boolean;
 }
 
 export interface AgreementResponse {

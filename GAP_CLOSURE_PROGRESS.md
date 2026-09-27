@@ -251,7 +251,7 @@ differs, because two phases were in flight at once.
 - [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [x] **1.2 Replay runner.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `services/agents/app/replay/` holds the split, the shadow sinks and the runner; it holds no triage. Persistence is injected through `app/workers/triage_persistence.py`, whose default is `LiveTriageWriter` doing exactly what the worker did inline, so the measured path is the production one rather than a copy. `CostTracker` gained a `persist` flag so a replay measures spend without billing it. Normalisation reaches the real connector through a new `POST /connectors/{id}/normalize`, because both services package their code as top-level `app` and one process can hold one of them. Verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency are all recorded per decision. See D6 and D7 below for the two places the plan and the tree disagreed.
 - [x] **1.3 Scoring.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `packages/aisoc-benchmark/aisoc_benchmark/replay.py` reuses the existing `_INDICATOR_PATTERNS` for hallucination so there is one definition, and adds per-class precision and recall with malicious recall first, a confusion matrix, abstention rate, reliability bins with an expected calibration error, per-rule and per-source breakdowns, and seeded bootstrap intervals. Below 30 malicious cases the headline accuracy is withheld with the count and the reason. A rate with no denominator reads "not measured".
-- [x] **1.4 Surfaces.** Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Built to the shape D8 records: the API orchestrates, driving two new internal routes (`POST /replay/history` on actions, `POST /replay/run` on agents) and scoring in process through a byte-identical mirror of `packages/aisoc-benchmark` under `services/api/app/_vendor/`, since the API image's build context excludes `packages/`. `aisoc replay` drives the API and renders nothing of its own; progress goes to stderr so `aisoc replay ... > report.md` is the report and nothing else. The console page shows every rate beside the count it was computed over, and prints the withheld-headline sentence in place of a number rather than a dash or a zero. Export reuses `format_replay_report` and `ReplayScore.as_dict` from 1.3 and serves the stored artefact rather than re-rendering it; the PDF is that same Markdown through WeasyPrint, and answers 503 naming the native libraries when they are absent rather than serving an empty file. Migration **065**, not the 064 D8 names: `064_sandbox_upload_policy.sql` landed from Phase 11 while this was in flight, which is exactly why D8 says to check the directory. See D12 for the defect the end-to-end run found.
+- [x] **1.4 Surfaces.** Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Built to the shape D8 records: the API orchestrates, driving two new internal routes (`POST /replay/history` on actions, `POST /replay/run` on agents) and scoring in process through a byte-identical mirror of `packages/aisoc-benchmark` under `services/api/app/_vendor/`, since the API image's build context excludes `packages/`. `aisoc replay` drives the API and renders nothing of its own; progress goes to stderr so `aisoc replay ... > report.md` is the report and nothing else. The console page shows every rate beside the count it was computed over, and prints the withheld-headline sentence in place of a number rather than a dash or a zero. Export reuses `format_replay_report` and `ReplayScore.as_dict` from 1.3 and serves the stored artefact rather than re-rendering it; the PDF is that same Markdown through WeasyPrint, and answers 503 naming the native libraries when they are absent rather than serving an empty file. Migration **065**, not the 064 D8 names: `064_sandbox_upload_policy.sql` landed from Phase 11 while this was in flight, which is exactly why D8 says to check the directory. See D15 for the defect the end-to-end run found.
 - [x] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position, and now the three surfaces as well: a "Running one" section for the console, the CLI and the API, and a "Reproducibility, stated precisely" section that names what is excluded and why. Its "what exists today" note no longer hedges, because nothing on the page is unbuilt. Three more claim-to-gate rows added for 1.4, all GATED. The absolute tally moves with whatever else lands, so recount it with `scripts/check_claim_gate_matrix.py` rather than reading a number off this line.
 
 **Done when:** the CLI, run against a mocked Splunk ES holding 200 recorded
@@ -288,7 +288,18 @@ window on a second run, and a hosted model may legitimately differ.
 
 - [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
 - [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
-- [ ] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log.
+- [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#908](https://github.com/beenuar/AiSOC/pull/908). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
+
+**Done when:** on recorded data, a test tenant cannot enable auto-close for a
+class with 20 shadow decisions, can once the thresholds are met, and is demoted
+when injected disagreements cross the drift threshold.
+
+**Met.** `tests/isolation/test_autonomy_promotion_live.py`, 13 tests against
+`postgres:16` with the full API migration chain applied: refused at 20 with
+`insufficient_sample` and `insufficient_malicious` and nothing written, granted
+at 150 with the full snapshot, demoted after 30 injected disagreements with
+`recent_drift` among the reasons, and the promotion and demotion replayed
+through `audit_hash.verify_chain`.
 
 ## Phase 3: Prompt-injection evaluation suite
 
@@ -414,6 +425,16 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   [#904](https://github.com/beenuar/AiSOC/pull/904). Suites: `services/agents`
   1252 to 1280, `packages/aisoc-benchmark` 35 to 57, `services/connectors` 880
   to 886. Every other suite unchanged and passing.
+- [x] **Phase 2.1 shadow mode and 2.2 rolling agreement.**
+  [#906](https://github.com/beenuar/AiSOC/pull/906). Migration 066. Suites:
+  `services/agents` 1293 to 1311, `services/actions` 767 to 801, `services/api`
+  2852 to 2872, `apps/web` settings vitest 9 to 15. Claim matrix 156 rows to
+  159, GATED 148 to 151.
+- [x] **Phase 2.3 evidence-gated autonomy.**
+  [#908](https://github.com/beenuar/AiSOC/pull/908). Migration 067. Suites:
+  `services/actions` 801 to 835, `apps/web` settings vitest 32 to 36, and
+  `tests/isolation/test_autonomy_promotion_live.py` 13 passing against live
+  `postgres:16`. Claim matrix 159 rows to 164, GATED 151 to 156.
 
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
@@ -480,6 +501,74 @@ the five mirrors already in the tree, with
 `sync_vendored_autonomy_evidence.py --check` wired into `ci.yml`. Two copies
 allowed to differ means the control is off in whichever one is more generous.
 
+### D12. `unified_decision` had no production caller, and the plan names it anyway
+
+The plan says to wire the promotion gate into
+`services/actions/app/services/unified_autonomy.py`. Doing only that would
+have wired it into nothing.
+
+`unified_decision` is referenced in exactly one place in the tree:
+`services/actions/tests/test_unified_autonomy.py`. The live path is
+`live_actions/dispatcher.py::_govern`, which composes a different
+`AutonomyDecision` (the one in `autonomy_safety`) from `decide()`, the tenant
+policy and `_apply_capability_contract`. This is the repository's most-repeated
+shape: a mechanism that exists, is unit-tested, and is not on the path that
+needs it.
+
+**Resolution:** both. `unified_decision` takes the grant and is kept
+consistent, because the plan names it and because a second grader that
+disagreed with the first would be worse than the unwired one. And the grant is
+wired into `_govern`, where it raises the tier ceiling exactly as the existing
+`force_auto` override does and then passes through `_apply_capability_contract`
+unchanged, so the contract's floors still apply. Adding a third grader beside
+the two that already compose would have re-created the "same verb graded
+differently depending on which door it came through" defect this tree already
+fixed once.
+
+### D13. A grant stops at L3 where `force_auto` goes to L4
+
+`force_auto` lifts the ceiling to L4, which permits HIGH blast radius. An
+earned grant lifts it to L3, which stops at MEDIUM.
+
+The two are not the same kind of thing. `force_auto` is a human writing down a
+decision about one verb. A grant is an inference from agreement on *triage
+verdicts*, which is evidence about the agent's judgement and is not evidence
+that isolating a host was the right call. Letting one number unlock both is how
+a measurement of one thing becomes permission for another, and it would be
+invisible afterwards because the resulting action looks identical either way.
+
+`test_earned_autonomy_wiring.py` pins the ceiling, pins that a grant never
+lowers a bar (a 40-case sweep over blast radius, confidence and reversibility
+asserting the only permitted movement is queued to auto on the reversible
+MEDIUM branch), and pins that confidence is still required, since a grant is
+evidence about the agent in general and confidence is what it says about this
+decision.
+
+### D14. The live database is not optional for this phase
+
+The unit suites prove the arithmetic and prove the statements are built
+correctly. Between them they would still miss the failure that matters most: an
+aggregate that counts something slightly different from what the evaluator
+expects. The SQL and the evaluator agree by convention, and a convention is
+what drifts.
+
+One instance of exactly that was found by running it. `to_named_params` turns
+`$2::text[]` into `:graded::text[]`, and SQLAlchemy's `text()` parser reads the
+second colon pair as the start of another bind parameter, so a stray colon
+reached Postgres and every agreement query on the API side failed to parse.
+Both unit suites were green. The cast is gone from the shared SQL (both drivers
+infer the array type from the column) and the SQLAlchemy caller declares it
+with `bindparam(..., type_=ARRAY(Text))` instead.
+
+The live suite is also the only place the hash chain over the transitions can
+be checked, since `entry_hash` is computed on insert from the previous row for
+the same tenant. It cleans up the evidence and the grants and deliberately
+leaves the tenant, the operator and the audit rows: `audit_log` refuses a
+DELETE by trigger, `audit_log.tenant_id` cascades from `tenants` and
+`audit_log.actor_id` is `ON DELETE SET NULL` from `users`, so removing either
+reaches the trigger and is refused. Working around that in a test would mean
+demonstrating the hole the trigger closes, so the refusal is asserted instead.
+
 ### Notes for the next session
 
 Two traps this program hit that are worth not re-learning.
@@ -507,7 +596,7 @@ the fix was proven by re-staling `ROADMAP.md` and watching the test fail.
 started with `nohup ... &` and was dead within a minute, having written 41
 progress dots. Long suites run in the foreground.
 
-### D12. The route Phase 1.2 added could never have been reached, and only the end-to-end run could tell
+### D15. The route Phase 1.2 added could never have been reached, and only the end-to-end run could tell
 
 D8 predicted that three proven links are not the same claim as one end-to-end
 run. This is what the fourth link found the first time it ran.

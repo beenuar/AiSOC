@@ -15,6 +15,7 @@ import type {
   AgreementWindow,
   AutonomyActionPolicy,
   AutonomyBlastRadius,
+  AutonomyGrant,
 } from '@/lib/api';
 import {
   AutonomyScorecard,
@@ -209,5 +210,69 @@ describe('<AutonomyScorecard /> track record', () => {
       />,
     );
     expect(screen.getByText('not measured')).toBeInTheDocument();
+  });
+});
+
+// ─── Earned autonomy (gap-closure Phase 2.3) ─────────────────────────────────
+//
+// One property, and it is the reason the grant carries a `source` at all: an
+// override must stay legible as an override. Autonomy somebody earned and
+// autonomy somebody overruled a refusal to grant behave identically and are
+// very different things to be reading during an incident review.
+
+function grant(overrides: Partial<AutonomyGrant> = {}): AutonomyGrant {
+  return {
+    id: 'g1',
+    scope_kind: 'alert_class',
+    scope_key: 'identity',
+    capability: 'auto_close',
+    state: 'granted',
+    source: 'earned',
+    is_override: false,
+    ...overrides,
+  };
+}
+
+describe('<AutonomyScorecard /> earned autonomy', () => {
+  it('says nothing when the tenant holds no capabilities', () => {
+    render(<AutonomyScorecard actions={[action('block_ip', 'medium', 0.9)]} grants={[]} />);
+    expect(screen.queryByText(/Autonomy granted/i)).not.toBeInTheDocument();
+  });
+
+  it('labels an earned grant as earned', () => {
+    render(<AutonomyScorecard actions={[action('block_ip', 'medium', 0.9)]} grants={[grant()]} />);
+    expect(screen.getByText('earned')).toBeInTheDocument();
+    expect(screen.queryByText('operator override')).not.toBeInTheDocument();
+  });
+
+  it('labels an override as an override and shows the stated reason', () => {
+    render(
+      <AutonomyScorecard
+        actions={[action('block_ip', 'medium', 0.9)]}
+        grants={[
+          grant({
+            source: 'operator_override',
+            is_override: true,
+            override_reason: 'Accepted for a two-week pilot',
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('operator override')).toBeInTheDocument();
+    expect(screen.getByText('Accepted for a two-week pilot')).toBeInTheDocument();
+  });
+
+  it('keeps a demoted grant visible with why it was taken away', () => {
+    // A capability that was revoked is more interesting than one never held,
+    // and hiding it would make "what happened to our auto-close" unanswerable
+    // from this page.
+    render(
+      <AutonomyScorecard
+        actions={[action('block_ip', 'medium', 0.9)]}
+        grants={[grant({ state: 'demoted', demoted_reason: 'recent_drift' })]}
+      />,
+    );
+    expect(screen.getByText('demoted')).toBeInTheDocument();
+    expect(screen.getByText('recent_drift')).toBeInTheDocument();
   });
 });

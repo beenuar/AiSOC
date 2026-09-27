@@ -36,6 +36,7 @@ import type {
   AgreementResponse,
   AutonomyActionPolicy,
   AutonomyBlastRadius,
+  AutonomyGrant,
 } from '@/lib/api';
 
 export type AutonomyPosture = 'copilot' | 'autopilot';
@@ -151,9 +152,11 @@ export function summariseTrackRecord(agreement: AgreementResponse | null | undef
 export function AutonomyScorecard({
   actions,
   agreement,
+  grants,
 }: {
   actions: AutonomyActionPolicy[];
   agreement?: AgreementResponse | null;
+  grants?: AutonomyGrant[];
 }) {
   const card = computeScorecard(actions);
   const isCopilot = card.posture === 'copilot';
@@ -207,6 +210,59 @@ export function AutonomyScorecard({
       </div>
 
       <TrackRecord record={record} />
+      <EarnedAutonomy grants={grants ?? []} />
+    </div>
+  );
+}
+
+/**
+ * Capabilities this tenant holds, and how each one came to be held.
+ *
+ * Gap-closure Phase 2.3. The distinction this renders is the whole reason the
+ * grant carries a `source` rather than a boolean: autonomy somebody earned and
+ * autonomy somebody overruled a refusal to grant look identical in behaviour
+ * and are very different things to be looking at during an incident review. A
+ * demoted row stays visible for the same reason: a capability that was taken
+ * away is more interesting than one that was never held.
+ */
+function EarnedAutonomy({ grants }: { grants: AutonomyGrant[] }) {
+  if (grants.length === 0) return null;
+
+  return (
+    <div className="mt-4 border-t border-gray-800 pt-3">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">Autonomy granted</p>
+      <ul className="mt-2 space-y-1.5">
+        {grants.map((grant) => (
+          <li key={grant.id} className="flex flex-wrap items-baseline gap-2 text-sm">
+            <span className="font-mono text-xs text-gray-300">
+              {grant.capability} · {grant.scope_key}
+            </span>
+            <span
+              className={clsx(
+                'rounded px-1.5 py-0.5 text-[11px] ring-1 ring-inset',
+                grant.state === 'demoted'
+                  ? 'bg-gray-500/10 text-gray-400 ring-gray-600/40'
+                  : grant.is_override
+                    ? 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
+                    : 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+              )}
+            >
+              {grant.state === 'demoted'
+                ? 'demoted'
+                : grant.is_override
+                  ? 'operator override'
+                  : 'earned'}
+            </span>
+            <span className="text-[11px] text-gray-500">
+              {grant.state === 'demoted'
+                ? grant.demoted_reason || 'the evidence no longer supports it'
+                : grant.is_override
+                  ? grant.override_reason || 'no reason recorded'
+                  : 'met every threshold on its own'}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
