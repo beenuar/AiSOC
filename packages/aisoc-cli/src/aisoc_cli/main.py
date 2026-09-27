@@ -1065,7 +1065,7 @@ def _poll_until_terminal(
         response = client.get(url, headers=headers)
         if response.status_code >= 400:
             raise click.ClickException(f"Could not read the evaluation: {_api_error(response)}")
-        body = response.json()
+        body: dict[str, Any] = response.json()
         status = str(body.get("status") or "")
         if status != last_status:
             err_console.print(f"[dim]status:[/dim] {status}")

@@ -228,11 +228,11 @@ def test_a_normalizer_that_cannot_be_reached_is_a_502_not_a_substituted_mapping(
 
 
 def test_a_window_above_the_ceiling_is_refused_rather_than_truncated(client: TestClient, connectors: list[httpx.Request]) -> None:
-    body = {"connector_id": "splunk", "findings": [_finding_payload(i) for i in range(3)]}
-    # Assert the constant is what the message quotes, rather than building
-    # 2001 findings to make the point.
+    # Assert the constant is what the message quotes, rather than restating it.
     assert MAX_FINDINGS == 2000
-    body["findings"] = body["findings"] * 700  # 2100 rows
+    findings: list[dict[str, Any]] = [_finding_payload(i) for i in range(3)] * 700  # 2100 rows
+    body: dict[str, Any] = {"connector_id": "splunk", "findings": findings}
+
     response = client.post("/api/v1/replay/run", json=body, headers=_headers())
 
     assert response.status_code == 422

@@ -50,7 +50,9 @@ Needs a Postgres with the migration chain applied::
 
     docker run -d --name aisoc-e2e-pg -e POSTGRES_USER=aisoc \\
         -e POSTGRES_PASSWORD=aisoc -e POSTGRES_DB=aisoc -p 55433:5432 postgres:16
-    export AISOC_E2E_DATABASE_URL=postgresql+asyncpg://aisoc:aisoc@127.0.0.1:55433/aisoc
+    export AISOC_E2E_DATABASE_MIGRATION_URL=postgresql+asyncpg://aisoc:aisoc@127.0.0.1:55433/aisoc
+    export AISOC_APP_DB_PASSWORD=aisoc_app
+    export AISOC_E2E_DATABASE_URL=postgresql+asyncpg://aisoc_app:aisoc_app@127.0.0.1:55433/aisoc
     python -m pytest tests/e2e/test_replay_cli_end_to_end.py
 
 Skips when no database is configured, so a local ``pytest tests/`` stays
@@ -80,9 +82,17 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: The deployment's own database. The migration chain has to be applied to it;
-#: `run_migrations` is idempotent so re-running is safe.
+#: What the four services connect as. This is deliberately **not** the owner:
+#: `061_runtime_app_role.sql` moves the deployment onto a DML-only `aisoc_app`
+#: that the row-level-security policies apply to, and a superuser ignores every
+#: policy in the schema even under `FORCE ROW LEVEL SECURITY`. Running the
+#: end-to-end proof as the owner would measure a role nothing ships.
 DSN = os.environ.get("AISOC_E2E_DATABASE_URL", "").strip()
+
+#: The owner. Used for the migration chain and for creating the administrator,
+#: both of which need privileges the runtime role deliberately lacks. Falls
+#: back to `DSN` so a single-role setup still runs.
+MIGRATION_DSN = os.environ.get("AISOC_E2E_DATABASE_MIGRATION_URL", "").strip() or DSN
 
 REQUIRED = os.environ.get("AISOC_REPLAY_E2E_REQUIRED", "").strip() not in ("", "0", "false")
 
@@ -285,16 +295,19 @@ def stack(splunk: str) -> Iterator[dict[str, str]]:
             "for a run that measured nothing is the failure this guard exists to prevent."
         )
 
-    api_env = {
+    # DDL and user creation run as the owner; everything the services do runs
+    # as the runtime role. Collapsing the two is what let 92 RLS policies sit
+    # inert for months elsewhere in this repository.
+    owner_env = {
         "PYTHONPATH": ".",
-        "DATABASE_URL": DSN,
-        "DATABASE_MIGRATION_URL": DSN,
+        "DATABASE_URL": MIGRATION_DSN,
+        "DATABASE_MIGRATION_URL": MIGRATION_DSN,
         "SECRET_KEY": SECRET_KEY,
     }
     migrate = subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, "-m", "app.scripts.run_migrations"],
         cwd=str(REPO_ROOT / "services" / "api"),
-        env={**os.environ, **api_env},
+        env={**os.environ, **owner_env},
         capture_output=True,
         text=True,
         check=False,
@@ -304,7 +317,7 @@ def stack(splunk: str) -> Iterator[dict[str, str]]:
     admin = subprocess.run(  # noqa: S603 - fixed argv, no shell
         [sys.executable, "-m", "app.scripts.bootstrap_admin", "--password-stdin", "--reset-password"],
         cwd=str(REPO_ROOT / "services" / "api"),
-        env={**os.environ, **api_env, "AISOC_ADMIN_EMAIL": ADMIN_EMAIL},
+        env={**os.environ, **owner_env, "AISOC_ADMIN_EMAIL": ADMIN_EMAIL},
         input=ADMIN_PASSWORD,
         capture_output=True,
         text=True,
@@ -349,7 +362,7 @@ def stack(splunk: str) -> Iterator[dict[str, str]]:
             {
                 **shared,
                 "DATABASE_URL": DSN,
-                "DATABASE_MIGRATION_URL": DSN,
+                "DATABASE_MIGRATION_URL": MIGRATION_DSN,
                 "AISOC_ACTIONS_BASE_URL": f"http://127.0.0.1:{ports['actions']}",
                 "AISOC_ACTIONS_SERVICE_TOKEN": SERVICE_TOKEN,
                 "AGENTS_SERVICE_URL": f"http://127.0.0.1:{ports['agents']}",

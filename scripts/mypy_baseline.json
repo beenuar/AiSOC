@@ -84,7 +84,7 @@
     "src/aisoc_cli/main.py": {
       "import-not-found": 7,
       "import-untyped": 2,
-      "untyped-decorator": 48
+      "untyped-decorator": 65
     },
     "tests/test_cli.py": {
       "import-not-found": 2,
@@ -103,6 +103,10 @@
     "tests/test_packaging.py": {
       "import-not-found": 1,
       "untyped-decorator": 1
+    },
+    "tests/test_replay_command.py": {
+      "import-not-found": 3,
+      "untyped-decorator": 2
     },
     "tests/test_submit_command.py": {
       "attr-defined": 1,

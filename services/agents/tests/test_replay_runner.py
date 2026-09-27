@@ -331,18 +331,18 @@ def test_the_normalize_url_matches_where_the_route_is_mounted() -> None:
     connectors = Path(__file__).resolve().parents[3] / "services" / "connectors" / "app"
 
     main = ast.parse((connectors / "main.py").read_text())
-    prefixes = {
-        keyword.value.value
+    prefixes: set[str] = {
+        str(keyword.value.value)
         for node in ast.walk(main)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "include_router"
         for keyword in node.keywords
-        if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant)
+        if keyword.arg == "prefix" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str)
     }
     assert prefixes, "could not read any router prefix out of the connectors service"
 
     router = ast.parse((connectors / "api" / "router.py").read_text())
-    routes = {
-        decorator.args[0].value
+    routes: set[str] = {
+        str(decorator.args[0].value)
         for node in ast.walk(router)
         if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef)
         for decorator in node.decorator_list
@@ -351,6 +351,7 @@ def test_the_normalize_url_matches_where_the_route_is_mounted() -> None:
         and decorator.func.attr in {"post", "get"}
         and decorator.args
         and isinstance(decorator.args[0], ast.Constant)
+        and isinstance(decorator.args[0].value, str)
     }
     normalize_route = next(r for r in routes if r.endswith("/normalize"))
 

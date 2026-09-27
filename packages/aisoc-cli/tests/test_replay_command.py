@@ -27,9 +27,8 @@ from typing import Any
 
 import httpx
 import pytest
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
-from aisoc_cli import main as cli_main
 from aisoc_cli.main import cli
 
 EVALUATION_ID = "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8"
@@ -100,6 +99,27 @@ class _Api:
         return httpx.Response(200, json=_summary(status, **self._overrides))
 
 
+def _install(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Any,
+    *,
+    patch_sleep: bool = True,
+) -> None:
+    """Point the CLI's httpx client at a mock transport, and stop it sleeping.
+
+    Patched by dotted path rather than by reaching through ``cli_main`` for
+    its ``httpx`` and ``time`` attributes. Same effect, and it does not assert
+    that the module re-exports its own imports, which it does not.
+    """
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        "aisoc_cli.main.httpx.Client",
+        lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(handler)}),
+    )
+    if patch_sleep:
+        monkeypatch.setattr("aisoc_cli.main.time.sleep", lambda _seconds: None)
+
+
 @pytest.fixture
 def runner() -> CliRunner:
     # stderr kept separate so the "report on stdout, progress on stderr"
@@ -110,18 +130,11 @@ def runner() -> CliRunner:
 @pytest.fixture
 def api(monkeypatch: pytest.MonkeyPatch) -> _Api:
     scripted = _Api()
-    real_client = httpx.Client
-    monkeypatch.setattr(
-        cli_main.httpx,
-        "Client",
-        lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(scripted)}),
-    )
-    # Polling is scripted, so a real sleep would only slow the suite down.
-    monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+    _install(monkeypatch, scripted)
     return scripted
 
 
-def _invoke(runner: CliRunner, *args: str):
+def _invoke(runner: CliRunner, *args: str) -> Result:
     return runner.invoke(cli, ["replay", *args], catch_exceptions=False)
 
 
@@ -236,13 +249,7 @@ def test_a_failed_evaluation_exits_non_zero_with_the_servers_reason(
         statuses=["failed"],
         summary_overrides={"error": "the actions service is unreachable at http://actions:8085"},
     )
-    real_client = httpx.Client
-    monkeypatch.setattr(
-        cli_main.httpx,
-        "Client",
-        lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(scripted)}),
-    )
-    monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+    _install(monkeypatch, scripted)
 
     result = runner.invoke(
         cli, ["replay", "--connector-id", "c0ffee00-0000-0000-0000-000000000001"]
@@ -258,13 +265,7 @@ def test_polling_continues_until_a_terminal_status(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     scripted = _Api(statuses=["queued", "running", "running", "completed"])
-    real_client = httpx.Client
-    monkeypatch.setattr(
-        cli_main.httpx,
-        "Client",
-        lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(scripted)}),
-    )
-    monkeypatch.setattr(cli_main.time, "sleep", lambda _seconds: None)
+    _install(monkeypatch, scripted)
 
     result = runner.invoke(
         cli, ["replay", "--connector-id", "c0ffee00-0000-0000-0000-000000000001"]
@@ -328,12 +329,7 @@ def test_an_unreachable_api_says_so_and_names_the_url(
     def refuse(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
-    real_client = httpx.Client
-    monkeypatch.setattr(
-        cli_main.httpx,
-        "Client",
-        lambda *a, **kw: real_client(*a, **{**kw, "transport": httpx.MockTransport(refuse)}),
-    )
+    _install(monkeypatch, refuse, patch_sleep=False)
 
     result = runner.invoke(
         cli,

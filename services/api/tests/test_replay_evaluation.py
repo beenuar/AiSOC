@@ -29,6 +29,7 @@ import httpx
 import pytest
 from app._vendor.aisoc_benchmark.replay import LATENCY_LINE_PREFIX, format_replay_report, score_replay
 from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.endpoints.evaluations import StartReplayRequest
 from app.api.v1.endpoints.evaluations import router as evaluations_router
 from app.services.replay_evaluation import job as job_module
 from app.services.replay_evaluation import report as report_export
@@ -605,11 +606,21 @@ def test_exporting_a_run_that_has_no_report_is_a_409_with_the_reason(stub_app: F
 
 
 def test_no_route_on_this_surface_takes_a_tenant_from_the_caller() -> None:
-    """The tenant is never a request field, a query parameter or a path segment."""
+    """The tenant is never a path segment, a query parameter or a body field.
+
+    Read off the route objects rather than off the source, so a parameter
+    added through a dependency is covered too.
+    """
     for route in evaluations_router.routes:
-        assert "tenant" not in route.path
-        for name in getattr(route, "dependant", None).query_params if hasattr(route, "dependant") else []:
-            assert "tenant" not in name.name
+        assert "tenant" not in getattr(route, "path", "")
+        dependant = getattr(route, "dependant", None)
+        if dependant is None:
+            continue
+        for parameter in [*dependant.query_params, *dependant.path_params]:
+            assert "tenant" not in parameter.name
+
+    for model in (StartReplayRequest,):
+        assert not any("tenant" in name for name in model.model_fields)
 
 
 def test_the_withheld_headline_is_null_rather_than_zero() -> None:

@@ -462,7 +462,14 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      AISOC_E2E_DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      # The two roles the default deployment ships. The services connect as
+      # aisoc_app, which is DML-only and which the RLS policies apply to;
+      # aisoc is the owner and runs DDL and nothing else. Wiring this job as a
+      # single superuser would measure a role nothing runs as, which is what
+      # `check_runtime_db_role.py` refuses.
+      AISOC_E2E_DATABASE_URL: postgresql+asyncpg://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+      AISOC_E2E_DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+      AISOC_APP_DB_PASSWORD: aisoc_app_ci_secret
       AISOC_REPLAY_E2E_REQUIRED: '1'
       ENVIRONMENT: development
     steps:
