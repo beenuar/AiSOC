@@ -70,15 +70,35 @@ jobs:
           name: aisoc-npm-tarball
           path: packages/aisoc-lite/*.tgz
 
-      - name: Publish to npm with provenance
+      # Trusted publishing (OIDC) needs npm 11.5.1 or newer; Node 22 ships
+      # npm 10, which falls back to token auth and then fails with ENEEDAUTH.
+      - name: Upgrade npm for trusted publishing
+        if: vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      # npm validates a trusted publisher against the *workflow filename*, so
+      # this file is registered separately from release.yml on npmjs.com even
+      # though both publish the same package. The names are in
+      # docs/operations/publishing.md; changing either filename breaks
+      # publishing with ENEEDAUTH and nothing else.
+      - name: Publish to npm
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v') }}
         working-directory: packages/aisoc-lite
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TRUSTED: ${{ vars.AISOC_NPM_TRUSTED_PUBLISHING }}
         run: |
           set -euo pipefail
+          if [ "${TRUSTED:-}" = "true" ]; then
+            # Provenance is generated automatically on the OIDC path.
+            npm publish --access public
+            exit 0
+          fi
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::notice::NPM_TOKEN not configured — skipping publish (tarball uploaded as an artifact). Configure the secret to enable automated publish."
+            echo "::notice::Neither trusted publishing nor NPM_TOKEN is configured, so the tarball was uploaded as an artifact and nothing was published. See docs/operations/publishing.md."
             exit 0
           fi
           npm publish --provenance --access public

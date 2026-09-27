@@ -195,6 +195,7 @@ const sidebars: SidebarsConfig = {
         "operations/mcp-client",
         "operations/codespaces",
         "operations/theming",
+        "operations/release-policy",
         "operations/upgrades",
         "operations/notifications",
         "operations/action-approvals",

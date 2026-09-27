@@ -1,0 +1,215 @@
+name: Upgrade test
+
+# Upgrade the previous minor to this tree, with data already in the database.
+#
+# A fresh install applies every migration to an empty schema, which is the one
+# case that cannot go wrong. The defects that reach operators are the other
+# ones: an `ALTER TABLE ... ADD COLUMN ... NOT NULL` with no default against a
+# populated table, a unique index added over rows that already violate it, a
+# backfill that assumes a column it is about to create, a type change that
+# succeeds on zero rows and fails on a million. None of those is visible
+# without data present.
+#
+# How it works, and why it uses the published image
+# -------------------------------------------------
+# The migration runner lives in `services/api` and needs that service's
+# dependencies. Rather than reconstruct them, this runs the *published*
+# previous-minor image twice:
+#
+#   1. with its own `/app/migrations`, producing the schema an operator on the
+#      previous release actually has;
+#   2. with this tree's `services/api/migrations` bind-mounted over
+#      `/app/migrations`, which is the upgrade.
+#
+# The same runner applies both legs, so what is being tested is the migration
+# chain rather than a re-implementation of how it is applied. The limit is
+# stated rather than hidden: a migration that needs a *newer runner* than the
+# previous release shipped is not covered here, and would show up as a failure
+# in the second leg rather than as a silent pass.
+
+on:
+  pull_request:
+    paths:
+      - 'services/api/migrations/**'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/*/alembic/**'
+      - '.github/workflows/upgrade-test.yml'
+      - 'scripts/upgrade_fixture.sql'
+  push:
+    branches: [main]
+    paths:
+      - 'services/api/migrations/**'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/*/alembic/**'
+      - '.github/workflows/upgrade-test.yml'
+      - 'scripts/upgrade_fixture.sql'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Previous minor to this tree, with data present
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_dev_secret
+          POSTGRES_DB: aisoc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aisoc -d aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Which release are we upgrading from?
+        id: from
+        run: |
+          set -euo pipefail
+          previous="$(python3 scripts/check_release_policy.py --previous-minor)"
+          echo "Upgrading from v${previous} to the migration chain in this tree."
+          echo "version=v${previous}" >> "$GITHUB_OUTPUT"
+
+      - name: Install a psql client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      # Leg one: the schema an operator on the previous release has.
+      - name: Apply the previous release's migration chain
+        env:
+          IMAGE: ghcr.io/beenuar/aisoc-core-api:${{ steps.from.outputs.version }}
+        run: |
+          set -euo pipefail
+          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
+          MIGRATION_DSN='postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc'
+          docker run --rm --network host \
+            -e DATABASE_MIGRATION_URL="$MIGRATION_DSN" \
+            -e DATABASE_URL='postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc' \
+            -e AISOC_APP_DB_PASSWORD='aisoc_app_dev_secret' \
+            "$IMAGE" python -m app.scripts.run_migrations
+          echo "Applied at the previous release:"
+          psql "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -tAc \
+            "select count(*) from aisoc_schema_migrations"
+
+      # The whole point. An empty database cannot exercise a backfill, a NOT
+      # NULL addition, or a unique index over existing rows.
+      - name: Seed data that the upgrade has to survive
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
+            -f scripts/upgrade_fixture.sql
+
+      - name: Record what is there before the upgrade
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
+            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from cases union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/before.tsv'"
+          cat /tmp/before.tsv
+
+      # Leg two: this tree's chain, applied by the release's own runner.
+      - name: Apply this tree's migration chain over the populated schema
+        env:
+          IMAGE: ghcr.io/beenuar/aisoc-core-api:${{ steps.from.outputs.version }}
+        run: |
+          set -euo pipefail
+          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
+          MIGRATION_DSN='postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc'
+          docker run --rm --network host \
+            -v "${GITHUB_WORKSPACE}/services/api/migrations:/app/migrations:ro" \
+            -e DATABASE_MIGRATION_URL="$MIGRATION_DSN" \
+            -e DATABASE_URL='postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc' \
+            -e AISOC_APP_DB_PASSWORD='aisoc_app_dev_secret' \
+            "$IMAGE" python -m app.scripts.run_migrations
+
+      - name: Every migration in this tree is recorded as applied
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, subprocess, sys
+
+          dsn = "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc"
+          applied = set(subprocess.run(
+              ["psql", "-tA", dsn, "-c", "select name from aisoc_schema_migrations"],
+              capture_output=True, text=True, check=True,
+          ).stdout.split())
+          on_disk = {p.name for p in pathlib.Path("services/api/migrations").glob("*.sql")}
+          if not on_disk:
+              sys.exit("no migrations found on disk; this check would pass over an absence")
+          missing = sorted(on_disk - applied)
+          if missing:
+              sys.exit(f"{len(missing)} migration(s) in this tree were not applied by the upgrade: {missing}")
+          print(f"OK: all {len(on_disk)} migrations applied, {len(applied)} rows in aisoc_schema_migrations.")
+          PY
+
+      # The row counts that were there before must still be there, and the
+      # rows themselves must still be readable. A migration that drops and
+      # recreates a table passes a count check on an empty database and
+      # destroys a customer's alert history on a real one.
+      - name: The data survived
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
+            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from cases union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/after.tsv'"
+          echo "before:"; cat /tmp/before.tsv
+          echo "after:";  cat /tmp/after.tsv
+          diff /tmp/before.tsv /tmp/after.tsv || {
+            echo "::error::row counts changed across the upgrade"
+            exit 1
+          }
+          # Named rows, not just counts: a table recreated with the same
+          # number of fabricated rows would pass the diff above.
+          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
+            "select title from alerts where id = '11111111-1111-1111-1111-111111111111'" | grep -q 'pre-upgrade alert'
+          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
+            "select title from cases where id = '22222222-2222-2222-2222-222222222222'" | grep -q 'pre-upgrade case'
+          echo "OK: the rows that were there before the upgrade are still there, by id."
+
+      # The runtime role is what every service connects as, and a migration
+      # that creates a table without granting it is a table the application
+      # cannot read. That failure surfaces as a 500 after deploy, not here,
+      # unless it is checked here.
+      - name: The runtime role can still read what it owns nothing of
+        run: |
+          set -euo pipefail
+          python3 scripts/check_runtime_db_role.py \
+            --dsn "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc"
+          psql -v ON_ERROR_STOP=1 -tA \
+            "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
+            -c "select count(*) from alerts"
+
+      - name: Re-applying the chain is a no-op
+        env:
+          IMAGE: ghcr.io/beenuar/aisoc-core-api:${{ steps.from.outputs.version }}
+        run: |
+          set -euo pipefail
+          before=$(psql -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c "select count(*) from aisoc_schema_migrations")
+          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
+          MIGRATION_DSN='postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc'
+          docker run --rm --network host \
+            -v "${GITHUB_WORKSPACE}/services/api/migrations:/app/migrations:ro" \
+            -e DATABASE_MIGRATION_URL="$MIGRATION_DSN" \
+            -e DATABASE_URL='postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc' \
+            -e AISOC_APP_DB_PASSWORD='aisoc_app_dev_secret' \
+            "$IMAGE" python -m app.scripts.run_migrations
+          after=$(psql -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c "select count(*) from aisoc_schema_migrations")
+          test "$before" = "$after" || {
+            echo "::error::a second run applied $((after - before)) more migration(s); the chain is not idempotent"
+            exit 1
+          }
+          echo "OK: a second run applied nothing."
