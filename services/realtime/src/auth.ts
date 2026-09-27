@@ -20,10 +20,6 @@ import crypto from 'crypto';
 // Must equal `REALTIME_TICKET_AUDIENCE` in services/api/app/core/security.py.
 export const REALTIME_TICKET_AUDIENCE = 'aisoc-realtime';
 
-// Must equal `DEV_REALTIME_TICKET_SECRET` in services/api/app/core/config.py.
-// Shared dev fallback so local docker-compose works with zero secret plumbing.
-const DEV_REALTIME_TICKET_SECRET = 'aisoc-dev-realtime-ticket-secret-not-for-production';
-
 // Mirror INSECURE_SECRET_KEY_DEFAULTS in services/api/app/core/config.py so a
 // placeholder secret is treated as "unset" on this side too.
 const INSECURE_SECRET_DEFAULTS = new Set<string>([
@@ -31,14 +27,12 @@ const INSECURE_SECRET_DEFAULTS = new Set<string>([
   'dev_secret_key_change_in_production',
   'changeme',
   'secret',
+  // The former hardcoded dev fallback. It is published in this repository's
+  // history, so it is listed here to be *refused* rather than removed: an
+  // operator who copies it out of an older checkout into .env must not get a
+  // working deployment keyed on a value anyone can read.
+  'aisoc-dev-realtime-ticket-secret-not-for-production',
 ]);
-
-function isProductionEnv(): boolean {
-  const env = (process.env.AISOC_ENV || process.env.ENVIRONMENT || process.env.APP_ENV || '')
-    .trim()
-    .toLowerCase();
-  return env === 'production' || env === 'prod';
-}
 
 /**
  * Resolve the effective HS256 secret used to verify realtime tickets.
@@ -53,9 +47,17 @@ export function resolveTicketSecret(): string | null {
   if (configured && !INSECURE_SECRET_DEFAULTS.has(configured)) {
     return configured;
   }
-  if (!isProductionEnv()) {
-    return DEV_REALTIME_TICKET_SECRET;
-  }
+  // No development fallback. This used to return DEV_REALTIME_TICKET_SECRET
+  // whenever the environment did not look like production, and the check read
+  // AISOC_ENV / ENVIRONMENT / APP_ENV from the container's own environment —
+  // which no shipped manifest passed to this service. The production branch
+  // was therefore unreachable and a constant published in this repository was
+  // the effective HMAC key in every deployment, so anyone who could reach the
+  // edge could mint a ticket for any tenant (GHSA-4m55-xhcm-wjcr).
+  //
+  // `make up` now generates AISOC_REALTIME_JWT_SECRET and compose passes it to
+  // both the API that mints tickets and this service, so failing closed here
+  // costs the local stack nothing.
   return null;
 }
 

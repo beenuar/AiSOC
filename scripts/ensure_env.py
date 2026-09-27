@@ -105,6 +105,23 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Shared bearer for the actions service (API -> actions). Gates every response action.",
     ),
+    # The HS256 key the API signs realtime tickets with and the realtime edge
+    # verifies them against. Both sides previously fell back to a constant
+    # committed to this repository whenever this was unset — which no manifest
+    # ever set — so anyone who could reach the edge could mint a ticket for any
+    # tenant by signing with a published value.
+    "AISOC_REALTIME_JWT_SECRET": (
+        lambda: secrets.token_urlsafe(32),
+        "HS256 key for realtime WebSocket/SSE tickets. Shared by the API (mints) and realtime (verifies).",
+    ),
+    # Service-to-service bearer for realtime's /internal/* fan-out routes.
+    # Their guard treated an unset value as authorized, and nothing set it, so
+    # the routes accepted an arbitrary tenant_id from any caller that could
+    # reach the port.
+    "REALTIME_INTERNAL_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Bearer for realtime's /internal/* fan-out (API/agents -> realtime). Sent as x-internal-token.",
+    ),
 }
 
 

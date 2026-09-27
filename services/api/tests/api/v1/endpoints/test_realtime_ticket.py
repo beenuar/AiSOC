@@ -67,9 +67,23 @@ def test_secret_uses_configured_value_in_any_env():
     assert realtime_ticket_secret(s) == _REAL_SECRET
 
 
-def test_secret_falls_back_to_dev_default_in_development():
+def test_secret_does_not_fall_back_to_the_published_default_in_development():
+    """GHSA-4m55-xhcm-wjcr. This asserted the fallback and was the vulnerability.
+
+    The fallback was a constant committed to this repository, and the check
+    that was supposed to confine it to development read an environment
+    variable no shipped manifest passed to the realtime container — so it was
+    the effective HMAC key everywhere, and a ticket for any tenant could be
+    minted by signing with a published value.
+    """
     s = _settings(ENVIRONMENT="development", AISOC_REALTIME_JWT_SECRET="")
-    assert realtime_ticket_secret(s) == DEV_REALTIME_TICKET_SECRET
+    assert realtime_ticket_secret(s) is None
+
+
+def test_the_retired_dev_secret_is_refused_even_when_set_explicitly():
+    """Pasting it out of an older checkout must not produce a working key."""
+    s = _settings(ENVIRONMENT="development", AISOC_REALTIME_JWT_SECRET=DEV_REALTIME_TICKET_SECRET)
+    assert realtime_ticket_secret(s) is None
 
 
 def test_secret_is_none_in_prod_when_unset():
