@@ -38,6 +38,7 @@ from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
 from app.workers.retention_purge import run_forever as run_retention_purge
 from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
@@ -474,6 +475,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "reconciled. Set SHADOW_RECONCILE_ENABLED=true to poll them"
         )
 
+    # Gap-closure Phase 8.1. The consumer for the `NEW_IOC` events
+    # `services/threatintel` has always emitted and nothing has ever read.
+    #
+    # Default off, and deliberately not guarded by the scheduler lock the
+    # three workers above use: this is a Kafka consumer group, so the broker
+    # already assigns partitions across replicas, and adding a lock on top
+    # would leave every replica but one subscribed to nothing.
+    retro_hunt_task: asyncio.Task | None = None
+    if settings.RETRO_HUNT_ENABLED:
+        try:
+            retro_hunt_task = asyncio.create_task(
+                run_retro_hunt_consumer(),
+                name="retro_hunt_consumer",
+            )
+            logger.info("retro_hunt consumer started")
+        except Exception as exc:
+            logger.warning("retro_hunt consumer failed to start", error=str(exc))
+
     # Phase 2.6 — flip /readyz to 200. All lifespan-managed
     # dependencies have been touched at this point (DB, Redis,
     # Neo4j, schedulers); the load balancer can route traffic
@@ -532,6 +551,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("shadow_reconcile worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("shadow_reconcile worker shutdown error", error=type(exc).__name__)
+
+    if retro_hunt_task is not None and not retro_hunt_task.done():
+        retro_hunt_task.cancel()
+        try:
+            await retro_hunt_task
+        except asyncio.CancelledError:
+            logger.debug("retro_hunt consumer cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("retro_hunt consumer shutdown error", error=type(exc).__name__)
 
     if demo_bootstrap_task is not None and not demo_bootstrap_task.done():
         demo_bootstrap_task.cancel()

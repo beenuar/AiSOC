@@ -13,12 +13,18 @@ on:
     paths:
       - "tests/isolation/**"
       - "services/api/app/services/lake_sql.py"
+      - "services/api/app/services/retro_hunt/**"
+      - "services/api/clickhouse/**"
+      - "services/fusion/app/services/lake_writer.py"
       - "services/ingest/internal/graph_ws/**"
       - ".github/workflows/isolation-live.yml"
   pull_request:
     paths:
       - "tests/isolation/**"
       - "services/api/app/services/lake_sql.py"
+      - "services/api/app/services/retro_hunt/**"
+      - "services/api/clickhouse/**"
+      - "services/fusion/app/services/lake_writer.py"
       - "services/ingest/internal/graph_ws/**"
       - ".github/workflows/isolation-live.yml"
   workflow_dispatch:
@@ -123,6 +129,17 @@ jobs:
           ISOLATION_CLICKHOUSE_PORT: "9000"
           ISOLATION_KAFKA_BROKERS: localhost:9092
         run: python -m pytest tests/isolation/test_live_stores.py -v --tb=short
+
+      # Gap-closure Phase 8.1's done-when clause, which is a statement about a
+      # pair of tenants and so cannot be proven offline: an indicator is found
+      # for the tenant whose recorded lake rows hold it and not for the one
+      # whose do not. The rows come from the production lake writer and the
+      # query from the production generator, so a wrong column fails here.
+      - name: Retro-hunt sweep matches recorded lake data
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+        run: python -m pytest tests/isolation/test_retro_hunt_live.py -v --tb=short
 
       - name: Capture forensics on failure
         if: failure()

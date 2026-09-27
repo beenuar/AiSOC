@@ -423,7 +423,13 @@ suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 8: Intel-driven retro-hunts and a hunting agent
 
-- [ ] **8.1 Retro-hunts** consuming the `NEW_IOC` events nothing consumes today, with provenance, dedup, rate limits and budgets.
+- [x] **8.1 Retro-hunts** consuming the `NEW_IOC` events nothing consumes today, with provenance, dedup, rate limits and budgets.
+  - Confirmed before building: `NEW_IOC` appeared only at the emit site in `services/threatintel/app/feeds/pipeline.py`, in the plan, and in this tracker. `services/api/app/workers/retro_hunt_consumer.py` is the consumer.
+  - The plan's topic name is the producer's **dead** default. `ThreatIntelPipeline.__init__` defaults to `threat-intel-events`; the service's lifespan passes `KAFKA_TOPIC_THREAT_INTEL` (`aisoc.threat_intel`). A consumer on the signature's name reads nothing and stays healthy. `check_ioc_lake_mapping.py` pins the two together.
+  - Dedup is two layers: the `retro_hunt_sightings` UNIQUE constraint on (tenant, type, value) stops a republished indicator alerting twice, and the `alerts` per-tenant partial unique index on `idempotency_key` stops a duplicate landing. The sweep query is an aggregate, so a thousand matching events are one row before either layer is reached.
+  - Budget is per tenant, hourly and daily, checked before the sweep so an exhausted budget costs one UPDATE; skipped sweeps are counted so an empty budget is distinguishable from a quiet feed. ClickHouse enforces a bytes-to-read and execution-time ceiling on every query.
+  - Mapping proven, not asserted: `scripts/check_ioc_lake_mapping.py` (static, across three service trees) plus `tests/isolation/test_retro_hunt_live.py` (real writer, real DDL, real generator, live ClickHouse). The first live test was **vacuous** — injecting a dropped `is_ip` left all 11 tests passing, because the `iocs` array matched through the OR — so it now probes each column alone. Measuring that also corrected the reason `toIPv6` is used: ClickHouse coerces the literal, so it is explicitness rather than the difference between matching and not.
+  - Migration `070_retro_hunts.sql` (069 was the latest on disk, not the 063 the plan captured).
 - [ ] **8.2 KEV exposure** checked against asset and vulnerability data, opening a case task when exposed.
 - [ ] **8.3 Hunting agent** turning a hypothesis into a plan, read-only queries and evidence-backed findings; new `aisoc-hunt` role alias.
 - [x] **8.4 Hunt library** grown from 5 to at least 50, each with positive and negative synthetic scenarios, and `hunts/README.md` corrected where it cites a script that does not exist.

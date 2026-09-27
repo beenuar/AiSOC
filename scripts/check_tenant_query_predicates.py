@@ -259,6 +259,11 @@ RATCHET: dict[str, str] = {
     "services/api/app/workers/hunt_scheduler.py::run_once::SavedHunt": (
         "scheduler sweeps every tenant's due hunts, then executes each under its own tenant"
     ),
+    "services/api/app/services/retro_hunt/service.py::opted_in_tenants::RetroHuntSettings": (
+        "answers 'which tenants opted in to retro-hunts', so it cannot presuppose one; the caller "
+        "binds each tenant with set_config before any sweep or alert write, so every write after "
+        "this read is RLS-enforced. Same shape and same reasoning as hunt_scheduler.run_once above"
+    ),
     "services/api/app/workers/oauth_refresh.py::_select_due_connectors::Connector": (
         "refresh worker sweeps all tenants' expiring OAuth grants; there is no caller"
     ),
@@ -310,7 +315,17 @@ RATCHET: dict[str, str] = {
 #: could carry one, so the token row is the only thing that assigns it. The
 #: other seven unscoped statements the SCIM surface introduced were given real
 #: predicates instead of entries here.
-MAX_RATCHET = 33
+#:
+#: 33 -> 34 (gap-closure Phase 8.1): `retro_hunt.service.opted_in_tenants`.
+#: A fan-out consumer's first question is "which tenants opted in", and that
+#: question cannot presuppose a tenant — the same reasoning already recorded
+#: for `org_scope.resolve_portfolio_scope`, `hunt_scheduler.run_once` and
+#: `oauth_refresh._select_due_connectors`, all of which discover a working set
+#: and then bind each tenant before touching it. The alternative was to issue
+#: the identical query as raw SQL, which would have moved it out of this
+#: gate's view without changing what it reads, and that is worse than an entry
+#: with a reason beside it.
+MAX_RATCHET = 34
 
 
 # ---------------------------------------------------------------------------

@@ -87,6 +87,13 @@ weasyprint = ">=62,<71"          # WS-G2: server-side PDF generation from print-
 # because croniter is API-stable and we only use the
 # `get_next` / `is_valid` surface.
 croniter = ">=2.0,<7.0"
+# Gap-closure Phase 8.1 — the retro-hunt consumer subscribes to the
+# `NEW_IOC` events `services/threatintel` emits. Same range `services/agents`
+# already declares, so the two services that consume AiSOC's own topics
+# resolve the same client: a consumer-group protocol difference between them
+# would surface as a rebalance nobody could explain. Only used by
+# `app.workers.retro_hunt_consumer`, which is off by default.
+aiokafka = ">=0.10,<0.15"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.

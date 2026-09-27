@@ -297,6 +297,31 @@ class Settings(BaseSettings):
     )
     HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
 
+    # ------------------------------------------------------------------
+    # Intel-driven retro-hunts (gap-closure Phase 8.1).
+    #
+    # Off by default at the deployment level *and* per tenant. Two switches
+    # rather than one because they answer different questions: this one is the
+    # operator's ("may this deployment consume the intel topic at all"), and
+    # ``retro_hunt_settings.enabled`` is the customer's ("may AiSOC sweep my
+    # history"). A sweep costs warehouse time and, where it reaches a
+    # connected SIEM, possibly money, so neither answer may be assumed.
+    #
+    # The topic default is the one the *producer* actually uses.
+    # ``ThreatIntelPipeline.__init__`` carries a ``threat-intel-events``
+    # default that nothing reaches, because ``services/threatintel``'s
+    # lifespan overrides it with ``KAFKA_TOPIC_THREAT_INTEL``. A consumer that
+    # subscribed to the constructor default would read an empty topic forever
+    # and report healthy while doing so, so ``scripts/check_ioc_lake_mapping.py``
+    # compares this value against that service's setting.
+    # ------------------------------------------------------------------
+    RETRO_HUNT_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETRO_HUNT_ENABLED", "AISOC_RETRO_HUNT_ENABLED"),
+    )
+    KAFKA_TOPIC_THREAT_INTEL: str = "aisoc.threat_intel"
+    RETRO_HUNT_CONSUMER_GROUP: str = "aisoc-retro-hunt"
+
     # Retention purge worker. Applies each tenant's configured retention
     # window by deleting aged rows from the ClickHouse lake and the Postgres
     # alerts table.

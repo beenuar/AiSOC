@@ -213,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
 ### Added
 
+<<<<<<< HEAD
 - **Per-organisation white-label branding, with uploaded assets treated as a
   security boundary** (gap-closure Phase 13.2).
 
@@ -348,6 +349,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minted before this change fail closed rather than outliving the revocation
   meant to end them. The refresh path checks it too, and matters more there: a
   refresh token outlives an access token by days.
+=======
+- **The `NEW_IOC` events the threat-intel pipeline has always emitted now have
+  a consumer** (gap-closure Phase 8.1).
+
+  **The gap.** `services/threatintel/app/feeds/pipeline.py` publishes a
+  `NEW_IOC` event for every newly-seen indicator. A grep for the string across
+  the repository returned the emit site, the plan, and nothing else. Every
+  indicator the CISA KEV catalog, MISP, OTX and TAXII feeds produced went into
+  three stores and onto a Kafka topic that no process subscribed to, so a
+  customer whose estate contained a published indicator was never told.
+
+  **A trap found while closing it.** The pipeline's constructor defaults
+  `kafka_topic` to `threat-intel-events`, and `services/threatintel`'s lifespan
+  overrides it with `KAFKA_TOPIC_THREAT_INTEL`, which is `aisoc.threat_intel`.
+  The constructor default is unreachable in any running deployment. A consumer
+  written against the name in the signature would have subscribed to a topic no
+  producer writes, consumed nothing, logged nothing, and kept a healthy
+  container indefinitely. `check_ioc_lake_mapping.py` compares the producer's
+  setting with the consumer's so the two cannot drift.
+
+  **What was built.** A retro-hunt sweeps each opted-in tenant's recorded
+  history for a published indicator, over the event lake and, through the
+  Phase 4 typed indicator search, any SIEMs that tenant has connected. Off by
+  default at the deployment level and again per tenant, because a sweep costs
+  warehouse time and, where it reaches a connected SIEM, possibly money.
+
+  **Why one indicator cannot open a thousand alerts.** The sweep query is an
+  aggregate: it returns a sighting count, first and last sighting times, and
+  bounded distinct sets of hosts, users and connectors, so there is no code
+  path that yields a row per match. On top of that, `retro_hunt_sightings` has
+  a UNIQUE constraint on (tenant, indicator type, indicator value), so a feed
+  republishing an indicator daily updates a counter instead of alerting daily,
+  and the alert carries an idempotency key that the `alerts` table already has
+  a per-tenant partial unique index on. One of those stops the alert being
+  attempted and the other stops it landing.
+
+  **How the mapping was proven rather than asserted.** An indicator type has to
+  be searched in a column the lake writer actually fills, and this repository
+  has twice shipped rules matching fields nothing emitted. Every mapped column
+  is annotated with the OCSF path `lake_writer.event_to_row` reads to populate
+  it; `scripts/check_ioc_lake_mapping.py` reads that writer's source, the
+  ClickHouse DDL and the three threat-intel clients and fails on any
+  disagreement; and `tests/isolation/test_retro_hunt_live.py` drives a real
+  OCSF event through the real writer into a live ClickHouse and runs the real
+  query generator against it.
+
+  **The first version of that live test was vacuous, and the fix is the
+  interesting part.** Dropping `is_ip` from both IP columns was injected and
+  all eleven tests still passed, because the `iocs` array column carries the
+  address as a plain string and matched through the OR beside the typed
+  column. The test now probes **each mapped column on its own** and compares
+  the set that matched against the set that should, which does fail when a
+  column is pointed at something the writer does not fill. Measuring that also
+  corrected a claim this changelog would otherwise have carried: ClickHouse
+  coerces a string literal when comparing against an `IPv6` column, so
+  `toIPv6()` is explicitness about the stored value being the IPv4-mapped form,
+  not the difference between matching and not.
+
+  Three deliberate refusals are recorded rather than implemented: a URL is not
+  swept in the lake because there is no URL column and a scan of the compressed
+  raw payload would return a confident zero on connectors that leave it empty;
+  a CVE is not swept against telemetry because it does not appear there; and a
+  feed type nobody has mapped is refused by name and counted rather than
+  defaulted to a plausible one.
+>>>>>>> 5bc33969 (feat(retro-hunt): consume the NEW_IOC events nothing consumed)
 
 ### Changed
 

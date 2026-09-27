@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         "concepts/ai-estate",
         "concepts/groundedness",
         "concepts/live-actions",
+        "concepts/retro-hunts",
         "concepts/automation-maturity",
         "concepts/self-play",
         "concepts/investigation-swarm",
