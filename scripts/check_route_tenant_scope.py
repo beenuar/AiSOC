@@ -230,6 +230,14 @@ class Route:
     function: str
     methods: list[str]
     route_path: str
+    #: The router object the decorator hung off. Registration order only
+    #: matters between routes on the *same* router, so the shadowing gate
+    #: needs this to avoid pairing two routers that share a module.
+    router_objs: list[str] = field(default_factory=list)
+    #: False when a decorator was handed a variable instead of a literal, so
+    #: ``route_path`` is empty because nothing could be read rather than
+    #: because the route sits at a collection root.
+    path_is_literal: bool = True
     tenant_params: list[str] = field(default_factory=list)
     auth_deps: list[str] = field(default_factory=list)
     scope_calls: list[str] = field(default_factory=list)
@@ -279,8 +287,13 @@ def _annotation_names(annotation: ast.expr | None) -> set[str]:
     return _names_in(annotation)
 
 
-def _decorator_route_info(dec: ast.expr) -> tuple[str, str, str] | None:
-    """Return (router_object, method, route_path) for a route decorator."""
+def _decorator_route_info(dec: ast.expr) -> tuple[str, str, str | None] | None:
+    """Return (router_object, method, route_path) for a route decorator.
+
+    ``route_path`` is ``None`` when the decorator was handed something other
+    than a string literal, so a caller can tell "no path here to read" from
+    "the path is the empty string".
+    """
     if not isinstance(dec, ast.Call):
         return None
     func = dec.func
@@ -289,7 +302,11 @@ def _decorator_route_info(dec: ast.expr) -> tuple[str, str, str] | None:
     if not isinstance(func.value, ast.Name):
         return None
     router_obj = func.value.id
-    route_path = ""
+    # `None` rather than `""`: a decorator handed a variable and one handed
+    # the empty string (a collection root, `@router.get("")`) are different
+    # facts, and a reader that conflates them either skips 45 real routes or
+    # reports them all as unreadable.
+    route_path: str | None = None
     if dec.args and isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
         route_path = dec.args[0].value
     return router_obj, func.attr, route_path
@@ -397,7 +414,8 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
             continue
 
         methods: list[str] = []
-        route_path = ""
+        route_path: str | None = None
+        path_is_literal = True
         router_objs: set[str] = set()
         decorator_auth: set[str] = set()
 
@@ -408,7 +426,10 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
             router_obj, method, path = info
             router_objs.add(router_obj)
             methods.append(method)
-            route_path = route_path or path
+            if path is None:
+                path_is_literal = False
+            elif route_path is None:
+                route_path = path
             # dependencies=[...] declared on the route decorator itself
             assert isinstance(dec, ast.Call)
             for kw in dec.keywords:
@@ -455,7 +476,9 @@ def _scan_tree(tree: ast.AST, *, service: str, rel_path: str) -> list[Route]:
                 lineno=node.lineno,
                 function=node.name,
                 methods=sorted(set(methods)),
-                route_path=route_path,
+                route_path=route_path or "",
+                path_is_literal=path_is_literal,
+                router_objs=sorted(router_objs),
                 tenant_params=tenant_params,
                 auth_deps=sorted(auth_deps),
                 scope_calls=scope_calls,
