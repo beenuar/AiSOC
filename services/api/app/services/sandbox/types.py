@@ -41,7 +41,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Final, Literal, TypeVar
+from typing import Any, Final, Literal, TypeAlias, TypeGuard, TypeVar
 
 __all__ = [
     "UNAVAILABLE",
@@ -90,11 +90,22 @@ UNAVAILABLE: Final[Unavailable] = Unavailable()
 
 _T = TypeVar("_T")
 #: A value the provider supplied, or :data:`UNAVAILABLE`.
-Maybe = _T | Unavailable
+#:
+#: The ``: TypeAlias`` annotation is load-bearing, not decoration. Without it
+#: a bare type variable is not a valid alias target, so this reads as an
+#: ordinary variable and every annotation spelled ``Maybe[X]`` is silently
+#: untyped, which is the opposite of the point of this module.
+Maybe: TypeAlias = _T | Unavailable
 
 
-def is_available(value: Maybe[_T]) -> bool:
-    """True when ``value`` came from the provider rather than standing in for it."""
+def is_available(value: Maybe[_T]) -> TypeGuard[_T]:
+    """True when ``value`` came from the provider rather than standing in for it.
+
+    A ``TypeGuard`` rather than a ``bool`` so the type checker narrows the
+    positive branch. Without it, ``report.verdict.value`` behind this call is
+    an error at every call site, and the call sites would then be written to
+    avoid the helper instead of using it.
+    """
     return not isinstance(value, Unavailable)
 
 

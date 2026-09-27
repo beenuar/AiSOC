@@ -35,7 +35,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.services.sandbox.base import SandboxProvider, guard_outbound_url
+from app.services.sandbox.base import SandboxProvider, as_mapping, guard_outbound_url
 from app.services.sandbox.types import (
     UNAVAILABLE,
     AnalysisState,
@@ -204,8 +204,8 @@ class CapeV2Provider(SandboxProvider):
     @staticmethod
     def to_report(payload: dict[str, Any], *, handle: str = "") -> SandboxReport:
         """Map a CAPEv2 JSON report onto the interface. Pure, so tests can drive it."""
-        info = payload.get("info") if isinstance(payload.get("info"), dict) else {}
-        target_file = ((payload.get("target") or {}).get("file") or {}) if isinstance(payload.get("target"), dict) else {}
+        info = as_mapping(payload.get("info"))
+        target_file = as_mapping(as_mapping(payload.get("target")).get("file"))
 
         malscore = payload.get("malscore")
         score: Any = UNAVAILABLE

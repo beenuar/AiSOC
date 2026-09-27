@@ -17,6 +17,7 @@ from __future__ import annotations
 import abc
 import ipaddress
 import socket
+from typing import Any, TypeAlias
 from urllib.parse import urlsplit
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
@@ -28,7 +29,21 @@ from app.services.sandbox.types import (
     SubmissionReceipt,
 )
 
-__all__ = ["SandboxProvider", "guard_outbound_url"]
+__all__ = ["SandboxProvider", "as_mapping", "guard_outbound_url"]
+
+
+def as_mapping(value: object) -> dict[str, Any]:
+    """``value`` if it is a JSON object, otherwise an empty one.
+
+    Every adapter reads vendor JSON, where any key may be absent or the wrong
+    shape, and the obvious inline spelling
+    ``payload.get(k) if isinstance(payload.get(k), dict) else {}`` calls
+    ``get`` twice, so a type checker cannot narrow the first result from the
+    second's test. Doing it once here narrows properly and stops seven
+    near-identical expressions drifting apart.
+    """
+    return value if isinstance(value, dict) else {}
+
 
 #: Hosts that must never be reached whatever DNS says, matching the blocklist
 #: in ``services/agents/app/playbook/ssrf_guard.py``. A sandbox provider is
@@ -45,7 +60,13 @@ _METADATA_HOSTS: frozenset[str] = frozenset(
 )
 
 
-def _refuse_address(ip: ipaddress._BaseAddress, *, allow_private: bool) -> str:
+#: The two concrete address types, rather than ``ipaddress._BaseAddress``:
+#: the private base declares none of the ``is_*`` properties this function
+#: reads, so annotating with it type-checks every one of them as an error.
+_IPAddress: TypeAlias = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+def _refuse_address(ip: _IPAddress, *, allow_private: bool) -> str:
     """Empty string when ``ip`` may be contacted, otherwise the reason it may not."""
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         return _refuse_address(ip.ipv4_mapped, allow_private=allow_private)
