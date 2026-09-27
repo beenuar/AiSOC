@@ -328,10 +328,26 @@ its preflight, so an unconfigured repository shows *skipped* rather than
 passed. That last property is now asserted by a test, and the test was proven
 by deleting the `if:` and watching it go red.
 
-**The guard's measured rate against this corpus is 66.7% (36 of 54)**, where
-the prose payload corpus measures the same guard at 0.852. Both are published
-with the distinction stated. The gap is a finding, not a regression, and
-closing it is the next work this evaluation makes possible (D19).
+**The guard's measured rate against this corpus was 66.7% (36 of 54)** when
+the corpus was built, where the prose payload corpus measured the same guard
+at 0.852. Both were published with the distinction stated. The gap was a
+finding rather than a regression, and 3.4 below is the work it made possible.
+
+- [x] **3.4 Close the field-native gap, and measure whether closing it generalised.** Shipped in [#916](https://github.com/beenuar/AiSOC/pull/916). The guard now reads a **segmented view** of every string in which identifier punctuation is a word separator, so a rule written for an email body reaches a DNS label without being rewritten, and each rule declares which views it is valid on. Containment aimed at a *named target* is matched by the argument's shape rather than by a noun list, on the literal view only, because segmentation is what makes an identifier readable and also what destroys the target's shape. Corpus detection **66.7% to 98.1% (53/54)**, prose corpus **0.852 to 0.96** with false positives still at 0.00, benign controls flagged **2/11 to 1/11** like for like. The offboarding script that cost an analyst automation on every true positive is fixed: tool names match on token boundaries, which `\b` could not do because `_` is a word character. Seventeen of the eighteen ratchet entries are closed and the last is refused with its reason. **The generalisation result is the important one and it is bad: 7.1% (2/28) on held-out payloads (D20).**
+
+**Done when (3.4):** the field-native families are closed on the corpus, the
+offboarding false positive is gone, and the change is graded against payloads
+authored after it.
+
+**Met, and the held-out grading is the part worth reading.**
+`services/agents/tests/adversarial/injection_holdout.py` is 28 adversarial
+payloads and 6 benign controls in the same seven surfaces, written after the
+guard was committed and never consulted while its patterns were written. The
+guard scores **7.1% (2/28)** on it against 98.1% on the corpus it was
+hardened against, and the guard *before* this change scores 3.6% (1/28). The
+hardening moved the tuned corpus by 31 points and unseen payloads by one
+payload. That corpus carries no floor and never will, for the reason stated
+in D20.
 
 ## Phase 4: Let the investigation agent reach the customer's tools
 
@@ -343,12 +359,41 @@ closing it is the next work this evaluation makes possible (D19).
 
 ## Phase 5: MCP client
 
-- [ ] **5.1 Client** on the official MCP Python SDK, pinned, streamable HTTP only by default.
-- [ ] **5.2 Registry**: per-tenant server registry with vault credential, tool allowlist, timeout and response-size cap.
-- [ ] **5.3 Read-only by default**; a state-changing MCP tool is reachable only through governed dispatch.
-- [ ] **5.4 Untrusted by default**: contract boundary markers, injection guard, ledger, SSRF guard and air-gap policy.
-- [ ] **5.5 Tests and docs** against an in-process MCP test server, plus `apps/docs/docs/operations/mcp-client.md` marking each vendor server unverified until someone runs it.
-- [ ] **5.6 AiSOC's own MCP server** gains read tools for triage verdicts, the ledger and replay reports, plus a dry-run-only action preview.
+- [x] **5.1 Client** on the official MCP Python SDK, pinned, streamable HTTP only by default. `services/agents/app/mcp/`, on `mcp==1.30.0` exact-pinned. The 1.x line rather than 2.x deliberately: mcp 2.x depends on `httpx2`, a second HTTP client alongside the `httpx` this service already pins, and two TLS stacks inside the one service that reaches third-party servers is a cost with no return. Exact rather than ranged because the version is the behaviour: this library parses replies from third parties straight into the prompt, and a change in what `readOnlyHint` and `destructiveHint` mean would move what `policy.py` decides.
+- [x] **5.2 Registry** in `services/api`: migration **069**, `/api/v1/mcp-servers`, credential in the existing `CredentialVault` under the connector convention rather than a bespoke column. The console never sees a credential (`has_credential: bool`); the agents service reads it over one internal route that is **service-token only with no session fallback**, unlike every other dual-mode route in this service, because a console user who can read their tenant's alerts must not thereby be able to read their operator's vendor token. See D21 for why the credential travels at all.
+- [x] **5.3 Read-only by default.** A tool is callable only if the tenant allowlisted it *and* the server did not annotate it `destructiveHint: true` or `readOnlyHint: false`. Both halves, because they are different assertions: the allowlist is the tenant's, the annotation is the vendor's, and either saying no is a no. The allowlist defaults empty, so a newly registered server offers nothing. A destructive tool is refused outright and the refusal names governed dispatch; see D22 for why "or not at all" is the honest half of the plan's sentence today.
+- [x] **5.4 Untrusted by default.** Socket-level byte cap, per-run nonce fence, injection guard, an inline first-party boundary sentence, and a ledger row for every call, refusal and failure. The SSRF guard and air-gap policy run immediately before the socket, not at save time; see D23.
+- [x] **5.5 Tests and docs.** 40 tests across three files against a real `FastMCP` server over the SDK's memory transport, so nothing mocks `ClientSession` or `McpClient`. `apps/docs/docs/operations/mcp-client.md` marks all five vendor servers unverified against a live vendor, and says the tool names given are examples to be replaced with what the vendor's own `tools/list` publishes.
+- [x] **5.6 AiSOC's own MCP server.** Extended, not duplicated: `services/mcp` goes from 13 tools to 18. **The ledger half already existed** (`aisoc_list_investigations`, `aisoc_get_investigation`, `aisoc_replay_decision`, `aisoc_explain_step`), which is recorded rather than re-implemented. New: `aisoc_get_triage_verdict`, `aisoc_list_replay_reports`, `aisoc_get_replay_report`, `aisoc_list_actions` and `aisoc_preview_action`. The preview is dry-run only and cannot become anything else; see D24. Every tool now publishes MCP behaviour annotations, and the published tool count is gated for the first time; see D25.
+
+**Done when:** against a mock MCP server, an investigation calls an allowlisted
+read tool, refuses a destructive one, and the ledger records both.
+
+**Met.** `services/agents/tests/test_mcp_investigation.py::test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destructive_one`
+runs exactly that: a real `FastMCP` server publishing `get_detections`
+(read-only) and `isolate_host` (destructive), both allowlisted by the operator
+**on purpose** so the annotation is what refuses rather than the allowlist; the
+real tool loop `deep_investigation` drives; a scripted model that asks for both.
+The read tool returns the server's data fenced with the run nonce, the
+destructive tool was never bound so the loop's own registry refuses it, and the
+real `_LedgerWriter` produces one `mcp_tool_call` row and one
+`mcp_tool_refused` row carrying the run id, the resolved tenant and the
+classification.
+
+Three things stop that from being a vacuous pass. The destructive tool is
+asserted absent from the schemas handed to the provider, not merely absent from
+the trace, so "the model did not call it" and "the model was never offered it"
+are told apart. The ledger is captured at the **database boundary**
+(`ledger.record_event`) rather than by replacing the writer, so the sequence
+numbers, the tenant resolution and the payload shape are the ones that would
+reach Postgres, and a separate test asserts the sequence numbers are monotonic
+and above the graph range, because `ON CONFLICT (run_id, seq) DO NOTHING` drops
+a collision silently. And a refusal is separately proven to cost **no network
+call at all**, by handing the invoker a session factory that raises the moment
+anything asks it for a session.
+
+Not proven: a row landing in a real Postgres, which is the live-container
+suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 6: Tenant skills and better triage context
 
@@ -469,7 +514,23 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   gate was proven against the pre-fix tree: run against `main`'s
   `services/api/app/main.py`, both `test_the_deployed_lifespan_registers_the_sweep`
   and `test_the_sweep_is_off_by_default_and_says_so` fail.
+- [x] **Phase 5.1 to 5.5, the MCP client.** Migration 069. New dependency
+  `mcp==1.30.0`, exact-pinned in `services/agents/pyproject.toml`, re-locked
+  in `poetry.lock` and added to the agents CI install list so the version CI
+  exercises is the version the image ships. Suites: `services/agents` 1350 to
+  1390 (40 new), `services/api` 2924 to 2964 (40 new). Claim matrix 176 rows
+  to 182, GATED 168 to 174. New gate
+  `scripts/check_mcp_client_policy.py`, wired into `ci.yml`, proven able to
+  fail against eight injected regressions rather than merely observed passing.
+  See D21 to D23.
 
+- [x] **Phase 5.6, AiSOC's own MCP server.** `services/mcp` 13 tools to 18,
+  suite 124 to 135. Every tool now publishes MCP behaviour annotations, and
+  the published tool count is compared against the registry across seven
+  documents for the first time. Claim matrix 184 rows to 186, GATED 176 to
+  178, and the existing "MCP server exposes 13 tools" row was corrected
+  rather than only renumbered, because the gate it named had never read a
+  document. See D24 and D25.
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
 Recorded because the obvious implementation of shadow mode is wrong in a way
@@ -911,3 +972,232 @@ more than it looks: `disable_user_offboarding_batch.ps1` is a legitimate
 script name, `disable_user` is in the guard's tool-name list, and a
 tool-name match is **high** severity, which demotes the case to L0. So an
 ordinary offboarding script takes automation away from a true positive.
+
+### D20. The hardening worked on the corpus and barely generalised, and the second number is the one that matters
+
+D19 left the field-native gap open on the grounds that tuning a guard against
+the corpus that grades it produces a flattering number and no information.
+That reasoning was right, so the work in 3.4 was graded twice: once on the
+corpus it was written against, and once on payloads authored after the guard
+was committed and never consulted while its patterns were written.
+
+| | tuned corpus | held out |
+|---|---|---|
+| guard before 3.4 | 66.7% (36/54) | 3.6% (1/28) |
+| guard after 3.4 | 98.1% (53/54) | 7.1% (2/28) |
+
+The change moved the corpus it was written against by 31 points and moved
+unseen payloads by a single payload. **It fitted the corpus far more than it
+closed the threat, and that is the finding**, not the 98.1%.
+
+The two held-out payloads that are caught say why. One is caught by unicode
+normalisation and one by a rule whose vocabulary happened to fit. Every other
+held-out payload asks for exactly what the tuned corpus asks for, in words no
+rule enumerates: `ho-ticket-pull-off-network` wants a named host taken off the
+network and is missed because "pull off the network" is not in a verb list,
+and `ho-ticket-cab-signoff` claims sign-off from a change advisory board,
+which the authority rule does not list.
+
+So the structural half of 3.4 did generalise and it was not enough.
+Segmentation genuinely made every prose rule reach an identifier field, and a
+rule added tomorrow will reach one too, which a longer pattern list would not
+have achieved. But what segmentation carries into those fields is still a set
+of word lists, and a word list is exactly the thing an attacker routes around
+without effort. The guard is a vocabulary matcher that can now read more
+fields.
+
+**The next structural step is named here and deliberately not taken here.**
+The property that separates almost every held-out miss from its benign
+control is not vocabulary at all: it is that an imperative addressed to a
+reader appears in a field that carries machine-generated data. A DNS label, a
+command line, a user agent and a file name are emitted by software and never
+contain requests, so sentence-shaped second-person content in one of them is
+anomalous whatever it says. Ticket text and an email body are written by
+people and are full of requests, so the same test cannot apply there and a
+different one is needed. That is a field-class prior rather than another word
+list, and the field classes come from the platform's own OCSF schema rather
+than from an attacker's thesaurus.
+
+It is not taken here because the held-out corpus has now been read. Anything
+built after reading it and graded against it is tuned against it, and the
+number would be worthless in precisely the way this decision exists to
+prevent. Doing it properly needs a **new** held-out set authored after that
+change lands.
+
+For the same reason `HOLDOUT_UNDETECTED` is **not a ratchet** and the
+held-out corpus carries **no floor**. CI checks that the measurement happens
+and that the published page matches it, and checks the recorded misses in
+both directions so the record keeps describing the tree. It does not check
+that the rate is good, because a target on a held-out set is an instruction
+to tune against it, and the first person to satisfy that target by writing
+one pattern per miss would leave the repository with a number that means
+nothing and no way to tell.
+
+One thing the held-out figure is *not*: a pessimistic bound. These payloads
+were written by someone who could read the patterns, and for a guard shipped
+under an MIT licence in a public repository, so can an attacker. White box is
+the correct threat model here, so 7.1% is the number to plan against.
+
+The false-positive side moved the right way and is reported like for like.
+On the eleven benign controls that existed before this change, 2 flagged and
+1 does now: `disable_user_offboarding_batch.ps1` no longer trips a
+high-severity tool-name match, so an ordinary offboarding script no longer
+takes automation away from a true positive. Six controls were added, four of
+which flag the un-narrowed draft of the rule they sit beside, which is what
+makes them evidence rather than decoration. Two of those six flagged `main`
+itself through bare nouns in `injected_containment` that matched their own
+verb, and both nouns are gone. `benign-edr-response-cmdline` still flags and
+stays recorded: suppressing it needs a rule that reads a containment verb in
+flag position as a tool invocation, and a suppression rule is the one kind
+whose failure mode is silence.
+### D21. The credential has to cross the internal network, and the usual dual-mode route is the wrong shape for it
+
+The plan puts the client in `services/agents` and the registry in
+`services/api`. Both package their code as top-level `app`, so one process
+holds one of them, and the API is the service with the vault and the tenant
+session. The credential therefore travels, on the same round trip that already
+carries organisation memory, SIEM writeback, connector normalisation and shadow
+reconciliation. D15's version of this has the API *pushing* credentials to
+`services/actions`; this one reverses the direction, because the agent is the
+one that knows an investigation has started.
+
+What is deliberately different from every other internal route here: there is
+**no session fallback**. `/feedback/context-statements`, `/alerts/{id}/source-writeback`
+and the rest accept either a session or the service token, because the data
+behind them is the caller's own. This route returns plaintext third-party
+credentials. A console user who can read their tenant's alerts must not thereby
+be able to read the bearer token their operator configured for a vendor's MCP
+server, so a perfectly valid session gets a 401 and the console is given
+`has_credential: bool` instead. `test_a_valid_console_session_is_still_refused_plaintext`
+pins it.
+
+Two smaller decisions on the same route. `tenant_id` is **required**, because a
+service token carries no tenant of its own and defaulting an omitted parameter
+to "every tenant" on a route returning credentials is the widest possible
+reading of an absence. And a row whose credential will not decrypt is dropped
+with a warning rather than returned with an empty credential: the second would
+produce an unauthenticated call to a third party that the operator believes is
+authenticated, and the vendor's 401 would reach the agent as "that tool is
+unavailable", which is indistinguishable from the tool not existing.
+
+### D22. "Or not at all" is the honest half of 5.3 today, and saying so is the point
+
+The plan says a state-changing MCP tool is reachable only through governed
+dispatch, as a live action with a declared contract, **or not at all**. The
+first half cannot be built here. A capability contract declares impact,
+reversal and a verification probe for a *verb*, and it is graded by
+`approval_matrix.evaluate_contract`; an MCP tool is a name on somebody else's
+server with an annotation and a description. There is no verb to contract, no
+reversal to declare and no probe to write, and inventing one per vendor tool
+would be the "exists but nothing calls it" shape wearing a contract.
+
+So the shipped behaviour is refusal, and the refusal message names governed
+dispatch as the door it would otherwise take. This is recorded rather than
+left implicit because the opposite reading is available and wrong: a future
+session could read 5.3 as unfinished and wire MCP tools into the dispatcher
+without a contract, which would be worse than the refusal by exactly the margin
+this repository's playbook-step defect cost: steps that claimed to dispatch
+actions and reached no executor at all.
+
+The other half of the sentence is where the work went. Refusing at call time
+would have been the obvious implementation; refusing at *discovery*, so the
+tool is never put in front of the model, is strictly stronger, because a tool
+the model cannot see is one it cannot be talked into naming. Both happen, and
+the dispatch-time check re-runs the same pure function over the same discovered
+descriptor rather than a weaker restatement of it.
+
+### D23. The SSRF guard belongs at the socket, and putting a copy at save time nearly made it worse
+
+The plan says server URLs pass the SSRF guard. The obvious place is the
+registry, when an operator presses save, and that is where a reader looks for
+it. It is the wrong place to *rely* on: DNS is not a property of a URL. A
+hostname that resolves to a public address at save time can resolve to
+`169.254.169.254` an hour later, and by then the saved row has been validated
+and nothing re-asks.
+
+So there are two checks and they are deliberately not the same check.
+`services/api` runs a **structural** one at save time (scheme, userinfo,
+hostname shape, IP literals, the cloud-metadata blocklist, the air-gap policy)
+so an operator gets an immediate readable refusal, and its docstring says in as
+many words that it does not resolve DNS and is not the control. The enforcing
+one is `validate_outbound_url` in `services/agents`, called after the
+configuration is read and before the transport is constructed. The gate asserts
+the ordering by line number inside `session()`, because "the guard is called"
+and "the guard is called first" are different claims and only the second is a
+control.
+
+The near-miss worth recording: the first draft had the API resolving DNS too,
+which would have read like the real check to every future reader while ageing
+into a false one, and would have made the agents-side guard look like a
+belt-and-braces duplicate that a later cleanup could reasonably delete.
+
+### D24. Two thirds of 5.6 already existed, and the third needed a boundary in code rather than in prose
+
+5.6 names three read surfaces and one preview. Checking first, which is the
+thing this repository's history says to do before building anything:
+
+**The Investigation Ledger half was already shipped.**
+`aisoc_list_investigations`, `aisoc_get_investigation`, `aisoc_replay_decision`
+and `aisoc_explain_step` have been in `services/mcp/src/tools/investigations.ts`
+for months. Nothing was rebuilt and nothing was wrapped.
+
+**The triage-verdict half half-existed.** `aisoc_get_alert` already returns
+every verdict field, so the new tool is a focused projection rather than a new
+capability. It earns its place by handling two things the raw record does not:
+`confidence` (an integer 0 to 100) and `ai_score` (a float 0 to 1) are kept
+apart by name with the scale stated, because a consumer that treats one as the
+other renders `2100%`, which this tree has shipped once; and a null verdict is
+reported in words as "nothing has triaged this yet" rather than left as a null
+field an agent reads as "no threat found".
+
+**Replay reports had no tool at all.** Phase 1.4's surfaces exist; nothing
+exposed them over MCP. The report is served **as stored**, not re-rendered,
+so a withheld headline (below 30 malicious cases, Phase 1.3 refuses to print a
+number) stays withheld. Re-rendering would eventually mean two definitions of
+what a replay report says, and the one an agent quotes would not be the one
+the operator exported.
+
+**The preview is the part that needed care.** It is the only tool in this
+server that touches the response surface, and an MCP key is credential
+material that lives in an editor's configuration file. So the boundary is in
+code: `DRY_RUN_PATH` is a module constant and the only action path the module
+names, `/live-actions/dispatch` appears nowhere in `src/`, and the test asserts
+that by **reading the source** rather than by driving the handler, so a second
+action tool added later is caught rather than only the one under test. The
+schema is strict, so a caller-supplied `dry_run: false` is a validation error
+rather than a field forwarded to the API. The enforcing control is still
+upstream, where the route forces `dry_run: true` whatever the body says; this
+is the second lock, on the side an agent can see.
+
+Proven able to fail by pointing the constant at the dispatch path, which reds
+both the source scan and the request assertion.
+
+### D25. The server published no annotations, which is the gap its own client complains about
+
+Phase 5.1's client refuses an MCP tool whose server sets `destructiveHint:
+true` or `readOnlyHint: false`, and treats an absent annotation as no claim
+rather than as a claim to be read-only. AiSOC's own MCP server published
+**none at all**, so by its own client's rules every one of its 13 tools was a
+tool an operator would have had to vouch for by name.
+
+Fixed by declaring them on all 18 and advertising them in `ListTools`. The
+test pins the set of not-read-only tools to exactly `aisoc_run_investigation`,
+in both directions: a future write tool cannot arrive annotated read-only, and
+a read tool cannot drift into looking state-changing. `readOnlyHint` is
+required as a boolean rather than optional, because an omission is
+indistinguishable from a tool nobody thought about.
+
+`aisoc_run_investigation` is the one honest exception. It starts an agent run:
+it writes ledger rows, spends model budget and can reach whatever the tenant
+configured. Annotating it read-only would be the direction of dishonesty a
+client cannot detect.
+
+**And the published tool count was ungated.** "13 tools" was written into six
+documents and nothing compared any of them to `ALL_TOOLS`. The claim matrix
+carried a row saying the count was gated by `ci.yml :: mcp`; that job runs the
+registry tests, which pin the tool *set*, and had never read a document. The
+row's Status column was therefore true about a different claim than the one it
+stated. `tests/published-count.test.ts` now compares all seven figures against
+the registry in both directions, proven by staling one figure and by deleting
+another. `plans/cyble-aisoc/platform/README.md` also carries the old figure
+and is deliberately left alone: plan files are never edited.

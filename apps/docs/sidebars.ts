@@ -191,6 +191,7 @@ const sidebars: SidebarsConfig = {
         "operations/sandbox-providers",
         "operations/llm-gateway",
         "operations/llm-cost",
+        "operations/mcp-client",
         "operations/codespaces",
         "operations/theming",
         "operations/upgrades",

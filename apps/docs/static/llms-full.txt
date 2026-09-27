@@ -146,18 +146,23 @@ AiSOC to MCP-aware assistants including Claude Desktop, Cursor, Continue.dev and
 Cody. It speaks stdio JSON-RPC and translates tool calls into AiSOC REST calls;
 the API key stays on the machine running the server.
 
-It advertises 13 tools:
+It advertises 18 tools:
 
 - `aisoc_explain_step`
 - `aisoc_get_alert`
 - `aisoc_get_case`
 - `aisoc_get_detection_rule`
 - `aisoc_get_investigation`
+- `aisoc_get_replay_report`
+- `aisoc_get_triage_verdict`
 - `aisoc_lake_query`
 - `aisoc_lake_schema`
+- `aisoc_list_actions`
 - `aisoc_list_alerts`
 - `aisoc_list_cases`
 - `aisoc_list_investigations`
+- `aisoc_list_replay_reports`
+- `aisoc_preview_action`
 - `aisoc_query_detections`
 - `aisoc_replay_decision`
 - `aisoc_run_investigation`

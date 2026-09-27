@@ -5821,6 +5821,114 @@ paths:
                 title: Response Mitre Coverage Api V1 Marketplace Mitre Get
       security:
       - HTTPBearer: []
+  /api/v1/mcp-servers:
+    get:
+      tags:
+      - mcp-servers
+      summary: List Mcp Servers
+      description: Every MCP server registered for the caller's tenant.
+      operationId: list_mcp_servers_api_v1_mcp_servers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerListResponse'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - mcp-servers
+      summary: Register Mcp Server
+      description: 'Register a server for this tenant.
+
+
+        The tenant comes from the credential. A refusal is a 422 naming what was
+
+        wrong, because every refusal here is something an operator typed.'
+      operationId: register_mcp_server_api_v1_mcp_servers_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/mcp-servers/{server_id}:
+    patch:
+      tags:
+      - mcp-servers
+      summary: Update Mcp Server
+      description: Change a registered server. Absent fields are left alone.
+      operationId: update_mcp_server_api_v1_mcp_servers__server_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: server_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Server Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerModel'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - mcp-servers
+      summary: Remove Mcp Server
+      operationId: remove_mcp_server_api_v1_mcp_servers__server_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: server_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Server Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/rbac/permissions:
     get:
       tags:
@@ -23830,6 +23938,215 @@ components:
       - changed_at
       - created_at
       title: MaturityOut
+    McpServerCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 40
+          minLength: 2
+          title: Name
+        label:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Label
+        transport:
+          type: string
+          title: Transport
+          default: streamable_http
+        url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+          - type: 'null'
+          title: Url
+        command:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Command
+        args:
+          items:
+            type: string
+          type: array
+          maxItems: 32
+          title: Args
+        credential:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Credential
+        tool_allowlist:
+          items:
+            type: string
+          type: array
+          title: Tool Allowlist
+        timeout_seconds:
+          type: integer
+          title: Timeout Seconds
+          default: 20
+        max_response_bytes:
+          type: integer
+          title: Max Response Bytes
+          default: 65536
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+      type: object
+      required:
+      - name
+      title: McpServerCreate
+    McpServerListResponse:
+      properties:
+        servers:
+          items:
+            $ref: '#/components/schemas/McpServerModel'
+          type: array
+          title: Servers
+        read_only_by_default:
+          type: boolean
+          title: Read Only By Default
+          default: true
+      type: object
+      required:
+      - servers
+      title: McpServerListResponse
+    McpServerModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        transport:
+          type: string
+          title: Transport
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+        command:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Command
+        args:
+          items:
+            type: string
+          type: array
+          title: Args
+        tool_allowlist:
+          items:
+            type: string
+          type: array
+          title: Tool Allowlist
+        timeout_seconds:
+          type: integer
+          title: Timeout Seconds
+        max_response_bytes:
+          type: integer
+          title: Max Response Bytes
+        enabled:
+          type: boolean
+          title: Enabled
+        has_credential:
+          type: boolean
+          title: Has Credential
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - id
+      - name
+      - transport
+      - timeout_seconds
+      - max_response_bytes
+      - enabled
+      - has_credential
+      title: McpServerModel
+      description: What the console sees. Never the credential.
+    McpServerUpdate:
+      properties:
+        label:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Label
+        transport:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Transport
+        url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+          - type: 'null'
+          title: Url
+        command:
+          anyOf:
+          - type: string
+            maxLength: 512
+          - type: 'null'
+          title: Command
+        args:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 32
+          - type: 'null'
+          title: Args
+        credential:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Credential
+        tool_allowlist:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tool Allowlist
+        timeout_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Timeout Seconds
+        max_response_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Max Response Bytes
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: McpServerUpdate
     MemberOut:
       properties:
         user_id:

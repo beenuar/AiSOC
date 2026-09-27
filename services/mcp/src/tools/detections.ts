@@ -97,6 +97,7 @@ export const queryDetectionsTool: ToolDefinition<typeof QueryDetectionsSchema> =
     description:
       "Search the detection-rule library by free text, category, language, severity, or MITRE technique. Returns a compact summary; pull the full body with `aisoc_get_detection_rule`.",
     inputSchema: zodToJsonSchema(QueryDetectionsSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: QueryDetectionsSchema,
   async handle(ctx, args) {
@@ -168,6 +169,7 @@ export const getDetectionRuleTool: ToolDefinition<typeof GetDetectionRuleSchema>
     description:
       "Fetch the full body of a single detection rule, including the raw rule text, MITRE mappings, hit stats, and false-positive rate.",
     inputSchema: zodToJsonSchema(GetDetectionRuleSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: GetDetectionRuleSchema,
   async handle(ctx, args) {

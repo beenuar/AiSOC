@@ -99,6 +99,7 @@ export const listInvestigationsTool: ToolDefinition<typeof ListInvestigationsSch
     description:
       "List recent investigation runs for the connected tenant. Each run is a single agent execution against a case.",
     inputSchema: zodToJsonSchema(ListInvestigationsSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ListInvestigationsSchema,
   async handle(ctx, args) {
@@ -129,6 +130,7 @@ export const getInvestigationTool: ToolDefinition<typeof GetInvestigationSchema>
     description:
       "Fetch a single investigation run with summary stats (status, model, tokens, cost, event/artifact counts).",
     inputSchema: zodToJsonSchema(GetInvestigationSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: GetInvestigationSchema,
   async handle(ctx, args) {
@@ -168,6 +170,7 @@ export const replayDecisionTool: ToolDefinition<typeof ReplayDecisionSchema> = {
     description:
       "Walk the agent decision ledger for an investigation run. Returns each step (recon, forensic, responder, reporter, tool-calls, errors) with summaries and timing. Use `aisoc_explain_step` for a deep dive on a single step.",
     inputSchema: zodToJsonSchema(ReplayDecisionSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ReplayDecisionSchema,
   async handle(ctx, args) {
@@ -209,6 +212,7 @@ export const explainStepTool: ToolDefinition<typeof ExplainStepSchema> = {
     description:
       "Why-did-the-agent-do-this view for a single decision step. Returns the focal event, the previous and next events for context, and any inlined artifacts (LLM prompts/responses, tool I/O) attached to that step.",
     inputSchema: zodToJsonSchema(ExplainStepSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ExplainStepSchema,
   async handle(ctx, args) {
