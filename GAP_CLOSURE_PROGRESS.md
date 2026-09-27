@@ -143,15 +143,60 @@ replay runners and evaluation scoring. None of the five clients
 Phase 1.1 is genuinely new work, and the writeback direction it mirrors
 (`disposition_writeback.py`) already exists and supplies the taxonomy.
 
+### D6. No two services can be imported into one process, so the connector `normalize()` is reached over HTTP
+
+The plan says "normalize each finding with the same connector `normalize()`
+production uses", and it is right to. Grading the agent on an input shape the
+product never produces measures a pipeline nobody runs.
+
+It cannot be done by importing. `services/agents`, `services/connectors` and
+`services/actions` all package their code as top-level `app`, so one Python
+process can hold exactly one of them, and no path manipulation changes that.
+The two remaining options were a copy of every vendor's field mapping inside
+the agents service, kept in step by discipline, or a round trip to the service
+that owns the mapping.
+
+**Resolution:** a round trip, through a new `POST /connectors/{id}/normalize`.
+This is the same reasoning that already put organisation memory and SIEM
+writeback behind HTTP calls to the API service rather than behind a second copy
+of their SQL. The handler builds the connector with `__new__` and never runs
+`__init__`, so the route holds no credential and cannot call a customer's SIEM;
+a connector whose `normalize` does reach for instance state gets a 422 naming
+itself rather than returning a half-mapped envelope. Eleven of the 84
+registered connectors take that path today, and a parametrised test asserts
+every connector either normalizes or says why.
+
+The runner keeps a `FindingNormalizer` port with **no fallback**. A replay that
+cannot reach the production mapping raises `NormalizerUnavailable` and names
+what is missing, because a "close enough" mapping written in the agents service
+would be invisible in the report: its output has the same shape as the real
+thing.
+
+### D7. What a replay measures is triage, not the pipeline
+
+The plan's chain is connector `normalize()` then triage. Production's chain has
+`services/ingest` and `services/fusion` in between, and fusion is where an
+alert gains correlation across related events, its fused confidence score, the
+deterministic narrative and entity resolution.
+
+A replayed finding carries none of those. Reproducing them in the agents
+service would be the reimplementation the plan forbids, one layer down.
+
+**Resolution:** the gap is published rather than closed. `ENVELOPE_LIMITS` in
+`app/replay/normalize.py` lists the four missing enrichments and travels in
+every report's method section, and `confidence_score` is deliberately left
+unset rather than invented, since a fabricated fusion confidence would enter
+the prompt that decides the verdict being graded.
+
 ---
 
 ## Phase 1: Replay evaluation on a customer's own history
 
 - [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
-- [ ] **1.2 Replay runner.** New module in `services/agents`. Production `normalize()`, time ordering, 70/30 time split, the production triage path in shadow mode with persistence injected, memory and context frozen at the split point, and verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency recorded.
-- [ ] **1.3 Scoring.** Extend `packages/aisoc-benchmark`: per-class precision and recall with malicious recall first, confusion matrix, abstention rate, calibration with expected calibration error, hallucination rate, per-rule and per-source breakdowns, bootstrap confidence intervals, and no headline accuracy below 30 malicious cases.
-- [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export.
-- [ ] **1.5 Gates and docs.** Recorded vendor payload tests per reader, the leakage test, claim-to-gate rows, and `apps/docs/docs/evaluation/replay.md` stating that data leaves the deployment only when the configured model is hosted.
+- [x] **1.2 Replay runner.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `services/agents/app/replay/` holds the split, the shadow sinks and the runner; it holds no triage. Persistence is injected through `app/workers/triage_persistence.py`, whose default is `LiveTriageWriter` doing exactly what the worker did inline, so the measured path is the production one rather than a copy. `CostTracker` gained a `persist` flag so a replay measures spend without billing it. Normalisation reaches the real connector through a new `POST /connectors/{id}/normalize`, because both services package their code as top-level `app` and one process can hold one of them. Verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency are all recorded per decision. See D6 and D7 below for the two places the plan and the tree disagreed.
+- [x] **1.3 Scoring.** Shipped in [#904](https://github.com/beenuar/AiSOC/pull/904). `packages/aisoc-benchmark/aisoc_benchmark/replay.py` reuses the existing `_INDICATOR_PATTERNS` for hallucination so there is one definition, and adds per-class precision and recall with malicious recall first, a confusion matrix, abstention rate, reliability bins with an expected calibration error, per-rule and per-source breakdowns, and seeded bootstrap intervals. Below 30 malicious cases the headline accuracy is withheld with the count and the reason. A rate with no denominator reads "not measured".
+- [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export. Markdown rendering already ships with 1.3 (`format_replay_report`).
+- [~] **1.5 Gates and docs.** Recorded vendor payload tests per reader shipped with 1.1. The leakage test shipped in [#904](https://github.com/beenuar/AiSOC/pull/904) (`services/agents/tests/test_replay_leakage.py`), covering all three stores a test-window decision can travel back through, each with a sensitivity half that runs the unprotected configuration and asserts it leaks. Three claim-to-gate rows added, matrix 148 rows to 151, GATED 140 to 143. `apps/docs/docs/evaluation/replay.md` covers the method, the limits and the privacy position. What remains is the documentation of the 1.4 surfaces once they exist.
 
 **Done when:** the CLI, run against a mocked Splunk ES holding 200 recorded
 closed notables, produces a report that reproduces byte for byte on a second run
@@ -283,6 +328,10 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   baseline above captured and recorded.
 - [x] **Phase 1.1, history readers.**
   [#903](https://github.com/beenuar/AiSOC/pull/903).
+- [x] **Phase 1.2 replay runner and 1.3 scoring.**
+  [#904](https://github.com/beenuar/AiSOC/pull/904). Suites: `services/agents`
+  1252 to 1280, `packages/aisoc-benchmark` 35 to 57, `services/connectors` 880
+  to 886. Every other suite unchanged and passing.
 
 ### Notes for the next session
 
