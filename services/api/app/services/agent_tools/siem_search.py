@@ -322,7 +322,7 @@ async def search_indicator(
     logger.info(
         "agent_tools.siem_search tenant=%s type=%s sources=%d rows=%d actor=%s",
         tenant_id,
-        indicator_type,
+        str(indicator_type).replace("\r", "").replace("\n", " ")[:32],
         len(result.sources),
         len(result.rows),
         str(actor).replace("\r", "").replace("\n", " ")[:64],

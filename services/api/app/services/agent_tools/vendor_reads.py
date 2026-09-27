@@ -113,7 +113,7 @@ def _sanitise_params(capability: str, params: dict[str, Any] | None) -> dict[str
             # comes to believe it set a window it did not set.
             logger.info(
                 "agent_tools.param_dropped capability=%s key=%s",
-                capability,
+                str(capability).replace("\r", "").replace("\n", " ")[:64],
                 str(key).replace("\r", "").replace("\n", " ")[:40],
             )
             continue
@@ -241,9 +241,9 @@ async def run_read(
     logger.info(
         "agent_tools.vendor_read tenant=%s capability=%s vendor=%s status=%s executed=%s",
         tenant_id,
-        capability,
-        report.vendor_id,
-        report.status,
+        str(capability).replace("\r", "").replace("\n", " ")[:64],
+        str(report.vendor_id).replace("\r", "").replace("\n", " ")[:64],
+        str(report.status).replace("\r", "").replace("\n", " ")[:32],
         report.executed,
     )
     return report
