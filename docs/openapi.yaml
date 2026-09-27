@@ -1433,6 +1433,7 @@ paths:
       tags:
       - cases
       summary: Get investigation run
+      description: One investigation run belonging to this case, in the caller's tenant.
       operationId: case_investigation_run_api_v1_cases__case_id__investigations__run_id__get
       security:
       - HTTPBearer: []
@@ -10808,18 +10809,16 @@ paths:
       tags:
       - mssp
       summary: Add Tenants To Portfolio
-      description: 'Bring tenants under management.
+      description: 'Bring tenants under management, with each tenant''s consent.
 
 
-        A tenant already managed by another organisation is rejected rather than
+        A tenant must first invite this organisation by setting
 
-        reassigned: `organization_tenants` carries a unique constraint on
+        `settings["mssp_parent_invite"]` to the managing tenant''s id through
 
-        `tenant_id` precisely so a customer cannot end up in two portfolios, and
+        `PATCH /api/v1/tenants/me/settings`. The invite is single-use. A tenant
 
-        silently moving one would be a cross-tenant transfer performed by
-
-        whoever asked last.'
+        already managed by another organisation is rejected rather than reassigned.'
       operationId: add_tenants_to_portfolio_api_v1_mssp_organizations_current_tenants_post
       requestBody:
         content:

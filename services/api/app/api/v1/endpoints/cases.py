@@ -1179,18 +1179,20 @@ async def case_investigation_run(
     db: DBSession,
     user: AuthUser,
 ) -> dict[str, Any]:
-    """One investigation run, scoped to the caller's tenant and to the case.
-
-    This took no database session and never read `user.tenant_id`: `case_id`
-    was declared and never used, and `run_id` alone was proxied to the agents
-    service, so any authenticated user could read any run by id across tenants
-    (GHSA-x2gf-3p79-wvgm). The sibling list route two functions up already
-    resolved the case against the caller's tenant; this one did not.
-
-    Both halves are needed. Resolving the case proves the caller may see *this
-    case*; checking the run belongs to it proves the id in the path is not
-    somebody else's run smuggled under a case the caller does own.
-    """
+    """One investigation run belonging to this case, in the caller's tenant."""
+    # Scoping kept out of the docstring because FastAPI publishes that verbatim
+    # in docs/openapi.yaml, and the rationale is for the next maintainer rather
+    # than for API consumers.
+    #
+    # This handler took no database session and never read `user.tenant_id`:
+    # `case_id` was declared and never used, and `run_id` alone was proxied to
+    # the agents service, so any authenticated user could read any run by id
+    # across tenants (GHSA-x2gf-3p79-wvgm). The sibling list route two
+    # functions up already resolved the case against the caller's tenant.
+    #
+    # Both halves below are needed. Resolving the case proves the caller may
+    # see *this case*; checking the run belongs to it proves the id in the path
+    # is not somebody else's run smuggled under a case the caller does own.
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     # URL-encode the user-supplied run_id so it cannot inject `/`, `?`, `#`,
     # CR/LF, or other URL syntax into the proxied path.

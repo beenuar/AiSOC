@@ -1077,32 +1077,29 @@ async def add_tenants_to_portfolio(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, object]:
-    """Bring tenants under management, with the tenant's consent.
+    """Bring tenants under management, with each tenant's consent.
 
-    A tenant already managed by another organisation is rejected rather than
-    reassigned: `organization_tenants` carries a unique constraint on
-    `tenant_id` precisely so a customer cannot end up in two portfolios, and
-    silently moving one would be a cross-tenant transfer performed by
-    whoever asked last.
-
-    **Consent is required and comes from the tenant's own side.** This route
-    previously accepted any tenant UUID whose row was unclaimed, checking only
-    that the caller administers their *own* organisation — and creating an
-    organisation is self-service. So three requests let any authenticated user,
-    including one holding only `viewer`, pull an unrelated tenant's alerts,
-    cases and posture into a portfolio they control (GHSA-mcg9-8pxf-j98v). On a
-    deployment not using MSSP no tenant is claimed, so every tenant was
-    attachable.
-
-    The consent mechanism is the one `onboard_child_tenant` already uses: an
-    admin of the tenant sets `settings["mssp_parent_invite"]` to the managing
-    tenant's id through `PATCH /api/v1/tenants/me/settings`, which is gated on
-    `settings:write` and so cannot be forged from outside that tenant. The
-    invite is single-use and is cleared on acceptance.
-
-    A caller attaching their *own* tenant needs no invite — they already
-    administer it, and requiring them to invite themselves would be ceremony.
+    A tenant must first invite this organisation by setting
+    `settings["mssp_parent_invite"]` to the managing tenant's id through
+    `PATCH /api/v1/tenants/me/settings`. The invite is single-use. A tenant
+    already managed by another organisation is rejected rather than reassigned.
     """
+    # Rationale kept out of the docstring because FastAPI publishes that
+    # verbatim in docs/openapi.yaml.
+    #
+    # This route previously accepted any tenant UUID whose row was unclaimed,
+    # checking only that the caller administers their *own* organisation — and
+    # creating an organisation is self-service. So three requests let any
+    # authenticated user, including one holding only `viewer`, pull an
+    # unrelated tenant's alerts, cases and posture into a portfolio they
+    # control (GHSA-mcg9-8pxf-j98v). The unclaimed precondition is not a
+    # mitigation: on a deployment not using MSSP, no tenant is claimed.
+    #
+    # The consent mechanism is the one `onboard_child_tenant` already uses,
+    # deliberately rather than a second one: it is gated on `settings:write`
+    # in the *child's* own settings and so cannot be forged from outside that
+    # tenant. A caller attaching their own tenant needs no invite — requiring
+    # them to invite themselves would be ceremony, not consent.
     added: list[str] = []
     rejected: dict[str, str] = {}
 
