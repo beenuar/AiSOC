@@ -147,7 +147,7 @@ Phase 1.1 is genuinely new work, and the writeback direction it mirrors
 
 ## Phase 1: Replay evaluation on a customer's own history
 
-- [x] **1.1 History readers.** Shipped in [#902](https://github.com/beenuar/AiSOC/pull/902). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
+- [x] **1.1 History readers.** Shipped in [#903](https://github.com/beenuar/AiSOC/pull/903). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [ ] **1.2 Replay runner.** New module in `services/agents`. Production `normalize()`, time ordering, 70/30 time split, the production triage path in shadow mode with persistence injected, memory and context frozen at the split point, and verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency recorded.
 - [ ] **1.3 Scoring.** Extend `packages/aisoc-benchmark`: per-class precision and recall with malicious recall first, confusion matrix, abstention rate, calibration with expected calibration error, hallucination rate, per-rule and per-source breakdowns, bootstrap confidence intervals, and no headline accuracy below 30 malicious cases.
 - [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export.
@@ -282,7 +282,7 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   tracker created, hooks installed via `scripts/setup_hooks.sh`, and the
   baseline above captured and recorded.
 - [x] **Phase 1.1, history readers.**
-  [#902](https://github.com/beenuar/AiSOC/pull/902).
+  [#903](https://github.com/beenuar/AiSOC/pull/903).
 
 ### Notes for the next session
 
