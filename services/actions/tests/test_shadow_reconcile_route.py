@@ -104,6 +104,17 @@ def _patch_reconcile(monkeypatch: pytest.MonkeyPatch, **counts: int) -> list[tup
     return calls
 
 
+def _no_scope() -> TenantPrincipal:
+    """A credential that resolved to no tenant at all.
+
+    A named function rather than a lambda so FastAPI overrides it as a
+    zero-argument dependency; handing it the dataclass directly would have the
+    framework read the constructor signature and try to populate the fields
+    from the request, which is the opposite of what an empty scope means.
+    """
+    return TenantPrincipal()
+
+
 def _status_error(code: int, headers: dict[str, str] | None = None) -> httpx.HTTPStatusError:
     request = httpx.Request("GET", "https://splunk.example.com:8089/services/search/jobs")
     response = httpx.Response(code, headers=headers or {}, request=request)
@@ -255,7 +266,7 @@ class TestTheTenantIsNotARequestField:
         monkeypatch.setattr(route_mod, "database_configured", lambda: True)
         app = FastAPI()
         app.include_router(route_mod.router, prefix="/api/v1")
-        app.dependency_overrides[require_console_or_service_auth] = lambda: TenantPrincipal()
+        app.dependency_overrides[require_console_or_service_auth] = _no_scope
         seen = _patch_reader(monkeypatch, [_finding()])
 
         response = TestClient(app).post("/api/v1/shadow/reconcile", json=_body())
@@ -283,8 +294,18 @@ def test_the_route_is_reachable_on_the_deployed_app() -> None:
     A router that is written and never included is the same defect one layer
     up, so the assertion is against the service's own ``app`` rather than
     against a FastAPI instance this test built.
+
+    Reachability is asserted by *sending a request*, not by reading
+    ``app.routes``. On the FastAPI version this service pins, ``include_router``
+    does not populate ``app.routes`` at all: an app with four routers mounted
+    reports only the seven docs and probe routes it was born with, and a test
+    that reads that list would pass over a service with no API whatsoever.
+    Anything other than 404 proves the path resolves to a handler; the body is
+    not the point and is refused here because no credential is presented.
     """
     from app.main import app as deployed  # noqa: PLC0415 - importing the service graph is the point
 
-    paths = {route.path for route in deployed.routes if hasattr(route, "path")}
-    assert "/api/v1/shadow/reconcile" in paths
+    assert "/api/v1/shadow/reconcile" in deployed.openapi()["paths"]
+
+    response = TestClient(deployed).post("/api/v1/shadow/reconcile", json=_body())
+    assert response.status_code != 404, "the router is declared but not mounted on the deployed app"
