@@ -124,7 +124,8 @@ def alert_class_of(raw_alert: dict[str, Any] | None) -> str:
 class ShadowModePolicy(Protocol):
     """Whether this tenant is measuring this alert class rather than acting on it."""
 
-    async def is_shadow(self, tenant_ref: str, alert_class: str) -> bool: ...
+    async def is_shadow(self, tenant_ref: str, alert_class: str) -> bool:
+        """True when this alert is to be measured rather than acted on."""
 
 
 class LiveShadowModePolicy:

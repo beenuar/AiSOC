@@ -658,7 +658,7 @@ class FusedAlertTriageWorker:
         source_writeback = await self._write_back_to_source(state, verdict, confidence, rationale=_rationale_of(state), writer=writer)
 
         shadow = isinstance(writer, ShadowModeTriageWriter)
-        if shadow and writer.recorded:
+        if isinstance(writer, ShadowModeTriageWriter) and writer.recorded:
             _METRICS["shadow_decisions_recorded"] += 1
 
         return {

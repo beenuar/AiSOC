@@ -25,6 +25,7 @@ Postgres evaluates that statement as read is what the isolation suite covers.
 
 from __future__ import annotations
 
+import inspect
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ from app._vendor.autonomy_evidence_rules import (
     AgreementWindow,
     PromotionThresholds,
 )
+from app.services import shadow_agreement
 from app.services.shadow_agreement import (
     SCOPE_COLUMNS,
     _scope_predicate,
@@ -229,11 +231,7 @@ class TestTheVendoredRulesAreTheOnesInUse:
         surface as a tenant asking why the scorecard says they qualify and
         the gate says they do not.
         """
-        import inspect
-
-        import app.services.shadow_agreement as module
-
-        source = inspect.getsource(module)
+        source = inspect.getsource(shadow_agreement)
         assert "def agreement_rate" not in source
         assert "def malicious_recall" not in source
 
