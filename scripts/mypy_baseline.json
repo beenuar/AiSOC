@@ -50,9 +50,6 @@
     "tests/test_detection_id_stability.py": {
       "attr-defined": 2
     },
-    "tests/test_readme_figures_gate.py": {
-      "attr-defined": 5
-    },
     "tests/test_toolchain_pin_gate.py": {
       "name-defined": 1
     }
