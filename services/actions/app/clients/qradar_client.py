@@ -16,6 +16,7 @@ a weaker posture, never the default.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -68,6 +69,70 @@ class QRadarClient:
             )
             response.raise_for_status()
             return response.json() if response.content else {}
+
+    async def list_closed_offenses(
+        self,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """List offenses an analyst closed in the window, with the reason resolved.
+
+        Gap-closure Phase 1.1.
+
+        An offense carries only a numeric ``closing_reason_id``, and a number
+        is not a label anyone can map to a disposition. QRadar's closing
+        reasons are also site-configurable, so the id-to-name table is read
+        from the appliance rather than hardcoded, and each offense is given a
+        ``closing_reason_name`` for the parser. An id the appliance does not
+        resolve is left without a name, which the parser reads as ``unlabeled``
+        rather than inventing a reason for it.
+        """
+        reasons = await self._closing_reasons()
+        async with httpx.AsyncClient(timeout=self._timeout, verify=self._verify_ssl) as client:
+            response = await client.get(
+                f"{self._base}/api/siem/offenses",
+                headers={**self._headers(), "Range": f"items=0-{max(limit - 1, 0)}"},
+                params={
+                    "filter": (
+                        f"status = CLOSED and close_time >= {int(since.timestamp() * 1000)} "
+                        f"and close_time <= {int(until.timestamp() * 1000)}"
+                    ),
+                    "fields": ("id,description,status,severity,offense_type,close_time,last_updated_time,closing_reason_id,closing_user"),
+                },
+            )
+            response.raise_for_status()
+            offenses = response.json() if response.content else []
+
+        for offense in offenses:
+            name = reasons.get(offense.get("closing_reason_id"))
+            if name is not None:
+                offense["closing_reason_name"] = name
+        logger.info("qradar.closed_offenses", count=len(offenses))
+        return list(offenses)
+
+    async def _closing_reasons(self) -> dict[Any, str]:
+        """Read the appliance's closing-reason id to text table.
+
+        Never raises: an appliance that refuses this endpoint should yield
+        offenses whose reason is unknown, which the parser scores as
+        ``unlabeled``. Failing the whole history read over the lookup would
+        turn a partial answer into no answer.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=self._verify_ssl) as client:
+                response = await client.get(
+                    f"{self._base}/api/siem/offense_closing_reasons",
+                    headers=self._headers(),
+                    params={"fields": "id,text"},
+                )
+                response.raise_for_status()
+                rows = response.json() if response.content else []
+        except Exception as exc:  # noqa: BLE001, a missing lookup degrades to unlabeled
+            logger.warning("qradar.closing_reasons_unavailable", error=str(exc))
+            return {}
+        return {row["id"]: row["text"] for row in rows if "id" in row and "text" in row}
 
     async def add_note(self, offense_id: str, note_text: str) -> dict[str, Any]:
         """Attach a note to an offense.

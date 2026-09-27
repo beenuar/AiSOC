@@ -147,7 +147,7 @@ Phase 1.1 is genuinely new work, and the writeback direction it mirrors
 
 ## Phase 1: Replay evaluation on a customer's own history
 
-- [~] **1.1 History readers.** Closed-finding readers for Splunk ES, Microsoft Sentinel, Elastic Security, IBM QRadar and Microsoft Defender XDR, each row carrying the analyst's disposition, reason, closer and close time; vendor labels mapped to the canonical taxonomy, with anything outside it becoming `unlabeled` and excluded from accuracy rather than guessed.
+- [x] **1.1 History readers.** Shipped in [#902](https://github.com/beenuar/AiSOC/pull/902). Five readers on the clients in `services/actions`, which already own the credential path and already hold the writeback going the other way: `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`, `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses`, `DefenderClient.list_resolved_alerts`. One taxonomy module (`app/services/alert_history.py`) rather than five that could disagree. 30 tests drive each reader's real HTTP path against vendor-shaped payloads; the `services/actions` suite goes 737 to 767. Claim-to-gate row added, matrix 147 rows to 148, GATED 139 to 140. Two vendor decisions recorded in `apps/docs/docs/evaluation/replay.md`: Elastic ships no disposition field so an untagged deployment yields no labels, and QRadar "Non-Issue" is `benign` not `benign_true_positive` because it makes no claim about whether the rule was right.
 - [ ] **1.2 Replay runner.** New module in `services/agents`. Production `normalize()`, time ordering, 70/30 time split, the production triage path in shadow mode with persistence injected, memory and context frozen at the split point, and verdict, confidence, evidence, tool calls, model id, tokens, measured cost and latency recorded.
 - [ ] **1.3 Scoring.** Extend `packages/aisoc-benchmark`: per-class precision and recall with malicious recall first, confusion matrix, abstention rate, calibration with expected calibration error, hallucination rate, per-rule and per-source breakdowns, bootstrap confidence intervals, and no headline accuracy below 30 malicious cases.
 - [ ] **1.4 Surfaces.** CLI `aisoc replay`, async API job with tenant-scoped tables, the "Evaluate on your history" console page, and JSON, Markdown and PDF export.
@@ -277,6 +277,25 @@ as a number that was not measured.
 
 Nothing yet beyond this kickoff. Each entry below will name its PR.
 
-- [x] **Kickoff.** Locked plan saved verbatim to
-  `plans/aisoc_gap_closure_plan.plan.md`, this tracker created, hooks installed
-  via `scripts/setup_hooks.sh`, and the baseline above captured and recorded.
+- [x] **Kickoff.** [#901](https://github.com/beenuar/AiSOC/pull/901), merged.
+  Locked plan saved verbatim to `plans/aisoc_gap_closure_plan.plan.md`, this
+  tracker created, hooks installed via `scripts/setup_hooks.sh`, and the
+  baseline above captured and recorded.
+- [x] **Phase 1.1, history readers.**
+  [#902](https://github.com/beenuar/AiSOC/pull/902).
+
+### Notes for the next session
+
+Two traps this program hit that are worth not re-learning.
+
+**A gate run before `git add` reads a different tree than CI does.**
+`check_comment_paths.py` failed naming two comments that pointed at
+`apps/docs/docs/evaluation/replay.md`. The file existed. It was untracked, and
+the gate's corpus is `git ls-files`. Staging first made it pass. The same shape
+made a `ruff format --check` comparison against `main` look like `main` had two
+unformatted files: `git stash` leaves untracked files in place, so the "base"
+run was still seeing the new ones.
+
+**Backgrounding a long run kills it here.** The first baseline attempt was
+started with `nohup ... &` and was dead within a minute, having written 41
+progress dots. Long suites run in the foreground.

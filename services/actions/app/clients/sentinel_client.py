@@ -14,6 +14,7 @@ Credentials expected in ``ActionRequest.parameters``:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -83,6 +84,57 @@ class SentinelClient:
         response.raise_for_status()
         self._token = response.json()["access_token"]
         return self._token
+
+    def _incidents_url(self) -> str:
+        return (
+            f"{ARM_BASE}/subscriptions/{self._subscription_id}"
+            f"/resourceGroups/{self._resource_group}"
+            f"/providers/Microsoft.OperationalInsights/workspaces/{self._workspace_name}"
+            f"/providers/Microsoft.SecurityInsights/incidents"
+        )
+
+    async def list_closed_incidents(
+        self,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """List incidents an analyst closed in the window, with their classification.
+
+        Gap-closure Phase 1.1. ARM pages with ``nextLink``; the loop follows it
+        rather than reading only the first page, because a first-page-only read
+        would silently grade a customer on whichever incidents happened to sort
+        first and report the sample size as if it were the whole window.
+
+        The OData filter bounds the window server-side. ``Status eq 'Closed'``
+        is the only status that carries a classification, so an open incident
+        cannot enter the corpus.
+        """
+        results: list[dict[str, Any]] = []
+        url: str | None = self._incidents_url()
+        params: dict[str, Any] | None = {
+            "api-version": API_VERSION,
+            "$filter": (
+                f"properties/status eq 'Closed' and "
+                f"properties/lastModifiedTimeUtc ge {since.isoformat()} and "
+                f"properties/lastModifiedTimeUtc le {until.isoformat()}"
+            ),
+            "$orderby": "properties/lastModifiedTimeUtc asc",
+            "$top": min(limit, 200),
+        }
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            token = await self._access_token(client)
+            while url and len(results) < limit:
+                response = await client.get(url, headers={"Authorization": f"Bearer {token}"}, params=params)
+                response.raise_for_status()
+                body = response.json() if response.content else {}
+                results.extend(body.get("value") or [])
+                # nextLink carries its own query string; re-sending params
+                # would duplicate $filter and ARM rejects the request.
+                url = body.get("nextLink")
+                params = None
+        return results[:limit]
 
     async def get_incident(self, incident_id: str) -> dict[str, Any]:
         """Read one incident. Used as the writeback verification probe."""

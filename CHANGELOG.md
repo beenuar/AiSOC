@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Closed-finding history readers: the analyst labels a replay evaluation
+  grades against** (gap-closure Phase 1.1). AiSOC could already push a verdict
+  into somebody else's SIEM. It could not read back the findings a customer's
+  own analysts had already closed, so there was no way for an operator to
+  measure triage against their own decisions on their own data before being
+  asked to trust it. The published benchmark is substrate self-consistency on
+  a synthetic corpus, which answers a different question.
+
+  Five readers now list closed findings in a time window, each row carrying
+  the analyst's disposition, their reason, who closed it and when:
+  `SplunkClient.list_closed_notables`, `SentinelClient.list_closed_incidents`,
+  `ElasticClient.list_closed_signals`, `QRadarClient.list_closed_offenses` and
+  `DefenderClient.list_resolved_alerts`. They extend the clients in
+  `services/actions`, which already own the credential path and already hold
+  the writeback going the other way.
+
+  **The rule that carries the value is the refusal to guess.** Vendor labels
+  map to the canonical taxonomy in one place,
+  `app/services/alert_history.py`, rather than five places that could disagree
+  about what "benign positive" means. Anything outside that taxonomy becomes
+  `unlabeled` and is excluded from accuracy. That is not an edge case: Splunk
+  ES ships dispositions literally named "Other" and "Undetermined", and
+  Sentinel and Defender both ship an explicit `Undetermined` or `Unknown`
+  classification. An analyst who picked one of those said they did not know,
+  and folding it into `true_positive` because the finding happened to be
+  closed would manufacture agreement out of an admission of uncertainty.
+
+  Two vendor-specific decisions are worth stating rather than burying.
+  Elastic Security ships no disposition field at all: closing a signal records
+  no reason, so the honest reader returns `unlabeled` unless the deployment
+  has adopted a workflow tag, and the convention it reads is documented rather
+  than assumed. QRadar's "Non-Issue" maps to `benign` and not
+  `benign_true_positive`, because it makes no claim about whether the rule was
+  right, which is the distinction `benign` exists to carry.
+
+  **Measured:** 30 new tests drive each reader's real HTTP path against
+  vendor-shaped payloads with a mock transport, so a wrong endpoint, a wrong
+  filter or a parser that fails on the documented response shape is caught
+  here rather than on a customer's history. The `services/actions` suite goes
+  from 737 to 767 passing.
+
+  **Gate:** `ci.yml` actions job (`test_alert_history.py`), with a new
+  claim-to-gate row. The assertions that hold the claim are the negative ones:
+  every vendor's explicit "I do not know" is asserted to land on `unlabeled`,
+  two conflicting Elastic tags yield `unlabeled` rather than a coin flip, and
+  `unlabeled` is asserted not to be a member of `CANONICAL_DISPOSITIONS` so
+  nothing downstream can score it as a verdict. `ClosedFinding.__post_init__`
+  refuses a disposition that is neither canonical nor `unlabeled`, so a mapper
+  cannot introduce a third vocabulary. An unparseable close time raises rather
+  than defaulting to now, because a silently wrong close time would put a row
+  on the wrong side of the train/test split and leak the answer into its own
+  evaluation.
+
 ## [11.2.0] — 2026-09-26
 
 ### Added

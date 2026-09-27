@@ -13,6 +13,7 @@ Credentials expected in ActionRequest.parameters:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -92,6 +93,62 @@ class ElasticClient:
             hits = resp.json().get("hits", {}).get("hits", [])
             logger.info("elastic.dsl.complete", index=index, results=len(hits))
             return [h["_source"] for h in hits]
+
+    async def list_closed_signals(
+        self,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int = 1000,
+        index: str = ".alerts-security.alerts-*",
+    ) -> list[dict[str, Any]]:
+        """List detection signals an analyst closed in the window.
+
+        Gap-closure Phase 1.1.
+
+        Elastic ships no disposition field: closing a signal sets
+        ``kibana.alert.workflow_status`` to ``closed`` and records no reason.
+        So this reader returns the signals and
+        :func:`app.services.alert_history.map_elastic_disposition` reads the
+        deployment's workflow tags, yielding ``unlabeled`` when there are none.
+        That is the honest outcome for an untagged deployment, and the
+        alternative, inferring a disposition from the fact of closure, would
+        label every closed signal a true positive.
+
+        Unlike :meth:`run_dsl_search` this keeps the whole hit rather than
+        ``_source`` alone, because ``_id`` is the signal's identity and the
+        parser needs it.
+        """
+        body = {
+            "query": {
+                "bool": {
+                    "filter": [
+                        {"term": {"kibana.alert.workflow_status": "closed"}},
+                        {
+                            "range": {
+                                "@timestamp": {
+                                    "gte": since.isoformat(),
+                                    "lte": until.isoformat(),
+                                }
+                            }
+                        },
+                    ]
+                }
+            },
+            "size": limit,
+            "sort": [{"@timestamp": {"order": "asc"}}],
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self._es_url}/{index}/_search",
+                headers=self._es_headers(),
+                auth=self._auth(),  # type: ignore[arg-type]
+                json=body,
+            )
+            resp.raise_for_status()
+            hits = resp.json().get("hits", {}).get("hits", [])
+            logger.info("elastic.closed_signals", count=len(hits))
+            return list(hits)
 
     async def create_or_update_detection_rule(
         self,

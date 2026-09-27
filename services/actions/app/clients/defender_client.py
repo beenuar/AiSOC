@@ -11,6 +11,7 @@ Credentials expected in ActionRequest.parameters:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -52,6 +53,52 @@ class DefenderClient:
     async def _ensure_token(self, client: httpx.AsyncClient) -> None:
         if not self._token:
             await self._authenticate(client)
+
+    async def list_resolved_alerts(
+        self,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """List alerts an analyst resolved in the window, with their classification.
+
+        Gap-closure Phase 1.1.
+
+        Defender XDR separates two fields an evaluation must not conflate:
+        ``classification`` is the verdict (TruePositive,
+        InformationalExpectedActivity, FalsePositive, Unknown) and
+        ``determination`` is the reason (Malware, SecurityTesting, Phishing and
+        so on). Only the first maps to a disposition; the second is carried as
+        the analyst's reason. ``Unknown`` is a real choice in the product and
+        stays unlabeled.
+
+        ``@odata.nextLink`` is followed so a window larger than one page is
+        read whole rather than truncated to whatever sorted first.
+        """
+        results: list[dict[str, Any]] = []
+        url: str | None = f"{_MDE_BASE}/alerts"
+        params: dict[str, Any] | None = {
+            "$filter": (
+                f"status eq 'Resolved' and "
+                f"lastUpdateTime ge {since.strftime('%Y-%m-%dT%H:%M:%SZ')} and "
+                f"lastUpdateTime le {until.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            ),
+            "$orderby": "lastUpdateTime asc",
+            "$top": min(limit, 100),
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            while url and len(results) < limit:
+                resp = await client.get(url, headers=self._headers(), params=params)
+                resp.raise_for_status()
+                body = resp.json() if resp.content else {}
+                results.extend(body.get("value") or [])
+                # nextLink already carries the filter and the skip token.
+                url = body.get("@odata.nextLink")
+                params = None
+        logger.info("defender.resolved_alerts", count=len(results))
+        return results[:limit]
 
     async def find_machine(self, hostname: str) -> dict[str, Any] | None:
         """Look up a machine by hostname in Defender for Endpoint."""

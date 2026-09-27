@@ -13,6 +13,7 @@ Credentials expected in ActionRequest.parameters:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -100,6 +101,48 @@ class SplunkClient:
             results = data.get("results", [])
             logger.info("splunk.search.complete", sid=sid, result_count=len(results))
             return results
+
+    async def list_closed_notables(
+        self,
+        since: datetime,
+        until: datetime,
+        *,
+        limit: int = 1000,
+        search_override: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List notables an analyst closed in the window, with their disposition.
+
+        Gap-closure Phase 1.1: the read half of the writeback in
+        :mod:`app.services.disposition_writeback`, so replay evaluation can be
+        graded against the customer's own analysts.
+
+        ``status`` 5 and 6 are Splunk ES's Resolved and Closed. The ``notable``
+        macro is used rather than a literal ``index=notable`` because it is
+        what resolves the correct index on a customised install, and every ES
+        deployment ships it.
+
+        ``search_override`` exists because Enterprise Security is routinely
+        customised: a site with extra dispositions, a renamed status or its own
+        review lookup supplies its own SPL rather than being told its history
+        cannot be read. The fields the parser needs are documented in
+        `apps/docs/docs/evaluation/replay.md`.
+        """
+        spl = search_override or (
+            "`notable` | search status IN (5, 6) | fields event_id rule_id rule_name urgency disposition review_time reviewer comment _time"
+        )
+        rows = await self.run_search(
+            spl,
+            earliest_time=str(int(since.timestamp())),
+            latest_time=str(int(until.timestamp())),
+            max_count=limit,
+        )
+        logger.info(
+            "splunk.closed_notables",
+            count=len(rows),
+            since=since.isoformat(),
+            until=until.isoformat(),
+        )
+        return rows
 
     async def create_notable_event(
         self,

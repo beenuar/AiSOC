@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
         "benchmark",
         "benchmark-methodology",
         "benchmark-scoreboard",
+        "evaluation/replay",
       ],
     },
     {
