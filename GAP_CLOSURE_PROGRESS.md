@@ -261,7 +261,7 @@ the decomposition and what each link rests on are in D8 above.
 
 - [x] **2.1 Shadow mode**, per tenant and per alert class. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The seam is Phase 1.2's: `FusedAlertTriageWorker` already routes every write through the `TriageWriter` port, so shadow mode is a wrapper around the tenant's live sink rather than a second code path. Chosen per alert, not per worker, because the class is not known until the alert is in hand; the constructor sinks are untouched, which is what keeps the Phase 1.2 AST test true. Migration **066** adds `aisoc_shadow_mode` and `aisoc_shadow_decisions`. Analyst closures arrive from two places: a bounded sweep over closed alerts in this console, and the five Phase 1.1 SIEM readers polled back out of the customer's own product and matched on the vendor finding id. See D9 for the one property everything else rests on.
 - [x] **2.2 Rolling agreement** per alert class, rule, source and model, on the operations dashboard and the autonomy scorecard. Shipped in [#906](https://github.com/beenuar/AiSOC/pull/906). The metrics are Phase 1.3's and "uses the Phase 1 metrics" is now a gate rather than a sentence: `check_replay_contract_parity.py` went from three trees to four and compares `GRADED_DISPOSITIONS`, `ABSTENTION_VERDICTS`, `MALICIOUS` and `UNLABELED` in both directions, proven capable of failing by drifting each collection in turn. Agreement is computed over *answered* decisions only so abstaining cannot inflate it, malicious recall counts an abstention as a miss, a rate with no denominator reads "not measured", and every rate travels with its count. Matrix 156 rows to 159, GATED 148 to 151.
-- [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#907](https://github.com/beenuar/AiSOC/pull/907). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
+- [x] **2.3 Promotion gate**, with automatic demotion on drift and every transition written to the hash-chained audit log. Shipped in [#908](https://github.com/beenuar/AiSOC/pull/908). Migration **067** adds `aisoc_autonomy_grants`. The gate is pure and lives in the vendored rules module so `services/actions` enforces the same arithmetic at dispatch that `services/api` decides on at promotion time. Wired into all three modules the plan names: `unified_autonomy.unified_decision` gained an `earned_grant` argument that can only widen the reversible MEDIUM-blast branch, `tenant_policy.TenantPolicy` carries the earned verbs and never issues one, and `autonomy_policy.py` gained `GET`/`POST`/`DELETE /grants`. The dispatcher was also wired, because `unified_decision` turned out to have no production caller at all (see D12). The "Done when" runs against a real Postgres in `integration.yml`. See D13 for why the ceiling stops at L3.
 
 **Done when:** on recorded data, a test tenant cannot enable auto-close for a
 class with 20 shadow decisions, can once the thresholds are met, and is demoted
@@ -398,6 +398,16 @@ Nothing yet beyond this kickoff. Each entry below will name its PR.
   [#904](https://github.com/beenuar/AiSOC/pull/904). Suites: `services/agents`
   1252 to 1280, `packages/aisoc-benchmark` 35 to 57, `services/connectors` 880
   to 886. Every other suite unchanged and passing.
+- [x] **Phase 2.1 shadow mode and 2.2 rolling agreement.**
+  [#906](https://github.com/beenuar/AiSOC/pull/906). Migration 066. Suites:
+  `services/agents` 1293 to 1311, `services/actions` 767 to 801, `services/api`
+  2852 to 2872, `apps/web` settings vitest 9 to 15. Claim matrix 156 rows to
+  159, GATED 148 to 151.
+- [x] **Phase 2.3 evidence-gated autonomy.**
+  [#908](https://github.com/beenuar/AiSOC/pull/908). Migration 067. Suites:
+  `services/actions` 801 to 835, `apps/web` settings vitest 32 to 36, and
+  `tests/isolation/test_autonomy_promotion_live.py` 13 passing against live
+  `postgres:16`. Claim matrix 159 rows to 164, GATED 151 to 156.
 
 ### D9. A shadow verdict must not reach `alerts.disposition`, and the guard belongs in the SQL
 
