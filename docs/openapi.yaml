@@ -3957,6 +3957,111 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/agent-tools/backends:
+    get:
+      tags:
+      - agent-tools
+      summary: Which agent tools this tenant has a backend for
+      description: 'Enumerate what can be asked, so nothing else is advertised.
+
+
+        ``registry_reachable`` is part of the contract. A caller that reads an
+
+        unreachable action registry as "this tenant has no vendor tools" will
+
+        bind a smaller toolset and then investigate confidently without it, which
+
+        is the worst of the three outcomes. Reported as unknown instead.'
+      operationId: list_backends_api_v1_agent_tools_backends_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Backends Api V1 Agent Tools Backends Get
+      security:
+      - HTTPBearer: []
+  /api/v1/agent-tools/siem-search:
+    post:
+      tags:
+      - agent-tools
+      summary: Search every configured SIEM for one indicator
+      description: 'Run one typed indicator search across the tenant''s SIEMs.
+
+
+        The response separates three facts that an agent must not conflate: rows
+
+        that matched, sources that answered, and sources that could not be
+
+        searched. ``outcome`` is the single field a caller branches on.'
+      operationId: search_siem_api_v1_agent_tools_siem_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiemSearchRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Search Siem Api V1 Agent Tools Siem Search Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/agent-tools/vendor-read:
+    post:
+      tags:
+      - agent-tools
+      summary: Run one read-only vendor verb
+      description: 'Dispatch one read verb, under the capability contract.
+
+
+        Refusals are 422 rather than a result with ``executed: false``, so a
+
+        caller cannot mistake "this verb is not allowed here" for "the vendor had
+
+        nothing". The one thing that is *not* a refusal is a vendor failure: that
+
+        comes back 200 with ``executed: false`` and a reason, because the caller
+
+        has to render it to a model as "could not check".'
+      operationId: vendor_read_api_v1_agent_tools_vendor_read_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorReadRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Vendor Read Api V1 Agent Tools Vendor Read Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/graph:
     get:
       tags:
@@ -28683,6 +28788,46 @@ components:
       - alerts_handled
       - escalations
       title: ShiftSummary
+    SiemSearchRequest:
+      properties:
+        indicator_type:
+          type: string
+          title: Indicator Type
+          description: One of the types GET /agent-tools/backends publishes.
+        value:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Value
+        since_hours:
+          type: integer
+          maximum: 168.0
+          minimum: 1.0
+          title: Since Hours
+          default: 24
+        limit:
+          type: integer
+          maximum: 40.0
+          minimum: 1.0
+          title: Limit
+          default: 40
+      type: object
+      required:
+      - indicator_type
+      - value
+      title: SiemSearchRequest
+      description: 'A structured query. Deliberately not a query.
+
+
+        There is no ``query`` field, no ``free_text`` field and no ``field``
+
+        field, and their absence is the contract rather than an omission.
+
+        ``indicator_type`` is validated against a closed set and ``value``
+
+        against the shape that type requires, so a model cannot pass query text
+
+        by claiming it is an indicator.'
     SourceLinkResponse:
       properties:
         vendor:
@@ -31191,6 +31336,42 @@ components:
       - msg
       - type
       title: ValidationError
+    VendorReadRequest:
+      properties:
+        capability:
+          type: string
+          title: Capability
+        target:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Target
+        vendor:
+          type: string
+          maxLength: 64
+          title: Vendor
+          default: ''
+        params:
+          additionalProperties: true
+          type: object
+          title: Params
+      type: object
+      required:
+      - capability
+      - target
+      title: VendorReadRequest
+      description: 'One read-only verb against one entity.
+
+
+        ``params`` is filtered against a per-verb allowlist before it travels,
+
+        because by the time it reaches the actions service it is the same
+
+        dictionary that carries the decrypted credential. An unfiltered
+
+        pass-through would let a caller supply their own vendor credential and
+
+        have the read run somewhere else entirely.'
     VulnerabilityCreate:
       properties:
         asset_id:
