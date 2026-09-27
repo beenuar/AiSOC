@@ -31,11 +31,9 @@ from typing import Any
 import httpx
 import structlog
 
-from app.tools.registry import Tool
-
 logger = structlog.get_logger()
 
-__all__ = ["lookup_file_hash", "sandbox_tools"]
+__all__ = ["TOOL_DESCRIPTION", "TOOL_NAME", "TOOL_PARAMETERS", "lookup_file_hash"]
 
 #: A hash lookup is a single indexed read at every provider in the tree, but it
 #: may cross the public internet. Short enough that a stalled provider cannot
@@ -162,27 +160,28 @@ async def lookup_file_hash(sha256: str) -> dict[str, Any]:
     }
 
 
-def sandbox_tools() -> list[Tool]:
-    """The file-analysis tools, for :func:`app.tools.registry.default_registry`."""
-    return [
-        Tool(
-            name="lookup_file_hash",
-            description=(
-                "Check whether a configured malware-analysis provider has already analysed a file, by its "
-                "SHA-256 hash. Returns a verdict, score, signatures and any ATT&CK techniques when a report "
-                "exists. Never uploads the file. An unknown hash is not a clean verdict, and a failed lookup "
-                "is not a clean verdict either: check the 'outcome' field."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "sha256": {
-                        "type": "string",
-                        "description": "The file's SHA-256 digest, 64 hexadecimal characters.",
-                    }
-                },
-                "required": ["sha256"],
-            },
-            fn=lambda sha256: lookup_file_hash(sha256),
-        )
-    ]
+# The registry wraps these into its own ``Tool`` rather than this module
+# importing that dataclass. The import would run tool module -> registry while
+# ``default_registry`` already runs registry -> tool module, and a cycle that
+# happens to work because one side defers its import is still a cycle. Keeping
+# the schema here as plain data also means a tool module knows nothing about
+# how tools are registered.
+TOOL_NAME = "lookup_file_hash"
+
+TOOL_DESCRIPTION = (
+    "Check whether a configured malware-analysis provider has already analysed a file, by its "
+    "SHA-256 hash. Returns a verdict, score, signatures and any ATT&CK techniques when a report "
+    "exists. Never uploads the file. An unknown hash is not a clean verdict, and a failed lookup "
+    "is not a clean verdict either: check the 'outcome' field."
+)
+
+TOOL_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "sha256": {
+            "type": "string",
+            "description": "The file's SHA-256 digest, 64 hexadecimal characters.",
+        }
+    },
+    "required": ["sha256"],
+}

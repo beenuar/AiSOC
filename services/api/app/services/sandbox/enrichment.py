@@ -18,13 +18,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-import structlog
-
 from app.services.sandbox.registry import SandboxRegistry, build_registry
 from app.services.sandbox.service import lookup_hash
 from app.services.sandbox.types import SandboxVerdict, Unavailable, is_available
-
-log = structlog.get_logger(__name__)
 
 __all__ = ["enrich_file_hash", "enrich_file_hashes"]
 

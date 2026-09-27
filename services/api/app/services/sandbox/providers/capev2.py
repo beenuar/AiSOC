@@ -33,7 +33,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-import structlog
 
 from app.services.sandbox.base import SandboxProvider, as_mapping, guard_outbound_url
 from app.services.sandbox.types import (
@@ -48,8 +47,6 @@ from app.services.sandbox.types import (
     Signature,
     SubmissionReceipt,
 )
-
-log = structlog.get_logger(__name__)
 
 __all__ = ["CapeV2Provider"]
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import httpx
 import pytest
 from app.tools.registry import default_registry
-from app.tools.sandbox import lookup_file_hash, sandbox_tools
+from app.tools.sandbox import TOOL_DESCRIPTION, TOOL_PARAMETERS, lookup_file_hash
 
 DIGEST = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
 
@@ -119,10 +119,10 @@ class TestToolSurface:
             assert forbidden not in names
 
     async def test_the_tool_takes_a_hash_and_nothing_else(self) -> None:
-        schema = sandbox_tools()[0].openai_schema()["function"]["parameters"]
-        assert list(schema["properties"]) == ["sha256"]
+        assert list(TOOL_PARAMETERS["properties"]) == ["sha256"]
+        assert TOOL_PARAMETERS["required"] == ["sha256"]
 
     async def test_the_description_warns_the_model_about_both_negatives(self) -> None:
-        description = sandbox_tools()[0].description.lower()
+        description = TOOL_DESCRIPTION.lower()
         assert "never uploads" in description
         assert "unknown hash is not a clean verdict" in description
