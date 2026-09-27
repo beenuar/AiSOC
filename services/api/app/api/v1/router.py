@@ -70,6 +70,7 @@ from app.api.v1.endpoints import (
     report_builder,
     reports,
     rule_tuning,
+    sandbox,
     saved_hunts,
     saved_views,
     shifts,
@@ -239,6 +240,11 @@ api_router.include_router(saved_hunts.router)
 
 # Email-security + phishing-triage workflow (Tier 3)
 api_router.include_router(phishing.router)
+
+# File + URL analysis behind one provider contract. Hash lookup is always
+# allowed; uploading a customer file is off by default, per tenant per
+# provider, and air-gapped mode permits local providers only.
+api_router.include_router(sandbox.router)
 
 # Knowledge-base + RAG over org docs/runbooks (Tier 3)
 api_router.include_router(knowledge_base.router)

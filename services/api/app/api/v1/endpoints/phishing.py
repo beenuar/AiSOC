@@ -29,6 +29,7 @@ from app.api.v1.deps import AuthUser, DBSession
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
+from app.services.sandbox.enrichment import enrich_file_hash
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,15 @@ class SubmitRequest(BaseModel):
     sender: str | None = None
     subject: str | None = None
     urls: list[str] = Field(default_factory=list)
+    attachment_hashes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "SHA-256 digests of the message's attachments. Digests only: the attachment itself is never "
+            "accepted here, because this route runs unattended on submitted mail and an unattended path "
+            "that can upload is one misconfiguration away from disclosing every attachment a tenant receives. "
+            "To have a file analysed, POST it to /sandbox/files, which enforces the tenant's upload policy."
+        ),
+    )
 
 
 class TriageResult(BaseModel):
@@ -168,6 +178,76 @@ def _heuristic_triage(content: str | None, urls: list[str]) -> TriageResult:
     )
 
 
+async def _attachment_indicators(hashes: list[str]) -> list[dict[str, Any]]:
+    """Look each attachment digest up through the sandbox provider contract.
+
+    Hash lookup only, and never an upload: see ``attachment_hashes`` above.
+
+    A provider that could not be reached produces an indicator saying so rather
+    than nothing. The distinction matters most here, because an analyst reading
+    a phishing verdict with no attachment indicator would otherwise conclude
+    the attachments were checked and found clean.
+    """
+    indicators: list[dict[str, Any]] = []
+    for digest in hashes[:10]:
+        try:
+            block = (await enrich_file_hash(digest)).get("file_analysis") or {}
+        except Exception:  # noqa: BLE001 - a sandbox outage must not fail triage
+            logger.warning("phishing.attachment_lookup_failed hash=%s", str(digest)[:64].replace("\n", " "))
+            indicators.append({"kind": "hash", "value": digest, "note": "attachment could not be checked: analysis provider unavailable"})
+            continue
+        if not block:
+            continue
+        for unchecked in block.get("could_not_check") or []:
+            indicators.append(
+                {
+                    "kind": "hash",
+                    "value": digest,
+                    "note": f"could not be checked by {unchecked.get('provider')}: not a clean result",
+                }
+            )
+        for finding in block.get("findings") or []:
+            indicators.append(
+                {
+                    "kind": "hash",
+                    "value": digest,
+                    "note": f"{finding.get('provider')} verdict: {finding.get('verdict')}",
+                    "score": finding.get("score"),
+                    "attack_techniques": finding.get("attack_techniques"),
+                }
+            )
+    return indicators
+
+
+def _merge_attachment_verdict(result: TriageResult, indicators: list[dict[str, Any]]) -> TriageResult:
+    """Fold attachment findings into the triage result.
+
+    A malicious attachment raises the verdict to ``malware`` and the confidence
+    floor, because a sandbox verdict on the file itself is stronger evidence
+    than any amount of keyword matching on the body. A verdict is never lowered
+    here: an attachment nothing recognised says nothing about the message.
+    """
+    if not indicators:
+        return result
+    merged = [*result.indicators, *indicators]
+    malicious = any("verdict: malicious" in str(i.get("note", "")) for i in indicators)
+    if malicious:
+        return TriageResult(
+            verdict="malware",
+            confidence=max(result.confidence, 0.9),
+            indicators=merged,
+            mitre_technique=result.mitre_technique or "T1566.001",
+            summary=f"{result.summary} An attachment was identified as malicious by file analysis.".strip(),
+        )
+    return TriageResult(
+        verdict=result.verdict,
+        confidence=result.confidence,
+        indicators=merged,
+        mitre_technique=result.mitre_technique,
+        summary=result.summary,
+    )
+
+
 def _row_to_submission(row: Any) -> SubmissionResponse:
     return SubmissionResponse(
         id=row.id,
@@ -204,6 +284,7 @@ async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> Submissi
         result = None
     if not result:
         result = _heuristic_triage(body.raw_content, body.urls)
+    result = _merge_attachment_verdict(result, await _attachment_indicators(body.attachment_hashes))
 
     now = datetime.now(UTC)
     sub_id = uuid.uuid4()
@@ -298,6 +379,12 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
         result = None
     if not result:
         result = _heuristic_triage(existing.raw_content, list(existing.urls or []))
+    # Re-run the attachment lookups too: a retriage exists because something
+    # changed, and a provider that had never seen the file may have now.
+    prior_hashes = [
+        str(i.get("value")) for i in (existing.indicators or []) if isinstance(i, dict) and i.get("kind") == "hash" and i.get("value")
+    ]
+    result = _merge_attachment_verdict(result, await _attachment_indicators(list(dict.fromkeys(prior_hashes))))
 
     now = datetime.now(UTC)
     q = text("""

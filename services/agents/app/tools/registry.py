@@ -72,9 +72,11 @@ def default_registry() -> ToolRegistry:
     """Registry of AiSOC's real analyst tools, wrapped for LLM tool-calling."""
     from app.investigator.tools import enrich_ioc, extract_iocs, map_to_mitre
     from app.tools.mitre import lookup_technique
+    from app.tools.sandbox import sandbox_tools
 
     return ToolRegistry(
         [
+            *sandbox_tools(),
             Tool(
                 name="extract_iocs",
                 description="Extract IOCs (IPs, domains, hashes, URLs) from free text.",

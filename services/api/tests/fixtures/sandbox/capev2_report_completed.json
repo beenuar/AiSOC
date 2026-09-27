@@ -1,0 +1,54 @@
+{
+  "_synthetic": "Hand-written from the documented CAPEv2 report schema. Unverified against a live instance.",
+  "info": {
+    "id": 4211,
+    "started": "2026-09-20T11:04:08",
+    "ended": "2026-09-20T11:09:55"
+  },
+  "target": {
+    "file": {
+      "name": "invoice.doc",
+      "type": "Composite Document File V2",
+      "sha256": "9f2c1b7e4a6d8053f1e2c3b4a5968770d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60"
+    }
+  },
+  "malscore": 8.4,
+  "signatures": [
+    {
+      "name": "office_macro_autoexec",
+      "description": "Document runs a macro on open",
+      "severity": 3,
+      "confidence": 90,
+      "ttp": [
+        "T1204.002"
+      ]
+    },
+    {
+      "name": "injection_createremotethread",
+      "description": "Injects into a remote process",
+      "severity": 3,
+      "confidence": 80,
+      "ttp": [
+        "T1055"
+      ]
+    }
+  ],
+  "network": {
+    "domains": [
+      {
+        "domain": "payload.example.net",
+        "ip": "203.0.113.24"
+      }
+    ],
+    "hosts": [
+      {
+        "ip": "203.0.113.24"
+      }
+    ],
+    "http": [
+      {
+        "uri": "http://payload.example.net/stage2.bin"
+      }
+    ]
+  }
+}

@@ -348,6 +348,20 @@ jobs:
         run: python scripts/check_mock_data_gated.py --self-test
       - name: Verify sample data is gated behind demo mode
         run: python scripts/check_mock_data_gated.py
+      # Sending a customer file to a third party is a disclosure, and for the
+      # first commercial provider wired here it is a disclosure to the public
+      # internet: a stored report carries `visibility: "public"` and
+      # `tlp: "clear"`. Every property that keeps that deliberate is invisible
+      # in a diff that breaks it: a dataclass default flipping to True, a
+      # reordered branch that consults consent before the hash lookup, an
+      # exception handler that turns a provider outage into an empty report.
+      # Self-test first: the gate is driven over an injected violation of each
+      # rule and over a tree with no content, because a gate that cannot fail
+      # is indistinguishable from no gate.
+      - name: Sandbox upload policy self-test
+        run: python scripts/check_sandbox_upload_policy.py --self-test
+      - name: Verify file uploads stay off by default and failures stay failures
+        run: python scripts/check_sandbox_upload_policy.py
       # The check above recognises the *shapes* that carried fabricated data:
       # a bare mock in `fallbackData`, a mock through a state setter, a mock
       # behind `??`. Each was added after a specific escape, so each knows only

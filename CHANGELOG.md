@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+<<<<<<< HEAD
 - **Closed-finding history readers: the analyst labels a replay evaluation
   grades against** (gap-closure Phase 1.1). AiSOC could already push a verdict
   into somebody else's SIEM. It could not read back the findings a customer's
@@ -61,6 +62,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than defaulting to now, because a silently wrong close time would put a row
   on the wrong side of the train/test split and leak the answer into its own
   evaluation.
+=======
+- **File and URL analysis behind one provider contract, with uploading a
+  customer file off by default.** AiSOC could enrich an IP, a domain and a URL
+  and had nothing at all for a file hash: `services/enrichment` fans out to
+  five threat-intel providers, none of which analyses a file, and the phishing
+  triage route read an attachment's name and never its contents. The gap was
+  measured by reading the tree, not estimated: no module under `services/`
+  contained the words sandbox, detonation or CAPE in an executable sense, and
+  `AlertEnricher._IOC_FIELDS` mapped `file_hash` to the same generic lookup as
+  an IP.
+
+  `SandboxProvider` covers hash lookup, file submission, URL submission,
+  polling and a report. The interface owns the vocabulary (a verdict, a score
+  0-100, signatures, IOCs and an ATT&CK mapping) and each provider maps its
+  own payload onto it, so the first adapter wired does not become the de-facto
+  schema. Three ship: **CAPEv2** as the open-source reference, which runs on
+  the operator's own network and is therefore the one that survives air-gapped
+  mode; a **mock** that analyses nothing and knows nothing until a test seeds
+  it; and **MalwareAnalyzer** as the first commercial adapter.
+
+  **Absent is not zero, and this is the field that proved it necessary.** A
+  recorded MalwareAnalyzer report carries `attackTechniques: []` beside
+  `behavior.analyzed: false`. The list is empty because the file type could
+  not be identified and no guest was ever chosen, not because the sample
+  exhibits no techniques. An `UNAVAILABLE` sentinel keeps "the provider does
+  not compute this" distinct from "the provider computed it and found none",
+  and the report carries the stage's own reason so an analyst asking why a
+  section is blank gets an answer instead of a guess. A missing score reads
+  `unavailable`, never `0`.
+
+  **Uploading is a disclosure and is modelled as a decision.** Hash lookup runs
+  first, always, because a digest discloses nothing and a hit means the upload
+  is unnecessary rather than forbidden. Uploading is then off by default, per
+  tenant *and* per provider, since consenting to a sandbox in your own rack says
+  nothing about a hosted service. It is recorded with who agreed and which version
+  of the disclosure text they saw, and refused outright in air-gapped mode for
+  any provider that is not local. Migration `064` adds both tables with
+  row-level security, the fail-open arm the cross-tenant workers need, and
+  `aisoc_app` grants. Refusals are logged as well as uploads, because "nothing
+  was uploaded, the hash was already known" and "nothing was uploaded, this
+  tenant has not consented" are the two answers an operator actually needs.
+
+  **The consent text says `public` because the service does.** A stored
+  MalwareAnalyzer report carries `visibility: "public"` and `tlp: "clear"`, so
+  an upload there is a disclosure to the internet rather than to a vendor. The
+  operator-facing text says so in those words. The vendor's own web client
+  sends a `visibility` field and offers `private`, but pins `public` and
+  disables the control without a signed-in account, so AiSOC requests the
+  configured visibility and keeps describing the outcome as public until an
+  operator sets `MALWAREANALYZER_PRIVATE_SUBMISSIONS_CONFIRMED=1`. A key alone
+  does not flip that wording: an unverified assumption must not rewrite the
+  sentence somebody agrees to before disclosing a customer file.
+
+  **Authentication is supported and labelled unverified, because it could not
+  be determined.** The service publishes "No API key required" and every call
+  works without one. There is an authenticated surface, and the vendor's client
+  sends `Authorization: Bearer`, which is why that is the default here. But a
+  bogus `Bearer` and a bogus `x-api-key` produce byte-identical `401`s and the
+  CORS preflight reflects any header asked for, so neither confirms the scheme
+  for a minted key. The header name and prefix are configurable, no key is
+  required, and the provider reports `authentication_is_verified = False` so
+  the settings surface shows a caveat rather than a tick nobody earned.
+
+  **A failure reaches the model as "could not check".** A provider that times
+  out, refuses authentication or returns something unparseable produces
+  `outcome: could_not_check` with the reason attached and no report at all. A
+  pending analysis is equally distinct from a clean one. The agent gets one
+  tool, `lookup_file_hash`, which cannot upload: an upload is governed by a
+  consent an operator recorded deliberately, and that decision does not belong
+  behind a sentence a model chose to emit.
+
+  Wired into file-hash enrichment, into `POST /phishing/submit` via
+  `attachment_hashes` (digests only, for the same reason), and into the agent
+  tool registry.
+
+  Gated by `scripts/check_sandbox_upload_policy.py` in `ci.yml`, which drives
+  the real policy over all 24 combinations of provider class, air-gap, consent
+  and hash-known, requires air-gap and a known hash to each outrank consent,
+  and reads the AST for the three shapes that would make those runtime checks
+  vacuous: a consent-shaped flag defaulting to `True`, `evaluate_upload` called
+  before `lookup_hash`, and an `except` block constructing a report. It was
+  proven against an injected violation of each rule rather than only against
+  the tree that satisfies them, and it refuses a tree with no content.
+
+  No file was uploaded to any third party while building this. The recorded
+  fixture is a GET by hash for the published EICAR test file; every
+  submit and poll fixture is hand-written and labelled as such.
+>>>>>>> c51f197b (feat(sandbox): file and URL analysis behind one provider contract)
 
 ## [11.2.0] — 2026-09-26
 

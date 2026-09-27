@@ -188,6 +188,7 @@ const sidebars: SidebarsConfig = {
         "operations/ingest-authentication",
         "operations/airgap",
         "operations/air-gapped",
+        "operations/sandbox-providers",
         "operations/llm-gateway",
         "operations/llm-cost",
         "operations/codespaces",

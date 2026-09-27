@@ -1,0 +1,10 @@
+{
+  "_synthetic": "Hand-written from the documented CAPEv2 task-view schema.",
+  "error": false,
+  "data": {
+    "task": {
+      "id": 4212,
+      "status": "running"
+    }
+  }
+}
