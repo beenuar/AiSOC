@@ -823,7 +823,14 @@ jobs:
   chart-publish:
     name: Helm - publish the chart
     runs-on: ubuntu-latest
-    needs: release
+    # `docker-manifest` as well as `release`, because a step below runs
+    # check_published_images against the registry and the chart's appVersion
+    # names the tag being published *by* docker-manifest. Needing only
+    # `release` let this job start while the manifests were still pushing, so
+    # it asked GHCR for images that did not exist yet: on v12.0.0 it failed
+    # with 17 image-missing findings and then passed unchanged on a re-run.
+    # The gate was right both times; the ordering was not.
+    needs: [release, docker-manifest]
     if: always() && (github.event_name == 'push' || needs.release.result == 'success')
     timeout-minutes: 15
     permissions:
