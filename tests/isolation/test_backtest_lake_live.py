@@ -77,7 +77,7 @@ import types
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 
@@ -247,15 +247,32 @@ def _ocsf_event(*, label: str, tenant: uuid.UUID, age: timedelta, connector: str
     }
 
 
+def _unavailable(detail: str) -> NoReturn:
+    """Name what is missing, and decide whether missing is allowed.
+
+    One helper so the skip reason and the required-mode failure can never
+    drift apart or describe different things.
+    """
+    if REQUIRED:
+        pytest.fail(f"BACKTEST_LAKE_LIVE_REQUIRED is set and {detail}")
+    pytest.skip(detail)
+
+
 @pytest.fixture(scope="module")
 def clickhouse_client() -> Any:
-    """A live warehouse, or a named skip — never a silent one."""
-    try:
-        import clickhouse_driver  # noqa: PLC0415 - soft dependency; absence is a skip, not an import error
-    except ImportError:  # pragma: no cover - environment-specific
-        if REQUIRED:
-            pytest.fail("BACKTEST_LAKE_LIVE_REQUIRED is set but clickhouse-driver is not installed")
-        pytest.skip("clickhouse-driver not installed")
+    """A live warehouse, or a named skip — never a silent one.
+
+    The driver is probed with ``find_spec`` and then imported
+    unconditionally, rather than imported inside a ``try``. Both forms work;
+    this one also keeps the binding provably defined on the path that uses
+    it, which the ``try`` form did not — ``pytest.skip`` ends the test but is
+    not a return, so static analysis read the client construction below as
+    reachable with the module unbound.
+    """
+    if importlib.util.find_spec("clickhouse_driver") is None:  # pragma: no cover - environment-specific
+        _unavailable("clickhouse-driver is not installed")
+
+    import clickhouse_driver  # noqa: PLC0415 - soft dependency, probed on the line above
 
     try:
         client = clickhouse_driver.Client(
@@ -266,20 +283,21 @@ def clickhouse_client() -> Any:
             connect_timeout=5,
         )
         client.execute("SELECT 1")
-    except Exception as exc:  # noqa: BLE001 - absence is a skip unless it is required
-        detail = f"no ClickHouse at {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT} ({type(exc).__name__}: {exc})"
-        if REQUIRED:
-            pytest.fail(f"BACKTEST_LAKE_LIVE_REQUIRED is set and {detail}")
-        pytest.skip(detail)
+    except Exception as exc:  # noqa: BLE001 - absence is a skip unless the job requires the store
+        _unavailable(f"no ClickHouse at {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT} ({type(exc).__name__}: {exc})")
+        raise exc from None  # unreachable: `_unavailable` always raises
     return client
 
 
 @pytest.fixture(scope="module")
-def seeded_lake(clickhouse_client: Any) -> Any:
+def seeded_lake(clickhouse_client: Any, api_modules: Any) -> Any:
     """A real lake holding rows the production writer produced.
 
     Both tenants are seeded at every age, so a scoped read of A can be
     compared against an unscoped read that sees B.
+
+    Every test that reads the lake requests this, which is how they all get
+    ``api_modules`` without it having to be autouse.
     """
     lake_writer = _load_by_path("services/fusion/app/services/lake_writer.py", "_aisoc_backtest_lake_writer")
 
@@ -314,15 +332,23 @@ def seeded_lake(clickhouse_client: Any) -> Any:
     client.execute("DROP TABLE IF EXISTS aisoc.raw_events")
 
 
-@pytest.fixture(scope="module", autouse=True)
-def api_modules() -> Any:
+@pytest.fixture(scope="module")
+def api_modules(clickhouse_client: Any) -> Any:
     """Register the API service's ``app`` tree, then hand the name back.
 
-    Autouse and module-scoped because the two lazy imports inside
-    ``fetch_lake_events`` resolve at call time, so the registration has to
-    outlive module import and still be gone before the next file runs. Names
-    that were already taken are saved and restored rather than overwritten,
-    so this works whichever service loaded ``app`` first.
+    Module-scoped because the two lazy imports inside ``fetch_lake_events``
+    resolve at call time, so the registration has to outlive module import and
+    still be gone before the next file runs. Names that were already taken are
+    saved and restored rather than overwritten, so this works whichever
+    service loaded ``app`` first.
+
+    It takes ``clickhouse_client`` so the skip is decided before any of this
+    is imported. ``isolation.yml`` runs this whole directory offline with only
+    ``qdrant-client structlog pytest pytest-asyncio`` installed, and an
+    autouse version of this fixture turned that job's clean skip into
+    ``ModuleNotFoundError: No module named 'pydantic_settings'`` on thirteen
+    tests — a live-store test has to be absent-tolerant in the same job the
+    rest of the directory is.
     """
     installed: list[str] = []
     saved = {name: sys.modules[name] for name, _rel in API_MODULES if name in sys.modules}
@@ -340,7 +366,13 @@ def api_modules() -> Any:
             # find their siblings, and so `@dataclass` can resolve annotations.
             sys.modules[dotted] = module
             installed.append(dotted)
-            spec.loader.exec_module(module)
+            try:
+                spec.loader.exec_module(module)
+            except ImportError as exc:
+                # A dependency of the service, not of the test. Named either
+                # way: skipped where the warehouse is optional, failed where
+                # the job declares it is not.
+                _unavailable(f"{rel} needs a dependency this environment lacks ({exc})")
         yield sys.modules["app.services.backtest"]
     finally:
         for name in reversed(installed):
