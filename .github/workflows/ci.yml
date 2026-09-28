@@ -570,6 +570,20 @@ jobs:
         run: python3 scripts/check_replay_contract_parity.py --self-test
       - name: Replay contract parity gate
         run: python3 scripts/check_replay_contract_parity.py
+      # The three sdk-* jobs below compile and test each SDK in isolation, and
+      # none of them compares a client to the API it claims to speak to.
+      # packages/sdk-go passed all three over a file of type declarations with
+      # no functions and no net/http, under a first line calling itself a
+      # client; packages/sdk-ts declared a codegen script writing an
+      # src/openapi.d.ts that did not exist, cited by two comments as the
+      # reason to trust the hand-written types. Writing this found four
+      # operations both clients called that the API does not serve — two of
+      # them pinned by tests that mock the transport, which answers whatever
+      # the client asks.
+      - name: SDK surface gate — self-test
+        run: python3 scripts/check_sdk_surface.py --self-test
+      - name: SDK surface gate
+        run: python3 scripts/check_sdk_surface.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector

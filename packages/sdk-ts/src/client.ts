@@ -90,7 +90,7 @@ class ResourceClient {
   ) {}
 
   protected async request<T>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
     query?: Record<string, unknown>,
@@ -152,18 +152,21 @@ class CasesClient extends ResourceClient {
     return this.request<Case>("PATCH", `/api/v1/cases/${id}`, data);
   }
 
-  async delete(id: string): Promise<void> {
-    return this.request<void>("DELETE", `/api/v1/cases/${id}`);
-  }
+  // There is no `delete`. The API serves no DELETE on a case — a case is
+  // closed by patching its status, and the method that used to be here
+  // called a route `services/api` has never declared.
 }
 
 class DetectionsClient extends ResourceClient {
+  // The route is `/detection/rules`, singular, and this client asked for
+  // `/detections` — so every method here answered 404 against a real
+  // deployment while its mocked test passed.
   async list(params?: PaginationParams): Promise<Page<DetectionRule>> {
-    return this.request<Page<DetectionRule>>("GET", "/api/v1/detections", undefined, params as Record<string, unknown>);
+    return this.request<Page<DetectionRule>>("GET", "/api/v1/detection/rules", undefined, params as Record<string, unknown>);
   }
 
   async get(id: string): Promise<DetectionRule> {
-    return this.request<DetectionRule>("GET", `/api/v1/detections/${id}`);
+    return this.request<DetectionRule>("GET", `/api/v1/detection/rules/${id}`);
   }
 }
 
@@ -190,8 +193,10 @@ class PlaybooksClient extends ResourceClient {
     return this.request<Playbook>("POST", "/api/v1/playbooks", data);
   }
 
+  // PUT, not PATCH: `playbooks.py` declares `@router.put("/{playbook_id}")`
+  // and no patch route, so the previous verb returned 405.
   async update(id: string, data: Partial<Playbook>): Promise<Playbook> {
-    return this.request<Playbook>("PATCH", `/api/v1/playbooks/${id}`, data);
+    return this.request<Playbook>("PUT", `/api/v1/playbooks/${id}`, data);
   }
 
   async delete(id: string): Promise<void> {

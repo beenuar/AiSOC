@@ -78,6 +78,13 @@ class _ResourceClient:
             return TypeAdapter(model).validate_python(r.json())
         return r.json()
 
+    async def _put(self, path: str, body: Any, model: Optional[Type[T]] = None) -> Any:
+        r = await self._http.put(path, json=body)
+        self._raise(r)
+        if model is not None:
+            return TypeAdapter(model).validate_python(r.json())
+        return r.json()
+
     async def _delete(self, path: str) -> None:
         r = await self._http.delete(path)
         self._raise(r)
@@ -127,18 +134,22 @@ class CasesClient(_ResourceClient):
     async def update(self, case_id: str, **data: Any) -> Case:
         return await self._patch(f"/api/v1/cases/{case_id}", data, Case)
 
-    async def delete(self, case_id: str) -> None:
-        return await self._delete(f"/api/v1/cases/{case_id}")
+    # There is no `delete`. The API serves no DELETE on a case — a case is
+    # closed by patching its status, and the method that used to be here
+    # called a route `services/api` has never declared.
 
 
 class DetectionsClient(_ResourceClient):
+    # The route is `/detection/rules`, singular, and this client asked for
+    # `/detections` — so every method here answered 404 against a real
+    # deployment while its mocked test passed.
     async def list(self, page: int = 1, page_size: int = 20) -> Page[DetectionRule]:
         return await self._get(
-            "/api/v1/detections", {"page": page, "page_size": page_size}, Page[DetectionRule]
+            "/api/v1/detection/rules", {"page": page, "page_size": page_size}, Page[DetectionRule]
         )
 
     async def get(self, rule_id: str) -> DetectionRule:
-        return await self._get(f"/api/v1/detections/{rule_id}", model=DetectionRule)
+        return await self._get(f"/api/v1/detection/rules/{rule_id}", model=DetectionRule)
 
 
 class ConnectorsClient(_ResourceClient):
@@ -163,8 +174,10 @@ class PlaybooksClient(_ResourceClient):
     async def create(self, **data: Any) -> Playbook:
         return await self._post("/api/v1/playbooks", data, Playbook)
 
+    # PUT, not PATCH: `playbooks.py` declares `@router.put("/{playbook_id}")`
+    # and no patch route, so the previous verb returned 405.
     async def update(self, playbook_id: str, **data: Any) -> Playbook:
-        return await self._patch(f"/api/v1/playbooks/{playbook_id}", data, Playbook)
+        return await self._put(f"/api/v1/playbooks/{playbook_id}", data, Playbook)
 
     async def delete(self, playbook_id: str) -> None:
         return await self._delete(f"/api/v1/playbooks/{playbook_id}")

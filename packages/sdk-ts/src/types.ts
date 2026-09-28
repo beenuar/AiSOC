@@ -1,9 +1,15 @@
 /**
  * Hand-authored TypeScript types mirroring the AiSOC OpenAPI schema.
  *
- * These are kept in sync with docs/openapi.yaml via the `pnpm codegen` script
- * which regenerates src/openapi.d.ts.  The types below are a curated, ergonomic
- * subset intended for direct use by SDK consumers.
+ * A curated, ergonomic subset intended for direct use by SDK consumers — not
+ * a generated file. This header used to say the types were kept in sync with
+ * docs/openapi.yaml "via the `pnpm codegen` script which regenerates
+ * src/openapi.d.ts". There was no such file, nothing in CI ran that script,
+ * and the sentence was the only stated reason to trust these declarations.
+ *
+ * What is actually enforced is narrower and true: `scripts/check_sdk_surface.py`
+ * proves every endpoint `client.ts` calls is an operation the spec declares.
+ * The field-level shapes below are still hand-kept.
  */
 
 // ── Enums ─────────────────────────────────────────────────────────────────────

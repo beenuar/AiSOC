@@ -107,13 +107,20 @@ async def test_cases_create(httpx_mock: HTTPXMock):
 
 
 @pytest.mark.asyncio
-async def test_cases_delete(httpx_mock: HTTPXMock):
+async def test_a_204_delete_resolves_to_none(httpx_mock: HTTPXMock):
+    """This used to exercise ``cases.delete``.
+
+    That method called a DELETE route the API has never declared, and this
+    test passed anyway because ``httpx_mock`` answers whatever the client
+    asks. Repointed at ``playbooks.delete``, which is a real 204.
+    """
     httpx_mock.add_response(status_code=204)
 
     async with AiSOCClient(base_url=BASE_URL, token=TOKEN) as client:
-        result = await client.cases.delete("c1")
+        result = await client.playbooks.delete("p1")
 
     assert result is None
+    assert httpx_mock.get_requests()[0].url.path == "/api/v1/playbooks/p1"
 
 
 # ─── Error handling ───────────────────────────────────────────────────────────

@@ -1,4 +1,11 @@
-// Package aisoc provides a typed Go client for the AiSOC REST API.
+// Package aisoc provides typed Go declarations for the AiSOC REST API.
+//
+// Declarations only: there is no HTTP client here, and this file carries no
+// functions. It used to open by claiming to provide "a typed Go client",
+// which sdk-go-test corroborated by building, vetting and testing it green —
+// a compiler is satisfied by type and const blocks. The absence is recorded
+// as a gap in packages/sdk-surface.json so the three green SDK jobs cannot
+// keep implying a parity that does not exist.
 package aisoc
 
 import "time"

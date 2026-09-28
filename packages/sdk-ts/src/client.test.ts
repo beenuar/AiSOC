@@ -89,12 +89,18 @@ describe("cases", () => {
     expect(opts.method).toBe("POST");
   });
 
-  it("delete() calls DELETE and returns void on 204", async () => {
+  // This used to exercise `cases.delete`, which called a DELETE route the
+  // API has never declared. Repointed at `playbooks.delete`, which is a real
+  // 204 — mocking the transport meant the old test passed either way.
+  it("a 204 DELETE resolves to void", async () => {
     const mock = vi.fn().mockResolvedValue({ ok: true, status: 204, json: async () => undefined, text: async () => "" });
     vi.stubGlobal("fetch", mock);
     const client = makeClient();
-    const result = await client.cases.delete("c1");
+    const result = await client.playbooks.delete("p1");
     expect(result).toBeUndefined();
+    const [url, opts] = mock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/playbooks/p1");
+    expect(opts.method).toBe("DELETE");
   });
 });
 

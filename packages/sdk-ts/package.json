@@ -1,7 +1,7 @@
 {
   "name": "@aisoc/sdk",
   "version": "4.0.0",
-  "description": "TypeScript client SDK for AiSOC — auto-generated from the OpenAPI schema",
+  "description": "TypeScript client SDK for AiSOC — a hand-written client over docs/openapi.yaml, checked against it by scripts/check_sdk_surface.py",
   "keywords": ["aisoc", "soc", "security", "client", "sdk"],
   "license": "MIT",
   "main": "./dist/index.js",
@@ -16,7 +16,6 @@
   },
   "files": ["dist", "src"],
   "scripts": {
-    "codegen": "openapi-typescript ../../docs/openapi.yaml -o src/openapi.d.ts",
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
