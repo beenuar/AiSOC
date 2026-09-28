@@ -16,8 +16,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE = REPO_ROOT / "scripts" / "check_sdk_surface.py"
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from gate_toolkit import refuses_an_empty_tree  # noqa: E402
+
+# The gate reads the spec with a line parser so it can run on a bare
+# interpreter. PyYAML is what that parser is checked against, and its absence
+# is the environment the parser exists for — so the comparison skips rather
+# than fails when it is not installed.
+try:
+    import yaml as pyyaml
+except ModuleNotFoundError:  # pragma: no cover - depends on the environment
+    pyyaml = None
 
 SPEC = """openapi: 3.1.0
 info:
@@ -96,16 +111,10 @@ def test_the_spec_parser_agrees_with_pyyaml_on_the_real_document() -> None:
     """A line parser instead of PyYAML, so the gate runs on a bare interpreter.
 
     Worth only as much as its agreement with a real YAML parser, so that is
-    asserted against the actual 34k-line spec rather than a fixture. Skipped
-    rather than failed where PyYAML is absent: that is the environment the
-    line parser exists for.
+    asserted against the actual 34k-line spec rather than a fixture.
     """
-    yaml = __import__("importlib").util.find_spec("yaml")
-    if yaml is None:  # pragma: no cover - depends on the environment
-        import pytest
-
+    if pyyaml is None:  # pragma: no cover - depends on the environment
         pytest.skip("PyYAML is not installed; the line parser is what this gate uses anyway")
-    import yaml as pyyaml
 
     module = _load()
     text = (REPO_ROOT / "docs" / "openapi.yaml").read_text(encoding="utf-8")
@@ -280,19 +289,14 @@ def test_a_missing_manifest_is_refused(tmp_path, capsys) -> None:
     root = tmp_path / "bare"
     root.mkdir()
     subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
-    module = _load()
     assert _run(root, module) == 2
     assert "packages/sdk-surface.json is missing" in capsys.readouterr().out
 
 
 def test_the_empty_tree_refusal_holds_for_a_copy_of_the_script() -> None:
     """The toolkit's probe: `scripts/` copied into a tree with no content."""
-    module = _load()
-    from gate_toolkit import refuses_an_empty_tree
-
-    refused, detail = refuses_an_empty_tree(Path(GATE).name, [])
+    refused, detail = refuses_an_empty_tree(GATE.name, [])
     assert refused, detail
-    assert module is not None
 
 
 # ─── the gate, end to end ────────────────────────────────────────────────────
