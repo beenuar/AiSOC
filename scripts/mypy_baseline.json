@@ -397,9 +397,7 @@
       "misc": 1
     },
     "tests/test_compliance_phishing_kb_tenant_isolation.py": {
-      "assignment": 1,
-      "method-assign": 1,
-      "misc": 2,
+      "misc": 1,
       "var-annotated": 1
     },
     "tests/test_credential_vault_envelope.py": {
