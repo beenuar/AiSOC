@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from app.services.lucene_eval import LuceneQueryError, lucene_matches
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +63,17 @@ class HuntResult:
 # ─── Sigma Runner ─────────────────────────────────────────────────────────────
 
 
+#: Reported instead of ``None`` when pySigma is missing and the reduced
+#: evaluator answered instead. Callers show ``error`` to an operator, so this
+#: is the difference between "this rule found nothing" and "a different, less
+#: capable evaluator found nothing".
+SIGMA_DEGRADED = (
+    "pySigma is not installed; this rule was evaluated by the reduced built-in "
+    "evaluator, which ignores Sigma field modifiers. Install pysigma and "
+    "pysigma-backend-opensearch for full semantics."
+)
+
+
 def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
     """
     Execute a Sigma rule against a list of events.
@@ -70,7 +83,17 @@ def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict]
     try:
         from sigma.backends.opensearch import OpensearchLuceneBackend
         from sigma.rule import SigmaRule
+    except ImportError:
+        # Not a non-event. The reduced evaluator below reads a Sigma
+        # `detection` block as plain substring containment and ignores every
+        # field modifier, so its answer is not the answer the real backend
+        # would give. Returning `None` here reported that difference as
+        # nothing at all, which is how a deployment can silently evaluate
+        # every Sigma rule with the wrong engine.
+        logger.warning("pySigma unavailable; Sigma rules are being evaluated by the reduced built-in evaluator")
+        return _sigma_fallback(rule_body, events), SIGMA_DEGRADED
 
+    try:
         sigma_rule = SigmaRule.from_yaml(rule_body)
         backend = OpensearchLuceneBackend()
         queries = backend.convert_rule(sigma_rule)
@@ -79,14 +102,10 @@ def _run_sigma(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict]
         matched = []
         for event in events:
             for query in queries:
-                if _lucene_match(query, event):
+                if _lucene_match(str(query), event):
                     matched.append(event)
                     break
         return matched, None
-
-    except ImportError:
-        # pySigma not available – use simple YAML condition evaluator
-        return _sigma_fallback(rule_body, events), None
     except Exception as exc:
         logger.warning("Sigma parse error: %s", exc)
         return _sigma_fallback(rule_body, events), str(exc)
@@ -400,10 +419,32 @@ def _run_eql(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], 
 
 
 def _lucene_match(query: str, event: dict[str, Any]) -> bool:
-    """Simple Lucene query evaluator for field:value pairs."""
-    flat = _flatten_dict(event)
-    flat_str = " ".join(f"{k}:{v}" for k, v in flat.items()).lower()
-    return query.lower() in flat_str
+    """Whether ``event`` satisfies ``query``, with real boolean semantics.
+
+    This was ``query.lower() in " ".join(f"{k}:{v}" ...)``. A Lucene boolean
+    expression is never a contiguous substring of a ``key:value`` join, so
+    every multi-clause query — which is what pySigma emits for any rule with
+    two fields — matched nothing and reported no error. See
+    :mod:`app.services.lucene_eval`.
+    """
+    return lucene_matches(query, _flatten_dict(event))
+
+
+def _run_lucene(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
+    """Execute a rule authored directly in Lucene.
+
+    This used to be routed to ``_run_kql``, whose matcher reads the first
+    ``field:value`` it can regex out of the query and otherwise falls back to
+    ``query.lower() in flat_str``. Both readings drop every boolean operator,
+    so a two-clause Lucene rule was answered by substring containment.
+    """
+    try:
+        matched = [event for event in events if lucene_matches(rule_body.strip(), _flatten_dict(event))]
+    except LuceneQueryError as exc:
+        # An unreadable query is not an absence of matches, and saying so is
+        # the only thing that distinguishes the two for the caller.
+        return [], f"unsupported Lucene query: {exc}"
+    return matched, None
 
 
 def _flatten_dict(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -429,7 +470,7 @@ def _rule_runners():
         "yara": _run_yara,
         "kql": _run_kql,
         "eql": _run_eql,
-        "lucene": lambda body, evts: (_run_kql(body, evts)[0], None),
+        "lucene": _run_lucene,
         "regex": _run_regex,
     }
 
