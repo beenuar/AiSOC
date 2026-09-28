@@ -34,7 +34,17 @@ ceilings:
   # first number. That is the whole argument for the ratchet in one run — a
   # count nothing compares to anything drifts, and nobody finds out.
   semgrep:
-    total: 101
+    # 101 -> 102 (error unchanged at 40). The added WARNING is
+    # `dynamic-urllib-use-detected` on scripts/check_main_run_cancellations.py,
+    # which asks the Actions API whether a run on `main` was cancelled. It is
+    # the same finding the identical call in check_codeql_alerts.py already
+    # contributes: both build the URL from a fixed API root and refuse
+    # anything that does not start with it, so the `file://` read the rule
+    # warns about is not reachable — but the rule fires on any non-literal
+    # argument to `urlopen`, and counting it is better than suppressing it.
+    # `entries:` below stays empty on purpose: a ceiling counts a finding, a
+    # suppression hides it.
+    total: 102
     error: 40
     measured_with: "1.86.0"
   checkov:

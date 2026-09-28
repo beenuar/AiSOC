@@ -205,7 +205,9 @@ def cancels_a_push(cancel: object) -> bool:
 
 
 def group_is_per_commit(group: str | None) -> bool:
-    return bool(group) and any(key in group for key in PER_COMMIT_KEYS)
+    if not group:
+        return False
+    return any(key in group for key in PER_COMMIT_KEYS)
 
 
 def diagnose(doc: dict) -> list[str]:
@@ -299,7 +301,7 @@ def self_test() -> int:
         },
     }
 
-    cases = [
+    cases: list[tuple[str, dict, bool]] = [
         ("cancelling shared group on main", shared_cancelling, True),
         # The one a `cancel-in-progress: false` fix leaves behind.
         ("non-cancelling but shared group on main", shared_queueing, True),

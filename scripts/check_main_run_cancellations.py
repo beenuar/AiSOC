@@ -128,7 +128,12 @@ def resolve_repository(root: Path) -> str:
 
 
 def _get(url: str, token: str) -> dict:
-    req = urllib.request.Request(  # noqa: S310 - fixed https host
+    # Same shape as check_codeql_alerts.py::_get, including the prefix check:
+    # urllib honours `file://`, so a URL that did not come from API is refused
+    # rather than fetched.
+    if not url.startswith(API + "/"):
+        raise GateError(f"refusing to call a non-GitHub URL: {url}")
+    req = urllib.request.Request(  # noqa: S310 - refused above unless it is the GitHub API
         url,
         headers={
             "Accept": "application/vnd.github+json",
