@@ -326,11 +326,7 @@ def _settings_fatal_when_empty() -> set[str]:
     placeholder are a different rule and are not this gate's business.
     """
     tree = ast.parse(API_CONFIG.read_text(encoding="utf-8"))
-    fn = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "warn_if_insecure_defaults"
-    )
+    fn = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "warn_if_insecure_defaults")
     names: set[str] = set()
     for node in ast.walk(fn):
         if (
