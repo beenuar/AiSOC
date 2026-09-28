@@ -154,19 +154,17 @@ class TestTheDocumentedCommandIsTheOneThatWorks:
     def test_the_production_file_does_not_import_the_base(self) -> None:
         document = yaml.load(PROD.read_text(encoding="utf-8"), Loader=_ComposeLoader)  # noqa: S506
         assert "include" not in (document or {}), (
-            "`include:` plus an override of an imported service is rejected by every "
-            "released Compose 2.x. Use two `-f` flags instead."
+            "`include:` plus an override of an imported service is rejected by every released Compose 2.x. Use two `-f` flags instead."
         )
 
     def test_the_docs_give_both_files_in_order(self) -> None:
         page = (REPO / "apps" / "docs" / "docs" / "deployment" / "docker.md").read_text(encoding="utf-8")
         assert "-f docker-compose.yml -f docker-compose.prod.yml" in page, (
-            "the deployment page must give both files, base first — the overlay alone "
-            "does not resolve on Compose 2.x"
+            "the deployment page must give both files, base first — the overlay alone does not resolve on Compose 2.x"
         )
-        assert "-f docker-compose.prod.yml up" not in page.replace(
-            "-f docker-compose.yml -f docker-compose.prod.yml up", ""
-        ), "the page still shows the single-file form somewhere"
+        assert "-f docker-compose.prod.yml up" not in page.replace("-f docker-compose.yml -f docker-compose.prod.yml up", ""), (
+            "the page still shows the single-file form somewhere"
+        )
 
     def test_the_smoke_workflow_drives_the_same_command(self) -> None:
         """A workflow that exercises a different invocation than the docs
@@ -174,9 +172,9 @@ class TestTheDocumentedCommandIsTheOneThatWorks:
         flow = (REPO / ".github" / "workflows" / "compose-smoke.yml").read_text(encoding="utf-8")
         if "docker-compose.prod.yml" in flow:
             assert "-f docker-compose.yml -f docker-compose.prod.yml" in flow
-            assert flow.count("-f docker-compose.prod.yml") == flow.count(
-                "-f docker-compose.yml -f docker-compose.prod.yml"
-            ), "some invocation still passes the overlay alone"
+            assert flow.count("-f docker-compose.prod.yml") == flow.count("-f docker-compose.yml -f docker-compose.prod.yml"), (
+                "some invocation still passes the overlay alone"
+            )
 
 
 class TestTheBypassIsUnreachable:
@@ -499,7 +497,7 @@ class TestAPublishedValueCannotSatisfyAGuard:
     def test_a_real_secret_is_accepted(self) -> None:
         """The other direction. A checker that refused everything would pass
         the test below and ship a production stack that cannot start."""
-        result = _run_checker({"POSTGRES_PASSWORD": "9b20969c058203d8a725c09800645f4666f913d80590c094"})
+        result = _run_checker({"POSTGRES_PASSWORD": "9b20969c058203d8a725c09800645f4666f913d80590c094"})  # gitleaks:allow
         assert result.returncode == 0, result.stderr
 
     @pytest.mark.parametrize(
