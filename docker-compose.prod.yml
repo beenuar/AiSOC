@@ -1,0 +1,213 @@
+# AiSOC — production compose.
+#
+#     docker compose -f docker-compose.prod.yml up -d
+#
+# This is the file `apps/docs/docs/deployment/docker.md` has pointed at since
+# the deployment page was written. It did not exist, which is what discussion
+# #629 reported: the documented production command failed on a missing file,
+# and the only stack an operator could actually start was the development one,
+# where `ENVIRONMENT` defaults to `development` and
+# `services/api/app/api/v1/dev_auth.py` resolves an unauthenticated request to
+# a demo user whose role is `admin`.
+#
+# It uses the Compose Spec `include` directive, the same way
+# `infra/compose/docker-compose.dev.yml` does, so there is exactly one
+# definition of every service and this file holds only what production changes.
+# A standalone copy would have drifted from the base within a release, which is
+# the failure this repository keeps finding.
+#
+# WHAT THIS FILE GUARANTEES
+#
+#   * The authentication bypass is unreachable. `ENVIRONMENT` and `AISOC_DEV_MODE`
+#     are fixed values here, not interpolated, so no `.env` can re-enable them.
+#   * Nothing starts on a default credential. Every secret uses `${VAR:?...}`,
+#     which makes Compose refuse to start and name the variable, rather than
+#     booting on `aisoc_dev_secret` and looking healthy.
+#   * No datastore is reachable from the host. Postgres, Redis, Kafka and
+#     Qdrant publish no ports at all; the console and the ingest endpoint are
+#     the only things bound, and they bind to loopback unless you set
+#     AISOC_BIND_ADDR deliberately (put a TLS-terminating proxy in front —
+#     see docs/runbooks/HARDENING.md section 2).
+#
+# WHAT IT DOES NOT DO
+#
+#   TLS, secret rotation, network policies, audit-log forwarding and backups
+#   are not in a compose file. `docs/runbooks/HARDENING.md` is the checklist
+#   and this file is the starting posture, not the finished one.
+
+include:
+  - ./docker-compose.yml
+
+services:
+  # ---------------------------------------------------------------------------
+  # Data plane. No published ports: in the development stack these are bound to
+  # 127.0.0.1 so a developer can attach a client, which is reasonable there and
+  # is an attack surface here. `ports: []` overrides the base list rather than
+  # appending to it.
+  # ---------------------------------------------------------------------------
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD — the development default is a published literal}
+      # The DML-only runtime role the services connect as, so the row-level
+      # security policies actually apply to them. Separate from the owner
+      # password above and rotated the same way.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD — the development default is a published literal}
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  zookeeper:
+    ports: !reset []
+    restart: unless-stopped
+
+  kafka:
+    ports: !reset []
+    restart: unless-stopped
+
+  qdrant:
+    ports: !reset []
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Application services. `ENVIRONMENT` and `AISOC_DEV_MODE` are literals on
+  # purpose: an interpolated value here would let a stray `.env` put a
+  # production deployment back into the environment where the auth bypass
+  # lives, which is the defect this file exists to make impossible.
+  # ---------------------------------------------------------------------------
+  api:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD}
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD}@postgres:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/aisoc
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+      # `make env` generates all six of these. They are required rather than
+      # defaulted because a service that starts without one either serves
+      # unauthenticated or signs with a key published in this repository —
+      # both were reported vulnerabilities, fixed in v12.0.0.
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY — run `make env` to generate it}
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:?set AISOC_CREDENTIAL_KEY — run `make env` to generate it}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN — run `make env` to generate it}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN — run `make env` to generate it}
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
+
+  ingest-worker:
+    restart: unless-stopped
+    environment:
+      # Both keys, because `envmode.Current()` reads ENV first and the base
+      # file's ENV is what shadowed an operator's ENVIRONMENT before this.
+      ENV: production
+      ENVIRONMENT: production
+      # Required outside development by
+      # services/ingest/internal/config/config.go. This is the service that
+      # accepts events off the network, so it is the last one that should be
+      # allowed to start without a signing secret.
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — ingest refuses to start without it outside development}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN}
+      AISOC_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
+
+  fusion:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
+
+  agents:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
+
+  actions:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      # Without this the service answers 503 on every mutating route, which is
+      # the intended failure introduced in v12.0.0 — it previously served
+      # isolate_host and run_script to anything that could reach the port.
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN}
+
+  connectors:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:?set AISOC_CREDENTIAL_KEY}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+
+  threatintel:
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      AISOC_DEV_MODE: 0
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
+
+  realtime:
+    restart: unless-stopped
+    environment:
+      # Unset, the edge rejects every connection and /internal/* answers 503.
+      # Both used to fall back: the ticket verifier to a constant committed to
+      # this repository, and the internal guard to "authorized".
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
+
+  litellm:
+    restart: unless-stopped
+
+  ollama:
+    restart: unless-stopped
+
+  # The console. Demo mode is inlined at build time by Next, so this asserts
+  # the runtime side only; pull the `latest` tag rather than a `-demo` one.
+  web:
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      AISOC_DEMO_MODE: "false"
+
+  # ---------------------------------------------------------------------------
+  # `full`-profile stores. They do not run in a CORE deployment, but the base
+  # file gives every service a default that points at the published dev
+  # credential, so `--profile full` would start Neo4j and ClickHouse on a
+  # password anyone can read. Required here rather than defaulted, and required
+  # on the services that dial them so the two cannot disagree.
+  # ---------------------------------------------------------------------------
+  neo4j:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD — required for the full profile}
+
+  clickhouse:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD — required for the full profile}
+
+  opensearch:
+    ports: !reset []
+    restart: unless-stopped
+
+  # Kafka UI browses every topic with no authentication of its own. It is
+  # useful while developing and is not something to run beside production data,
+  # so it is moved onto a profile nothing here activates: `--profile full` no
+  # longer starts it. An operator who wants it can still ask for it by name.
+  kafka-ui:
+    profiles: !override ["debug-ui"]
+    ports: !reset []

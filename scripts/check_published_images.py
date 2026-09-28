@@ -99,6 +99,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gate_toolkit import refuses_an_empty_tree, repo_root, scratch_tree  # noqa: E402
 
 COMPOSE_REL = Path("docker-compose.yml")
+
+#: Compose files that name images an operator is told to pull. The production
+#: file was added after this gate and would have shipped unread: it `include`s
+#: the base rather than repeating it, so it contributes no `image:` of its own
+#: today — but a tag pinned there later would be invisible to this scan, which
+#: is exactly the shape the gate exists to catch. Reading the whole set costs
+#: nothing and removes the question.
+COMPOSE_FILES: tuple[Path, ...] = (
+    COMPOSE_REL,
+    Path("docker-compose.prod.yml"),
+)
+
 CHART_REL = Path("infra/helm/aisoc")
 VERSION_REL = Path("VERSION")
 
@@ -205,24 +217,68 @@ def _split(image: str) -> tuple[str, str]:
     return image, "latest"
 
 
+class _ComposeLoader(yaml.SafeLoader):
+    """SafeLoader that understands the Compose Spec's merge-control tags.
+
+    ``!reset`` and ``!override`` tell Compose to clear or replace an inherited
+    value instead of merging it, and `docker-compose.prod.yml` needs both to
+    unpublish ports the base file binds. PyYAML's safe loader raises
+    ``ConstructorError`` on an unknown tag, so without this the gate would
+    crash on a file it was extended to read — a scan that cannot run is worse
+    than one that reports nothing, because it looks like a broken gate rather
+    than a finding.
+    """
+
+
+def _strip_tag(loader: yaml.Loader, node: yaml.Node) -> object:
+    """Return the tagged value itself; the tag is a merge instruction only."""
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    return loader.construct_scalar(node)
+
+
+for _tag in ("!reset", "!override"):
+    _ComposeLoader.add_constructor(_tag, _strip_tag)
+
+
+def _load_compose(path: Path) -> dict:
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=_ComposeLoader) or {}  # noqa: S506
+
+
 def collect_compose_references(root: Path) -> list[Reference]:
-    """Every ``image:`` under ``services:``, at the tag ``docker compose up`` requests."""
-    path = root / COMPOSE_REL
-    if not path.is_file():
-        raise ScanError(f"no {COMPOSE_REL} to read: {path}")
-    try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as exc:
-        raise ScanError(f"{COMPOSE_REL} is not readable as YAML: {exc}") from exc
+    """Every ``image:`` under ``services:``, at the tag ``docker compose up`` requests.
+
+    Reads every file in :data:`COMPOSE_FILES`. The base file must exist — its
+    absence means the scan cannot answer and is an error rather than a clean
+    verdict — while the others are read when present, so adding or removing one
+    does not require editing this function.
+    """
+    base = root / COMPOSE_REL
+    if not base.is_file():
+        raise ScanError(f"no {COMPOSE_REL} to read: {base}")
 
     references: list[Reference] = []
-    for name, service in sorted((document.get("services") or {}).items()):
-        if not isinstance(service, dict) or not isinstance(service.get("image"), str):
+    for relative in COMPOSE_FILES:
+        path = root / relative
+        if not path.is_file():
             continue
-        expanded, interpolated = _expand(service["image"])
-        repository, tag = _split(expanded)
-        origin = "the default in ${AISOC_VERSION:-…}" if interpolated else "written literally"
-        references.append(Reference(str(COMPOSE_REL), name, repository, tag, origin))
+        try:
+            # `!reset` / `!override` are Compose Spec tags. PyYAML's safe
+            # loader raises on an unknown tag, so a production overlay using
+            # them would make this gate crash rather than scan.
+            document = _load_compose(path)
+        except yaml.YAMLError as exc:
+            raise ScanError(f"{relative} is not readable as YAML: {exc}") from exc
+
+        for name, service in sorted((document.get("services") or {}).items()):
+            if not isinstance(service, dict) or not isinstance(service.get("image"), str):
+                continue
+            expanded, interpolated = _expand(service["image"])
+            repository, tag = _split(expanded)
+            origin = "the default in ${AISOC_VERSION:-…}" if interpolated else "written literally"
+            references.append(Reference(str(relative), name, repository, tag, origin))
     return references
 
 

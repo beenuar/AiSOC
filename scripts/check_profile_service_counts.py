@@ -49,6 +49,14 @@ self_test_if_requested(__file__)
 REPO_ROOT = repo_root()
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 
+#: The production stack. It `include`s the base and then differs from it
+#: deliberately — `kafka-ui` browses every topic with no authentication of its
+#: own and is moved off the `full` profile there — so its `full` count is one
+#: lower. Scanned and reported beside the development figures rather than left
+#: for an operator to discover: two stacks that differ by design should differ
+#: on the page too.
+PROD_COMPOSE = REPO_ROOT / "docker-compose.prod.yml"
+
 #: One-shot containers that run to completion and exit. Counted separately
 #: because "long-running services" is the figure the documents publish, and
 #: folding a container that exits into it would overstate what is resident.
@@ -60,6 +68,13 @@ ONE_SHOT: frozenset[str] = frozenset({"ollama-pull"})
 #: integer near the word "services": a gate that guesses which numbers are
 #: claims would either miss the one that matters or flag prose forever.
 CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
+    # The production deployment page. `prod:full` is a separate figure from
+    # `full` because the production stack deliberately does not start kafka-ui,
+    # and a reader comparing the two pages would otherwise find a discrepancy
+    # with nothing explaining it.
+    ("apps/docs/docs/deployment/docker.md", "core", r"CORE is (\d+) long-running services here"),
+    ("apps/docs/docs/deployment/docker.md", "prod:full", r"`--profile full`\s*\n?is (\d+) rather than"),
+    ("apps/docs/docs/deployment/docker.md", "full", r"is \d+ rather than (\d+), the difference being"),
     ("README.md", "core", r"\|\s*\*\*core\*\*\s*\|\s*`make up`\s*\|\s*(\d+)\s*\|"),
     ("README.md", "full", r"\|\s*\*\*full\*\*\s*\|\s*`make up-full`\s*\|\s*(\d+)\s*\|"),
     ("README.md", "core", r"\|\s*\*\*demo\*\*\s*\|\s*`make up && make demo`\s*\|\s*(\d+)\s*\|"),
@@ -199,7 +214,10 @@ def _parse_services(text: str) -> dict[str, list[str] | None]:
     to keep that true. The shape being read is narrow: two-space-indented
     service keys under a top-level ``services:``, and a ``profiles:`` key
     four spaces in, in either inline (``["a", "b"]``) or block (``- a``)
-    form. Both forms appear in this file.
+    form. Both forms appear in this file, and either may carry a Compose Spec
+    merge tag (``!override``) in the production overlay — untagged, that line
+    read as "no profiles declared" and the gate counted a service the
+    production stack does not start.
     """
     services: dict[str, list[str] | None] = {}
     in_services = False
@@ -226,13 +244,13 @@ def _parse_services(text: str) -> dict[str, list[str] | None]:
         if current is None:
             continue
 
-        inline = re.match(r"^    profiles:\s*\[(.*)\]\s*$", raw)
+        inline = re.match(r"^    profiles:\s*(?:![a-z]+\s+)?\[(.*)\]\s*$", raw)
         if inline:
             services[current] = re.findall(r"[A-Za-z0-9._-]+", inline.group(1))
             collecting_block = False
             continue
 
-        if re.match(r"^    profiles:\s*$", raw):
+        if re.match(r"^    profiles:\s*(?:![a-z]+\s*)?$", raw):
             services[current] = []
             collecting_block = True
             continue
@@ -271,6 +289,29 @@ def _declared_profiles(services: dict[str, list[str] | None]) -> set[str]:
     return {p for profiles in services.values() if profiles for p in profiles}
 
 
+def _production_services(base: dict[str, list[str] | None]) -> dict[str, list[str] | None]:
+    """The base service set with the production file's profile overrides applied.
+
+    Computed rather than shelled out to ``docker compose config``, because a
+    gate that needs a Docker daemon is a gate that skips on the runners that
+    do not have one — and a skip here reports nothing while looking green.
+
+    Only ``profiles:`` is applied, because that is the only key that changes
+    *which* services a run starts. The production file's other overrides change
+    how a service is configured, which the counts do not describe.
+    """
+    if not PROD_COMPOSE.is_file():
+        return base
+    overrides = _parse_services(PROD_COMPOSE.read_text(encoding="utf-8"))
+    merged = dict(base)
+    for name, profiles in overrides.items():
+        # `_parse_services` returns None for a service that names no profiles,
+        # which in the overlay means "not overridden" rather than "no profile".
+        if profiles is not None:
+            merged[name] = profiles
+    return merged
+
+
 def scan() -> tuple[dict[str, int], dict[str, set[str]], list[str]]:
     """Returns (counts by profile, members by profile, errors)."""
     if not COMPOSE.is_file():
@@ -284,6 +325,14 @@ def scan() -> tuple[dict[str, int], dict[str, set[str]], list[str]]:
     profiles = ("core", *sorted(_declared_profiles(services)))
     members = {p: _profile_members(services, p) for p in profiles}
     counts = {p: _long_running(members[p]) for p in profiles}
+
+    # The production stack, under `prod:` keys so a claim site can name either
+    # and the two cannot be confused for one another.
+    prod_services = _production_services(services)
+    for profile in profiles:
+        prod_members = _profile_members(prod_services, profile)
+        members[f"prod:{profile}"] = prod_members
+        counts[f"prod:{profile}"] = _long_running(prod_members)
 
     for rel, profile, pattern in CLAIM_SITES:
         path = REPO_ROOT / rel
@@ -351,6 +400,12 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"profile-service-counts: OK, core {counts['core']}, full {counts.get('full', 0)}, "
         f"{len(CLAIM_SITES)} published figures agree with docker-compose.yml"
+    )
+    # Printed every run rather than only when it differs: a figure that appears
+    # only on disagreement is one nobody knows the value of.
+    print(
+        f"  production stack: core {counts.get('prod:core', 0)}, full {counts.get('prod:full', 0)}"
+        f" ({counts.get('full', 0) - counts.get('prod:full', 0)} fewer on full — kafka-ui is not run beside production data)"
     )
     return 0
 
