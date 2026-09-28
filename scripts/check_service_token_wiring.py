@@ -142,13 +142,19 @@ def _generated(root: Path) -> set[str]:
         return set()
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        target = None
+        # Carried alongside the name rather than read back off `node`, which
+        # `ast.walk` types as the base `AST`: the isinstance checks above narrow
+        # inside their own branch and not after the if/elif closes.
+        target: str | None = None
+        assigned: ast.expr | None = None
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             target = node.target.id
+            assigned = node.value
         elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             target = node.targets[0].id
-        if target == "GENERATED" and isinstance(node.value, ast.Dict):
-            return {k.value for k in node.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+            assigned = node.value
+        if target == "GENERATED" and isinstance(assigned, ast.Dict):
+            return {k.value for k in assigned.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
     return set()
 
 
