@@ -127,7 +127,18 @@ class TestTheExplainCostWriterCannotProduceNull:
 # `POSTGRES_ABORT_SEMANTICS_REQUIRED=1` in CI turns the skip into a failure so
 # it cannot go quiet.
 
-_DSN = os.environ.get("DATABASE_URL", "")
+#: The **owner** DSN, not the runtime one.
+#:
+#: The fixture below creates a scratch table, and the role the services
+#: connect as is DML-only so that row-level security applies to it — it
+#: answers `permission denied for schema public` on any DDL, which is the
+#: role split working as designed. `tests/isolation/test_postgres_rls.py`
+#: resolves the owner the same way, and falls back to the runtime DSN so a
+#: single-role deployment still runs.
+#:
+#: The property under test — PostgreSQL aborting a transaction on a statement
+#: error — does not depend on which role holds the connection.
+_DSN = os.environ.get("DATABASE_MIGRATION_URL", "").strip() or os.environ.get("DATABASE_URL", "")
 _REQUIRED = os.environ.get("POSTGRES_ABORT_SEMANTICS_REQUIRED", "").strip() not in ("", "0", "false")
 
 
