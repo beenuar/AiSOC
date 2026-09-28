@@ -18,6 +18,7 @@ file.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 
@@ -308,6 +309,79 @@ class TestServicesComeBackAfterAReboot:
         and shut down again, and restarting it on boot would leave an
         unauthenticated topic browser running beside production data."""
         assert str((_merged_services().get("kafka-ui") or {}).get("restart")) == "no"
+
+
+#: `services/api/app/core/config.py`, whose `warn_if_insecure_defaults` every
+#: production boot runs through `enforce_secure_defaults`.
+API_CONFIG = REPO / "services" / "api" / "app" / "core" / "config.py"
+
+
+def _settings_fatal_when_empty() -> set[str]:
+    """Settings whose *emptiness* refuses a production boot.
+
+    Read out of `warn_if_insecure_defaults` rather than listed here, because a
+    list here is a second copy of the rule and would drift from the one the
+    container actually runs. Every check of the shape ``not s.<NAME>`` means
+    "empty is fatal outside development"; the checks comparing against a known
+    placeholder are a different rule and are not this gate's business.
+    """
+    tree = ast.parse(API_CONFIG.read_text(encoding="utf-8"))
+    fn = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "warn_if_insecure_defaults"
+    )
+    names: set[str] = set()
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.Not)
+            and isinstance(node.operand, ast.Attribute)
+            and isinstance(node.operand.value, ast.Name)
+            and node.operand.value.id == "s"
+            and node.operand.attr.isupper()
+        ):
+            names.add(node.operand.attr)
+    return names
+
+
+class TestTheApiCanActuallyBoot:
+    """`ENVIRONMENT: production` turns every insecure default into a refusal.
+
+    That is the point of this file, and it is also a trap: a secret the API
+    hard-fails on that no service block passes through does not produce a
+    compose error, it produces a crash loop. Observed against this stack —
+    `docker compose -f docker-compose.prod.yml up -d` reported every container
+    started, and the API restarted forever on
+
+        InsecureProductionDefaultsError: Refusing to boot in production with
+        insecure defaults:
+          - METRICS_TOKEN is empty in a non-development environment
+          - JWT_SECRET is empty or set to the well-known placeholder
+
+    because neither was in the api service's `environment`. The sixteen
+    assertions already in this file all passed on that tree: they check that
+    the secrets the file *does* declare are undefaulted, never that the set is
+    complete. This one closes that direction.
+    """
+
+    def test_every_secret_the_api_refuses_to_boot_without_is_declared(self, prod: dict) -> None:
+        required = _settings_fatal_when_empty()
+        assert required, "parsed no settings out of warn_if_insecure_defaults, so this gate checks nothing"
+
+        declared = {key for key, _ in _env_items(prod.get("api") or {})}
+        missing = sorted(required - declared)
+        assert not missing, (
+            f"docker-compose.prod.yml sets ENVIRONMENT=production for api but does not pass {missing}; "
+            "the API will crash-loop on InsecureProductionDefaultsError while compose reports it started"
+        )
+
+    def test_each_one_is_required_rather_than_defaulted(self, prod: dict) -> None:
+        """A default here would boot production on it instead of refusing."""
+        required = _settings_fatal_when_empty()
+        env = dict(_env_items(prod.get("api") or {}))
+        defaulted = sorted(name for name in required if _DEFAULTED.match(env.get(name, "")))
+        assert not defaulted, f"these carry a default, so a deployment with no value for them starts anyway: {defaulted}"
 
 
 class TestNoDatastoreIsBoundToTheHost:

@@ -159,7 +159,8 @@ is 21 rather than 22, the difference being `kafka-ui`.
 | `POSTGRES_PASSWORD` | no | Postgres owner |
 | `AISOC_APP_DB_PASSWORD` | no | DML-only runtime role |
 | `REDIS_PASSWORD` | no | Redis |
-| `JWT_SECRET` | no | Ingest token signing |
+| `JWT_SECRET` | no | Ingest token signing, and SAML/OIDC session issuance in the API |
+| `METRICS_TOKEN` | no | Bearer required to scrape `/metrics` outside development |
 | `NEO4J_PASSWORD`, `CLICKHOUSE_PASSWORD` | no | `full` profile stores |
 | `GRAFANA_ADMIN_PASSWORD` | no | `monitoring` profile dashboard |
 

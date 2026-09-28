@@ -98,8 +98,29 @@ services:
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN — run `make env` to generate it}
       AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
+      # The remaining two secrets `enforce_secure_defaults` hard-fails on, and
+      # the reason this stack could not boot at all: `ENVIRONMENT: production`
+      # above turns every entry in `warn_if_insecure_defaults` into a refusal,
+      # and these two were the only ones no service block passed through. The
+      # API crash-looped on
+      #
+      #   InsecureProductionDefaultsError: Refusing to boot in production with
+      #   insecure defaults:
+      #     - METRICS_TOKEN is empty in a non-development environment
+      #     - JWT_SECRET is empty or set to the well-known placeholder
+      #
+      # while compose reported the stack up. Declaring them here is what makes
+      # the refusal arrive the way the rest of this file's do — before anything
+      # starts, naming the variable — rather than as a restart loop behind a
+      # console that is already listening.
+      #
+      # `make env` deliberately does not generate METRICS_TOKEN: a token set
+      # anywhere overrides the development exemption on /metrics, so writing
+      # one into every `.env` would close the scrape endpoint on development
+      # stacks whose Prometheus sends no credential. It is a production secret,
+      # set deliberately here.
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN — guards /metrics outside development; `openssl rand -hex 32`}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — signs SAML/OIDC sessions; the same value ingest-worker takes below}
 
   ingest-worker:
     ports: !override ["${AISOC_BIND_ADDR:-127.0.0.1}:8081:8080"]
