@@ -690,6 +690,16 @@ jobs:
         run: |
           python3 scripts/check_published_secrets.py --self-test
           python3 scripts/check_published_secrets.py --check
+      # The IOC lookup's `catch` had nowhere to put "this did not work" except
+      # the flag that means "we checked, and it is clean", so a transport
+      # error, a 5xx and a route that did not exist all rendered a green CLEAN
+      # badge over the indicator an analyst had just typed in. It was not a
+      # latent branch: the route did not exist, so every lookup took it. That
+      # is a shape rather than a bug in one file, and this is the shape.
+      - name: A backend failure never renders as a safety verdict
+        run: |
+          python3 scripts/check_failure_is_not_a_verdict.py --self-test
+          python3 scripts/check_failure_is_not_a_verdict.py
       # The marketplace index has to exist in three build contexts, none of
       # which can see the other two. The API's copy was missing, so its image
       # shipped no catalogue and the marketplace answered 503 on every

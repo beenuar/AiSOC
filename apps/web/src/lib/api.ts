@@ -3113,11 +3113,17 @@ export const threatIntelApi = {
     return match ? { status: 'match', indicator: match } : { status: 'clean' };
   },
 
-  bulkLookup: (iocs: string[]) =>
-    request<{ results: IOCLookup[] }>('/api/v1/enrichment/bulk', {
-      method: 'POST',
-      body: JSON.stringify({ iocs }),
-    }),
+  // `bulkLookup` used to live here. It posted `{ iocs: [...] }` to
+  // `/api/v1/enrichment/bulk` and had **zero callers**. That path is not
+  // served by the API — measured against a running stack, 404 — and the
+  // request shape was not the one the enrichment service reads either
+  // (`POST /enrich/bulk` takes `{ items: [...] }`). It is deleted rather
+  // than repointed: an exported helper aimed at a route that does not exist
+  // is a loaded gun, because whoever wires it up first gets a rejected
+  // promise and, following the shape `lookup` used to have, renders it as a
+  // clean verdict. A bulk lookup can be written against
+  // `/api/v1/threat-intel/indicators` — the route `lookup` uses — when
+  // something needs one.
 
   // `total` is the store's count of indicators in scope; `shown` is how many
   // this response carries. They are different numbers and the console renders

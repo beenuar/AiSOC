@@ -41,6 +41,13 @@ _REALTIME_URL = os.getenv("REALTIME_URL", "http://realtime:3001")
 _INTERNAL_TOKEN = os.getenv("REALTIME_INTERNAL_TOKEN", "")
 _API_URL = os.getenv("API_URL", "http://api:8000")
 
+#: The service that actually serves IOC enrichment: `POST /enrich` and
+#: `POST /enrich/bulk` on `services/enrichment`, port 8082. The same address
+#: `app.investigator.tools` reads, and the same default `docker-compose.yml`
+#: gives fusion. The enrich step used to post to
+#: `{API_URL}/api/v1/enrichment/lookup`, which the API has never served.
+_ENRICHMENT_URL = os.getenv("ENRICHMENT_SERVICE_URL", "http://enrichment:8082").rstrip("/")
+
 
 # ---------------------------------------------------------------------------
 # Run status
@@ -337,14 +344,40 @@ def _evaluate_expression(expression: str, context: dict[str, Any]) -> bool:
 
 
 async def _handle_enrich(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
+    """Look one indicator up in the enrichment service.
+
+    It used to post to ``{API_URL}/api/v1/enrichment/lookup``. The API has
+    never served that path — measured against a running stack, it answers 404
+    — so this step could not enrich anything, and the request shape it sent
+    (``{"ioc": …}``) is not the one the enrichment service accepts either.
+
+    The route that exists is ``POST /enrich`` on ``services/enrichment``,
+    which is what ``app.tools.enrichment`` and ``app.investigator.tools``
+    already call. This is the third caller and it now goes to the same place,
+    with the payload that service actually reads.
+
+    Failure raises rather than returning an empty result. Enrichment is a
+    `full`-profile service, so on a CORE deployment this step *will* fail —
+    and "the enrichment service is not running" must not reach a playbook
+    author as "nothing is known about this indicator". Those are different
+    facts and only one of them is about the indicator.
+    """
     ioc = step.params.get("ioc") or context.get("ioc") or context.get("src_ip", "")
     ioc_type = step.params.get("ioc_type", "ip")
-    r = await http.post(
-        f"{_API_URL}/api/v1/enrichment/lookup",
-        json={"ioc": ioc, "ioc_type": ioc_type},
-        timeout=step.timeout_seconds,
-    )
-    r.raise_for_status()
+    if not ioc:
+        return {"skipped": True, "reason": "no indicator in the step parameters or the run context"}
+    try:
+        r = await http.post(
+            f"{_ENRICHMENT_URL}/enrich",
+            json={"value": ioc, "ioc_type": ioc_type},
+            timeout=step.timeout_seconds,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise PermanentStepFailure(
+            f"enrichment for {ioc!r} did not run: {exc}. This says nothing about the indicator. "
+            f"The enrichment service is on the `full` profile — check it is reachable at {_ENRICHMENT_URL}."
+        ) from exc
     return r.json()
 
 
