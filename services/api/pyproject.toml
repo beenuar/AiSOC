@@ -49,9 +49,28 @@ python-multipart = ">=0.0.9,<0.0.33"
 tenacity = ">=8.3,<10.0"
 structlog = ">=24.1,<27.0"
 prometheus-client = ">=0.20,<0.27"
-opentelemetry-sdk = "^1.24.0"
-opentelemetry-instrumentation-fastapi = "^0.45b0"
-opentelemetry-instrumentation-sqlalchemy = "^0.45b0"
+# Floored at 0.58b0, and the floor is a measurement. FastAPI 0.141 keeps an
+# opaque `_IncludedRouter` in `app.routes` rather than the flattened APIRoutes
+# older releases left there, and `_get_route_details` in
+# opentelemetry-instrumentation-fastapi reads `.path` off whatever matches.
+# Below 0.58b0 that raises AttributeError *inside the ASGI tracing middleware*,
+# before the request reaches a handler — so every request into an included
+# router, which is the whole of `/api/v1`, returns 500. `instrument_app(app)`
+# is unconditional in `create_application()`, so there is no configuration
+# that avoids it.
+#
+# This shipped. The lock resolved 0.45b0 because the range read `^0.45b0`, and
+# CI installed the package with no version bound at all, so CI resolved 0.66b0
+# and the app worked there while the image could not serve a route. Measured
+# against the exact locked set (fastapi 0.141.1 / starlette 1.7.0 / sdk 1.24.0):
+# 0.45b0, 0.46b0, 0.50b0, 0.52b0, 0.54b0, 0.56b0 and 0.57b0 all return 500;
+# 0.58b0 and every release after it return 200. The three services declaring
+# this package with an open-ended `>=0.45b0` locked 0.65b0 and were unaffected,
+# which is why only the two carrying a caret were broken.
+# The sdk moves with it: instrumentation 0.58b0 pairs with sdk 1.37.
+opentelemetry-sdk = ">=1.37,<2"
+opentelemetry-instrumentation-fastapi = ">=0.58b0,<0.70"
+opentelemetry-instrumentation-sqlalchemy = ">=0.58b0,<0.70"
 clickhouse-driver = "^0.2.8"
 # sqlglot powers the tenant-lake SQL rewriter (Workstream 7). We use it to
 # parse user-supplied SELECTs, enforce a table allowlist, and inject the
