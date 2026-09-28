@@ -93,6 +93,7 @@ services:
       AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:?set AISOC_CREDENTIAL_KEY — run `make env` to generate it}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN — run `make env` to generate it}
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN — run `make env` to generate it}
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:?set AISOC_AGENTS_SERVICE_TOKEN — run `make env` to generate it}
       AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
       METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN — guards /metrics outside development; `openssl rand -hex 32`}
