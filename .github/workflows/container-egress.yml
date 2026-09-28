@@ -1,0 +1,111 @@
+name: Container egress
+
+# "Runs entirely on your infrastructure" had two gates and a hole in the
+# middle. `scripts/check_default_egress.py` reads every service's declared
+# settings defaults; `tests/test_no_default_egress.py` puts a socket guard in
+# front of each service's import and ASGI lifespan. Both are honest about the
+# gap, and `tests/test_no_default_egress.py` names it outright:
+#
+#   Neither this nor the static gate says anything about what the *running
+#   containers* do. That needs egress-blocked integration, which the Helm
+#   chart's default-deny NetworkPolicy addresses at deploy time and nothing
+#   addresses in CI.
+#
+# This is that integration. Images built from this commit are started on a
+# docker network created with `--internal` — no route off the host — with a
+# DNS sinkhole as their only resolver, and every name they ask for is
+# recorded and classified with the same predicate the services enforce
+# air-gap policy with.
+#
+# Two controls, because zero observations is what a correct run and a blind
+# probe both look like, and the API's unconfigured startup legitimately
+# records zero: it dials Postgres on loopback, which needs no DNS.
+#
+#   * the canary, which proves a container wired exactly like the probed ones
+#     is seen by the sinkhole;
+#   * the red-run proof, which shows the gate failing on an image that does
+#     dial out, so a green run means something.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-egress-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container-egress:
+    name: A running container makes no outbound call
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Same reasoning as golden-pipeline.yml: image builds fill the runner
+      # and the resulting failure reads as something else entirely.
+      - name: Reclaim disk before building
+        run: |
+          set -euo pipefail
+          echo "before: $(df -h / | awk 'NR==2{print $4}') free"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          echo "after:  $(df -h / | awk 'NR==2{print $4}') free"
+
+      # From this commit, not from `:latest`. A published tag would answer a
+      # question about whatever was last released rather than about this
+      # change.
+      - name: Build the images to probe
+        run: docker compose build api fusion
+
+      # First, because everything after it is worthless if the probe is
+      # blind, and a control that runs last is a control that reports on a
+      # verdict already printed.
+      - name: The probe can see egress
+        run: python3 scripts/check_container_egress.py --service api --negative-control
+
+      - name: No public name is asked for on startup
+        run: python3 scripts/check_container_egress.py --service api --service fusion --seconds 45
+
+      # A green run proves these images made no outbound call. It does not
+      # prove the gate would notice one, which is the property that makes it
+      # worth having. golden-pipeline.yml proves itself the same way.
+      - name: The gate reds on an image that does dial out
+        run: |
+          set -euo pipefail
+          # Its own directory, not /tmp: the build context is sent whole, and
+          # a runner's /tmp carries files the daemon cannot read.
+          mkdir -p "$RUNNER_TEMP/egress-leak"
+          cat > "$RUNNER_TEMP/egress-leak/Dockerfile" <<'DOCKERFILE'
+          FROM python:3.11-slim
+          CMD ["python", "-c", "import socket, time\ntry:\n    socket.gethostbyname('telemetry.example.net')\nexcept OSError:\n    pass\ntime.sleep(120)\n"]
+          DOCKERFILE
+          # `--load` explicitly: a container-driver builder keeps the result
+          # in its own cache, and `docker run` would then report the image as
+          # missing rather than the gate reporting on it.
+          docker buildx build --load -t aisoc-egress-leak:probe "$RUNNER_TEMP/egress-leak"
+          if python3 scripts/check_container_egress.py \
+               --service leaky --probe-image aisoc-egress-leak:probe --seconds 20; then
+            echo "::error title=container-egress::the gate passed an image that resolved a public name — it proves nothing"
+            exit 1
+          fi
+          echo "confirmed: the gate fails when a container dials out"
+
+      - name: Leave nothing behind
+        if: always()
+        run: |
+          # Only what this job created. Networks are named `aisoc-egress-*`
+          # by the gate and removed by it on the way out; this is the
+          # belt-and-braces for a cancelled run.
+          docker ps -aq --filter 'name=aisoc-egress-' | xargs -r docker rm -f || true
+          docker network ls -q --filter 'name=aisoc-egress-' | xargs -r docker network rm || true
