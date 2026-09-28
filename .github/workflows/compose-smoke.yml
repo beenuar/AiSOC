@@ -202,16 +202,17 @@ jobs:
           COMPOSE_PROJECT_NAME: aisoc-prodguard
         run: |
           set -euo pipefail
-          real() { openssl rand -hex 24; }
+          # Derived from the compose file, not listed here. A hand-written
+          # list is a second copy of the guards, and the first `${VAR:?}`
+          # added after it was written broke this step with
+          # `required variable AISOC_AGENTS_SERVICE_TOKEN is missing a value`.
           {
-            for name in POSTGRES_PASSWORD AISOC_APP_DB_PASSWORD REDIS_PASSWORD SECRET_KEY \
-                        AISOC_CREDENTIAL_KEY AISOC_SERVICE_TOKEN AISOC_ACTIONS_SERVICE_TOKEN \
-                        AISOC_REALTIME_JWT_SECRET REALTIME_INTERNAL_TOKEN METRICS_TOKEN \
-                        JWT_SECRET NEO4J_PASSWORD CLICKHOUSE_PASSWORD GRAFANA_ADMIN_PASSWORD; do
-              printf '%s=%s\n' "$name" "$(real)"
-            done
+            python3 scripts/check_published_secrets.py --list-guarded \
+              | while read -r name; do printf '%s=%s\n' "$name" "$(openssl rand -hex 24)"; done
             printf 'AISOC_VERSION=%s\n' "${AISOC_VERSION}"
           } > /tmp/prod-real.env
+          test "$(wc -l < /tmp/prod-real.env)" -gt 10 \
+            || { echo "::error::no guarded variables were derived"; exit 1; }
           sed 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=aisoc_dev_secret|' /tmp/prod-real.env > /tmp/prod-published.env
 
           echo "::group::published credential — must refuse"

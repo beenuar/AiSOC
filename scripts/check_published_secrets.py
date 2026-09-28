@@ -369,12 +369,25 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check-env", action="store_true", help="inspect this process's environment")
     parser.add_argument("--check", action="store_true", help="verdict over the repository")
+    parser.add_argument(
+        "--list-guarded",
+        action="store_true",
+        help="print every `${VAR:?}` variable in the production compose file, one per line",
+    )
     args = parser.parse_args(argv)
     if args.check_env:
         return _check_env()
     if args.check:
         return _check_repo()
-    parser.error("choose --check-env or --check")
+    if args.list_guarded:
+        # For the compose-smoke step that has to supply a value for every
+        # guarded variable. Hand-listing them meant the next `${VAR:?}` added
+        # to that file broke the smoke run — which is what happened the first
+        # time one was, and is a list maintained in two places by definition.
+        for name in sorted(guarded_variables(repo_root() / "docker-compose.prod.yml")):
+            print(name)
+        return 0
+    parser.error("choose --check-env, --check or --list-guarded")
     return 2
 
 
