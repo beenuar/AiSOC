@@ -1,7 +1,12 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # AiSOC Demo - API service (FastAPI)
 #
-# Deployed at:    https://aisoc-demo-api.fly.dev
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-api.fly.dev was NXDOMAIN when last measured (2026-09-28); the
+# public domain below answers HTTP 525, the edge without its origin.
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-api.fly.dev
 # Public domain:  https://api.tryaisoc.com  (CNAME → aisoc-demo-api.fly.dev)
 # Internal name:  aisoc-demo-api.internal:8000
 #

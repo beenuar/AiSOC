@@ -1,7 +1,11 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # AiSOC Demo - Agents service (LangGraph orchestrator + investigator)
 #
-# Deployed at:    https://aisoc-demo-agents.fly.dev
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-agents.fly.dev was NXDOMAIN when last measured (2026-09-28).
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-agents.fly.dev
 # Internal name:  aisoc-demo-agents.internal:8084
 #
 # Reads:  Postgres, Redis, KB (in-image), MITRE ATT&CK JSON (in-image)

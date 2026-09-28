@@ -1,7 +1,13 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # AiSOC Demo - Web (Next.js)
 #
-# Deployed at:    https://aisoc-demo-web.fly.dev
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-web.fly.dev was NXDOMAIN when last measured (2026-09-28). The
+# apex below still answers 200 — it is served from somewhere else, not from
+# this app. infra/fly/README.md records the status and what must be true
+# first.
+#
+# App URL when it exists:  https://aisoc-demo-web.fly.dev
 # Public domain:  https://tryaisoc.com  (CNAME → aisoc-demo-web.fly.dev)
 #
 # Three public hostnames front this stack:

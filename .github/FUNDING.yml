@@ -15,4 +15,8 @@
 # liberapay:
 # issuehunt:
 # otechie:
-# custom: ["https://tryaisoc.com/support"]
+# custom: []
+#
+# Whatever goes in `custom:` must return HTTP 200 before it is uncommented.
+# The example that used to sit on that line pointed at a path that 404s, and
+# a Sponsor button is the most visible link a repository has.

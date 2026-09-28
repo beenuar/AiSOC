@@ -1,7 +1,12 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # AiSOC Demo - Realtime service (WebSocket)
 #
-# Deployed at:    https://aisoc-demo-realtime.fly.dev
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-realtime.fly.dev was NXDOMAIN when last measured (2026-09-28);
+# the public WS host below answers HTTP 525, the edge without its origin.
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-realtime.fly.dev
 # Internal name:  aisoc-demo-realtime.internal:4000
 # Public WS:      wss://ws.tryaisoc.com  (CNAME → aisoc-demo-realtime.fly.dev)
 #

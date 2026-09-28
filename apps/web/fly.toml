@@ -1,19 +1,20 @@
 # fly.toml — AiSOC web app (Fly.io)
 #
-# This file mirrors the live configuration of the `aisoc-demo-web` Fly app.
-# It is the source of truth for the web app's Fly deployment.
+# The `aisoc-demo-web` Fly app this describes DOES NOT EXIST. It was reclaimed
+# for non-payment and `aisoc-demo-web.fly.dev` was NXDOMAIN when last measured
+# (2026-09-28). See infra/fly/README.md for what must be true before any of
+# this can be deployed again.
 #
 # Secrets are NEVER stored here. They are managed server-side via:
 #   flyctl secrets set KEY=value -a aisoc-demo-web
 #   flyctl secrets list -a aisoc-demo-web
 #
-# Auto-deploy: any push to `main` that touches `apps/web/**`,
-# `packages/types/**`, `packages/ui/**`, `pnpm-lock.yaml`,
-# `pnpm-workspace.yaml`, or `.github/workflows/deploy-web.yml`
-# triggers `.github/workflows/deploy-web.yml`, which runs
-# `flyctl deploy --remote-only` against this file.
+# There is no auto-deploy. This file used to be deployed by a push-triggered
+# workflow; that workflow was removed along with its API counterpart, because
+# a workflow that deploys to nothing is dead code pointing at a dead
+# destination.
 #
-# Manual deploy (from repo root):
+# Manual deploy (from repo root), once the app exists again:
 #   flyctl deploy --remote-only \
 #     --dockerfile apps/web/Dockerfile \
 #     --config apps/web/fly.toml \

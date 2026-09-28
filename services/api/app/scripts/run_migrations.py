@@ -118,9 +118,8 @@ async def _connect() -> asyncpg.Connection:
     own boot. asyncpg surfaces these as ``ConnectionDoesNotExistError``,
     ``ConnectionResetError``, or ``OSError`` raised *inside the initial
     handshake* — i.e. before the connection is ever usable. A single
-    failed connect would crash the entire deploy, which made the
-    "Deploy API to Fly" workflow look like a code regression when it
-    was really just a cold-start race.
+    failed connect would crash the entire deploy, which made a Fly deploy
+    look like a code regression when it was really just a cold-start race.
 
     We retry on the small set of connect-time exceptions that are
     actually transient. Anything authentication- or schema-related

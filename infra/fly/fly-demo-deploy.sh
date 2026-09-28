@@ -2,7 +2,14 @@
 # 
 # fly-demo-deploy.sh
 #
-# Deploys the full AiSOC live demo stack to Fly.io behind tryaisoc.com.
+# NOTHING THIS DEPLOYS IS CURRENTLY RUNNING. The Fly apps were reclaimed for
+# non-payment and all three `*.fly.dev` hostnames were NXDOMAIN when last
+# measured (2026-09-28); every flyctl call against the organisation answers
+# "Your account has overdue invoices". infra/fly/README.md records the
+# measurements and the four preconditions, the first of which is a billing
+# action no change in this repository can work around.
+#
+# Deploys the full AiSOC live demo stack to Fly.io behind the hosted domain.
 # Idempotent: safe to re-run after partial failures.
 #
 # Usage:

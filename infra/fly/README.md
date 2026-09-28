@@ -1,21 +1,71 @@
-# AiSOC Hosted Demo (Fly.io)
+# AiSOC on Fly.io — nothing here is currently deployed
 
-This directory contains the infrastructure-as-code for the public demo at
-**[tryaisoc.com](https://tryaisoc.com)**, deployed on Fly.io.
+> ## Status, measured 2026-09-28
+>
+> **This stack does not exist.** The Fly organisation has overdue invoices and
+> every app was reclaimed for non-payment. Measured with `dig` and `curl` on
+> the date above:
+>
+> ```
+> aisoc-demo-web.fly.dev        NXDOMAIN
+> aisoc-demo-api.fly.dev        NXDOMAIN
+> aisoc-demo-realtime.fly.dev   NXDOMAIN
+> ```
+>
+> The `api.` and `ws.` subdomains in the table below still resolve — to
+> Cloudflare — and answer **HTTP 525**: the edge is up and the origin behind
+> it is gone. The apex is served from somewhere else entirely and is not this
+> stack.
+>
+> The two workflows that deployed from this directory, `deploy-api.yml` and
+> `deploy-web.yml`, were **removed**. They had already been reduced to
+> `workflow_dispatch`-only, every one of their last runs on `main` failed, and
+> a workflow that deploys to nothing is dead code pointing at a dead
+> destination. Nothing they did is lost: `fly-demo-deploy.sh` performs the
+> deploy, the "Smoke checks" section below is the post-deploy verification
+> they ran, and "Bringing this back" is the precondition list they encoded.
+>
+> **The open-source front door is <https://beenuar.github.io/AiSOC/>. The
+> self-host path is `make up`. Neither involves Fly, and neither depends on
+> anything in this directory.**
 
-Three public hostnames front the stack:
+Read the rest of this file as a runbook for a stack that is not running.
+
+## Bringing this back
+
+Four things must be true, in this order. Only the first is not an engineering
+task, and it blocks all three that follow.
+
+1. **The Fly invoice is settled.** Every `flyctl` call against this
+   organisation answers `Your account has overdue invoices. Please update your
+   payment information`. That is a billing action. No change in this
+   repository can work around it, and any attempt below fails on it first.
+2. **The apps are re-created.** They were reclaimed, not stopped, so the names
+   may also have been released. `fly-demo-deploy.sh --provision` creates them,
+   the Postgres and Redis attachments, and requests the certificates.
+3. **DNS and certificates are re-issued.** The CNAME targets in "First-time
+   setup" point at `*.fly.dev` names that currently do not resolve, so they
+   have to be re-pointed after step 2 rather than assumed intact.
+4. **The result is verified by asking the app, not the deploy tool.** A
+   `flyctl deploy` that returns zero is not a demo that works — the machine
+   can boot, fail its first request, and sit there. Run the "Smoke checks"
+   below and require HTTP 200 before calling it deployed. This is the one
+   thing the deleted workflows added over the shell script, and it is the
+   reason the public demo once stayed down for weeks behind green runs.
+
+Three public hostnames fronted the stack:
 
 | Hostname             | Fly app                | Purpose                          |
 |----------------------|------------------------|----------------------------------|
-| `tryaisoc.com`       | `aisoc-demo-web`       | Next.js UI (apex/root domain)    |
-| `api.tryaisoc.com`   | `aisoc-demo-api`       | FastAPI: `/health`, `/api/v1/*`  |
-| `ws.tryaisoc.com`    | `aisoc-demo-realtime`  | WebSocket fanout (`wss://`)      |
+| apex                 | `aisoc-demo-web`       | Next.js UI (apex/root domain)    |
+| `api.` subdomain     | `aisoc-demo-api`       | FastAPI: `/health`, `/api/v1/*`  |
+| `ws.` subdomain      | `aisoc-demo-realtime`  | WebSocket fanout (`wss://`)      |
 
-Why three hostnames instead of routing everything through `tryaisoc.com`:
-the realtime service speaks raw WebSocket which Next.js rewrites can't
-proxy in production, and sending all `/api/v1/*` through the web app's
-machine would double latency. Splitting api/ws onto their own Fly certs
-is the standard pattern and keeps the browser's CORS/CSP boundary explicit.
+Why three hostnames instead of routing everything through the apex: the
+realtime service speaks raw WebSocket which Next.js rewrites can't proxy in
+production, and sending all `/api/v1/*` through the web app's machine would
+double latency. Splitting api/ws onto their own Fly certs is the standard
+pattern and keeps the browser's CORS/CSP boundary explicit.
 
 ## Goal
 

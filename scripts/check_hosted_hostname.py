@@ -110,8 +110,18 @@ _GATE_FIXTURE = "deliberate regression assertion that the hostname is absent"
 # path -> (expected occurrences, why this one is allowed)
 ALLOWED: dict[str, tuple[int, str]] = {
     # --- managed-instance deploy configs -----------------------------------
-    "infra/fly/fly-demo-deploy.sh": (27, _MANAGED_DEPLOY),
-    "infra/fly/README.md": (17, _MANAGED_DEPLOY),
+    # 27 before the status banner. The one that went was the header sentence
+    # claiming the script "deploys the stack behind <hosted domain>" — present
+    # tense about apps that no longer exist. The remaining 26 are flags and
+    # printed DNS records, which are what the script configures.
+    "infra/fly/fly-demo-deploy.sh": (26, _MANAGED_DEPLOY),
+    # 17 before the Fly apps were confirmed reclaimed. Six went with the
+    # claims that were no longer true: the file opened by saying the hosted
+    # demo is "deployed on Fly.io" when the three `*.fly.dev` names are
+    # NXDOMAIN, and the hostname/app table stated a mapping that resolves to
+    # HTTP 525. The table stays, describing what fronted the stack, with the
+    # hostnames named by role instead of spelled out as if they worked.
+    "infra/fly/README.md": (11, _MANAGED_DEPLOY),
     "infra/fly/web/fly.toml": (13, _MANAGED_DEPLOY),
     "infra/fly/api/fly.toml": (9, _MANAGED_DEPLOY),
     "infra/fly/realtime/fly.toml": (4, _MANAGED_DEPLOY),
@@ -124,7 +134,10 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "apps/web/fly.toml": (4, _MANAGED_DEPLOY),
     "scripts/demo-public.sh": (3, _MANAGED_DEPLOY),
     "scripts/adoption_snapshot.py": (1, _MANAGED_DEPLOY),
-    ".github/FUNDING.yml": (1, _MANAGED_DEPLOY),
+    # `.github/FUNDING.yml` used to sit here for one occurrence: a commented-out
+    # `custom: ["<hosted host>/support"]` example. The path 404s, and a Sponsor
+    # button is the most visible link a repository has, so the example was
+    # replaced with an empty list and a rule rather than exempted.
     ".github/ISSUE_TEMPLATE/benchmark_submission.yml": (2, _MANAGED_DEPLOY),
     "apps/web/e2e/demo/screencast.spec.ts": (1, _MANAGED_DEPLOY),
     # --- marketing surface, served from the hosted site --------------------
