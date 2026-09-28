@@ -1,0 +1,107 @@
+name: Grading integrity
+
+# A required status check is a promise that every commit reaching the branch
+# was graded. This workflow is the only thing that checks the promise is kept,
+# and it does so from both ends because they fail differently:
+#
+#   concurrency-shape   reads the workflow files. Prevention: a concurrency
+#                       block that can discard a push to a protected branch is
+#                       rejected before it lands.
+#
+#   cancelled-runs      asks the Actions API. Detection: a run on `main` that
+#                       ended `cancelled` is reported as a problem. The static
+#                       gate cannot see a manual cancel, a runner eviction, a
+#                       timeout kill, or a concurrency shape it has not
+#                       learned to read.
+#
+# Why either is needed: a cancelled run reports `cancelled`, not `failure`, so
+# nothing goes red; and a job whose `needs:` dependency was cancelled never
+# starts, so it produces no check run at all. Measured before the fix, of the
+# last 1,000 push-triggered runs on `main`, 259 ended `cancelled` — `ci.yml`
+# alone 36 of 51 — and only 51% of the required-check x commit pairs over the
+# last 30 commits actually graded. Nothing anywhere was red.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 05:17 UTC daily. Off the hour because the runner pool is busiest on it,
+    # and a job that queues past its window is a job that did not run.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: grading-integrity-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  concurrency-shape:
+    name: No workflow can discard a push to main
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      # Self-test first, on the same tree: a gate that has quietly stopped
+      # detecting anything fails here rather than printing OK below.
+      - name: The gate detects the shape it claims to
+        run: python3 scripts/check_workflow_concurrency.py --self-test
+
+      - name: Every workflow keeps its push runs
+        run: python3 scripts/check_workflow_concurrency.py --list
+
+  cancelled-runs:
+    name: No run on main ended cancelled
+    # Only where there is history to read. A pull request cannot change what
+    # already ran on `main`, so asking there would grade the base branch and
+    # block a change that has nothing to do with it.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      - name: The gate detects the condition it claims to
+        run: python3 scripts/check_main_run_cancellations.py --self-test
+
+      # No `continue-on-error`. The whole reason this exists is that a
+      # cancellation is already invisible; a gate that shrugs at one would
+      # add a second layer of silence on top of the first.
+      - name: Ask the Actions API what actually ran
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_main_run_cancellations.py
+
+  gate-self-test:
+    name: The grading-integrity gates still work
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      - name: The cancellation detector detects a cancellation
+        run: python3 scripts/check_main_run_cancellations.py --self-test

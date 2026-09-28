@@ -32,7 +32,24 @@ on:
 #
 # Queuing instead costs runner minutes and can leave `:latest` a few minutes
 # behind on a busy day. GitHub runs a concurrency group in order, so the last
-# push still wins the moving tags, and every run completes its push.
+# push still wins the moving tags.
+#
+# It does NOT mean every run completes its push, which this comment used to
+# claim. GitHub cancels a run that is still *pending* in a busy group when a
+# newer one queues, so `cancel-in-progress: false` only guarantees the first
+# and the last of a burst. Measured on 2026-09-28: 13 runs of this workflow on
+# `main` ended `cancelled` with zero jobs — killed before a single step
+# existed. Each of those commits therefore has no `sha-` image.
+#
+# Keeping the shared group is a deliberate trade, not an oversight. A
+# per-commit group would publish every `sha-` tag, but it would also let two
+# runs of 15 images x 2 architectures race for `:latest` and `:main`, and the
+# older run could win. A stale moving tag is what a self-hoster actually
+# pulls; a missing `sha-` tag is not. check_published_images.py — run daily by
+# image-availability.yml, and again by this workflow after its manifests are
+# pushed — is what catches a moving tag that has fallen behind.
+# scripts/check_workflow_concurrency.py records this as an exception with the
+# same reasoning, so the cost stays visible instead of being forgotten.
 concurrency:
   group: publish-images-${{ github.ref }}
   cancel-in-progress: false
