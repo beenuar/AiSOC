@@ -36,7 +36,9 @@ it *was*.
 from __future__ import annotations
 
 import os
+import socket
 import uuid
+from urllib.parse import urlparse
 
 import pytest
 import pytest_asyncio
@@ -129,8 +131,31 @@ _DSN = os.environ.get("DATABASE_URL", "")
 _REQUIRED = os.environ.get("POSTGRES_ABORT_SEMANTICS_REQUIRED", "").strip() not in ("", "0", "false")
 
 
+def _postgres_is_listening() -> bool:
+    """Whether something actually answers on the DSN's host and port.
+
+    Reading the DSN alone is not enough. The unit-test job exports a
+    `postgres://…localhost:5432` URL with no server behind it, so a
+    string check decided the test should run and it died on
+    `Connect call failed`. A DSN is a statement of intent; this asks.
+    """
+    parsed = urlparse(_DSN.replace("postgresql+asyncpg://", "postgresql://"))
+    if not parsed.hostname:
+        return False
+    try:
+        with socket.create_connection((parsed.hostname, parsed.port or 5432), timeout=2):
+            return True
+    except OSError:
+        return False
+
+
+#: `POSTGRES_ABORT_SEMANTICS_REQUIRED=1` still overrides, so integration.yml
+#: fails loudly rather than skipping if its Postgres is missing.
+_HAVE_POSTGRES = "postgres" in _DSN and _postgres_is_listening()
+
+
 @pytest.mark.skipif(
-    "postgres" not in _DSN and not _REQUIRED,
+    not _HAVE_POSTGRES and not _REQUIRED,
     reason="needs a live Postgres — abort-on-error is a PostgreSQL behaviour and SQLite does not have it",
 )
 class TestPostgresAbortsTheWholeTransaction:
