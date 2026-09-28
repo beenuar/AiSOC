@@ -9,6 +9,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import html
 import time
 from datetime import datetime
 from typing import Any
@@ -130,9 +131,13 @@ def _md_to_html(md: str, case_id: str) -> str:
 
         body = markdown.markdown(md, extensions=["tables", "fenced_code"])
     except ImportError:
-        # Fallback: wrap in <pre>
-        body = f"<pre>{md}</pre>"
+        # Escaped, because a raw `<pre>` wrap leaks HTML through unchanged and
+        # this report carries model output and connector-supplied entity names.
+        # `orchestrator/report.py` already reached this conclusion and says so
+        # in a comment; this copy did the thing that comment warns against.
+        body = f"<pre>{html.escape(md)}</pre>"
 
+    case_id = html.escape(str(case_id), quote=True)
     ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     return f"""<!DOCTYPE html>
 <html lang="en">

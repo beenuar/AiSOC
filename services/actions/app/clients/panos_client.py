@@ -33,12 +33,82 @@ management network) and avoids those.
 
 from __future__ import annotations
 
+import ipaddress
+import re
 from typing import Any
+from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 import structlog
 
 logger = structlog.get_logger()
+
+#: PAN-OS accepts a tag name of up to 127 characters. Restricting it to this
+#: set is narrower than the firewall allows and deliberately so: a tag is
+#: chosen by an operator from a small vocabulary their DAG already matches,
+#: not composed from event data, so nothing legitimate needs a character that
+#: carries meaning in XML.
+_TAG_PATTERN = re.compile(r"\A[A-Za-z0-9._-]{1,127}\Z")
+
+
+class PanOsAddressError(ValueError):
+    """The value offered as an address is not one.
+
+    Raised rather than escaped. An escaped non-address would be sent to the
+    firewall as a literal, where it silently matches nothing — so a block that
+    never applied would report success. Refusing names the problem at the
+    point it can still be fixed.
+    """
+
+
+def _validated_address(value: str) -> str:
+    """Return ``value`` if it is an address PAN-OS registers, else raise.
+
+    Accepts the three forms the user-id API takes: a single address, a CIDR
+    network, and a hyphenated range. Everything else is refused.
+
+    This is the primary control, with escaping below as defence in depth.
+    Escaping alone would stop the injection and still hand the firewall a
+    string that is not an address; validation means the only values that reach
+    the XML are ones that cannot contain a character worth escaping.
+    """
+    candidate = (value or "").strip()
+    if not candidate:
+        raise PanOsAddressError("no address supplied")
+
+    try:
+        ipaddress.ip_address(candidate)
+        return candidate
+    except ValueError:
+        pass
+
+    try:
+        # strict=False so an operator may pass 10.0.0.1/24 and mean the
+        # network; PAN-OS resolves it the same way.
+        ipaddress.ip_network(candidate, strict=False)
+        return candidate
+    except ValueError:
+        pass
+
+    start, separator, end = candidate.partition("-")
+    if separator:
+        try:
+            first = ipaddress.ip_address(start.strip())
+            last = ipaddress.ip_address(end.strip())
+        except ValueError:
+            pass
+        else:
+            if first.version == last.version and first <= last:
+                return candidate
+
+    raise PanOsAddressError(f"{value!r} is not an IP address, CIDR network or address range; refusing to send it to the firewall")
+
+
+def _validated_tag(value: str) -> str:
+    candidate = (value or "").strip()
+    if not _TAG_PATTERN.match(candidate):
+        raise PanOsAddressError(f"{value!r} is not a valid PAN-OS tag name; expected 1-127 characters from [A-Za-z0-9._-]")
+    return candidate
 
 
 class PanOsClient:
@@ -65,23 +135,34 @@ class PanOsClient:
         decide to silently release the block. Operators who want a
         TTL on the block should set it at the AiSOC playbook
         layer where it's auditable.
+
+        ``ip`` and ``tag`` arrive from ``ActionRequest.parameters`` and were
+        interpolated raw. A value closing the attribute could append further
+        payloads to the same message, so a *block* emitted well-formed XML
+        containing an ``unregister`` of any address the caller chose — the
+        containment action releasing a block instead of applying one
+        (GHSA-w754-prh8-m56j). Both are validated, then escaped.
         """
+        address = quoteattr(_validated_address(ip))
+        member = escape(_validated_tag(tag))
         return (
             f"<uid-message>"
             f"<version>2.0</version><type>update</type>"
             f"<payload><register>"
-            f'<entry ip="{ip}" persistent="1">'
-            f"<tag><member>{tag}</member></tag>"
+            f'<entry ip={address} persistent="1">'
+            f"<tag><member>{member}</member></tag>"
             f"</entry></register></payload></uid-message>"
         )
 
     def _xml_unregister(self, ip: str, tag: str) -> str:
+        address = quoteattr(_validated_address(ip))
+        member = escape(_validated_tag(tag))
         return (
             f"<uid-message>"
             f"<version>2.0</version><type>update</type>"
             f"<payload><unregister>"
-            f'<entry ip="{ip}">'
-            f"<tag><member>{tag}</member></tag>"
+            f"<entry ip={address}>"
+            f"<tag><member>{member}</member></tag>"
             f"</entry></unregister></payload></uid-message>"
         )
 
