@@ -907,13 +907,26 @@ jobs:
       # `passlib`, `celery` and `aiofiles`, which nothing in either service
       # imports.
       #
-      # So the list is derived now. `service_requirements.py` reads what the
-      # manifests declare, expands poetry's carets into ranges pip
-      # understands, and hands pip both services' constraints at once — where
-      # they disagree pip resolves the intersection, and where they cannot
-      # agree pip fails rather than silently picking one.
+      # So the list is derived now. But deriving it from the *manifests* only
+      # narrowed the gap: a range re-resolves at install time, so CI could
+      # still land on a different patch release than the image ships, and
+      # that is precisely how the last defect hid — `services/api` declared
+      # `opentelemetry-instrumentation-fastapi = "^0.45b0"` and locked 0.45b0
+      # while this job installed it unbounded, resolved 0.66b0, and passed.
+      # Both were "inside the declared range"; only one of them was the image.
+      #
+      # So each service's suite now runs against its own `poetry.lock` — the
+      # same file `services/<name>/Dockerfile` installs from — expanded to its
+      # complete resolved closure and installed with `--no-deps`, so pip
+      # performs no resolution at all. Measured against the published
+      # `ghcr.io/beenuar/aisoc-core-api:latest`: 97 main-group entries, 0
+      # version mismatches.
+      #
+      # One virtualenv per service, because two locks cannot share an
+      # interpreter: `api` and `agents` disagree about 28 distributions. They
+      # are separate images, so that is not a defect in either lock.
       # `scripts/check_ci_install_parity.py` holds it that way.
-      - name: Install what services/api and services/agents declare
+      - name: Install services/api and services/agents from their committed locks
         run: |
           set -euo pipefail
           SYSTEM="$(python3 scripts/service_requirements.py api agents --system)"
@@ -924,6 +937,43 @@ jobs:
             # Same packages services/api/Dockerfile installs.
             sudo apt-get install -y --no-install-recommends ${SYSTEM}
           fi
+          # Written out per service rather than as a shell loop: the service
+          # name has to survive being read by something that is not bash.
+          # `scripts/check_ci_install_parity.py` resolves these lines to the
+          # locks they name, and a `for svc in ...` loop hands it `"${svc}"`,
+          # which resolves to no service at all — the gate would then report
+          # the job installing nothing and pass, which is the failure shape
+          # this whole change exists to remove.
+          python3 -m venv $RUNNER_TEMP/.venv-api
+          python3 scripts/service_requirements.py api --locked > /tmp/api.lock.txt
+          $RUNNER_TEMP/.venv-api/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/api.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-agents
+          python3 scripts/service_requirements.py agents --locked > /tmp/agents.lock.txt
+          $RUNNER_TEMP/.venv-agents/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/agents.lock.txt
+
+          echo "api:    $(wc -l < /tmp/api.lock.txt) pinned distribution(s) from services/api/poetry.lock"
+          echo "agents: $(wc -l < /tmp/agents.lock.txt) pinned distribution(s) from services/agents/poetry.lock"
+
+          # A requirement line whose marker is false is skipped by pip without
+          # a warning and with exit 0, so an environment can come out of a
+          # successful install with nothing in it. That is not hypothetical:
+          # poetry writes an extras-gated dependency as `extra == "dev"`,
+          # which is false in a plain requirements file, and it silently took
+          # the test runner out of three virtualenvs. Name it here, where the
+          # install is, rather than three steps later as an import error.
+          $RUNNER_TEMP/.venv-api/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-agents/bin/python -c "import pytest"
+      # The repository's own gate suites (`tests/`, `scripts/tests/`) and the
+      # forty `scripts/` gates this job runs are not a service: they have no
+      # manifest and no lock of their own, so there is no locked set to
+      # install for them. They keep the derived-range install, on the
+      # interpreter the service suites no longer use. Stated rather than
+      # implied — it is the one install path in this job that can still
+      # re-resolve, and it grades no service's code.
+      - name: Install what the repository's own gate suites need
+        run: |
+          set -euo pipefail
           python3 scripts/service_requirements.py api agents | xargs pip install --quiet
       # Boot-test: verify the FastAPI app can actually import without
       # NameError / ImportError before spending time on the full pytest
@@ -938,14 +988,15 @@ jobs:
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
         run: |
-          python -c "from app.main import app; print('api boot-test ok')"
+          $RUNNER_TEMP/.venv-api/bin/python -c "from app.main import app; print('api boot-test ok')"
       - name: Run API tests (unit + GraphQL schema)
         working-directory: services/api
         env:
           ENVIRONMENT: development
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
-        run: python -m pytest tests/ -v --tb=short
+        run: |
+          $RUNNER_TEMP/.venv-api/bin/python -m pytest tests/ -v --tb=short
       # This used to be a hand-maintained list of 26 file paths, which is the
       # same "a matrix is a list somebody has to remember to add to" shape
       # called out for the Go modules further down, and it had the same
@@ -971,7 +1022,7 @@ jobs:
         # search this suite grades was the empty list, every run.
         run: |
           cd services/agents
-          python3 -m pytest tests/ -v --tb=short -rs
+          $RUNNER_TEMP/.venv-agents/bin/python -m pytest tests/ -v --tb=short -rs
 
       # The repository's own gate suites — `tests/` and `scripts/tests/`.
       # `tests/` was reached only as nineteen single-file invocations spread
@@ -1244,13 +1295,37 @@ jobs:
       # lock, so the module could not load there at all; only this line made
       # the tests pass. The pysigma defect with the arrow reversed.
       #
-      # Derived now, from the three manifests, with pip resolving the
-      # intersection where they disagree.
-      - name: Install what fusion, honeytokens and purple-team declare
+      # Derived from the three manifests now — and then from the three
+      # *locks*, because a range still re-resolves and the version CI grades
+      # has to be the version the image ships. These three disagree about
+      # `asyncpg` (0.29.0 against 0.31.0), so they cannot share an
+      # interpreter and each gets its own virtualenv installed `--no-deps`
+      # from its own resolved closure.
+      - name: Install fusion, honeytokens and purple-team from their committed locks
         run: |
           set -euo pipefail
-          python3 scripts/service_requirements.py fusion honeytokens purple-team \
-            | xargs pip install --quiet
+          # Per service, not a loop: the gate has to be able to read which
+          # service each line installs, and `"${svc}"` resolves to none.
+          python3 -m venv $RUNNER_TEMP/.venv-fusion
+          python3 scripts/service_requirements.py fusion --locked > /tmp/fusion.lock.txt
+          $RUNNER_TEMP/.venv-fusion/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/fusion.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-honeytokens
+          python3 scripts/service_requirements.py honeytokens --locked > /tmp/honeytokens.lock.txt
+          $RUNNER_TEMP/.venv-honeytokens/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/honeytokens.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-purple-team
+          python3 scripts/service_requirements.py purple-team --locked > /tmp/purple-team.lock.txt
+          $RUNNER_TEMP/.venv-purple-team/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/purple-team.lock.txt
+
+          # pip skips a requirement whose marker is false without warning and
+          # with exit 0. These three declare their test runner through a PEP
+          # 621 extra, which poetry locks as `extra == "dev"` — false in a
+          # plain requirements file — and all three came out of a successful
+          # install with no pytest in them.
+          $RUNNER_TEMP/.venv-fusion/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-honeytokens/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-purple-team/bin/python -c "import pytest"
       # Phase 2.2 — every wave-1 service now has a measured coverage
       # floor encoded in its pyproject under `[tool.coverage.report]
       # fail_under`. Pytest reads it via `--cov-config=pyproject.toml`
@@ -1260,13 +1335,16 @@ jobs:
       # grow.
       - name: Run fusion unit tests + coverage gate
         working-directory: services/fusion
-        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+        run: |
+          $RUNNER_TEMP/.venv-fusion/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
       - name: Run honeytokens unit tests + coverage gate
         working-directory: services/honeytokens
-        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+        run: |
+          $RUNNER_TEMP/.venv-honeytokens/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
       - name: Run purple-team unit tests + coverage gate
         working-directory: services/purple-team
-        run: python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+        run: |
+          $RUNNER_TEMP/.venv-purple-team/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
 
   # ──────────────────────────────────────────────
   # Phase 2.1 — Wider Python service test matrix.
@@ -1357,7 +1435,10 @@ jobs:
       # cannot be disjoint with anything, and pip still caches wheels across
       # cells. `aioredis`, `jinja2` and `tenacity` are simply gone: no
       # service here declares or imports any of them.
-      - name: Install what services/${{ matrix.service }} declares
+      #
+      # And from that service's committed lock rather than from its ranges,
+      # so the versions this cell grades are the versions its image ships.
+      - name: Install services/${{ matrix.service }} from its committed lock
         run: |
           set -euo pipefail
           SYSTEM="$(python3 scripts/service_requirements.py '${{ matrix.service }}' --system)"
@@ -1365,8 +1446,15 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y --no-install-recommends ${SYSTEM}
           fi
-          python3 scripts/service_requirements.py '${{ matrix.service }}' \
-            | xargs pip install --quiet
+          python3 -m venv $RUNNER_TEMP/.venv-${{ matrix.service }}
+          python3 scripts/service_requirements.py '${{ matrix.service }}' --locked > '/tmp/${{ matrix.service }}.lock.txt'
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/pip install --quiet --disable-pip-version-check \
+            --no-deps -r '/tmp/${{ matrix.service }}.lock.txt'
+          echo "${{ matrix.service }}: $(wc -l < '/tmp/${{ matrix.service }}.lock.txt') pinned distribution(s)"
+          # pip skips a requirement whose marker is false without warning and
+          # with exit 0, so a successful install can leave an empty
+          # environment. Say so here rather than at the pytest step.
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/python -c "import pytest"
       # Phase 2.2 — coverage floor read from each service's pyproject.
       # `--cov-config=pyproject.toml` makes coverage.py honour the
       # `[tool.coverage.report] fail_under = N` line; pytest-cov then
@@ -1375,7 +1463,7 @@ jobs:
       - name: Run ${{ matrix.service }} tests + coverage gate
         working-directory: services/${{ matrix.service }}
         run: |
-          python -m pytest tests/ \
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/python -m pytest tests/ \
             --cov-config=pyproject.toml \
             --cov=app \
             --cov-report=term-missing \

@@ -29,6 +29,7 @@ hunt worker.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -237,6 +238,13 @@ def _python_test_install_set() -> tuple[list[str], list[str]]:
     producer the workflow asks. What stays falsifiable is the naming — a job
     that derives from the wrong service, or a manifest that drops the package,
     both fail here.
+
+    The step now passes ``--locked`` and redirects to a file, so the answer
+    comes from the lock rather than from the ranges — which is the point of
+    that change, and is also a stronger question: "is pysigma in the set the
+    virtualenv receives" rather than "is it in the set a resolver may choose
+    from". The tail is cut at the redirect, because a reader that keeps going
+    takes ``>`` and ``/tmp/api.lock.txt`` for service names.
     """
     root = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(root / "scripts"))
@@ -245,15 +253,23 @@ def _python_test_install_set() -> tuple[list[str], list[str]]:
     workflow = yaml.safe_load((root / ".github" / "workflows" / "ci.yml").read_text())
     steps = workflow["jobs"]["python-test"]["steps"]
     named: list[str] = []
+    locked: set[str] = set()
     for step in steps:
         for line in str(step.get("run") or "").splitlines():
             if "service_requirements.py" not in line or "--system" in line:
                 continue
-            tail = line.split("service_requirements.py", 1)[1]
-            named += [word for word in tail.split("|")[0].split() if not word.startswith("-")]
+            tail = re.split(r"[|>;]|&&", line.split("service_requirements.py", 1)[1])[0]
+            words = [word for word in tail.split() if re.fullmatch(r"[a-z0-9][a-z0-9-]*", word)]
+            named += words
+            if "--locked" in line:
+                locked.update(words)
     resolved: list[str] = []
     for service in dict.fromkeys(named):
-        resolved += service_requirements.requirements(root / "services" / service / "pyproject.toml")
+        manifest = root / "services" / service / "pyproject.toml"
+        if service in locked:
+            resolved += service_requirements.locked_requirements(manifest)
+        else:
+            resolved += service_requirements.requirements(manifest)
     return list(dict.fromkeys(named)), resolved
 
 
@@ -274,10 +290,16 @@ def test_ci_installs_the_backend_it_claims_to_test() -> None:
     # The floor is the measurement, not a preference: pysigma 0.11.0 through
     # 0.11.16 carry `from pyparsing import List` in `sigma/exceptions.py`, a
     # name pyparsing no longer re-exports, so importing the package raises on
-    # any current pyparsing. A manifest permitting one of those releases is a
-    # manifest permitting an engine that cannot start.
-    spec = next(r for r in requirements if r.lower().startswith("pysigma>") or r.lower().startswith("pysigma="))
-    assert ">=0.11.17" in spec, f"pysigma must be floored at 0.11.17; the job would install {spec}"
+    # any current pyparsing. A release below the floor cannot start, so the
+    # question is the same whichever form the step produces — the job must not
+    # be able to install one. `==` is checked by value because a pin below the
+    # floor is worse than a range permitting one: it installs it every time.
+    spec = next(r for r in requirements if re.match(r"pysigma\s*[=><]", r, re.I))
+    if "==" in spec:
+        pinned = tuple(int(p) for p in re.findall(r"\d+", spec.split("==", 1)[1])[:3])
+        assert pinned >= (0, 11, 17), f"the lock pins pysigma {spec}, below the 0.11.17 floor that can actually import"
+    else:
+        assert ">=0.11.17" in spec, f"pysigma must be floored at 0.11.17; the job would install {spec}"
 
 
 def test_the_yara_runner_is_installed_too() -> None:

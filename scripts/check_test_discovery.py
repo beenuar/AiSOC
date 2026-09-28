@@ -118,8 +118,15 @@ DEFAULT_PYTHON_FILES = ("test_*.py", "*_test.py")
 #: `pip install ... pytest` line, and an install line has no path argument, so
 #: it reads as a bare collection of the entire tree — an over-broad resolver
 #: manufactures the coverage this gate exists to disprove.
+#: The optional `["']` after the interpreter is not cosmetic. A quoted
+#: interpreter path — `"$RUNNER_TEMP/.venv-api/bin/python" -m pytest` — puts
+#: the closing quote between `python` and `-m`, so the `\s+` never matches and
+#: the line is not recognised as a pytest run at all. The tokeniser below
+#: handles it perfectly well; only this detector would have rejected it, which
+#: is the worst place for the disagreement because the result is a suite
+#: silently reported as collected by nothing.
 _PYTEST_COMMAND = re.compile(
-    r"(?:^|[\n;&|]|\bpython3?(?:\.\d+)?\s+-m\s+|\buv\s+run\s+|\bpoetry\s+run\s+)\s*pytest\b",
+    r"""(?:^|[\n;&|]|\bpython3?(?:\.\d+)?["']?\s+-m\s+|\buv\s+run\s+|\bpoetry\s+run\s+)\s*pytest\b""",
     re.MULTILINE,
 )
 _PIP_INSTALL = re.compile(r"\b(?:pip3?|python3?(?:\.\d+)?\s+-m\s+pip)\s+install\b")
@@ -235,6 +242,16 @@ def _cd_target(segment: str, cwd: str) -> str | None:
     return Path(*parts).as_posix() if parts else ""
 
 
+#: ``python``, ``python3``, ``python3.11``, ``/usr/bin/python3`` and
+#: ``../../.venv-api/bin/python`` are all the same thing, and a resolver that
+#: recognises only the bare names stops seeing a suite the moment CI runs it
+#: from a virtualenv. Every whole-suite job does now — each service installs
+#: its own ``poetry.lock`` into ``.venv-<service>`` because two locks cannot
+#: share an interpreter — and matching on the bare name alone reported all
+#: thirteen service trees as collected by nothing while CI ran every one.
+_INTERPRETER = re.compile(r"(?:\S*/)?python3?(?:\.\d+)?")
+
+
 def _args_after_pytest(tokens: list[str]) -> list[str] | None:
     """The arguments handed to pytest, or None if this is not a pytest run."""
     index = 0
@@ -248,7 +265,7 @@ def _args_after_pytest(tokens: list[str]) -> list[str] | None:
         if index + 1 >= len(tokens) or tokens[index + 1] != "run":
             return None
         index += 2
-    if index < len(tokens) and re.fullmatch(r"python3?(?:\.\d+)?", tokens[index]):
+    if index < len(tokens) and _INTERPRETER.fullmatch(tokens[index]):
         index += 1
         if index < len(tokens) and tokens[index] == "-m":
             index += 1
@@ -834,6 +851,27 @@ def self_test() -> int:
     chooser: list[tuple[str, object, object]] = [
         ("a plain invocation yields its arguments", _args_after_pytest(shlex.split("pytest tests/ -q")), ["tests/", "-q"]),
         ("python -m pytest reaches the same place", _args_after_pytest(shlex.split("python3 -m pytest tests/")), ["tests/"]),
+        (
+            "an interpreter inside a virtualenv reaches the same place",
+            _args_after_pytest(shlex.split("../../.venv-api/bin/python -m pytest tests/")),
+            ["tests/"],
+        ),
+        (
+            "an absolute interpreter path reaches the same place",
+            _args_after_pytest(shlex.split("/usr/bin/python3.11 -m pytest tests/")),
+            ["tests/"],
+        ),
+        ("a program merely ending in the word is not an interpreter", _args_after_pytest(shlex.split("mypython -m pytest tests/")), None),
+        (
+            "a quoted interpreter path is still a pytest command",
+            bool(_PYTEST_COMMAND.search('"$RUNNER_TEMP/.venv-api/bin/python" -m pytest tests/')),
+            True,
+        ),
+        (
+            "an unquoted interpreter path is still a pytest command",
+            bool(_PYTEST_COMMAND.search("$RUNNER_TEMP/.venv-api/bin/python -m pytest tests/")),
+            True,
+        ),
         ("an env prefix is stepped over", _args_after_pytest(shlex.split("PYTHONPATH=. python -m pytest tests/")), ["tests/"]),
         ("poetry run reaches the same place", _args_after_pytest(shlex.split("poetry run pytest tests/")), ["tests/"]),
         ("a pip install line is not an invocation", _args_after_pytest(shlex.split("pip install pytest pytest-asyncio")), None),

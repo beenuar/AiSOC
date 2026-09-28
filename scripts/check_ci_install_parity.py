@@ -165,6 +165,12 @@ class SuiteJob:
     services: set[str] = field(default_factory=set)
     installs: dict[str, Requirement] = field(default_factory=dict)
     invocations: list[str] = field(default_factory=list)
+    #: service -> {distribution: exact version}, for a job that installs that
+    #: service's committed `poetry.lock` rather than re-resolving its ranges.
+    locked: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: service -> the interpreter its suite is run with, so "installed the
+    #: lock" and "ran the suite against the lock" stay separate claims.
+    runners: dict[str, set[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -388,6 +394,46 @@ def requirements_in(command: str) -> list[Requirement]:
 _DERIVED = re.compile(r"service_requirements\.py\s+(?P<args>[^|>\n]*)")
 
 
+def locked_installs(run: str, root: Path) -> dict[str, dict[str, str]]:
+    """Which services this command installs from their committed ``poetry.lock``.
+
+    ``service_requirements.py <name> --locked`` emits that lock's complete
+    resolved closure as exact pins, and the workflow feeds it to
+    ``pip install --no-deps``, so pip resolves nothing and the set it lands on
+    is the set the image ships. Resolving it here means reading the same lock.
+
+    A service name that does not survive as a literal — ``"${svc}"`` from a
+    shell loop — resolves to nothing, and a job that installs nothing this
+    reader can see is a job this gate would pass while grading an unknown
+    version set. So the workflows spell each service out, and
+    ``check_locked_installs`` fails any suite whose lock it could not find a
+    line for.
+    """
+    found: dict[str, dict[str, str]] = {}
+    for match in _DERIVED.finditer(run):
+        if "--locked" not in match.group("args"):
+            continue
+        args = match.group("args").split()
+        groups = "all"
+        for index, arg in enumerate(args):
+            if arg.strip().strip("\"'") == "--only" and index + 1 < len(args):
+                groups = args[index + 1].strip().strip("\"'")
+        for arg in args:
+            name = arg.strip().strip("\"'()")
+            if name.startswith("-") or "$" in name or not name:
+                continue
+            manifest = root / "services" / name / "pyproject.toml"
+            if not manifest.is_file() or not (root / "services" / name / "poetry.lock").is_file():
+                continue
+            pins: dict[str, str] = {}
+            for pin in service_requirements.locked_requirements(manifest, groups):
+                package, _, version = pin.split(";")[0].strip().partition("==")
+                if version:
+                    pins[canonical(package)] = version
+            found[name] = pins
+    return found
+
+
 def derived_requirements(run: str, root: Path) -> list[Requirement]:
     """What ``service_requirements.py <names> | xargs pip install`` installs.
 
@@ -404,11 +450,22 @@ def derived_requirements(run: str, root: Path) -> list[Requirement]:
     """
     found: list[Requirement] = []
     for match in _DERIVED.finditer(run):
-        names = [
-            arg.strip().strip("\"'")
-            for arg in match.group("args").split()
-            if not arg.startswith("-") and "$" not in arg and arg.strip().strip("\"'")
-        ]
+        args = match.group("args").split()
+        # Matched against the raw argument text, not against split tokens: the
+        # `--system` call is inside a command substitution, so the token
+        # arrives as `--system)"` and an equality test on it silently fails.
+        flags = match.group("args")
+        if "--locked" in flags:
+            continue  # `locked_installs` resolves this line to exact pins instead
+        if "--system" in flags:
+            # Emits apt package names for the native libraries WeasyPrint
+            # reaches through ctypes, and they go to `apt-get`. Reading it as
+            # a pip install credits the job with installing a set it never
+            # installed — which, now that the real install is `--locked`,
+            # would have the matrix cells reporting range installs that do
+            # not exist.
+            continue
+        names = [arg.strip().strip("\"'") for arg in args if not arg.startswith("-") and "$" not in arg and arg.strip().strip("\"'")]
         for name in names:
             manifest = root / "services" / name / "pyproject.toml"
             if not manifest.is_file():
@@ -452,6 +509,21 @@ _SERVICE_PATH = re.compile(r"services/([a-z0-9][a-z0-9-]*)")
 _PYTEST_LINE = re.compile(r"\bpytest\b(?P<args>.*)$")
 
 
+_VENV_RUNNER = re.compile(r"\.venv-(?P<service>[a-z0-9][a-z0-9-]*)/bin/python")
+
+
+def suite_runner(line: str) -> str:
+    """The interpreter a suite line invokes: ``.venv-<service>`` or the default one.
+
+    Installing a lock and running the suite against it are two claims, and a
+    job can do the first and not the second — the install step is the easy
+    half to get right and the easy half to leave dangling. Keeping them apart
+    means ``check_locked_installs`` can say which one is missing.
+    """
+    match = _VENV_RUNNER.search(line)
+    return f".venv-{match.group('service')}" if match else "default"
+
+
 def whole_suite_targets(run: str, working_directory: str) -> set[str]:
     """Services whose *whole* suite this command collects.
 
@@ -485,6 +557,17 @@ def whole_suite_targets(run: str, working_directory: str) -> set[str]:
         found |= set(re.findall(r"(?:cd|pushd)\s+services/([a-z0-9-]+)", run))
         targets |= found
     return targets
+
+
+def whole_suite_runs(run: str, working_directory: str) -> dict[str, set[str]]:
+    """Service -> the interpreter(s) the command runs its whole suite with."""
+    runs: dict[str, set[str]] = {}
+    for line in re.sub(r"\\\s*\n", " ", run).splitlines():
+        if not _PYTEST_LINE.search(line):
+            continue
+        for service in whole_suite_targets(line, working_directory) or whole_suite_targets(run, working_directory):
+            runs.setdefault(service, set()).add(suite_runner(line))
+    return runs
 
 
 def remember(record: SuiteJob, requirement: Requirement) -> None:
@@ -538,10 +621,13 @@ def read_workflows(root: Path) -> list[SuiteJob]:
                         remember(record, requirement)
                     for requirement in derived_requirements(run, root):
                         remember(record, requirement)
+                    record.locked.update(locked_installs(run, root))
                     hit = whole_suite_targets(run, working_directory)
                     if hit:
                         record.services |= hit
                         record.invocations.append(run.strip().splitlines()[-1][:90])
+                        for service, runners in whole_suite_runs(run, working_directory).items():
+                            record.runners.setdefault(service, set()).update(runners)
                 # `${{ env.API_DEPS }}` reaches pip as arguments; the folded
                 # scalar that defines it is an install path even though no
                 # `pip install` appears on its lines.
@@ -549,7 +635,7 @@ def read_workflows(root: Path) -> list[SuiteJob]:
                     if key.endswith("DEPS") and isinstance(value, str):
                         for requirement in requirements_in("pip install " + value):
                             remember(record, requirement)
-                if record.services and record.installs:
+                if record.services and (record.installs or record.locked):
                     jobs.append(record)
     return jobs
 
@@ -557,16 +643,30 @@ def read_workflows(root: Path) -> list[SuiteJob]:
 # ── Reading a service ────────────────────────────────────────────────────────
 
 
-def _dependency_table(table: dict) -> dict[str, str]:
-    out: dict[str, str] = {}
+def _dependency_table(table: dict) -> tuple[dict[str, str], dict[str, str]]:
+    """Split a poetry dependency table into (always installed, optional).
+
+    ``optional = true`` means an extra is the only thing that pulls the
+    package in, and the Dockerfiles run ``poetry install --only main --no-root``
+    with no ``--extras`` — so the image does **not** have it. Reading such a
+    dependency as runtime says "production always has this", which inverts the
+    question every check below asks. ``services/agents`` declares
+    ``weasyprint = {version = ">=62,<71", optional = true}`` and guards the
+    import; demanding CI install it would be demanding CI grade a path the
+    image cannot take.
+    """
+    always: dict[str, str] = {}
+    optional: dict[str, str] = {}
     for name, spec in (table or {}).items():
         if name == "python":
             continue
+        is_optional = False
         if isinstance(spec, dict):
+            is_optional = bool(spec.get("optional"))
             spec = spec.get("version", "")
         if isinstance(spec, str):
-            out[canonical(name)] = spec.strip()
-    return out
+            (optional if is_optional else always)[canonical(name)] = spec.strip()
+    return always, optional
 
 
 def _handles_import_error(node: ast.Try) -> bool:
@@ -646,10 +746,18 @@ def read_services(root: Path) -> dict[str, Service]:
         project = data.get("project", {})
         dev: dict[str, str] = {}
         for group in (poetry.get("group") or {}).values():
-            dev.update(_dependency_table(group.get("dependencies", {})))
+            group_always, group_optional = _dependency_table(group.get("dependencies", {}))
+            dev.update(group_always)
+            dev.update(group_optional)
         for extra in (project.get("optional-dependencies") or {}).values():
             dev.update(_pep621_table(extra))
-        runtime = {**_dependency_table(poetry.get("dependencies", {})), **_pep621_table(project.get("dependencies"))}
+        # An `optional = true` runtime dependency is declared, so it still
+        # resolves a guarded import to a distribution — but it is not
+        # something the image always has, so it belongs beside the dev group
+        # rather than in `runtime`.
+        main_always, main_optional = _dependency_table(poetry.get("dependencies", {}))
+        dev.update(main_optional)
+        runtime = {**main_always, **_pep621_table(project.get("dependencies"))}
         if not runtime and not dev:
             unreadable.append(manifest.parent.name)
             continue
@@ -728,6 +836,11 @@ def check_fallbacks(jobs: list[SuiteJob], services: dict[str, Service]) -> tuple
                     continue  # optional by declaration: the fallback is the contract
                 if distribution in job.installs:
                     continue
+                # Installed from the service's own lock, which is the set the
+                # image ships. `check_locked_installs` asks the same question
+                # of the lock, so a lock genuinely missing it is still caught.
+                if distribution in job.locked.get(name, {}):
+                    continue
                 if (name, distribution) in EXEMPT:
                     continue
                 problems.append(
@@ -737,6 +850,99 @@ def check_fallbacks(jobs: list[SuiteJob], services: dict[str, Service]) -> tuple
                     f"fallback; production grades the real path (fallback -> ci, {len(sites)} guarded site(s))"
                 )
     return problems, sorted(set(unresolved))
+
+
+def check_locked_installs(jobs: list[SuiteJob], services: dict[str, Service], root: Path) -> list[str]:
+    """lock -> ci: grade the version set the image ships, not one inside its ranges.
+
+    Deriving CI's install list from the manifests removed the hand-written
+    copy, but a *range* still re-resolves at install time, so CI could land on
+    a different patch release than the image. That is not hypothetical: the
+    defect this direction exists for had ``services/api`` declaring
+    ``opentelemetry-instrumentation-fastapi = "^0.45b0"`` and locking 0.45b0,
+    while the job installed it with no bound at all, resolved 0.66b0 and
+    passed — CI graded a version the image did not contain, and the one the
+    image contained could not serve a request.
+
+    So: a whole-suite job for a service with a committed lock must install
+    that lock, and must run that service's suite with the interpreter it
+    installed it into. The two are checked separately because a job can do
+    the first and not the second, and then the pins are sitting in a
+    virtualenv nothing uses.
+
+    Three further conditions, because a pin is only parity if it is a pin of
+    the right thing:
+
+    * The locked version must satisfy the range its own manifest declares. A
+      lock that has drifted from its manifest is a lock pinning something the
+      service no longer permits.
+    * The lock must contain every runtime distribution whose absence the
+      service's own code handles with ``except ImportError`` — the pysigma
+      shape, asked of the lock rather than of a list.
+    * A service with **no** lock is reported as the exception it is, named,
+      rather than passing silently.
+    """
+    problems: list[str] = []
+    for job in jobs:
+        for name in sorted(job.services):
+            service = services.get(name)
+            if service is None:
+                continue
+            lock = root / "services" / name / "poetry.lock"
+            if not lock.is_file():
+                problems.append(
+                    f"{job.workflow}:{job.job} runs the whole services/{name} suite and services/{name} has no "
+                    f"poetry.lock, so there is no resolved set to install — CI necessarily re-resolves and the "
+                    f"version it grades is not guaranteed to be the version the image ships (lock -> ci, no lock)"
+                )
+                continue
+            pins = job.locked.get(name)
+            if pins is None:
+                problems.append(
+                    f"{job.workflow}:{job.job} runs the whole services/{name} suite but does not install "
+                    f"services/{name}/poetry.lock — it re-resolves inside the declared ranges, so the versions it "
+                    f"grades need not be the versions services/{name}/Dockerfile installs. Install with "
+                    f"`service_requirements.py {name} --locked` (lock -> ci)"
+                )
+                continue
+
+            runners = job.runners.get(name, set())
+            if runners and runners != {f".venv-{name}"}:
+                problems.append(
+                    f"{job.workflow}:{job.job} installs services/{name}/poetry.lock but runs that suite with "
+                    f"{', '.join(sorted(runners))} rather than .venv-{name} — the pins are installed into an "
+                    f"interpreter the tests do not use (lock -> ci, unused environment)"
+                )
+
+            for package, version in sorted(pins.items()):
+                declared = service.declared.get(package)
+                if declared is None:
+                    continue
+                interval = bounds(declared)
+                if interval is None:
+                    continue
+                low, high = interval[0] or _FLOOR, interval[1] or _CEILING
+                pinned = release(version)
+                if _pad(pinned, low)[0] < _pad(pinned, low)[1] or not _pad(pinned, high)[0] < _pad(pinned, high)[1]:
+                    problems.append(
+                        f"services/{name}/poetry.lock pins `{package}` {version}, which its own manifest "
+                        f"({declared}) does not permit — the lock and the manifest have drifted, so installing "
+                        f"the lock installs something the service forbids (lock -> ci, lock outside manifest)"
+                    )
+
+            for module, sites in sorted(service.fallbacks.items()):
+                distribution = distribution_for(module, set(service.declared))
+                if distribution is None or distribution not in service.runtime:
+                    continue
+                if distribution in pins or (name, distribution) in EXEMPT:
+                    continue
+                problems.append(
+                    f"{job.workflow}:{job.job} installs services/{name}/poetry.lock, but that lock does not "
+                    f"contain `{distribution}` — services/{name} declares it as a runtime dependency and "
+                    f"{sites[0]} handles its absence with `except ImportError`, so the suite grades the fallback "
+                    f"(lock -> ci, guarded dependency absent from the lock)"
+                )
+    return problems
 
 
 def check_installs_are_declared(jobs: list[SuiteJob], services: dict[str, Service]) -> list[str]:
@@ -906,6 +1112,7 @@ def run(root: Path, *, inventory: bool = False, as_json: bool = False) -> tuple[
     problems = (
         fallback_problems
         + unresolved
+        + check_locked_installs(jobs, services, root)
         + check_installs_are_declared(jobs, services)
         + check_ranges(jobs, services)
         + check_exemptions(jobs, services)
@@ -926,16 +1133,20 @@ def run(root: Path, *, inventory: bool = False, as_json: bool = False) -> tuple[
         return (1 if problems else 0), problems
 
     guarded = sum(len(s.fallbacks) for s in services.values())
+    graded = {s for j in jobs for s in j.services}
+    from_lock = {(j.workflow, j.job, s) for j in jobs for s in j.services if s in j.locked}
+    total_suites = {(j.workflow, j.job, s) for j in jobs for s in j.services}
     print(f"check_ci_install_parity: root {root}")
-    print(
-        f"  {len(jobs)} whole-suite job(s) over {len({s for j in jobs for s in j.services})} of "
-        f"{len(services)} service(s); {guarded} guarded import(s) across the tree"
-    )
+    print(f"  {len(jobs)} whole-suite job(s) over {len(graded)} of {len(services)} service(s); {guarded} guarded import(s) across the tree")
+    print(f"  {len(from_lock)} of {len(total_suites)} suite run(s) install the service's committed poetry.lock")
     if inventory:
         for job in jobs:
             print(f"  {job.workflow}:{job.job}")
             print(f"      services : {', '.join(sorted(job.services))}")
-            print(f"      installs : {len(job.installs)} package(s)")
+            print(f"      installs : {len(job.installs)} package(s) from declared ranges")
+            for locked_name, pins in sorted(job.locked.items()):
+                runner = ", ".join(sorted(job.runners.get(locked_name, {"?"})))
+                print(f"      locked   : services/{locked_name} -> {len(pins)} exact pin(s), run by {runner}")
             for line in job.invocations:
                 print(f"      runs     : {line}")
         for name, service in sorted(services.items()):
@@ -978,14 +1189,31 @@ def _fixture(root: Path) -> None:
         "def run():\n    try:\n        import sigma\n    except ImportError:\n        return []\n    return sigma.everything()\n",
         encoding="utf-8",
     )
+    # The lock is what the image installs, so it is what CI must install.
+    (service / "poetry.lock").write_text(
+        '[[package]]\nname = "pysigma"\nversion = "0.11.31"\ngroups = ["main"]\noptional = false\n\n'
+        '[[package]]\nname = "httpx"\nversion = "0.28.1"\ngroups = ["main"]\noptional = false\n\n'
+        '[[package]]\nname = "pytest"\nversion = "9.1.1"\ngroups = ["dev"]\noptional = false\n\n'
+        '[metadata]\nlock-version = "2.1"\n',
+        encoding="utf-8",
+    )
+    # Two install paths, as `ci.yml:python-test` really has: a derived-range
+    # install serving the repository's own gate suites, which are not a
+    # service and have no lock, and the service's locked set in its own
+    # virtualenv. Keeping both in the fixture is what lets the range cases
+    # and the lock cases below aim at different lines.
     (root / ".github" / "workflows" / "ci.yml").write_text(
         "name: CI\n"
         "jobs:\n"
         "  demo:\n"
         "    steps:\n"
         '      - run: pip install "pysigma>=0.11.17,<0.12" "httpx>=0.27,<0.29" "pytest>=9.0.3,<10.0"\n'
+        "      - run: |\n"
+        "          python3 -m venv .venv-demo\n"
+        "          python3 scripts/service_requirements.py demo --locked > /tmp/demo.lock.txt\n"
+        "          .venv-demo/bin/pip install --no-deps -r /tmp/demo.lock.txt\n"
         "      - working-directory: services/demo\n"
-        "        run: python -m pytest tests/ -v\n",
+        "        run: ../../.venv-demo/bin/python -m pytest tests/ -v\n",
         encoding="utf-8",
     )
     # A second job that names one test file. It is out of scope by design, so
@@ -1021,8 +1249,26 @@ def self_test() -> int:
     workflow = lambda root: root / ".github" / "workflows" / "ci.yml"  # noqa: E731
     manifest = lambda root: root / "services" / "demo" / "pyproject.toml"  # noqa: E731
 
+    _LOCKED_STEP = (
+        "          python3 scripts/service_requirements.py demo --locked > /tmp/demo.lock.txt\n"
+        "          .venv-demo/bin/pip install --no-deps -r /tmp/demo.lock.txt\n"
+    )
+
+    def unlock(root: Path) -> None:
+        """Put the job back on a re-resolved install, as it was before the lock.
+
+        The `fallback -> ci` and attribution cases below are about a job whose
+        environment comes from a *list*. Once the lock is installed the list
+        stops mattering — the lock has pysigma whatever the list says — so
+        injecting into the list alone proves nothing. These cases have to
+        reproduce the world they were written for.
+        """
+        path = workflow(root)
+        path.write_text(path.read_text().replace(_LOCKED_STEP, ""), encoding="utf-8")
+
     def drop_the_guarded_runtime_dependency(root: Path) -> None:
         """The pysigma defect: the image has it, CI does not, the code falls back."""
+        unlock(root)
         path = workflow(root)
         path.write_text(path.read_text().replace('"pysigma>=0.11.17,<0.12" ', ""), encoding="utf-8")
 
@@ -1074,12 +1320,13 @@ def self_test() -> int:
         only understood `working-directory:` would miss the suite that found
         the defect this gate exists for.
         """
+        unlock(root)
         path = workflow(root)
         path.write_text(
             path.read_text()
             .replace('"pysigma>=0.11.17,<0.12" ', "")
             .replace(
-                "      - working-directory: services/demo\n        run: python -m pytest tests/ -v\n",
+                "      - working-directory: services/demo\n        run: ../../.venv-demo/bin/python -m pytest tests/ -v\n",
                 "      - run: |\n          cd services/demo\n          python -m pytest tests/ -v\n",
             ),
             encoding="utf-8",
@@ -1120,9 +1367,92 @@ def self_test() -> int:
         workflow_path.write_text(workflow_path.read_text().replace('"httpx>=0.27,<0.29"', '"httpx>=0.27,<0.28"'), encoding="utf-8")
         narrow = root / ".github" / "workflows" / "narrow.yml"
         narrow.write_text(narrow.read_text().replace('"httpx>=0.27,<0.29"', '"httpx>=0.27,<0.28"'), encoding="utf-8")
+        # The lock has to move with the manifest, or this control injects a
+        # second, genuine divergence and stops being a control.
+        lock = root / "services" / "demo" / "poetry.lock"
+        lock.write_text(
+            lock.read_text().replace('name = "httpx"\nversion = "0.28.1"', 'name = "httpx"\nversion = "0.27.2"'), encoding="utf-8"
+        )
 
     def stale_exemption(root: Path) -> None:
         EXEMPT[("demo", "httpx")] = "no reason that is still true"
+
+    # ── The lock direction ──────────────────────────────────────────────────
+
+    def re_resolve_instead_of_installing_the_lock(root: Path) -> None:
+        """The defect this direction exists for, one notch smaller than the last.
+
+        The job still derives its list from the manifest, so every earlier
+        check passes — but it re-resolves inside the declared ranges, so the
+        version it grades need not be the version the image ships.
+        `^0.45b0` locking 0.45b0 while CI resolved 0.66b0 is exactly this.
+        """
+        path = workflow(root)
+        path.write_text(
+            path.read_text().replace(
+                "          python3 scripts/service_requirements.py demo --locked > /tmp/demo.lock.txt\n"
+                "          .venv-demo/bin/pip install --no-deps -r /tmp/demo.lock.txt\n",
+                "          python3 scripts/service_requirements.py demo | xargs .venv-demo/bin/pip install\n",
+            ),
+            encoding="utf-8",
+        )
+
+    def install_the_lock_but_run_the_suite_elsewhere(root: Path) -> None:
+        """Pins installed into a virtualenv the tests do not use."""
+        path = workflow(root)
+        path.write_text(path.read_text().replace("../../.venv-demo/bin/python -m pytest", "python -m pytest"), encoding="utf-8")
+
+    def lock_drifts_outside_its_manifest(root: Path) -> None:
+        """A pin the service's own manifest no longer permits."""
+        path = root / "services" / "demo" / "poetry.lock"
+        path.write_text(
+            path.read_text().replace('name = "pysigma"\nversion = "0.11.31"', 'name = "pysigma"\nversion = "0.13.0"'), encoding="utf-8"
+        )
+
+    def lock_omits_a_guarded_runtime_dependency(root: Path) -> None:
+        """The pysigma shape, asked of the lock rather than of a hand-written list."""
+        path = root / "services" / "demo" / "poetry.lock"
+        path.write_text(
+            path.read_text().replace('[[package]]\nname = "pysigma"\nversion = "0.11.31"\ngroups = ["main"]\noptional = false\n\n', ""),
+            encoding="utf-8",
+        )
+
+    def remove_the_lock_entirely(root: Path) -> None:
+        """No lock is an exception to be named, not one to pass silently."""
+        (root / "services" / "demo" / "poetry.lock").unlink()
+        path = workflow(root)
+        path.write_text(
+            path.read_text().replace(
+                "          python3 scripts/service_requirements.py demo --locked > /tmp/demo.lock.txt\n"
+                "          .venv-demo/bin/pip install --no-deps -r /tmp/demo.lock.txt\n",
+                "",
+            ),
+            encoding="utf-8",
+        )
+
+    def declare_the_guarded_package_optional_in_the_manifest(root: Path) -> None:
+        """`optional = true` means the image does not have it either.
+
+        `services/agents` declares WeasyPrint that way. Reading it as a
+        runtime dependency would demand CI install something no image ships,
+        and grade a path production cannot take — the guarded-import defect
+        pointing the wrong way. So this must NOT be reported.
+        """
+        path = manifest(root)
+        path.write_text(
+            path.read_text().replace('pysigma = ">=0.11.17,<0.12"', 'pysigma = { version = ">=0.11.17,<0.12", optional = true }'),
+            encoding="utf-8",
+        )
+        workflow_path = workflow(root)
+        workflow_path.write_text(workflow_path.read_text().replace('"pysigma>=0.11.17,<0.12" ', ""), encoding="utf-8")
+        lock = root / "services" / "demo" / "poetry.lock"
+        lock.write_text(
+            lock.read_text().replace(
+                'name = "pysigma"\nversion = "0.11.31"\ngroups = ["main"]\noptional = false',
+                'name = "pysigma"\nversion = "0.11.31"\ngroups = ["main"]\noptional = true',
+            ),
+            encoding="utf-8",
+        )
 
     cases: list[tuple[str, object, str | None]] = [
         ("clean fixture passes", None, None),
@@ -1136,10 +1466,20 @@ def self_test() -> int:
         ("a guarded import nothing provides", guard_a_module_nothing_provides, "no declared dependency provides it"),
         ("attribution through `cd` rather than working-directory", reach_the_service_by_cd_instead_of_working_directory, "fallback -> ci"),
         ("a stale exemption", stale_exemption, "exemption"),
+        ("CI re-resolves the ranges instead of installing the lock", re_resolve_instead_of_installing_the_lock, "lock -> ci"),
+        (
+            "the lock is installed into an environment the suite does not use",
+            install_the_lock_but_run_the_suite_elsewhere,
+            "unused environment",
+        ),
+        ("the lock pins a version its manifest forbids", lock_drifts_outside_its_manifest, "lock outside manifest"),
+        ("the lock omits a guarded runtime dependency", lock_omits_a_guarded_runtime_dependency, "absent from the lock"),
+        ("a service with no lock at all", remove_the_lock_entirely, "no lock"),
         # Controls: these must NOT be reported.
         ("a caret and its explicit range agree", caret_and_explicit_range_are_the_same_range, None),
         ("two divergences inside a job that names one file", break_only_the_narrow_job, None),
         ("a dev-group dependency is optional by declaration", declare_the_guarded_package_optional, None),
+        ("a runtime dependency marked optional in the manifest", declare_the_guarded_package_optional_in_the_manifest, None),
     ]
 
     declared_optional = dict(OPTIONAL_BY_OMISSION)
@@ -1177,7 +1517,10 @@ def self_test() -> int:
     # empty tree.
     def strip_every_suite_run(root: Path) -> None:
         path = workflow(root)
-        path.write_text(path.read_text().replace("        run: python -m pytest tests/ -v\n", "        run: true\n"), encoding="utf-8")
+        path.write_text(
+            path.read_text().replace("        run: ../../.venv-demo/bin/python -m pytest tests/ -v\n", "        run: true\n"),
+            encoding="utf-8",
+        )
 
     code, _ = build(strip_every_suite_run)
     vacuous = code != 0

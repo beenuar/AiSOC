@@ -26,7 +26,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "httpx>=0.27.0"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx>=0.27.0",
+    # CI runs this suite with `--cov-config=pyproject.toml --cov=app`
+    # against the `fail_under` below, so the plugin that enforces it is
+    # this service's own dependency. It was reaching the environment
+    # from `services/fusion`, which happened to share the interpreter;
+    # installing each service from its own lock made the borrowing
+    # visible as `unrecognized arguments: --cov`.
+    "pytest-cov>=5,<8",
+]
 
 
 # Phase 2.2 — coverage floor for CI gate.
