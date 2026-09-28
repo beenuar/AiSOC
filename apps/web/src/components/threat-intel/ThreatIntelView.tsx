@@ -6,6 +6,7 @@ import {
   threatIntelApi,
   type AlertSeverity,
   type IndicatorType,
+  type IOCLookupOutcome,
   type ThreatIndicator,
 } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -109,20 +110,23 @@ const SEVERITY_CONFIG: Record<AlertSeverity, string> = {
 
 function LookupForm() {
   const [query, setQuery] = useState('');
-  const [result, setResult] = useState<ThreatIndicator | null>(null);
+  // One outcome rather than a `result` plus a `notFound` flag. The two-flag
+  // shape is what allowed a failed lookup to render as a clean one: the
+  // `catch` had nowhere to put "this did not work" except the flag that meant
+  // "we checked, and it is clean".
+  const [outcome, setOutcome] = useState<IOCLookupOutcome | null>(null);
   const [isLooking, setIsLooking] = useState(false);
-  const [notFound, setNotFound] = useState(false);
 
   const handleLookup = async () => {
     if (!query.trim()) return;
     setIsLooking(true);
-    setNotFound(false);
-    setResult(null);
+    setOutcome(null);
     try {
-      const r = await threatIntelApi.lookup(query.trim());
-      setResult(r);
-    } catch {
-      setNotFound(true);
+      setOutcome(await threatIntelApi.lookup(query.trim()));
+    } catch (err) {
+      // `lookup` reports transport failure in its return value, so reaching
+      // here means the client itself threw. Still not a clean verdict.
+      setOutcome({ status: 'failed', reason: (err as Error)?.message || 'the lookup did not complete' });
     } finally {
       setIsLooking(false);
     }
@@ -149,29 +153,41 @@ function LookupForm() {
         </button>
       </div>
 
-      {notFound && (
+      {outcome?.status === 'failed' && (
+        <div className="mt-3 flex items-start gap-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider pt-0.5 shrink-0">
+            not checked
+          </span>
+          <span>
+            Lookup failed — {outcome.reason}. This says nothing about{' '}
+            <span className="font-mono">{query.trim()}</span>; it was never checked.
+          </span>
+        </div>
+      )}
+
+      {outcome?.status === 'clean' && (
         <div className="mt-3 flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider">clean</span>
           <span>No threat indicators found for this IOC</span>
         </div>
       )}
 
-      {result && (
+      {outcome?.status === 'match' && (
         <div className="mt-3 bg-red-500/5 border border-red-500/20 rounded-lg p-3 space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-red-400 font-medium text-sm">Malicious indicator</span>
-            <span className="text-xs text-gray-500">Confidence: {result.confidence}%</span>
+            <span className="text-xs text-gray-500">Confidence: {outcome.indicator.confidence}%</span>
           </div>
-          {result.description ? (
-            <p className="text-xs text-gray-400">{result.description}</p>
+          {outcome.indicator.description ? (
+            <p className="text-xs text-gray-400">{outcome.indicator.description}</p>
           ) : null}
           <div className="flex flex-wrap gap-1">
-            {(result.tags ?? []).map((t) => (
+            {(outcome.indicator.tags ?? []).map((t) => (
               <span key={t} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
             ))}
           </div>
           <div className="text-xs text-gray-500">
-            Sources: {result.sources.join(', ')}
+            Sources: {(outcome.indicator.sources ?? []).join(', ')}
           </div>
         </div>
       )}

@@ -3053,11 +3053,65 @@ export interface IOCLookup extends ThreatIndicator {
   raw?: Record<string, unknown>;
 }
 
+/**
+ * The outcome of one IOC lookup. Three states, deliberately — "the store
+ * answered and holds nothing on this indicator" and "the store did not
+ * answer" are different facts, and only the first of them is good news.
+ *
+ * Collapsing them is what the console used to do: the lookup `catch` set a
+ * `notFound` flag that rendered a green **CLEAN — no threat indicators found
+ * for this IOC**, so a transport error, a 5xx, or a route that did not exist
+ * all read to an analyst as an all-clear on the indicator they were checking.
+ * It called `/api/v1/enrichment/lookup`, which the API does not serve, so
+ * every lookup took that branch and the panel had only ever said "clean".
+ */
+export type IOCLookupOutcome =
+  | { status: 'match'; indicator: ThreatIndicator }
+  | { status: 'clean' }
+  | { status: 'failed'; reason: string };
+
 export const threatIntelApi = {
-  lookup: (ioc: string) =>
-    request<IOCLookup>('/api/v1/enrichment/lookup', {
-      params: { ioc },
-    }),
+  /**
+   * Look one indicator up in the tenant's threat-intel store.
+   *
+   * Goes to `/api/v1/threat-intel/indicators`, the route that serves the
+   * page's own list — so the lookup reads the same store the table does, and
+   * a match here is an indicator the deployment actually holds. The response
+   * carries `degraded`/`reason`, which the backend already sets when it
+   * answered from a fallback or could not reach its index; that is treated as
+   * a failed lookup rather than a clean one, because a partial store cannot
+   * support "we hold nothing on this".
+   */
+  lookup: async (ioc: string): Promise<IOCLookupOutcome> => {
+    let response: {
+      indicators?: ThreatIndicator[];
+      degraded?: boolean;
+      reason?: string;
+    };
+    try {
+      response = await request('/api/v1/threat-intel/indicators', { params: { q: ioc } });
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : undefined;
+      // status 0 is `request`'s own marker for "never reached the server".
+      const detail =
+        status === undefined || status === 0
+          ? 'the threat-intel service could not be reached'
+          : `the threat-intel service answered HTTP ${status}`;
+      return { status: 'failed', reason: detail };
+    }
+
+    if (response.degraded) {
+      return {
+        status: 'failed',
+        reason: response.reason?.trim() || 'the threat-intel store answered from a degraded source',
+      };
+    }
+
+    const match = (response.indicators ?? []).find(
+      (candidate) => candidate.value?.toLowerCase() === ioc.toLowerCase(),
+    );
+    return match ? { status: 'match', indicator: match } : { status: 'clean' };
+  },
 
   bulkLookup: (iocs: string[]) =>
     request<{ results: IOCLookup[] }>('/api/v1/enrichment/bulk', {
