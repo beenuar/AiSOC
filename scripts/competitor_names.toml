@@ -126,9 +126,21 @@ names = ["Torq", "Tines", "Wazuh"]
 reason = "Connector conformance matrix — one row per shipped connector id."
 
 [[allow]]
-paths = ["marketplace/index.json", "apps/web/public/marketplace/index.json"]
+paths = [
+  "marketplace/index.json",
+  "apps/web/public/marketplace/index.json",
+  # The third copy, inside the API's Docker build context. Byte-identical to
+  # the other two by construction — check_marketplace_index_parity.py — so
+  # excusing it excuses nothing the first two do not already carry.
+  "services/api/app/data/marketplace/index.json",
+]
 names = ["Torq", "Tines", "Wazuh"]
 reason = "Generated marketplace catalog; entries are the connector manifests above."
+
+[[allow]]
+paths = ["services/api/tests/test_marketplace_ships_in_the_image.py"]
+names = ["Wazuh"]
+reason = """Names the connector the #374 reporter was installing when the marketplace returned 503, so the regression test asserts against the item that actually failed rather than an arbitrary one."""
 
 [[allow]]
 paths = ["packages/types/src/generated/connector-types.ts", "packages/types/src/generated/connector-types.json"]
