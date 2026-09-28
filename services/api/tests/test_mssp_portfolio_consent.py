@@ -64,6 +64,7 @@ class _Session:
         # question that was actually asked.
         compiled = statement.compile()
         wanted = next((v for v in compiled.params.values() if isinstance(v, uuid.UUID)), None)
+        assert wanted is not None, f"the claim lookup bound no tenant id: {compiled.params}"
         result = MagicMock()
         result.scalar_one_or_none = MagicMock(return_value=self._claims.get(wanted))
         return result

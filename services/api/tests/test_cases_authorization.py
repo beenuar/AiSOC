@@ -134,7 +134,9 @@ class TestTheInvestigationRunReadIsScoped:
             await cases.case_investigation_run(case_id="c-1", run_id="r-1", db=MagicMock(), user=_user())
 
         assert exc.value.status_code == 404
-        proxy.assert_not_awaited(), "the run was proxied for a case the caller cannot see"
+        # The run must never have been proxied: resolving the case is what
+        # proves the caller may see it.
+        proxy.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_run_belonging_to_another_case_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,5 +177,6 @@ class TestTheInvestigationRunReadIsScoped:
 
         await cases.case_investigation_run(case_id="INC-001", run_id="../../admin?x=1", db=MagicMock(), user=_user())
 
+        assert proxy.await_args is not None, "the handler never reached the proxy"
         path = proxy.await_args.args[1]
         assert "../" not in path and "?" not in path, path
