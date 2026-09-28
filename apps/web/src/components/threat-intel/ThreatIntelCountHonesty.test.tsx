@@ -100,6 +100,28 @@ describe('an unreachable indicator store is not a count of zero', () => {
     }
   });
 
+  it('does not print zeros when the route answered 200 but said it was degraded', () => {
+    // The live shape, and the one `!data` could never catch. With no
+    // threat-intel service reachable the route answers HTTP 200 with
+    // `degraded: true` and a reason — an explicit non-measurement.
+    swrData.value = {
+      indicators: [],
+      total: 0,
+      degraded: true,
+      reason: 'the threat-intel service did not answer (ConnectError); no indicators can be listed',
+    };
+
+    render(<ThreatIntelView />);
+
+    expect(screen.queryByText(/^0 indicators$/)).toBeNull();
+    expect(screen.getByText(/^— indicators$/)).toBeInTheDocument();
+    for (const label of chipLabels()) {
+      expect(label).toMatch(/\(—\)$/);
+    }
+    // And it says what the route said, rather than a generic sentence.
+    expect(screen.getByText(/did not answer \(ConnectError\)/i)).toBeInTheDocument();
+  });
+
   it('counts a populated store', () => {
     swrData.value = {
       indicators: [

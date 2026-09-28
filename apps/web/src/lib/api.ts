@@ -3136,11 +3136,24 @@ export const threatIntelApi = {
   // `total` is the store's count of indicators in scope; `shown` is how many
   // this response carries. They are different numbers and the console renders
   // both — it used to render the page length as the catalogue size.
+  //
+  // `degraded`/`reason` are on the type because the route sets them and the
+  // list path was throwing them away. Measured against a running stack with
+  // no threat-intel service, this route answers **HTTP 200** with
+  // `{"indicators":[],"total":0,"degraded":true,"reason":"the threat-intel
+  // service did not answer (ConnectError); no indicators can be listed"}` —
+  // so a consumer keying only on "did the request succeed" reads an explicit
+  // non-measurement as a measurement of zero. `lookup` above already treats
+  // the same flag as a failed lookup.
   list: (filters: { type?: IndicatorType; tag?: string; q?: string } = {}) =>
-    request<{ indicators: ThreatIndicator[]; total: number; shown?: number; bounded?: boolean }>(
-      '/api/v1/threat-intel/indicators',
-      { params: filters as Record<string, string> },
-    ),
+    request<{
+      indicators: ThreatIndicator[];
+      total: number;
+      shown?: number;
+      bounded?: boolean;
+      degraded?: boolean;
+      reason?: string;
+    }>('/api/v1/threat-intel/indicators', { params: filters as Record<string, string> }),
 };
 
 // ─── AI Agents ────────────────────────────────────────────────────────────────

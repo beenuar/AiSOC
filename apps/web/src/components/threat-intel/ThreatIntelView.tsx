@@ -260,7 +260,15 @@ export function ThreatIntelView() {
   // absence. `?? []` then published "Malicious (of shown): 0" — a security
   // verdict — and an empty state telling the operator to go connect a feed,
   // on a store the page could not reach.
-  const storeUnknown = !data;
+  //
+  // `degraded` is the other half, and the live one. With no threat-intel
+  // service reachable the route answers **HTTP 200** carrying
+  // `degraded: true` and a reason — an explicit statement that nothing was
+  // measured — so `!data` is false and every figure on this page rendered a
+  // confident zero over it. `threatIntelApi.lookup` already treats the same
+  // flag as a failed lookup; the list did not.
+  const storeUnknown = !data || data.degraded === true;
+  const degradedReason = data?.reason?.trim() || null;
 
   // Not `?? MOCK_INDICATORS`. `fallbackData` above already withholds the
   // sample set outside the hosted demo; repeating the constant here put it
@@ -415,7 +423,10 @@ export function ThreatIntelView() {
                 storeUnknown
                   ? isLoading
                     ? 'Reading indicators from the threat-intel service.'
-                    : `The threat-intel service did not answer${error ? '' : ''}. This is not a report that no indicators exist.`
+                    : // The route's own `reason` when it sent one, because
+                      // "did not answer (ConnectError)" tells an operator
+                      // where to look and a generic sentence does not.
+                      `${degradedReason ?? 'The threat-intel service did not answer'}. This is not a report that no indicators exist.`
                   : 'Connect a TI feed (MISP, OTX, AbuseIPDB, GreyNoise, internal STIX/TAXII) from Settings → Connectors to start enriching alerts with reputation context.'
               }
               className="bg-transparent py-8"
