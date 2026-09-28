@@ -168,7 +168,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD}@postgres:5432/aisoc
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/aisoc
       REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
-      # `make env` generates all six of these. They are required rather than
+      # `make env` generates all of these. They are required rather than
       # defaulted because a service that starts without one either serves
       # unauthenticated or signs with a key published in this repository —
       # both were reported vulnerabilities, fixed in v12.0.0.

@@ -57,9 +57,9 @@ Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM*
 was measured against. The first run downloads a ~2 GB language model into a named volume; only
 `make clean` fetches it again.
 
-`make up` also creates `.env` and generates the **six** secrets in it — the credential vault, the
-session signing key, and the four service-to-service credentials — then creates an administrator and
-prints its password. That password is generated on your machine, shown once, and stored nowhere:
+`make up` also creates `.env` and generates the **ten** secrets in it — the credential vault, the
+session signing key, the four service-to-service credentials and the four datastore passwords — then
+creates an administrator and prints its password. That password is generated on your machine, shown once, and stored nowhere:
 copy it, or mint a new one with `make bootstrap ARGS=--reset-password`.
 
 Then **prove it actually works**. `make smoke` posts one real event to the ingest API, follows it

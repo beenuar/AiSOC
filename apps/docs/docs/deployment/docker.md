@@ -117,7 +117,7 @@ COMPOSE_PROFILES=connectors,osquery,slack docker compose up -d
 ## Production
 
 ```bash
-make env                                      # generates the six service secrets
+make env                                      # generates the ten secrets the stack needs
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 

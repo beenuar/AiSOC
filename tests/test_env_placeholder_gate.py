@@ -202,6 +202,39 @@ def test_generated_secrets_ship_empty(key: str) -> None:
     )
 
 
+#: Prose that states, in words, how many secrets first run generates. Each is
+#: a place a reader is told a number; none of them was derived from anything.
+_COUNTED_IN_PROSE = (
+    ("README.md", "generates the **{word}** secrets in it"),
+    ("apps/docs/docs/deployment/docker.md", "generates the {word} secrets the stack needs"),
+)
+
+_NUMBER_WORDS = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen").split()
+
+
+def test_the_published_count_is_the_real_count() -> None:
+    """A count copied into prose goes stale silently.
+
+    README said "the **six** secrets" while `GENERATED` held ten, because the
+    two lists were maintained by hand and compared by nothing — the same
+    shape as the detector-versus-template drift this file exists for. The
+    number is spelled in words on purpose (it reads better in a sentence),
+    so it is derived and compared rather than matched loosely.
+    """
+    expected = _NUMBER_WORDS[len(ensure_env.GENERATED)]
+    stale: list[str] = []
+    for relative, template in _COUNTED_IN_PROSE:
+        text = (REPO / relative).read_text(encoding="utf-8")
+        if template.format(word=expected) not in text:
+            found = [w for w in _NUMBER_WORDS if template.format(word=w) in text]
+            stale.append(f"  {relative}: says {found or ['nothing matching the sentence']}, should say {expected!r}")
+    assert not stale, (
+        f"scripts/ensure_env.py generates {len(ensure_env.GENERATED)} secrets and these disagree:\n"
+        + "\n".join(stale)
+        + "\n\nIf the sentence was reworded, update _COUNTED_IN_PROSE in this file so it keeps being checked."
+    )
+
+
 def test_ensure_env_fills_exactly_the_empty_and_placeholder_secrets(tmp_path: Path) -> None:
     """End-to-end over the real template: copy, generate, and check the result."""
     env = tmp_path / ".env"
