@@ -282,10 +282,28 @@ jobs:
       - name: Assert events landed in the ClickHouse lake
         run: |
           set -euo pipefail
+          # Read the password out of `.env` rather than hard-coding it. The
+          # literal `clickhouse_dev_secret` was right for as long as
+          # `.env.example` shipped it; `ensure_env.py` now generates a real
+          # one, so the client authenticated against a server that had moved
+          # on. `2>/dev/null || echo 0` then turned "wrong password" into a
+          # row count of zero, and the step reported that the lake was never
+          # populated — naming a subsystem that was working.
+          CH_PASS="$(sed -n 's/^CLICKHOUSE_PASSWORD=//p' .env | tail -1)"
+          [ -n "${CH_PASS}" ] || { echo "::error::CLICKHOUSE_PASSWORD is not set in .env"; exit 1; }
+          echo "::add-mask::${CH_PASS}"
+
+          # Prove the client can authenticate before interpreting a count.
+          # A failed query and an empty table must not produce the same number.
+          docker compose exec -T clickhouse clickhouse-client \
+            --user aisoc --password "${CH_PASS}" --query 'SELECT 1' >/dev/null \
+            || { echo "::error::could not authenticate to ClickHouse as aisoc — the lake assertion below could not have run"; \
+                 docker compose logs --tail=40 --no-color clickhouse || true; exit 1; }
+
           ok=""
           for i in $(seq 1 30); do
             N="$(docker compose exec -T clickhouse clickhouse-client \
-                  --user aisoc --password clickhouse_dev_secret \
+                  --user aisoc --password "${CH_PASS}" \
                   --query 'SELECT count() FROM aisoc.raw_events' 2>/dev/null || echo 0)"
             echo "lake row count (attempt ${i}): ${N}"
             if [ "${N:-0}" -gt 0 ]; then ok=1; break; fi
