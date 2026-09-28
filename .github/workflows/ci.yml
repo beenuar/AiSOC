@@ -749,6 +749,26 @@ jobs:
           python3 scripts/check_orm_migration_parity.py --self-test
           python3 scripts/check_orm_migration_parity.py --check
 
+      # The same rule for the raw `text()` SQL the gate above cannot see —
+      # 107 statements naming 44 tables, 35 of which have no ORM model at
+      # all, so raw SQL is the only thing that writes them.
+      # `detection_rule_proposals` had no `source` column and three inserts
+      # named it, so the auto-tuner, the scheduled-hunt bridge and the
+      # false-positive loop could not write a proposal on any deployment.
+      # Nothing caught it: no job runs `services/api/tests/` against a real
+      # database, and the one test covering the insert asserted only that the
+      # table name appeared somewhere in the SQL string — which the wrong
+      # name `aisoc_detection_rule_proposals` also satisfies.
+      #
+      # The self-test runs first, and deliberately: it injects a wrong table,
+      # a wrong column and a runtime-assembled statement into scratch trees,
+      # so a parser that has quietly stopped matching cannot report the
+      # repository clean.
+      - name: Verify raw SQL names only tables and columns migrations create
+        run: |
+          python3 scripts/check_raw_sql_columns.py --self-test
+          python3 scripts/check_raw_sql_columns.py
+
       # The four alembic chains have to be invoked by something. They were
       # not: every container command was a plain `uvicorn`, so the
       # documented quickstart booted two services with no tables and no RLS

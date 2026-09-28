@@ -137,6 +137,21 @@ def _string(node: ast.AST) -> str | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
+def _rel(path: pathlib.Path) -> str:
+    """``path`` relative to the repository, or as given when it is outside it.
+
+    The parsers below are reusable — ``check_raw_sql_columns`` reads the same
+    migrations through them — and a reusable parser has to survive being
+    pointed at a scratch tree. ``relative_to`` raises there, which would turn
+    "this gate was handed a temporary directory" into a traceback rather than
+    a scan. Inside the repository the output is unchanged.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 #: SQL type name → family. Two spellings of the same family are not drift
 #: (``Text`` against ``String``, ``BigInteger`` against ``Integer``); two
 #: families are, and one such mismatch is why this mapping exists.
@@ -289,7 +304,7 @@ def model_tables(paths: list[pathlib.Path]) -> dict[str, dict]:
             if tablename and columns:
                 tables[tablename] = {
                     "columns": columns,
-                    "source": str(path.relative_to(REPO_ROOT)),
+                    "source": _rel(path),
                     "model": node.name,
                 }
     return tables
@@ -302,17 +317,43 @@ def model_tables(paths: list[pathlib.Path]) -> dict[str, dict]:
 #: ``CREATE TABLE [IF NOT EXISTS] name ( ... )`` — the body is scanned for
 #: leading identifiers, one per column definition.
 _CREATE_TABLE = re.compile(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\"']?(\w+)[\"']?\s*\((.*?)\);", re.I | re.S)
-_ADD_COLUMN = re.compile(
-    r"ALTER\s+TABLE\s+(?:ONLY\s+)?[\"']?(\w+)[\"']?\s+ADD\s+COLUMN\s+"
-    r"(?:IF\s+NOT\s+EXISTS\s+)?[\"']?(\w+)[\"']?\s*([A-Za-z]*)\s*(?:\((\d+)\))?",
-    re.I,
-)
-_DROP_COLUMN = re.compile(r"ALTER\s+TABLE\s+(?:ONLY\s+)?[\"']?(\w+)[\"']?\s+DROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?[\"']?(\w+)[\"']?", re.I)
-_ALTER_TYPE = re.compile(
-    r"ALTER\s+TABLE\s+(?:ONLY\s+)?[\"']?(\w+)[\"']?\s+ALTER\s+COLUMN\s+[\"']?(\w+)[\"']?\s+"
-    r"(?:SET\s+DATA\s+)?TYPE\s+([A-Za-z]+)\s*(?:\((\d+)\))?",
-    re.I,
-)
+#: ``ALTER TABLE <name> <clauses>;`` — the target, then everything up to the
+#: statement terminator, because one ``ALTER TABLE`` may carry several
+#: comma-separated clauses.
+#:
+#: This was four regexes, each anchored on its own ``ALTER TABLE`` prefix,
+#: which between them read only the *first* clause of any statement.
+#: ``040_critical_severity_alert_confidence.sql`` adds three columns to
+#: ``alerts`` in one statement and this parser credited the table with one;
+#: ``063_cost_provenance.sql`` adds five to ``aisoc_run_costs`` and it credited
+#: one. Anchoring on the statement and then reading its clause list is the only
+#: shape that does not depend on how the author chose to punctuate.
+_ALTER_TABLE = re.compile(r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?[\"']?(\w+)[\"']?\s+(.*?)(?:;|\Z)", re.I | re.S)
+_CLAUSE_ADD = re.compile(r"\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?[\"']?(\w+)[\"']?\s*([A-Za-z]*)\s*(?:\((\d+)\))?", re.I)
+_CLAUSE_DROP = re.compile(r"\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?[\"']?(\w+)[\"']?", re.I)
+_CLAUSE_RENAME = re.compile(r"\bRENAME\s+COLUMN\s+[\"']?(\w+)[\"']?\s+TO\s+[\"']?(\w+)[\"']?", re.I)
+_CLAUSE_TYPE = re.compile(r"\bALTER\s+COLUMN\s+[\"']?(\w+)[\"']?\s+(?:SET\s+DATA\s+)?TYPE\s+([A-Za-z]+)\s*(?:\((\d+)\))?", re.I)
+
+_SQL_COMMENT = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
+
+
+def strip_sql_comments(sql: str) -> str:
+    """``sql`` with ``--`` and ``/* */`` comments removed, line structure kept.
+
+    Any parser that splits a clause list on commas has to do this first, and
+    both readers of SQL in this tree learned it the hard way.
+    ``_split_columns`` reads the first token of each comma-separated part as a
+    column name, so a ``--`` comment line sits inside the part that *follows*
+    it and hides the column behind it: ``detection_rule_proposals`` documents
+    four of its columns that way and this parser credited the table with none
+    of them. ``check_raw_sql_columns`` hit the same thing from the statement
+    side, where a comment inside a ``SET`` clause made three perfectly
+    ordinary upserts read as assembled at runtime.
+
+    Newlines survive so a comment cannot glue two statements together.
+    """
+    return _SQL_COMMENT.sub("", sql)
+
 
 #: Words that begin a table-level constraint rather than a column.
 _CONSTRAINT_WORDS = frozenset({"primary", "unique", "foreign", "constraint", "check", "exclude", "like"})
@@ -366,19 +407,40 @@ def _record(
     store.setdefault(table, {})[column] = (family, length)
 
 
-def _scan_sql(text: str, store: dict[str, dict[str, tuple[str | None, int | None]]], dropped: set[tuple[str, str]]) -> None:
+def _scan_sql(raw: str, store: dict[str, dict[str, tuple[str | None, int | None]]], dropped: set[tuple[str, str]]) -> None:
+    text = strip_sql_comments(raw)
     for table, body in _CREATE_TABLE.findall(text):
         for column, family, length in _split_columns(body):
             _record(store, table, column, family, length)
-    for table, column, type_name, length in _ADD_COLUMN.findall(text):
-        _record(store, table, column, _family(type_name), int(length) if length else None)
-    for table, column, type_name, length in _ALTER_TYPE.findall(text):
-        # Only widens what is already known; an ALTER TYPE on a column this
-        # scan never saw created is still a column it never saw created.
-        if column in store.get(table, {}):
+    # Each ALTER TABLE in document order, then its clauses, so a statement
+    # that adds a column and a later one that renames it compose the way the
+    # database would apply them.
+    for table, clauses in _ALTER_TABLE.findall(text):
+        for column, type_name, length in _CLAUSE_ADD.findall(clauses):
             _record(store, table, column, _family(type_name), int(length) if length else None)
-    for table, column in _DROP_COLUMN.findall(text):
-        dropped.add((table, column))
+        for column, type_name, length in _CLAUSE_TYPE.findall(clauses):
+            # Only widens what is already known; an ALTER TYPE on a column
+            # this scan never saw created is still a column it never saw
+            # created.
+            if column in store.get(table, {}):
+                _record(store, table, column, _family(type_name), int(length) if length else None)
+        # A renamed column is the same column under a new name, and reading
+        # only the create statement leaves the parser holding the old one.
+        # Migration 025 renames four columns on `connectors` — `config` to
+        # `connector_config` among them — and every reader in the tree names
+        # the new spelling, so a parser that never applies the rename reports
+        # four columns that do not exist and misses four that do.
+        for before, after in _CLAUSE_RENAME.findall(clauses):
+            columns = store.get(table)
+            if columns is None:
+                continue
+            # The rename is itself proof the column is there, so a column
+            # this parser never saw created still lands under its new name
+            # rather than being silently dropped.
+            columns[after] = columns.pop(before, (None, None))
+            dropped.discard((table, before))
+        for column in _CLAUSE_DROP.findall(clauses):
+            dropped.add((table, column))
 
 
 def _scan_alembic_module(tree: ast.AST, store: dict[str, dict[str, tuple[str | None, int | None]]], dropped: set[tuple[str, str]]) -> None:
@@ -461,12 +523,12 @@ def migration_columns(service: pathlib.Path) -> tuple[dict[str, dict[str, tuple[
                 tree = _upgrade_only(path)
                 if tree is not None:
                     _scan_alembic_module(tree, store, dropped)
-                    read.append(str(path.relative_to(REPO_ROOT)))
+                    read.append(_rel(path))
 
     for name in SQL_MIGRATION_DIRS:
         for path in sorted((service / name).glob("*.sql")):
             _scan_sql(path.read_text(encoding="utf-8", errors="replace"), store, dropped)
-            read.append(str(path.relative_to(REPO_ROOT)))
+            read.append(_rel(path))
 
     return store, dropped, read
 
@@ -508,7 +570,7 @@ def creates_tables_from_metadata(paths: list[pathlib.Path]) -> str | None:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr == "create_all":
-                return str(path.relative_to(REPO_ROOT))
+                return _rel(path)
     return None
 
 

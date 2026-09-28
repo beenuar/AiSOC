@@ -8,6 +8,7 @@ they run fast and deterministically.
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -38,7 +39,14 @@ async def test_hunt_hits_open_a_detection_proposal(monkeypatch):
     await hunt_scheduler._propose_detection_from_hunt(db, _hunt(), 5)
     assert db.execute.await_count == 1
     sql = str(db.execute.await_args.args[0])
-    assert "detection_rule_proposals" in sql
+    # The parsed table name, not a substring of the SQL. `"detection_rule_
+    # proposals" in sql` also passes on `aisoc_detection_rule_proposals`,
+    # which contains the right name inside the wrong one — and that exact
+    # confusion is recorded history here: three insert sites and two tests had
+    # codified the `aisoc_`-prefixed spelling of this very table.
+    inserted = re.search(r"INSERT\s+INTO\s+(\w+)", sql)
+    assert inserted is not None, sql
+    assert inserted.group(1) == "detection_rule_proposals"
 
 
 @pytest.mark.asyncio
