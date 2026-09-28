@@ -21,8 +21,13 @@
 #   * The authentication bypass is unreachable. `ENVIRONMENT` and `AISOC_DEV_MODE`
 #     are fixed values here, not interpolated, so no `.env` can re-enable them.
 #   * Nothing starts on a default credential. Every secret uses `${VAR:?...}`,
-#     which makes Compose refuse to start and name the variable, rather than
-#     booting on `aisoc_dev_secret` and looking healthy.
+#     which makes Compose refuse to start and name the variable rather than
+#     starting on nothing — and, because `:?` rejects an *empty* variable and
+#     cannot look at a value, `preflight-secrets` below runs ahead of every
+#     other service and refuses the literals this repository publishes. Until
+#     it existed this bullet was false: `${POSTGRES_PASSWORD:?… the
+#     development default is a published literal}` accepted `aisoc_dev_secret`,
+#     which is what `.env.example` shipped.
 #   * No datastore is reachable from the host. Postgres, Redis, Kafka and
 #     Qdrant publish no ports at all; the console and the ingest endpoint are
 #     the only things bound, and they bind to loopback unless you set
@@ -40,12 +45,66 @@ include:
 
 services:
   # ---------------------------------------------------------------------------
+  # The value check `${VAR:?}` cannot do.
+  #
+  # Compose's `:?` operator rejects an unset or empty variable. It cannot look
+  # at a value, so `${POSTGRES_PASSWORD:?… the development default is a
+  # published literal}` accepted `aisoc_dev_secret` — the exact literal its own
+  # message names, shipped in `.env.example` and defaulted to in
+  # `docker-compose.yml`. Every guard below had the same hole, so the guarantee
+  # in this file's header held for none of them.
+  #
+  # This runs first and every other service waits for it to exit 0.
+  # `scripts/check_published_secrets.py` derives the refused values from the
+  # tree — the `${VAR:-literal}` defaults in the compose files, the non-empty
+  # values in `.env.example`, and INSECURE_SECRET_KEY_DEFAULTS — so a default
+  # added later is refused without anyone remembering to list it here.
+  #
+  # Every `${VAR:?}` variable in this file is repeated below. That is what
+  # gets it into the container's environment, and `--check` fails when a guard
+  # exists that the preflight never sees.
+  # ---------------------------------------------------------------------------
+  preflight-secrets:
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
+    pull_policy: missing
+    container_name: aisoc-preflight-secrets
+    restart: "no"
+    entrypoint: ["python3", "/repo/scripts/check_published_secrets.py", "--check-env"]
+    # Read-only, and the whole tree rather than the four files the harvest
+    # happens to read today: a hand-listed mount is another list that stops
+    # matching the code, and the failure mode is the check quietly reading
+    # less than it thinks it does. `AISOC_REPO_ROOT` is how `gate_toolkit`
+    # is pointed at a tree without shelling out to git, which this image
+    # does not carry.
+    volumes:
+      - .:/repo:ro
+    environment:
+      AISOC_REPO_ROOT: /repo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD — the development default is a published literal}
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD — the development default is a published literal}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY — run `make env` to generate it}
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:?set AISOC_CREDENTIAL_KEY — run `make env` to generate it}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN — run `make env` to generate it}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN — run `make env` to generate it}
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
+      METRICS_TOKEN: ${METRICS_TOKEN:?set METRICS_TOKEN — guards /metrics outside development; `openssl rand -hex 32`}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — signs SAML/OIDC sessions}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD — required for the monitoring profile}
+
+  # ---------------------------------------------------------------------------
   # Data plane. No published ports: in the development stack these are bound to
   # 127.0.0.1 so a developer can attach a client, which is reasonable there and
   # is an attack surface here. `ports: []` overrides the base list rather than
   # appending to it.
   # ---------------------------------------------------------------------------
   postgres:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -56,18 +115,30 @@ services:
       AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:?set AISOC_APP_DB_PASSWORD — the development default is a published literal}
 
   redis:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   zookeeper:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   kafka:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   qdrant:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
@@ -78,6 +149,9 @@ services:
   # lives, which is the defect this file exists to make impossible.
   # ---------------------------------------------------------------------------
   api:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -123,6 +197,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET — signs SAML/OIDC sessions; the same value ingest-worker takes below}
 
   ingest-worker:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !override ["${AISOC_BIND_ADDR:-127.0.0.1}:8081:8080"]
     restart: unless-stopped
     environment:
@@ -139,6 +216,9 @@ services:
       AISOC_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   fusion:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -148,6 +228,9 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
 
   agents:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -158,6 +241,9 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   actions:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -169,6 +255,9 @@ services:
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN}
 
   connectors:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -179,6 +268,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
 
   threatintel:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -187,6 +279,9 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   realtime:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
@@ -197,16 +292,34 @@ services:
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
 
   litellm:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   ollama:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
+
+  # Declared here only to take the preflight dependency. It is the one service
+  # the base file defines that this overlay otherwise has nothing to say about,
+  # and a single service that starts ahead of the credential check is the hole
+  # the check exists to close.
+  ollama-pull:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
 
   # The console. Demo mode is inlined at build time by Next, so this asserts
   # the runtime side only; pull the `latest` tag rather than a `-demo` one.
   web:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -220,18 +333,27 @@ services:
   # on the services that dial them so the two cannot disagree.
   # ---------------------------------------------------------------------------
   neo4j:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD — required for the full profile}
 
   clickhouse:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD — required for the full profile}
 
   opensearch:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
@@ -240,6 +362,9 @@ services:
   # so it is moved onto a profile nothing here activates: `--profile full` no
   # longer starts it. An operator who wants it can still ask for it by name.
   kafka-ui:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     profiles: !override ["debug-ui"]
     ports: !reset []
     # `no`, not `unless-stopped`: this is a tool you bring up to look at
@@ -257,37 +382,67 @@ services:
   # for debugging, or publish one deliberately in a local override.
   # ---------------------------------------------------------------------------
   alertmanager:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   enrichment:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   honeytokens:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   osquery-tls:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   otel-collector:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   prometheus:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   purple-team:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   slack-bot:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   tempo:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
 
   ueba:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
 
   # HARDENING.md section 5 — observability and audit.
@@ -296,6 +451,9 @@ services:
   # `--profile monitoring` cannot start a dashboard over production telemetry
   # on a password printed in its own documentation.
   grafana:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
     ports: !reset []
     restart: unless-stopped
     environment:

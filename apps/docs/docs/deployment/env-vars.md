@@ -40,6 +40,27 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | `AISOC_SERVICE_TOKEN` | _empty_ | Shared bearer for service-to-service calls. The API **sends** it when proxying the connector catalog and "Test connection" to `services/connectors`, which **verifies** it — so a value set on one side only is a 401 the wizard reports as a failed connection test. `make env` generates one and compose passes it to both. |
 | `AISOC_CONNECTORS_SERVICE_TOKEN` | _empty_ | Per-service override for the above, if you would rather not share one secret. |
 | `AISOC_CONSOLE_URL` | `http://localhost:3000` | Base URL `make bootstrap` prints as the sign-in address. Set it to the address operators actually browse to — any non-localhost deployment otherwise prints the wrong one beside a credential shown exactly once. |
+| `POSTGRES_PASSWORD` | _empty_ | Postgres **owner** role. Owns every table and applies the migration chain; no service connects as it. `make env` generates one. |
+| `AISOC_APP_DB_PASSWORD` | _empty_ | Postgres **runtime** role (`aisoc_app`), DML only so the row-level-security policies apply to it. `make env` generates one. |
+| `REDIS_PASSWORD` | _empty_ | Redis AUTH password. `REDIS_URL` references it rather than repeating it, so rotating one rotates both. `make env` generates one. |
+| `CLICKHOUSE_PASSWORD` | _empty_ | ClickHouse event-lake password, referenced the same way by `CLICKHOUSE_URL`. `make env` generates one. |
+
+:::info A published default cannot satisfy a production guard
+
+The four datastore passwords above used to ship in `.env.example` as
+`aisoc_dev_secret`, `aisoc_app_dev_secret`, `redis_dev_secret` and
+`clickhouse_dev_secret`. `docker-compose.prod.yml` guarded each with
+`${VAR:?… the development default is a published literal}`, but Compose's `:?`
+rejects an **unset or empty** variable and cannot look at a value — so every
+one of those guards accepted the exact literal its own message named.
+
+They ship empty and generated now, and `docker-compose.prod.yml` runs a
+`preflight-secrets` service ahead of everything else that refuses any value
+published in this repository. An existing `.env` is not rewritten by
+`make env`, so a deployment that already holds one of these will be told at
+startup rather than silently keeping it.
+
+:::
 
 ### Migration runner
 

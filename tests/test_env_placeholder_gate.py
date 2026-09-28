@@ -71,12 +71,10 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "AISOC_REALTIME_TICKET_TTL_SECONDS": "a duration",
     "CONNECTORS_SERVICE_URL": "the compose hostname of the connectors service",
     "CONNECTORS_SERVICE_TIMEOUT_SECONDS": "a duration",
-    "POSTGRES_PASSWORD": "dev Postgres password; works out of the box, documented as changeable",
-    "AISOC_APP_DB_PASSWORD": "dev password for the runtime DB role; same reasoning",
-    "DATABASE_URL": "a DSN built from the two passwords above",
+    "DATABASE_URL": "a DSN that references the generated passwords rather than repeating them",
     "DATABASE_MIGRATION_URL": "the owner-role DSN used only by the migration runner",
-    "REDIS_URL": "dev Redis DSN",
-    "CLICKHOUSE_URL": "dev ClickHouse DSN",
+    "REDIS_URL": "a DSN that references REDIS_PASSWORD rather than repeating it",
+    "CLICKHOUSE_URL": "a DSN that references CLICKHOUSE_PASSWORD rather than repeating it",
     "KAFKA_BOOTSTRAP_SERVERS": "a host:port",
     "OPENSEARCH_URL": "a URL",
     "QDRANT_URL": "a URL",
@@ -94,9 +92,6 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "SPLUNK_SCHEME": "a URL scheme",
     "SPLUNK_VERIFY_SSL": "a boolean, and the secure default",
     "AWS_REGION": "a region",
-    "NEXT_PUBLIC_API_URL": "a localhost URL",
-    "NEXT_PUBLIC_REALTIME_URL": "a localhost URL",
-    "NEXT_PUBLIC_WS_URL": "a localhost URL",
 }
 
 #: The exact strings the old grep failed to match. Pinned as a regression test:
@@ -142,6 +137,22 @@ def test_every_shipped_value_is_either_a_placeholder_or_a_declared_default() -> 
         + "\n\nIf it is prose for the reader to replace, add a pattern to "
         "scripts/check_env_placeholders.py::PLACEHOLDER_PATTERNS.\n"
         "If it is a value the stack runs with, add it to DELIBERATE_DEFAULTS in this file with a reason."
+    )
+
+
+def test_no_declared_default_outlives_the_value_it_describes() -> None:
+    """The list above runs in one direction only unless this runs the other.
+
+    A row whose variable no longer ships a non-empty value is prose nobody
+    checks: `POSTGRES_PASSWORD` sat here described as "works out of the box,
+    documented as changeable" for as long as the template shipped
+    `aisoc_dev_secret`, and would have kept saying so after it stopped.
+    """
+    live = {key for _lineno, key, value in _example_entries() if value.strip() and not check_env_placeholders.is_placeholder(value)}
+    stale = sorted(set(DELIBERATE_DEFAULTS) - live)
+    assert not stale, (
+        "these are declared as real defaults but .env.example no longer ships a non-empty "
+        f"value for them: {stale}. Remove the row, or the description outlives the value."
     )
 
 

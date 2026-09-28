@@ -122,6 +122,34 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Bearer for realtime's /internal/* fan-out (API/agents -> realtime). Sent as x-internal-token.",
     ),
+    # The datastore passwords. `.env.example` shipped these as
+    # `aisoc_dev_secret` / `aisoc_app_dev_secret` / `redis_dev_secret` /
+    # `clickhouse_dev_secret`, and `docker-compose.prod.yml` guarded each one
+    # with `${VAR:?… the development default is a published literal}`.
+    # Compose's `:?` rejects an unset or empty variable and cannot look at a
+    # value, so every one of those guards accepted the exact literal its own
+    # message named. `preflight-secrets` in that file refuses the value at
+    # boot; generating them here means a fresh install never holds one.
+    #
+    # Hex rather than urlsafe base64: these travel inside DSNs
+    # (`redis://:$REDIS_PASSWORD@…`) and a `/` or `+` in the userinfo would
+    # have to be percent-encoded by every consumer that builds one.
+    "POSTGRES_PASSWORD": (
+        lambda: secrets.token_hex(24),
+        "Postgres owner role. Owns every table and applies the migration chain; no service connects as it.",
+    ),
+    "AISOC_APP_DB_PASSWORD": (
+        lambda: secrets.token_hex(24),
+        "Postgres runtime role (aisoc_app). DML only, so the row-level-security policies apply to it.",
+    ),
+    "REDIS_PASSWORD": (
+        lambda: secrets.token_hex(24),
+        "Redis AUTH password. Referenced by REDIS_URL rather than repeated inside it.",
+    ),
+    "CLICKHOUSE_PASSWORD": (
+        lambda: secrets.token_hex(24),
+        "ClickHouse event-lake password. Referenced by CLICKHOUSE_URL rather than repeated inside it.",
+    ),
 }
 
 

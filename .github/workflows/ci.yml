@@ -648,6 +648,17 @@ jobs:
         run: |
           python3 scripts/check_profile_service_counts.py --self-test
           python3 scripts/check_profile_service_counts.py
+      # `docker-compose.prod.yml` states that nothing starts on a default
+      # credential and implements it with `${VAR:?…}`. Compose's `:?` rejects
+      # an unset or empty variable and cannot look at a value, so the guard
+      # whose message reads "the development default is a published literal"
+      # accepted `aisoc_dev_secret` — the literal `.env.example` shipped. The
+      # value check runs as a preflight service; this asserts every guard
+      # reaches it and that nothing starts ahead of it.
+      - name: No production guard can be satisfied by a published credential
+        run: |
+          python3 scripts/check_published_secrets.py --self-test
+          python3 scripts/check_published_secrets.py --check
       # The marketplace index has to exist in three build contexts, none of
       # which can see the other two. The API's copy was missing, so its image
       # shipped no catalogue and the marketplace answered 503 on every

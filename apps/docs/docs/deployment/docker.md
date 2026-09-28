@@ -131,7 +131,12 @@ matter:
   shim described above.
 - **Nothing starts on a default credential.** Every secret is declared
   `${VAR:?...}`, so Compose refuses to start and names the variable rather than
-  booting on a literal published in this repository and looking healthy.
+  booting on nothing. Compose's `:?` rejects an *unset or empty* variable and
+  has no way to compare a value, so a `preflight-secrets` service runs ahead of
+  everything else and refuses the literals this repository publishes —
+  `aisoc_dev_secret`, `redis_dev_secret`, Grafana's `admin` and the rest. It
+  derives that list from the tree (`scripts/check_published_secrets.py`), so a
+  default added later is refused without anyone having to remember it.
 - **Only the console and the ingest endpoint are reachable.** `web` on `:3000`
   and `ingest-worker` on `:8081`, and nothing else — not the datastores, not
   the internal services, not Prometheus or Grafana. The console proxies every

@@ -95,7 +95,9 @@ jobs:
           # now rather than duplicated across the two triggers it had.
           paths=(
             'docker-compose.yml'
+            'docker-compose.prod.yml'
             'infra/compose/docker-compose.demo.yml'
+            'scripts/check_published_secrets.py'
             '.env.example'
             '.github/workflows/compose-smoke.yml'
             'services/'
@@ -185,6 +187,47 @@ jobs:
       - name: Validate compose file
         if: steps.relevant.outputs.run == 'true'
         run: docker compose config --quiet
+
+      # `docker-compose.prod.yml` shipped sixteen passing assertions about
+      # nothing starting on a default credential, and every one of them read
+      # the file rather than starting it. Compose's `${VAR:?}` rejects an
+      # unset or empty variable and cannot look at a value, so the guard
+      # reading "the development default is a published literal" accepted
+      # `aisoc_dev_secret`. This starts the stack, both ways, and asserts the
+      # exit status — a static read of the same file cannot tell the
+      # difference between these two runs.
+      - name: A published credential cannot start the production stack
+        if: steps.relevant.outputs.run == 'true'
+        env:
+          COMPOSE_PROJECT_NAME: aisoc-prodguard
+        run: |
+          set -euo pipefail
+          real() { openssl rand -hex 24; }
+          {
+            for name in POSTGRES_PASSWORD AISOC_APP_DB_PASSWORD REDIS_PASSWORD SECRET_KEY \
+                        AISOC_CREDENTIAL_KEY AISOC_SERVICE_TOKEN AISOC_ACTIONS_SERVICE_TOKEN \
+                        AISOC_REALTIME_JWT_SECRET REALTIME_INTERNAL_TOKEN METRICS_TOKEN \
+                        JWT_SECRET NEO4J_PASSWORD CLICKHOUSE_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+              printf '%s=%s\n' "$name" "$(real)"
+            done
+            printf 'AISOC_VERSION=%s\n' "${AISOC_VERSION}"
+          } > /tmp/prod-real.env
+          sed 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=aisoc_dev_secret|' /tmp/prod-real.env > /tmp/prod-published.env
+
+          echo "::group::published credential — must refuse"
+          if docker compose --env-file /tmp/prod-published.env -f docker-compose.prod.yml \
+               up --no-build --exit-code-from preflight-secrets preflight-secrets; then
+            echo "::error::the production stack started on aisoc_dev_secret"
+            exit 1
+          fi
+          docker compose --env-file /tmp/prod-published.env -f docker-compose.prod.yml down -v
+          echo "::endgroup::"
+
+          echo "::group::real credentials — must start"
+          docker compose --env-file /tmp/prod-real.env -f docker-compose.prod.yml \
+            up --no-build --exit-code-from preflight-secrets preflight-secrets
+          docker compose --env-file /tmp/prod-real.env -f docker-compose.prod.yml down -v
+          echo "::endgroup::"
 
       - name: Detect build-context changes
         id: dockerfile_changes
