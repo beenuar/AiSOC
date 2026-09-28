@@ -190,10 +190,23 @@ jobs:
             printf '\nAISOC_VERSION=%s\n' "${AISOC_VERSION}" >> .env
           fi
 
+          # Copying .env.example leaves every generated secret empty, which is
+          # what `make up` runs ensure_env.py to fix. Without it this job
+          # provisions an environment no real deployment ever has: v12.0.0 made
+          # an empty AISOC_REALTIME_JWT_SECRET fatal — the ticket endpoint
+          # answers 503 and the realtime edge rejects every connection, by
+          # design — and the spine test failed at mint_ws_ticket. It was not
+          # caught on main because this job is path-filtered and had not run on
+          # a commit that triggers it since that release.
+          python3 scripts/ensure_env.py
+          python3 scripts/ensure_env.py --check
+
           token="$(openssl rand -hex 32)"
           echo "::add-mask::$token"
           # Written into .env so compose substitutes it into the ingest and
           # connectors services; exported so the spine test presents it.
+          # Overwrites the value ensure_env just generated, deliberately: the
+          # test has to present the same token the services verify.
           sed -i "s|^AISOC_SERVICE_TOKEN=.*|AISOC_SERVICE_TOKEN=${token}|" .env
           grep -q "^AISOC_SERVICE_TOKEN=${token}$" .env || {
             echo "::error::AISOC_SERVICE_TOKEN was not written into .env — check that .env.example still declares it"
