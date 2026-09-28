@@ -119,9 +119,17 @@ jobs:
       - name: Self-test the harness before measuring anything with it
         run: python3 scripts/perf/load_harness.py --self-test
 
+      # `services/demo-producer` is its own Go module and the repository root
+      # has no `go.mod`, so building from the workspace root cannot resolve a
+      # module at all — `go: go.mod file not found in current directory or any
+      # parent directory`. It has never worked: it shipped in #933 and this
+      # job runs on the nightly schedule only, so the first execution that was
+      # not skipped, on 2026-09-28, was also the first failure. The module
+      # itself is fine; ci.yml's `Go — Build & Vet` matrix compiles it on every
+      # pull request by cd-ing into it first, which is the convention here.
       - name: Build the producer
-        run: go build -o /tmp/demo-producer ./services/demo-producer
-        working-directory: ${{ github.workspace }}
+        run: go build -o /tmp/demo-producer .
+        working-directory: services/demo-producer
 
       - name: Bring up the spine
         run: |
