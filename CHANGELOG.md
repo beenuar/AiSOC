@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Six of the eight `PARTIAL` rows in the claim-to-gate matrix closed, and
+  every one closed by building the gate it named.** The matrix goes from 236
+  rows — 228 GATED / 8 PARTIAL / 0 NO GATE to **236 rows — 234 GATED / 2
+  PARTIAL / 0 NO GATE**, recounted with `scripts/check_claim_gate_matrix.py`
+  rather than typed. The gates are `check_ledger_replay_contract.py` plus 37
+  API replay tests, `check_sdk_surface.py`, `check_default_egress.py` plus
+  `tests/test_no_default_egress.py`, `check_raw_sql_columns.py`,
+  `tests/isolation/test_backtest_lake_live.py`, and
+  `check_scanner_ratchet.py`; each landed in its own change with proof that
+  it goes red before it was trusted.
+
+  Four of the six found a live defect on the way in — four operations both
+  SDK clients called that the API does not serve, a `source` column three raw
+  INSERTs name that `detection_rule_proposals` has never had, a public CDN
+  default in `services/purple-team` that nothing in the service read, and a
+  payload expansion in the backtest that had never run on a real lake row
+  because the writer stores OCSF `raw_data` into a column named
+  `raw_payload`.
+
+  Three of the six rows also carried a **gap statement that was wrong in this
+  repository's favour**: they credited an "api integration" job and an
+  "integration gate" that do not run those paths. A `PARTIAL` row's caveat
+  has to be re-derived when it is closed, not merely deleted, or the file
+  records a deferral that was never what the row said it was.
+
+  The two rows that remain are the same deferral seen twice — a groundedness
+  floor, and promoting the live-agent eval to a pull-request gate. Neither is
+  blocked on code or on a funded provider key: `live-agent-eval.yml` serves a
+  local model through Ollama and needs no secret. It has simply never run, so
+  there is no distribution to derive a floor from, and a floor invented
+  before the measurement exists would publish a number nobody took. The
+  scorer and the production demotion it drives are already gated on every
+  pull request; what is not gated is the live agent's own output, and a
+  hand-written string cannot stand in for that.
+
+- **`project_stats.py` and the README no longer publish two numbers under one
+  label.** It counted every YAML under `detections/` and printed the result
+  as "Detection files on disk" — 7,016, against the 6,991 the README and the
+  generated truth table publish under the same words. Both were right and
+  they were counting different things: the extra 25 are the standalone
+  response playbooks under `detections/playbooks/`, which are not detection
+  rules. The rule count is now the one the truth table publishes, the wider
+  file count is printed beside it saying what it includes, and a test in
+  `tests/test_readme_figures_gate.py` pins the rule count to the truth
+  table's own row so the two cannot drift apart again.
+
 ### Added
 
 - **`docker-compose.prod.yml`, the file the deployment page had always pointed

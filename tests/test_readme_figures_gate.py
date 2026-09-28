@@ -10,6 +10,7 @@ passes is indistinguishable from no gate.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -301,3 +302,25 @@ def test_the_live_tree_presents_its_own_version(tmp_path: Path) -> None:
     assert module.REPO_ROOT == REPO_ROOT
     assert module._declared_version() == (REPO_ROOT / "VERSION").read_text().strip()
     assert module.gate_current_version() == []
+
+
+def test_project_stats_rule_count_matches_the_truth_table() -> None:
+    """One label, one number.
+
+    `project_stats.py` printed every YAML under `detections/` as "Detection
+    files on disk" — 7,016 against the README's 6,991 under the same words.
+    Both counts were right and they counted different things; the extra 25
+    are response playbooks. Two surfaces using one label for two numbers is
+    how a reader concludes one of them is lying.
+    """
+    spec = importlib.util.spec_from_file_location("_project_stats_under_test", REPO_ROOT / "scripts" / "project_stats.py")
+    assert spec and spec.loader
+    stats = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = stats
+    spec.loader.exec_module(stats)
+
+    table = (REPO_ROOT / "docs" / "detections" / "truth-table.md").read_text(encoding="utf-8")
+    match = re.search(r"\|\s*rules on disk \(total\)\s*\|\s*(\d+)\s*\|", table)
+    assert match, "the truth table no longer publishes a total rules-on-disk row"
+    assert stats._detection_files_on_disk() == int(match.group(1))
+    assert stats._detection_yaml_files() >= stats._detection_files_on_disk()

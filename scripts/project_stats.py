@@ -81,12 +81,35 @@ def _executable_detections() -> int | None:
     return total
 
 
+#: Directories under `detections/` holding YAML that is not a detection rule.
+#: Kept equal to `detection_truth_table.py`'s `SKIP_DIRS`, because a rule
+#: count and a file count published under the same words is how two surfaces
+#: come to disagree while both are right.
+_NON_RULE_DIRS = {"fixtures", "playbooks"}
+
+
 def _detection_files_on_disk() -> int:
-    """Every YAML under detections/, including the quarantine.
+    """Detection *rules* on disk, including the quarantine.
 
     Reported alongside the executable count so the gap is visible rather than
     conflated. The two numbers have been published interchangeably before.
+
+    This used to count every YAML under `detections/` and print the result as
+    "Detection files on disk", which put 7,016 against the README's 6,991
+    under the same label. Both were right and they were counting different
+    things: the extra 25 are the standalone response playbooks under
+    `detections/playbooks/`, which are not detection rules. The rule count is
+    now the one the truth table and the README publish, and the wider file
+    count is printed beside it saying what it includes.
     """
+    d = ROOT / "detections"
+    if not d.is_dir():
+        return 0
+    return sum(1 for p in d.rglob("*.yaml") if not _NON_RULE_DIRS & set(p.relative_to(d).parts))
+
+
+def _detection_yaml_files() -> int:
+    """Every YAML under detections/, rules and playbooks alike."""
     d = ROOT / "detections"
     return sum(1 for _ in d.rglob("*.yaml")) if d.is_dir() else 0
 
@@ -141,6 +164,7 @@ def collect() -> dict:
         "connectors": _connectors(),
         "detections_executable": _executable_detections(),
         "detections_files_on_disk": _detection_files_on_disk(),
+        "detections_yaml_files": _detection_yaml_files(),
         "services_in_repo": _python_services(),
         "compose": _compose_services(),
         "claim_gate": _claim_gate_rows(),
@@ -154,13 +178,15 @@ def collect() -> dict:
 def _render(stats: dict) -> str:
     c = stats["compose"]
     g = stats["claim_gate"]
+    playbook_yaml = stats["detections_yaml_files"] - stats["detections_files_on_disk"]
     lines = [
         "",
         f"  AiSOC {stats.get('version', '?')} — figures recounted from the tree",
         "",
         f"  Connectors (registered)        {stats['connectors']}",
         f"  Detections (engine loads)      {stats['detections_executable']}",
-        f"  Detection files on disk        {stats['detections_files_on_disk']}  (includes quarantined imports the engine never evaluates)",
+        f"  Detection rules on disk        {stats['detections_files_on_disk']}  (includes quarantined imports the engine never evaluates)",
+        f"  YAML files under detections/   {stats['detections_yaml_files']}  (the extra {playbook_yaml} are response playbooks, not rules)",
         f"  Services in repo               {stats['services_in_repo']}",
     ]
     if c:
