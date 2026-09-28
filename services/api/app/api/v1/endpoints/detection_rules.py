@@ -10,7 +10,7 @@ from sqlalchemy import and_, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
-from app.services.backtest import backtest_rule, build_backtest_sql, rows_to_events
+from app.services.backtest import backtest_rule, fetch_lake_events
 from app.services.mssp_rule_resolver import resolve_effective_rules
 from app.services.rule_engine import execute_rule, run_hunt
 
@@ -34,17 +34,6 @@ class BacktestResponse(BaseModel):
     hit_rate: float
     sample_matches: list[dict[str, Any]]
     error: str | None = None
-
-
-async def _fetch_lake_events(tenant_id: uuid.UUID, *, window_days: int, limit: int, source: str | None) -> list[dict[str, Any]]:
-    """Fetch tenant-scoped historical events from the ClickHouse lake."""
-    from app.db.clickhouse import execute_lake_query  # noqa: PLC0415 — optional lake backend
-    from app.services.lake_sql import rewrite_for_tenant  # noqa: PLC0415
-
-    sql = build_backtest_sql(window_days=window_days, limit=limit, source=source)
-    rewrite = rewrite_for_tenant(sql, tenant_id, row_cap=limit)
-    result = await execute_lake_query(rewrite.sql, timeout_seconds=30)
-    return rows_to_events(result.columns, result.rows)
 
 
 class DetectionRuleResponse(BaseModel):
@@ -463,7 +452,7 @@ async def backtest_detection_rule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Detection rule not found")
 
     try:
-        events = await _fetch_lake_events(
+        events = await fetch_lake_events(
             current_user.tenant_id,
             window_days=request.window_days,
             limit=request.limit,

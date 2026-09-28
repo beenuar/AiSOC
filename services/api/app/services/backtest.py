@@ -46,11 +46,21 @@ def build_backtest_sql(*, window_days: int, limit: int, source: str | None) -> s
 
 def rows_to_events(columns: list[str], rows: list[list[Any]]) -> list[dict[str, Any]]:
     """Zip lake columns+rows into event dicts, expanding any JSON payload column
-    (``raw_data`` / ``raw_event``) so rules that match connector-flat fields work."""
+    (``raw_payload`` / ``raw_data`` / ``raw_event``) so rules that match
+    connector-flat fields work.
+
+    ``raw_payload`` is the name the lake actually uses: the writer stores the
+    OCSF ``raw_data`` field into a column it calls ``raw_payload``
+    (``lake_writer._COLUMNS``), and ``aisoc.raw_events`` has no ``raw_data``
+    column at all. Listing only the OCSF-side names meant a backtest over the
+    lake expanded nothing, so every rule matching a connector-flat field
+    scanned events that did not carry it. The other two names stay for callers
+    that pass pre-lake event shapes.
+    """
     events: list[dict[str, Any]] = []
     for row in rows:
         event = dict(zip(columns, row, strict=False))
-        for payload_key in ("raw_data", "raw_event"):
+        for payload_key in ("raw_payload", "raw_data", "raw_event"):
             payload = event.get(payload_key)
             if isinstance(payload, str) and payload.strip():
                 try:
