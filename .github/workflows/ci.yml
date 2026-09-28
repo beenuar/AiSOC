@@ -570,6 +570,16 @@ jobs:
         run: python3 scripts/check_replay_contract_parity.py --self-test
       - name: Replay contract parity gate
         run: python3 scripts/check_replay_contract_parity.py
+      # The finding-count comparison itself lives in the three scanner jobs in
+      # security.yml, where the reports are. This runs the half that needs no
+      # scanner — the allow-list's own schema, its expiry dates, and whether
+      # the set of ceilings still matches the set of scanners the workflow
+      # runs — in a job that is a required check, so a ceiling left behind by
+      # a deleted scanner cannot hide in a job nobody waits for.
+      - name: Scanner ratchet gate — self-test
+        run: python3 scripts/check_scanner_ratchet.py --self-test
+      - name: Scanner ratchet gate
+        run: python3 scripts/check_scanner_ratchet.py
       # The three sdk-* jobs below compile and test each SDK in isolation, and
       # none of them compares a client to the API it claims to speak to.
       # packages/sdk-go passed all three over a file of type declarations with
