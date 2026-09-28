@@ -33,6 +33,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`RELEASES.md` announced v11.2.0 as the current release for the whole of
+  v12.0.0, and every figure gate in the repository was green while it did.**
+  The TL;DR read "AiSOC is on `v11.2.0`, released 2026-09-26", the "What's
+  new" section opened "`VERSION` is `11.2.0`", and there was no `## v12.0.0`
+  section at all — so the file whose job is to say what shipped was wrong
+  about the most basic fact it carries, including on the BREAKING items a
+  reader most needs before upgrading.
+
+  **Why it survived.** `scripts/readme_gates.py` already re-derives two
+  figures for `RELEASES.md` — the executable-rule count from the generated
+  truth table, and the claim-gate tally from the matrix rows — and the file
+  passed both. It had **no version check of any kind**, so the one number
+  that changes on every release was the one number nothing compared against
+  `VERSION`. `gate_current_version()` now reads the three sentence shapes
+  that present a version as the current one: `AiSOC is on vX.Y.Z`,
+  ``VERSION` is `X.Y.Z``, and the README's shields.io badge.
+
+  **What it deliberately does not read.** A figure gate over every version
+  string in these documents would be unusable, because `RELEASES.md` names
+  ten superseded releases on purpose and each opens in the past tense
+  (``VERSION` was `11.0.0``). The check reads only the present-tense forms,
+  which is the same idea as the existing `_HISTORICAL_QUOTE` exemption
+  arrived at from the other direction.
+
+  It also does **not** reuse that exemption, and that is the load-bearing
+  decision rather than an omission. `_is_historical` exempts a whole line,
+  and the stale TL;DR is a single long line that legitimately dates a
+  *different* figure in the same sentence ("at the v11.2.0 cut: 147 rows").
+  Applying it would have skipped the stale version claim eighty words to its
+  left — the exact text the gate was written for — so the new patterns carry
+  their own scoping instead of borrowing a neighbour's. A test injects that
+  shape and requires it to fail.
+
+  Proven against the pre-fix tree rather than assumed: run at `dd072a75`, the
+  new check exits 1 naming both statements, while that commit's own
+  `readme_gates.py` reports `readme-gates: OK` on the identical text.
+
+  v12.0.0 is now published in `RELEASES.md` and `ROADMAP.md`, and v11.2.0 is
+  demoted to a past-tense section carrying its own dated tally unchanged.
+
+- **Five documents published figures that had drifted from the artefacts they
+  cite, three of them while saying they could not.**
+  `docs/contributing/detection-translation-drive.md` introduces its table as
+  copied from a CI-gated source "so it cannot drift" and read `native
+  869/869` and `sigma (imported) 3132/77` against a generated truth table
+  holding `877/833` and `3132/1770`. The gate holds the *generated* file to
+  what the engine loads; nothing held that page to the generated file. Its
+  headline said 947 of 6,983 rules fire against a real 2,603 of 6,991.
+
+  The advice was staler than the numbers, which matters more for a page whose
+  purpose is directing a first contribution: it offered "3,055 quarantined
+  Sigma rules against 77 already translated" as easy bulk work, when 1,770
+  now compile and the remaining **1,362 were each refused with a recorded
+  reason**. Picking an arbitrary quarantined rule now likely lands on one
+  refused on purpose — 464 of them are negations that must stay refused,
+  because Sigma reads `not filter` as true when the field is absent. The page
+  now points at the refusal table and names the leverage: 556 need a
+  connector that emits their log source, and several groups are one matcher
+  feature standing in front of a whole family.
+
+  The four `docs/design/landing-page-*` documents carried 69 connectors,
+  6,998 detections, 7,117 marketplace items and 57 plugins. These are not
+  inert design notes: five shipped landing-page components name them as the
+  verbatim copy source. They now read 84 connectors across 9 categories,
+  2,603 executable of 6,991 on disk, 7,155 marketplace items, 77 plugins and
+  62 packs. Where a recipe gave a literal (`value={6998}`) it now names the
+  generated constant the components already import, so the next corpus change
+  moves the page without an edit.
+
+- **`ROADMAP.md` pointed its v11.2 section at the wrong changelog anchor and
+  had no v12.0 section**, so the newest release was absent from the roadmap
+  while the previous one linked to its notes. Three labels were corrected
+  without inventing scope. The mobile responder line asserted "no React
+  Native code exists in the tree" — `apps/mobile` declares `react-native` and
+  Expo, and the same file already recorded the PWA and `apps/mobile` as
+  shipped in v9.0 two hundred lines earlier, so the document contradicted
+  itself; it now states what shipped and that what remains is a device build,
+  a store submission and APNs/FCM credentials, which are account actions. The
+  marketplace-v3 item read "deferred past v8.0" through five majors: it is an
+  open, unscheduled scope decision that was never scheduled against a
+  release, and dating the label made it look like a slipped commitment.
+  Phase 7 still pointed at `docs/audit/PROGRESS.md`, which is in
+  `.gitignore`, was never committed, and is called out as exactly that by
+  line 22 of the same file — repointed at `DEFERRED_SUBPHASES.md`, where 7b+
+  is genuinely scoped. Phase 10's "all 69 connectors" is date-scoped rather
+  than rewritten, since the generated conformance matrix now reads 84 / 84.
+  Phase 4 stays unchecked: what it needs is a funded provider key, not code.
+
+- **A duplicate empty `## Summary` heading sat above the real one** in
+  `docs/audit/CLAIM_TO_GATE_MATRIX.md`. Removed without touching a table row,
+  a status, or the blank-line discipline the parser depends on; the tally is
+  unchanged at 236 rows — 228 GATED, 8 PARTIAL, 0 NO GATE.
+
 - **The marketplace answered 503 in every container, on every release since
   the endpoint was written.** Reported against an on-premise Docker Compose
   deployment in [#374](https://github.com/beenuar/AiSOC/discussions/374). Two

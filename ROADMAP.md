@@ -29,10 +29,10 @@ A proof-first, security-first program to make every README claim gate-backed, cl
 - [ ] Phase 4 — Real evals + detection content truth table (third-party-labeled corpus, hallucination/calibration/abstention, model matrix) — **4a/4b/4c landed**: de-circularised DAC candidate-rule gate; honest executable-vs-imported truth table; hallucination, abstention, calibration and containment metrics in `packages/aisoc-benchmark` with a documented adapter so a third-party agent can be graded on the same corpus; confidence calibration gated in `test_confidence_calibration.py`; and a **model matrix** (`scripts/run_model_matrix.py`) wired into the weekly wet eval, which grades the same corpus across several models by re-invoking the existing evaluator rather than defining a second notion of accuracy. **Remains open on one thing only, and it is not code:** the live-agent numbers need a funded provider key. Without one the matrix reports *not measured* per model rather than emitting zeros, because a zero is a measurement and "we did not run this" is not.
 - [x] Phase 5 — Data spine correctness (versioned event-schema registry + dead-letter queue + source-event lineage in the fusion consumer; idempotency via AlertSink dedup + event-time watermarking; backfill/replay-from-offset tracked as 5b)
 - [x] Phase 6 — Performance + cost (fusion hot-path throughput harness with a generous regression-floor gate; deterministic storage $/TB cost model + drift gate; storage-consolidation ADR-0005)
-- [x] Phase 7 — Ingest-time graph + multi-model router — **graph-at-ingest already shipped** (v8 T1.1, `services/ingest/internal/graph/`); **7a landed**: unified deterministic→ML→LLM router with tier attribution + the `AISOC_DETERMINISTIC` determinism contract (`services/agents/app/routing/model_router.py`, gated). 7b+ (posture collection, effective-permissions snapshot loader, bi-temporal valid_from/valid_to, fusion-time ContextBundle) tracked in `docs/audit/PROGRESS.md`
+- [x] Phase 7 — Ingest-time graph + multi-model router — **graph-at-ingest already shipped** (v8 T1.1, `services/ingest/internal/graph/`); **7a landed**: unified deterministic→ML→LLM router with tier attribution + the `AISOC_DETERMINISTIC` determinism contract (`services/agents/app/routing/model_router.py`, gated). 7b+ (posture collection, effective-permissions snapshot loader, bi-temporal valid_from/valid_to, fusion-time ContextBundle) scoped in [`docs/audit/DEFERRED_SUBPHASES.md`](docs/audit/DEFERRED_SUBPHASES.md), which records that all five effective-permissions resolvers already ship and that what remains is one thing: no connector answers `__posture_snapshot__`
 - [x] Phase 8 — LLMOps (version+hash-pinned prompt registry with a CI drift gate; model pins + deterministic-terminated provider-fallback chains; content-addressed response cache; fail-closed structured-output validation)
 - [x] Phase 9 — Autonomy safety (dry-run-by-default policy, honest bounded rollback-capability contract replacing silent `return True`, mandatory post-action verification for unattended containment, break-glass HIGH-blast flag, autonomy scorecard — all gated at the policy layer; live-router wiring + durable approval-SLA timer table tracked as 9b)
-- [x] Phase 10 — Connector + content quality (runtime-contract conformance suite across all 69 connectors — gates the "live Test connection" capability that had NO gate + secret-field-marking; published `conformance-matrix.md` with a drift gate; detection lifecycle already gated by Phase 4a DAC + Phase 4b truth table. Live-vendor sandbox smoke + rate-limit/checkpoint durability tracked as 10b)
+- [x] Phase 10 — Connector + content quality (runtime-contract conformance suite across all 69 connectors registered when the phase landed; the generated [`conformance-matrix.md`](docs/connectors/conformance-matrix.md) now reads 84 / 84 — gates the "live Test connection" capability that had NO gate + secret-field-marking; the matrix is published with a drift gate on it; detection lifecycle already gated by Phase 4a DAC + Phase 4b truth table. Live-vendor sandbox smoke + rate-limit/checkpoint durability tracked as 10b)
 - [x] Phase 11 — API / SDK / release engineering (pure-Python OpenAPI breaking-change detector `scripts/openapi_diff.py` + `openapi-breaking.yml` gate: PR spec vs base fails on removed endpoint/schema/field, type change, tightened request, or dropped enum value — closes the OpenAPI NO GATE row; per-language SDK generated-client contract-drift tracked as 11b)
 - [x] Phase 12 — Observability + governance (per-service SLOs in `docs/operations/slos.yaml` with a coverage gate; `docs/operations/observability.md` documenting the four golden signals + single OTel trace across the spine; `GOVERNANCE.md` + `MAINTAINERS.md` + DCO sign-off in `CONTRIBUTING.md`; governance-completeness gate — `governance.yml`)
 
@@ -262,9 +262,12 @@ Implemented and reviewed by Beenu Arora <beenu@cyble.com>.
       account action rather than an engineering one — see
       `apps/mobile/README.md`.)_
 - [ ] Plugin publishing marketplace v3 (commercial plugins, revenue sharing)
-      _(deferred past v8.0; **not started**. Revenue sharing is a commercial
-      decision rather than an engineering one, and the free packaging path is
-      itself still blocked on registry credentials — see v8.1.)_
+      _(**open and unscheduled**, and never in fact scheduled against a
+      particular release. The "deferred past v8.0" this line used to carry
+      dated the label rather than the decision, and survived five majors.
+      Revenue sharing is a commercial decision rather than an engineering one,
+      and the free packaging path is itself still blocked on registry
+      credentials — see v8.1.)_
 
 ---
 
@@ -606,12 +609,22 @@ Disposition of every item that had been listed against v8.0:
 - ~~NL→query: "show me failed logins from new ASNs last 24h" → ES|QL / KQL~~ → **shipped in v7.2.0** (deterministic translator + 50-pair eval set)
 - ~~SOC-in-a-box one-click cloud deploy (Terraform module for AWS / GCP)~~ → **GCP module shipped in v7.2.0** (AWS already shipped)
 - ~~Automated retro/blameless post-mortem drafting from case timeline~~ → **shipped in v7.2.0** (ideas backlog item promoted)
-- Mobile responder console (React Native) — **not started**, deferred; see the
-  note under v7.0 above. No React Native code exists in the tree.
+- Mobile responder console (React Native) — **shipped in v9.0**; see the note
+  under v7.0 above. The "no React Native code exists in the tree" this line
+  used to carry is false: `apps/mobile` declares `react-native` and Expo, and
+  the capability itself had shipped earlier still as a PWA under
+  `apps/web/src/app/(responder)/`. What genuinely remains is not engineering:
+  **no device build, simulator run or store submission has been performed**,
+  and the APNs and FCM credentials needed to deliver a push to a real handset
+  are an account action, the same class of blocker as the npm and PyPI
+  publish. `apps/mobile/README.md` states both halves.
 - Plugin publishing marketplace v3 (commercial plugins, revenue sharing) —
-  **not started**, deferred. Revenue sharing is a commercial decision rather
-  than an engineering one, and the free packaging path is itself still blocked
-  on registry credentials.
+  **open and unscheduled**, and never in fact scheduled against a particular
+  release. This line read "deferred past v8.0" through five majors, which
+  dated the label rather than the decision; it is a scope decision, not a
+  slipped commitment. Revenue sharing is a commercial decision rather than an
+  engineering one, and the free packaging path is itself still blocked on
+  registry credentials.
 - MSSP RBAC enforcement on `/api/v1/actors/*` (threat attribution) — **shipped
   in v7.5.0** as part of the threat-actor attribution RBAC + port fix.
 - AI-generated threat intelligence briefings from public feeds — **open**, not
@@ -674,6 +687,45 @@ packages that could not be built at the v8.1.0 tag, and three new documents —
 `docs/architecture/README.md`, and `docs/testing/CLEAN_INSTALL.md`.
 
 Full inventory under `[8.1.1]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v12.0 — Shipped (2026-09-28)
+
+The deployment a stranger actually starts, treated as the threat model. Three
+reported vulnerabilities sat in the profile `make up` brings up, and none of
+them needed a credential to reach: the actions service skipped authentication
+entirely whenever its service token was empty and `AISOC_DEV_MODE` was set —
+which compose defaults on while nothing generated the token — so
+`isolate_host`, `disable_user`, `block_ip` and `run_script` were available to
+anything that could reach the port; the realtime edge verified connection
+tickets against a constant committed to this repository and read an unset
+`/internal/*` token as authorized rather than as unconfigured; and `viewer`
+could write to cases on all nine write routes, where a permission deliberately
+withheld from the role was enforced nowhere. All three now refuse to serve
+until the credential they need is set, which is what makes this a major, and
+`scripts/ensure_env.py` backfills the generated secrets into an existing
+`.env` so the documented path repairs itself.
+
+Capability work in the same release: hunting stopped being a library of hunts
+somebody had already written, with an agent that turns a hypothesis into a
+plan whose fields and operators are closed enums and a compiler that binds
+every model-supplied value as a parameter, so injection is unrepresentable
+rather than filtered; the hunt corpus went from 5 to 68, and the grading over
+it stopped being satisfiable by accident once a negative scenario had to
+differ from its positive in exactly one indicator field — which found eight
+violations on its first run against a corpus the old grading was passing. And
+autonomy is now earned from a measured track record rather than typed into a
+setting, with promotion refusing an unmeasured rate and demotion ignoring one.
+
+Two gates that reported success over nothing were rebuilt on what the app
+actually serves: the route-shadowing check read `app.routes` and filtered for
+`APIRoute`, which `include_router` no longer populates, so it compared zero
+pairs across 456 published operations — and the defect it should have caught
+had left `DELETE /api/v1/autonomy-policy/grants` unreachable since it shipped,
+answering 204 while deleting from the wrong table.
+
+Full inventory — 44 entries — under `[12.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -762,7 +814,7 @@ were moved onto the compiled ruleset, which is what closed the long-standing
 disagreement between the validator, the coverage page, the marketplace index
 and the truth table.
 
-Full inventory under `[12.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+Full inventory under `[11.2.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
