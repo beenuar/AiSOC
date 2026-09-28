@@ -2111,4 +2111,4 @@ dev = ["httpx", "pytest", "pytest-asyncio"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "fb6d14dca912c74b44d8c043ecebf6f6a8c9d08c6a1edba43c53a0f46acc7799"
+content-hash = "249638ebeae2adea98ad02c6248636f56a8c733b830fc7ed785f4efe710d481a"

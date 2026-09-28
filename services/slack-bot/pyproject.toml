@@ -36,6 +36,12 @@ asyncpg = ">=0.29,<0.31"
 # resolve together or not at all.
 pytest = ">=9.0.3,<10.0"
 pytest-asyncio = ">=1.0,<2.0"
+# The CI job that runs this suite reads a coverage floor out of the
+# `[tool.coverage.report]` table below, and the plugin that enforces it was
+# installed by the workflow rather than declared here. A floor whose reader
+# lives somewhere else is a floor that can be dropped by editing a file this
+# service does not own.
+pytest-cov = ">=5,<8"
 respx = "^0.21.1"
 
 # Same shape as services/api and services/osquery-tls rather than a third

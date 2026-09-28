@@ -85,6 +85,20 @@ jobs:
           pip install --quiet 'pytest>=7.4,<9'
           python -m pytest tests/test_dependency_pin_gate.py -v --tb=short
 
+      # The gate above compares files to files: a manifest to a Dockerfile, a
+      # range to another range. It never asked which *job* installs which
+      # *service*, so it could not see that `ci.yml`'s API list omitted
+      # `pysigma` while the image installs it from the lock. The API's Sigma
+      # matcher imports `sigma` inside a `try`, so CI graded a reduced
+      # built-in evaluator and production graded the real backend — and the
+      # one CI never ran was the broken one.
+      - name: Install the reader
+        run: python -m pip install --quiet 'pyyaml>=6,<7'
+      - name: The gate detects each divergence, and refuses a tree with nothing to compare
+        run: python scripts/check_ci_install_parity.py --self-test
+      - name: Every job grading a service installs what that service's image ships
+        run: python scripts/check_ci_install_parity.py --inventory
+
   toolchain-agreement:
     name: Go, Node, pnpm and Python toolchains agree
     runs-on: ubuntu-latest

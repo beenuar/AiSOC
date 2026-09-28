@@ -226,23 +226,66 @@ class TestTheFallbackIsNotSilent:
         assert isinstance(matched, list)
 
 
+def _python_test_install_set() -> tuple[list[str], list[str]]:
+    """The services ``ci.yml``'s ``python-test`` job derives its install from,
+    and the requirements that derivation produces.
+
+    The job used to carry a hand-written ``API_DEPS`` list and this test read
+    it verbatim. It now runs ``service_requirements.py <services>``, so the
+    question "does CI install pysigma" is answered by resolving that step the
+    way the shell does: read which services the step names, then ask the same
+    producer the workflow asks. What stays falsifiable is the naming — a job
+    that derives from the wrong service, or a manifest that drops the package,
+    both fail here.
+    """
+    root = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(root / "scripts"))
+    import service_requirements  # noqa: PLC0415
+
+    workflow = yaml.safe_load((root / ".github" / "workflows" / "ci.yml").read_text())
+    steps = workflow["jobs"]["python-test"]["steps"]
+    named: list[str] = []
+    for step in steps:
+        for line in str(step.get("run") or "").splitlines():
+            if "service_requirements.py" not in line or "--system" in line:
+                continue
+            tail = line.split("service_requirements.py", 1)[1]
+            named += [word for word in tail.split("|")[0].split() if not word.startswith("-")]
+    resolved: list[str] = []
+    for service in dict.fromkeys(named):
+        resolved += service_requirements.requirements(root / "services" / service / "pyproject.toml")
+    return list(dict.fromkeys(named)), resolved
+
+
 def test_ci_installs_the_backend_it_claims_to_test() -> None:
     """The pySigma tests above `importorskip`. A skip in CI would be a green lie.
 
     CI installed the API's dependencies from a hand-curated pip list that did
     not name pysigma, so the real backend path had never once run in CI while
-    the published image installed it from the lockfile and ran it. Assert the
-    workflow installs it, so the only place these tests can skip is a local
-    checkout that chose not to.
+    the published image installed it from the lockfile and ran it.
     """
-    root = Path(__file__).resolve().parents[3]
-    workflow = yaml.safe_load((root / ".github" / "workflows" / "ci.yml").read_text())
-    deps = str(workflow["jobs"]["python-test"]["env"]["API_DEPS"])
-    assert "pysigma" in deps, "ci.yml must install pysigma or the Sigma backend tests silently skip"
-    assert "pysigma-backend-opensearch" in deps, "the OpenSearch backend is what rule_engine imports"
-    # `API_DEPS` is a folded scalar, so every line joins into one shell word
-    # list and a `#` anywhere inside comments out the remainder. A rationale
-    # written between two packages silently uninstalled everything after it,
-    # pytest included, and the job failed with "No module named pytest".
-    assert "#" not in deps, f"a comment inside the folded scalar truncates the install list: {deps}"
-    assert deps.split()[-1] == "pytest-asyncio", "the tail of the install list was swallowed"
+    services, requirements = _python_test_install_set()
+    assert "api" in services, f"python-test must derive services/api's requirements; it names {services}"
+
+    installed = {requirement.split("[")[0].split(">")[0].split("<")[0].split("=")[0].strip().lower() for requirement in requirements}
+    assert "pysigma" in installed, "the job that runs these tests must install pysigma or they silently skip"
+    assert "pysigma-backend-opensearch" in installed, "the OpenSearch backend is what rule_engine imports"
+
+    # The floor is the measurement, not a preference: pysigma 0.11.0 through
+    # 0.11.16 carry `from pyparsing import List` in `sigma/exceptions.py`, a
+    # name pyparsing no longer re-exports, so importing the package raises on
+    # any current pyparsing. A manifest permitting one of those releases is a
+    # manifest permitting an engine that cannot start.
+    spec = next(r for r in requirements if r.lower().startswith("pysigma>") or r.lower().startswith("pysigma="))
+    assert ">=0.11.17" in spec, f"pysigma must be floored at 0.11.17; the job would install {spec}"
+
+
+def test_the_yara_runner_is_installed_too() -> None:
+    """`_run_yara` sits 260 lines below `_run_sigma` in the same module and
+    degrades the same way — `([], "yara-python not installed")`, a clean empty
+    result with no exception. The Sigma fix named one of the two; a job that
+    installs pysigma and not yara-python has moved the blind spot rather than
+    closed it."""
+    _, requirements = _python_test_install_set()
+    installed = {requirement.split("[")[0].split(">")[0].split("<")[0].split("=")[0].strip().lower() for requirement in requirements}
+    assert "yara-python" in installed, "_run_yara returns no matches and no error when yara-python is absent"

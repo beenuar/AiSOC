@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "httpx"]
+dev = ["pytest", "pytest-asyncio", "httpx>=0.27.0"]
 
 
 # Phase 2.2 — coverage floor for CI gate.

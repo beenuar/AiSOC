@@ -875,39 +875,40 @@ jobs:
     name: Python — Tests
     runs-on: ubuntu-latest
     needs: python-lint
-    env:
-      # `API_DEPS` is a folded scalar: every line below joins into one
-      # command, so a `#` inside it comments out the remainder of the
-      # install list. Keep prose out of the value.
-      #
-      # pysigma and pysigma-backend-opensearch are here because the Sigma
-      # path this job tests imports them. Without them
-      # `rule_engine._run_sigma` took its ImportError branch, so every Sigma
-      # test graded the reduced built-in evaluator, while the published image
-      # installs pysigma from the lockfile and ran the real backend. CI and
-      # production evaluated Sigma rules with different engines, and the one
-      # CI never ran was the broken one. Ranges mirror
-      # services/api/pyproject.toml.
-      API_DEPS: >-
-        "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
-        structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
-        prometheus-client "opentelemetry-sdk" "opentelemetry-api"
-        "opentelemetry-exporter-otlp-proto-grpc"
-        "opentelemetry-instrumentation-fastapi"
-        "strawberry-graphql[fastapi]"
-        neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
-        "sqlglot>=30,<31" aiosqlite
-        "croniter>=2.0,<7.0"
-        "pysigma>=0.11,<0.12" "pysigma-backend-opensearch>=1.0,<2.0"
-        pytest pytest-asyncio
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install API dependencies
-        run: pip install --quiet ${{ env.API_DEPS }}
+      # This was a hand-written copy of two services' dependency lists, and it
+      # had drifted from both. It omitted `pysigma`, so `rule_engine._run_sigma`
+      # took its `except ImportError` branch and every Sigma test in this job
+      # graded a reduced built-in evaluator while the image — which installs
+      # from poetry.lock — graded the real backend. The one CI never ran was
+      # the broken one. It also omitted `yara-python`, whose runner returns
+      # `([], "yara-python not installed")` from the same file, and it named
+      # `passlib`, `celery` and `aiofiles`, which nothing in either service
+      # imports.
+      #
+      # So the list is derived now. `service_requirements.py` reads what the
+      # manifests declare, expands poetry's carets into ranges pip
+      # understands, and hands pip both services' constraints at once — where
+      # they disagree pip resolves the intersection, and where they cannot
+      # agree pip fails rather than silently picking one.
+      # `scripts/check_ci_install_parity.py` holds it that way.
+      - name: Install what services/api and services/agents declare
+        run: |
+          set -euo pipefail
+          SYSTEM="$(python3 scripts/service_requirements.py api agents --system)"
+          if [ -n "${SYSTEM}" ]; then
+            sudo apt-get update -qq
+            # WeasyPrint reaches Pango and Cairo through ctypes, so a wheel is
+            # not enough and its guard catches OSError as well as ImportError.
+            # Same packages services/api/Dockerfile installs.
+            sudo apt-get install -y --no-install-recommends ${SYSTEM}
+          fi
+          python3 scripts/service_requirements.py api agents | xargs pip install --quiet
       # Boot-test: verify the FastAPI app can actually import without
       # NameError / ImportError before spending time on the full pytest
       # suite.  PR #152 fixed two import-time NameErrors (model_validator,
@@ -943,35 +944,16 @@ jobs:
       # `scripts/check_test_discovery.py` holds it that way in both
       # directions.
       - name: Run agents unit tests (whole suite — discovered, not listed)
-        # `test_audit_helpers.py` imports `app.investigator.state` directly
-        # (it stubs out the package __init__ to avoid pulling in LangGraph),
-        # so it only needs stdlib + pydantic — already installed via API_DEPS.
-        # `test_fusion_client.py` (Issue #190) exercises the thin httpx
-        # client that wires `DetectAgent.process` to the fusion service's
-        # `POST /process` endpoint; it mocks the network with respx so the
-        # suite stays offline-safe. The test imports `DetectAgent` from
-        # `app.agents`, which transitively loads sibling sub-agents
-        # (auto_triage / phishing / identity / insider_threat / cloud) that
-        # import `langchain_core` and `langchain_openai` at module scope —
-        # so both packages are required at import time, even though the
-        # fusion-client test itself only calls into `app.tools.fusion`.
+        # The install this step used to carry is gone: the step above installs
+        # what both manifests declare, so `langchain-core`, `markdown`, `mcp`
+        # and the rest arrive at the ranges `services/agents/pyproject.toml`
+        # states rather than at a second set of ranges written here. That
+        # second set had drifted — it pinned `langgraph>=1,<2` against a
+        # manifest saying `>=1.0.10,<2.0.0`, and it never named `openai` or
+        # `qdrant-client`, both of which `tools/mitre_full.py` imports inside
+        # a `try` that returns `[]` when they are missing. The ATT&CK semantic
+        # search this suite grades was the empty list, every run.
         run: |
-          # langchain-core floored at 1.2.22: the high-severity advisory on
-          # the 0.3.x line has no patch there, so the pin had to move before
-          # the alert could close. The deterministic eval suites are the
-          # re-grade — MITRE accuracy is unchanged at 97.0%.
-          # markdown is a declared dependency of this service (pyproject:
-          # markdown = "^3.5") and the report renderer's HTML branch needs it.
-          # test_router_report.py was in neither the install list nor the file
-          # list below, so two of its assertions failed on every developer
-          # machine and CI never ran them either way.
-          # mcp is exact-pinned to match services/agents/pyproject.toml. The
-          # MCP client tests run a real server in-process over memory streams
-          # rather than mocking the SDK, so the version CI exercises has to be
-          # the version the image ships.
-          pip install --quiet pytest pytest-asyncio respx \
-            'langchain-core>=1.2.22,<2' 'langchain-openai>=1,<2' 'langgraph>=1,<2' \
-            jsonschema 'markdown>=3.5,<4' 'mcp==1.30.0'
           cd services/agents
           python3 -m pytest tests/ -v --tb=short -rs
 
@@ -1213,73 +1195,23 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install minimal deps
-        # ``fastapi`` + ``httpx`` are required by the fusion router-contract
-        # tests (Issue #190): they import ``app.api.router`` and drive it
-        # with FastAPI's ``ASGITransport`` + ``httpx.AsyncClient``. ``aiokafka``
-        # is needed because ``app/api/router.py`` exposes ``set_worker(...)``
-        # which type-references ``FusionWorker`` from ``app.workers.consumer``;
-        # importing the router module therefore eagerly evaluates the
-        # consumer module, which itself imports ``aiokafka`` at module scope.
-        # We deliberately do NOT install the full API dep set here — the goal
-        # of this job stays "pure helpers + thin router contracts, no
-        # service boot, no Postgres/Kafka/Redis".
-        # asyncpg: required since Phase 3.1 — the fusion AlertSink persists
-        # fused alerts to the Postgres alert store.
-        # clickhouse-driver: required since Phase A1 — the fusion LakeWriter
-        # archives normalized events into the ClickHouse event lake.
-        # pyyaml: required since Phase A2 — the detection-matcher parity test
-        # loads the canonical scripts/generate_detections.py (imports yaml).
-        # sqlalchemy: required by the purple-team router-contract test. That
-        # test asserts every route on the router carries the service-auth
-        # dependency, and importing the router to enumerate its routes pulls
-        # sqlalchemy. Skipping the import instead would leave a gate that
-        # cannot fail, which is worse than installing one more package.
-        #
-        # The `[asyncio]` extra is load-bearing, and it is the extra that
-        # `services/purple-team/pyproject.toml` has always declared. Importing
-        # the router reaches `sqlalchemy.ext.asyncio`, which needs `greenlet`.
-        # `greenlet` is only in the `asyncio` extra — but through SQLAlchemy
-        # 2.0.x it was *also* a non-extra requirement gated on
-        # `platform_machine`, which is true on this runner, so a bare
-        # `sqlalchemy` installed it by accident and this list passed for
-        # months without declaring what it depended on. SQLAlchemy 2.1.0
-        # dropped that clause, the unbounded install re-resolved onto it, and
-        # the import died at collection.
-        #
-        # Bounding the rest is that second half, done. Twelve packages here
-        # named no version at all, which is the same defect the `sqlalchemy`
-        # outage was: an unbounded install resolves whatever upstream shipped
-        # this morning, and the first anyone hears of it is a red `main` on a
-        # pull request that changed nothing. Every bound below is the range the
-        # three services under test declare, so this job installs what they
-        # ship rather than what PyPI happens to be serving:
-        #
-        #   pydantic / pydantic-settings / structlog / aioredis / aiokafka /
-        #   asyncpg / clickhouse-driver  — services/fusion, which is the
-        #                                  tightest of the three.
-        #   pytest / pytest-asyncio      — services/fusion's dev group; the
-        #                                  other two leave them unbounded.
-        #   pyyaml                       — services/purple-team, and
-        #                                  services/api agrees.
-        #   redis                        — services/fusion, *with* the
-        #                                  `[hiredis]` extra it declares. The
-        #                                  bare name here was the sqlalchemy
-        #                                  shape again: an install path
-        #                                  dropping an extra the manifest asks
-        #                                  for installs a smaller set than
-        #                                  ships.
-        #   httpx                        — see below. The three did not agree.
-        run: >-
-          pip install --quiet
-          "pydantic>=2.5,<3" "pydantic-settings>=2.1,<3"
-          "pytest>=9.0.3,<10" "pytest-asyncio>=1.0,<2"
-          "structlog>=24.1,<25" "redis[hiredis]>=5.0.1,<6" "aioredis>=2.0.1,<3"
-          "fastapi>=0.117,<0.142" "httpx>=0.27,<0.29" "aiokafka>=0.10,<0.11"
-          "asyncpg>=0.29,<0.30" "clickhouse-driver>=0.2.6,<0.3" "pyyaml>=6,<7"
-          "cryptography>=46,<51" "sqlalchemy[asyncio]>=2,<3"
-      - name: Install pytest-cov (Phase 2.2 coverage gate)
-        run: pip install --quiet 'pytest-cov>=4,<7'
+      # This was a hand-written subset of three services' manifests, kept
+      # deliberately minimal so the job stayed fast. Minimal is a legitimate
+      # choice; drifting is not, and it had: `pytest-cov>=4,<7` against a
+      # manifest saying `^4.1.0`, `sqlalchemy>=2,<3` against `^2.0.25`, and
+      # `cryptography` named here and declared by nothing — which is how
+      # `services/fusion/app/memory/pack.py` came to import a library its own
+      # lock does not contain. The image installs `--only main` from that
+      # lock, so the module could not load there at all; only this line made
+      # the tests pass. The pysigma defect with the arrow reversed.
+      #
+      # Derived now, from the three manifests, with pip resolving the
+      # intersection where they disagree.
+      - name: Install what fusion, honeytokens and purple-team declare
+        run: |
+          set -euo pipefail
+          python3 scripts/service_requirements.py fusion honeytokens purple-team \
+            | xargs pip install --quiet
       # Phase 2.2 — every wave-1 service now has a measured coverage
       # floor encoded in its pyproject under `[tool.coverage.report]
       # fail_under`. Pytest reads it via `--cov-config=pyproject.toml`
@@ -1369,44 +1301,33 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install shared dependency set
-        # Pinned to the pyproject constraints in each service. The set
-        # is the union of every service's runtime + dev deps; this is
-        # cheaper than per-matrix-cell `poetry install` because pip
-        # caches the wheels across matrix runs and the upper bounds
-        # come from the highest-constrained pyproject in the bunch
-        # (e.g. structlog<27, httpx<0.29, pytest-asyncio<2). If a new
-        # service needs an additional package, add it here rather than
-        # introducing per-service install steps — the goal of a
-        # uniform matrix is one install path, one cache hit.
+      # This installed one union set for eight services, under a comment
+      # asking for exactly that. The union cannot work, and did not: three
+      # packages have no version satisfying all eight. `httpx` is `^0.26.0`
+      # in connectors and threatintel (both lock 0.26.0) and `>=0.27,<0.29`
+      # in five others (which lock 0.28.1); `prometheus-client` is `^0.19.0`
+      # in threatintel against `>=0.20,<0.26` in osquery-tls, and the line
+      # here satisfied neither; `respx` is `^0.20.0` in connectors against
+      # `^0.21.1` in slack-bot and teams-bot. And `pytest>=7.4,<9` was
+      # disjoint from the `>=9.0.3,<10.0` all seven declare and all seven
+      # locks resolve, so this job graded those suites on a pytest none of
+      # them may ship.
+      #
+      # A matrix cell runs one service, so it installs one service's
+      # dependencies. That is cheaper than the union for most cells, it
+      # cannot be disjoint with anything, and pip still caches wheels across
+      # cells. `aioredis`, `jinja2` and `tenacity` are simply gone: no
+      # service here declares or imports any of them.
+      - name: Install what services/${{ matrix.service }} declares
         run: |
-          pip install --quiet \
-            'fastapi>=0.117,<0.142' \
-            'pydantic>=2.5,<3' \
-            'pydantic-settings>=2.1,<3' \
-            'httpx>=0.27,<0.29' \
-            'structlog>=24.1,<27' \
-            'pytest>=7.4,<9' \
-            'pytest-asyncio>=0.23,<2' \
-            'pytest-cov>=4,<7' \
-            'respx>=0.21,<0.23' \
-            'redis>=5.0,<6' \
-            'aioredis>=2.0,<3' \
-            'aiokafka>=0.10,<0.15' \
-            'aiohttp>=3.9,<4' \
-            'apscheduler>=3.10,<4' \
-            'slack-bolt>=1.18,<2' \
-            'prometheus-client>=0.20,<0.24' \
-            'qdrant-client>=1.9,<2' \
-            'opentelemetry-instrumentation-fastapi>=0.45b0' \
-            'sqlalchemy[asyncio]>=2,<3' \
-            'aiosqlite>=0.19,<0.22' \
-            'asyncpg>=0.29,<0.31' \
-            'cryptography>=46,<51' \
-            'pyyaml>=6,<7' \
-            'jinja2>=3,<4' \
-            'jsonschema>=4,<5' \
-            'tenacity>=8,<10'
+          set -euo pipefail
+          SYSTEM="$(python3 scripts/service_requirements.py '${{ matrix.service }}' --system)"
+          if [ -n "${SYSTEM}" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ${SYSTEM}
+          fi
+          python3 scripts/service_requirements.py '${{ matrix.service }}' \
+            | xargs pip install --quiet
       # Phase 2.2 — coverage floor read from each service's pyproject.
       # `--cov-config=pyproject.toml` makes coverage.py honour the
       # `[tool.coverage.report] fail_under = N` line; pytest-cov then

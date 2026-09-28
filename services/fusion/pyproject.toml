@@ -15,7 +15,12 @@ python = "^3.11"
 # "204 must not have a response body" assert at import. One range for
 # every service — see services/api/pyproject.toml for the measurement.
 fastapi = ">=0.117,<0.142"
-uvicorn = {extras = ["standard"], version = "^0.27.0"}
+# `>=0.29,<0.54`, the range services/api declares. It read `^0.27.0`,
+# which is disjoint from the `>=0.29.0` honeytokens and purple-team
+# declare — and all three are installed by one CI job, so no single
+# version could satisfy it. The job papered over that by installing no
+# uvicorn at all.
+uvicorn = {extras = ["standard"], version = ">=0.29,<0.54"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
 aiokafka = "^0.10.0"
@@ -39,6 +44,14 @@ scikit-learn = "^1.4.0"
 lightgbm = "^4.3.0"
 numpy = "^1.26.0"
 clickhouse-driver = "^0.2.6"
+# `app/memory/pack.py` imports `cryptography.hazmat` at module scope to verify
+# the Ed25519 signature on a memory pack, and this manifest did not declare it.
+# The lock therefore resolved no `cryptography` at all, so the image — which
+# installs `--only main` from that lock — could not import the module. CI never
+# saw it because the shared install step named `cryptography` directly, which
+# is the pysigma defect with the arrow reversed: CI grading a path production
+# cannot reach. Same range as every other service that touches vault crypto.
+cryptography = ">=46,<51"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
