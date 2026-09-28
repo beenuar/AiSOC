@@ -679,10 +679,7 @@ def _assert_unique_identities(items: list[dict[str, Any]]) -> None:
         else:
             seen[identity] = path
     if collisions:
-        raise SystemExit(
-            "marketplace: two entries share a (type, id); every consumer keys on it.\n"
-            + "\n".join(collisions)
-        )
+        raise SystemExit("marketplace: two entries share a (type, id); every consumer keys on it.\n" + "\n".join(collisions))
 
 
 def build_index() -> dict[str, Any]:

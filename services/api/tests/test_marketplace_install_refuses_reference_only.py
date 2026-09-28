@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -41,11 +42,13 @@ def _index() -> dict[str, Any]:
     return marketplace._load_index()
 
 
-def _first(predicate) -> dict[str, Any]:
-    for item in _index().get("items") or []:
-        if predicate(item):
-            return item
-    pytest.skip("catalogue has no entry of this kind")
+def _first(predicate: Callable[[dict[str, Any]], bool]) -> dict[str, Any]:
+    # One exit, because `pytest.skip` raises and a trailing call to it reads
+    # to a static analyser as a path that falls off the end without returning.
+    match = next((item for item in _index().get("items") or [] if predicate(item)), None)
+    if match is None:
+        pytest.skip("catalogue has no entry of this kind")
+    return match
 
 
 def _install(item: dict[str, Any]):
