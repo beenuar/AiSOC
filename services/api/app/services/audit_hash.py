@@ -111,37 +111,60 @@ def compute_entry_hash(
     return h.hexdigest()
 
 
-def verify_chain(rows: list[dict[str, Any]]) -> tuple[bool, int | None, str | None]:
-    """Replay ``rows`` (oldest → newest, same tenant) and verify the chain.
+def verify_chain_breaks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replay ``rows`` (oldest → newest, same tenant) and return **every** break.
 
-    Each row must expose the same field names as
-    :func:`compute_entry_hash` plus ``prev_hash`` and ``entry_hash``.
+    :func:`verify_chain` stops at the first violation, which is the right
+    answer to "is this chain intact?" and the wrong one for an auditor, who
+    needs to know whether they are looking at one historical fork or at
+    ongoing tampering. A single boolean cannot distinguish a chain that broke
+    once, before a known writer change, from one that is still breaking.
 
-    Returns ``(True, None, None)`` on success, or
-    ``(False, index, reason)`` pointing at the first violating row.
-    A row missing ``entry_hash`` is treated as legacy / unchained and
-    skipped — the chain "starts" from the first row that carries one.
-    This keeps existing deployments verifiable without a backfill.
+    Each break is ``{"index", "reason", "chain_epoch", "id", "action",
+    "created_at"}``. ``chain_epoch`` is the row's own, so a caller can
+    separate breaks left by the pre-074 unserialized writer (epoch 1) from
+    breaks in rows the serialized appender produced (epoch 2) — the latter
+    being the only ones that indicate a live defect or real tampering.
+
+    After a break the replay **resynchronises** on the offending row's own
+    stored hash and carries on, instead of reporting every subsequent row as
+    broken too. One forked append otherwise reads as thousands of failures.
     """
+    breaks: list[dict[str, Any]] = []
     prev_hash: str | None = None
     started = False
+
+    def _note(idx: int, row: dict[str, Any], reason: str) -> None:
+        created = row.get("created_at")
+        breaks.append(
+            {
+                "index": idx,
+                "reason": reason,
+                "chain_epoch": row.get("chain_epoch"),
+                "chain_index": row.get("chain_index"),
+                "id": str(row.get("id")) if row.get("id") is not None else None,
+                "action": row.get("action"),
+                "created_at": created.isoformat() if hasattr(created, "isoformat") else None,
+            }
+        )
+
     for idx, row in enumerate(rows):
         stored = row.get("entry_hash")
         if stored is None:
             if started:
                 # Once a tenant has chained rows, every subsequent row
                 # must also be chained. A gap = tampering.
-                return False, idx, "chain interrupted: entry_hash missing"
+                _note(idx, row, "chain interrupted: entry_hash missing")
             continue
         started = True
 
         # prev_hash on the row must match the chain we have so far.
         recorded_prev = row.get("prev_hash")
         if recorded_prev != prev_hash:
-            return False, idx, "prev_hash mismatch"
+            _note(idx, row, "prev_hash mismatch")
 
         computed = compute_entry_hash(
-            prev_hash=prev_hash,
+            prev_hash=recorded_prev,
             row_id=row["id"],
             tenant_id=row["tenant_id"],
             actor_id=row.get("actor_id"),
@@ -155,12 +178,43 @@ def verify_chain(rows: list[dict[str, Any]]) -> tuple[bool, int | None, str | No
             created_at=row["created_at"],
         )
         if computed != stored:
-            return False, idx, "entry_hash mismatch"
-        prev_hash = computed
-    return True, None, None
+            # The row's contents do not produce the hash it carries, given
+            # the predecessor it names. This is the rewrite case, and it is
+            # reported separately from a mis-linked predecessor because they
+            # have different causes: one is tampering with a row, the other
+            # is two writers racing for the same slot.
+            _note(idx, row, "entry_hash mismatch")
+
+        # Resynchronise on what the row actually stored.
+        prev_hash = stored
+
+    return breaks
+
+
+def verify_chain(rows: list[dict[str, Any]]) -> tuple[bool, int | None, str | None]:
+    """Replay ``rows`` (oldest → newest, same tenant) and verify the chain.
+
+    Each row must expose the same field names as
+    :func:`compute_entry_hash` plus ``prev_hash`` and ``entry_hash``.
+
+    Returns ``(True, None, None)`` on success, or
+    ``(False, index, reason)`` pointing at the first violating row.
+    A row missing ``entry_hash`` is treated as legacy / unchained and
+    skipped — the chain "starts" from the first row that carries one.
+    This keeps existing deployments verifiable without a backfill.
+
+    Use :func:`verify_chain_breaks` when the full picture matters; this is
+    the same replay reporting only its first finding.
+    """
+    breaks = verify_chain_breaks(rows)
+    if not breaks:
+        return True, None, None
+    first = breaks[0]
+    return False, int(first["index"]), str(first["reason"])
 
 
 __all__ = [
     "compute_entry_hash",
     "verify_chain",
+    "verify_chain_breaks",
 ]

@@ -16,6 +16,16 @@ Hardening (BATCH 7 — H-4 + M-12)
   ``metadata`` JSONB column.
 * Writes ``prev_hash`` / ``entry_hash`` so middleware-emitted rows
   participate in the same tamper-evident chain as :func:`emit_audit`.
+
+One writer per request (migration 074)
+--------------------------------------
+
+This middleware and a handler's :func:`emit_audit` used to write two audit
+rows for one request, on two sessions, both resolving the same chain head —
+and the chain forked. It now writes only when the request produced no audit
+row of its own, so a request has exactly one audit writer. See
+:func:`app.services.audit._append_to_chain` for why serializing the two was
+not an option from here.
 """
 
 from __future__ import annotations
@@ -27,6 +37,13 @@ from datetime import UTC, datetime
 
 from app.core.trusted_proxy import resolve_client_ip
 from app.db.database import AsyncSessionLocal
+from app.models.audit import AuditLog
+from app.services.audit import (
+    _append_to_chain,
+    begin_request_audit_scope,
+    end_request_audit_scope,
+    request_emitted_audit,
+)
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
@@ -96,8 +113,23 @@ def _truncate(value: str | None, limit: int) -> str | None:
 
 class AuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        response = await call_next(request)
+        # Opened *before* `call_next` so the downstream task inherits the
+        # dict by reference and `emit_audit` can mark it. A context is copied
+        # when the task is spawned, so a scope opened after this point would
+        # never see the handler's mark.
+        scope_token = begin_request_audit_scope()
+        try:
+            response = await call_next(request)
+        except BaseException:
+            end_request_audit_scope(scope_token)
+            raise
 
+        try:
+            return await self._audit(request, response)
+        finally:
+            end_request_audit_scope(scope_token)
+
+    async def _audit(self, request: Request, response: Response) -> Response:
         if request.method not in _MUTATING:
             return response
 
@@ -108,6 +140,23 @@ class AuditMiddleware(BaseHTTPMiddleware):
         user_id, tenant_id, email = _extract_jwt_claims(request)
         if tenant_id is None:
             return response  # unauthenticated
+
+        # One audit writer per request.
+        #
+        # This row and the handler's `emit_audit` row were written on separate
+        # sessions, both resolving the same chain head, and the chain forked.
+        # Serializing them cannot work from here: this runs before the request
+        # session's dependency teardown, so waiting on the handler's
+        # transaction waits on something that cannot commit until this returns
+        # — measured, and it dropped this row entirely.
+        #
+        # The handler's row is the better of the two anyway. It carries the
+        # real `changes` payload and the action the handler meant, where this
+        # one carries a label guessed from the URL. What is lost by skipping
+        # is the status code, which is recoverable from the access log and is
+        # not worth a forked audit chain.
+        if request_emitted_audit(request):
+            return response
 
         try:
             action, resource = _label_for_path(request.method, request.url.path)
@@ -123,10 +172,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     pass  # segment is not a UUID; try next
 
             async with AsyncSessionLocal() as db:
-                from app.models.audit import AuditLog  # noqa: PLC0415
-                from app.services.audit import _resolve_prev_hash  # noqa: PLC0415
-                from app.services.audit_hash import compute_entry_hash  # noqa: PLC0415
-
                 try:
                     actor_ip = resolve_client_ip(request)
                 except Exception:  # noqa: BLE001
@@ -156,24 +201,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     created_at=created_at,
                 )
 
-                # Chain-link the middleware event onto the tenant's history.
+                # Chain-link the middleware event onto the tenant's history,
+                # through the same serialized appender the handlers use. This
+                # session is the only audit writer for this request, so the
+                # per-tenant lock it takes can only ever wait on *another*
+                # request's transaction, which commits on its own.
                 try:
-                    prev = await _resolve_prev_hash(db, tenant_id)
-                    event.prev_hash = prev
-                    event.entry_hash = compute_entry_hash(
-                        prev_hash=prev,
-                        row_id=event.id,
-                        tenant_id=event.tenant_id,
-                        actor_id=event.actor_id,
-                        actor_email=event.actor_email,
-                        actor_ip=event.actor_ip,
-                        action=event.action,
-                        resource=event.resource,
-                        resource_id=event.resource_id,
-                        changes=event.changes,
-                        metadata=event.metadata_,
-                        created_at=event.created_at,
-                    )
+                    await _append_to_chain(db, event)
                 except Exception:  # noqa: BLE001
                     logger.warning(
                         "audit-middleware: failed to compute hash chain",

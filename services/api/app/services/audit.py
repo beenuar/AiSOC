@@ -45,12 +45,13 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
 from prometheus_client import Counter
-from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.trusted_proxy import resolve_client_ip
@@ -81,50 +82,199 @@ _MAX_UA_LEN = 512
 _MAX_REQUEST_ID_LEN = 128
 
 
+# ─── One audit writer per request ───────────────────────────────────────────
+#
+# The measured fork had two writers inside a single request: a handler's
+# ``emit_audit`` on the request session, and ``AuditMiddleware`` on a session
+# of its own. Serializing them is not enough, because the middleware runs
+# before the request session's dependency teardown — it would be waiting on a
+# transaction that cannot commit until the middleware returns. That cycle is
+# what timed out and dropped a row when a lock was last tried here.
+#
+# So the second writer goes away instead: ``AuditMiddleware`` writes its row
+# only for requests that produced none. That also removes a duplicate the log
+# has carried all along — an audited route wrote two rows for one action, one
+# from the handler with the real ``changes`` payload and one from the
+# middleware with a route-derived label.
+#
+# The channel is a **mutable dict in a ContextVar**, not the ContextVar value
+# itself. ``BaseHTTPMiddleware`` runs the downstream app in a task spawned
+# from the middleware's context, and a context is *copied* at spawn: a value
+# the endpoint sets is invisible to the middleware. A reference the middleware
+# put there first, mutated downstream, is visible to both.
+#
+# ``request.state`` would also work and is used as a second channel where a
+# ``Request`` is to hand, because a handler that dispatches audit work into
+# its own task would lose the ContextVar and silently re-earn the duplicate.
+_REQUEST_AUDIT: ContextVar[dict[str, int] | None] = ContextVar("aisoc_request_audit", default=None)
+
+
+def begin_request_audit_scope() -> object:
+    """Open a per-request tally of audit rows. Returns a reset token."""
+    return _REQUEST_AUDIT.set({"emitted": 0})
+
+
+def end_request_audit_scope(token: object) -> None:
+    """Close the scope opened by :func:`begin_request_audit_scope`.
+
+    Deliberately total. ``BaseHTTPMiddleware`` can unwind in a different
+    context than the one that opened the scope, and ``ContextVar.reset``
+    raises a different exception for each way that can go wrong: ``ValueError``
+    for a token from another context, ``TypeError`` for something that is not
+    a token, ``RuntimeError`` for one already used. None of them is worth
+    turning into a 500 — the cost of failing to reset is a duplicate audit
+    row, and the cost of raising is the request.
+    """
+    try:
+        _REQUEST_AUDIT.reset(token)  # type: ignore[arg-type]
+    except (TypeError, ValueError, LookupError, RuntimeError):
+        pass
+
+
+def request_emitted_audit(request: Request | None = None) -> bool:
+    """Whether this request already wrote an audit row.
+
+    Checked by ``AuditMiddleware`` to decide whether its own row would be a
+    second writer. Reads both channels: a handler may have emitted with no
+    ``Request`` to hand, or from a task that did not inherit the ContextVar.
+    """
+    scope = _REQUEST_AUDIT.get()
+    if scope is not None and scope.get("emitted", 0) > 0:
+        return True
+    if request is not None:
+        return bool(getattr(request.state, "aisoc_audit_emitted", False))
+    return False
+
+
+def _mark_request_emitted(request: Request | None) -> None:
+    scope = _REQUEST_AUDIT.get()
+    if scope is not None:
+        scope["emitted"] = scope.get("emitted", 0) + 1
+    if request is not None:
+        # ``request.state`` is backed by ``scope["state"]``, the same dict for
+        # every Request built from this ASGI scope, so the middleware sees it.
+        request.state.aisoc_audit_emitted = True
+
+
+#: Epoch stamped on rows produced by the serialized appender below.
+#:
+#: Migration 074 leaves the column default at 1, so a pre-074 replica writing
+#: during a rolling deploy stays in epoch 1 and outside the unique index that
+#: only epoch 2 is expected to satisfy.
+CHAIN_EPOCH = 2
+
+#: Take the tenant's append lock and read the head, in one statement.
+#:
+#: ``ON CONFLICT DO UPDATE`` rather than ``DO NOTHING`` because only the
+#: UPDATE arm takes the row lock; ``DO NOTHING`` would return no row for an
+#: existing tenant and lock nothing, which is the race this exists to close.
+#: The assignment is a deliberate no-op — the lock and the ``RETURNING`` are
+#: the entire point.
+_LOCK_AND_READ_HEAD = text(
+    """
+    INSERT INTO audit_chain_head (tenant_id, head_hash, next_index)
+    VALUES (:tid, NULL, 0)
+    ON CONFLICT (tenant_id) DO UPDATE SET tenant_id = audit_chain_head.tenant_id
+    RETURNING head_hash, next_index
+    """
+)
+
+_ADVANCE_HEAD = text(
+    """
+    UPDATE audit_chain_head
+       SET head_hash = :head, next_index = :next_index, updated_at = NOW()
+     WHERE tenant_id = :tid
+    """
+)
+
+
 async def _resolve_prev_hash(db: AsyncSession, tenant_id: uuid.UUID) -> str | None:
-    """Return the most recent ``entry_hash`` for ``tenant_id``.
+    """Return the tenant's current chain head.
 
-    Ordering by ``created_at DESC, id DESC`` is deliberate:
-    ``created_at`` may collide at microsecond granularity for events
-    emitted in a single request, so we tiebreak on ``id`` to keep the
-    chain deterministic even when wall-clock time does not move.
+    Reads ``audit_chain_head`` rather than scanning ``audit_log``, and does so
+    **under the tenant's append lock** — the two are the same statement, which
+    is what makes the read and the insert that follows atomic with respect to
+    other appenders.
 
-    Returns ``None`` for the genesis (first ever audit row for this
-    tenant). Legacy rows that pre-date the hash chain — where
-    ``entry_hash IS NULL`` — are skipped via the partial index from
-    migration 043; new chains begin from the first hashed row.
+    Kept as a function of its own because it is also the honest answer to
+    "what is the head?" for callers that only want to look. Note that looking
+    is not free: it takes the lock, so a reader serializes against writers.
+    """
+    row = (await db.execute(_LOCK_AND_READ_HEAD, {"tid": tenant_id})).mappings().one()
+    return row["head_hash"]
 
-    **Known limitation — concurrent writers fork the chain.** The read here
-    and the insert that follows are not atomic, and one request can have two
-    writers: this handler's session and `audit_middleware`'s own. Measured on
-    `POST /alerts/{id}/explain`, two milliseconds apart, both resolving the
-    same head:
+
+async def _append_to_chain(db: AsyncSession, event: AuditLog) -> None:
+    """Chain-link ``event`` onto its tenant's history, serialized per tenant.
+
+    Why this is serialized at all
+    -----------------------------
+    Appending to a hash chain is a read-modify-write on a shared head. Two
+    writers that read the same head both append to it, and the chain forks —
+    measured on ``POST /alerts/{id}/explain``, two milliseconds apart::
 
         alerts:create   entry=dabf5207f866  prev=-
         alerts.explain  entry=66eed8144cee  prev=dabf5207f866
         alerts:create   entry=ca30ed264f98  prev=dabf5207f866   <- fork
 
-    `verify_chain` calls that broken and is right to: a fork is
-    indistinguishable from a removed row. `GET /api/v1/health/audit-chain`
-    reports it rather than hiding it.
+    There is no lock-free way to append to a dense linked list: serialization
+    at the append point is inherent, not an implementation choice. So the
+    design question is only *where* it happens and whether it can deadlock or
+    drop a row.
 
-    It is not fixed here, and a transaction-scoped advisory lock is not the
-    fix: the middleware runs before the request session's dependency
-    teardown, so the handler still holds the lock and the middleware's
-    acquisition times out — measured, and it dropped the middleware's row
-    entirely, which is worse than the fork. Closing it needs a commit-ordered
-    sequence or a single audit writer per request, which is a design change
-    and not this one.
+    Why the lock is safe here when the previous attempt was not
+    ----------------------------------------------------------
+    A transaction-scoped advisory lock was tried and reverted because the two
+    writers were in the **same request** — a handler's ``emit_audit`` and
+    ``audit_middleware`` on separate sessions — and the middleware runs before
+    the request session's dependency teardown. The middleware waited on a
+    transaction that could not commit until the middleware returned. Its
+    acquisition timed out and its row was dropped, which is worse than the
+    fork: a missing audit row is undetectable, a forked one is not.
+
+    ``AuditMiddleware`` no longer writes a second row for a request that
+    already produced one, so that cycle cannot form. What remains is one
+    writer waiting on another *request's* transaction, which is an ordinary
+    wait that ends when that request commits.
+
+    **No lock timeout, deliberately.** Waiting is correct; timing out drops a
+    row. The lock is a single row lock per append, so the protocol has no
+    cycle of its own and cannot deadlock against itself.
+
+    The invariant does not rest on any of this
+    ------------------------------------------
+    ``uq_audit_log_chain_successor`` is UNIQUE on ``(tenant_id, prev_hash)``,
+    and a fork *is* two rows claiming the same predecessor. The database
+    cannot store one. If this function, the middleware change and the lock
+    were all removed, the second writer would get a constraint violation
+    rather than quietly forking.
     """
-    stmt = (
-        select(AuditLog.entry_hash)
-        .where(AuditLog.tenant_id == tenant_id)
-        .where(AuditLog.entry_hash.is_not(None))
-        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-        .limit(1)
+    head = (await db.execute(_LOCK_AND_READ_HEAD, {"tid": event.tenant_id})).mappings().one()
+    prev: str | None = head["head_hash"]
+    index = int(head["next_index"])
+
+    event.prev_hash = prev
+    event.chain_index = index
+    event.chain_epoch = CHAIN_EPOCH
+    event.entry_hash = compute_entry_hash(
+        prev_hash=prev,
+        row_id=event.id,
+        tenant_id=event.tenant_id,
+        actor_id=event.actor_id,
+        actor_email=event.actor_email,
+        actor_ip=event.actor_ip,
+        action=event.action,
+        resource=event.resource,
+        resource_id=event.resource_id,
+        changes=event.changes,
+        metadata=event.metadata_,
+        created_at=event.created_at,
     )
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+
+    await db.execute(
+        _ADVANCE_HEAD,
+        {"head": event.entry_hash, "next_index": index + 1, "tid": event.tenant_id},
+    )
 
 
 def _safe_truncate(value: str | None, limit: int) -> str | None:
@@ -228,22 +378,7 @@ async def emit_audit(
     # aborted the transaction, and this was simply the next statement to run.
     try:
         async with savepoint(db):
-            prev = await _resolve_prev_hash(db, tenant_id)
-        event.prev_hash = prev
-        event.entry_hash = compute_entry_hash(
-            prev_hash=prev,
-            row_id=event.id,
-            tenant_id=event.tenant_id,
-            actor_id=event.actor_id,
-            actor_email=event.actor_email,
-            actor_ip=event.actor_ip,
-            action=event.action,
-            resource=event.resource,
-            resource_id=event.resource_id,
-            changes=event.changes,
-            metadata=event.metadata_,
-            created_at=event.created_at,
-        )
+            await _append_to_chain(db, event)
     except Exception:  # noqa: BLE001
         # `error`, a counter and a health surface — not a warning.
         #
@@ -269,4 +404,9 @@ async def emit_audit(
         event.entry_hash = None
 
     db.add(event)
+    # Marked even when the chain computation above failed. The point of the
+    # mark is "this request already has a writer", and an unchained row is
+    # still a row — letting the middleware add a second one would put two
+    # writers back in the request, which is the defect, not the mitigation.
+    _mark_request_emitted(request)
     return event

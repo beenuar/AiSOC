@@ -7645,7 +7645,20 @@ paths:
 
         window, so a row that was rewritten in place is found rather than assumed
 
-        absent.'
+        absent.
+
+
+        Since migration 074 the replay also separates breaks by `chain_epoch`.
+
+        Epoch 1 is the pre-074 unserialized writer, which could fork two audit
+
+        rows of one request onto the same predecessor; those rows were left
+
+        exactly as written rather than re-chained, so a healthy deployment can
+
+        legitimately hold epoch-1 breaks forever. An epoch-2 break cannot be
+
+        historical and is the number worth alerting on.'
       operationId: get_audit_chain_health_api_v1_health_audit_chain_get
       responses:
         '200':

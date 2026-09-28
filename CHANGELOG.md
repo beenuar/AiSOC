@@ -33,6 +33,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The audit hash chain could fork, and a fork is indistinguishable from a
+  deleted row.** Appending to a hash chain is a read-modify-write on a shared
+  head, and nothing made the read and the write atomic. Two writers resolved
+  the same head and both appended to it — measured on
+  `POST /alerts/{id}/explain`, two milliseconds apart, a handler's
+  `emit_audit` and `audit_middleware` on separate sessions. `verify_chain`
+  reported the result as broken and was right to.
+
+  **Why serializing was not enough on its own.** A transaction-scoped
+  advisory lock was tried here previously and reverted: the two writers were
+  in the *same request*, and the middleware runs before the request session's
+  dependency teardown, so it waited on a transaction that could not commit
+  until it returned. Its acquisition timed out and its audit row was dropped,
+  which is worse than the fork — a missing audit row is undetectable, a
+  forked one is not.
+
+  Three layers, each answering a different question. `AuditMiddleware` now
+  writes only when the request produced no audit row of its own, so a request
+  has exactly one audit writer and that cycle cannot form; it also removes a
+  duplicate the log had carried all along. `audit_chain_head` holds one row
+  per tenant and appenders take a row lock on it, so concurrent appends for a
+  tenant queue rather than race — with no lock timeout, deliberately, because
+  waiting is correct and timing out drops a row. And
+  `uq_audit_log_chain_successor`, `UNIQUE (tenant_id, COALESCE(prev_hash,
+  ''))`, makes a fork **unrepresentable** rather than unlikely: a fork *is*
+  two rows claiming the same predecessor, so the database cannot store one,
+  and that guarantee does not rest on the lock being taken or on any
+  application code behaving.
+
+  Measured on PostgreSQL 16 at 500 concurrent appends for one tenant: the old
+  writer produced 401 duplicate predecessors and 499 replay breaks; the new
+  one produces 0 and 0, with positions dense and no row lost. Isolating the
+  layers at 120 appends shows why both are needed — the unique index alone,
+  with an unserialized writer, refuses every fork and in doing so drops 117
+  of 120 audit rows.
+
+  `chain_index` records the position the writer actually chained at, so a
+  replay reads rows in written order instead of inferring it from
+  `(created_at, id)`, which ties on a random UUID when two rows share a
+  microsecond.
+
+  **Rows written before this change were not re-chained.** Rewriting an
+  append-only log so a known-broken history reads as clean is the integrity
+  problem the chain exists to detect. The discontinuity is recorded instead:
+  `chain_epoch` is 1 for pre-074 rows and 2 for rows from the serialized
+  writer, the unique index covers epoch 2 only, and
+  `GET /api/v1/health/audit-chain` now reports every break rather than the
+  first, split by epoch. `replay_breaks_since_serialized_writer` is the
+  number to alert on, because it cannot be historical. Migration
+  `074_audit_chain_serialized_append.sql` seeds the head from the history
+  that already exists, so the first append after upgrading continues the
+  chain instead of writing a second genesis row.
+
 - **`RELEASES.md` announced v11.2.0 as the current release for the whole of
   v12.0.0, and every figure gate in the repository was green while it did.**
   The TL;DR read "AiSOC is on `v11.2.0`, released 2026-09-26", the "What's

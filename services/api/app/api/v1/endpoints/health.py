@@ -85,7 +85,7 @@ from app.api.v1.endpoints.metrics import PipelineHealth, PipelineStage
 from app.core.config import settings
 from app.models.alert import Alert
 from app.models.connector import Connector
-from app.services.audit_hash import verify_chain
+from app.services.audit_hash import verify_chain_breaks
 from app.services.connector_freshness import compute_freshness
 from app.services.fleet_health import assess_fleet
 from app.services.replay_evaluation.vendors import replayable_connector_ids
@@ -654,6 +654,13 @@ async def get_audit_chain_health(
     `verified` replays the chain with `verify_chain` over the most recent
     window, so a row that was rewritten in place is found rather than assumed
     absent.
+
+    Since migration 074 the replay also separates breaks by `chain_epoch`.
+    Epoch 1 is the pre-074 unserialized writer, which could fork two audit
+    rows of one request onto the same predecessor; those rows were left
+    exactly as written rather than re-chained, so a healthy deployment can
+    legitimately hold epoch-1 breaks forever. An epoch-2 break cannot be
+    historical and is the number worth alerting on.
     """
     window = 500
 
@@ -666,6 +673,7 @@ async def get_audit_chain_health(
               count(*) FILTER (WHERE entry_hash IS NULL)     AS unchained,
               count(*) FILTER (WHERE entry_hash IS NOT NULL) AS chained,
               count(*)                                       AS total,
+              count(*) FILTER (WHERE chain_epoch >= 2)       AS epoch2,
               min(created_at) FILTER (WHERE entry_hash IS NULL) AS oldest_unchained,
               max(created_at) FILTER (WHERE entry_hash IS NULL) AS newest_unchained
             FROM audit_log
@@ -679,6 +687,11 @@ async def get_audit_chain_health(
         .one()
     )
 
+    # Ordered by `chain_index` first, which is the order the serialized
+    # appender actually chained in. `(created_at, id)` is the fallback for
+    # epoch-1 rows, which have no index — and is precisely the ambiguity
+    # `chain_index` exists to remove, since two rows sharing a microsecond
+    # tie-break on a random UUID and can replay in an order nobody wrote.
     rows = (
         (
             await db.execute(
@@ -686,10 +699,10 @@ async def get_audit_chain_health(
                     """
                 SELECT id, tenant_id, actor_id, actor_email, actor_ip,
                        action, resource, resource_id, changes, metadata, created_at,
-                       prev_hash, entry_hash
+                       prev_hash, entry_hash, chain_index, chain_epoch
                 FROM audit_log
                 WHERE tenant_id = :tid
-                ORDER BY created_at DESC, id DESC
+                ORDER BY chain_index DESC NULLS LAST, created_at DESC, id DESC
                 LIMIT :lim
                 """
                 ),
@@ -700,7 +713,22 @@ async def get_audit_chain_health(
         .all()
     )
     replay = [dict(r) for r in reversed(rows)]
-    intact, bad_index, reason = verify_chain(replay)
+    breaks = verify_chain_breaks(replay)
+    intact = not breaks
+    bad_index = int(breaks[0]["index"]) if breaks else None
+    reason = str(breaks[0]["reason"]) if breaks else None
+    epoch2_breaks = [b for b in breaks if (b.get("chain_epoch") or 1) >= 2]
+
+    head = (
+        (
+            await db.execute(
+                text("SELECT head_hash, next_index, updated_at FROM audit_chain_head WHERE tenant_id = :tid"),
+                {"tid": user.tenant_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
 
     unchained = int(counts["unchained"] or 0)
     return {
@@ -720,17 +748,37 @@ async def get_audit_chain_health(
         "oldest_unchained_at": counts["oldest_unchained"].isoformat() if counts["oldest_unchained"] else None,
         "newest_unchained_at": counts["newest_unchained"].isoformat() if counts["newest_unchained"] else None,
         "replay_window": len(replay),
-        # A replay break is not always tampering. Two audit writers in one
-        # request — a handler calling `emit_audit` and `audit_middleware`
-        # writing its own row on a separate session — can resolve the same
-        # head and fork the chain, and a fork is indistinguishable from a
-        # removed row. That is a real, open defect in the writer, documented
-        # on `app.services.audit._resolve_prev_hash`; it is reported here
-        # rather than hidden, because hiding it is what made the chain's
-        # failure invisible in the first place.
+        # `replay_intact` covers the whole window including history. It can be
+        # false forever on a deployment that forked before migration 074, and
+        # that is the honest answer — those rows were not re-chained, because
+        # rewriting an append-only log so a known-broken history reads clean
+        # is the integrity problem the chain exists to detect.
         "replay_intact": intact,
         "replay_broken_at_index": bad_index,
         "replay_reason": reason,
+        # Every break, not just the first. One forked append and ongoing
+        # tampering are different facts and a single boolean cannot tell them
+        # apart. Capped so a badly broken chain cannot return a huge payload.
+        "replay_breaks": breaks[:20],
+        "replay_break_count": len(breaks),
+        # The number to alert on. Epoch 2 is the serialized appender, whose
+        # forks are prevented by `uq_audit_log_chain_successor` rather than
+        # merely made unlikely — so a non-zero count here is a real defect or
+        # real tampering, never leftover history.
+        "replay_breaks_since_serialized_writer": len(epoch2_breaks),
+        "rows_from_serialized_writer": int(counts["epoch2"] or 0),
+        # The append head itself. A tenant that has audit rows and no head row
+        # would restart its chain from genesis on the next append, so its
+        # absence is worth seeing rather than inferring.
+        "chain_head": (
+            {
+                "head_hash": head["head_hash"],
+                "next_index": int(head["next_index"]),
+                "updated_at": head["updated_at"].isoformat() if head["updated_at"] else None,
+            }
+            if head is not None
+            else None
+        ),
         # The counter is the alertable half; this is the on-demand half.
         "metric": "aisoc_audit_chain_failures_total",
     }

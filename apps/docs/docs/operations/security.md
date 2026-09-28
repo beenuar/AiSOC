@@ -388,6 +388,20 @@ The set of hashed fields is deliberately conservative — `tenant_id`, `actor_id
 
 The log is **append-only**: there is no `UPDATE` or `DELETE` endpoint, and the table has RLS enabled so a tenant can only read their own events. The middleware that auto-populates audit on common write paths is [`services/api/app/middleware/audit_middleware.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/middleware/audit_middleware.py); high-value actions (case state transitions, playbook executions, credential rotations) call `emit_audit(...)` explicitly so the `changes` payload is precise. Both paths participate in the hash chain.
 
+#### Serialized append, and why a fork was possible before it
+
+Appending to a hash chain is a read-modify-write on a shared head, and until migration `074_audit_chain_serialized_append.sql` nothing made the read and the write atomic. Two writers could resolve the same head and both append to it, and the chain forked. A fork is indistinguishable from a removed row, so `verify_chain()` reports it as broken — correctly.
+
+The commonest case was a single request with two writers: a handler's `emit_audit(...)` on the request session and the middleware's row on a session of its own. Three things close it, and each answers a different question:
+
+* **One writer per request.** The middleware now writes only when the request produced no audit row of its own. This is what makes serializing safe at all — the middleware runs *before* the request session's dependency teardown, so making it wait on the handler's transaction waits on something that cannot commit until the middleware returns.
+* **A per-tenant append lock.** `audit_chain_head` holds one row per tenant with the current head and the next chain position. Appenders take a row lock on it, so concurrent appends for a tenant queue rather than race. There is deliberately **no lock timeout**: waiting is correct, and timing out drops an audit row, which is worse than a fork because a missing row is undetectable.
+* **A unique index that makes a fork unrepresentable.** `uq_audit_log_chain_successor` is `UNIQUE (tenant_id, COALESCE(prev_hash, ''))`. A fork *is* two rows claiming the same predecessor, so the database cannot store one. This guarantee does not depend on the lock being taken or on any application code behaving.
+
+`chain_index` records the position the writer actually chained at, so a replay reads rows in the order they were written instead of inferring it from `(created_at, id)` — which ties on a random UUID when two rows share a microsecond. A gap in that sequence is direct evidence of a deleted row.
+
+**Rows written before the change were not re-chained.** Rewriting an append-only log so that a known-broken history reads as clean is the integrity problem the chain exists to detect. The discontinuity is recorded instead: `chain_epoch` is 1 for pre-074 rows and 2 for rows from the serialized writer, the unique index covers epoch 2 only, and `GET /api/v1/health/audit-chain` reports breaks split by epoch. A deployment that forked before the change will keep reporting those breaks, permanently and on purpose; the number to alert on is `replay_breaks_since_serialized_writer`, which cannot be historical.
+
 For SOC 2 / ISO 27001 evidence collection, the [Compliance service](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/compliance.py) reads from this log directly — there is no separate compliance event store to keep in sync.
 
 ## Secrets at rest

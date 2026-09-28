@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, SmallInteger, String
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,3 +35,13 @@ class AuditLog(Base):
     # and ``app.services.audit_hash`` for the canonical algorithm.
     prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     entry_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Chain position, assigned under the ``audit_chain_head`` row lock so a
+    # replay reads rows in the order the writer chained them. Inferring that
+    # order from ``(created_at, id)`` ties on a random UUID when two rows
+    # share a microsecond, which can order a replay differently from the way
+    # it was written. NULL on rows predating migration 074.
+    chain_index: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # 1 = the pre-074 writer, which could fork under concurrency. 2 = the
+    # serialized appender. Set by the writer, not defaulted by the schema —
+    # see migration 074.
+    chain_epoch: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
