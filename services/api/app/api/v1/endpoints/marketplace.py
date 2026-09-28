@@ -47,11 +47,30 @@ router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 _HERE = Path(__file__).resolve()
 _HERE_PARENTS = list(_HERE.parents)
 _REPO_ROOT = _HERE_PARENTS[6] if len(_HERE_PARENTS) > 6 else _HERE_PARENTS[-1]
+
+#: The copy that travels inside the image.
+#:
+#: Every path below it is outside the API's Docker build context — the image
+#: is built from `services/api`, so `COPY . .` never saw the repository-root
+#: `marketplace/` directory, none of the four original candidates existed at
+#: runtime, and the marketplace answered 503 on every containerised
+#: deployment. That is what discussion #374 reported, and it was true of every
+#: release since this endpoint was written.
+#:
+#: `scripts/build_marketplace.py` writes this alongside the other two copies
+#: and `scripts/check_marketplace_index_parity.py` keeps them byte-identical,
+#: so this cannot drift into describing a different catalogue than the console
+#: shows.
+_PACKAGED_INDEX = _HERE_PARENTS[3] / "data" / "marketplace" / "index.json"
+
 _CANDIDATE_PATHS = [
+    # A source checkout wins, so a contributor regenerating the index sees the
+    # change without rebuilding the image.
     _REPO_ROOT / "marketplace" / "index.json",
     _REPO_ROOT / "apps" / "web" / "public" / "marketplace" / "index.json",
     Path("/app/marketplace/index.json"),
     Path("/app/apps/web/public/marketplace/index.json"),
+    _PACKAGED_INDEX,
 ]
 
 
@@ -178,6 +197,29 @@ def _hash_file(path: Path) -> str:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _content_sha256(item: dict[str, Any]) -> str:
+    """The item's digest, from disk when the file is there and the index when not.
+
+    Hashing the file was the only route until now, and the API image carries
+    neither `detections/`, `playbooks/` nor `plugins/` — it is built from
+    `services/api`, which contains none of them. So an install in a container
+    failed on a missing file even once the index itself was found.
+
+    `scripts/build_marketplace.py` now records each item's SHA-256 while it
+    reads the file it is indexing, which makes the index self-describing. The
+    on-disk read still wins where the trees exist, so a contributor editing a
+    rule in a checkout gets the digest of what they just edited rather than
+    the one the index was generated from.
+    """
+    try:
+        return _hash_file(_resolve_item_path(item))
+    except HTTPException:
+        recorded = item.get("sha256")
+        if isinstance(recorded, str) and recorded:
+            return recorded
+        raise
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -333,8 +375,7 @@ async def install_marketplace_item(
             detail=f"Marketplace item not found: {body.type}:{body.id}",
         )
 
-    target = _resolve_item_path(match)
-    sha = _hash_file(target)
+    sha = _content_sha256(match)
 
     tenant_id = str(current_user.tenant_id)
     key = (tenant_id, body.type, body.id)

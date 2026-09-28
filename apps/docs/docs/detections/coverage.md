@@ -10,7 +10,7 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-09-26T19:28:33Z`
+Generated: `2026-09-28T06:03:48Z`
 
 This page is a **curated selection**, not the size of the corpus.
 It picks the highest-scoring rules per threat family from the set

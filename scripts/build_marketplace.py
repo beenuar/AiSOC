@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import re
 import sys
@@ -60,6 +61,20 @@ COMMUNITY_PLUGINS_DIR = REPO_ROOT / "plugins" / "community"
 
 OUTPUT_PRIMARY = REPO_ROOT / "marketplace" / "index.json"
 OUTPUT_PUBLIC = REPO_ROOT / "apps" / "web" / "public" / "marketplace" / "index.json"
+
+#: A third copy, inside the API service's Docker build context.
+#:
+#: The API image is built with `services/api` as its context, so the
+#: repository-root `marketplace/` directory is not visible to `COPY . .` and
+#: the published image shipped without an index at all. Every containerised
+#: deployment therefore answered 503 on the marketplace — reported in
+#: discussion #374 and true of every release since the endpoint was written.
+#:
+#: `apps/web/public/marketplace/index.json` is the same arrangement for the
+#: console, so this follows a pattern the repository already relies on rather
+#: than introducing one. `scripts/check_marketplace_index_parity.py` asserts
+#: the three stay byte-identical.
+OUTPUT_API_PACKAGED = REPO_ROOT / "services" / "api" / "app" / "data" / "marketplace" / "index.json"
 
 DETECTION_CATEGORIES = {
     "cloud",
@@ -587,9 +602,32 @@ def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _attach_content_hashes(items: list[dict[str, Any]]) -> None:
+    """Record each item's SHA-256 in the index itself.
+
+    Install used to hash the file on disk, which meant the API needed the
+    `detections/`, `playbooks/` and `plugins/` trees at runtime. Its image is
+    built from `services/api` and contains none of them, so an install in any
+    container failed even once the index was found. Carrying the digest here
+    makes the index self-describing and removes the dependency entirely.
+
+    A missing file is recorded as `None` rather than skipped, so the parity
+    gate can report it instead of the index quietly describing fewer items
+    than it lists.
+    """
+    for item in items:
+        relative = item.get("path")
+        if not isinstance(relative, str):
+            item["sha256"] = None
+            continue
+        source = REPO_ROOT / relative
+        item["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+
+
 def build_index() -> dict[str, Any]:
     items = collect_items()
     items.sort(key=lambda i: (i["type"], i.get("id", "")))
+    _attach_content_hashes(items)
     return {
         "$schema": "https://example.com/schemas/marketplace/v1.json",
         "version": "1.0.0",
@@ -618,10 +656,9 @@ def build_index() -> dict[str, Any]:
 
 def write_index(index: dict[str, Any]) -> None:
     payload = json.dumps(index, indent=2, sort_keys=False) + "\n"
-    OUTPUT_PRIMARY.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PUBLIC.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PRIMARY.write_text(payload, encoding="utf-8")
-    OUTPUT_PUBLIC.write_text(payload, encoding="utf-8")
+    for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(payload, encoding="utf-8")
 
 
 def main() -> int:

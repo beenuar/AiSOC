@@ -648,6 +648,15 @@ jobs:
         run: |
           python3 scripts/check_profile_service_counts.py --self-test
           python3 scripts/check_profile_service_counts.py
+      # The marketplace index has to exist in three build contexts, none of
+      # which can see the other two. The API's copy was missing, so its image
+      # shipped no catalogue and the marketplace answered 503 on every
+      # containerised deployment — reported in discussion #374, and invisible
+      # here because the suite runs from a checkout where every path resolves.
+      - name: Marketplace index ships wherever it is read
+        run: |
+          python3 scripts/check_marketplace_index_parity.py --self-test
+          python3 scripts/check_marketplace_index_parity.py
       # The one door in this product a model can open by emitting a sentence.
       # Three things have to stay true and nothing at runtime fails loudly if
       # they stop: every agent-reachable verb is graded READ_ONLY, every one
