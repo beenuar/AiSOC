@@ -37,6 +37,7 @@ def _load_gates(tmp_root: Path):
     module.README = tmp_root / "README.md"
     module.TRUTH_TABLE = tmp_root / "docs" / "detections" / "truth-table.md"
     module.CLAIM_MATRIX = tmp_root / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
+    module.VERSION_FILE = tmp_root / "VERSION"
     # Every module-level path, not just REPO_ROOT: leaving FIGURE_DOCS
     # pointing at the real tree made the gate read the live compliance page
     # against a scratch matrix, and every test failed for a reason that had
@@ -69,6 +70,7 @@ def tree(tmp_path: Path) -> Path:
     (tmp_path / "docs" / "audit").mkdir(parents=True)
     (tmp_path / "docs" / "detections" / "truth-table.md").write_text(TRUTH_TABLE)
     (tmp_path / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md").write_text(MATRIX)
+    (tmp_path / "VERSION").write_text("12.0.0\n")
     return tmp_path
 
 
@@ -199,3 +201,103 @@ def test_a_stale_partial_count_in_the_summary_also_fails(tree: Path) -> None:
     failures = _load_gates(tree).gate_readme_figures()
     assert len(failures) == 1, failures
     assert "PARTIAL: 4" in failures[0].detail
+
+
+# ── The version a document presents as current ───────────────────────────────
+#
+# RELEASES.md announced v11.2.0 as the current release for the whole of
+# v12.0.0 — stale TL;DR, stale `VERSION` is line, and no v12.0.0 section at
+# all — while every check in the repository passed, because the figure gate
+# read detection counts and the claim-gate tally and had never read a version
+# string. The most basic fact the file carries was the one nothing checked.
+
+
+def _releases(tree: Path, body: str) -> None:
+    """A scratch tree whose README is clean, so only RELEASES.md is on trial."""
+    (tree / "README.md").write_text("833 executable. 2 GATED / 1 PARTIAL.\n")
+    (tree / "RELEASES.md").write_text(body)
+
+
+def _version_failures(tree: Path):
+    module = _load_gates(tree)
+    module.FIGURE_DOCS = (tree / "RELEASES.md",)
+    return module.gate_current_version()
+
+
+def test_a_doc_naming_the_current_version_passes(tree: Path) -> None:
+    _releases(tree, "AiSOC is on `v12.0.0`, released 2026-09-28.\n\n`VERSION` is `12.0.0`.\n")
+    assert _version_failures(tree) == []
+
+
+def test_a_stale_current_version_fails(tree: Path) -> None:
+    """The exact text that shipped: the TL;DR and the section opener both stale."""
+    _releases(tree, "AiSOC is on `v11.2.0`, released 2026-09-26.\n\n`VERSION` is `11.2.0`.\n")
+    failures = _version_failures(tree)
+    assert len(failures) == 2, failures
+    assert all("11.2.0" in f.detail and "12.0.0" in f.detail for f in failures)
+
+
+def test_a_past_tense_mention_does_not_fail(tree: Path) -> None:
+    """RELEASES.md names ten superseded versions and must keep being able to.
+
+    Every one of them opens in the past tense, which is the shape the gate
+    declines to read. A gate that flagged these would force the release
+    history to be rewritten on every bump, so it would be turned off.
+    """
+    _releases(
+        tree,
+        "AiSOC is on `v12.0.0`, released 2026-09-28.\n\n"
+        "## v11.2.0 (2026-09-26)\n\n"
+        "`VERSION` was `11.2.0`. The **v11.2.0** release (2026-09-26) widened the corpus.\n\n"
+        "## v11.1.0 (2026-09-25)\n\n"
+        "`VERSION` was `11.1.0`. As of v11.1.0 the console re-resolves its upstreams.\n",
+    )
+    assert _version_failures(tree) == []
+
+
+def test_a_stale_claim_sharing_a_line_with_a_dated_figure_still_fails(tree: Path) -> None:
+    """The reason `_is_historical` is not applied to these patterns.
+
+    RELEASES.md's TL;DR is one long line that legitimately dates a *different*
+    figure in the same sentence. Exempting the line — which is what the figure
+    gate does — would have skipped the stale version claim eighty words to its
+    left, so the gate would have passed on the tree it was written for.
+    """
+    _releases(
+        tree,
+        "> **TL;DR:** AiSOC is on `v11.2.0`, released 2026-09-26 — the corpus "
+        "release. Every claim is gated (claim-to-gate matrix at the v11.2.0 "
+        "cut: 147 rows — 139 GATED / 8 PARTIAL / 0 NO GATE).\n",
+    )
+    failures = _version_failures(tree)
+    assert len(failures) == 1, failures
+    assert "11.2.0" in failures[0].detail
+
+
+def test_a_stale_readme_version_badge_fails(tree: Path) -> None:
+    """A reader takes the badge as the version on sight, without reading prose."""
+    (tree / "README.md").write_text(
+        "[![Version](https://img.shields.io/badge/version-11.2.0-f59e0b)](CHANGELOG.md)\n833 executable. 2 GATED / 1 PARTIAL.\n"
+    )
+    module = _load_gates(tree)
+    module.FIGURE_DOCS = ()
+    failures = module.gate_current_version()
+    assert len(failures) == 1, failures
+    assert "README" in failures[0].detail and "11.2.0" in failures[0].detail
+
+
+def test_a_missing_version_file_skips_the_check(tmp_path: Path) -> None:
+    """A partial checkout or a release tarball must skip, not fail."""
+    (tmp_path / "README.md").write_text("AiSOC is on `v3.0.0`.\n")
+    module = _load_gates(tmp_path)
+    module.FIGURE_DOCS = ()
+    assert module.gate_current_version() == []
+
+
+def test_the_live_tree_presents_its_own_version(tmp_path: Path) -> None:
+    """Production, with nothing reconfigured — the half that actually gates."""
+    module = _import_gates()
+
+    assert module.REPO_ROOT == REPO_ROOT
+    assert module._declared_version() == (REPO_ROOT / "VERSION").read_text().strip()
+    assert module.gate_current_version() == []

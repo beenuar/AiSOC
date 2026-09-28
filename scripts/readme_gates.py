@@ -11,8 +11,11 @@ PRs that touch the README front door:
 3. Every reference to `apps/web/public/demo/<asset>` in README is paired
    with an actually-existing file (or is paired with an explicit
    "rendered .mp4 lands with v8.0" guard).
+4. Figures repeated in prose match the artifact they summarise: the
+   executable-rule count, the claim-gate tally, and the version a document
+   presents as the current one.
 
-The four-th gate (`aisoc-sandbox` cross-platform smoke test) lives in a
+The fifth gate (`aisoc-sandbox` cross-platform smoke test) lives in a
 separate matrix job in `.github/workflows/readme-gates.yml` because it
 needs Linux + macOS runners.
 
@@ -393,6 +396,7 @@ def gate_sandbox_offline_smoke() -> list[GateFailure]:
 
 TRUTH_TABLE = REPO_ROOT / "docs" / "detections" / "truth-table.md"
 CLAIM_MATRIX = REPO_ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
+VERSION_FILE = REPO_ROOT / "VERSION"
 
 #: Other documents that quote the claim-gate tally. Each is checked the
 #: same way the README is: a figure repeated in prose drifts from its
@@ -426,6 +430,96 @@ def _is_historical(text: str, index: int) -> bool:
     start = text.rfind("\n", 0, index) + 1
     end = text.find("\n", index)
     return bool(_HISTORICAL_QUOTE.search(text[start : len(text) if end < 0 else end]))
+
+
+#: Sentence shapes that present a version as *the* current one. A figure gate
+#: over every version string in these documents would be unusable — the whole
+#: point of `RELEASES.md` is that it names ten past versions — so this reads
+#: only the forms whose grammar makes the present-tense claim, and the release
+#: history's own opener (``VERSION`` *was* ``11.0.0``) is not one of them.
+#:
+#: The line-level `_is_historical` exemption is deliberately **not** applied
+#: here, and that is the load-bearing decision. `RELEASES.md`'s TL;DR is a
+#: single long line that legitimately dates a *different* figure in the same
+#: sentence ("at the v11.2.0 cut: 147 rows"), so exempting the line would have
+#: skipped the stale "AiSOC is on `v11.2.0`" sitting eighty words to its left —
+#: which is the exact text this gate was written for. These patterns carry
+#: their own scoping instead of borrowing a neighbour's.
+_CURRENT_VERSION_CLAIMS = (
+    # RELEASES.md's TL;DR: "AiSOC is on `v11.2.0`, released 2026-09-26".
+    re.compile(r"AiSOC is (?:on|at)\s+`?v?(\d+\.\d+\.\d+)`?"),
+    # The opener of whichever section describes the current release.
+    re.compile(r"`VERSION`\s+is\s+`?v?(\d+\.\d+\.\d+)`?"),
+    # README's shields.io badge, which a reader takes as the version on sight.
+    re.compile(r"shields\.io/badge/version-(\d+\.\d+\.\d+)"),
+)
+
+
+def _declared_version() -> str | None:
+    """The version this tree ships, from ``VERSION`` — the file the release
+    flow bumps, so no document can be more current than it."""
+    if not VERSION_FILE.exists():
+        return None
+    return _read(VERSION_FILE).strip() or None
+
+
+def _doc_label(path: Path) -> str:
+    """A repo-relative label for a document, falling back to its file name.
+
+    The tests repoint ``REPO_ROOT`` at a scratch tree; the label is cosmetic
+    and must not take the gate down with it.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return path.name
+
+
+def _figure_sources() -> list[tuple[str, str]]:
+    """Every document that publishes a figure, as ``(label, text)`` pairs.
+
+    Shared by both figure gates so a document added to `FIGURE_DOCS` is read
+    by each of them. Listing a surface for one check and not the other is how
+    `ROADMAP.md` went stale while the gate that should have caught it passed.
+    """
+    sources: list[tuple[str, str]] = []
+    if README.exists():
+        sources.append(("README", _read(README)))
+    sources.extend((_doc_label(path), _read(path)) for path in FIGURE_DOCS if path.exists())
+    return sources
+
+
+def gate_current_version() -> list[GateFailure]:
+    """A document may not present a version other than ``VERSION`` as current.
+
+    `RELEASES.md` announced `v11.2.0` as the current release for the whole of
+    `v12.0.0` — no TL;DR rewrite, no `## v12.0.0` section, and the file's
+    figure claims were being checked the entire time, because the figure gate
+    reads detection counts and the claim-gate tally and had never read a
+    version string. A reader landing on the release notes was told the wrong
+    thing about the most basic fact the file exists to carry.
+    """
+    version = _declared_version()
+    if version is None:
+        return []
+
+    failures: list[GateFailure] = []
+    for label, text in _figure_sources():
+        for pattern in _CURRENT_VERSION_CLAIMS:
+            for m in pattern.finditer(text):
+                if m.group(1) == version:
+                    continue
+                failures.append(
+                    GateFailure(
+                        "current-version",
+                        f"{label} presents {m.group(1)} as the current version "
+                        f"({m.group(0).strip()!r}); VERSION says {version}. "
+                        f"Either update it, or rewrite it in the past tense the "
+                        f"way RELEASES.md dates a superseded release "
+                        f'("`VERSION` was `{m.group(1)}`").',
+                    )
+                )
+    return failures
 
 
 def _truth_table_executable() -> int | None:
@@ -512,22 +606,13 @@ def gate_readme_figures() -> list[GateFailure]:
         # counting note about this exact failure; it recurred because the gate
         # written afterwards pointed outward only.
         sources: list[tuple[str, str]] = [
-            (
-                str(CLAIM_MATRIX.relative_to(REPO_ROOT)) if CLAIM_MATRIX.is_relative_to(REPO_ROOT) else CLAIM_MATRIX.name,
-                _read(CLAIM_MATRIX),
-            ),
+            (_doc_label(CLAIM_MATRIX), _read(CLAIM_MATRIX)),
             ("README", readme),
         ]
         for path in FIGURE_DOCS:
             if not path.exists():
                 continue
-            try:
-                label = str(path.relative_to(REPO_ROOT))
-            except ValueError:
-                # The tests repoint REPO_ROOT at a scratch tree; the label is
-                # cosmetic and must not take the gate down with it.
-                label = path.name
-            sources.append((label, _read(path)))
+            sources.append((_doc_label(path), _read(path)))
 
         for label, text in sources:
             for m in re.finditer(r"(\d+)\s+(?:rows\s+)?`?GATED`?[,/\s]+(?:and\s+)?(\d+)\s+`?PARTIAL", text):
@@ -579,6 +664,7 @@ def _run_all(check_network: bool, skip_sandbox: bool) -> list[GateFailure]:
     failures.extend(gate_package_references(check_network))
     failures.extend(gate_demo_asset_references())
     failures.extend(gate_readme_figures())
+    failures.extend(gate_current_version())
     if not skip_sandbox:
         failures.extend(gate_sandbox_offline_smoke())
     return failures
