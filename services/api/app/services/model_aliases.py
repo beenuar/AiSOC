@@ -15,12 +15,17 @@ agents-side pins), or set a global ``LLM_MODEL`` at the call site.
 from __future__ import annotations
 
 import os
+import re
 
 # Mirrors the roles in services/agents/app/llm/model_pins.py.
 ROLES = frozenset({"triage", "recon", "investigation", "copilot", "summary", "report", "nl", "hunt"})
 
 
 DEFAULT_OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
+
+#: A trailing OpenAI-compatible API version segment — `/v1`, and `/v2` etc. so
+#: the rule does not have to be revisited for a provider that moves on.
+_VERSION_SUFFIX = re.compile(r"/v\d+$")
 
 #: See :data:`services.agents.app.llm.routing.GATEWAY_ALIAS_PREFIX`.
 GATEWAY_ALIAS_PREFIX = "aisoc-"
@@ -133,3 +138,36 @@ def chat_completions_url(model: str | None = None) -> str:
     if base:
         return base.rstrip("/") + "/chat/completions"
     return DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
+
+
+def completions_url_for_base(base_url: str) -> str:
+    """Chat-completions URL for a base the *caller* resolved.
+
+    :func:`chat_completions_url` reads the base out of the environment, which
+    the explain paths cannot use: theirs is layered per tenant, so a BYOK base
+    wins over the process one and only the caller knows which applied.
+
+    They therefore built the URL by hand, with ``f"{base}/v1/chat/completions"``
+    — a different convention from the one every other caller uses. Compose
+    sets ``LLM_GATEWAY_URL=http://litellm:4000/v1``, so against the bundled
+    gateway that produced::
+
+        http://litellm:4000/v1/v1/chat/completions   ->  404
+
+    and the explain path reported ``llm_used: false`` and served its
+    deterministic template instead. Honest, and never once reaching the model
+    that was running beside it.
+
+    So the suffix is decided by what the base already carries rather than
+    assumed: a base that ends in a version segment takes ``/chat/completions``,
+    and a bare host takes ``/v1/chat/completions`` so a BYOK value like
+    ``https://api.openai.com`` still resolves.
+    """
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
+    if base.endswith("/chat/completions"):
+        return base
+    if _VERSION_SUFFIX.search(base):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"

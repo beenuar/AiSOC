@@ -118,6 +118,7 @@ from pydantic import BaseModel, Field
 
 from app.core.rate_limit import RateLimitDecision, TokenBucketLimiter
 from app.llm.contract import LLMContractViolation, safe_chat_completions_request
+from app.llm.factory import completions_url_for_base
 from app.security.llm_resolver import LlmConfig, resolve_llm_config
 from app.security.tenant_scope import (
     TenantPrincipal,
@@ -587,8 +588,7 @@ async def _llm_summary(
         return fallback
 
     try:
-        base = llm_config.base_url.rstrip("/")
-        url = f"{base}/v1/chat/completions"
+        url = completions_url_for_base(llm_config.base_url)
         model = llm_config.model
 
         tech_lines = [f"- {t['id']} {t['name']} ({', '.join(t.get('tactic_names') or []) or 'unknown tactic'})" for t in mitre_techs]

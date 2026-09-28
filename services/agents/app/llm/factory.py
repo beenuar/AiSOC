@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import os
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -114,6 +115,35 @@ def chat_completions_url(model: str | None = None) -> str:
     if base:
         return base.rstrip("/") + "/chat/completions"
     return DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
+
+
+#: A trailing OpenAI-compatible API version segment — `/v1`, and `/v2` etc. so
+#: the rule does not have to be revisited for a provider that moves on.
+_VERSION_SUFFIX = re.compile(r"/v\d+$")
+
+
+def completions_url_for_base(base_url: str) -> str:
+    """Chat-completions URL for a base the *caller* resolved.
+
+    Mirrors :func:`services.api.app.services.model_aliases.completions_url_for_base`;
+    see it for why the suffix is decided rather than assumed.
+
+    :func:`chat_completions_url` above reads the base out of the environment,
+    which `/explain` cannot use — its config is layered per tenant, so a BYOK
+    base wins over the process one and only the caller knows which applied. It
+    built the URL by hand as ``f"{base}/v1/chat/completions"``, and since
+    compose sets ``LLM_GATEWAY_URL=http://litellm:4000/v1`` that resolved to
+    ``http://litellm:4000/v1/v1/chat/completions`` and 404'd against the
+    gateway running beside it.
+    """
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return DEFAULT_OPENAI_CHAT_COMPLETIONS_URL
+    if base.endswith("/chat/completions"):
+        return base
+    if _VERSION_SUFFIX.search(base):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
 
 
 def make_chat_model(

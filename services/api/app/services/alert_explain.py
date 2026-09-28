@@ -60,6 +60,7 @@ from app.models.detection_rule import DetectionRule
 from app.services.cost_dashboard import _impute_public_cost
 from app.services.llm_resolver import LlmConfig, resolve_llm_config
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
+from app.services.model_aliases import completions_url_for_base
 
 logger = logging.getLogger(__name__)
 
@@ -687,8 +688,7 @@ async def _call_llm_for_summary(
     metadata into ``aisoc_run_costs``.
     """
     started = time.monotonic()
-    base = llm_config.base_url.rstrip("/")
-    url = f"{base}/v1/chat/completions"
+    url = completions_url_for_base(llm_config.base_url)
 
     prompt_alert = {
         "title": alert.title,
