@@ -715,6 +715,18 @@ jobs:
         run: |
           python3 scripts/check_failure_is_not_a_verdict.py --self-test
           python3 scripts/check_failure_is_not_a_verdict.py
+      # `AISOC_AGENTS_SERVICE_TOKEN` was read by eight modules in
+      # services/agents and one in services/api, verified by a function that
+      # reads it and nothing else, and produced by nothing — not the
+      # generator, not `.env.example`, not one compose manifest. Organisation
+      # memory, tenant skills, dispositions, identity context, runbooks, the
+      # MCP toolset, the action bridge and SIEM writeback were all off on
+      # every default install, each logging its own warning and returning an
+      # empty result that reads like "this tenant has none".
+      - name: Service credentials production code reads are produced by first run
+        run: |
+          python3 scripts/check_service_token_wiring.py --self-test
+          python3 scripts/check_service_token_wiring.py
       # The marketplace index has to exist in three build contexts, none of
       # which can see the other two. The API's copy was missing, so its image
       # shipped no catalogue and the marketplace answered 503 on every

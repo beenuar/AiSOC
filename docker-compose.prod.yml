@@ -176,6 +176,11 @@ services:
       AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:?set AISOC_CREDENTIAL_KEY — run `make env` to generate it}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN — run `make env` to generate it}
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN — run `make env` to generate it}
+      # Verified by `alert_writeback.service_token_valid`, which reads this
+      # and only this. Unset, every internal context route the agents service
+      # calls refuses it, and triage silently runs without organisation
+      # memory, tenant skills, dispositions, identity or runbooks.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:?set AISOC_AGENTS_SERVICE_TOKEN — run `make env` to generate it}
       AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:?set AISOC_REALTIME_JWT_SECRET — run `make env` to generate it}
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
       # The remaining two secrets `enforce_secure_defaults` hard-fails on, and
@@ -244,6 +249,9 @@ services:
       AISOC_DEV_MODE: 0
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:?set AISOC_SERVICE_TOKEN}
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN}
+      # The same value the api service declares above. Eight modules here
+      # present it; the API verifies it without falling back.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:?set AISOC_AGENTS_SERVICE_TOKEN}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   actions:

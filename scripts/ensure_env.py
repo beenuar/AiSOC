@@ -105,6 +105,20 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Shared bearer for the actions service (API -> actions). Gates every response action.",
     ),
+    # The agents service's own credential, and the one case where the two
+    # sides could not meet in the middle: eight modules in `services/agents`
+    # read it, and `alert_writeback.service_token_valid` on the API verifies
+    # it *without* falling back to AISOC_SERVICE_TOKEN. Nothing generated it
+    # and no manifest passed it, so on every default install organisation
+    # memory, tenant skills, recent dispositions, identity context,
+    # knowledge-base runbooks, the MCP toolset, the playbook action bridge
+    # and SIEM writeback were all silently off — each logging its own
+    # `no_service_token` warning into a stream nobody reads and returning an
+    # empty result that looks exactly like "this tenant has none".
+    "AISOC_AGENTS_SERVICE_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Shared bearer between the API and the agents service. Gates triage context, MCP tools and SIEM writeback.",
+    ),
     # The HS256 key the API signs realtime tickets with and the realtime edge
     # verifies them against. Both sides previously fell back to a constant
     # committed to this repository whenever this was unset — which no manifest

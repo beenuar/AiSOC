@@ -417,6 +417,15 @@ services:
       # variable shipped against a variable nothing ever set.
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       AISOC_CONNECTORS_SERVICE_TOKEN: ${AISOC_CONNECTORS_SERVICE_TOKEN:-}
+      # The agents service's credential, on the verifying side. `alert_writeback
+      # .service_token_valid` reads this and only this — it does NOT fall back
+      # to AISOC_SERVICE_TOKEN — so the internal context routes the agents
+      # service calls (`/feedback/context-statements`,
+      # `/tenant-skills/resolved/active`, `/kb/runbooks/for-triage`,
+      # `/feedback/recent-dispositions`, `/graph/identity-context`, the MCP
+      # registry and `/alerts/{id}/source-writeback`) refuse every caller until
+      # it is set. Must match the value on `agents`.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:-}
       CONNECTORS_SERVICE_URL: ${CONNECTORS_SERVICE_URL:-http://connectors:8003}
       # Where GET /api/v1/threat-intel/indicators is served from. The console
       # has called that path since the IOC inbox shipped and nothing answered
@@ -576,6 +585,13 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/3
+      # `tenant_scope` refuses outright when neither a console secret nor a
+      # service token is configured and dev mode is off, and this service
+      # received none of the three — the same trio `connectors` and
+      # `threatintel` already carry.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       # The ClickHouse event lake is a `full`-profile capability: it backs
       # /lake/sql and the hunt surface, not alerting. CORE runs without it and
@@ -648,6 +664,31 @@ services:
       # service, so this only resolves when that profile is up.
       AISOC_SLACK_BOT_URL: ${AISOC_SLACK_BOT_URL:-}
       AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      # Bearer for realtime's /internal/* fan-out. `app/playbook/engine.py`
+      # reads it to publish step progress; unset, realtime refuses the call
+      # and a running playbook is invisible in the console.
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+      # The three below are the same trio `connectors` and `threatintel`
+      # already carry, and this service had none of them. `tenant_scope`
+      # refuses outright when neither a console secret nor a service token is
+      # configured *and* dev mode is off — which is what every tenant-scoped
+      # route here answered: 503, with no credential material to verify
+      # against and nothing in the image supplying any.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # The agents service's own service credential, used in both directions:
+      # presented as `X-AiSOC-Service-Token` on the API's internal context
+      # routes, and verified by `app.security.tenant_scope` when the API calls
+      # back (it resolves `AISOC_AGENTS_SERVICE_TOKEN` before the shared one).
+      #
+      # Eight modules in this service read it and nothing produced it, so on a
+      # default install organisation memory, tenant skills, recent
+      # dispositions, identity context, knowledge-base runbooks, the MCP
+      # toolset, the playbook action bridge and SIEM writeback were all off —
+      # each logging its own `no_service_token` warning and returning empty.
+      # `make env` generates it; it must match the value on `api` below.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:-}
     networks:
       - aisoc
     restart: unless-stopped
@@ -816,6 +857,13 @@ services:
       # DATABASE_URL and the role's actual credential come from one value.
       AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
       AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
+      # `tenant_scope` refuses outright when neither a console secret nor a
+      # service token is configured and dev mode is off, and this service
+      # received none of the three — the same trio `connectors` and
+      # `threatintel` already carry.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       # The ingest service is registered as `ingest-worker` in this compose
       # file; the previous `http://ingest:8080` would not resolve via DNS.
       AISOC_INGEST_BASE_URL: http://ingest-worker:8080
