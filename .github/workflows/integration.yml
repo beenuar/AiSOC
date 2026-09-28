@@ -648,6 +648,23 @@ jobs:
           POSTGRES_RLS_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/isolation/test_postgres_rls.py -v --tb=short
 
+      # `POST /alerts/{id}/explain` logged `audit: failed to compute hash chain`
+      # on every call against a default install, and the audit row was not
+      # merely unchained — it was never written. A best-effort cost INSERT
+      # failed, the caller caught the Python exception, and PostgreSQL had
+      # already aborted the transaction, so every later statement including
+      # the audit INSERT failed too.
+      #
+      # The abort is a PostgreSQL behaviour. SQLite does not have it, so the
+      # unit suite exercises the savepoint mechanics and cannot reproduce the
+      # defect; this runs the reproduction against a real database.
+      # POSTGRES_ABORT_SEMANTICS_REQUIRED turns an unreachable database into a
+      # failure rather than a skip, for the same reason as the job above.
+      - name: A failed optional write does not delete the audit row (live)
+        env:
+          POSTGRES_ABORT_SEMANTICS_REQUIRED: '1'
+        run: python -m pytest services/api/tests/test_audit_chain_survives_a_failed_write.py -v --tb=short
+
       # Gap-closure Phase 2.3's "Done when", run rather than reasoned about: a
       # test tenant with 20 shadow decisions cannot enable auto-close, can
       # once the thresholds are met, and is demoted when injected

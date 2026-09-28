@@ -85,6 +85,7 @@ from app.api.v1.endpoints.metrics import PipelineHealth, PipelineStage
 from app.core.config import settings
 from app.models.alert import Alert
 from app.models.connector import Connector
+from app.services.audit_hash import verify_chain
 from app.services.connector_freshness import compute_freshness
 from app.services.fleet_health import assess_fleet
 from app.services.replay_evaluation.vendors import replayable_connector_ids
@@ -618,6 +619,112 @@ async def get_dead_letters(
             }
             for r in rows
         ],
+    }
+
+
+@router.get("/audit-chain")
+async def get_audit_chain_health(
+    user: AuthUser,
+    db: DBSession,
+) -> dict[str, Any]:
+    """Whether the audit log's tamper-evidence actually covers this tenant.
+
+    `apps/docs/docs/operations/security.md` states that every state-changing
+    action is appended to an immutable, hash-chained log. That claim is only
+    true of rows that carry a hash, and the one signal that a row did not was
+    a `logger.warning` — which fired on every `alerts.explain` against a
+    default install for as long as a best-effort cost write could abort the
+    transaction underneath it. Nobody noticed, because an append-only log
+    going quiet looks exactly like an idle one.
+
+    So the question gets a surface. `unchained` counts rows this tenant holds
+    with no `entry_hash`, split into the ones written before migration 043
+    (which never had one and are not a defect) and the ones written after it
+    (which are). A reviewer asking "is the chain intact?" gets a number rather
+    than a grep.
+
+    `verified` replays the chain with `verify_chain` over the most recent
+    window, so a row that was rewritten in place is found rather than assumed
+    absent.
+    """
+    window = 500
+
+    counts = (
+        (
+            await db.execute(
+                text(
+                    """
+            SELECT
+              count(*) FILTER (WHERE entry_hash IS NULL)     AS unchained,
+              count(*) FILTER (WHERE entry_hash IS NOT NULL) AS chained,
+              count(*)                                       AS total,
+              min(created_at) FILTER (WHERE entry_hash IS NULL) AS oldest_unchained,
+              max(created_at) FILTER (WHERE entry_hash IS NULL) AS newest_unchained
+            FROM audit_log
+            WHERE tenant_id = :tid
+            """
+                ),
+                {"tid": user.tenant_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
+
+    rows = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT id, tenant_id, actor_id, actor_email, actor_ip,
+                       action, resource, resource_id, changes, metadata, created_at,
+                       prev_hash, entry_hash
+                FROM audit_log
+                WHERE tenant_id = :tid
+                ORDER BY created_at DESC, id DESC
+                LIMIT :lim
+                """
+                ),
+                {"tid": user.tenant_id, "lim": window},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    replay = [dict(r) for r in reversed(rows)]
+    intact, bad_index, reason = verify_chain(replay)
+
+    unchained = int(counts["unchained"] or 0)
+    return {
+        # Two facts, reported separately, because they have different causes
+        # and a single boolean would hide that. `chain_complete` is about rows
+        # written with no hash at all — what a failed chain computation
+        # produces, and what `aisoc_audit_chain_failures_total` counts.
+        # `replay_intact` is about the links between rows that do have one.
+        "chain_complete": unchained == 0,
+        "total_rows": int(counts["total"] or 0),
+        "chained_rows": int(counts["chained"] or 0),
+        # Every row here is one the tamper-evidence claim does not cover.
+        # Migration 043 made the columns nullable so existing deployments
+        # could adopt the chain without a flag day, so a non-zero count on an
+        # old tenant may be legacy — the timestamps say which.
+        "unchained_rows": unchained,
+        "oldest_unchained_at": counts["oldest_unchained"].isoformat() if counts["oldest_unchained"] else None,
+        "newest_unchained_at": counts["newest_unchained"].isoformat() if counts["newest_unchained"] else None,
+        "replay_window": len(replay),
+        # A replay break is not always tampering. Two audit writers in one
+        # request — a handler calling `emit_audit` and `audit_middleware`
+        # writing its own row on a separate session — can resolve the same
+        # head and fork the chain, and a fork is indistinguishable from a
+        # removed row. That is a real, open defect in the writer, documented
+        # on `app.services.audit._resolve_prev_hash`; it is reported here
+        # rather than hidden, because hiding it is what made the chain's
+        # failure invisible in the first place.
+        "replay_intact": intact,
+        "replay_broken_at_index": bad_index,
+        "replay_reason": reason,
+        # The counter is the alertable half; this is the on-demand half.
+        "metric": "aisoc_audit_chain_failures_total",
     }
 
 

@@ -55,6 +55,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.db.best_effort import attempt
 from app.models.alert import Alert
 from app.models.detection_rule import DetectionRule
 from app.services.cost_dashboard import _impute_public_cost
@@ -386,9 +387,11 @@ async def _historical_fp_rate(
         .limit(_FP_RATE_SAMPLE_CAP)
     )
 
-    try:
-        row = (await db.execute(query)).one()
-    except Exception as exc:  # noqa: BLE001
+    # In a savepoint: this query is informational, but a failure here aborts
+    # the transaction for everything after it — which is how a failed analytics
+    # query used to take the audit row for the same request down with it.
+    row, exc = await attempt(db, lambda: db.execute(query))
+    if exc is not None:
         # FP rate is informational; never fail the whole explain
         # endpoint because the analytics query timed out.
         logger.warning("explain.fp_rate_query_failed tenant=%s error=%s", tenant_id, exc)
@@ -401,8 +404,10 @@ async def _historical_fp_rate(
             notes=f"Query failed: {exc}; treat with caution.",
         )
 
-    total = int(row.total or 0)
-    fps = int(row.fps or 0)
+    assert row is not None  # noqa: S101 - `attempt` returns one of the two
+    aggregate = row.one()
+    total = int(aggregate.total or 0)
+    fps = int(aggregate.fps or 0)
     rate = (fps / total) if total else 0.0
     return HistoricalFpRate(
         fp_rate=round(rate, 4),
@@ -841,12 +846,29 @@ async def _record_llm_cost(
         # operators still see them in the audit trail.
         return
 
-    cost_usd = _impute_public_cost(
+    # ``None`` means "this model has no published list price", which is the
+    # normal case for the local model CORE ships. It used to be passed
+    # straight into ``total_cost_usd``, a NOT NULL column, so every explain on
+    # a default install raised
+    #
+    #   NotNullViolationError: null value in column "total_cost_usd" of
+    #   relation "aisoc_run_costs" violates not-null constraint
+    #
+    # which the caller swallowed as `explain.cost_track_failed` — and which
+    # took the whole transaction down with it. See the savepoint in
+    # ``generate_alert_explanation``.
+    estimated = _impute_public_cost(
         call.model,
         call.prompt_tokens,
         call.completion_tokens,
     )
 
+    # Migration 063's vocabulary, which this writer predates. ``total_cost_usd``
+    # carries **measured** (gateway-reported) cost only, and this path has no
+    # gateway-reported figure — ``_LlmCallResult`` carries no cost header — so
+    # it is never written here. A list-price figure goes to the estimate
+    # columns and an unpriced call increments a counter, which is how a
+    # surface downstream can say "not measured" rather than "$0.00".
     run_id = f"alert:{alert_id}"
 
     # ``aisoc_run_costs`` PK is (run_id, tenant_id, model). We use an
@@ -864,7 +886,9 @@ async def _record_llm_cost(
             "model": call.model,
             "prompt_tokens": call.prompt_tokens,
             "completion_tokens": call.completion_tokens,
-            "cost_usd": cost_usd,
+            "estimated_cost_usd": estimated or 0.0,
+            "estimated_call_count": 1 if estimated is not None else 0,
+            "unpriced_call_count": 0 if estimated is not None else 1,
             "latency_ms": call.latency_ms,
         },
     )
@@ -877,19 +901,25 @@ _UPSERT_RUN_COST = text(
     INSERT INTO aisoc_run_costs (
         run_id, tenant_id, model,
         total_prompt_tokens, total_completion_tokens,
-        total_cost_usd, total_latency_ms, call_count, recorded_at
+        total_cost_usd, total_latency_ms, call_count,
+        estimated_cost_usd, estimated_call_count, unpriced_call_count,
+        recorded_at
     )
     VALUES (
         :run_id, :tenant_id, :model,
         :prompt_tokens, :completion_tokens,
-        :cost_usd, :latency_ms, 1, now()
+        0, :latency_ms, 1,
+        :estimated_cost_usd, :estimated_call_count, :unpriced_call_count,
+        now()
     )
     ON CONFLICT (run_id, tenant_id, model) DO UPDATE SET
         total_prompt_tokens     = aisoc_run_costs.total_prompt_tokens     + EXCLUDED.total_prompt_tokens,
         total_completion_tokens = aisoc_run_costs.total_completion_tokens + EXCLUDED.total_completion_tokens,
-        total_cost_usd          = aisoc_run_costs.total_cost_usd          + EXCLUDED.total_cost_usd,
         total_latency_ms        = aisoc_run_costs.total_latency_ms        + EXCLUDED.total_latency_ms,
         call_count              = aisoc_run_costs.call_count              + 1,
+        estimated_cost_usd      = aisoc_run_costs.estimated_cost_usd      + EXCLUDED.estimated_cost_usd,
+        estimated_call_count    = aisoc_run_costs.estimated_call_count    + EXCLUDED.estimated_call_count,
+        unpriced_call_count     = aisoc_run_costs.unpriced_call_count     + EXCLUDED.unpriced_call_count,
         recorded_at             = now()
     """
 )
@@ -961,16 +991,17 @@ async def generate_alert_explanation(
         # Always attempt to book the cost — _record_llm_cost no-ops on
         # failed calls so we don't pollute the cost table with zero
         # rows.
-        try:
-            await _record_llm_cost(
-                db,
-                tenant_id=alert.tenant_id,
-                alert_id=alert.id,
-                call=call,
-            )
-        except Exception as exc:  # noqa: BLE001
-            # Cost tracking failures must never break the explain
-            # response. Log and move on.
+        # In a savepoint. "Must never break the explain response" was already
+        # the intent, and the `try/except` around it did not achieve it: a
+        # failed INSERT aborts the PostgreSQL transaction, so catching the
+        # Python exception left every later statement on this session failing
+        # too — including the audit row for this very request, which was
+        # therefore never written at all.
+        _, exc = await attempt(
+            db,
+            lambda: _record_llm_cost(db, tenant_id=alert.tenant_id, alert_id=alert.id, call=call),
+        )
+        if exc is not None:
             logger.warning(
                 "explain.cost_track_failed tenant=%s alert=%s error=%s",
                 alert.tenant_id,

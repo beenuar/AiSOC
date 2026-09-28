@@ -49,15 +49,30 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Request
+from prometheus_client import Counter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.trusted_proxy import resolve_client_ip
+from app.db.best_effort import savepoint
 from app.models.audit import AuditLog
 from app.services.audit_hash import compute_entry_hash
 from app.services.audit_redaction import redact_changes
 
 logger = logging.getLogger("aisoc.audit")
+
+#: Rows written without a hash link, by the action that produced them.
+#:
+#: Defined here rather than in ``app.main`` so that importing the audit
+#: service is enough to register it: a counter declared beside the HTTP
+#: metrics would be missing from any process that emits audit events without
+#: serving requests, and a metric that exists on one replica and not another
+#: reads as zero.
+AUDIT_CHAIN_FAILURES = Counter(
+    "aisoc_audit_chain_failures_total",
+    "Audit rows written with no hash link, so tamper-evidence does not cover them.",
+    ["action"],
+)
 
 # Hard caps on header-derived metadata that lands in the audit row.
 # These exist independently of changes-payload redaction and protect
@@ -78,6 +93,28 @@ async def _resolve_prev_hash(db: AsyncSession, tenant_id: uuid.UUID) -> str | No
     tenant). Legacy rows that pre-date the hash chain — where
     ``entry_hash IS NULL`` — are skipped via the partial index from
     migration 043; new chains begin from the first hashed row.
+
+    **Known limitation — concurrent writers fork the chain.** The read here
+    and the insert that follows are not atomic, and one request can have two
+    writers: this handler's session and `audit_middleware`'s own. Measured on
+    `POST /alerts/{id}/explain`, two milliseconds apart, both resolving the
+    same head:
+
+        alerts:create   entry=dabf5207f866  prev=-
+        alerts.explain  entry=66eed8144cee  prev=dabf5207f866
+        alerts:create   entry=ca30ed264f98  prev=dabf5207f866   <- fork
+
+    `verify_chain` calls that broken and is right to: a fork is
+    indistinguishable from a removed row. `GET /api/v1/health/audit-chain`
+    reports it rather than hiding it.
+
+    It is not fixed here, and a transaction-scoped advisory lock is not the
+    fix: the middleware runs before the request session's dependency
+    teardown, so the handler still holds the lock and the middleware's
+    acquisition times out — measured, and it dropped the middleware's row
+    entirely, which is worse than the fork. Closing it needs a commit-ordered
+    sequence or a single audit writer per request, which is a design change
+    and not this one.
     """
     stmt = (
         select(AuditLog.entry_hash)
@@ -182,8 +219,16 @@ async def emit_audit(
     # write the row — falling back to an unchained entry is strictly
     # better than failing the originating mutation, and the gap is
     # detectable by the verifier.
+    #
+    # Inside a savepoint, because "we still write the row" was not true.
+    # PostgreSQL aborts the whole transaction on a statement error, so a
+    # failed SELECT here left the INSERT below failing too and the event was
+    # never written at all. Observed on `alerts.explain`, where the SELECT was
+    # not itself at fault — an earlier best-effort cost INSERT had already
+    # aborted the transaction, and this was simply the next statement to run.
     try:
-        prev = await _resolve_prev_hash(db, tenant_id)
+        async with savepoint(db):
+            prev = await _resolve_prev_hash(db, tenant_id)
         event.prev_hash = prev
         event.entry_hash = compute_entry_hash(
             prev_hash=prev,
@@ -200,8 +245,22 @@ async def emit_audit(
             created_at=event.created_at,
         )
     except Exception:  # noqa: BLE001
-        logger.warning(
-            "audit: failed to compute hash chain for tenant=%s action=%s",
+        # `error`, a counter and a health surface — not a warning.
+        #
+        # This was `logger.warning` and nothing else, and it fired on every
+        # `alerts.explain` against a default install for as long as the cost
+        # writer could abort the transaction. Nobody noticed, because an
+        # append-only log going quiet looks exactly like an idle one. A
+        # compliance control whose only failure signal is a line in a stream
+        # nobody greps is a control in name only.
+        #
+        # `aisoc_audit_chain_failures_total` is scraped on /metrics, so this
+        # is alertable, and `GET /api/v1/health/audit-chain` answers the same
+        # question on demand for an auditor who is not watching a dashboard.
+        AUDIT_CHAIN_FAILURES.labels(action=action).inc()
+        logger.error(
+            "audit: failed to compute hash chain for tenant=%s action=%s — "
+            "this row is written UNCHAINED and the tamper-evidence claim does not hold for it",
             tenant_id,
             action,
             exc_info=True,

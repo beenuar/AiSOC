@@ -146,6 +146,25 @@ def _rule(
     )
 
 
+def _fake_session() -> MagicMock:
+    """A stand-in `AsyncSession` that also understands savepoints.
+
+    The optional database work in this module — the FP-rate aggregate and the
+    cost write — now runs inside `db.begin_nested()`, because a failure
+    without one aborts the PostgreSQL transaction and takes the caller's
+    later statements down with it, which is how a cost-tracking bug deleted
+    an `alerts.explain` audit row. A bare `MagicMock` returns a non-awaitable
+    for `begin_nested`, so the fake has to grow the same shape.
+    """
+    nested = MagicMock()
+    nested.is_active = True
+    nested.commit = AsyncMock()
+    nested.rollback = AsyncMock()
+    db = MagicMock()
+    db.begin_nested = AsyncMock(return_value=nested)
+    return db
+
+
 def _scalar_one_or_none_result(value: Any) -> MagicMock:
     """Mock an ``await session.execute(...)`` whose ``scalar_one_or_none()`` returns ``value``."""
     result = MagicMock()
@@ -259,7 +278,7 @@ class TestResolveRuleLineage:
         rule = _rule(rule_id=rid)
         alert = _alert(raw_event={"rule_id": str(rid)})
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_scalar_one_or_none_result(rule))
 
         result_rule, confidence, method = await _resolve_rule_lineage(db, alert)
@@ -279,7 +298,7 @@ class TestResolveRuleLineage:
             mitre_techniques=["T1078"],
         )
 
-        db = MagicMock()
+        db = _fake_session()
         # First call: explicit lookup → no row.
         # Second call: candidate scan → one matching rule.
         rule = _rule(mitre_techniques=["T1078"])
@@ -302,7 +321,7 @@ class TestResolveRuleLineage:
         # without hitting the DB a second time.
         alert = _alert(category=None, mitre_techniques=[])
 
-        db = MagicMock()
+        db = _fake_session()
         # No explicit signal in this alert, so no lookup at all.
         # We assert we never call execute (early return).
         db.execute = AsyncMock()
@@ -324,7 +343,7 @@ class TestResolveRuleLineage:
         )
         alert = _alert(mitre_techniques=["T1078", "T1110", "T1059"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_scalars_all_result([rule]))
 
         result_rule, confidence, method = await _resolve_rule_lineage(db, alert)
@@ -350,7 +369,7 @@ class TestResolveRuleLineage:
         )
         alert = _alert(category="identity", mitre_techniques=["T1059"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_scalars_all_result([rule]))
 
         result_rule, confidence, method = await _resolve_rule_lineage(db, alert)
@@ -365,7 +384,7 @@ class TestResolveRuleLineage:
         # This is the "tenant disabled all rules" corner.
         alert = _alert(category="identity", mitre_techniques=["T1078"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_scalars_all_result([]))
 
         result_rule, confidence, method = await _resolve_rule_lineage(db, alert)
@@ -393,7 +412,7 @@ class TestHistoricalFpRate:
         rule = _rule(category="identity", mitre_techniques=["T1078"])
         alert = _alert(tenant_id=tenant, category="identity", mitre_techniques=["T1078"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_row_one_result(total=200, fps=20))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=rule, alert=alert)
@@ -412,7 +431,7 @@ class TestHistoricalFpRate:
         tenant = uuid.uuid4()
         alert = _alert(tenant_id=tenant, category="identity", mitre_techniques=["T1078"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_row_one_result(total=50, fps=5))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=None, alert=alert)
@@ -425,7 +444,7 @@ class TestHistoricalFpRate:
         tenant = uuid.uuid4()
         alert = _alert(tenant_id=tenant, category="identity", mitre_techniques=[])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_row_one_result(total=10, fps=1))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=None, alert=alert)
@@ -439,7 +458,7 @@ class TestHistoricalFpRate:
         tenant = uuid.uuid4()
         alert = _alert(tenant_id=tenant, category=None, mitre_techniques=[])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_row_one_result(total=100, fps=10))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=None, alert=alert)
@@ -452,7 +471,7 @@ class TestHistoricalFpRate:
         tenant = uuid.uuid4()
         alert = _alert(tenant_id=tenant)
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(return_value=_row_one_result(total=0, fps=0))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=None, alert=alert)
@@ -468,7 +487,7 @@ class TestHistoricalFpRate:
         tenant = uuid.uuid4()
         alert = _alert(tenant_id=tenant)
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(side_effect=RuntimeError("connection reset"))
 
         fp = await _historical_fp_rate(db, tenant_id=tenant, rule=None, alert=alert)
@@ -733,7 +752,7 @@ class TestGenerateAlertExplanation:
         # The endpoint should NEVER fail-closed because the LLM is off.
         alert = _alert(category="identity", mitre_techniques=["T1078"])
 
-        db = MagicMock()
+        db = _fake_session()
         # No explicit rule → falls through to candidate scan returning
         # no candidates → no rule. FPR query returns zero sample.
         db.execute = AsyncMock(
@@ -763,7 +782,7 @@ class TestGenerateAlertExplanation:
         # Happy path: resolver allows, LLM returns text, cost is booked.
         alert = _alert(category="identity", mitre_techniques=["T1078"])
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([]),  # no candidate rules
@@ -807,7 +826,7 @@ class TestGenerateAlertExplanation:
         # the deterministic summary and surface the failure reason.
         alert = _alert(category="identity")
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([]),
@@ -849,7 +868,7 @@ class TestGenerateAlertExplanation:
         # The dashboard will simply miss this row.
         alert = _alert(category="identity")
 
-        db = MagicMock()
+        db = _fake_session()
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([]),
