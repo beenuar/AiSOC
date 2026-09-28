@@ -227,14 +227,31 @@ function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProp
  *                     data for this panel. Say *that*, and point at the thing
  *                     that would produce some.
  */
+/**
+ * Three states, not two.
+ *
+ * This had an error branch and an empty branch, and the error branch runs
+ * first — which reads as complete right up until you notice that the empty
+ * branch is also what renders *before* the request lands. On first paint,
+ * with no data and no error yet, `/dashboard` asserted "No alerts in the last
+ * 24 hours": a measured claim about a window nothing had looked at, made
+ * milliseconds before the failing request came back.
+ *
+ * `pending` is the missing third state. It covers the request still being in
+ * flight and the request having answered without the figures this panel needs
+ * — both are "not measured", and neither is a report of zero.
+ */
 function PanelUnavailable({
   error,
+  pending,
   onRetry,
   emptyTitle,
   emptyDescription,
   action,
 }: {
   error?: unknown;
+  /** The answer is not in. Never claim a measurement. */
+  pending?: boolean;
   onRetry?: () => void;
   emptyTitle: string;
   emptyDescription: string;
@@ -247,6 +264,15 @@ function PanelUnavailable({
         description="The metrics API did not respond. Nothing is rendered here rather than a placeholder number."
         error={error}
         onRetry={onRetry}
+        className="px-4 py-6"
+      />
+    );
+  }
+  if (pending) {
+    return (
+      <EmptyState
+        title="Not loaded yet"
+        description="Waiting on the metrics API. This panel will say what it found once it answers."
         className="px-4 py-6"
       />
     );
@@ -429,7 +455,12 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { data: rawMetrics, error: metricsError, mutate: mutateMetrics } = useSWR(
+  const {
+    data: rawMetrics,
+    error: metricsError,
+    isLoading: metricsLoading,
+    mutate: mutateMetrics,
+  } = useSWR(
     'dashboard-metrics',
     () => metricsApi.getDashboard(),
     {
@@ -476,6 +507,17 @@ export function DashboardView() {
           threatsBySource: apiData.threatsBySource ?? [],
         }
       : null;
+
+  /**
+   * Whether these panels have anything measured to report.
+   *
+   * Both halves matter. `metricsLoading` is the request still being in flight,
+   * which is the first-paint case. `!metrics` also covers the request having
+   * answered with a payload that carries no alert totals — equally unmeasured,
+   * and equally not a zero. A panel reached through either branch must not
+   * describe a result.
+   */
+  const metricsPending = metricsLoading || (!metrics && !metricsError);
 
   const sources = metrics?.sources ?? [];
   const topMitre = metrics?.topMitre ?? [];
@@ -582,6 +624,7 @@ export function DashboardView() {
         ) : (
           <PanelUnavailable
             error={metricsError}
+            pending={metricsPending}
             onRetry={retryMetrics}
             emptyTitle="No dashboard metrics yet"
             emptyDescription="Connect a data source to start populating alert, case and MTTR counters."
@@ -602,6 +645,7 @@ export function DashboardView() {
           ) : (
             <PanelUnavailable
               error={metricsError}
+              pending={metricsPending}
               onRetry={retryMetrics}
               emptyTitle="No alerts in the last 24 hours"
               emptyDescription="The volume curve plots hourly alert counts once alerts start arriving."
@@ -628,6 +672,7 @@ export function DashboardView() {
           ) : (
             <PanelUnavailable
               error={metricsError}
+              pending={metricsPending}
               onRetry={retryMetrics}
               emptyTitle="No severity data"
               emptyDescription="Severity counts appear once the API returns alert metrics."
@@ -646,6 +691,7 @@ export function DashboardView() {
           ) : (
             <PanelUnavailable
               error={metricsError}
+              pending={metricsPending}
               onRetry={retryMetrics}
               emptyTitle="No technique coverage yet"
               emptyDescription="Tactics rank by alert count once detections start firing."
@@ -657,6 +703,7 @@ export function DashboardView() {
           {sources.length === 0 ? (
             <PanelUnavailable
               error={metricsError}
+              pending={metricsPending}
               onRetry={retryMetrics}
               emptyTitle="No sources connected"
               emptyDescription="Connect a data source and its event volume appears here."

@@ -298,7 +298,17 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
           <option value="low">Low</option>
         </select>
 
-        <span className="text-xs text-gray-500">{cases.length} cases</span>
+        {/* The same `countsUnknown` the five stat cards above already honour.
+            This one printed `0 cases` beside their five em-dashes, so the
+            page gave two different answers about the same unread list — and
+            the confident one was the wrong one, because a zero reads as
+            measured-and-none rather than not-measured. */}
+        <span
+          className="text-xs text-gray-500"
+          title={countsUnknown ? 'The case service has not answered, so there is no count to show.' : undefined}
+        >
+          {countsUnknown ? '— cases' : `${cases.length} cases`}
+        </span>
       </div>
 
       {/* Cases List */}

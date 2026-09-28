@@ -358,7 +358,9 @@ export function ThreatIntelView() {
                   : 'text-gray-400 bg-gray-800/60 hover:bg-gray-800'
               )}
             >
-              {t === 'all' ? 'All' : t.toUpperCase()} ({typeCounts[t] ?? 0})
+              {/* Five chips reading `(0)` is five measured claims about a
+                  store the page could not reach. */}
+              {t === 'all' ? 'All' : t.toUpperCase()} ({storeUnknown ? '—' : typeCounts[t] ?? 0})
             </button>
           ))}
         </div>
@@ -368,10 +370,18 @@ export function ThreatIntelView() {
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-gray-300">Indicators of Compromise</h3>
-          <span className="text-xs text-gray-500">
-            {totalCollected > indicators.length
-              ? `${indicators.length.toLocaleString()} of ${totalCollected.toLocaleString()} indicators`
-              : `${indicators.length.toLocaleString()} indicators`}
+          {/* `storeUnknown` is the same signal the empty state below uses to
+              say "this is not a report that no indicators exist". This
+              counter said `0 indicators` directly above that sentence. */}
+          <span
+            className="text-xs text-gray-500"
+            title={storeUnknown ? 'The threat-intel service has not answered, so there is no count to show.' : undefined}
+          >
+            {storeUnknown
+              ? '— indicators'
+              : totalCollected > indicators.length
+                ? `${indicators.length.toLocaleString()} of ${totalCollected.toLocaleString()} indicators`
+                : `${indicators.length.toLocaleString()} indicators`}
           </span>
         </div>
         {indicators.length === 0 ? (
