@@ -168,6 +168,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failed at `mint_ws_ticket`. It was green on `main` only because the job is
   path-filtered and had not run on a triggering commit since that release.
 
+- **Two lettered deferrals were on no list of the lettered deferrals.**
+  `docs/audit/DEFERRED_SUBPHASES.md` exists because six commitments had their
+  scope recorded only by a filename pointing at a gitignored file — and the
+  audit that wrote it read `ROADMAP.md` and stopped there. `6b` (wire the
+  storage cost model into the sizing guide and the LLM-cost dashboard) was in
+  `docs/decisions/0005-storage-consolidation.md` and `8b` (migrate the inline
+  agent prompts onto the registry) in `services/agents/app/llm/prompt_registry.py`,
+  both still pointing at the tracker that was never committed. Both are open,
+  both now have a section, and both pointers now resolve. `11b` closed
+  (`scripts/check_sdk_surface.py`), and re-verifying the rest against the tree
+  corrected two statuses: `9b`'s durable approval-timer table landed in
+  `062_approval_timers.sql`, leaving only console-raised approvals with
+  nothing to expire them, and `10b`'s checkpoint durability landed with one
+  adopter of 84 connectors. New `scripts/check_deferral_tracker.py` derives
+  the set of deferrals from the tracked tree in both directions, so a ninth
+  cannot go unrecorded.
+
 ## [12.0.0] - 2026-09-27
 
 ### BREAKING

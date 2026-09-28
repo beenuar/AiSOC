@@ -15,8 +15,8 @@ which is exactly the signal that should trigger the eval re-grade.
 
 The registry is the source of truth for prompt text; agents should read via
 `get(name)` rather than redeclaring constants. Migration of the existing inline
-prompts is tracked as 8b; this seeds the registry + gate with the canonical
-triage/summary prompts.
+prompts is tracked as 8b in `docs/audit/DEFERRED_SUBPHASES.md`; this seeds the
+registry + gate with the canonical triage/summary prompts.
 """
 
 from __future__ import annotations

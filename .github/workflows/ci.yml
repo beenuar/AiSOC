@@ -1094,6 +1094,29 @@ jobs:
         # indistinguishable from a leak.
         run: python3 scripts/check_triage_context_freeze.py
 
+      - name: Every lettered deferral has its scope in the committed tracker
+        # Six sub-phases were "tracked in docs/audit/PROGRESS.md", which is
+        # gitignored and was never committed, so six named commitments had
+        # their scope recorded only by a filename pointing at nothing.
+        # docs/audit/DEFERRED_SUBPHASES.md replaced it — and the audit that
+        # wrote it read ROADMAP.md and stopped there, so two more deferrals
+        # named elsewhere stayed invisible: 6b in an ADR and 8b in a module
+        # docstring, both still pointing at the file that does not exist.
+        #
+        # The set of deferrals can therefore not live in a reader's memory.
+        # This derives it from the whole tracked tree, in both directions — a
+        # deferral named anywhere with no section, and a section for one
+        # nothing references — and fails any tracked file still sending a
+        # reader to the tracker that was never committed.
+        #
+        # Self-test first, and deliberately: it injects the ADR shape, the
+        # docstring shape and a bare phase reference into scratch trees, so a
+        # matcher that has quietly stopped matching cannot report the
+        # repository clean.
+        run: |
+          python3 scripts/check_deferral_tracker.py --self-test
+          python3 scripts/check_deferral_tracker.py
+
       - name: Every check in the tree is reachable from a workflow
         # The gate on the gates. A conformance script with no workflow cannot
         # fail, which is indistinguishable from no gate at all — while its

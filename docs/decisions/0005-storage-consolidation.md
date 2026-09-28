@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-07-12
 - **Decision-makers:** AiSOC core team
-- **Plan reference:** World-Class Hardening Program, Phase 6 (performance + cost) — [`ROADMAP.md`](../../ROADMAP.md), [`docs/audit/PROGRESS.md`](../audit/PROGRESS.md).
+- **Plan reference:** World-Class Hardening Program, Phase 6 (performance + cost) — [`ROADMAP.md`](../../ROADMAP.md), [`docs/audit/DEFERRED_SUBPHASES.md`](../audit/DEFERRED_SUBPHASES.md).
 
 ## Context
 
@@ -71,9 +71,12 @@ below can therefore never silently drift.
 - **Negative.** Object-tier reads (warm/cold) are slower than ClickHouse; an
   investigation reaching past 30 days pays a latency cost. Accepted: >30-day
   lookbacks are rare and the cost saving is large (block is ~3.5× object).
-- **Follow-up (Phase 6b, tracked in `docs/audit/PROGRESS.md`).** Wire the model
-  into the managed-mode sizing guide and the LLM-cost dashboard so a tenant's
-  storage $/mo shows next to its LLM $/mo.
+- **Follow-up (Phase 6b, tracked in
+  [`docs/audit/DEFERRED_SUBPHASES.md`](../audit/DEFERRED_SUBPHASES.md)).** Wire
+  the model into the managed-mode sizing guide and the LLM-cost dashboard so a
+  tenant's storage $/mo shows next to its LLM $/mo. Still open: the dashboard
+  reports LLM spend only, and the managed-instance billing section does not
+  mention storage.
 
 ## Performance gate
 
