@@ -4,6 +4,7 @@ import { ArrowRight, Telescope } from 'lucide-react';
 import { StickyNav } from '@/components/landing/sections/StickyNav';
 import { Footer } from '@/components/landing/sections/Footer';
 import { docs } from '@/lib/docs';
+import { isDemoMode } from '@/lib/demoMode';
 
 /**
  * Global 404 fallback.
@@ -33,7 +34,7 @@ import { docs } from '@/lib/docs';
 export const metadata: Metadata = {
   title: '404 — page not found · AiSOC',
   description:
-    'That URL is not part of the AiSOC marketing site. Jump back to the homepage, open the interactive demo, or pick one of the popular destinations below.',
+    'That URL is not part of the AiSOC site. Jump back to the homepage, open the dashboard, or pick one of the popular destinations below.',
   // Tell crawlers we know this is a 404 surface; do not let them index it.
   robots: { index: false, follow: false },
 };
@@ -45,33 +46,60 @@ interface Destination {
   external?: boolean;
 }
 
-const DESTINATIONS: ReadonlyArray<Destination> = [
-  {
-    label: 'Open the live dashboard',
-    href: '/dashboard',
-    blurb:
-      'Anonymous, pre-seeded investigation. No signup. Demo data resets daily at 00:00 UTC.',
-  },
-  {
-    label: 'See pricing',
-    href: '/pricing',
-    blurb: 'Free to self-host. Pay only when we host.',
-  },
-  {
-    label: 'Read the docs',
-    href: docs('intro'),
-    blurb: 'Architecture, agent contract, deployment recipes, connector SDK.',
-    external: true,
-  },
-  {
-    label: 'Contact the team',
-    href: '/contact',
-    blurb:
-      'Sovereign deployments, design-partner conversations, security disclosures.',
-  },
-];
+/**
+ * The dashboard card, which is the only one whose copy depends on the
+ * deployment.
+ *
+ * It advertised "Anonymous, pre-seeded investigation. No signup. Demo data
+ * resets daily at 00:00 UTC." unconditionally — on a self-hosted build with
+ * demo mode off, an offer of seeded data that does not exist and a reset
+ * schedule nothing runs. Same class of defect as a console announcing demo
+ * resets over somebody's real alerts, pointing the other way.
+ *
+ * `isDemoMode()` is the flag the rest of the product gates on, and this file
+ * is a Server Component, so it reads `AISOC_DEMO_MODE` from the running
+ * container before falling back to the value compiled in at build time.
+ */
+function dashboardDestination(demo: boolean): Destination {
+  return demo
+    ? {
+        label: 'Open the live dashboard',
+        href: '/dashboard',
+        blurb: 'Anonymous, pre-seeded investigation. No signup. Demo data resets daily at 00:00 UTC.',
+      }
+    : {
+        label: 'Open the dashboard',
+        href: '/dashboard',
+        blurb: 'Alerts, cases and investigations for this deployment. Sign in to continue.',
+      };
+}
+
+function destinations(demo: boolean): ReadonlyArray<Destination> {
+  return [
+    dashboardDestination(demo),
+    {
+      label: 'See pricing',
+      href: '/pricing',
+      blurb: 'Free to self-host. Pay only when we host.',
+    },
+    {
+      label: 'Read the docs',
+      href: docs('intro'),
+      blurb: 'Architecture, agent contract, deployment recipes, connector SDK.',
+      external: true,
+    },
+    {
+      label: 'Contact the team',
+      href: '/contact',
+      blurb: 'Sovereign deployments, design-partner conversations, security disclosures.',
+    },
+  ];
+}
 
 export default function NotFoundPage() {
+  const demo = isDemoMode();
+  const DESTINATIONS = destinations(demo);
+
   return (
     <main
       data-theme="dark"
@@ -105,7 +133,7 @@ export default function NotFoundPage() {
               href="/dashboard"
               className="inline-flex h-11 items-center gap-2 rounded-md border border-white/15 bg-white/[0.02] px-5 text-sm font-semibold text-white transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
             >
-              Open the live dashboard
+              {demo ? 'Open the live dashboard' : 'Open the dashboard'}
             </Link>
           </div>
         </div>
