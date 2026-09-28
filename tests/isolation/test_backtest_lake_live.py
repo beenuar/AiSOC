@@ -94,6 +94,13 @@ API_PACKAGES: tuple[str, ...] = ("app", "app.core", "app.db", "app.services")
 #: they have to stay registered while the call runs, not just while it loads.
 API_MODULES: tuple[tuple[str, str], ...] = (
     ("app.core.config", "app/core/config.py"),
+    # `rule_engine` grew a top-level `from app.services.lucene_eval import …`
+    # after this list was written. `app.services` here is a synthetic
+    # namespace holding only what is registered below, so an unlisted sibling
+    # does not resolve — the error reads `'app.services' is not a package`,
+    # which points at the namespace rather than at the missing entry. Anything
+    # a listed module imports at module scope has to be listed above it.
+    ("app.services.lucene_eval", "app/services/lucene_eval.py"),
     ("app.services.rule_engine", "app/services/rule_engine.py"),
     ("app.services.lake_sql", "app/services/lake_sql.py"),
     ("app.db.clickhouse", "app/db/clickhouse.py"),
