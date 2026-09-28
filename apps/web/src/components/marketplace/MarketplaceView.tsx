@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import clsx from 'clsx';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { formatTagLabel } from './tagLabel';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -441,17 +442,23 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
         </div>
       </div>
 
-      {/* Tags */}
+      {/* Tags. The builder flattens the importers' structured tag block into
+          dotted keys for downstream code; `formatTagLabel` is what turns that
+          encoding back into something a person reads. */}
       {item.tags && item.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {item.tags.slice(0, 4).map((tag) => (
-            <span
-              key={tag}
-              className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-400"
-            >
-              {tag}
-            </span>
-          ))}
+          {item.tags.slice(0, 4).map((tag) => {
+            const { label, title } = formatTagLabel(tag);
+            return (
+              <span
+                key={tag}
+                title={title}
+                className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-400"
+              >
+                {label}
+              </span>
+            );
+          })}
           {item.tags.length > 4 && (
             <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-500">
               +{item.tags.length - 4}
@@ -616,6 +623,37 @@ export function MarketplaceView() {
     [refreshInstalled, setBusyKey],
   );
 
+  /**
+   * One entry per `type:id` — the identity the grid keys its children on, and
+   * the identity `POST /v1/marketplace/install` resolves by first match.
+   *
+   * The shipped index carried two collisions between the v1 playbook pack and
+   * the standalone response playbooks, and React does not simply warn about a
+   * repeated key: reconciliation maps the old fibers by key, a second fiber
+   * with the same key overwrites the first in that map, and the overwritten
+   * one is never handed to `deleteChild`. It stayed mounted through every
+   * later render, so two installable playbooks survived into the
+   * `Reference only` view — which by definition holds nothing installable —
+   * and the grid rendered more children than the header beneath it counted.
+   *
+   * `scripts/build_marketplace.py` now refuses to emit a colliding index, but
+   * this file is served from `public/` and a deployment can serve its own, so
+   * the console settles it at the boundary rather than trusting the feed.
+   * First match wins, which is the entry the install API would have resolved.
+   */
+  const { catalogue, duplicateCount } = useMemo(() => {
+    const source = data?.items ?? [];
+    const seen = new Set<string>();
+    const unique: MarketplaceItem[] = [];
+    for (const item of source) {
+      const key = installedKey(item.type, item.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
+    }
+    return { catalogue: unique, duplicateCount: source.length - unique.length };
+  }, [data]);
+
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'playbook' | 'detection' | 'plugin'>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -635,9 +673,9 @@ export function MarketplaceView() {
 
   // Build distinct, sorted MITRE technique list (with item counts) for the filter.
   const mitreOptions = useMemo(() => {
-    if (!data?.items) return [] as { id: string; count: number }[];
+    if (catalogue.length === 0) return [] as { id: string; count: number }[];
     const byId = new Map<string, number>();
-    for (const it of data.items) {
+    for (const it of catalogue) {
       for (const tid of it.mitre_techniques ?? []) {
         byId.set(tid, (byId.get(tid) ?? 0) + 1);
       }
@@ -645,17 +683,17 @@ export function MarketplaceView() {
     return Array.from(byId.entries())
       .map(([id, count]) => ({ id, count }))
       .sort((a, b) => a.id.localeCompare(b.id));
-  }, [data]);
+  }, [catalogue]);
 
   // Distinct content categories (detection.category + playbook.category) for filter.
   const categoryOptions = useMemo(() => {
-    if (!data?.items) return [] as string[];
+    if (catalogue.length === 0) return [] as string[];
     const set = new Set<string>();
-    for (const it of data.items) {
+    for (const it of catalogue) {
       if (it.category) set.add(it.category);
     }
     return Array.from(set).sort();
-  }, [data]);
+  }, [catalogue]);
 
   // Counts per tier so chips can show "Stable (865)" etc. — helps users
   // understand at a glance that imported content dwarfs native content.
@@ -667,19 +705,19 @@ export function MarketplaceView() {
       imported: 0,
       community: 0,
     };
-    if (!data?.items) return counts;
-    counts.all = data.items.length;
-    for (const it of data.items) {
+    if (catalogue.length === 0) return counts;
+    counts.all = catalogue.length;
+    for (const it of catalogue) {
       const tier = (it.tier ?? 'stable') as TierFilter;
       if (tier in counts) counts[tier]++;
     }
     return counts;
-  }, [data]);
+  }, [catalogue]);
 
   const items = useMemo(() => {
-    if (!data?.items) return [];
+    if (catalogue.length === 0) return [];
 
-    const filtered = data.items.filter((item) => {
+    const filtered = catalogue.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
       if (severityFilter !== 'all' && item.severity !== severityFilter) return false;
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
@@ -742,7 +780,7 @@ export function MarketplaceView() {
 
     return filtered;
   }, [
-    data,
+    catalogue,
     search,
     typeFilter,
     severityFilter,
@@ -762,26 +800,26 @@ export function MarketplaceView() {
   // engine does not load — so the published figure and the truth table's
   // were two numbers nothing compared.
   const executableCount = useMemo(
-    () => (data?.items ?? []).filter((i) => i.executable !== false).length,
-    [data],
+    () => catalogue.filter((i) => i.executable !== false).length,
+    [catalogue],
   );
   const referenceOnlyCount = useMemo(
-    () => (data?.items ?? []).filter((i) => i.executable === false).length,
-    [data],
+    () => catalogue.filter((i) => i.executable === false).length,
+    [catalogue],
   );
 
   const stats = useMemo(() => {
     if (!data?.items) return null;
     if (data.stats) return data.stats;
     return {
-      total:      data.items.length,
-      playbooks:  data.items.filter((i) => i.type === 'playbook').length,
-      detections: data.items.filter((i) => i.type === 'detection').length,
-      plugins:    data.items.filter((i) => i.type === 'plugin').length,
-      verified:   data.items.filter((i) => i.verified).length,
-      community:  data.items.filter((i) => i.source === 'community').length,
+      total:      catalogue.length,
+      playbooks:  catalogue.filter((i) => i.type === 'playbook').length,
+      detections: catalogue.filter((i) => i.type === 'detection').length,
+      plugins:    catalogue.filter((i) => i.type === 'plugin').length,
+      verified:   catalogue.filter((i) => i.verified).length,
+      community:  catalogue.filter((i) => i.source === 'community').length,
     };
-  }, [data]);
+  }, [data, catalogue]);
 
   const toggleSort = (field: SortOption) => {
     if (sortBy === field) {
@@ -850,6 +888,20 @@ export function MarketplaceView() {
             ×
           </button>
         </div>
+      )}
+
+      {/* A collapsed collision is the sort of thing that should cost a
+          sentence rather than happen quietly: the catalogue a reader is
+          looking at is smaller than the file behind it, and they are entitled
+          to know which way the console resolved it. */}
+      {duplicateCount > 0 && (
+        <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 px-4 py-2 text-sm text-amber-200/90">
+          {duplicateCount === 1
+            ? 'One entry in this index repeats a type and id that another entry already uses, so it is not listed.'
+            : `${duplicateCount} entries in this index repeat a type and id that another entry already uses, so they are not listed.`}{' '}
+          Install resolves the first match, so the listing is what an install would act on. Regenerate with{' '}
+          <code className="text-amber-200">pnpm marketplace:sync</code>.
+        </p>
       )}
 
       {/* Stats.
@@ -1060,7 +1112,7 @@ export function MarketplaceView() {
           </button>
         ))}
         <span className="ml-auto text-xs text-zinc-500">
-          Showing {items.length} of {data?.items.length ?? 0}
+          Showing {items.length} of {catalogue.length}
         </span>
       </div>
 

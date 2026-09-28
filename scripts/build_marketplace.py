@@ -649,9 +649,46 @@ def _attach_content_hashes(items: list[dict[str, Any]]) -> None:
         item["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
 
 
+def _assert_unique_identities(items: list[dict[str, Any]]) -> None:
+    """Refuse to emit an index where two entries answer to the same identity.
+
+    ``(type, id)`` is the identity every consumer keys on, and two entries
+    sharing one breaks all of them in different ways. The console keys its
+    grid children on it, and React maps old fibers by key when it reconciles:
+    a second fiber with the same key overwrites the first in that map, so the
+    overwritten one is never handed to ``deleteChild`` and stays mounted
+    through every later render. Two installable playbooks therefore survived
+    into the ``Reference only`` view, which by definition holds nothing
+    installable, and the grid rendered more children than its own header
+    counted. ``POST /v1/marketplace/install`` resolves ``(type, id)`` by first
+    match, so the entry a reader clicked was not necessarily the one that got
+    installed — a different document, a different step count, a different
+    content hash.
+
+    Both collisions in the shipped index were between the v1 pack tree and the
+    standalone response playbooks under ``detections/playbooks/``, which use
+    the same ``<slug>-v1`` convention in slug spaces that happened to overlap.
+    """
+    seen: dict[tuple[str, str], str] = {}
+    collisions: list[str] = []
+    for item in items:
+        identity = (str(item.get("type")), str(item.get("id")))
+        path = str(item.get("path") or "<no path>")
+        if identity in seen:
+            collisions.append(f"  {identity[0]}:{identity[1]}\n    {seen[identity]}\n    {path}")
+        else:
+            seen[identity] = path
+    if collisions:
+        raise SystemExit(
+            "marketplace: two entries share a (type, id); every consumer keys on it.\n"
+            + "\n".join(collisions)
+        )
+
+
 def build_index() -> dict[str, Any]:
     items = collect_items()
     items.sort(key=lambda i: (i["type"], i.get("id", "")))
+    _assert_unique_identities(items)
     _attach_content_hashes(items)
     return {
         "$schema": "https://example.com/schemas/marketplace/v1.json",

@@ -1,4 +1,9 @@
-id: suspicious-signin-response-v1
+# `standalone-` because `playbooks/packs/v1/suspicious-signin/` ships a
+# different playbook that had claimed `suspicious-signin-response-v1` too. The
+# pack tree keeps the plain id: it is what the agents PlaybookStore loads and
+# what `GET /api/v1/playbooks` serves, while this tree is indexed only by the
+# marketplace builder.
+id: standalone-suspicious-signin-response-v1
 name: Suspicious Sign-In Response
 description: >
   Responds to suspicious sign-in events including impossible travel, new country

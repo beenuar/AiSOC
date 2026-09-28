@@ -1,4 +1,9 @@
-id: container-escape-response-v1
+# `standalone-` because `playbooks/packs/v1/container-escape/` ships a
+# different playbook that had claimed `container-escape-response-v1` too. The
+# pack tree keeps the plain id: it is what the agents PlaybookStore loads and
+# what `GET /api/v1/playbooks` serves, while this tree is indexed only by the
+# marketplace builder.
+id: standalone-container-escape-response-v1
 name: Container Escape Response
 description: >
   Responds to detected container escape attempts or privileged container

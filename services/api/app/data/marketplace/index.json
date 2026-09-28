@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-28T17:40:28Z",
+  "generated": "2026-09-28T22:12:26Z",
   "categories": [
     {
       "id": "playbooks",
@@ -235425,33 +235425,6 @@
       "sha256": "9b06b45cb15df5b6fd9a186d4486c9ba75411fc3a72e2bea4fe3a0a7190c0440"
     },
     {
-      "id": "container-escape-response-v1",
-      "type": "playbook",
-      "name": "Container Escape Response",
-      "description": "Responds to detected container escape attempts or privileged container misuse. Terminates the offending container, cordons the node, captures runtime forensics, and alerts the platform security team.",
-      "version": "1.0.0",
-      "author": "Beenu - beenu@cyble.com",
-      "tags": [
-        "container",
-        "kubernetes",
-        "docker",
-        "escape",
-        "runtime-security"
-      ],
-      "severity": "critical",
-      "trigger": null,
-      "steps": 8,
-      "category": "playbooks",
-      "mitre_techniques": [],
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "pack": false,
-      "enabled": true,
-      "path": "detections/playbooks/container-escape-response.yaml",
-      "sha256": "176f2c07b9553b44dd41d85b85b2a8e55c3a4e0f6e18ac22f0d4a3ff61d261aa"
-    },
-    {
       "id": "critical-vulnerability-response-v1",
       "type": "playbook",
       "name": "Critical Vulnerability Response",
@@ -236697,6 +236670,60 @@
       "sha256": "260e61e4a08c5a30fcddb01364e62d26b5e67d8661a5db47c5a33586e4dee696"
     },
     {
+      "id": "standalone-container-escape-response-v1",
+      "type": "playbook",
+      "name": "Container Escape Response",
+      "description": "Responds to detected container escape attempts or privileged container misuse. Terminates the offending container, cordons the node, captures runtime forensics, and alerts the platform security team.",
+      "version": "1.0.0",
+      "author": "Beenu - beenu@cyble.com",
+      "tags": [
+        "container",
+        "kubernetes",
+        "docker",
+        "escape",
+        "runtime-security"
+      ],
+      "severity": "critical",
+      "trigger": null,
+      "steps": 8,
+      "category": "playbooks",
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "pack": false,
+      "enabled": true,
+      "path": "detections/playbooks/container-escape-response.yaml",
+      "sha256": "0391348632c3831ebdc5207f1b817844da10334e4ef214564af79b141e8ac42a"
+    },
+    {
+      "id": "standalone-suspicious-signin-response-v1",
+      "type": "playbook",
+      "name": "Suspicious Sign-In Response",
+      "description": "Responds to suspicious sign-in events including impossible travel, new country logins, known bad IP addresses, or sign-ins outside business hours. Triggers step-up authentication or session termination based on risk score.",
+      "version": "1.0.0",
+      "author": "Beenu - beenu@cyble.com",
+      "tags": [
+        "sign-in",
+        "identity",
+        "authentication",
+        "impossible-travel",
+        "conditional-access"
+      ],
+      "severity": "critical",
+      "trigger": null,
+      "steps": 8,
+      "category": "playbooks",
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "pack": false,
+      "enabled": true,
+      "path": "detections/playbooks/suspicious-signin-response.yaml",
+      "sha256": "91616904b93c07d67e6896b6a9c01e177439ff51d5969d23294ede2c2285b0d2"
+    },
+    {
       "id": "supply-chain-compromise-v1",
       "type": "playbook",
       "name": "Supply Chain Compromise Response",
@@ -236880,33 +236907,6 @@
       "enabled": true,
       "path": "playbooks/packs/v1/suspicious-signin/suspicious-signin-response.playbook.json",
       "sha256": "f9475a1dcf7a0f93cb06a35bf567a08147b329fbc971cacd1e19ebeaac4a0e51"
-    },
-    {
-      "id": "suspicious-signin-response-v1",
-      "type": "playbook",
-      "name": "Suspicious Sign-In Response",
-      "description": "Responds to suspicious sign-in events including impossible travel, new country logins, known bad IP addresses, or sign-ins outside business hours. Triggers step-up authentication or session termination based on risk score.",
-      "version": "1.0.0",
-      "author": "Beenu - beenu@cyble.com",
-      "tags": [
-        "sign-in",
-        "identity",
-        "authentication",
-        "impossible-travel",
-        "conditional-access"
-      ],
-      "severity": "critical",
-      "trigger": null,
-      "steps": 8,
-      "category": "playbooks",
-      "mitre_techniques": [],
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "pack": false,
-      "enabled": true,
-      "path": "detections/playbooks/suspicious-signin-response.yaml",
-      "sha256": "9c537ac853cef10087b88b56ba6bb401f2decae392a1dbd27118b9c02e3745f8"
     },
     {
       "id": "token-theft-response-v1",
