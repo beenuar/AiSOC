@@ -135,7 +135,17 @@ def verify_chain_breaks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     started = False
 
     def _note(idx: int, row: dict[str, Any], reason: str) -> None:
+        # `created_at` is a datetime from the database and a string from a CSV
+        # export, and this function is documented to accept both. Rendered
+        # rather than passed through so a caller serialising the result to
+        # JSON does not have to know which it got.
         created = row.get("created_at")
+        if isinstance(created, datetime):
+            created_at: str | None = created.isoformat()
+        elif isinstance(created, str):
+            created_at = created
+        else:
+            created_at = None
         breaks.append(
             {
                 "index": idx,
@@ -144,7 +154,7 @@ def verify_chain_breaks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "chain_index": row.get("chain_index"),
                 "id": str(row.get("id")) if row.get("id") is not None else None,
                 "action": row.get("action"),
-                "created_at": created.isoformat() if hasattr(created, "isoformat") else None,
+                "created_at": created_at,
             }
         )
 
