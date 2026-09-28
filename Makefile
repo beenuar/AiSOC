@@ -44,7 +44,7 @@ PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail -n1 | tr -d '\r')
 console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:3000)
 
-.PHONY: help install env up up-full down restart status doctor smoke demo logs clean \
+.PHONY: help install env up up-full pull down restart status doctor smoke demo logs clean \
         bootstrap ingest-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
@@ -60,8 +60,13 @@ help:
 	@echo "    make smoke          Push one real event through the pipeline and check it becomes an alert"
 	@echo "    make doctor         Diagnose the deployment and say what to fix"
 	@echo ""
+	@echo "  Upgrading"
+	@echo "    git pull && make up   Fetches new images when AISOC_VERSION is a moving tag"
+	@echo "                          (the default). A pinned release is immutable and is not refetched."
+	@echo ""
 	@echo "  Running it"
 	@echo "    make status         Show every service and its health"
+	@echo "    make pull           Refresh the images (what \`make up\` does on a moving tag)"
 	@echo "    make logs           Follow logs (SERVICE=fusion to narrow)"
 	@echo "    make restart        Restart the stack"
 	@echo "    make down           Stop the stack, keep the data"
@@ -94,7 +99,7 @@ env:
 # allocated` against whichever container lost the race, which names neither the
 # process holding the port nor what to do about it. Half the stack is running
 # by then, so the error also arrives after a minute of unrelated output.
-up: env _ports
+up: env _ports _refresh
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "Waiting for services to become healthy…"
@@ -134,7 +139,7 @@ bootstrap:
 # 8123 stopped the stack after eight containers had already started, with
 # `Bind for 0.0.0.0:8123 failed: port is already allocated` naming neither the
 # process holding it nor what to do.
-up-full: env _ports
+up-full: env _ports _refresh
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait PROFILE=full
 	@echo ""
@@ -143,6 +148,45 @@ up-full: env _ports
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
 	@$(MAKE) --no-print-directory bootstrap
+
+# Refreshes the images when the tag they name can move.
+#
+# `pull_policy: missing` is correct for a pinned tag — `v12.0.0` is immutable,
+# so once it is local there is nothing to fetch — and wrong for `latest`, which
+# is republished on every merge to main. With `AISOC_VERSION=latest` (the
+# default) and `missing` on all fifteen first-party services, `git pull &&
+# make up` ran brand-new compose configuration against whatever images the
+# machine happened to have. Nothing anywhere told an operator to pull.
+#
+# Measured: a stack whose images were pulled at 08:14 UTC stayed on them
+# across `make up` while `ghcr.io/beenuar/aisoc-web:latest` had been
+# republished at 15:29 UTC, seven commits later. The revision label says so,
+# and nothing in the output did.
+#
+# So this pulls when the tag can move and does nothing when it cannot:
+#
+#   * a first run downloads the same bytes either way, so it costs nothing;
+#   * a warm run on `latest` spends ~25s on manifest checks and gets the fix
+#     the operator just pulled, which is the point;
+#   * a pinned `AISOC_VERSION` skips it entirely and prints why;
+#   * `AISOC_PULL_POLICY=never` (also honoured by compose itself) skips it,
+#     for an air-gapped host that must never reach a registry.
+_refresh:
+	@version="$${AISOC_VERSION:-$$(sed -n 's/^AISOC_VERSION=//p' .env 2>/dev/null | tail -1)}"; \
+	version="$${version:-latest}"; \
+	policy="$${AISOC_PULL_POLICY:-$$(sed -n 's/^AISOC_PULL_POLICY=//p' .env 2>/dev/null | tail -1)}"; \
+	if [ "$$policy" = "never" ]; then \
+	  echo "AISOC_PULL_POLICY=never — not contacting a registry; running whatever is local."; \
+	elif [ "$$version" = "latest" ] || [ "$$version" = "main" ] || [ "$$version" = "edge" ]; then \
+	  echo "AISOC_VERSION=$$version is a moving tag — refreshing images (pin a release to skip this)."; \
+	  $(COMPOSE) $(PROFILE_ARG) pull --quiet || echo "  (pull failed — continuing with the local images)"; \
+	else \
+	  echo "AISOC_VERSION=$$version is pinned and immutable — nothing to refresh."; \
+	fi
+
+# The same refresh on its own, for an operator who wants to fetch now and
+# start later, or who is diagnosing a version mismatch.
+pull: _refresh
 
 # Names a port conflict before compose hits it. Silent when every port is
 # either free or already held by this deployment's own containers — re-running

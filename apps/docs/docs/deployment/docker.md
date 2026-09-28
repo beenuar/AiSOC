@@ -218,6 +218,45 @@ ghcr.io/beenuar/aisoc-web:<version>
 | `main` | The newest commit on `main`. | Anyone tracking the tip |
 | `vX.Y.Z-demo`, `demo` | `aisoc-web` only: the console built for a public demo. | `infra/compose/docker-compose.demo.yml` |
 
+### Upgrading
+
+```bash
+git pull
+make up
+```
+
+`make up` refreshes the images **when the tag they name can move**. Compose's
+`pull_policy: missing` is right for a pinned release — `v12.0.0` is immutable,
+so once it is local there is nothing to fetch — and wrong for `latest`, which
+is republished on every merge. Until this was wired, `git pull && make up` ran
+brand-new compose configuration against whatever images the machine already
+had, and nothing in the output said so: a stack whose images were pulled at
+08:14 UTC stayed on them while `ghcr.io/beenuar/aisoc-web:latest` had been
+republished at 15:29 UTC, seven commits later.
+
+What that means in practice:
+
+- **A first run costs nothing extra.** There are no images yet, so the same
+  bytes are downloaded either way.
+- **A warm run on `latest` spends a few seconds** on manifest checks and then
+  runs the code you just pulled.
+- **A pinned `AISOC_VERSION` skips it** and says so — there is nothing to
+  refresh behind an immutable tag.
+- **`AISOC_PULL_POLICY=never` skips it too**, and is also honoured by Compose
+  itself, so an air-gapped host never reaches a registry.
+
+`make pull` does the refresh on its own, for fetching now and starting later.
+
+To see what is actually running:
+
+```bash
+docker image inspect ghcr.io/beenuar/aisoc-web:latest \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+That is the commit the image was built from. If it does not match the commit
+you have checked out, the console is not running your code.
+
 The demo tags exist because the console's demo mode is a **build-time** choice,
 not a runtime one: Next.js inlines `NEXT_PUBLIC_*` values into the client
 bundle during `next build`, so an image built for a demo cannot be turned back

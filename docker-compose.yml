@@ -349,7 +349,7 @@ services:
       context: ./services/api
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-api
     depends_on:
       postgres:
@@ -475,7 +475,7 @@ services:
       context: ./services/ingest
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-ingest:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-ingest
     depends_on:
       kafka:
@@ -534,7 +534,7 @@ services:
       context: ./services/enrichment
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-enrichment:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-enrichment
     depends_on:
       redis:
@@ -559,7 +559,7 @@ services:
       context: ./services/fusion
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-fusion:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-fusion
     depends_on:
       # Postgres was missing here, so during a cold boot fusion tried to write
@@ -601,7 +601,7 @@ services:
       context: ./services/agents
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-agents
     depends_on:
       postgres:
@@ -785,7 +785,7 @@ services:
       context: ./services/osquery-tls
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-osquery-tls:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-osquery-tls
     depends_on:
       postgres:
@@ -854,7 +854,7 @@ services:
       context: ./services/actions
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-actions:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-actions
     depends_on:
       redis:
@@ -896,7 +896,7 @@ services:
       context: ./services/connectors
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-connectors:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-connectors
     depends_on:
       kafka:
@@ -967,7 +967,7 @@ services:
       context: ./services/threatintel
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-threatintel:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-threatintel
     depends_on:
       redis:
@@ -1020,7 +1020,7 @@ services:
       context: ./services/ueba
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-ueba:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-ueba
     depends_on:
       postgres:
@@ -1076,7 +1076,7 @@ services:
       context: ./services/honeytokens
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-honeytokens
     depends_on:
       postgres:
@@ -1131,7 +1131,7 @@ services:
       context: ./services/purple-team
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-purple-team
     depends_on:
       postgres:
@@ -1177,7 +1177,7 @@ services:
       context: ./services/realtime
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-realtime:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-realtime
     depends_on:
       redis:
@@ -1210,7 +1210,7 @@ services:
       context: ./services/slack-bot
       dockerfile: Dockerfile
     image: ghcr.io/beenuar/aisoc-slack-bot:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-slack-bot
     depends_on:
       - api
@@ -1246,7 +1246,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     image: ghcr.io/beenuar/aisoc-web:${AISOC_VERSION:-latest}
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-web
     depends_on:
       - api

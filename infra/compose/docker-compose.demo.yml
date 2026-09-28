@@ -178,7 +178,7 @@ services:
     # without being clobbered by a registry pull. Compose still pulls when
     # the image isn't present locally (first run) or when the user runs
     # `docker compose pull` explicitly.
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     depends_on:
       postgres:
         condition: service_healthy
@@ -227,7 +227,7 @@ services:
     build:
       context: ../../services/agents
     container_name: aisoc-demo-agents
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     depends_on:
       postgres:
         condition: service_healthy
@@ -263,7 +263,7 @@ services:
     build:
       context: ../../services/realtime
     container_name: aisoc-demo-realtime
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     depends_on:
       redis:
         condition: service_healthy
@@ -294,7 +294,7 @@ services:
     build:
       context: ../../services/api
     container_name: aisoc-demo-seed
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     depends_on:
       api:
         condition: service_healthy
@@ -348,7 +348,7 @@ services:
         NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL: "demo@example.com"
         NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD: "aisoc-demo"
     container_name: aisoc-demo-web
-    pull_policy: missing
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
     depends_on:
       - api
       - agents
