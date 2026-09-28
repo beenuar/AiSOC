@@ -684,8 +684,16 @@ def main() -> int:
         return 0
 
     if args.check:
-        existing_primary = OUTPUT_PRIMARY.read_text(encoding="utf-8") if OUTPUT_PRIMARY.exists() else ""
-        existing_public = OUTPUT_PUBLIC.read_text(encoding="utf-8") if OUTPUT_PUBLIC.exists() else ""
+        # Every destination write_index() writes. It used to check two of the
+        # three, so `marketplace:check` reported "up to date" while the copy
+        # inside the API's Docker build context was stale or absent — the
+        # state that made the marketplace answer 503 in every container
+        # (discussion #374). A check that verifies fewer places than the
+        # writer writes is one that certifies the case it cannot see.
+        existing = {
+            destination: (destination.read_text(encoding="utf-8") if destination.exists() else "")
+            for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED)
+        }
 
         # Compare ignoring `generated` timestamp.
         def _strip_generated(s: str) -> str:
@@ -699,13 +707,20 @@ def main() -> int:
             return json.dumps(obj, indent=2, sort_keys=False) + "\n"
 
         rebuilt_no_ts = _strip_generated(serialised)
-        if _strip_generated(existing_primary) != rebuilt_no_ts or _strip_generated(existing_public) != rebuilt_no_ts:
+        stale = [
+            str(destination.relative_to(REPO_ROOT))
+            for destination, content in existing.items()
+            if _strip_generated(content) != rebuilt_no_ts
+        ]
+        if stale:
+            # Named, because "the index is stale" sent people to the one they
+            # already had open rather than the one that was actually wrong.
             print(
-                "marketplace/index.json is stale. Run: pnpm marketplace:build",
+                f"stale or missing: {', '.join(stale)}. Run: pnpm marketplace:sync",
                 file=sys.stderr,
             )
             return 1
-        print(f"marketplace/index.json is up to date ({index['stats']['total']} items).")
+        print(f"marketplace index is up to date in {len(existing)} locations ({index['stats']['total']} items).")
         return 0
 
     write_index(index)

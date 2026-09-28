@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docker-compose.prod.yml`, the file the deployment page had always pointed
+  at.** `apps/docs/docs/deployment/docker.md` listed it in its flavors table
+  and gave it as a runnable command under `## Production`. It had never
+  existed, so the documented production path failed on its first command
+  ([#629](https://github.com/beenuar/AiSOC/discussions/629)).
+
+  That left the development stack as the only one an operator could start, and
+  it has no effective authentication: `ENVIRONMENT` defaults to `development`,
+  `development` is in `AUTH_BYPASS_ENVIRONMENTS`, and `dev_auth.py` resolves a
+  request carrying no bearer token to a demo user whose role is `admin`.
+  Measured both ways — `development` answers an unauthenticated request with
+  HTTP 200 and `role: admin`, `production` answers 401.
+
+  The new file `include`s the base rather than repeating it, so there is one
+  definition of every service. `ENVIRONMENT` and `AISOC_DEV_MODE` are fixed
+  values rather than interpolated, so no `.env` can re-enable the bypass; every
+  secret is `${VAR:?...}`, so Compose refuses to start and names the variable
+  instead of booting on a literal published in this repository; and only the
+  console and the ingest endpoint are reachable — 21 services bound a host port
+  before, 2 do now. `kafka-ui` browses every topic with no authentication of
+  its own and is no longer started by `--profile full`.
+
+### Fixed
+
+- **The marketplace answered 503 in every container, on every release since
+  the endpoint was written.** Reported against an on-premise Docker Compose
+  deployment in [#374](https://github.com/beenuar/AiSOC/discussions/374). Two
+  defects stacked: `_resolve_index_path()` checked four paths and all four were
+  outside the API's Docker build context — the image is built from
+  `services/api`, so `COPY . .` never saw the repository-root `marketplace/`
+  directory — and install then hashed the item's file under `detections/`,
+  `playbooks/` or `plugins/`, none of which the image ships either.
+
+  `build_marketplace.py` now writes a third copy inside the build context and
+  records each item's SHA-256 while it reads the file it is indexing, so the
+  index is self-describing and install no longer needs the content trees. An
+  on-disk read still wins in a checkout. Verified against the published image:
+  browse and install both went 503 → 200.
+
+  Nothing in CI compared what the image contains against what the code reads,
+  and the suite runs from a checkout where every path resolves.
+  `check_marketplace_index_parity.py` now holds the three copies identical and
+  asserts every item carries a digest; `--check` verifies all three
+  destinations rather than two, which had let it report "up to date" about the
+  one copy that was missing.
+
+- **`ingest-worker` pinned `ENV: development` as a literal.** `.env.example`
+  says setting `ENVIRONMENT=production` is enough, and for every other service
+  it was. `envmode.Current()` reads `ENV` before `ENVIRONMENT`, so the one
+  service that accepts events off the network stayed in development mode
+  whatever an operator set, and `JWT_SECRET must be set in non-development
+  environments` never fired.
+
+- **Three store credentials could not be changed by configuration.**
+  `redis_dev_secret`, `neo4j_dev_secret` and `clickhouse_dev_secret` were
+  literals in `docker-compose.yml`, so an operator who set a password got
+  services still dialling the published one. They now interpolate with the
+  development value as the default, leaving the development stack unchanged.
+
+- **The integration spine job provisioned an environment no deployment has.**
+  It seeded `.env` by copying `.env.example`, which leaves every generated
+  secret empty — the thing `make up` runs `ensure_env.py` to fix. v12.0.0 made
+  an empty `AISOC_REALTIME_JWT_SECRET` fatal by design, so the spine test
+  failed at `mint_ws_ticket`. It was green on `main` only because the job is
+  path-filtered and had not run on a triggering commit since that release.
+
 ## [12.0.0] - 2026-09-27
 
 ### BREAKING
