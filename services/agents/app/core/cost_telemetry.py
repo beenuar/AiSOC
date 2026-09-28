@@ -558,6 +558,14 @@ class CostTracker:
         return sum(1 for r in self._records if r.cost_source == UNPRICED)
 
     @property
+    def prompt_tokens(self) -> int:
+        return sum(r.prompt_tokens for r in self._records)
+
+    @property
+    def completion_tokens(self) -> int:
+        return sum(r.completion_tokens for r in self._records)
+
+    @property
     def total_tokens(self) -> int:
         return sum(r.prompt_tokens + r.completion_tokens for r in self._records)
 
@@ -578,6 +586,11 @@ class CostTracker:
         reading a key by that name has no way to ask how it was arrived at.
         Anything that needs one dollar figure should use ``measured_cost_usd``
         and say "not measured" when ``measured_call_count`` is zero.
+
+        The prompt/completion split is rolled up alongside the total because
+        every ``CallRecord`` already carries both and the summary was the only
+        place the split was dropped — a consumer wanting per-investigation
+        token shape had to re-estimate numbers the tracker had measured.
         """
         return {
             "run_id": self.run_id,
@@ -587,6 +600,8 @@ class CostTracker:
             "estimated_cost_usd": self.estimated_cost_usd,
             "estimated_call_count": self.estimated_call_count,
             "unpriced_call_count": self.unpriced_call_count,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "total_latency_ms": self.total_latency_ms,
             "call_count": len(self._records),

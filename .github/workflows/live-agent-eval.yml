@@ -112,12 +112,27 @@ jobs:
           WET_EVAL_OPENAI_KEY: ollama
           OPENAI_API_KEY: ollama
           OPENAI_BASE_URL: http://127.0.0.1:11434/v1
-          AISOC_LLM_MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          # One pin per role, because that is what the agents actually read.
+          # This step used to set `AISOC_LLM_MODEL`, which nothing in
+          # `services/agents` has looked at since #478 — the roles resolve
+          # through `app.llm.model_pins.get_pin`, whose only env override is
+          # `AISOC_MODEL_PIN_<ROLE>`. Left as it was, every agent would have
+          # asked Ollama for a gateway alias (`aisoc-recon`) that Ollama has
+          # never heard of.
+          AISOC_MODEL_PIN_TRIAGE: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_RECON: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_INVESTIGATION: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_COPILOT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_SUMMARY: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_REPORT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_NL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_HUNT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
         run: |
           set -euo pipefail
           python3 scripts/run_evals.py \
             --wet \
             --wet-require-live \
+            --wet-model "$OLLAMA_MODEL" \
             --wet-limit "$INCIDENT_LIMIT" \
             --out live-agent-eval.json \
             --wet-out live-agent-eval.wet.json
@@ -136,11 +151,22 @@ jobs:
           print("## Live agent eval (local model)\n")
           print(f"- mode: `{block.get('mode')}`")
           print(f"- model: `{block.get('model')}`")
-          agg = block.get("aggregate", {})
-          lat = agg.get("latency_ms", {})
-          print(f"- incidents dispatched: {block.get('incident_count', 'unknown')}")
+          # `latency_seconds` sits at the top of the block. This read
+          # `block["aggregate"]["latency_ms"]`, and the report has neither
+          # key, so the line it guards could never have printed.
+          lat = block.get("latency_seconds", {})
+          print(f"- incidents dispatched: {block.get('incidents', 'unknown')}")
           if lat:
-              print(f"- latency p50/p95 ms: {lat.get('p50')} / {lat.get('p95')}")
+              print(f"- latency p50/p95 s: {lat.get('p50')} / {lat.get('p95')}")
+          grounded = block.get("groundedness") or {}
+          if grounded.get("measured"):
+              print(
+                  f"- groundedness: mean {grounded['mean']}, median {grounded['median']}, "
+                  f"min {grounded['min']} over {grounded['scored_incidents']} incident(s)"
+              )
+          else:
+              print(f"- groundedness: {grounded.get('note', 'not measured')}")
+          print(f"- MITRE accuracy: {block.get('mitre_accuracy')}")
           for w in block.get("warnings", []):
               print(f"- warning: {w}")
           PY

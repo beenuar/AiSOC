@@ -61,6 +61,7 @@ Output shape
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -247,7 +248,11 @@ class WetEvalRecord:
     prompt_tokens: int
     completion_tokens: int
     latency_seconds: float
-    usd: float
+    # ``None`` when the model has no rate-card entry. ``cost_usd`` silently
+    # falls back to the gpt-4o rate for an unknown model, so a self-hosted
+    # model would otherwise publish a confident dollar figure priced against
+    # somebody else's list — a fabricated cost, not a measured one.
+    usd: float | None
     mitre_correct: bool
     # Fraction of the concrete indicators the agent asserted that actually
     # appear in the evidence it was handed. Only meaningful on the live path —
@@ -316,13 +321,65 @@ def _dry_run_records(
 # ---------------------------------------------------------------------------
 # Live path: invoke the LangGraph agent for each incident.
 # ---------------------------------------------------------------------------
+def _base_technique(value: str) -> str:
+    """``T1566.001`` → ``T1566``. Sub-technique-insensitive comparison.
+
+    The corpus labels sub-techniques and a model routinely answers with the
+    parent, so comparing the literal strings scores a correct mapping as a
+    miss. Anything that is not a technique id is returned upper-cased and
+    compared as-is rather than silently dropped.
+    """
+    token = str(value).strip().upper()
+    return token.split(".", 1)[0] if token.startswith("T") else token
+
+
+def _agent_assertion_text(state: Any) -> str:
+    """The prose the agent asserted, which is what groundedness is scored on.
+
+    Mirrors what the production gate scores in
+    ``fused_alert_consumer._apply_groundedness_gate``: the agent's own
+    reasoning — findings and the basis it gives for them — checked against the
+    evidence it was handed. Every narrative field the recon, forensic and
+    responder agents write is in scope, because an invented IP or technique is
+    a hallucination wherever the agent puts it.
+
+    ``state.report_md`` is deliberately **not** in scope, and the reason is a
+    measurement one rather than a flattering one. The report writer is handed a
+    flattened dump of the enrichment cache under an ``enrichment_sample.``
+    prefix, and a small model echoes those keys straight into its markdown, so
+    the indicator extractor pulls tokens like ``45.142.122.111.error`` out of
+    the rendered report. Those are the agent repeating its own prompt
+    scaffolding, not asserting a security indicator, and scoring them measures
+    the report template rather than the model.
+    """
+    recon = getattr(state, "recon", None)
+    forensic = getattr(state, "forensic", None)
+    responder = getattr(state, "responder", None)
+    parts: list[str] = []
+    if recon is not None:
+        parts.append(str(getattr(recon, "summary", "") or ""))
+        parts.extend(str(t) for t in (getattr(recon, "mitre_techniques", None) or []))
+        parts.extend(str(a) for a in (getattr(recon, "threat_actors", None) or []))
+        parts.extend(str(i.get("value", "")) for i in (getattr(recon, "iocs", None) or []) if isinstance(i, dict))
+    if forensic is not None:
+        parts.append(str(getattr(forensic, "summary", "") or ""))
+        parts.append(str(getattr(forensic, "root_cause_hypothesis", "") or ""))
+        parts.append(str(getattr(forensic, "blast_radius", "") or ""))
+        parts.extend(str(a) for a in (getattr(forensic, "artefacts", None) or []))
+        parts.extend(str(e.get("event", "")) for e in (getattr(forensic, "timeline", None) or []) if isinstance(e, dict))
+    if responder is not None:
+        parts.append(str(getattr(responder, "summary", "") or ""))
+        parts.extend(str(a.get("rationale", "")) for a in (getattr(responder, "recommended_actions", None) or []) if isinstance(a, dict))
+    return "\n".join(p for p in parts if p)
+
+
 def _live_records(
     incidents_path: Path | str,
     *,
     model: str,
     limit: int | None = None,
 ) -> tuple[list[WetEvalRecord], list[str], bool]:
-    """Dispatch the 200-incident set against the live agent.
+    """Dispatch the incident set against the live agent.
 
     Returns ``(records, warnings, degraded)``, where ``degraded`` is True when
     the records are substrate fallbacks rather than real agent output. A
@@ -332,12 +389,19 @@ def _live_records(
     records and append a clear warning so the workflow can mark the run
     as degraded rather than silently emitting fake numbers.
 
-    The actual LLM calls happen inside ``services/agents``. We import it
-    lazily because most consumers of this module (the test, the workflow
-    preflight) only ever exercise the dry-run path. Token / cost
-    accounting reads ``ai_message.usage_metadata`` from the LangChain
-    ``AIMessage`` shape, falling back to ``estimate_tokens`` when the
-    provider didn't surface usage.
+    The actual LLM calls happen inside ``services/agents``: this dispatches
+    :func:`app.investigator.run_investigation`, the same four-agent LangGraph
+    pipeline the console's "investigate" button drives, and reads the token
+    counts back out of the run's own ``CostTracker`` summary rather than
+    re-estimating them. Imported lazily because most consumers of this module
+    (the test, the workflow preflight) only ever exercise the dry-run path.
+
+    This previously named ``InvestigatorAgent``, a class that exists nowhere in
+    ``services/agents`` — it is in the historical prototype under ``plans/``.
+    The import therefore always raised, the live path always degraded, and
+    under ``--wet-require-live`` the job always exited 3. The first run of
+    ``live-agent-eval.yml`` failed that way in 92 seconds, which is why the
+    workflow had never produced a distribution to set a floor from.
     """
     warnings: list[str] = []
     # Resolved below alongside the agent. Kept as a name here so a missing
@@ -345,9 +409,7 @@ def _live_records(
     _score_groundedness = None
     try:
         # Imported lazily to keep the dry-run path stdlib-only.
-        from app.investigator import (  # type: ignore  # noqa: F401
-            InvestigatorAgent,
-        )
+        from app.investigator import run_investigation  # type: ignore
     except Exception as exc:  # pragma: no cover - exercised in degraded envs.
         warnings.append(
             "Live agent stack not importable in this environment: "
@@ -394,24 +456,49 @@ def _live_records(
     # already set one (e.g. local dev with a personal key in the env).
     os.environ.setdefault("OPENAI_API_KEY", api_key)
 
-    agent = InvestigatorAgent()  # type: ignore[name-defined]
     for inc in incidents:
+        # Exactly what the agent is handed, and therefore exactly what
+        # groundedness scores its output against. The incident's
+        # ``expected_*`` keys are the answer sheet and are deliberately left
+        # out: an agent that names a technique the telemetry never showed has
+        # asserted an ungrounded indicator even when the technique is right.
+        alert_summary = f"{inc.get('title') or ''}\n\n{inc.get('description') or ''}".strip()
+        raw_alert = {
+            "severity": inc.get("severity"),
+            "telemetry": inc.get("telemetry") or [],
+            "evidence_keywords": inc.get("evidence_keywords") or [],
+        }
+
         t0 = time.perf_counter()
         try:
-            result = agent.investigate(inc)  # type: ignore[attr-defined]
+            state = asyncio.run(
+                run_investigation(
+                    case_id=str(inc.get("id") or ""),
+                    alert_summary=alert_summary,
+                    raw_alert=raw_alert,
+                )
+            )
         except Exception as exc:  # pragma: no cover - defensive.
             warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; skipping.")
             continue
         latency_s = time.perf_counter() - t0
 
-        usage = getattr(result, "usage_metadata", None) or {}
-        prompt_tokens = int(
-            usage.get("input_tokens") or usage.get("prompt_tokens") or estimate_tokens(str(inc.get("description") or "")) + 800
-        )
-        completion_tokens = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+        if str(getattr(state, "status", "")) == "failed":
+            warnings.append(f"Live agent returned status=failed on incident {inc.get('id')}: {getattr(state, 'error', None)!r}; skipping.")
+            continue
 
-        predicted = set(getattr(result, "predicted_tactics", []) or [])
-        expected = set(inc.get("expected_mitre_tactics") or [])
+        # Measured by the run's own CostTracker, which sums the provider's
+        # reported usage across all four agents' calls. Only estimated when
+        # the provider surfaced nothing at all.
+        cost_summary = getattr(state, "cost_summary", None) or {}
+        prompt_tokens = int(cost_summary.get("prompt_tokens") or 0)
+        completion_tokens = int(cost_summary.get("completion_tokens") or 0)
+        if prompt_tokens == 0 and completion_tokens == 0:
+            warnings.append(f"No provider token usage on incident {inc.get('id')}; token counts for it are estimated, not measured.")
+            prompt_tokens = estimate_tokens(alert_summary) + 800
+
+        predicted = {_base_technique(t) for t in (getattr(getattr(state, "recon", None), "mitre_techniques", None) or [])}
+        expected = {_base_technique(t) for t in (inc.get("expected_techniques") or [])}
         mitre_correct = bool(expected and (predicted & expected))
 
         # Groundedness: did the agent assert any concrete indicator that the
@@ -421,15 +508,8 @@ def _live_records(
         grounded_score: float | None = None
         hallucinated: list[str] = []
         if _score_groundedness is not None:
-            evidence_text = " ".join(
-                [
-                    str(inc.get("description") or ""),
-                    str(inc.get("title") or ""),
-                    " ".join(str(k) for k in (inc.get("evidence_keywords") or [])),
-                    json.dumps(inc.get("telemetry") or []),
-                ]
-            )
-            scored = _score_groundedness(str(result), evidence_text)
+            evidence_text = f"{alert_summary}\n{json.dumps(raw_alert, default=str)}"
+            scored = _score_groundedness(_agent_assertion_text(state), evidence_text)
             grounded_score = scored.score
             hallucinated = list(scored.hallucinated)
 
@@ -444,7 +524,7 @@ def _live_records(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 latency_seconds=round(latency_s, 4),
-                usd=round(cost_usd(prompt_tokens, completion_tokens, model=model), 6),
+                usd=(round(cost_usd(prompt_tokens, completion_tokens, model=model), 6) if model in RATE_CARD_2025_USD_PER_M else None),
                 mitre_correct=mitre_correct,
             )
         )
@@ -458,12 +538,13 @@ def _live_records(
 class WetEvalReport:
     mode: str
     model: str
-    rate_card_per_m: dict[str, float]
+    rate_card_per_m: dict[str, float] | None
     incidents: int
     templates: int
     aggregate: dict[str, Any]
     per_template_family: list[dict[str, Any]] = field(default_factory=list)
     mitre_accuracy: float = 0.0
+    groundedness: dict[str, Any] = field(default_factory=dict)
     incident_records: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     ran_at: str = ""
@@ -480,6 +561,11 @@ class WetEvalReport:
             "tokens": self.aggregate["tokens"],
             "usd": self.aggregate["usd"],
             "mitre_accuracy": round(self.mitre_accuracy, 4),
+            # Every consumer of this block reads the number *and* the sample
+            # size it was measured over. It was computed per incident and then
+            # dropped here, so a successful live run published no groundedness
+            # at all and no floor could be derived from one.
+            "groundedness": self.groundedness,
             "per_template_family": self.per_template_family,
             "ran_at": self.ran_at,
             "harness_version": self.harness_version,
@@ -508,6 +594,48 @@ class WetEvalReport:
         return out
 
 
+def _groundedness_block(records: list[WetEvalRecord]) -> dict[str, Any]:
+    """Aggregate the per-incident groundedness scores, or say nothing measured.
+
+    ``measured: false`` with ``scored_incidents: 0`` rather than a mean of
+    ``0.0``: a zero here reads as "the agent was graded and invented every
+    indicator", which is the opposite of "no agent text existed to grade".
+    The sample size travels with the mean for the same reason — a floor is
+    only as defensible as the number of incidents behind it.
+    """
+    scored = [r.groundedness for r in records if r.groundedness is not None]
+    if not scored:
+        return {
+            "measured": False,
+            "scored_incidents": 0,
+            "note": (
+                "not measured — groundedness is scored only on the live path, where there is real agent text to check against the evidence"
+            ),
+        }
+    with_hallucination = [r for r in records if r.groundedness is not None and r.hallucinated]
+    unsupported: dict[str, int] = {}
+    for rec in with_hallucination:
+        for indicator in rec.hallucinated:
+            unsupported[indicator] = unsupported.get(indicator, 0) + 1
+    return {
+        "measured": True,
+        "scored_incidents": len(scored),
+        "mean": round(mean(scored), 4),
+        "median": round(median(scored), 4),
+        "min": round(min(scored), 4),
+        "max": round(max(scored), 4),
+        "p05": round(_percentile(scored, 5), 4),
+        "p25": round(_percentile(scored, 25), 4),
+        "incidents_with_unsupported_indicator": len(with_hallucination),
+        "hallucination_rate": round(len(with_hallucination) / len(scored), 4),
+        # The 20 most frequently invented indicators, so a regression is
+        # diagnosable from the report without re-running the model.
+        "top_unsupported_indicators": [
+            {"indicator": k, "incidents": v} for k, v in sorted(unsupported.items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+        ],
+    }
+
+
 def _build_report(
     records: list[WetEvalRecord],
     *,
@@ -519,14 +647,10 @@ def _build_report(
 ) -> WetEvalReport:
     """Aggregate ``records`` into a wet-eval report block."""
     rates = rate_card if rate_card is not None else RATE_CARD_2025_USD_PER_M
-    rate_entry = (
-        rates.get(model)
-        or rates.get(DEFAULT_MODEL)
-        or {
-            "input": 2.5,
-            "output": 10.0,
-        }
-    )
+    # No fallback to the headline model's rate. Publishing gpt-4o's list price
+    # beside a locally-served model's token counts is a dollar figure nobody
+    # measured, and it is indistinguishable in the JSON from one that was.
+    rate_entry = rates.get(model)
 
     if not records:
         # Empty input → return a well-formed empty report rather than
@@ -549,6 +673,7 @@ def _build_report(
             },
             per_template_family=[],
             mitre_accuracy=0.0,
+            groundedness=_groundedness_block([]),
             incident_records=[],
             warnings=list(warnings or []),
             ran_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -559,7 +684,7 @@ def _build_report(
     completion_tokens = [r.completion_tokens for r in records]
     total_tokens = [r.total_tokens for r in records]
     latencies = [r.latency_seconds for r in records]
-    usds = [r.usd for r in records]
+    usds = [r.usd for r in records if r.usd is not None]
 
     # Headline MITRE accuracy. In dry-run we deflate by the documented
     # factor so the table doesn't show a perfect 1.000 — that would look
@@ -575,6 +700,7 @@ def _build_report(
     else:
         headline_accuracy = raw_accuracy
 
+    unpriced_note = f"not measured — '{model}' has no rate-card entry, and a self-hosted model has no per-token list price to apply"
     aggregate = {
         "latency_seconds": _summarise(latencies, decimals=4),
         "tokens": {
@@ -582,7 +708,7 @@ def _build_report(
             "completion": _summarise(completion_tokens, decimals=2),
             "total": _summarise(total_tokens, decimals=2),
         },
-        "usd": _summarise(usds, decimals=6),
+        "usd": (_summarise(usds, decimals=6) if usds else {"measured": False, "count": 0, "note": unpriced_note}),
     }
 
     by_family: dict[str, list[WetEvalRecord]] = {}
@@ -597,7 +723,7 @@ def _build_report(
         bucket = by_family[fam]
         b_lat = [r.latency_seconds for r in bucket]
         b_tok = [r.total_tokens for r in bucket]
-        b_usd = [r.usd for r in bucket]
+        b_usd = [r.usd for r in bucket if r.usd is not None]
         per_family.append(
             {
                 "family": fam,
@@ -609,9 +735,9 @@ def _build_report(
                 "tokens_mean": round(mean(b_tok), 2),
                 "tokens_median": round(median(b_tok), 2),
                 "tokens_p95": round(_percentile(b_tok, 95), 2),
-                "usd_mean": round(mean(b_usd), 6),
-                "usd_median": round(median(b_usd), 6),
-                "usd_p95": round(_percentile(b_usd, 95), 6),
+                "usd_mean": round(mean(b_usd), 6) if b_usd else None,
+                "usd_median": round(median(b_usd), 6) if b_usd else None,
+                "usd_p95": round(_percentile(b_usd, 95), 6) if b_usd else None,
             }
         )
 
@@ -627,6 +753,8 @@ def _build_report(
             "latency_seconds": r.latency_seconds,
             "usd": r.usd,
             "mitre_correct": r.mitre_correct,
+            "groundedness": r.groundedness,
+            "unsupported_indicators": r.hallucinated,
         }
         for r in records
     ]
@@ -641,6 +769,7 @@ def _build_report(
         aggregate=aggregate,
         per_template_family=per_family,
         mitre_accuracy=headline_accuracy,
+        groundedness=_groundedness_block(records),
         incident_records=incident_records,
         warnings=list(warnings or []),
         ran_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
