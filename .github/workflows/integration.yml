@@ -663,6 +663,10 @@ jobs:
       - name: A failed optional write does not delete the audit row (live)
         env:
           POSTGRES_ABORT_SEMANTICS_REQUIRED: '1'
+          # The suite imports `app.db.best_effort`, and this job runs from the
+          # repository root where `app` is not importable — the API service is
+          # not pip-installed here. Same answer the alembic steps below use.
+          PYTHONPATH: services/api
         run: python -m pytest services/api/tests/test_audit_chain_survives_a_failed_write.py -v --tb=short
 
       # Gap-closure Phase 2.3's "Done when", run rather than reasoned about: a
