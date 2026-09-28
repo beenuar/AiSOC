@@ -601,6 +601,21 @@ jobs:
         run: python3 scripts/check_default_egress.py --self-test
       - name: Default egress gate
         run: python3 scripts/check_default_egress.py
+      # A different replay, and the one the claim matrix mislabelled. The gate
+      # named for "Investigation Ledger stores every step" tests the hash
+      # chain over `audit_log`, which the API middleware writes; the ledger is
+      # `investigation_events`, written by services/agents over raw asyncpg
+      # and read back by three routes no test touched. This holds the three
+      # trees that have to agree for a step to survive from the agent that
+      # took it to the analyst reading it back — the response model against
+      # the console's type, the client's requests against the router's
+      # decorators, and the writer's columns against the migration chain —
+      # each in both directions, plus the sequencing that makes "every step"
+      # mean an ordered, unduplicated one.
+      - name: Ledger replay contract gate — self-test
+        run: python3 scripts/check_ledger_replay_contract.py --self-test
+      - name: Ledger replay contract gate
+        run: python3 scripts/check_ledger_replay_contract.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector
