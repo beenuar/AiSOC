@@ -254,8 +254,21 @@ jobs:
             exit 1
           fi
           chmod +x /tmp/tfsec
-          /tmp/tfsec --version
+          # tfsec's JSON report carries no version field, so the ratchet's
+          # version-drift arm has nothing in the report to compare against.
+          # The binary's own answer is the robust source: the pinned URL says
+          # what was asked for, a cached or substituted binary would still
+          # satisfy it, and only this says what actually ran. Same shape as
+          # the gitleaks job above, which has checked its pin this way for
+          # exactly the same reason.
+          installed="$(/tmp/tfsec --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          echo "installed tfsec ${installed:-unknown}"
+          if [ "$installed" != "$VERSION" ]; then
+            echo "::error title=iac-tfsec::expected tfsec $VERSION, got '${installed:-nothing}'"
+            exit 1
+          fi
+          echo "TFSEC_VERSION=$installed" >> "$GITHUB_ENV"
       - name: tfsec (terraform)
         run: /tmp/tfsec infra/terraform --format json --out tfsec.json --soft-fail
       - name: Ratchet the tfsec finding count
-        run: python3 scripts/check_scanner_ratchet.py --tool tfsec --report tfsec.json
+        run: python3 scripts/check_scanner_ratchet.py --tool tfsec --report tfsec.json --tool-version "$TFSEC_VERSION"

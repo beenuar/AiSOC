@@ -145,6 +145,48 @@ def test_a_bucket_the_report_does_not_carry_fails_rather_than_being_skipped():
     assert any("no such count" in p for p in problems)
 
 
+# ── the version-drift arm, where it used to fall silent ──────────────────────
+# tfsec's JSON carries no version field, so its counter returns None. The arm
+# read `if version and measured_with and ...`, which made that None a pass —
+# the ceiling declared `measured_with: "1.28.13"` and nothing ever compared
+# it, so a bump that left the finding count identical went through unseen.
+
+
+def test_a_version_that_could_not_be_established_is_not_a_version_that_matches():
+    problems = gate.check_report("tfsec", CEILING, {"total": 10, "error": 3}, None)
+    assert any("could not establish" in p for p in problems), "a missing version must fail, not skip the comparison"
+
+
+def test_a_ceiling_with_no_measured_with_does_not_demand_a_version():
+    """Only a ceiling that claims a version needs one to compare against."""
+    unversioned = {"total": 10, "error": 3}
+    assert gate.check_report("tfsec", unversioned, {"total": 10, "error": 3}, None) == []
+
+
+def test_a_banner_is_accepted_and_the_bare_version_extracted():
+    assert gate.normalise_version("v1.28.13") == "1.28.13"
+    assert gate.normalise_version("tfsec version v1.28.13 (linux/amd64)") == "1.28.13"
+    assert gate.normalise_version("1.28.13\n") == "1.28.13"
+
+
+def test_output_with_no_version_number_in_it_is_not_guessed_at():
+    assert gate.normalise_version("could not determine version") is None
+    assert gate.normalise_version(None) is None
+
+
+def test_a_binary_that_disagrees_with_its_own_report_fails(tmp_path):
+    """Two sources for one fact must be cross-checked, or they drift apart."""
+    report = tmp_path / "semgrep.json"
+    report.write_text(json.dumps({"version": "1.86.0", "results": []}), encoding="utf-8")
+    assert gate.main(["--tool", "semgrep", "--report", str(report), "--tool-version", "1.99.0"]) == 1
+
+
+def test_tool_version_with_no_number_in_it_is_a_setup_error_not_a_finding(tmp_path):
+    report = tmp_path / "tfsec.json"
+    report.write_text(json.dumps({"results": []}), encoding="utf-8")
+    assert gate.main(["--tool", "tfsec", "--report", str(report), "--tool-version", "unknown"]) == 2
+
+
 # ── allow-list hygiene ───────────────────────────────────────────────────────
 
 TODAY = date(2026, 9, 28)

@@ -56,6 +56,23 @@ What it checks
     compared against a different scanner is not a comparison. Failing here
     turns a silent re-baseline into an explicit, actionable one.
 
+    A version the gate could not establish **at all** fails the same arm.
+    This arm used to read ``if version and measured_with and ...``, so a
+    scanner reporting no version skipped the comparison and passed. tfsec was
+    exactly that case: its JSON carries no version field, ``_tfsec_counts``
+    returned ``None``, and the ``measured_with: "1.28.13"`` sitting in the
+    allow-list was never compared against anything — a bump that left the
+    finding count unchanged went through unnoticed. A scanner whose version
+    cannot be established is not a scanner whose version matches.
+
+    Where the report carries no version the caller establishes one out of
+    band and passes ``--tool-version``. The workflow reads it from the
+    binary's own ``--version``, which is what actually ran — a pinned
+    download URL says what was *asked* for, and a cached or substituted
+    binary would still satisfy it. When both a report version and a
+    ``--tool-version`` are present they must agree, checked in both
+    directions, because two sources that never meet drift.
+
 ``allowlist``
     Every entry carries a non-empty reason and an expiry no more than 90 days
     out, names a tool that is actually run, and has not expired. The file's
@@ -279,11 +296,49 @@ def tools_invoked(workflow_text: str) -> set[str]:
 
 
 def _versions_pinned(workflow_text: str) -> dict[str, str]:
-    """The exact version each scanner is installed at, where one is pinned."""
+    """The exact version each scanner is installed at, where one is pinned.
+
+    Two install shapes, because the workflow uses both. A pip-installed
+    scanner pins with ``pip install name==X.Y.Z``; a curled binary pins with a
+    shell ``VERSION=X.Y.Z`` inside its own ``- name: Install <tool>`` step.
+
+    Reading only the pip shape is why tfsec was invisible here, and that
+    mattered more than it looks: ``test_every_ceiling_pins_the_version_the_
+    workflow_installs`` iterates over what this function returns, so a
+    scanner it cannot see is silently exempt from the very cross-check that
+    exists to keep the pin and the ceiling honest.
+    """
     pins: dict[str, str] = {}
     for match in re.finditer(r"pip install[^\n]*?([a-z0-9_-]+)==([0-9][^\s'\"]*)", workflow_text):
         pins[match.group(1)] = match.group(2)
+
+    # Binary installs: bind a `VERSION=` assignment to the install step that
+    # encloses it, so the pin is attributed to the right tool rather than to
+    # whichever assignment happened to come last in the file.
+    step_heads = list(re.finditer(r"^\s*-\s*name:\s*Install\s+([A-Za-z0-9_-]+)\s*$", workflow_text, re.MULTILINE))
+    for index, head in enumerate(step_heads):
+        tool = head.group(1).strip().lower()
+        if tool not in KNOWN_TOOLS:
+            continue
+        end = step_heads[index + 1].start() if index + 1 < len(step_heads) else len(workflow_text)
+        assignment = re.search(r"^\s*VERSION=v?([0-9][^\s'\"]*)", workflow_text[head.end() : end], re.MULTILINE)
+        if assignment:
+            pins[tool] = assignment.group(1)
     return pins
+
+
+def normalise_version(raw: str | None) -> str | None:
+    """The version number out of whatever the scanner printed, or None.
+
+    ``tfsec --version`` prints a bare version; other binaries wrap theirs in a
+    banner. Extracting the first dotted numeric run handles both and refuses
+    to guess when there is nothing numeric to find, rather than returning a
+    banner string that could never equal a ``measured_with``.
+    """
+    if raw is None:
+        return None
+    match = re.search(r"[0-9]+(?:\.[0-9]+)+", raw)
+    return match.group(0) if match else None
 
 
 # ── the checks ───────────────────────────────────────────────────────────────
@@ -334,7 +389,13 @@ def check_report(tool: str, ceiling: dict[str, Any], counts: dict[str, int], ver
         return [f"{ALLOWLIST_REL}: ceilings.{tool} declares no integer bucket to compare against"]
 
     measured_with = str(ceiling.get("measured_with") or "")
-    if version and measured_with and version != measured_with:
+    if measured_with and not version:
+        problems.append(
+            f"{tool}: the ceiling was measured with {measured_with} and this run could not establish "
+            "which version produced the report, so the counts below are being compared across an "
+            "unknown version gap. Pass --tool-version with what the binary reports for itself."
+        )
+    elif version and measured_with and version != measured_with:
         problems.append(
             f"{tool}: this run used {version}, the ceiling was measured with {measured_with}. "
             "Counts move when rules move — re-measure and update both, do not compare across versions."
@@ -364,6 +425,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ratchet the observe-mode security scanners.")
     parser.add_argument("--tool", choices=KNOWN_TOOLS, help="compare one scanner's report against its ceiling")
     parser.add_argument("--report", type=Path, help="the scanner's JSON output")
+    parser.add_argument(
+        "--tool-version",
+        default=None,
+        help=(
+            "what the scanner binary reports for itself, for scanners whose JSON "
+            "carries no version field. Any banner is accepted; the dotted version "
+            "is extracted from it."
+        ),
+    )
     parser.add_argument("--list", action="store_true", help="print the declared ceilings and exit")
     parser.add_argument("--repo-root", type=Path, default=None)
     args = parser.parse_args(argv)
@@ -428,7 +498,21 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(ceiling, dict):
             print(f"ERROR: no ceiling declared for {args.tool}", file=sys.stderr)
             return 2
-        counts, version = count_findings(args.tool, report)
+        counts, reported_version = count_findings(args.tool, report)
+        declared_version = normalise_version(args.tool_version)
+        if args.tool_version and declared_version is None:
+            print(f"ERROR: --tool-version {args.tool_version!r} contains no version number", file=sys.stderr)
+            return 2
+        # Both directions. A scanner that declares a version in its report and
+        # is also told one on the command line must have them agree; taking
+        # either silently would let the two drift apart unnoticed, which is the
+        # one-directional shape this gate's own coverage arm exists to refuse.
+        if reported_version and declared_version and reported_version != declared_version:
+            problems.append(
+                f"{args.tool}: the report says it was produced by {reported_version} but the binary "
+                f"reports itself as {declared_version} — one of the two is not the scanner that ran"
+            )
+        version = reported_version or declared_version
         problems += check_report(args.tool, ceiling, counts, version)
         measured = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
         scanned = f"{args.tool} {version or 'version unreported'}: {measured}"
