@@ -128,6 +128,10 @@ def end_request_audit_scope(token: object) -> None:
     try:
         _REQUEST_AUDIT.reset(token)  # type: ignore[arg-type]
     except (TypeError, ValueError, LookupError, RuntimeError):
+        # Intentionally swallowed. The scope is per-request bookkeeping and
+        # the context it lived in is already gone; there is nothing to undo
+        # and nothing an operator could act on. Re-raising would turn a
+        # duplicate audit row into a failed request.
         pass
 
 
