@@ -211,8 +211,14 @@ jobs:
   # version tags proved unreliable, and the ratchet needs the JSON report on
   # disk. `--soft-fail` keeps the scan's own exit status out of it so the
   # count is the only thing that decides.
-  iac-scan:
-    name: IaC scan (checkov + tfsec, ratcheted)
+  # One job each, not one job for both. They shared a job while neither
+  # blocked, and the moment the ratchet made the steps hard the first
+  # scanner to breach its ceiling ended the job before the second one ran —
+  # so a real count for tfsec was unobtainable whenever checkov was red.
+  # A gate that can stop another gate from measuring is a gate that reports
+  # on whichever half happened to run first.
+  iac-checkov:
+    name: IaC scan (checkov, ratcheted)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -229,6 +235,15 @@ jobs:
             -o json --output-file-path . || true
       - name: Ratchet the checkov finding count
         run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
+
+  iac-tfsec:
+    name: IaC scan (tfsec, ratcheted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
       - name: Install tfsec
         run: |
           set -euo pipefail

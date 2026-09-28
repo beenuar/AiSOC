@@ -25,12 +25,20 @@
 # failure message, and write it here in the same pull request.
 
 ceilings:
+  # Every number here was measured by this gate in CI, not carried over.
+  # The counts the workflow header used to publish were 92/35 for semgrep and
+  # 91 for checkov, and both were wrong the first time the ratchet compared
+  # them: semgrep came back 101/40 because the tree has grown since anyone
+  # looked, and checkov came back 219 because the 91 covered infra/terraform
+  # while the job had always scanned infra/helm as well and reported only the
+  # first number. That is the whole argument for the ratchet in one run — a
+  # count nothing compares to anything drifts, and nobody finds out.
   semgrep:
-    total: 92
-    error: 35
+    total: 101
+    error: 40
     measured_with: "1.86.0"
   checkov:
-    failed: 91
+    failed: 219
     measured_with: "3.2.334"
   tfsec:
     total: 32
