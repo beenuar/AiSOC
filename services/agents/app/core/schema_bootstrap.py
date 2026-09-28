@@ -66,3 +66,54 @@ async def ensure_table(conn: Any, table: str, ddl: str) -> bool:
         )
         return False
     return True
+
+
+async def ensure_columns(conn: Any, table: str, columns: tuple[str, ...], ddl: str) -> bool:
+    """The same rule for a column set that ``ensure_table`` applies to a table.
+
+    ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS`` has the identical trap, for
+    the identical reason: Postgres checks ownership *before* the existence
+    test, so the statement raises ``must be owner of table <t>`` on a table
+    whose columns are all already present. Measured against a live CORE stack,
+    where the cost writer logged
+
+        cost_telemetry.provenance_columns_unavailable
+        error='must be owner of table aisoc_run_costs'
+
+    on **every** triage run while all six columns existed and were being
+    written — a warning pointing an operator at a migration that had already
+    run, attached to a subsystem that was working.
+
+    Returns ``True`` when the columns are usable afterwards, so a caller can
+    tell "present" from "genuinely missing and I cannot add them".
+    """
+    try:
+        present = await conn.fetch(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1",
+            table,
+        )
+    except Exception as exc:  # noqa: BLE001 — a dead connection is the caller's problem
+        logger.error("schema_bootstrap.column_probe_failed", table=table, error=str(exc))
+        return False
+
+    have = {row["column_name"] for row in present}
+    missing = [column for column in columns if column not in have]
+    if not missing:
+        return True
+
+    try:
+        await conn.execute(ddl)
+    except Exception as exc:  # noqa: BLE001 — reported, not swallowed
+        logger.error(
+            "schema_bootstrap.add_columns_failed",
+            table=table,
+            missing=missing,
+            error=str(exc),
+            hint=(
+                f"{table} is missing {missing} and this role cannot add them. The runtime role holds "
+                "DML only by design; apply the API migration chain as the owner role "
+                "(DATABASE_MIGRATION_URL) instead of relying on this bootstrap."
+            ),
+        )
+        return False
+    return True
