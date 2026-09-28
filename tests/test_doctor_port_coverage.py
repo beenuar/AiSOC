@@ -41,6 +41,7 @@ COMPOSE = REPO / "docker-compose.yml"
 #: `"<host> <service> <container>"`, the three-field spec the shell loop splits.
 _SPEC = re.compile(r'"(\d+)\s+([a-z0-9-]+)\s+(\d+)"')
 
+
 def _host_port(entry: str) -> str | None:
     """The host port of a `ports:` entry, or None when it publishes none.
 
