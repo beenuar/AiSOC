@@ -116,6 +116,21 @@ jobs:
             emit_all_true
             exit 0
           fi
+          # A push runs every area, whatever its own commits happened to touch.
+          #
+          # Filtering by diff is right for a pull request and wrong for the
+          # branch everything lands on. A push to main diffs only the commits
+          # in that push, and squash merges rarely touch services/fusion or
+          # services/ingest, so the spine skipped on almost every merge: its
+          # last real run on main was 4 August. A job that has not executed in
+          # seven weeks is not a gate, it is a green tick from a tree nobody
+          # has since tested — and it hid a broken ClickHouse assertion for the
+          # whole of that window.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "push to ${{ github.ref_name }}: running every area"
+            emit_all_true
+            exit 0
+          fi
           if [ -z "${base_ref}" ]; then
             echo "no diff base; running every area"
             emit_all_true
@@ -201,6 +216,19 @@ jobs:
           python3 scripts/ensure_env.py
           python3 scripts/ensure_env.py --check
 
+          # The two `full`-profile flags live in .env rather than in one step's
+          # env block, so every compose invocation in this job reads the same
+          # configuration. They were set on the boot step alone, and the chaos
+          # steps further down run `docker compose up -d fusion` without them:
+          # compose substitutes the `:-false` default, and the restarted fusion
+          # came back with `lake_writer: false`. Measured on a local stack —
+          # the worker logs `"lake_writer": true` on first boot and
+          # `"lake_writer": false` after the chaos restart. The lake assertion
+          # runs before the chaos steps so it did not notice, which is exactly
+          # what makes it worth fixing now: the configuration under test
+          # changed halfway through the job and nothing said so.
+          printf 'AISOC_LAKE_WRITER_ENABLED=true\nAISOC_GRAPH_ENABLED=true\n' >> .env
+
           token="$(openssl rand -hex 32)"
           echo "::add-mask::$token"
           # Written into .env so compose substitutes it into the ingest and
@@ -231,10 +259,10 @@ jobs:
       # The two flags travel with the profile: the lake writer and the graph
       # writer target stores that only exist in `full`, and in CORE they
       # default off rather than retrying against a host that is not there.
+      # They are written into .env by the seed step above so that every
+      # compose invocation in this job — including the chaos restarts — boots
+      # the same configuration this job claims to be testing.
       - name: Boot stack (full profile — this job asserts on the lake)
-        env:
-          AISOC_LAKE_WRITER_ENABLED: "true"
-          AISOC_GRAPH_ENABLED: "true"
         run: docker compose --profile full up -d
 
       # The credential must be refused when it is absent, or the spine test
@@ -279,6 +307,15 @@ jobs:
       # fusion worker runs a periodic-flush ticker so a low-traffic batch is
       # never stranded). Queryability (count > 0), not exact-once, is the
       # claim — MergeTree does not dedup and a Kafka replay may duplicate.
+      # #985 fixed the credential itself and documents the root cause in the
+      # step below. What this adds is the same distinction *inside* the loop.
+      # The pre-flight probe catches a password that is wrong from the start;
+      # it cannot catch a table or a database that is missing, and the old
+      # `2>/dev/null || echo 0` reported those as an empty lake too. So a
+      # failed query and an empty lake are now different answers at every
+      # attempt, and the faults no amount of retrying can clear stop the loop
+      # and name themselves rather than being counted as a zero thirty times
+      # over and blamed on the raw-events stream.
       - name: Assert events landed in the ClickHouse lake
         run: |
           set -euo pipefail
@@ -289,8 +326,14 @@ jobs:
           # on. `2>/dev/null || echo 0` then turned "wrong password" into a
           # row count of zero, and the step reported that the lake was never
           # populated — naming a subsystem that was working.
+          #
+          # sed, not `grep | cut`: under `set -euo pipefail` a grep that
+          # matches nothing exits 1 and takes the whole step with it, before
+          # the check below can say which variable was missing. `sed -n` is
+          # silent-and-zero on an absent key, so an absent one reaches the
+          # diagnostic that describes it.
           CH_PASS="$(sed -n 's/^CLICKHOUSE_PASSWORD=//p' .env | tail -1)"
-          [ -n "${CH_PASS}" ] || { echo "::error::CLICKHOUSE_PASSWORD is not set in .env"; exit 1; }
+          [ -n "${CH_PASS}" ] || { echo "::error::CLICKHOUSE_PASSWORD is not set in .env, so compose cannot have set one on the server either"; exit 1; }
           echo "::add-mask::${CH_PASS}"
 
           # Prove the client can authenticate before interpreting a count.
@@ -302,11 +345,27 @@ jobs:
 
           ok=""
           for i in $(seq 1 30); do
-            N="$(docker compose exec -T clickhouse clickhouse-client \
-                  --user aisoc --password "${CH_PASS}" \
-                  --query 'SELECT count() FROM aisoc.raw_events' 2>/dev/null || echo 0)"
-            echo "lake row count (attempt ${i}): ${N}"
-            if [ "${N:-0}" -gt 0 ]; then ok=1; break; fi
+            if N="$(docker compose exec -T clickhouse clickhouse-client \
+                      --user aisoc --password "${CH_PASS}" \
+                      --query 'SELECT count() FROM aisoc.raw_events' 2>/tmp/ch.err)"; then
+              N="$(printf '%s' "${N}" | tr -d '[:space:]')"
+              case "${N}" in
+                ''|*[!0-9]*)
+                  echo "::error::ClickHouse answered with something that is not a row count: '${N}'"
+                  exit 1
+                  ;;
+              esac
+              echo "lake row count (attempt ${i}): ${N}"
+              if [ "${N}" -gt 0 ]; then ok=1; break; fi
+            elif grep -qE 'AUTHENTICATION_FAILED|ACCESS_DENIED|UNKNOWN_TABLE|UNKNOWN_DATABASE' /tmp/ch.err; then
+              echo "::error::ClickHouse refused the query, so the lake was never asked how many rows it holds — this says nothing about the raw-events stream"
+              cat /tmp/ch.err
+              exit 1
+            else
+              # Only "not reachable yet" is worth waiting out: clickhouse has no
+              # healthcheck in compose, so it can still be booting here.
+              echo "clickhouse not answering yet (attempt ${i}): $(tr '\n' ' ' < /tmp/ch.err | tail -c 200)"
+            fi
             sleep 2
           done
           [ -n "${ok}" ] \
@@ -365,12 +424,45 @@ jobs:
             || { echo "::error::graph-at-ingest was not enabled by default"; tail -60 /tmp/ingest-worker.log || true; exit 1; }
 
           echo "── graph has nodes after the spine flowed ──"
+          # Same treatment as the ClickHouse assertion above, for the same
+          # reasons and then one more. This probe hardcoded `neo4j_dev_secret`
+          # too; it still happens to be right only because ensure_env.py does
+          # not generate NEO4J_PASSWORD, so .env leaves it unset and compose
+          # falls back to that default — one entry in the generated table away
+          # from failing exactly as ClickHouse did.
+          #
+          # Worse, `tr -dc '0-9'` deleted every non-digit from whatever came
+          # back, so an authentication error became the empty string and read
+          # as zero nodes — and an error message that happened to contain a
+          # digit would have been read as a node count and passed the gate.
+          # An error must not be able to look like either verdict.
+          # sed for the same reason as above, and it matters more here: .env
+          # carries no NEO4J_PASSWORD line at all, so `grep | cut` exits 1 on
+          # every run and `set -e` would kill this step before it reached the
+          # graph. Measured — that is what the first draft of this fix did.
+          neo4j_password="$(sed -n 's/^NEO4J_PASSWORD=//p' .env | tail -1)"
+          neo4j_password="${neo4j_password:-neo4j_dev_secret}"
+
           ok=""
           for i in $(seq 1 30); do
-            N="$(docker compose exec -T neo4j cypher-shell -u neo4j -p neo4j_dev_secret --format plain \
-                  'MATCH (n) RETURN count(n)' 2>/dev/null | tail -1 | tr -dc '0-9' || echo 0)"
-            echo "graph node count (attempt ${i}): ${N:-0}"
-            if [ "${N:-0}" -gt 0 ]; then ok=1; break; fi
+            if N="$(docker compose exec -T neo4j cypher-shell -u neo4j -p "${neo4j_password}" \
+                      --format plain 'MATCH (n) RETURN count(n)' 2>/tmp/neo4j.err)"; then
+              N="$(printf '%s' "${N}" | tail -1 | tr -d '[:space:]')"
+              case "${N}" in
+                ''|*[!0-9]*)
+                  echo "::error::neo4j answered with something that is not a node count: '${N}'"
+                  exit 1
+                  ;;
+              esac
+              echo "graph node count (attempt ${i}): ${N}"
+              if [ "${N}" -gt 0 ]; then ok=1; break; fi
+            elif grep -qiE 'unauthorized|authentication|credentials' /tmp/neo4j.err; then
+              echo "::error::neo4j refused the query, so the graph was never asked how many nodes it holds — this says nothing about graph-at-ingest"
+              cat /tmp/neo4j.err
+              exit 1
+            else
+              echo "neo4j not answering yet (attempt ${i}): $(tr '\n' ' ' < /tmp/neo4j.err | tail -c 200)"
+            fi
             sleep 2
           done
           [ -n "${ok}" ] || { echo "::error::graph-at-ingest produced no nodes from the live stream"; \
