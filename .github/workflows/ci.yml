@@ -950,7 +950,7 @@ jobs:
         # states rather than at a second set of ranges written here. That
         # second set had drifted — it pinned `langgraph>=1,<2` against a
         # manifest saying `>=1.0.10,<2.0.0`, and it never named `openai` or
-        # `qdrant-client`, both of which `tools/mitre_full.py` imports inside
+        # `qdrant-client`, both of which `app/tools/mitre_full.py` imports inside
         # a `try` that returns `[]` when they are missing. The ATT&CK semantic
         # search this suite grades was the empty list, every run.
         run: |

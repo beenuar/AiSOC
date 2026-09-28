@@ -39,7 +39,13 @@ REPO_ROOT = repo_root()
 # that notices when a declaration exists in a file this list does not name.
 DECLARING_FILES = (
     "services/api/pyproject.toml",
-    ".github/workflows/ci.yml",
+    # `ci.yml` is deliberately absent. Its python-test job used to carry a
+    # hand-written copy of the API's dependency list, sqlglot included, and a
+    # copy is what this gate exists to keep honest. It now derives the list
+    # from `services/api/pyproject.toml` through `service_requirements.py`, so
+    # it installs the range this file agrees on without restating it — one
+    # fewer place for the pin to drift. `check_stray_declarations` below
+    # still fails if the literal ever reappears there unregistered.
     ".github/workflows/integration.yml",
     ".github/workflows/isolation-live.yml",
     ".github/workflows/cross-tenant-rbac.yml",
