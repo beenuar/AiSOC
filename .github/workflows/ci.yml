@@ -584,6 +584,23 @@ jobs:
         run: python3 scripts/check_sdk_surface.py --self-test
       - name: SDK surface gate
         run: python3 scripts/check_sdk_surface.py
+      # "Runs entirely on your infrastructure" was gated in three places that
+      # each covered a corner — the CLI's telemetry, the Helm egress policy,
+      # the agents' redactor — and nowhere platform-wide. This reads every
+      # service's declared settings defaults and fails on a public host that
+      # no air-gap guard covers. `services/purple-team` declared an ATT&CK CDN
+      # URL that nothing in the service ever read: dead config still publishes
+      # an external default, so it was deleted rather than exempted.
+      #
+      # The host classification is lifted out of the service's own
+      # `airgap.py` rather than reimplemented, so the gate cannot drift from
+      # the enforcement it reports on, and each exemption names the guard that
+      # justifies it — delete the guard and the exemption stops applying.
+      # The dynamic half is `tests/test_no_default_egress.py`.
+      - name: Default egress gate — self-test
+        run: python3 scripts/check_default_egress.py --self-test
+      - name: Default egress gate
+        run: python3 scripts/check_default_egress.py
       # The count claim above says how many connectors exist; this says
       # whether a reader can find out how to use them. 35 of 84 had no page
       # at all and the sidebar listed 34 of 96, so most connector

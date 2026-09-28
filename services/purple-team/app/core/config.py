@@ -39,8 +39,14 @@ class Settings(BaseSettings):
     art_repo_path: str = "/opt/atomic-red-team"
     art_atomics_path: str = "/opt/atomic-red-team/atomics"
 
-    # ATT&CK STIX bundle URL (for coverage mapping)
-    attack_stix_url: str = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
+    # There used to be an ``attack_stix_url`` here, defaulting to the MITRE CTI
+    # bundle on a public CDN "for coverage mapping". Nothing in this service
+    # ever read it — not the coverage mapper, not the drift scheduler, not the
+    # routes. A dead setting is not harmless when its default is an external
+    # host: it is documented, it is settable, and it makes reaching a CDN look
+    # like the decision somebody already took. The services that do need the
+    # bundle (``agents``, ``ingest``) read it from ``ATTCK_DATA_PATH`` on disk.
+    # If coverage mapping ever needs it here, take the same local-file route.
 
     # OTel
     otel_endpoint: str = "http://localhost:4317"

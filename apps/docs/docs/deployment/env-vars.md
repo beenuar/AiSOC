@@ -402,7 +402,6 @@ All variables use the `PURPLE_TEAM_` prefix.
 | `PURPLE_TEAM_CALDERA_API_KEY` | `ADMIN123` | **Rotate before going live.** Caldera REST API key |
 | `PURPLE_TEAM_ART_REPO_PATH` | `/opt/atomic-red-team` | Filesystem path to the Atomic Red Team checkout |
 | `PURPLE_TEAM_ART_ATOMICS_PATH` | `/opt/atomic-red-team/atomics` | Path to the `atomics/` directory inside ART |
-| `PURPLE_TEAM_ATTACK_STIX_URL` | `https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json` | URL to the MITRE ATT&CK STIX bundle |
 | `PURPLE_TEAM_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `PURPLE_TEAM_SERVICE_NAME` | `aisoc-purple-team` | OTel service name |
 | `PURPLE_TEAM_HOST` | `0.0.0.0` | HTTP listener interface |
