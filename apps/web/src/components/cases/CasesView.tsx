@@ -168,7 +168,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
     pageSize: MOCK_CASES.length,
   });
 
-  const { data: casesData, isLoading } = useSWR(
+  const { data: casesData, error, isLoading } = useSWR(
     ['cases', statusFilter, severityFilter],
     () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
     {
@@ -189,13 +189,19 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
   // The list above already falls back to `[]`; this counted MOCK_CASES, so a
   // failed request rendered an empty table under stat cards claiming 18 cases.
   const allCases = casesData?.cases ?? [];
-  const statCounts = {
-    all: allCases.length,
-    open: allCases.filter(c => c.status === 'open').length,
-    in_progress: allCases.filter(c => c.status === 'in_progress').length,
-    resolved: allCases.filter(c => c.status === 'resolved').length,
-    closed: allCases.filter(c => c.status === 'closed').length,
-  };
+  // Substituting `[]` for MOCK_CASES stopped the fabrication but moved the
+  // defect: the grid sits above the `isLoading` branch, so five confident
+  // zeros rendered on first paint and stayed there when the read failed.
+  const countsUnknown = !casesData;
+  const statCounts: Record<string, number | null> = countsUnknown
+    ? { all: null, open: null, in_progress: null, resolved: null, closed: null }
+    : {
+        all: allCases.length,
+        open: allCases.filter(c => c.status === 'open').length,
+        in_progress: allCases.filter(c => c.status === 'in_progress').length,
+        resolved: allCases.filter(c => c.status === 'resolved').length,
+        closed: allCases.filter(c => c.status === 'closed').length,
+      };
 
   return (
     <div className="space-y-5">
@@ -234,7 +240,9 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
                 statusFilter === s ? 'border-blue-500/50 bg-blue-500/5' : 'border-gray-800/60 hover:border-gray-700'
               )}
             >
-              <p className="text-2xl font-bold text-gray-100">{statCounts[s]}</p>
+              <p className={clsx('text-2xl font-bold', statCounts[s] === null ? 'text-gray-600' : 'text-gray-100')}>
+                {statCounts[s] === null ? '—' : statCounts[s]}
+              </p>
               <p className="text-xs text-gray-500 mt-0.5 capitalize">
                 {s === 'all' ? 'All Cases' : s.replace('_', ' ')}
               </p>
@@ -298,6 +306,12 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
         <div className="flex items-center justify-center h-48">
           <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
         </div>
+      ) : error && !casesData ? (
+        <EmptyState
+          icon={EmptyStateIcons.case}
+          title="Could not load cases"
+          description="The case service did not answer. This is not a report that no cases exist — retry, or check the API is reachable."
+        />
       ) : cases.length === 0 ? (
         // WS-F5 — distinguish "filter miss" from "no cases ever". The former
         // gets a "clear filters" CTA; the latter explains what cases are and

@@ -218,7 +218,7 @@ function driftDeltaLabel(d: number, suffix = ''): string {
 function CoverageHeatmap() {
   const tenantId = useTenantId()
 
-  const { data } = useSWR<CoverageMatrix>(
+  const { data, error, isLoading } = useSWR<CoverageMatrix>(
     tenantId ? `${API}/api/v1/purple-team/coverage?tenant_id=${tenantId}` : null,
     fetcher,
     { refreshInterval: 30000, fallbackData: demoFallback(MOCK_COVERAGE) }
@@ -267,6 +267,11 @@ function CoverageHeatmap() {
     techniques: {},
     summary: { total_techniques: 0, tested_techniques: 0, detected_techniques: 0, overall_coverage: 0 },
   }
+  // "0 of 0 techniques, 0% coverage" is not the truthful reading when the
+  // service has told us nothing: it says the estate has no ATT&CK techniques
+  // to test, which is the reassuring interpretation of a failed read. A
+  // number nobody measured must not be rendered as a number.
+  const unknown = !data
   const resolved = data ?? EMPTY_COVERAGE
   const {
     summary: rawSummary,
@@ -282,6 +287,21 @@ function CoverageHeatmap() {
   }
   const driftSummary = drift?.drift.summary
   const hasPrevious = Boolean(drift?.previous)
+
+  if (unknown) {
+    return (
+      <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-6 text-sm">
+        <p className="font-medium text-gray-200">ATT&amp;CK coverage unknown</p>
+        <p className="mt-1 text-gray-500">
+          {isLoading
+            ? 'Loading coverage from the purple-team service…'
+            : error
+              ? 'The purple-team service did not answer. This is not a report of zero coverage.'
+              : 'No coverage has been reported for this tenant yet.'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">

@@ -421,11 +421,11 @@ export function Sidebar() {
             </>
           )}
         </div>
-        {/* Live indicator — decorative, status conveyed by the green dot label */}
-          <div className="ml-auto flex items-center gap-1" aria-hidden="true">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot" />
-            <span className="text-xs text-fg-subtle">Live</span>
-          </div>
+        {/* No status pill here. There is no data source in this file, so the
+            green animated "Live" dot that used to sit beside the product name
+            rendered on every page including one whose API was entirely down.
+            `LiveFeedPanel` drives the same idea off the realtime socket and
+            distinguishes connected-but-silent from receiving. */}
       </div>
 
       {/* Nav */}

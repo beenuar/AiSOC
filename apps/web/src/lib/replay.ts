@@ -75,16 +75,34 @@ function apiBase(): string {
   ).replace(/\/$/, "");
 }
 
-/** Server-side fetch of a published replay. Returns null on 404 / error. */
-export async function fetchPublicReplay(slug: string): Promise<PublicReplay | null> {
+/**
+ * "This replay does not exist" and "we could not reach the API" are different
+ * answers, and the page renders a different page for each. Collapsing both
+ * into `null` meant a 500, a 502 or a DNS failure reached `notFound()`, so an
+ * operator whose API was down was told their link was wrong.
+ */
+export type PublicReplayResult =
+  | { kind: "ok"; replay: PublicReplay }
+  | { kind: "missing" }
+  | { kind: "unavailable"; status: number | null };
+
+/** Server-side fetch of a published replay. */
+export async function fetchPublicReplay(slug: string): Promise<PublicReplayResult> {
+  let res: Response;
   try {
-    const res = await fetch(`${apiBase()}/api/v1/r/${encodeURIComponent(slug)}`, {
+    res = await fetch(`${apiBase()}/api/v1/r/${encodeURIComponent(slug)}`, {
       // Public, cacheable content; revalidate periodically at the edge.
       next: { revalidate: 300 },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as PublicReplay;
   } catch {
-    return null;
+    // No response at all: DNS failure, connection refused, timeout.
+    return { kind: "unavailable", status: null };
+  }
+  if (res.status === 404 || res.status === 410) return { kind: "missing" };
+  if (!res.ok) return { kind: "unavailable", status: res.status };
+  try {
+    return { kind: "ok", replay: (await res.json()) as PublicReplay };
+  } catch {
+    return { kind: "unavailable", status: res.status };
   }
 }

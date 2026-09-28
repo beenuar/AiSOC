@@ -17,7 +17,8 @@ function verdictColor(verdict: string): string {
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const replay = await fetchPublicReplay(slug);
+  const result = await fetchPublicReplay(slug);
+  const replay = result.kind === "ok" ? result.replay : null;
   const s = replay?.snapshot;
   const verdict = s?.verdict ?? "unknown";
   const title = replay?.title ?? "Investigation replay";

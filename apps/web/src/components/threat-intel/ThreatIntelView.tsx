@@ -249,11 +249,18 @@ export function ThreatIntelView() {
   const [typeFilter, setTypeFilter] = useState<ThreatIndicator['type'] | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  const { data } = useSWR(
+  const { data, error, isLoading } = useSWR(
     'threat-intel-indicators',
     () => threatIntelApi.list(),
     { fallbackData: demoFallback({ indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length }) },
   );
+
+  // `data` is undefined on first paint and on error alike, and both prior
+  // fixes on these lines were about fabricated values rather than about
+  // absence. `?? []` then published "Malicious (of shown): 0" — a security
+  // verdict — and an empty state telling the operator to go connect a feed,
+  // on a store the page could not reach.
+  const storeUnknown = !data;
 
   // Not `?? MOCK_INDICATORS`. `fallbackData` above already withholds the
   // sample set outside the hosted demo; repeating the constant here put it
@@ -313,8 +320,10 @@ export function ThreatIntelView() {
           { label: 'High confidence (of shown)', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
-            <p className={clsx('text-2xl font-bold mb-1', stat.color)}>{stat.value}</p>
-            <p className="text-xs text-gray-500">{stat.label}</p>
+            <p className={clsx('text-2xl font-bold mb-1', storeUnknown ? 'text-gray-600' : stat.color)}>
+              {storeUnknown ? '—' : stat.value}
+            </p>
+            <p className="text-xs text-gray-500">{storeUnknown ? 'not measured' : stat.label}</p>
           </div>
         ))}
       </div>
@@ -391,8 +400,14 @@ export function ThreatIntelView() {
           ) : (
             <EmptyState
               icon={EmptyStateIcons.shield}
-              title="No threat intel ingested yet"
-              description="Connect a TI feed (MISP, OTX, AbuseIPDB, GreyNoise, internal STIX/TAXII) from Settings → Connectors to start enriching alerts with reputation context."
+              title={storeUnknown ? (isLoading ? 'Loading threat intel…' : 'Threat intel store unreachable') : 'No threat intel ingested yet'}
+              description={
+                storeUnknown
+                  ? isLoading
+                    ? 'Reading indicators from the threat-intel service.'
+                    : `The threat-intel service did not answer${error ? '' : ''}. This is not a report that no indicators exist.`
+                  : 'Connect a TI feed (MISP, OTX, AbuseIPDB, GreyNoise, internal STIX/TAXII) from Settings → Connectors to start enriching alerts with reputation context.'
+              }
               className="bg-transparent py-8"
             />
           )

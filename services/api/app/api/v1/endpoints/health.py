@@ -178,6 +178,7 @@ async def _ingest_stage(db, tenant_id, *, now: datetime) -> PipelineStage:
             p95_latency_ms=0.0,
             error_rate=0.0,
             status="unknown",
+            unmeasured=["backlog", "p95_latency_ms", "error_rate"],
         )
 
     statuses: list[str] = []
@@ -208,6 +209,7 @@ async def _ingest_stage(db, tenant_id, *, now: datetime) -> PipelineStage:
         p95_latency_ms=0.0,
         error_rate=error_rate,
         status=_worst_status(statuses),
+        unmeasured=["p95_latency_ms"],
     )
 
 
@@ -247,6 +249,7 @@ async def _normalize_stage(
             p95_latency_ms=0.0,
             error_rate=0.0,
             status="unknown",
+            unmeasured=["backlog", "p95_latency_ms", "error_rate"],
         )
 
     p95_seconds = max(0.0, float(p95_seconds))
@@ -255,6 +258,7 @@ async def _normalize_stage(
         backlog=0,
         p95_latency_ms=round(p95_seconds * 1000.0, 2),
         error_rate=0.0,
+        unmeasured=["backlog", "error_rate"],
         status=_status_from_latency(
             p95_seconds=p95_seconds,
             warn_seconds=warn_seconds,
@@ -300,6 +304,7 @@ async def _fuse_stage(
             p95_latency_ms=0.0,
             error_rate=0.0,
             status="unknown",
+            unmeasured=["backlog", "p95_latency_ms", "error_rate"],
         )
 
     p95_seconds = max(0.0, float(p95_seconds))
@@ -308,6 +313,7 @@ async def _fuse_stage(
         backlog=0,
         p95_latency_ms=round(p95_seconds * 1000.0, 2),
         error_rate=0.0,
+        unmeasured=["backlog", "error_rate"],
         status=_status_from_latency(
             p95_seconds=p95_seconds,
             warn_seconds=warn_seconds,
@@ -376,6 +382,7 @@ async def _correlate_stage(
         p95_latency_ms=0.0,
         error_rate=0.0,
         status=status,
+        unmeasured=["p95_latency_ms", "error_rate"],
     )
 
 
@@ -443,6 +450,7 @@ async def _alert_stage(
         p95_latency_ms=latency_ms,
         error_rate=0.0,
         status=status,
+        unmeasured=["error_rate"],
     )
 
 

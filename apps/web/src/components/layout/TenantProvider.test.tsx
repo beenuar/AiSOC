@@ -183,7 +183,7 @@ describe('TenantProvider', () => {
     expect(result.current.available).toHaveLength(1);
   });
 
-  it('tolerates /mssp/children failing for an otherwise-healthy parent', async () => {
+  it('tolerates a 403 on /mssp/children for an otherwise-healthy parent', async () => {
     currentUserMock.mockReturnValue({
       id: 'u1',
       email: 'a@mssp.com',
@@ -197,7 +197,11 @@ describe('TenantProvider', () => {
       mssp_role: 'parent',
       parent_tenant_id: null,
     });
-    msspChildrenMock.mockRejectedValue(new Error('403'));
+    // An `ApiError`-shaped 403, which is what `msspApi.listChildren` really
+    // throws when the caller lacks `mssp:read`. The old fixture was a plain
+    // `Error('403')` — a message, not a status — so the test passed on a
+    // `catch {}` that also swallowed 500s and network failures.
+    msspChildrenMock.mockRejectedValue(Object.assign(new Error('Forbidden'), { name: 'ApiError', status: 403 }));
 
     const { result } = renderHook(() => useTenant(), { wrapper });
 
@@ -206,6 +210,22 @@ describe('TenantProvider', () => {
     expect(result.current.current?.id).toBe('parent-t');
     // No children → switcher will render as a read-only badge upstream.
     expect(result.current.available).toHaveLength(1);
+  });
+
+  it('surfaces a server failure on /mssp/children rather than showing an empty portfolio', async () => {
+    // An MSSP parent whose child-tenant endpoint is down must not be shown a
+    // switcher that says they manage nobody. That is the reassuring reading
+    // of a broken read, and it is indistinguishable from having offboarded
+    // every customer.
+    currentUserMock.mockReturnValue({ id: 'u1', email: 'a@mssp.com', role: 'mssp-admin', tenant_id: 'parent-t' });
+    isAuthenticatedMock.mockReturnValue(true);
+    tenantsMeMock.mockResolvedValue({ id: 'parent-t', name: 'MSSP Holdings', mssp_role: 'parent', parent_tenant_id: null });
+    msspChildrenMock.mockRejectedValue(Object.assign(new Error('Internal Server Error'), { name: 'ApiError', status: 500 }));
+
+    const { result } = renderHook(() => useTenant(), { wrapper });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
   });
 
   it('throws when useTenant() is called outside the provider', () => {

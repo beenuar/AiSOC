@@ -81,6 +81,15 @@ function statusStyles(status: Status) {
   }
 }
 
+/** The pill an uninstrumented cell gets, so absence never reads as zero. */
+function NotMeasured() {
+  return (
+    <span className="text-gray-500" title="Not instrumented on this stage yet">
+      n/a
+    </span>
+  );
+}
+
 function formatLatency(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return '—';
   if (ms < 1) return '< 1 ms';
@@ -104,8 +113,22 @@ function formatErrorRate(ratio: number): string {
   return `${(ratio * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
 }
 
+/**
+ * `health.py` says of this panel: "The SOC Console UI renders zeros as 'n/a'
+ * pills rather than zero-bars so operators don't read absence as 'all good'."
+ * It did not. Four of the five stages ship at least one hardcoded `0` for a
+ * cell nothing instruments -- ingest and correlate have no p95, normalize,
+ * fuse, correlate and alert have no error rate -- and the formatters below
+ * turned those into `< 1 ms` and `0%`, under a "Live" header. That is the
+ * single most reassuring reading a pipeline panel can offer, for the cells
+ * it knows least about.
+ *
+ * The stage now names its own unmeasured fields, so the backend that knows
+ * which ones they are is the thing that says so.
+ */
 function StageCard({ stage }: { stage: PipelineStage }) {
   const styles = statusStyles(stage.status);
+  const unmeasured = new Set(stage.unmeasured ?? []);
   return (
     <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
       <div className="flex items-center justify-between mb-1">
@@ -125,19 +148,19 @@ function StageCard({ stage }: { stage: PipelineStage }) {
         <div className="flex items-baseline justify-between text-xs">
           <dt className="text-gray-500">Backlog</dt>
           <dd className="font-medium text-gray-200 tabular-nums">
-            {formatBacklog(stage.backlog)}
+            {unmeasured.has('backlog') ? <NotMeasured /> : formatBacklog(stage.backlog)}
           </dd>
         </div>
         <div className="flex items-baseline justify-between text-xs">
           <dt className="text-gray-500">p95</dt>
           <dd className="font-medium text-gray-200 tabular-nums">
-            {formatLatency(stage.p95_latency_ms)}
+            {unmeasured.has('p95_latency_ms') ? <NotMeasured /> : formatLatency(stage.p95_latency_ms)}
           </dd>
         </div>
         <div className="flex items-baseline justify-between text-xs">
           <dt className="text-gray-500">Errors</dt>
-          <dd className={clsx('font-medium tabular-nums', styles.text)}>
-            {formatErrorRate(stage.error_rate)}
+          <dd className={clsx('font-medium tabular-nums', unmeasured.has('error_rate') ? 'text-gray-500' : styles.text)}>
+            {unmeasured.has('error_rate') ? <NotMeasured /> : formatErrorRate(stage.error_rate)}
           </dd>
         </div>
       </dl>
@@ -162,6 +185,19 @@ function LoadingStage({ stage }: { stage: PipelineStage['stage'] }) {
         <div className="h-3 w-full rounded bg-gray-800/60 animate-pulse" />
         <div className="h-3 w-2/3 rounded bg-gray-800/60 animate-pulse" />
       </div>
+    </div>
+  );
+}
+
+function MissingStage({ stage, reason }: { stage: PipelineStage['stage']; reason: string }) {
+  return (
+    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-sm font-semibold text-gray-100 truncate">{STAGE_LABELS[stage]}</p>
+        <span className="h-2.5 w-2.5 rounded-full bg-gray-700 ring-2 ring-gray-700/30" role="img" aria-label="status unknown" />
+      </div>
+      <p className="text-[11px] text-gray-500 truncate">{STAGE_DESCRIPTIONS[stage]}</p>
+      <p className="mt-3 text-xs text-gray-500">{reason}</p>
     </div>
   );
 }
@@ -195,15 +231,24 @@ export function PipelineHealth() {
         </div>
         {error ? (
           <span className="text-xs text-red-400">unavailable</span>
-        ) : (
+        ) : data ? (
           <span className="text-xs text-gray-500">Live</span>
+        ) : (
+          // `Live` was shown whenever `error` was falsy, which includes the
+          // whole first-paint window: the header asserted liveness before a
+          // single byte had arrived.
+          <span className="text-xs text-gray-500">Loading…</span>
         )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {STAGE_ORDER.map((name) => {
           const stage = stagesByName[name];
-          if (isLoading || !stage) return <LoadingStage key={name} stage={name} />;
+          if (isLoading) return <LoadingStage key={name} stage={name} />;
+          // A stage absent from a *successful* response is not still loading.
+          // It used to animate as a skeleton indefinitely, with no error and
+          // no timeout, which reads as "nearly there" rather than "missing".
+          if (!stage) return <MissingStage key={name} stage={name} reason={error ? 'stage unavailable' : 'not reported'} />;
           return <StageCard key={name} stage={stage} />;
         })}
       </div>

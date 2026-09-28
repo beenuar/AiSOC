@@ -12,10 +12,14 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const replay = await fetchPublicReplay(slug);
-  if (!replay) {
+  const result = await fetchPublicReplay(slug);
+  if (result.kind === "unavailable") {
+    return { title: "Replay temporarily unavailable · AiSOC" };
+  }
+  if (result.kind === "missing") {
     return { title: "Replay not found · AiSOC" };
   }
+  const replay = result.replay;
   const s = replay.snapshot;
   const title = `${replay.title} · AiSOC investigation replay`;
   const description = `Verdict: ${s.verdict.replace(/_/g, " ")} · investigated in ${(s.elapsedMs / 1000).toFixed(
@@ -31,11 +35,33 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+function ReplayUnavailable({ status }: { status: number | null }) {
+  return (
+    <main style={{ background: "#0b1020", minHeight: "100vh", color: "#e6e9f5", padding: "48px 24px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+        <Link href="/" style={{ color: "#8b93b7", textDecoration: "none", fontSize: 14 }}>
+          ← AiSOC
+        </Link>
+        <h1 style={{ fontSize: 26, fontWeight: 800, margin: "24px 0 8px" }}>Replay temporarily unavailable</h1>
+        <p style={{ color: "#8b93b7", fontSize: 15, lineHeight: 1.6 }}>
+          This link is fine — we could not reach the service that serves it
+          {status ? ` (HTTP ${status})` : " (no response)"}. Try again shortly.
+        </p>
+      </div>
+    </main>
+  );
+}
+
 export default async function ReplayPage({ params }: PageProps) {
   const { slug } = await params;
-  const replay = await fetchPublicReplay(slug);
-  if (!replay) notFound();
+  const result = await fetchPublicReplay(slug);
+  // Only a real 404 is a missing replay. Anything else is our outage, and
+  // telling the reader their identifier is wrong sends them to debug a link
+  // that is fine.
+  if (result.kind === "missing") notFound();
+  if (result.kind === "unavailable") return <ReplayUnavailable status={result.status} />;
 
+  const replay = result.replay;
   const s = replay.snapshot;
   return (
     <main style={{ background: "#0b1020", minHeight: "100vh", color: "#e6e9f5", padding: "48px 24px" }}>

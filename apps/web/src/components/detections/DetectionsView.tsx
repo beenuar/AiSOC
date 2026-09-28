@@ -532,6 +532,15 @@ export function DetectionsView() {
                 <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
+          ) : error && !useFallback ? (
+            // "No detection rules yet" on a failed read tells an operator
+            // their coverage is zero and invites them to author one. The
+            // ErrorState below is a sibling rather than an alternative, so
+            // both used to render — the reassuring one first.
+            <EmptyState
+              title="Could not load detection rules"
+              description="The detection service did not answer. This is not a report that no rules exist."
+            />
           ) : filtered.length === 0 ? (
             rules.length === 0 ? (
               <EmptyState
@@ -618,7 +627,9 @@ export function DetectionsView() {
           {error && !useFallback && (
             <ErrorState
               title="Couldn't load detection rules"
-              description="The detection service didn't respond. We've shown the local demo set instead."
+              // The guard is `!useFallback`, so the demo set was *not* shown.
+              // The copy claimed a substitution its own condition rules out.
+              description="The detection service didn't respond. Nothing is shown in its place."
               error={error}
               onRetry={() => mutate()}
             />

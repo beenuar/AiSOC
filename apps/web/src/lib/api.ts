@@ -2106,6 +2106,14 @@ export interface PipelineStage {
   p95_latency_ms: number;
   error_rate: number;
   status: 'unknown' | 'green' | 'yellow' | 'red';
+  /**
+   * Numeric fields above that this stage could not measure. They still carry
+   * `0` on the wire; render them as `n/a`, never as a value. Optional because
+   * an older API will not send it -- treat absent as "nothing declared",
+   * which is the pre-existing behaviour rather than a silent claim of
+   * full instrumentation.
+   */
+  unmeasured?: string[];
 }
 
 export interface PipelineHealth {

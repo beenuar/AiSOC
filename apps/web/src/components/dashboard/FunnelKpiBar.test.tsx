@@ -81,14 +81,25 @@ const SAMPLE_FUNNEL = {
   generated_at: '2026-05-13T10:00:00Z',
 };
 
+/**
+ * Shaped like what `services/api/app/api/v1/endpoints/health.py` actually
+ * emits, which the previous fixture was not: it gave `ingest` a p95 of 120
+ * and `correlate` a p95 of 600, and both are hardcoded `0.0` in the endpoint
+ * because neither is instrumented. Grading the component against numbers the
+ * backend cannot produce is why `< 1 ms` and `0%` under a "Live" header
+ * passed every test here.
+ *
+ * `unmeasured` is the endpoint's own declaration of which cells are
+ * placeholders.
+ */
 const SAMPLE_PIPELINE = {
   overall_status: 'yellow' as const,
   stages: [
-    { stage: 'ingest' as const, backlog: 0, p95_latency_ms: 120, error_rate: 0, status: 'green' as const },
-    { stage: 'normalize' as const, backlog: 5, p95_latency_ms: 200, error_rate: 0.01, status: 'green' as const },
+    { stage: 'ingest' as const, backlog: 0, p95_latency_ms: 0, error_rate: 0, status: 'green' as const, unmeasured: ['p95_latency_ms'] },
+    { stage: 'normalize' as const, backlog: 5, p95_latency_ms: 200, error_rate: 0, status: 'green' as const, unmeasured: ['backlog', 'error_rate'] },
     { stage: 'fuse' as const, backlog: 42, p95_latency_ms: 1_800, error_rate: 0.03, status: 'yellow' as const },
-    { stage: 'correlate' as const, backlog: 12, p95_latency_ms: 600, error_rate: 0, status: 'green' as const },
-    { stage: 'alert' as const, backlog: 3, p95_latency_ms: 300, error_rate: 0, status: 'green' as const },
+    { stage: 'correlate' as const, backlog: 12, p95_latency_ms: 0, error_rate: 0, status: 'green' as const, unmeasured: ['p95_latency_ms', 'error_rate'] },
+    { stage: 'alert' as const, backlog: 3, p95_latency_ms: 300, error_rate: 0, status: 'green' as const, unmeasured: ['error_rate'] },
   ],
   generated_at: '2026-05-13T10:00:00Z',
 };
@@ -191,5 +202,57 @@ describe('PipelineHealth', () => {
     // "unavailable" without the rest of the rail throwing.
     expect(screen.getByText('Pipeline Health')).toBeInTheDocument();
     expect(screen.getByText('unavailable')).toBeInTheDocument();
+  });
+
+  // `health.py`: "The SOC Console UI renders zeros as 'n/a' pills rather than
+  // zero-bars so operators don't read absence as 'all good'." These are that
+  // promise, asserted.
+  it('renders a cell the endpoint could not measure as n/a, not as a number', () => {
+    swrData.set(PIPELINE_KEY, SAMPLE_PIPELINE);
+    render(<PipelineHealth />);
+
+    // Four stages declare an unmeasured cell; six cells in total.
+    expect(screen.getAllByText('n/a')).toHaveLength(6);
+    // The reassuring readings those placeholder zeros used to produce are
+    // gone. `ingest.error_rate` really is measured (unhealthy/enabled), so
+    // exactly one genuine `0%` remains — an over-eager n/a would be the same
+    // defect pointing the other way.
+    expect(screen.queryByText('< 1 ms')).not.toBeInTheDocument();
+    expect(screen.getAllByText('0%')).toHaveLength(1);
+  });
+
+  it('still renders a measured zero as zero', () => {
+    swrData.set(PIPELINE_KEY, {
+      ...SAMPLE_PIPELINE,
+      stages: [{ stage: 'ingest' as const, backlog: 0, p95_latency_ms: 0, error_rate: 0, status: 'green' as const }],
+    });
+    render(<PipelineHealth />);
+    // Nothing declared unmeasured, so a genuine zero must survive: an
+    // over-eager n/a would be the same defect pointing the other way.
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText('< 1 ms')).toBeInTheDocument();
+    expect(screen.queryByText('n/a')).not.toBeInTheDocument();
+  });
+
+  // FIRST PAINT. The error branch runs before any data arrives, so a header
+  // that reads "Live" whenever `error` is falsy asserts liveness before a
+  // single byte has been received. This is the case the suite never had.
+  it('does not claim Live before the first response arrives', () => {
+    swrLoading.add(PIPELINE_KEY);
+    render(<PipelineHealth />);
+    expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+
+  it('claims Live only once data has arrived', () => {
+    swrData.set(PIPELINE_KEY, SAMPLE_PIPELINE);
+    render(<PipelineHealth />);
+    expect(screen.getByText('Live')).toBeInTheDocument();
+  });
+
+  it('marks a stage missing from a successful response rather than loading it forever', () => {
+    swrData.set(PIPELINE_KEY, { ...SAMPLE_PIPELINE, stages: SAMPLE_PIPELINE.stages.slice(0, 4) });
+    render(<PipelineHealth />);
+    expect(screen.getByText('not reported')).toBeInTheDocument();
   });
 });

@@ -27446,6 +27446,11 @@ components:
         status:
           type: string
           title: Status
+        unmeasured:
+          items:
+            type: string
+          type: array
+          title: Unmeasured
       type: object
       required:
       - stage

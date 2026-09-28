@@ -119,11 +119,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         if (me.mssp_role === 'parent') {
           try {
             children = await msspApi.listChildren();
-          } catch {
-            // Non-fatal: an MSSP parent without children is valid; a 403 here
-            // just means the user lacks `mssp:read` and we render the badge
-            // alone.
-            children = [];
+          } catch (err) {
+            // The comment justified only the 403. A bare catch also absorbed
+            // 500s and network failures, so an MSSP parent whose child-tenant
+            // endpoint was down saw an empty portfolio in the switcher rather
+            // than an error — the reassuring reading of a broken read.
+            const status = (err as { status?: number } | null)?.status;
+            if (status === 403 || status === 404) {
+              children = [];
+            } else {
+              throw err;
+            }
           }
         }
         if (cancelled) return;

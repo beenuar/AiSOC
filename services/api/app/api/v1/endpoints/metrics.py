@@ -27,7 +27,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, text
 
 from app.api.v1.deps import AuthUser, DBSession
@@ -217,6 +217,14 @@ class PipelineStage(BaseModel):
     p95_latency_ms: float
     error_rate: float
     status: str
+    #: Names of the numeric fields above this stage could not measure. Those
+    #: fields still carry ``0`` for compatibility, and ``0`` is the most
+    #: reassuring number a pipeline panel can show — an operator reads
+    #: "0 backlog, <1 ms, 0% errors" as healthy, not as uninstrumented. The
+    #: console renders anything named here as "n/a" instead. Four of the five
+    #: stages have at least one such field, so without this the strip was
+    #: mostly confident zeros about things nothing measures.
+    unmeasured: list[str] = Field(default_factory=list)
 
 
 class PipelineHealth(BaseModel):
