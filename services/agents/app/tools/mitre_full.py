@@ -245,6 +245,24 @@ def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
     )
 
 
+def _cdn_fetch_enabled() -> bool:
+    """Whether this deployment has asked to fetch the bundle over the internet.
+
+    Off unless asked. `app.main`'s lifespan calls `load_attck_corpus()` on every
+    startup, and with no bundle on disk that reached
+    `raw.githubusercontent.com` before the service had served a request — an
+    outbound call nobody configured, from a service that may be running
+    air-gapped. `tests/test_no_default_egress.py` exists to forbid exactly
+    this ("a lifespan that warms a cache from a CDN" is in its docstring) and
+    could not see it, because CI did not install the agents service's full
+    dependency set and the startup path stopped earlier.
+
+    Read per call rather than at import so a test or an operator can change it
+    without reloading the module.
+    """
+    return os.getenv("AISOC_ATTCK_CDN_FETCH", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 async def _download_bundle() -> dict[str, Any]:
     """Download the ATT&CK STIX bundle from MITRE GitHub."""
     logger.info("Downloading MITRE ATT&CK bundle from CDN", url=ATTCK_CDN_URL)
@@ -279,7 +297,17 @@ async def load_attck_corpus(force_reload: bool = False) -> None:
         except Exception as exc:
             logger.warning("Failed to read local ATT&CK bundle", error=str(exc))
 
-    # Fall back to CDN download
+    # Fall back to CDN download — only where the deployment asked for it.
+    if bundle is None and not _cdn_fetch_enabled():
+        logger.info(
+            "ATT&CK bundle not on disk and CDN fetch is off; using the built-in corpus",
+            path=str(local_path),
+            enable_with="AISOC_ATTCK_CDN_FETCH=1",
+            url=ATTCK_CDN_URL,
+        )
+        _load_stub_corpus()
+        return
+
     if bundle is None:
         try:
             bundle = await _download_bundle()

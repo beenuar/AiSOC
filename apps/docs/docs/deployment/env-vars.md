@@ -287,6 +287,7 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `PLAYBOOK_STORE_DIR` | `/data/playbooks` | Filesystem path for executable playbook DSL files |
 | `PLAYBOOK_PACK_ROOT` | `/data/playbook-packs` | Root directory for community playbook packs |
 | `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
+| `AISOC_ATTCK_CDN_FETCH` | _off_ | Allow the startup corpus load to fetch the full ATT&CK bundle from `raw.githubusercontent.com` when no file is present at `ATTCK_DATA_PATH`. Off by default: the lifespan runs on every start, so leaving it on would make an unconfigured deployment — including an air-gapped one — reach the internet before serving a request. With it off the service loads the bundled snapshot. |
 | `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
 | `AISOC_VERSION` | `0.1.0` | Reported in OTel resource attributes |
 | `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
