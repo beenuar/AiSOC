@@ -97,7 +97,7 @@
 - **Primitives:**
   - Aceternity **Glowing Effect** (`/components/glowing-effect`) — wraps each card border. `glow={true}`, `proximity={64}`, `inactiveZone={0.4}`.
   - Aceternity **Bento Grid** — used loosely (flat 2 × 2, equal heights, no skew).
-  - MagicUI **Number Ticker** — stat lines. P1 `value={6998}`, P2 `value={17}`, P3 `value={4}`, P4 `value={6}`.
+  - MagicUI **Number Ticker** — stat lines. P1 `value={EXECUTABLE_DETECTION_COUNT}` (from `apps/web/src/data/corpusStats.ts`, currently 2603 — do not hard-code it; the literal `6998` sat here while the corpus moved), P2 `value={17}`, P3 `value={4}`, P4 `value={6}`.
 - **Custom:** 24 × 24 brand glyphs (`open-source`, `graph`, `agentic`, `deploy-anywhere`). Active borders: P2 → `landing.gradient.pillars`, P3 → `landing.accent.ember`, P1 / P4 → `brand-500/30`.
 - **Anatomy:** `Pillars` → `PillarsHeading`, `PillarsGrid` (4 × `PillarCard`), each → `PillarIcon`, `PillarTitle`, `PillarBody`, `PillarStat`, `PillarLink`.
 - **States:** Default `landing.shadow.1`, `surface-border`. Hover → Glowing Effect on; lift `-2 px`. Focus → existing `:focus-visible` 2 px `brand-500` ring. <768 stacks. Reduced-motion → Glowing `disabled={true}`; lift instant.

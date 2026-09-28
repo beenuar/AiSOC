@@ -29,8 +29,8 @@
 - **Secondary CTA:** `Self-host on GitHub`
 - **Tertiary link (under CTAs):** `Watch a 90-second investigation →`
 - **Social-proof bar (three chips):**
-  - `69 connectors · EDR · SIEM · cloud · IAM · SaaS · VCS · network`
-  - `6,998 detections · 62 playbook packs · 57 plugins`
+  - `84 connectors · EDR · SIEM · cloud · IAM · SaaS · VCS · network · NDR · AI`
+  - `2,603 executable detections · 62 playbook packs · 77 plugins`
   - `Self-host · Render · Fly.io · Helm · Terraform · air-gap`
 
 ---
@@ -124,7 +124,7 @@
 - **Card P1 — Open source and transparent**
   - **Body:** `MIT-licensed agent, public detection corpus, reproducible
     benchmark — every claim on this page maps to a file in the repo.`
-  - **Stat:** `6,998 public detection rules`
+  - **Stat:** `2,603 executable detection rules`
   - **Link:** `Read the LICENSE →`
 - **Card P2 — Graph-native at ingest**
   - **Body:** `The entity graph is written while events are normalised,
@@ -151,8 +151,8 @@
 1. **Fusion engine.** `Real-time dedup, ML scoring, per-alert confidence.`
 2. **Entity-risk rollup (RBA).** `Time-decayed risk per user, host, IP,
    domain — 50:1 alert-to-incident.`
-3. **Native detections.** `6,998 YAML rules across cloud, endpoint,
-   identity, network, application, and data-exfil.`
+3. **Native detections.** `2,603 executable rules across cloud, endpoint,
+   identity, network, application, and data-exfil, of 6,991 on disk.`
 4. **Investigation Ledger.** `Replayable, step-by-step record of every
    agent decision per case.`
 5. **Attack-chain timeline.** `Cytoscape over the Neo4j subgraph — see
@@ -176,9 +176,9 @@
 
 ### Operate at scale (6 tiles)
 
-1. **69 click-and-connect connectors.** `EDR · SIEM · cloud · IAM ·
-   SaaS · VCS · network.`
-2. **Marketplace.** `7,117 community items — detections, playbooks,
+1. **84 click-and-connect connectors.** `EDR · SIEM · cloud · IAM ·
+   SaaS · VCS · network · NDR · AI.`
+2. **Marketplace.** `7,155 community items — detections, playbooks,
    plugins.`
 3. **Plugin SDKs.** `Python, TypeScript, Go — build a connector in 50
    lines.`
@@ -194,7 +194,7 @@
 ## `connectors` — Connectors + Marketplace
 
 - **Eyebrow:** `Plug in everything`
-- **H2:** `69 connectors. 6,998 detections. 62 playbook packs.`
+- **H2:** `84 connectors. 2,603 executable detections. 62 playbook packs.`
 - **Sub-head:**
   `Every connector renders a schema-driven form, encrypts its secrets at
   the application layer, and starts polling on a per-instance schedule.
@@ -337,7 +337,7 @@
 - **Card — Community**
   - **Price:** `Free`
   - **Tagline:** `Self-host the full stack.`
-  - **Includes:** `MIT-licensed code · all 69 connectors · marketplace
+  - **Includes:** `MIT-licensed code · all 84 connectors · marketplace
     · public benchmark harness · community Discord.`
 - **Card — Team (managed)**
   - **Price:** `Contact us — waitlist`
