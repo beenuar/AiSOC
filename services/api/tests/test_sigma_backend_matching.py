@@ -240,3 +240,9 @@ def test_ci_installs_the_backend_it_claims_to_test() -> None:
     deps = str(workflow["jobs"]["python-test"]["env"]["API_DEPS"])
     assert "pysigma" in deps, "ci.yml must install pysigma or the Sigma backend tests silently skip"
     assert "pysigma-backend-opensearch" in deps, "the OpenSearch backend is what rule_engine imports"
+    # `API_DEPS` is a folded scalar, so every line joins into one shell word
+    # list and a `#` anywhere inside comments out the remainder. A rationale
+    # written between two packages silently uninstalled everything after it,
+    # pytest included, and the job failed with "No module named pytest".
+    assert "#" not in deps, f"a comment inside the folded scalar truncates the install list: {deps}"
+    assert deps.split()[-1] == "pytest-asyncio", "the tail of the install list was swallowed"

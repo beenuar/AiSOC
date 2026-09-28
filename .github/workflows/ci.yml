@@ -854,6 +854,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: python-lint
     env:
+      # `API_DEPS` is a folded scalar: every line below joins into one
+      # command, so a `#` inside it comments out the remainder of the
+      # install list. Keep prose out of the value.
+      #
+      # pysigma and pysigma-backend-opensearch are here because the Sigma
+      # path this job tests imports them. Without them
+      # `rule_engine._run_sigma` took its ImportError branch, so every Sigma
+      # test graded the reduced built-in evaluator, while the published image
+      # installs pysigma from the lockfile and ran the real backend. CI and
+      # production evaluated Sigma rules with different engines, and the one
+      # CI never ran was the broken one. Ranges mirror
+      # services/api/pyproject.toml.
       API_DEPS: >-
         "fastapi>=0.117,<0.142" "pydantic[email]" pydantic-settings "sqlalchemy[asyncio]" asyncpg
         structlog "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
@@ -864,13 +876,6 @@ jobs:
         neo4j redis celery httpx aiofiles email-validator "PyJWT>=2.8,<3"
         "sqlglot>=30,<31" aiosqlite
         "croniter>=2.0,<7.0"
-        # The Sigma path this job tests imports these. Without them
-        # `rule_engine._run_sigma` took its ImportError branch, so every
-        # Sigma test here graded the reduced built-in evaluator while the
-        # published image installed pysigma from the lockfile and ran the
-        # real backend. CI and production evaluated Sigma rules with
-        # different engines, and the one CI never ran was the broken one.
-        # Ranges mirror services/api/pyproject.toml.
         "pysigma>=0.11,<0.12" "pysigma-backend-opensearch>=1.0,<2.0"
         pytest pytest-asyncio
     steps:
