@@ -7606,6 +7606,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/health/audit-chain:
+    get:
+      tags:
+      - health
+      summary: Get Audit Chain Health
+      description: 'Whether the audit log''s tamper-evidence actually covers this
+        tenant.
+
+
+        `apps/docs/docs/operations/security.md` states that every state-changing
+
+        action is appended to an immutable, hash-chained log. That claim is only
+
+        true of rows that carry a hash, and the one signal that a row did not was
+
+        a `logger.warning` — which fired on every `alerts.explain` against a
+
+        default install for as long as a best-effort cost write could abort the
+
+        transaction underneath it. Nobody noticed, because an append-only log
+
+        going quiet looks exactly like an idle one.
+
+
+        So the question gets a surface. `unchained` counts rows this tenant holds
+
+        with no `entry_hash`, split into the ones written before migration 043
+
+        (which never had one and are not a defect) and the ones written after it
+
+        (which are). A reviewer asking "is the chain intact?" gets a number rather
+
+        than a grep.
+
+
+        `verified` replays the chain with `verify_chain` over the most recent
+
+        window, so a row that was rewritten in place is found rather than assumed
+
+        absent.'
+      operationId: get_audit_chain_health_api_v1_health_audit_chain_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Audit Chain Health Api V1 Health Audit Chain Get
+      security:
+      - HTTPBearer: []
   /api/v1/health/shadow-reconciliation:
     get:
       tags:
