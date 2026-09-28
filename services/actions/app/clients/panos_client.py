@@ -33,10 +33,10 @@ management network) and avoids those.
 
 from __future__ import annotations
 
+import html
 import ipaddress
 import re
 from typing import Any
-from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 import structlog
@@ -98,7 +98,11 @@ def _validated_address(value: str) -> str:
         except ValueError:
             pass
         else:
-            if first.version == last.version and first <= last:
+            # Compared as integers: `ip_address` returns an IPv4Address or an
+            # IPv6Address, and the two are not orderable against each other,
+            # so `first <= last` is only well-typed once the versions match —
+            # which a type checker cannot infer from the guard.
+            if first.version == last.version and int(first) <= int(last):
                 return candidate
 
     raise PanOsAddressError(f"{value!r} is not an IP address, CIDR network or address range; refusing to send it to the firewall")
@@ -143,25 +147,25 @@ class PanOsClient:
         containment action releasing a block instead of applying one
         (GHSA-w754-prh8-m56j). Both are validated, then escaped.
         """
-        address = quoteattr(_validated_address(ip))
-        member = escape(_validated_tag(tag))
+        address = html.escape(_validated_address(ip), quote=True)
+        member = html.escape(_validated_tag(tag), quote=True)
         return (
             f"<uid-message>"
             f"<version>2.0</version><type>update</type>"
             f"<payload><register>"
-            f'<entry ip={address} persistent="1">'
+            f'<entry ip="{address}" persistent="1">'
             f"<tag><member>{member}</member></tag>"
             f"</entry></register></payload></uid-message>"
         )
 
     def _xml_unregister(self, ip: str, tag: str) -> str:
-        address = quoteattr(_validated_address(ip))
-        member = escape(_validated_tag(tag))
+        address = html.escape(_validated_address(ip), quote=True)
+        member = html.escape(_validated_tag(tag), quote=True)
         return (
             f"<uid-message>"
             f"<version>2.0</version><type>update</type>"
             f"<payload><unregister>"
-            f"<entry ip={address}>"
+            f'<entry ip="{address}">'
             f"<tag><member>{member}</member></tag>"
             f"</entry></unregister></payload></uid-message>"
         )

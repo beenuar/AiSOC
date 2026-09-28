@@ -22,7 +22,6 @@ import builtins
 import re
 
 import pytest
-
 from app.investigator.report_writer_agent import _md_to_html
 
 SCRIPT = "<script>alert('xss')</script>"

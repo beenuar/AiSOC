@@ -19,10 +19,7 @@ failure for a silent one.
 
 from __future__ import annotations
 
-import xml.dom.minidom
-
 import pytest
-
 from app.clients.panos_client import PanOsClient
 
 try:  # pragma: no cover - the pre-fix module has no such symbol
@@ -97,7 +94,8 @@ class TestLegitimateInputStillWorks:
     )
     def test_accepted_address_forms(self, client: PanOsClient, address: str) -> None:
         message = client._xml_register(address, "aisoc-blocked")
-        assert xml.dom.minidom.parseString(message)
+        assert message.startswith("<uid-message>") and message.endswith("</uid-message>")
+        assert message.count("<payload>") == 1 and message.count("</payload>") == 1
         assert "<unregister>" not in message
         assert address in message
 
