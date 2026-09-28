@@ -100,10 +100,33 @@ def test_no_secret_means_no_verification() -> None:
     assert ts.verify_console_token(_token(), "") is None
 
 
-def test_placeholder_secrets_count_as_unset() -> None:
-    for placeholder in ts.INSECURE_SECRET_DEFAULTS:
-        assert ts.resolve_console_secret.__doc__  # module contract exists
-        assert placeholder in ts.INSECURE_SECRET_DEFAULTS
+@pytest.mark.parametrize("placeholder", sorted(ts.INSECURE_SECRET_DEFAULTS))
+def test_placeholder_secrets_count_as_unset(placeholder: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A shipped placeholder must resolve to no secret, and so verify nothing.
+
+    This used to assert that ``resolve_console_secret.__doc__`` was truthy and
+    that each member of ``INSECURE_SECRET_DEFAULTS`` was in
+    ``INSECURE_SECRET_DEFAULTS`` — a docstring standing in for behaviour, and
+    a tautology. It never called ``resolve_console_secret`` with a placeholder
+    at all, so it would have passed on an implementation that accepted every
+    one of them.
+    """
+    monkeypatch.setenv("SECRET_KEY", placeholder)
+    assert ts.resolve_console_secret() == "", f"{placeholder!r} was accepted as a usable secret"
+    # The consequence, which is the thing that matters: a token signed with a
+    # placeholder cannot buy access, because there is no secret to verify it.
+    assert ts.verify_console_token(_token(secret=placeholder), ts.resolve_console_secret()) is None
+
+
+def test_a_real_secret_is_returned_verbatim(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECRET_KEY", SECRET)
+    assert ts.resolve_console_secret() == SECRET
+
+
+@pytest.mark.parametrize("unusable", ["", "   ", "\n"])
+def test_an_absent_or_blank_secret_resolves_to_nothing(unusable: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECRET_KEY", unusable)
+    assert ts.resolve_console_secret() == ""
 
 
 # ---------------------------------------------------------------------------

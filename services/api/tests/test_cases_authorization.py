@@ -23,10 +23,26 @@ satisfy a grep and still be broken.
 from __future__ import annotations
 
 import inspect
+import uuid
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints import cases
+from fastapi import HTTPException
+
+
+def _user() -> CurrentUser:
+    return CurrentUser(user_id=uuid.uuid4(), tenant_id=uuid.uuid4(), role="analyst", email="analyst@example.com")
+
+
+def _proxy_response(payload: dict[str, Any], status_code: int = 200) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json = MagicMock(return_value=payload)
+    return resp
+
 
 #: Every mutating route in this module, by handler name.
 WRITE_HANDLERS = [
@@ -102,20 +118,62 @@ class TestTheInvestigationRunReadIsScoped:
         assert "db" in params, "the handler takes no database session, so it cannot scope by tenant"
         assert "user" in params
 
-    def test_it_resolves_the_case_against_the_callers_tenant(self) -> None:
-        source = inspect.getsource(cases.case_investigation_run)
-        assert "_resolve_case_id(case_id, db, user.tenant_id)" in source, (
-            "the handler does not resolve case_id against the caller's tenant, so run_id alone "
-            "is proxied and any authenticated user can read any run"
-        )
+    @pytest.mark.asyncio
+    async def test_it_resolves_the_case_against_the_callers_tenant(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A case the caller's tenant does not own must not reach the proxy.
 
-    def test_a_run_belonging_to_another_case_is_refused(self) -> None:
+        Was `assert "_resolve_case_id(case_id, db, user.tenant_id)" in source`,
+        which is satisfied by the call appearing anywhere — including on a
+        branch that never runs, or with its result discarded.
+        """
+        proxy = AsyncMock()
+        monkeypatch.setattr(cases, "_agents_proxy", proxy)
+        monkeypatch.setattr(cases, "_resolve_case_id", AsyncMock(side_effect=HTTPException(status_code=404, detail="Case not found")))
+
+        with pytest.raises(HTTPException) as exc:
+            await cases.case_investigation_run(case_id="c-1", run_id="r-1", db=MagicMock(), user=_user())
+
+        assert exc.value.status_code == 404
+        proxy.assert_not_awaited(), "the run was proxied for a case the caller cannot see"
+
+    @pytest.mark.asyncio
+    async def test_a_run_belonging_to_another_case_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Resolving the case is not enough on its own.
 
         A caller who owns *some* case could otherwise pass their own case_id
-        with somebody else's run_id and have the proxy answer.
+        with somebody else's run_id and have the proxy answer. The old
+        assertion was `"run_case_id" in source and "404" in source` — and
+        `404` appears on the `_resolve_case_id` path too, so deleting this
+        check entirely would still have satisfied it.
         """
-        source = inspect.getsource(cases.case_investigation_run)
-        assert "run_case_id" in source and "404" in source.replace("HTTP_404_NOT_FOUND", "404"), (
-            "the handler does not check the returned run belongs to the resolved case"
-        )
+        mine, theirs = uuid.uuid4(), uuid.uuid4()
+        monkeypatch.setattr(cases, "_resolve_case_id", AsyncMock(return_value=mine))
+        monkeypatch.setattr(cases, "_agents_proxy", AsyncMock(return_value=_proxy_response({"id": "r-1", "case_id": str(theirs)})))
+
+        with pytest.raises(HTTPException) as exc:
+            await cases.case_investigation_run(case_id="INC-001", run_id="r-1", db=MagicMock(), user=_user())
+
+        assert exc.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_a_run_belonging_to_this_case_is_returned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The refusals above are worthless if the route refuses everything."""
+        mine = uuid.uuid4()
+        monkeypatch.setattr(cases, "_resolve_case_id", AsyncMock(return_value=mine))
+        payload = {"id": "r-1", "case_id": str(mine), "status": "completed"}
+        monkeypatch.setattr(cases, "_agents_proxy", AsyncMock(return_value=_proxy_response(payload)))
+
+        assert await cases.case_investigation_run(case_id="INC-001", run_id="r-1", db=MagicMock(), user=_user()) == payload
+
+    @pytest.mark.asyncio
+    async def test_the_run_id_cannot_inject_url_syntax_into_the_proxied_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`run_id` is caller-supplied and is interpolated into a URL path."""
+        mine = uuid.uuid4()
+        monkeypatch.setattr(cases, "_resolve_case_id", AsyncMock(return_value=mine))
+        proxy = AsyncMock(return_value=_proxy_response({"id": "x", "case_id": str(mine)}))
+        monkeypatch.setattr(cases, "_agents_proxy", proxy)
+
+        await cases.case_investigation_run(case_id="INC-001", run_id="../../admin?x=1", db=MagicMock(), user=_user())
+
+        path = proxy.await_args.args[1]
+        assert "../" not in path and "?" not in path, path
