@@ -77,6 +77,9 @@ interface MarketplaceStats {
   community: number;
   by_tier?: Record<string, number>;
   detections_by_tier?: Record<string, number>;
+  /** Entries the engine loads. Partitions the catalogue with `quarantined`. */
+  executable?: number;
+  /** Entries the engine does not load, so they cannot fire. */
   quarantined?: number;
 }
 
@@ -186,6 +189,25 @@ function CommunityBadge() {
   );
 }
 
+/**
+ * The catalogue's load-bearing distinction, and the one it did not make.
+ *
+ * 6,112 of 7,155 entries — 85% — are rules the engine does not load. They were
+ * disclosed only by the *absence* of a green "Verified" badge, listed beside
+ * executable content, sorted together, and offered the same Install button.
+ * A reader had no way to tell a rule that fires from one that cannot.
+ */
+function ReferenceOnlyBadge({ reason }: { reason?: string }) {
+  return (
+    <span
+      title={reason || 'The engine does not load this rule, so it cannot fire.'}
+      className="inline-flex items-center gap-1 rounded border border-amber-600/70 bg-amber-900/30 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-300"
+    >
+      Reference only
+    </span>
+  );
+}
+
 function StarRating({ rating, count }: { rating: number; count: number }) {
   const full = Math.floor(rating);
   const half = rating - full >= 0.5;
@@ -245,6 +267,20 @@ interface InstallButtonProps {
 }
 
 function InstallButton({ item, installed, busy, onInstall, onUninstall }: InstallButtonProps) {
+  // Installing a rule the engine does not load is a no-op wearing the costume
+  // of an action: the per-tenant flag flips and nothing can ever match. The
+  // control says what it is instead.
+  if (item.enabled === false) {
+    return (
+      <span
+        title={item.quarantine_reason || 'The engine does not load this rule, so installing it would enable nothing.'}
+        className="cursor-not-allowed rounded border border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-500"
+      >
+        Cannot install
+      </span>
+    );
+  }
+
   if (installed) {
     // Allow operators to back out of an install; visible affordance, not destructive
     // since marketplace items are already on disk – we just clear the per-tenant flag.
@@ -318,9 +354,20 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
         </h3>
         <div className="flex shrink-0 flex-wrap gap-1 justify-end">
           <TypeBadge type={item.type} />
+          {item.enabled === false && <ReferenceOnlyBadge reason={item.quarantine_reason} />}
           {item.source === 'community' ? <CommunityBadge /> : item.verified && <VerifiedBadge />}
         </div>
       </div>
+
+      {/* Why it cannot fire, in the card rather than in a tooltip. A reader
+          scanning the grid should not have to hover to find out that most of
+          what they are looking at does not run. */}
+      {item.enabled === false && (
+        <p className="rounded border border-amber-700/40 bg-amber-950/30 px-2 py-1.5 text-xs leading-relaxed text-amber-200/90">
+          Not loaded by the detection engine — it cannot fire.{' '}
+          <span className="text-amber-200/70">{item.quarantine_reason}</span>
+        </p>
+      )}
 
       {/* Description */}
       <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
@@ -416,6 +463,12 @@ type SdkFilter = 'all' | 'python' | 'go' | 'both';
 //            parsed and provenance-tagged but not fixture-tested per AiSOC's bar
 // community = third-party contributions
 type TierFilter = 'all' | 'stable' | 'beta' | 'imported' | 'community';
+// Whether the engine loads the entry. Orthogonal to `tier`, which says where
+// the content came from — 1,770 of the imported Sigma rules are compiled and
+// proven to fire, and plenty of native rules ship disabled, so neither answers
+// the other's question. Defaults to `all` so the catalogue is never silently
+// smaller than it is; the stat cards and the per-card banner carry the split.
+type RunsFilter = 'all' | 'executable' | 'reference';
 
 // Fetch the installed-set, but treat 401/404 as "not signed in / API offline"
 // so the marketplace stays usable in static demos and unauthenticated previews.
@@ -564,6 +617,7 @@ export function MarketplaceView() {
   // whether it runs: 1,770 of the imported Sigma rules are compiled, proven to
   // fire and loaded by the engine, so this filter is about provenance.
   const [tierFilter, setTierFilter] = useState<TierFilter>('stable');
+  const [runsFilter, setRunsFilter] = useState<RunsFilter>('all');
   const [mitreFilter, setMitreFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -626,6 +680,8 @@ export function MarketplaceView() {
         const itemTier = item.tier ?? 'stable';
         if (itemTier !== tierFilter) return false;
       }
+      if (runsFilter === 'executable' && item.enabled === false) return false;
+      if (runsFilter === 'reference' && item.enabled !== false) return false;
       if (mitreFilter !== 'all' && !(item.mitre_techniques ?? []).includes(mitreFilter)) return false;
       if (sdkFilter !== 'all') {
         if (item.type !== 'plugin') return false;
@@ -683,10 +739,25 @@ export function MarketplaceView() {
     sourceFilter,
     sdkFilter,
     tierFilter,
+    runsFilter,
     mitreFilter,
     sortBy,
     sortOrder,
   ]);
+
+  // Counted from the items rather than read from `stats`, so the headline
+  // cannot disagree with the grid underneath it. `stats.quarantined` used to
+  // count rows carrying a `quarantine_reason` — 4,213 of the 6,112 that
+  // cannot fire — so the published figure and the catalogue were two numbers
+  // nothing compared.
+  const executableCount = useMemo(
+    () => (data?.items ?? []).filter((i) => i.enabled !== false).length,
+    [data],
+  );
+  const referenceOnlyCount = useMemo(
+    () => (data?.items ?? []).filter((i) => i.enabled === false).length,
+    [data],
+  );
 
   const stats = useMemo(() => {
     if (!data?.items) return null;
@@ -720,6 +791,7 @@ export function MarketplaceView() {
     // Reset tier to its default (`stable`) rather than `all` so users land
     // back on the curated view, not on 6,000+ rules.
     setTierFilter('stable');
+    setRunsFilter('all');
     setMitreFilter('all');
   };
 
@@ -734,6 +806,13 @@ export function MarketplaceView() {
             repo&rsquo;s <code className="text-zinc-300">detections/</code>,{' '}
             <code className="text-zinc-300">playbooks/</code> and{' '}
             <code className="text-zinc-300">plugins/</code> trees, so what you see here is what your AiSOC instance has on disk.
+          </p>
+          <p className="mt-2 text-sm text-zinc-400">
+            <span className="font-medium text-amber-300">On disk is not the same as running.</span>{' '}
+            Most of this catalogue is imported upstream content the detection engine does not load —
+            kept for provenance and for porting, marked{' '}
+            <span className="font-semibold uppercase tracking-wide text-amber-300">reference only</span>, and
+            not installable. The counts below say how many of each.
           </p>
         </div>
         {installedSet.size > 0 && (
@@ -762,19 +841,24 @@ export function MarketplaceView() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats.
+          `Executable` and `Reference only` lead, and they partition the
+          catalogue: every entry is one or the other and the two sum to
+          `Total`. `Total` alone was the headline for a long time, over a
+          catalogue where 85% of the entries cannot fire. */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           {[
-            { label: 'Total',       value: stats.total,      color: 'text-zinc-100' },
-            { label: 'Playbooks',   value: stats.playbooks,  color: 'text-purple-300' },
-            { label: 'Detections',  value: stats.detections, color: 'text-cyan-300' },
-            { label: 'Plugins',     value: stats.plugins,    color: 'text-emerald-300' },
-            { label: 'Verified',    value: stats.verified,   color: 'text-emerald-400' },
-            { label: 'Community',   value: stats.community,  color: 'text-blue-300' },
-          ].map(({ label, value, color }) => (
+            { label: 'Executable',     value: executableCount,    color: 'text-emerald-400', title: 'Loaded by the detection engine — these can fire.' },
+            { label: 'Reference only', value: referenceOnlyCount, color: 'text-amber-400',   title: 'Present on disk and not loaded by the engine. They cannot fire; they are here for provenance and for porting.' },
+            { label: 'Total',          value: stats.total,        color: 'text-zinc-100',    title: 'Every entry in the catalogue, executable or not.' },
+            { label: 'Playbooks',      value: stats.playbooks,    color: 'text-purple-300' },
+            { label: 'Detections',     value: stats.detections,   color: 'text-cyan-300' },
+            { label: 'Plugins',        value: stats.plugins,      color: 'text-emerald-300' },
+          ].map(({ label, value, color, title }) => (
             <div
               key={label}
+              title={title}
               className="rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 text-center"
             >
               <p className={clsx('text-3xl font-bold tabular-nums', color)}>{value}</p>
@@ -822,6 +906,32 @@ export function MarketplaceView() {
               )}
             >
               {s === 'all' ? 'All sources' : s}
+            </button>
+          ))}
+        </div>
+
+        {/* Does it run? The question the catalogue could not answer.
+            Separate from the tier chips below: tier is provenance, this is
+            capability, and the two disagree in both directions. */}
+        <div
+          className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
+          title="Executable = loaded by the detection engine. Reference only = present on disk and not loaded, so it cannot fire."
+        >
+          {([
+            ['all', 'All', undefined],
+            ['executable', 'Executable', executableCount],
+            ['reference', 'Reference only', referenceOnlyCount],
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              onClick={() => setRunsFilter(value)}
+              className={clsx(
+                'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+                runsFilter === value ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200',
+              )}
+            >
+              {label}
+              {count !== undefined && <span className="ml-1 text-zinc-500">({count})</span>}
             </button>
           ))}
         </div>

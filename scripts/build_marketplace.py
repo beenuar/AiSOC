@@ -363,9 +363,21 @@ def build_detection_item(
         "enabled": False if (quarantined or enabled is False) else True,
         "path": str(path.relative_to(REPO_ROOT)),
     }
-    if quarantined:
+    # Every disabled rule states why.
+    #
+    # `quarantine_reason` used to be written only on the `quarantined` branch,
+    # so 1,899 rules carried `enabled: false` with no reason at all — the
+    # ones whose own YAML says `enabled: false` but which are not in a
+    # quarantine directory. The catalogue showed them beside executable
+    # content with nothing but the absence of a green badge to tell them
+    # apart, and `stats.quarantined` counted 4,213 while 6,112 rules could
+    # not fire. A rule the engine does not load is not executable whatever
+    # the reason, and the reader needs the reason either way.
+    if not item["enabled"]:
         item["quarantine_reason"] = data.get("quarantine_reason") or (
             "imported rule; upstream query language not directly executable by the AiSOC engine yet"
+            if quarantined
+            else "disabled in the rule file (`enabled: false`); the engine does not load it"
         )
     provenance = data.get("provenance")
     if isinstance(provenance, dict):
@@ -647,7 +659,17 @@ def build_index() -> dict[str, Any]:
             "community": sum(1 for i in items if i.get("source") == "community"),
             "by_tier": _tier_breakdown(items),
             "detections_by_tier": _detection_tier_breakdown(items),
-            "quarantined": sum(1 for i in items if i.get("quarantine_reason")),
+            # The split a reader of this catalogue needs, and the one it did
+            # not have. `quarantined` counted rows carrying a
+            # `quarantine_reason`, which was 4,213 while 6,112 rows could not
+            # fire — so the published figure understated the gap by 1,899 and
+            # the two numbers had no relationship a reader could check.
+            #
+            # Both are derived from `enabled`, which is what the engine's own
+            # loaded-rule set decides, so they partition the catalogue: every
+            # item is one or the other and they sum to `total`.
+            "executable": sum(1 for i in items if i.get("enabled", True)),
+            "quarantined": sum(1 for i in items if not i.get("enabled", True)),
         },
         "mitre_coverage": coverage_block(items),
         "items": items,
