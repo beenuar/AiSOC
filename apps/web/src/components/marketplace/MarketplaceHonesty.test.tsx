@@ -1,7 +1,7 @@
 /**
  * A catalogue entry that cannot fire must not read like one that can.
  *
- * 6,112 of the 7,155 entries in `marketplace/index.json` — 85% — are rules
+ * 4,388 of the 7,155 entries in `marketplace/index.json` — 61% — are rules
  * the detection engine does not load. The only thing distinguishing them from
  * executable content was the *absence* of a green "Verified" badge. They were
  * sorted together, described identically, and offered the same Install
@@ -45,6 +45,7 @@ const executable: MarketplaceItem = {
   source: 'core',
   verified: true,
   enabled: true,
+  executable: true,
   category: 'cloud',
 };
 
@@ -59,7 +60,12 @@ const referenceOnly: MarketplaceItem = {
   tier: 'stable', // `stable` on purpose: the tier is provenance, not capability
   source: 'chronicle-detection-rules',
   verified: false,
-  enabled: false,
+  // `enabled: true` on purpose. 1,724 rules in the real corpus carry the
+  // opposite — `enabled: false` with the engine loading them anyway — so a
+  // view that read `enabled` would be wrong in both directions. Only
+  // `executable` decides.
+  enabled: true,
+  executable: false,
   quarantine_reason: 'imported rule; upstream query language not directly executable by the AiSOC engine yet',
   category: '_quarantine',
 };

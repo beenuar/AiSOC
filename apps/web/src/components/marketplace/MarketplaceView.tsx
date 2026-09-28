@@ -33,6 +33,17 @@ export interface MarketplaceItem {
     | string;
   tier?: 'stable' | 'beta' | 'imported' | 'community';
   enabled?: boolean;
+  /**
+   * Whether the detection engine loads this rule — the only thing that
+   * decides whether it can fire, and deliberately **not** `enabled`.
+   *
+   * `enabled` is the YAML's own flag OR-ed with the directory, and 1,724
+   * rules carry `enabled: false` while the engine loads every one of them:
+   * the Sigma compiler began translating rules in place without rewriting
+   * the flag. Reading `enabled` here would mark those 1,724 working rules
+   * unusable. Absent on playbooks and plugins, which are not engine rules.
+   */
+  executable?: boolean;
   quarantine_reason?: string;
   provenance?: {
     source?: string | null;
@@ -192,7 +203,7 @@ function CommunityBadge() {
 /**
  * The catalogue's load-bearing distinction, and the one it did not make.
  *
- * 6,112 of 7,155 entries — 85% — are rules the engine does not load. They were
+ * 4,388 of 7,155 entries — 61% — are rules the engine does not load. They were
  * disclosed only by the *absence* of a green "Verified" badge, listed beside
  * executable content, sorted together, and offered the same Install button.
  * A reader had no way to tell a rule that fires from one that cannot.
@@ -270,7 +281,7 @@ function InstallButton({ item, installed, busy, onInstall, onUninstall }: Instal
   // Installing a rule the engine does not load is a no-op wearing the costume
   // of an action: the per-tenant flag flips and nothing can ever match. The
   // control says what it is instead.
-  if (item.enabled === false) {
+  if (item.executable === false) {
     return (
       <span
         title={item.quarantine_reason || 'The engine does not load this rule, so installing it would enable nothing.'}
@@ -354,7 +365,7 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
         </h3>
         <div className="flex shrink-0 flex-wrap gap-1 justify-end">
           <TypeBadge type={item.type} />
-          {item.enabled === false && <ReferenceOnlyBadge reason={item.quarantine_reason} />}
+          {item.executable === false && <ReferenceOnlyBadge reason={item.quarantine_reason} />}
           {item.source === 'community' ? <CommunityBadge /> : item.verified && <VerifiedBadge />}
         </div>
       </div>
@@ -362,7 +373,7 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
       {/* Why it cannot fire, in the card rather than in a tooltip. A reader
           scanning the grid should not have to hover to find out that most of
           what they are looking at does not run. */}
-      {item.enabled === false && (
+      {item.executable === false && (
         <p className="rounded border border-amber-700/40 bg-amber-950/30 px-2 py-1.5 text-xs leading-relaxed text-amber-200/90">
           Not loaded by the detection engine — it cannot fire.{' '}
           <span className="text-amber-200/70">{item.quarantine_reason}</span>
@@ -680,8 +691,8 @@ export function MarketplaceView() {
         const itemTier = item.tier ?? 'stable';
         if (itemTier !== tierFilter) return false;
       }
-      if (runsFilter === 'executable' && item.enabled === false) return false;
-      if (runsFilter === 'reference' && item.enabled !== false) return false;
+      if (runsFilter === 'executable' && item.executable === false) return false;
+      if (runsFilter === 'reference' && item.executable !== false) return false;
       if (mitreFilter !== 'all' && !(item.mitre_techniques ?? []).includes(mitreFilter)) return false;
       if (sdkFilter !== 'all') {
         if (item.type !== 'plugin') return false;
@@ -747,15 +758,15 @@ export function MarketplaceView() {
 
   // Counted from the items rather than read from `stats`, so the headline
   // cannot disagree with the grid underneath it. `stats.quarantined` used to
-  // count rows carrying a `quarantine_reason` — 4,213 of the 6,112 that
-  // cannot fire — so the published figure and the catalogue were two numbers
-  // nothing compared.
+  // count rows carrying a `quarantine_reason` — 4,213 against the 4,388 the
+  // engine does not load — so the published figure and the truth table's
+  // were two numbers nothing compared.
   const executableCount = useMemo(
-    () => (data?.items ?? []).filter((i) => i.enabled !== false).length,
+    () => (data?.items ?? []).filter((i) => i.executable !== false).length,
     [data],
   );
   const referenceOnlyCount = useMemo(
-    () => (data?.items ?? []).filter((i) => i.enabled === false).length,
+    () => (data?.items ?? []).filter((i) => i.executable === false).length,
     [data],
   );
 
@@ -809,7 +820,7 @@ export function MarketplaceView() {
           </p>
           <p className="mt-2 text-sm text-zinc-400">
             <span className="font-medium text-amber-300">On disk is not the same as running.</span>{' '}
-            Most of this catalogue is imported upstream content the detection engine does not load —
+            Much of this catalogue is imported upstream content the detection engine does not load —
             kept for provenance and for porting, marked{' '}
             <span className="font-semibold uppercase tracking-wide text-amber-300">reference only</span>, and
             not installable. The counts below say how many of each.
