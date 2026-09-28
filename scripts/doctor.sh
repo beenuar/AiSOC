@@ -202,9 +202,30 @@ svc_base_url() { # <service> <container-port> <fallback-url>
   if [ -n "${_bu_port:-}" ]; then printf 'http://localhost:%s' "$_bu_port"; else printf '%s' "$3"; fi
 }
 
+# Every host port the CORE stack publishes, which is the whole point: `up`
+# calls this before compose so a conflict is named here rather than arriving
+# as `Bind for 127.0.0.1:NNNN failed: port is already allocated` against
+# whichever container lost the race, half a stack later.
+#
+# It used to list six of them, and the gap was not academic. CORE gained
+# Ollama and the LiteLLM gateway, and 11434 was never added — so the one
+# conflict this product's audience is most likely to have, a locally
+# installed Ollama, was the one the pre-flight did not look for. Observed on
+# this machine: `make up` with the host's Ollama holding 11434 passed the
+# port check, and the model the stack pulled was not the model answering on
+# that port.
+#
+# `tests/test_doctor_port_coverage.py` compares this list against the ports
+# docker-compose.yml actually publishes in CORE, in both directions, so the
+# next service added to the profile cannot quietly skip the check.
+#
 # host-port service container-port
 for spec in "5432 postgres 5432" "6379 redis 6379" "9092 kafka 9092" \
-            "8000 api 8000" "8081 ingest-worker 8080" "3000 web 3000"; do
+            "8000 api 8000" "8081 ingest-worker 8080" "9090 ingest-worker 9090" \
+            "3000 web 3000" "4000 litellm 4000" "11434 ollama 11434" \
+            "6333 qdrant 6333" "8001 agents 8084" "8002 actions 8085" \
+            "8003 fusion 8003" "8005 threatintel 8005" "8086 realtime 4000" \
+            "8088 connectors 8003"; do
   # shellcheck disable=SC2086 # deliberate word splitting of a fixed 3-field spec
   set -- $spec; port="$1"; owner="$2"; cport="$3"
   ours="$(svc_published_port "$owner" "$cport" || true)"
