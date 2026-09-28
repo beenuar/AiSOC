@@ -35,8 +35,8 @@ which reads as thin coverage of something that does run. No job runs
 ``DATABASE_URL=postgresql+asyncpg://x:x@localhost/x``, a deliberate
 non-database. ``integration.yml`` and ``upgrade-test.yml`` are the only
 workflows with a live Postgres, and the single API test either of them runs is
-``tests/test_mssp_portfolio_isolation.py``. The insert had never touched a
-database anywhere.
+``services/api/tests/test_mssp_portfolio_isolation.py``. The insert had never
+touched a database anywhere.
 
 *A test that greps for the table name.* ``test_wave1_loop_edges.py`` asserted
 ``"detection_rule_proposals" in str(db.execute.await_args.args[0])``. Being a
