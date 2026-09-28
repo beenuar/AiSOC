@@ -162,6 +162,19 @@ class TestNothingStartsOnAPublishedCredential:
             "a credential published in this repository looks healthy and is not"
         )
 
+    def test_grafana_cannot_start_on_its_documented_default(self, prod: dict) -> None:
+        """`GF_SECURITY_ADMIN_PASSWORD` defaults to `admin` in development.
+
+        Grafana is on the `monitoring` profile, so it is not in CORE — which
+        is exactly why the first pass of this file missed it. A profiled
+        service is still a production service the moment someone asks for the
+        profile, and a dashboard over production telemetry on the password
+        printed in its own documentation is not a smaller problem for being
+        opt-in.
+        """
+        value = dict(_env_items(prod.get("grafana") or {})).get("GF_SECURITY_ADMIN_PASSWORD", "")
+        assert ":?" in value, f"grafana would start on a default admin password: {value!r}"
+
     def test_no_dev_secret_literal_reaches_a_service(self, prod: dict) -> None:
         """Asserted on values, not on the file text.
 
@@ -176,6 +189,125 @@ class TestNothingStartsOnAPublishedCredential:
             if "_dev_secret" in value and ":-" not in value
         ]
         assert not leaked
+
+
+#: The only two things that need to be reachable from outside. The console
+#: proxies every upstream server-side (`apps/web/next.config.js` rewrites API,
+#: agents, fusion, realtime, enrichment and osquery-tls), so a browser only
+#: ever talks to `web`; `ingest-worker` accepts events from agents and SIEMs.
+REACHABLE = frozenset({"web", "ingest-worker"})
+
+
+def _publishers(services: dict) -> dict[str, list[str]]:
+    return {
+        name: [str(entry) for entry in (service or {}).get("ports") or []]
+        for name, service in services.items()
+        if (service or {}).get("ports")
+    }
+
+
+#: Services in the overlay whose `ports:` carries a Compose merge tag. Without
+#: one the value is *merged* with the base rather than replacing it, so a bare
+#: `ports: []` reads as "change nothing" and the inherited binding survives —
+#: which is exactly what happened on the first attempt at this file.
+_TAGGED_PORTS = re.compile(r"^  ([a-z0-9-]+):\n(?:    .*\n)*?    ports: (![a-z]+)", re.M)
+
+
+def _overlay_port_overrides() -> dict[str, str]:
+    """Which services override `ports`, and with which merge tag."""
+    text = PROD.read_text(encoding="utf-8")
+    tagged = dict(_TAGGED_PORTS.findall(text))
+    declared = {name for name, _ in re.findall(r"^  ([a-z0-9-]+):\n(?:    .*\n)*?    (ports:)", text, re.M)}
+    return {name: tagged.get(name, "") for name in declared}
+
+
+def _merged_services() -> dict:
+    """Base services with the overlay's port overrides applied.
+
+    The production file `include`s the base, so reading it alone sees only the
+    keys it restates — a check for "what publishes a port" would then miss
+    every binding the overlay never mentions, and pass while the stack exposes
+    them. Merged here rather than shelled out to `docker compose config`,
+    because a gate that needs a Docker daemon skips where there isn't one, and
+    a skip reports nothing while looking green.
+    """
+    merged = {name: dict(service or {}) for name, service in _services(DEV).items()}
+    overlay = _services(PROD)
+    overrides = _overlay_port_overrides()
+    for name, service in overlay.items():
+        target = merged.setdefault(name, {})
+        if "ports" in (service or {}) and name in overrides:
+            target["ports"] = (service or {}).get("ports") or []
+        for key, value in (service or {}).items():
+            if key != "ports":
+                target[key] = value
+    return merged
+
+
+class TestOnlyTheConsoleAndIngestAreReachable:
+    """The first pass of this file only unpublished the datastores.
+
+    Nineteen application and observability services were still bound to the
+    host — including Grafana on its documented admin/admin default — because
+    the assertion was written about datastores rather than about the surface.
+    A gate that names a category catches that category; the property wanted
+    here is the complement, so it is asserted as one.
+    """
+
+    def test_nothing_else_publishes_a_port(self) -> None:
+        extra = {n: p for n, p in _publishers(_merged_services()).items() if n not in REACHABLE}
+        assert not extra, f"these are reachable from the host and need not be: {extra}"
+
+    def test_the_two_that_should_be_reachable_still_are(self) -> None:
+        """The other direction. Unpublishing everything would pass the test
+        above and ship a deployment with no console and no way to send it
+        events."""
+        published = set(_publishers(_merged_services()))
+        assert published == REACHABLE, f"expected exactly {sorted(REACHABLE)}, found {sorted(published)}"
+
+    def test_every_port_override_carries_a_merge_tag(self) -> None:
+        """A bare `ports: []` merges instead of replacing, so it changes nothing.
+
+        This is not hypothetical: the first version of the production file used
+        `ports: []` throughout, `docker compose config` still showed Postgres,
+        Redis, Kafka and Qdrant bound to the host, and the file read as though
+        it had unpublished them.
+        """
+        untagged = [name for name, tag in _overlay_port_overrides().items() if not tag]
+        assert not untagged, f"these override `ports` without !reset or !override, so it does not apply: {untagged}"
+
+    def test_ingest_does_not_publish_its_metrics_listener(self) -> None:
+        """`ingest-worker` binds :8081 and :9090 in development. Prometheus
+        scrapes the second over the compose network, so binding it to the host
+        exposes the counters and buys nothing."""
+        ports = _publishers(_merged_services()).get("ingest-worker", [])
+        assert len(ports) == 1, f"expected only the ingest endpoint, found {ports}"
+        assert "9090" not in str(ports[0])
+
+    def test_the_development_file_would_fail_this(self) -> None:
+        extra = {n for n in _publishers(_services(DEV)) if n not in REACHABLE}
+        assert extra, "docker-compose.yml publishes nothing extra, so this gate compares against nothing"
+
+
+class TestServicesComeBackAfterAReboot:
+    """A production stack that does not restart is a production stack that is
+    down until somebody notices.
+
+    Checked across the merged file rather than the overlay, because the five
+    that lacked a policy — Prometheus, Alertmanager, Tempo, the OTel collector
+    and kafka-ui — were all services the overlay only touched to unpublish.
+    """
+
+    def test_every_service_declares_a_restart_policy(self) -> None:
+        merged = _merged_services()
+        missing = [name for name, service in merged.items() if not (service or {}).get("restart")]
+        assert not missing, f"these would stay down after a crash or reboot: {missing}"
+
+    def test_the_debug_topic_browser_is_not_one_of_them(self) -> None:
+        """kafka-ui is deliberately `no`: it is brought up to look at something
+        and shut down again, and restarting it on boot would leave an
+        unauthenticated topic browser running beside production data."""
+        assert str((_merged_services().get("kafka-ui") or {}).get("restart")) == "no"
 
 
 class TestNoDatastoreIsBoundToTheHost:

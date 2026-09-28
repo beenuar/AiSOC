@@ -78,6 +78,7 @@ services:
   # lives, which is the defect this file exists to make impossible.
   # ---------------------------------------------------------------------------
   api:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -101,6 +102,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
 
   ingest-worker:
+    ports: !override ["${AISOC_BIND_ADDR:-127.0.0.1}:8081:8080"]
     restart: unless-stopped
     environment:
       # Both keys, because `envmode.Current()` reads ENV first and the base
@@ -116,6 +118,7 @@ services:
       AISOC_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   fusion:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -124,6 +127,7 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD}
 
   agents:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -133,6 +137,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   actions:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -143,6 +148,7 @@ services:
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:?set AISOC_ACTIONS_SERVICE_TOKEN}
 
   connectors:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -152,6 +158,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
 
   threatintel:
+    ports: !reset []
     restart: unless-stopped
     environment:
       ENVIRONMENT: production
@@ -159,6 +166,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD}
 
   realtime:
+    ports: !reset []
     restart: unless-stopped
     environment:
       # Unset, the edge rejects every connection and /internal/* answers 503.
@@ -168,9 +176,11 @@ services:
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:?set REALTIME_INTERNAL_TOKEN — run `make env` to generate it}
 
   litellm:
+    ports: !reset []
     restart: unless-stopped
 
   ollama:
+    ports: !reset []
     restart: unless-stopped
 
   # The console. Demo mode is inlined at build time by Next, so this asserts
@@ -211,3 +221,61 @@ services:
   kafka-ui:
     profiles: !override ["debug-ui"]
     ports: !reset []
+    # `no`, not `unless-stopped`: this is a tool you bring up to look at
+    # something and shut down again. Restarting it on boot would quietly leave
+    # an unauthenticated topic browser running next to production data.
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # HARDENING.md section 2 — transport and network surface.
+  #
+  # Profiled services that bind a host port in the development file. The
+  # console and the ingest endpoint are the only things that need to be
+  # reachable: apps/web/next.config.js proxies every upstream server-side, so
+  # a browser only ever talks to `web`. Reach these with `docker compose exec`
+  # for debugging, or publish one deliberately in a local override.
+  # ---------------------------------------------------------------------------
+  alertmanager:
+    ports: !reset []
+    restart: unless-stopped
+
+  enrichment:
+    ports: !reset []
+
+  honeytokens:
+    ports: !reset []
+
+  osquery-tls:
+    ports: !reset []
+
+  otel-collector:
+    ports: !reset []
+    restart: unless-stopped
+
+  prometheus:
+    ports: !reset []
+    restart: unless-stopped
+
+  purple-team:
+    ports: !reset []
+
+  slack-bot:
+    ports: !reset []
+
+  tempo:
+    ports: !reset []
+    restart: unless-stopped
+
+  ueba:
+    ports: !reset []
+
+  # HARDENING.md section 5 — observability and audit.
+  #
+  # Grafana defaults to admin/admin in the development file. Required here, so
+  # `--profile monitoring` cannot start a dashboard over production telemetry
+  # on a password printed in its own documentation.
+  grafana:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD — required for the monitoring profile}

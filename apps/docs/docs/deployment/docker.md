@@ -132,10 +132,13 @@ matter:
 - **Nothing starts on a default credential.** Every secret is declared
   `${VAR:?...}`, so Compose refuses to start and names the variable rather than
   booting on a literal published in this repository and looking healthy.
-- **No datastore is bound to the host.** Postgres, Redis, Kafka, Qdrant, Neo4j,
-  ClickHouse and OpenSearch publish no ports. `kafka-ui` browses every topic
-  with no authentication of its own, so `--profile full` does not start it —
-  ask for it by name with `--profile debug-ui` if you want it.
+- **Only the console and the ingest endpoint are reachable.** `web` on `:3000`
+  and `ingest-worker` on `:8081`, and nothing else — not the datastores, not
+  the internal services, not Prometheus or Grafana. The console proxies every
+  upstream server-side, so a browser never needs to reach them; use
+  `docker compose exec` if you need one for debugging. `kafka-ui` browses every
+  topic with no authentication of its own, so `--profile full` does not start
+  it — ask for it by name with `--profile debug-ui`.
 
 CORE is 16 long-running services here, the same as development. `--profile full`
 is 21 rather than 22, the difference being `kafka-ui`.
@@ -158,6 +161,13 @@ is 21 rather than 22, the difference being `kafka-ui`.
 | `REDIS_PASSWORD` | no | Redis |
 | `JWT_SECRET` | no | Ingest token signing |
 | `NEO4J_PASSWORD`, `CLICKHOUSE_PASSWORD` | no | `full` profile stores |
+| `GRAFANA_ADMIN_PASSWORD` | no | `monitoring` profile dashboard |
+
+All of them are required even if you only run CORE, where the last three are
+unused: Compose interpolates the whole file before it decides which profile is
+active, so it cannot ask for a variable conditionally. Setting them to any
+value is fine if you never enable those profiles — the alternative is Grafana
+starting on `admin`/`admin` the day somebody adds `--profile monitoring`.
 
 Put a TLS-terminating reverse proxy in front: the console and ingest bind to
 loopback unless you set `AISOC_BIND_ADDR` deliberately.
