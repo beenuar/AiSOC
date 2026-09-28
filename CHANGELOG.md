@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.0.0] - 2026-09-27
+
+### BREAKING
+
+Two services now **refuse to serve rather than serve unauthenticated**, and one
+role loses a permission it was never meant to have. Each was a reported
+vulnerability; the upgrade action for all three is the same one command.
+
+- **The actions service returns 503 on every mutating route until
+  `AISOC_ACTIONS_SERVICE_TOKEN` is set.** It previously skipped authentication
+  entirely whenever that token was empty and `AISOC_DEV_MODE` was set — and
+  compose defaults that flag to `1` while nothing generated the token, so every
+  stock install dispatched `isolate_host`, `disable_user`, `block_ip` and
+  `run_script` to anything that could reach the port (GHSA-g4h7-p63q-r8r4).
+
+- **The realtime edge rejects every connection until
+  `AISOC_REALTIME_JWT_SECRET` is set, and its `/internal/*` routes return 503
+  until `REALTIME_INTERNAL_TOKEN` is set.** Ticket verification previously fell
+  back to a constant committed to this repository, and the `/internal/*` guard
+  treated an unset token as authorized (GHSA-4m55-xhcm-wjcr,
+  GHSA-mqjp-pcpr-7c37).
+
+- **A `viewer` token can no longer write to cases.** `cases:write` is now
+  enforced on all nine write routes in `cases.py`, where it had been enforced
+  nowhere despite being withheld from `viewer` deliberately
+  (GHSA-3r28-vqm2-6g6c).
+
+**What to do.** Run `make up` (or `make env`). `scripts/ensure_env.py` backfills
+every generated secret into an **existing** `.env`, not only a new one, so the
+documented path repairs itself and nothing else is required.
+
+**If you do not deploy with `make up`** — Helm, Terraform, or your own compose —
+generate the three values and set them on the `api`, `actions` and `realtime`
+services before upgrading. `.env.example` documents each one and which services
+must share it. A deployment that upgrades without them keeps running and stops
+responding on those routes, which is the intended failure and the reason this
+is a major.
+
 ### Added
 
 - **Auto-triage now sees the last few analyst decisions on an alert of this
@@ -166,51 +204,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pushes to `oci://ghcr.io/beenuar/charts` on a tag, and then resolves the
   pushed chart rather than trusting the push step's exit code.
 
-### Changed
-
-- **npm publishing is prepared for trusted publishing (OIDC), token-free**
-  (gap-closure Phase 12.4). PyPI already used it. npm's equivalent is
-  configured on a package's settings page, and a package that has never been
-  published has no settings page, so unlike PyPI there is no pending-publisher
-  path: the first upload of each package needs a token and every upload after
-  it does not. `release.yml` and `publish-cli.yml` now take the OIDC path when
-  the `AISOC_NPM_TRUSTED_PUBLISHING` repository variable is `true`, fall back
-  to `NPM_TOKEN`, and explain honestly when neither is configured. Three
-  things make that path work and each fails with a bare `ENEEDAUTH` if missed:
-  trusted publishing needs npm 11.5.1 or later and Node 22 ships npm 10, so
-  the workflow upgrades npm on that path; npm matches the **workflow
-  filename** exactly, so `aisoc` needs a second publisher registered for
-  `publish-cli.yml`; and provenance is generated automatically on the OIDC
-  path, so `--provenance` must not be passed. The one-time registry steps are
-  recorded as maintainer-only in `GAP_CLOSURE_PROGRESS.md` and in
-  `docs/operations/publishing.md`. **No package has been uploaded and none of
-  the eight is published.**
-
-### Fixed
-
-- **Five surfaces kept publishing 14 CORE services after ADR-0007 moved it to
-  16, and the gate that exists for this could not see them.** Two were the
-  landing page and the FAQ, so the wrong figure was the one a reader met first.
-  `check_profile_service_counts.py` validated a hardcoded list of ten sites
-  against `docker-compose.yml` and never asked the tree whether anything else
-  published the number, so a count added to a file the list does not name was a
-  count the gate never read. It reported "10 published figures agree" while
-  five disagreed.
-
-  The exact list stays, because the reasoning behind it is right: a gate that
-  guessed which integers were claims would flag prose forever. What was missing
-  is the other direction. `unregistered_mentions()` now finds anything that
-  publishes a service count and fails unless it is registered or exempted on
-  purpose, so a new surface must join the list rather than escape it. The five
-  are registered and the gate now checks fifteen sites; the exemptions are
-  release history, ADRs that state the count they decided, and two files
-  counting something other than a compose profile.
-
-  Verified by running the repaired gate against the pre-fix tree, where it
-  names all five.
-
-### Added
-
 - **Auto-triage now reads the tenant's own runbooks, cites the chunks it was
   given, and stays point-in-time when a replay measures it** (gap-closure
   Phase 6.3, knowledge-base half).
@@ -340,7 +333,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expected result and the one worth stating: the synthetic corpus has no tenant
   skills, so a skill-free deployment behaves byte for byte as it did.
   `services/agents` 1390 to 1423 tests, `services/api` 2970 to 3007.
-### Added
 
 - **Per-organisation white-label branding, with uploaded assets treated as a
   security boundary** (gap-closure Phase 13.2).
@@ -450,372 +442,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FastAPI and an inventory assertion can otherwise measure nothing.
   `docs/decisions/0008-scim-trust-boundary.md` records why the tenant comes
   from the credential and can come from nowhere else.
-
-### Fixed
-
-- **A deactivated user's API keys kept working, so deprovisioning ended
-  sessions and not programmatic access** (found while building Phase 13.1).
-
-  **The defect.** `_resolve_api_key` looked up a key's owning user with
-  `User.is_active == True` and, when that returned nothing, fell through with
-  `role = "api_service"` instead of refusing. A key belonging to a deactivated
-  principal therefore went on authenticating indefinitely, under a generic
-  role, with nothing in the request or the logs looking wrong. Deactivating an
-  account stopped that person's sessions, which is what anyone testing it
-  would have checked, and left every credential they had minted for themselves
-  live.
-
-  **The half that was already sound, and its limit.** `get_current_user`
-  re-reads `is_active` on every request, so a session stops at the next call
-  rather than at the next token expiry. What it cannot do is survive
-  re-activation: an access token minted before the deactivation is still
-  inside its expiry window and resumes working the moment the row flips back.
-  Access and refresh tokens now carry `iat`, `users.sessions_revoked_at`
-  records the cutoff, and a token issued at or before it is refused however
-  active the principal currently is. A token carrying no `iat` predates the
-  claim and is treated as revoked whenever a revocation exists, so credentials
-  minted before this change fail closed rather than outliving the revocation
-  meant to end them. The refresh path checks it too, and matters more there: a
-  refresh token outlives an access token by days.
-- **A CISA KEV entry is now checked against the tenant's own vulnerability
-  findings** (gap-closure Phase 8.2).
-
-  A CVE takes a different path from every other indicator, and the reason is
-  the point. A hash or an address appears in event telemetry, so "have we seen
-  this" is a question for the event lake. A CVE never appears there, so
-  sweeping the lake for `CVE-2024-3400` would return zero on every tenant
-  forever while looking exactly like a sweep that worked. The router sends a
-  vulnerability to the exposure check instead, and records that as a decision
-  rather than leaving it as an omission.
-
-  Exposure means an **unremediated finding in the tenant's own vulnerability
-  data** whose CVE matches. Inferring it by matching the catalogue's vendor and
-  product strings against an asset's operating system field is deliberately not
-  done: that produces a plausible-looking answer built on string similarity,
-  and a case task an analyst has to disprove costs more than no task, because
-  the second one they disprove is the last one they read.
-
-  A tenant with no vulnerability data is told exposure **could not be checked**,
-  never that they are unaffected. `checked` and `exposed_asset_count` are
-  separate fields and `exposed` requires both, so a caller reading the result
-  cannot render an unscanned tenant as clean. The task body also says the count
-  is a floor rather than a total, because assets with no scan coverage cannot
-  appear in it.
-
-  A match additionally sets `is_exploited` on the matching findings. CISA is a
-  better source for that field than a scanner that has not caught up, and it is
-  the one write on this path that is not a case task.
-
-  Dedup shares the `retro_hunt_sightings` ledger under indicator type `cve`, so
-  the catalogue republishing its whole contents on every fetch opens one task
-  rather than one a day. It is not charged against the sweep budget: two
-  indexed Postgres queries are not a warehouse scan, and charging them against
-  a budget sized for the latter would starve the cheaper check that has the
-  clearer action attached to it.
-
-- **The `NEW_IOC` events the threat-intel pipeline has always emitted now have
-  a consumer** (gap-closure Phase 8.1).
-
-  **The gap.** `services/threatintel/app/feeds/pipeline.py` publishes a
-  `NEW_IOC` event for every newly-seen indicator. A grep for the string across
-  the repository returned the emit site, the plan, and nothing else. Every
-  indicator the CISA KEV catalog, MISP, OTX and TAXII feeds produced went into
-  three stores and onto a Kafka topic that no process subscribed to, so a
-  customer whose estate contained a published indicator was never told.
-
-  **A trap found while closing it.** The pipeline's constructor defaults
-  `kafka_topic` to `threat-intel-events`, and `services/threatintel`'s lifespan
-  overrides it with `KAFKA_TOPIC_THREAT_INTEL`, which is `aisoc.threat_intel`.
-  The constructor default is unreachable in any running deployment. A consumer
-  written against the name in the signature would have subscribed to a topic no
-  producer writes, consumed nothing, logged nothing, and kept a healthy
-  container indefinitely. `check_ioc_lake_mapping.py` compares the producer's
-  setting with the consumer's so the two cannot drift.
-
-  **What was built.** A retro-hunt sweeps each opted-in tenant's recorded
-  history for a published indicator, over the event lake and, through the
-  Phase 4 typed indicator search, any SIEMs that tenant has connected. Off by
-  default at the deployment level and again per tenant, because a sweep costs
-  warehouse time and, where it reaches a connected SIEM, possibly money.
-
-  **Why one indicator cannot open a thousand alerts.** The sweep query is an
-  aggregate: it returns a sighting count, first and last sighting times, and
-  bounded distinct sets of hosts, users and connectors, so there is no code
-  path that yields a row per match. On top of that, `retro_hunt_sightings` has
-  a UNIQUE constraint on (tenant, indicator type, indicator value), so a feed
-  republishing an indicator daily updates a counter instead of alerting daily,
-  and the alert carries an idempotency key that the `alerts` table already has
-  a per-tenant partial unique index on. One of those stops the alert being
-  attempted and the other stops it landing.
-
-  **How the mapping was proven rather than asserted.** An indicator type has to
-  be searched in a column the lake writer actually fills, and this repository
-  has twice shipped rules matching fields nothing emitted. Every mapped column
-  is annotated with the OCSF path `lake_writer.event_to_row` reads to populate
-  it; `scripts/check_ioc_lake_mapping.py` reads that writer's source, the
-  ClickHouse DDL and the three threat-intel clients and fails on any
-  disagreement; and `tests/isolation/test_retro_hunt_live.py` drives a real
-  OCSF event through the real writer into a live ClickHouse and runs the real
-  query generator against it.
-
-  **The first version of that live test was vacuous, and the fix is the
-  interesting part.** Dropping `is_ip` from both IP columns was injected and
-  all eleven tests still passed, because the `iocs` array column carries the
-  address as a plain string and matched through the OR beside the typed
-  column. The test now probes **each mapped column on its own** and compares
-  the set that matched against the set that should, which does fail when a
-  column is pointed at something the writer does not fill. Measuring that also
-  corrected a claim this changelog would otherwise have carried: ClickHouse
-  coerces a string literal when comparing against an `IPv6` column, so
-  `toIPv6()` is explicitness about the stored value being the IPv4-mapped form,
-  not the difference between matching and not.
-
-  Three deliberate refusals are recorded rather than implemented: a URL is not
-  swept in the lake because there is no URL column and a scan of the compressed
-  raw payload would return a confident zero on connectors that leave it empty;
-  a CVE is not swept against telemetry because it does not appear there; and a
-  feed type nobody has mapped is refused by name and counted rather than
-  defaulted to a plausible one.
-- **Throughput and latency are now measured end to end, against the deployment
-  rather than against one function** (gap-closure Phase 12.1 and 12.2).
-
-  **The gap.** The only performance evidence in the tree was
-  `scripts/perf/throughput_harness.py`, which times `promote_normalized_event`
-  in one process. That is the right shape for a regression floor on the
-  CPU-bound stage and it opens no socket, serialises nothing to Kafka and
-  writes no row, so it could not answer what the platform sustains. Nothing
-  published an events-per-second figure, an event-to-alert latency, a consumer
-  lag or a dead-letter rate at all.
-
-  **How it was measured.** `services/demo-producer` gained a `--load` mode
-  that pushes one deterministic event shape carrying a run id, a sequence
-  number and the send time in the title, with a distinct host per event so the
-  fusion correlation key does not collapse thousands of events into a handful
-  of alerts. `scripts/perf/load_harness.py` drives it against the real ingest
-  endpoint with a real credential, then reads the `alerts` table and times each
-  event to the row it became, correcting for the measured offset between the
-  producer's clock and the database's rather than assuming they agree.
-
-  On an Apple M5 Max with 8 CPUs and 15.6 GiB allocated to Docker, on
-  2026-09-27: a single-host Compose stack drained **176.9 alerts/s** at
-  saturation, and at a paced 80 events/s the event-to-alert latency was
-  **p50 976 ms, p95 1,091 ms, p99 1,156 ms** with consumer lag at zero. A
-  three-node kind deployment of the Helm chart drained **214.0 alerts/s** and
-  ran **p50 982 ms, p95 1,317 ms, p99 1,437 ms** paced. Every run delivered
-  every accepted event exactly once with a zero dead-letter rate. The figures
-  are published with their hardware and date at
-  `apps/docs/docs/operations/performance.md` and labelled explicitly as **not
-  a service-level objective**; the raw JSON is committed under
-  `docs/perf/results/`.
-
-  **The producer used to overstate itself.** It added `len(batch)` to one
-  counter as soon as `Do()` returned, without reading the status, so a stack
-  answering 401 or 500 to every batch still reported full throughput. It now
-  counts attempted, accepted, rejected, refused and transport-failed
-  separately, reads the `accepted`/`rejected` counters out of the ingest
-  response, and exits non-zero when nothing was accepted, because a run that
-  accepted nothing is a failed run rather than one that measured zero.
-
-  **The gates.** `scripts/check_perf_results.py` fails a committed result that
-  loses its hardware, its date or the not-an-SLO label, and fails an
-  unmeasured metric that carries a `value` key, which is how an absence gets
-  rendered as `0.00`. A measured zero is asserted to survive, because zero
-  dead letters and zero drained lag are real results. `perf.yml` runs the gate
-  and both harness self-tests on every relevant pull request, and the
-  end-to-end harness against a Compose spine nightly with floors two orders of
-  magnitude below the published figures, because a gate tuned near a
-  measurement flaps on shared runners and gets disabled.
-
-- **A reference high-availability Helm deployment, and a chaos test that
-  proves the claim it makes** (gap-closure Phase 12.2).
-
-  `infra/helm/aisoc/values-ha.yaml` runs three Kafka brokers in KRaft mode
-  with replication factor 3 and `min.insync.replicas=2`, multi-replica ingest,
-  fusion, agents, API, web and realtime, and PodDisruptionBudgets that refuse
-  to make a second broker unavailable voluntarily. PostgreSQL and ClickHouse
-  are deliberately left external, with managed options and their trade-offs
-  documented at `apps/docs/docs/operations/ha-deployment.md`: a chart that
-  shipped a single-pod database under a file called `values-ha.yaml` would be
-  claiming something it does not do.
-
-  `scripts/chaos/fusion_restart.py` pushes a paced stream, destroys a fusion
-  replica with `--grace-period=0 --force` part way through, and then asserts
-  **against PostgreSQL** that every event ingest accepted produced exactly one
-  alert row. It asserts nothing about what the replacement pod says about
-  itself, because a consumer that has silently detached reports healthy: the
-  UEBA consumer that had no `except` at all sat at `Running` with restarts 0
-  and `/health` at 200 permanently. Run against the kind deployment on
-  2026-09-27: 6,000 events, one replica destroyed 24.3 seconds in with 1,840
-  alerts already stored, 6,000 rows afterwards, no loss and no duplicates.
-
-### Fixed
-
-- **A Helm install created every object and connected nothing** (gap-closure
-  Phase 12.2). Four defects that only running the chart could surface:
-
-  `KAFKA_BOOTSTRAP_SERVERS` was set on the UEBA deployment and on no other.
-  `services/ingest` and `services/fusion` both fall back to an in-code default
-  of `localhost:9092`, which inside a pod resolves to the pod itself, so a
-  Helm install produced an ingest publishing into nothing and a fusion
-  consuming nothing, with every object created and every probe green. It is
-  now set in the shared ConfigMap from one helper, alongside `KAFKA_BROKERS`.
-
-  The chart ran no brokers at all: `kafka.bootstrapServers` named a Service
-  called `kafka` that the chart never creates. It can now deploy a three-node
-  KRaft StatefulSet, off by default because a default install should not
-  silently start a stateful quorum.
-
-  The first batch after an install was lost. Auto-creation is enabled, and the
-  produce that triggers creation is the one that fails with
-  `Unknown Topic Or Partition`; a retry succeeds, so the symptom is exactly
-  one dropped batch at install time. A post-install hook now creates the four
-  spine topics and pins their partitions and replication factor rather than
-  inheriting whatever the broker defaults were at boot.
-
-  Readiness probes pointed at `/health`, which answers 200 while the process
-  is alive whatever its consumer is doing. `api`, `ingest`, `alert-fusion`,
-  `agents` and `realtime` now use `/readyz`, which evaluates a probe per
-  subscription and names any that have detached. Because Kubernetes does not
-  restart on readiness failure, and deliberately should not, consumers also
-  gained an init container that holds them back until a broker answers: on a
-  cold install the brokers are still electing a controller when fusion's
-  lifespan runs, aiokafka's bootstrap raises, the worker task ends and nothing
-  retries. Observed on kind on 2026-09-27, with every event accepted by ingest
-  and none becoming an alert.
-
-- **`ueba.enabled` was a switch wired to nothing.** `honeytokens-deployment.yaml`
-  and `purple-team-deployment.yaml` each gate on their own flag;
-  `ueba-deployment.yaml` did not, so `--set ueba.enabled=false` rendered the
-  Deployment anyway. On a cluster without that image it is two pods in
-  `CreateContainerConfigError` for a subsystem the operator switched off, and
-  the switch reads as broken rather than as absent. Gated by `helm.yml` in
-  both directions.
-
-### Changed
-
-- **A skill is a fourth context store, so the replay freeze grew to cover it,
-  and the one thing that bypasses the freeze now has to say so** (gap-closure
-  Phase 6.2).
-
-  Tenant skills carry `activated_at`, so unlike organisation-memory statements
-  they can be tested against the replay split and are: a skill activated after
-  the split never reaches a replayed prompt. The exception is a skill backtest,
-  which exists to apply a candidate to a window that closed before it was
-  written. Freezing it out would measure nothing and applying it silently would
-  publish an accuracy number an author could raise by restating the labels, so
-  the candidate travels in `ContextSnapshot.skills_under_test`, and the report's
-  method note names it and carries the caveat that the figure describes that
-  window rather than forecasting new alerts.
-
-  `scripts/check_triage_context_freeze.py` is the new control and it is the one
-  that matters for what comes next: a verdict may depend on durable state only
-  through `TriageContextReader`, because that protocol is the seam the freeze
-  acts on. It requires both readers to implement every declared source and
-  every snapshot store to be filtered by `capture_context` and to publish its
-  kept and dropped counts. It was proven against seven injected regressions
-  rather than observed passing, and the seventh found a real hole: a substring
-  match over the method note passed when `skills_frozen` was deleted while
-  `skills_dropped_after_split` remained, leaving a note that said what was
-  thrown away and never what was kept.
-
-- **The injection benchmark led with the number that describes the guard least.**
-  Both the tuned and the held-out detection rates were published, but the tuned
-  98.1% came first, followed by a per-surface table reading 21/21 and 14/14, and
-  the held-out 7.1% sat below it. A reader who stopped there left with the rate
-  the guard scores against payloads it was hardened for, which is the one case an
-  attacker does not present. The generated block now opens with the held-out
-  rate and the 91-point gap, and says plainly that the gap measures how much of
-  the hardening was pattern-fitting rather than threat coverage. Both rates are
-  still published, tuned first for continuity with earlier runs. This is the same
-  rule the unmeasured fidelity floors already follow: lead with the weaker
-  measurement and let the stronger one qualify it.
-
-### Fixed
-
-- **`POST /kb/query` returned 503 for every request that named a `doc_kinds`
-  filter.** SQLAlchemy's `text()` skips a bound-parameter name followed by a
-  colon so the Postgres `::` cast is not mistaken for one, which means
-  `:kinds::text[]` declared no parameter at all and `.bindparams(kinds=...)`
-  raised before the statement reached the database. The handler's catch-all
-  turned that into "Database error", so the symptom pointed at the database
-  and the fault was in the statement's own text. Now `CAST(:kinds AS text[])`.
-  Found by a test for the Phase 6.3 retrieval route, which had copied the same
-  spelling.
-
-- **The prompt-injection guard now reads a constrained field as the
-  instruction it encodes, and the change was graded twice so the second
-  number could contradict the first** (gap-closure Phase 3.4).
-
-  **The measured weakness.** `PromptInjectionGuard` scored 0.852 on the prose
-  corpus it was tuned against and **66.7% (36/54)** on the field-native
-  incident corpus: 18 of 21 in ticket text and 12 of 14 in an email body,
-  against 1 of 5 in a command line, 1 of 5 in a DNS name and 0 of 3 in a file
-  name. Two properties of an identifier field, and not a shortage of
-  vocabulary, account for almost all of it. An identifier spells a sentence
-  with punctuation, and `\b` does not fire inside `snake_case` at all because
-  `_` is a word character, so a rule reading `system prompt` in an email body
-  cannot read `append-your-system-prompt-here.collect.attacker.example`. And
-  the object of a real injected containment is a proper noun: an attacker
-  writes `isolate WIN-DC-PRIMARY` because they want one named machine off the
-  network, and a noun list can hold `host` but never a customer's hostnames.
-
-  **What changed.** Every string is now matched against a second *segmented*
-  view in which identifier punctuation reads as a word separator, so a rule
-  written for prose reaches a DNS label without being rewritten, and a rule
-  added later will too. Each rule declares which views it is valid on, with
-  the reason at the declaration: `injected_containment` stays literal-only
-  because once punctuation is gone a descriptive compound name is
-  indistinguishable from an instruction. `=` and `:` stay out of the
-  separator set because they bind a key to a value that several rules read.
-  The named-target case cannot be a view at all, since segmentation is what
-  makes an identifier readable and also what destroys the target's shape, so
-  `named_containment_target` matches the argument's shape on the literal view.
-
-  **Measured on the corpus:** detection **66.7% to 98.1% (53/54)**, and the
-  prose corpus **0.852 to 0.96** with its false-positive rate still at 0.00.
-  Seventeen of the eighteen ratchet entries are closed; the last is refused
-  rather than outstanding, because it is SQL injection and the rule to catch
-  it would flag the quoted WAF payloads that sit in real tickets.
-
-  **Measured on payloads it had never seen: 7.1% (2/28), and that is the
-  number to plan against.** `injection_holdout.py` is 28 adversarial payloads
-  and 6 benign controls in the same seven surfaces, authored after the guard
-  was committed and never consulted while its patterns were written. The
-  guard *before* this change scores 3.6% on it. So the hardening moved the
-  corpus it was written against by 31 points and moved unseen payloads by a
-  single payload: it fitted the corpus far more than it closed the threat.
-  The structural half did generalise, in that a prose rule now reaches an
-  identifier field, but what it carries there is still a set of word lists
-  and an attacker has a thesaurus. That corpus carries **no floor and no
-  ratchet**, because a target on a held-out set is an instruction to tune
-  against it; CI gates only that the measurement happens, that the published
-  page matches it, and that the recorded misses describe the tree in both
-  directions. Both rates are published on `apps/docs/docs/benchmark.md` with
-  the distinction stated, and the next structural step is named in D20 of
-  `GAP_CLOSURE_PROGRESS.md` and deliberately not taken there, because
-  anything built after reading the held-out set is tuned against it.
-
-  **False positives moved the right way and are reported like for like.** On
-  the eleven benign controls that existed before, 2 flagged and 1 does now.
-  `disable_user_offboarding_batch.ps1` no longer trips a *high*-severity
-  tool-name match, which had been demoting every case carrying an ordinary
-  offboarding script to manual review: `disable_user` sat inside it as a
-  substring, and tool names now match on token boundaries. Two bare nouns
-  leave `injected_containment` because each matched its own verb and turned
-  routine administration into a high-severity hit, and `suspend`, `terminate`
-  and `block` leave the named-target verb list because in the bare
-  verb-then-name form the administrative reading is the common one. Six
-  benign controls were added, four of which flag the un-narrowed draft of the
-  rule they sit beside. `benign-edr-response-cmdline` still flags and stays
-  recorded: suppressing it needs a rule that reads a containment verb in flag
-  position as a tool invocation, and a suppression rule is the one kind whose
-  failure mode is silence.
-
-  Scan cost is **137us to 297us** per full incident, deterministic, with no
-  I/O. The eval harness re-grade is unchanged on all eleven axes, the guard
-  not being on that path.
-
-### Added
 
 - **The investigation agent can reach the customer's own tools, and says so
   when it cannot** (gap-closure Phase 4.1, 4.3 and 4.4). Six typed tools:
@@ -1682,7 +1308,415 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the wrong side of the train/test split and leak the answer into its own
   evaluation.
 
+- **`scripts/check_route_shadowing.py`**, the breadth half of the same
+  question. The runtime check needs a service's whole driver stack importable
+  and so can only speak for one service; this is one AST pass over `services/`
+  covering all thirteen, 628 routes in 138 files. It is the weaker instrument
+  and says so in its own output: it pairs routes within a module and router,
+  and a parameter carrying a convertor is counted and named as deferred to the
+  runtime check rather than being judged or silently dropped. Routes whose path
+  is not a string literal are counted too, because the first draft of the fix
+  used a shared constant and the gate went on printing OK while skipping the
+  very pair it exists for.
+
+### Changed
+
+- **npm publishing is prepared for trusted publishing (OIDC), token-free**
+  (gap-closure Phase 12.4). PyPI already used it. npm's equivalent is
+  configured on a package's settings page, and a package that has never been
+  published has no settings page, so unlike PyPI there is no pending-publisher
+  path: the first upload of each package needs a token and every upload after
+  it does not. `release.yml` and `publish-cli.yml` now take the OIDC path when
+  the `AISOC_NPM_TRUSTED_PUBLISHING` repository variable is `true`, fall back
+  to `NPM_TOKEN`, and explain honestly when neither is configured. Three
+  things make that path work and each fails with a bare `ENEEDAUTH` if missed:
+  trusted publishing needs npm 11.5.1 or later and Node 22 ships npm 10, so
+  the workflow upgrades npm on that path; npm matches the **workflow
+  filename** exactly, so `aisoc` needs a second publisher registered for
+  `publish-cli.yml`; and provenance is generated automatically on the OIDC
+  path, so `--provenance` must not be passed. The one-time registry steps are
+  recorded as maintainer-only in `GAP_CLOSURE_PROGRESS.md` and in
+  `docs/operations/publishing.md`. **No package has been uploaded and none of
+  the eight is published.**
+
+- **A skill is a fourth context store, so the replay freeze grew to cover it,
+  and the one thing that bypasses the freeze now has to say so** (gap-closure
+  Phase 6.2).
+
+  Tenant skills carry `activated_at`, so unlike organisation-memory statements
+  they can be tested against the replay split and are: a skill activated after
+  the split never reaches a replayed prompt. The exception is a skill backtest,
+  which exists to apply a candidate to a window that closed before it was
+  written. Freezing it out would measure nothing and applying it silently would
+  publish an accuracy number an author could raise by restating the labels, so
+  the candidate travels in `ContextSnapshot.skills_under_test`, and the report's
+  method note names it and carries the caveat that the figure describes that
+  window rather than forecasting new alerts.
+
+  `scripts/check_triage_context_freeze.py` is the new control and it is the one
+  that matters for what comes next: a verdict may depend on durable state only
+  through `TriageContextReader`, because that protocol is the seam the freeze
+  acts on. It requires both readers to implement every declared source and
+  every snapshot store to be filtered by `capture_context` and to publish its
+  kept and dropped counts. It was proven against seven injected regressions
+  rather than observed passing, and the seventh found a real hole: a substring
+  match over the method note passed when `skills_frozen` was deleted while
+  `skills_dropped_after_split` remained, leaving a note that said what was
+  thrown away and never what was kept.
+
+- **The injection benchmark led with the number that describes the guard least.**
+  Both the tuned and the held-out detection rates were published, but the tuned
+  98.1% came first, followed by a per-surface table reading 21/21 and 14/14, and
+  the held-out 7.1% sat below it. A reader who stopped there left with the rate
+  the guard scores against payloads it was hardened for, which is the one case an
+  attacker does not present. The generated block now opens with the held-out
+  rate and the 91-point gap, and says plainly that the gap measures how much of
+  the hardening was pattern-fitting rather than threat coverage. Both rates are
+  still published, tuned first for continuity with earlier runs. This is the same
+  rule the unmeasured fidelity floors already follow: lead with the weaker
+  measurement and let the stronger one qualify it.
+
 ### Fixed
+
+- **Five surfaces kept publishing 14 CORE services after ADR-0007 moved it to
+  16, and the gate that exists for this could not see them.** Two were the
+  landing page and the FAQ, so the wrong figure was the one a reader met first.
+  `check_profile_service_counts.py` validated a hardcoded list of ten sites
+  against `docker-compose.yml` and never asked the tree whether anything else
+  published the number, so a count added to a file the list does not name was a
+  count the gate never read. It reported "10 published figures agree" while
+  five disagreed.
+
+  The exact list stays, because the reasoning behind it is right: a gate that
+  guessed which integers were claims would flag prose forever. What was missing
+  is the other direction. `unregistered_mentions()` now finds anything that
+  publishes a service count and fails unless it is registered or exempted on
+  purpose, so a new surface must join the list rather than escape it. The five
+  are registered and the gate now checks fifteen sites; the exemptions are
+  release history, ADRs that state the count they decided, and two files
+  counting something other than a compose profile.
+
+  Verified by running the repaired gate against the pre-fix tree, where it
+  names all five.
+
+- **A deactivated user's API keys kept working, so deprovisioning ended
+  sessions and not programmatic access** (found while building Phase 13.1).
+
+  **The defect.** `_resolve_api_key` looked up a key's owning user with
+  `User.is_active == True` and, when that returned nothing, fell through with
+  `role = "api_service"` instead of refusing. A key belonging to a deactivated
+  principal therefore went on authenticating indefinitely, under a generic
+  role, with nothing in the request or the logs looking wrong. Deactivating an
+  account stopped that person's sessions, which is what anyone testing it
+  would have checked, and left every credential they had minted for themselves
+  live.
+
+  **The half that was already sound, and its limit.** `get_current_user`
+  re-reads `is_active` on every request, so a session stops at the next call
+  rather than at the next token expiry. What it cannot do is survive
+  re-activation: an access token minted before the deactivation is still
+  inside its expiry window and resumes working the moment the row flips back.
+  Access and refresh tokens now carry `iat`, `users.sessions_revoked_at`
+  records the cutoff, and a token issued at or before it is refused however
+  active the principal currently is. A token carrying no `iat` predates the
+  claim and is treated as revoked whenever a revocation exists, so credentials
+  minted before this change fail closed rather than outliving the revocation
+  meant to end them. The refresh path checks it too, and matters more there: a
+  refresh token outlives an access token by days.
+- **A CISA KEV entry is now checked against the tenant's own vulnerability
+  findings** (gap-closure Phase 8.2).
+
+  A CVE takes a different path from every other indicator, and the reason is
+  the point. A hash or an address appears in event telemetry, so "have we seen
+  this" is a question for the event lake. A CVE never appears there, so
+  sweeping the lake for `CVE-2024-3400` would return zero on every tenant
+  forever while looking exactly like a sweep that worked. The router sends a
+  vulnerability to the exposure check instead, and records that as a decision
+  rather than leaving it as an omission.
+
+  Exposure means an **unremediated finding in the tenant's own vulnerability
+  data** whose CVE matches. Inferring it by matching the catalogue's vendor and
+  product strings against an asset's operating system field is deliberately not
+  done: that produces a plausible-looking answer built on string similarity,
+  and a case task an analyst has to disprove costs more than no task, because
+  the second one they disprove is the last one they read.
+
+  A tenant with no vulnerability data is told exposure **could not be checked**,
+  never that they are unaffected. `checked` and `exposed_asset_count` are
+  separate fields and `exposed` requires both, so a caller reading the result
+  cannot render an unscanned tenant as clean. The task body also says the count
+  is a floor rather than a total, because assets with no scan coverage cannot
+  appear in it.
+
+  A match additionally sets `is_exploited` on the matching findings. CISA is a
+  better source for that field than a scanner that has not caught up, and it is
+  the one write on this path that is not a case task.
+
+  Dedup shares the `retro_hunt_sightings` ledger under indicator type `cve`, so
+  the catalogue republishing its whole contents on every fetch opens one task
+  rather than one a day. It is not charged against the sweep budget: two
+  indexed Postgres queries are not a warehouse scan, and charging them against
+  a budget sized for the latter would starve the cheaper check that has the
+  clearer action attached to it.
+
+- **The `NEW_IOC` events the threat-intel pipeline has always emitted now have
+  a consumer** (gap-closure Phase 8.1).
+
+  **The gap.** `services/threatintel/app/feeds/pipeline.py` publishes a
+  `NEW_IOC` event for every newly-seen indicator. A grep for the string across
+  the repository returned the emit site, the plan, and nothing else. Every
+  indicator the CISA KEV catalog, MISP, OTX and TAXII feeds produced went into
+  three stores and onto a Kafka topic that no process subscribed to, so a
+  customer whose estate contained a published indicator was never told.
+
+  **A trap found while closing it.** The pipeline's constructor defaults
+  `kafka_topic` to `threat-intel-events`, and `services/threatintel`'s lifespan
+  overrides it with `KAFKA_TOPIC_THREAT_INTEL`, which is `aisoc.threat_intel`.
+  The constructor default is unreachable in any running deployment. A consumer
+  written against the name in the signature would have subscribed to a topic no
+  producer writes, consumed nothing, logged nothing, and kept a healthy
+  container indefinitely. `check_ioc_lake_mapping.py` compares the producer's
+  setting with the consumer's so the two cannot drift.
+
+  **What was built.** A retro-hunt sweeps each opted-in tenant's recorded
+  history for a published indicator, over the event lake and, through the
+  Phase 4 typed indicator search, any SIEMs that tenant has connected. Off by
+  default at the deployment level and again per tenant, because a sweep costs
+  warehouse time and, where it reaches a connected SIEM, possibly money.
+
+  **Why one indicator cannot open a thousand alerts.** The sweep query is an
+  aggregate: it returns a sighting count, first and last sighting times, and
+  bounded distinct sets of hosts, users and connectors, so there is no code
+  path that yields a row per match. On top of that, `retro_hunt_sightings` has
+  a UNIQUE constraint on (tenant, indicator type, indicator value), so a feed
+  republishing an indicator daily updates a counter instead of alerting daily,
+  and the alert carries an idempotency key that the `alerts` table already has
+  a per-tenant partial unique index on. One of those stops the alert being
+  attempted and the other stops it landing.
+
+  **How the mapping was proven rather than asserted.** An indicator type has to
+  be searched in a column the lake writer actually fills, and this repository
+  has twice shipped rules matching fields nothing emitted. Every mapped column
+  is annotated with the OCSF path `lake_writer.event_to_row` reads to populate
+  it; `scripts/check_ioc_lake_mapping.py` reads that writer's source, the
+  ClickHouse DDL and the three threat-intel clients and fails on any
+  disagreement; and `tests/isolation/test_retro_hunt_live.py` drives a real
+  OCSF event through the real writer into a live ClickHouse and runs the real
+  query generator against it.
+
+  **The first version of that live test was vacuous, and the fix is the
+  interesting part.** Dropping `is_ip` from both IP columns was injected and
+  all eleven tests still passed, because the `iocs` array column carries the
+  address as a plain string and matched through the OR beside the typed
+  column. The test now probes **each mapped column on its own** and compares
+  the set that matched against the set that should, which does fail when a
+  column is pointed at something the writer does not fill. Measuring that also
+  corrected a claim this changelog would otherwise have carried: ClickHouse
+  coerces a string literal when comparing against an `IPv6` column, so
+  `toIPv6()` is explicitness about the stored value being the IPv4-mapped form,
+  not the difference between matching and not.
+
+  Three deliberate refusals are recorded rather than implemented: a URL is not
+  swept in the lake because there is no URL column and a scan of the compressed
+  raw payload would return a confident zero on connectors that leave it empty;
+  a CVE is not swept against telemetry because it does not appear there; and a
+  feed type nobody has mapped is refused by name and counted rather than
+  defaulted to a plausible one.
+- **Throughput and latency are now measured end to end, against the deployment
+  rather than against one function** (gap-closure Phase 12.1 and 12.2).
+
+  **The gap.** The only performance evidence in the tree was
+  `scripts/perf/throughput_harness.py`, which times `promote_normalized_event`
+  in one process. That is the right shape for a regression floor on the
+  CPU-bound stage and it opens no socket, serialises nothing to Kafka and
+  writes no row, so it could not answer what the platform sustains. Nothing
+  published an events-per-second figure, an event-to-alert latency, a consumer
+  lag or a dead-letter rate at all.
+
+  **How it was measured.** `services/demo-producer` gained a `--load` mode
+  that pushes one deterministic event shape carrying a run id, a sequence
+  number and the send time in the title, with a distinct host per event so the
+  fusion correlation key does not collapse thousands of events into a handful
+  of alerts. `scripts/perf/load_harness.py` drives it against the real ingest
+  endpoint with a real credential, then reads the `alerts` table and times each
+  event to the row it became, correcting for the measured offset between the
+  producer's clock and the database's rather than assuming they agree.
+
+  On an Apple M5 Max with 8 CPUs and 15.6 GiB allocated to Docker, on
+  2026-09-27: a single-host Compose stack drained **176.9 alerts/s** at
+  saturation, and at a paced 80 events/s the event-to-alert latency was
+  **p50 976 ms, p95 1,091 ms, p99 1,156 ms** with consumer lag at zero. A
+  three-node kind deployment of the Helm chart drained **214.0 alerts/s** and
+  ran **p50 982 ms, p95 1,317 ms, p99 1,437 ms** paced. Every run delivered
+  every accepted event exactly once with a zero dead-letter rate. The figures
+  are published with their hardware and date at
+  `apps/docs/docs/operations/performance.md` and labelled explicitly as **not
+  a service-level objective**; the raw JSON is committed under
+  `docs/perf/results/`.
+
+  **The producer used to overstate itself.** It added `len(batch)` to one
+  counter as soon as `Do()` returned, without reading the status, so a stack
+  answering 401 or 500 to every batch still reported full throughput. It now
+  counts attempted, accepted, rejected, refused and transport-failed
+  separately, reads the `accepted`/`rejected` counters out of the ingest
+  response, and exits non-zero when nothing was accepted, because a run that
+  accepted nothing is a failed run rather than one that measured zero.
+
+  **The gates.** `scripts/check_perf_results.py` fails a committed result that
+  loses its hardware, its date or the not-an-SLO label, and fails an
+  unmeasured metric that carries a `value` key, which is how an absence gets
+  rendered as `0.00`. A measured zero is asserted to survive, because zero
+  dead letters and zero drained lag are real results. `perf.yml` runs the gate
+  and both harness self-tests on every relevant pull request, and the
+  end-to-end harness against a Compose spine nightly with floors two orders of
+  magnitude below the published figures, because a gate tuned near a
+  measurement flaps on shared runners and gets disabled.
+
+- **A reference high-availability Helm deployment, and a chaos test that
+  proves the claim it makes** (gap-closure Phase 12.2).
+
+  `infra/helm/aisoc/values-ha.yaml` runs three Kafka brokers in KRaft mode
+  with replication factor 3 and `min.insync.replicas=2`, multi-replica ingest,
+  fusion, agents, API, web and realtime, and PodDisruptionBudgets that refuse
+  to make a second broker unavailable voluntarily. PostgreSQL and ClickHouse
+  are deliberately left external, with managed options and their trade-offs
+  documented at `apps/docs/docs/operations/ha-deployment.md`: a chart that
+  shipped a single-pod database under a file called `values-ha.yaml` would be
+  claiming something it does not do.
+
+  `scripts/chaos/fusion_restart.py` pushes a paced stream, destroys a fusion
+  replica with `--grace-period=0 --force` part way through, and then asserts
+  **against PostgreSQL** that every event ingest accepted produced exactly one
+  alert row. It asserts nothing about what the replacement pod says about
+  itself, because a consumer that has silently detached reports healthy: the
+  UEBA consumer that had no `except` at all sat at `Running` with restarts 0
+  and `/health` at 200 permanently. Run against the kind deployment on
+  2026-09-27: 6,000 events, one replica destroyed 24.3 seconds in with 1,840
+  alerts already stored, 6,000 rows afterwards, no loss and no duplicates.
+
+- **A Helm install created every object and connected nothing** (gap-closure
+  Phase 12.2). Four defects that only running the chart could surface:
+
+  `KAFKA_BOOTSTRAP_SERVERS` was set on the UEBA deployment and on no other.
+  `services/ingest` and `services/fusion` both fall back to an in-code default
+  of `localhost:9092`, which inside a pod resolves to the pod itself, so a
+  Helm install produced an ingest publishing into nothing and a fusion
+  consuming nothing, with every object created and every probe green. It is
+  now set in the shared ConfigMap from one helper, alongside `KAFKA_BROKERS`.
+
+  The chart ran no brokers at all: `kafka.bootstrapServers` named a Service
+  called `kafka` that the chart never creates. It can now deploy a three-node
+  KRaft StatefulSet, off by default because a default install should not
+  silently start a stateful quorum.
+
+  The first batch after an install was lost. Auto-creation is enabled, and the
+  produce that triggers creation is the one that fails with
+  `Unknown Topic Or Partition`; a retry succeeds, so the symptom is exactly
+  one dropped batch at install time. A post-install hook now creates the four
+  spine topics and pins their partitions and replication factor rather than
+  inheriting whatever the broker defaults were at boot.
+
+  Readiness probes pointed at `/health`, which answers 200 while the process
+  is alive whatever its consumer is doing. `api`, `ingest`, `alert-fusion`,
+  `agents` and `realtime` now use `/readyz`, which evaluates a probe per
+  subscription and names any that have detached. Because Kubernetes does not
+  restart on readiness failure, and deliberately should not, consumers also
+  gained an init container that holds them back until a broker answers: on a
+  cold install the brokers are still electing a controller when fusion's
+  lifespan runs, aiokafka's bootstrap raises, the worker task ends and nothing
+  retries. Observed on kind on 2026-09-27, with every event accepted by ingest
+  and none becoming an alert.
+
+- **`ueba.enabled` was a switch wired to nothing.** `honeytokens-deployment.yaml`
+  and `purple-team-deployment.yaml` each gate on their own flag;
+  `ueba-deployment.yaml` did not, so `--set ueba.enabled=false` rendered the
+  Deployment anyway. On a cluster without that image it is two pods in
+  `CreateContainerConfigError` for a subsystem the operator switched off, and
+  the switch reads as broken rather than as absent. Gated by `helm.yml` in
+  both directions.
+
+- **`POST /kb/query` returned 503 for every request that named a `doc_kinds`
+  filter.** SQLAlchemy's `text()` skips a bound-parameter name followed by a
+  colon so the Postgres `::` cast is not mistaken for one, which means
+  `:kinds::text[]` declared no parameter at all and `.bindparams(kinds=...)`
+  raised before the statement reached the database. The handler's catch-all
+  turned that into "Database error", so the symptom pointed at the database
+  and the fault was in the statement's own text. Now `CAST(:kinds AS text[])`.
+  Found by a test for the Phase 6.3 retrieval route, which had copied the same
+  spelling.
+
+- **The prompt-injection guard now reads a constrained field as the
+  instruction it encodes, and the change was graded twice so the second
+  number could contradict the first** (gap-closure Phase 3.4).
+
+  **The measured weakness.** `PromptInjectionGuard` scored 0.852 on the prose
+  corpus it was tuned against and **66.7% (36/54)** on the field-native
+  incident corpus: 18 of 21 in ticket text and 12 of 14 in an email body,
+  against 1 of 5 in a command line, 1 of 5 in a DNS name and 0 of 3 in a file
+  name. Two properties of an identifier field, and not a shortage of
+  vocabulary, account for almost all of it. An identifier spells a sentence
+  with punctuation, and `\b` does not fire inside `snake_case` at all because
+  `_` is a word character, so a rule reading `system prompt` in an email body
+  cannot read `append-your-system-prompt-here.collect.attacker.example`. And
+  the object of a real injected containment is a proper noun: an attacker
+  writes `isolate WIN-DC-PRIMARY` because they want one named machine off the
+  network, and a noun list can hold `host` but never a customer's hostnames.
+
+  **What changed.** Every string is now matched against a second *segmented*
+  view in which identifier punctuation reads as a word separator, so a rule
+  written for prose reaches a DNS label without being rewritten, and a rule
+  added later will too. Each rule declares which views it is valid on, with
+  the reason at the declaration: `injected_containment` stays literal-only
+  because once punctuation is gone a descriptive compound name is
+  indistinguishable from an instruction. `=` and `:` stay out of the
+  separator set because they bind a key to a value that several rules read.
+  The named-target case cannot be a view at all, since segmentation is what
+  makes an identifier readable and also what destroys the target's shape, so
+  `named_containment_target` matches the argument's shape on the literal view.
+
+  **Measured on the corpus:** detection **66.7% to 98.1% (53/54)**, and the
+  prose corpus **0.852 to 0.96** with its false-positive rate still at 0.00.
+  Seventeen of the eighteen ratchet entries are closed; the last is refused
+  rather than outstanding, because it is SQL injection and the rule to catch
+  it would flag the quoted WAF payloads that sit in real tickets.
+
+  **Measured on payloads it had never seen: 7.1% (2/28), and that is the
+  number to plan against.** `injection_holdout.py` is 28 adversarial payloads
+  and 6 benign controls in the same seven surfaces, authored after the guard
+  was committed and never consulted while its patterns were written. The
+  guard *before* this change scores 3.6% on it. So the hardening moved the
+  corpus it was written against by 31 points and moved unseen payloads by a
+  single payload: it fitted the corpus far more than it closed the threat.
+  The structural half did generalise, in that a prose rule now reaches an
+  identifier field, but what it carries there is still a set of word lists
+  and an attacker has a thesaurus. That corpus carries **no floor and no
+  ratchet**, because a target on a held-out set is an instruction to tune
+  against it; CI gates only that the measurement happens, that the published
+  page matches it, and that the recorded misses describe the tree in both
+  directions. Both rates are published on `apps/docs/docs/benchmark.md` with
+  the distinction stated, and the next structural step is named in D20 of
+  `GAP_CLOSURE_PROGRESS.md` and deliberately not taken there, because
+  anything built after reading the held-out set is tuned against it.
+
+  **False positives moved the right way and are reported like for like.** On
+  the eleven benign controls that existed before, 2 flagged and 1 does now.
+  `disable_user_offboarding_batch.ps1` no longer trips a *high*-severity
+  tool-name match, which had been demoting every case carrying an ordinary
+  offboarding script to manual review: `disable_user` sat inside it as a
+  substring, and tool names now match on token boundaries. Two bare nouns
+  leave `injected_containment` because each matched its own verb and turned
+  routine administration into a high-severity hit, and `suspend`, `terminate`
+  and `block` leave the named-target verb list because in the bare
+  verb-then-name form the administrative reading is the common one. Six
+  benign controls were added, four of which flag the un-narrowed draft of the
+  rule they sit beside. `benign-edr-response-cmdline` still flags and stays
+  recorded: suppressing it needs a rule that reads a containment verb in flag
+  position as a tool invocation, and a suppression rule is the one kind whose
+  failure mode is silence.
+
+  Scan cost is **137us to 297us** per full incident, deterministic, with no
+  I/O. The eval harness re-grade is unchanged on all eleven axes, the guard
+  not being on that path.
 
 - **An operator could earn an autonomy grant and had no working way to hand it
   back.** `DELETE /api/v1/autonomy-policy/grants` has been unreachable since it
@@ -1722,19 +1756,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than reporting an empty app clean, and it is proven against the defect: run
   on the pre-fix tree it names `DELETE /api/v1/autonomy-policy/grants` as
   answered by `reset_action_threshold`.
-
-### Added
-
-- **`scripts/check_route_shadowing.py`**, the breadth half of the same
-  question. The runtime check needs a service's whole driver stack importable
-  and so can only speak for one service; this is one AST pass over `services/`
-  covering all thirteen, 628 routes in 138 files. It is the weaker instrument
-  and says so in its own output: it pairs routes within a module and router,
-  and a parameter carrying a convertor is counted and named as deferred to the
-  runtime check rather than being judged or silently dropped. Routes whose path
-  is not a string literal are counted too, because the first draft of the fix
-  used a shared constant and the gate went on printing OK while skipping the
-  very pair it exists for.
 
 ## [11.2.0] — 2026-09-26
 

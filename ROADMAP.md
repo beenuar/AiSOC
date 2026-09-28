@@ -762,7 +762,7 @@ were moved onto the compiled ruleset, which is what closed the long-standing
 disagreement between the validator, the coverage page, the marketplace index
 and the truth table.
 
-Full inventory under `[11.2.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+Full inventory under `[12.0.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

@@ -7,7 +7,7 @@
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-11.2.0-f59e0b?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-12.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
@@ -51,20 +51,20 @@ git clone https://github.com/beenuar/AiSOC && cd AiSOC
 make up
 ```
 
-Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus
-`python3` (3.9+) and `bash` — `make doctor` checks all of it, and
-[Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements) says what
-each number was measured against. The first run downloads a ~2 GB language model into a
-named volume; only `make clean` fetches it again.
+Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus `python3`
+(3.9+) and `bash` — `make doctor` checks all of it, and
+[Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements) says what each number
+was measured against. The first run downloads a ~2 GB language model into a named volume; only
+`make clean` fetches it again.
 
-`make up` also creates `.env` and generates the three secrets in it — the credential-vault
-key, the session signing key, and the service-to-service token — then creates an
-administrator and prints its password. That password is generated on your machine, shown
-once, and stored nowhere: copy it, or mint a new one with `make bootstrap ARGS=--reset-password`.
+`make up` also creates `.env` and generates the **six** secrets in it — the credential vault, the
+session signing key, and the four service-to-service credentials — then creates an administrator and
+prints its password. That password is generated on your machine, shown once, and stored nowhere:
+copy it, or mint a new one with `make bootstrap ARGS=--reset-password`.
 
-Then **prove it actually works**. `make smoke` posts one real event to the
-ingest API, follows it through Kafka, detection, correlation and Postgres, and
-reads the alert back out of the public API. Every stage reports PASS or FAIL:
+Then **prove it actually works**. `make smoke` posts one real event to the ingest API, follows it
+through Kafka, detection, correlation and Postgres, and reads the alert back out of the public API.
+Every stage reports PASS or FAIL:
 
 ```
 $ make smoke
@@ -73,10 +73,10 @@ $ make smoke
 [PASS] alert is retrievable by id from the API
 ```
 
-Open **http://localhost:3000** and sign in with the credentials `make up` printed (API docs
-at **http://localhost:8000/api/docs**). On a server, set `AISOC_CONSOLE_URL` in `.env` —
-`make up` then prints that address rather than localhost, which is the one people can
-actually browse to. Stuck? `make doctor`.
+Open **http://localhost:3000** and sign in with the credentials `make up` printed (API docs at
+**http://localhost:8000/api/docs**). On a server, set `AISOC_CONSOLE_URL` in `.env` — `make up` then
+prints that address rather than localhost, which is the one people can browse to. Stuck?
+`make doctor`.
 
 ## Try it without connecting anything
 
@@ -171,19 +171,14 @@ reads *not measured*, never `0`. That was not always true; see
 Agents triage alerts and investigate incidents. What they can and cannot do:
 
 - **They read** the alert, its correlated siblings, entity context, and prior verdicts for the same signature.
-- **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model
-  chooses a tool and passes arguments; it never writes SQL.
+- **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model chooses a tool and passes arguments; it never writes SQL.
 - **Everything is logged** to the Investigation Ledger: prompts, tool calls, citations, the verdict, and token cost.
-- **Grounding is checked.** A verdict citing an indicator the evidence never
-  contained is demoted to human review rather than auto-closed.
-- **A prompt is validated before it is sent.** Raw logs, OCSF payloads and
-  secret-shaped values are refused, not redacted after the fact.
-- **Nothing executes without a human.** An approver must hold the required
-  permission tier and must not be the person who requested the action.
+- **Grounding is checked.** A verdict citing an indicator the evidence never contained is demoted to human review rather than auto-closed.
+- **A prompt is validated before it is sent.** Raw logs, OCSF payloads and secret-shaped values are refused, not redacted after the fact.
+- **Nothing executes without a human.** An approver must hold the required permission tier and must not be the person who requested the action.
 
-The bundled model means agents reason for real out of the box. When it returns
-something the schema rejects, triage falls back to a deterministic path and the
-rail shows which one answered — it never fabricates a verdict.
+The bundled model means agents reason for real out of the box. When it returns something the schema
+rejects, triage falls back to a deterministic path and the rail shows which one answered — it never fabricates a verdict.
 
 ## Project maturity
 
@@ -225,11 +220,16 @@ often right about are tabulated under [Installation](https://beenuar.github.io/A
 
 ## Security
 
-Secrets are generated per deployment and never committed; connector credentials are
-encrypted at rest. Services connect to Postgres as a DML-only role, so the row-level-security
-policies actually apply to them, and tenant isolation is enforced at the query layer in every
-store. RBAC gates every mutating route, ingest is authenticated, and the default install
-sends no prompt anywhere — the model runs beside it. Report issues via [SECURITY.md](SECURITY.md).
+Secrets are generated per deployment and never committed; connector credentials are encrypted at
+rest. Services connect to Postgres as a DML-only role, so the row-level-security policies actually
+apply to them, and tenant isolation is enforced at the query layer in every store. RBAC gates every
+mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the
+model runs beside it.
+
+**A service with no credential refuses to serve rather than serving unauthenticated.** As of v12.0.0
+the actions service and the realtime edge fail closed on a missing secret; `make up` generates all
+six, including into an `.env` that already exists. Eight reported vulnerabilities were fixed in that
+release — the [changelog](CHANGELOG.md) says what each was. Report via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
