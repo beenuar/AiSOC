@@ -295,13 +295,13 @@ async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> Submissi
             submitted_at, triaged_at, created_at
         ) VALUES (
             :id, :tenant_id, :by, :kind, :content, :sender, :subject,
-            :urls::text[], :verdict, :conf, :iocs::jsonb, :mitre,
+            CAST(:urls AS text[]), :verdict, :conf, CAST(:iocs AS jsonb), :mitre,
             :now, :now, :now
         ) RETURNING *
     """).bindparams(
         id=sub_id,
         tenant_id=user.tenant_id,
-        by=str(user) if user else "system",
+        by=user.email if user else "system",
         kind=body.artifact_kind,
         content=body.raw_content,
         sender=body.sender,
@@ -389,7 +389,7 @@ async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> S
     now = datetime.now(UTC)
     q = text("""
         UPDATE aisoc_phishing_submissions
-        SET verdict = :verdict, confidence = :conf, indicators = :iocs::jsonb,
+        SET verdict = :verdict, confidence = :conf, indicators = CAST(:iocs AS jsonb),
             mitre_technique = :mitre, triaged_at = :now
         WHERE id = :id AND tenant_id = :tenant_id RETURNING *
     """).bindparams(

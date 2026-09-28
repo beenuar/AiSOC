@@ -255,7 +255,7 @@ async def collect_evidence(body: CollectEvidenceRequest, db: DBSession, user: Au
             collected_at, status, created_at
         ) VALUES (
             :id, :tenant_id, :case_id, :fw, :ctrl, :title,
-            :kind, :summary, :payload::jsonb, :hash, :prev,
+            :kind, :summary, CAST(:payload AS jsonb), :hash, :prev,
             :now, 'pending', :now
         ) RETURNING *
     """).bindparams(
@@ -340,7 +340,7 @@ async def review_evidence(evidence_id: uuid.UUID, body: ReviewEvidenceRequest, d
         UPDATE aisoc_compliance_evidence
         SET status = :decision, reviewed_by = :reviewer, reviewed_at = :now
         WHERE id = :id AND tenant_id = :tenant_id RETURNING *
-    """).bindparams(id=evidence_id, tenant_id=user.tenant_id, decision=body.decision, reviewer=body.reviewer or str(user), now=now)
+    """).bindparams(id=evidence_id, tenant_id=user.tenant_id, decision=body.decision, reviewer=body.reviewer or user.email, now=now)
     try:
         row = (await db.execute(q)).fetchone()
         if not row:

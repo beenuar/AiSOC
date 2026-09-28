@@ -74,6 +74,14 @@ class CurrentUser:
         self.email = email
         self.scopes = scopes  # None → role-based; list → API-key scoped
 
+    def __repr__(self) -> str:
+        # Without this a stray `str(user)` persists `<...CurrentUser object at
+        # 0x...>` into whatever column it was bound to, which is what happened
+        # to three actor columns. `email` is deliberately omitted: this value
+        # reaches logs and tracebacks, and the address of the person holding
+        # the session is not something a stack trace should carry.
+        return f"CurrentUser(user_id={self.user_id}, tenant_id={self.tenant_id}, role={self.role})"
+
     def require_permission(self, permission: str) -> None:
         if self.scopes is not None:
             # API-key path: check explicit scopes list

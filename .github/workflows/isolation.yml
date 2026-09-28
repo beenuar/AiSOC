@@ -24,6 +24,7 @@ on:
       - "scripts/check_route_auth.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
+      - "scripts/check_text_bind_casts.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -45,6 +46,7 @@ on:
       - "scripts/check_route_auth.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
+      - "scripts/check_text_bind_casts.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -176,6 +178,16 @@ jobs:
 
       - name: Every query on a tenant-scoped table filters on a tenant
         run: python scripts/check_tenant_query_predicates.py
+
+      # A tenant predicate is worth nothing in a statement that cannot be
+      # built. `:tenant_id::uuid` declares `tenant_i`, so `.bindparams()`
+      # raises before the query is sent and the predicate gate above still
+      # reads the filter it wanted in the source text.
+      - name: Bind-cast gate self-test (the defect, and three near misses)
+        run: python scripts/check_text_bind_casts.py --self-test
+
+      - name: No bind parameter is followed by a `::` cast
+        run: python scripts/check_text_bind_casts.py
 
       # The second layer, which was decoration until 061_runtime_app_role.sql:
       # every service connected as a superuser, and a superuser ignores RLS

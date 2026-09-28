@@ -30,8 +30,11 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import uuid
 
 from app.api.v1.deps import CurrentUser
+
+_UUID = uuid.uuid4()
 
 ENDPOINTS = pathlib.Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "endpoints"
 
@@ -95,6 +98,74 @@ def test_no_handler_reads_an_attribute_the_principal_lacks() -> None:
                     offenders.append(f"{path.name}:{node.lineno} {node.value.id}.{node.attr}")
 
     assert not offenders, "authenticated principal has no such attribute:\n  " + "\n  ".join(offenders)
+
+
+def _stringified_principals(fn: ast.AST, bound: set[str]) -> list[str]:
+    """Calls to ``str()`` on a name bound to the principal, inside ``fn``."""
+    found: list[str] = []
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "str"
+            and len(node.args) == 1
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id in bound
+        ):
+            found.append(f"{node.lineno} str({node.args[0].id})")
+    return found
+
+
+def test_no_handler_stringifies_the_principal() -> None:
+    """``str(user)`` is a memory address, and three actor columns held one.
+
+    The attribute gate above walks ``ast.Attribute`` and so never saw this:
+    ``str(user)`` is an ``ast.Call``. ``CurrentUser`` is a plain class, so the
+    value bound into ``submitted_by``, ``created_by`` and ``reviewed_by`` was
+    ``<app.api.v1.deps.CurrentUser object at 0x...>`` — in the column an
+    auditor reads, and for ``created_by`` rendered back over the API. It
+    passed because the test helper assigned ``__str__`` to its mock, making
+    the fake friendlier than the thing it stood in for.
+
+    Bind the attribute you mean (``user.email``, ``user.user_id``). A
+    ``__repr__`` now exists on ``CurrentUser`` so a stray one is at least
+    legible, but a repr is a diagnostic, never an actor identity.
+    """
+    offenders: list[str] = []
+    for path in sorted(ENDPOINTS.glob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            bound = _principal_locals(fn)
+            if not bound:
+                continue
+            offenders.extend(f"{path.name}:{hit}" for hit in _stringified_principals(fn, bound))
+
+    assert not offenders, "stringify the attribute, not the principal:\n  " + "\n  ".join(offenders)
+
+
+def test_the_stringify_gate_would_catch_the_defect_it_was_written_for() -> None:
+    """Feed it the original shape; a gate that cannot fail is decorative."""
+    source = (
+        "async def submit(\n"
+        "    user: AuthUser,\n"
+        "):\n"
+        "    return q.bindparams(by=str(user) if user else 'system', tenant=str(user.tenant_id))\n"
+    )
+    fn = ast.parse(source).body[0]
+    bound = _principal_locals(fn)
+    assert bound == {"user"}
+    hits = _stringified_principals(fn, bound)
+    assert len(hits) == 1 and hits[0].endswith("str(user)"), hits
+
+
+def test_the_authenticated_principal_is_legible_when_printed() -> None:
+    """No ``CurrentUser`` should ever render as an address, gate or no gate."""
+    rendered = str(CurrentUser(user_id=_UUID, tenant_id=_UUID, role="analyst", email="analyst@example.com"))
+    assert "object at 0x" not in rendered, rendered
+    assert str(_UUID) in rendered and "analyst" in rendered, rendered
+    assert "analyst@example.com" not in rendered, "the repr reaches logs and tracebacks; keep the address out of it"
 
 
 def test_the_gate_would_catch_the_defect_it_was_written_for() -> None:
