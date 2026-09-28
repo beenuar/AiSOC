@@ -893,15 +893,12 @@ def main() -> None:
             )
             sys.exit(2)
         try:
-            wet_kwargs: dict[str, str] = {}
-            if args.wet_model:
-                wet_kwargs["model"] = args.wet_model
             wet_report = compute_wet_eval(
                 mode=wet_mode,
+                model=args.wet_model or _TELEMETRY_DEFAULT_MODEL,
                 harness_version=(f"scripts/run_evals.py @ {os.environ.get('GITHUB_SHA', 'local')}"),
                 limit=args.wet_limit,
                 require_live=args.wet_require_live,
-                **wet_kwargs,
             )
         except RuntimeError as exc:
             # Only reachable under --wet-require-live. A caller that asked for
