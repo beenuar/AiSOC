@@ -45,9 +45,13 @@ def _index() -> dict[str, Any]:
 def _first(predicate: Callable[[dict[str, Any]], bool]) -> dict[str, Any]:
     # One exit, because `pytest.skip` raises and a trailing call to it reads
     # to a static analyser as a path that falls off the end without returning.
-    match = next((item for item in _index().get("items") or [] if predicate(item)), None)
+    items: list[dict[str, Any]] = _index().get("items") or []
+    match: dict[str, Any] | None = next((item for item in items if predicate(item)), None)
     if match is None:
-        pytest.skip("catalogue has no entry of this kind")
+        # `pytest.skip()` raises, but it is not typed `NoReturn`, so a type
+        # checker reads the line below as returning `None`. Raising the very
+        # exception it raises says the same thing in a way both tools follow.
+        raise pytest.skip.Exception("catalogue has no entry of this kind")
     return match
 
 
@@ -81,7 +85,7 @@ class TestReferenceOnlyIsRefused:
         assert "reference-only" in str(caught.value.detail).lower()
 
     def test_the_refusal_says_why(self) -> None:
-        item = _first(lambda i: i.get("executable") is False and i.get("quarantine_reason"))
+        item = _first(lambda i: i.get("executable") is False and bool(i.get("quarantine_reason")))
         with pytest.raises(HTTPException) as caught:
             _install(item)
         assert item["quarantine_reason"] in str(caught.value.detail)
@@ -99,7 +103,7 @@ class TestExecutableStillInstalls:
     def test_an_executable_rule_installs(self) -> None:
         # The other direction. Refusing everything would satisfy the class
         # above and break the marketplace.
-        item = _first(lambda i: i["type"] == "detection" and i.get("executable") is True)
+        item = _first(lambda i: bool(i["type"] == "detection") and i.get("executable") is True)
         result = _install(item)
         assert result.id == item["id"]
         assert result.already_installed is False
@@ -109,6 +113,6 @@ class TestExecutableStillInstalls:
         # Playbooks and plugins are not engine rules and carry no
         # `executable`. `is False` rather than falsiness is what keeps them
         # installable, so pin it.
-        item = _first(lambda i: i["type"] == "playbook" and "executable" not in i)
+        item = _first(lambda i: bool(i["type"] == "playbook") and "executable" not in i)
         result = _install(item)
         assert result.id == item["id"]
