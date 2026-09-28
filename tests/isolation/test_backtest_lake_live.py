@@ -256,6 +256,11 @@ def _unavailable(detail: str) -> NoReturn:
     if REQUIRED:
         pytest.fail(f"BACKTEST_LAKE_LIVE_REQUIRED is set and {detail}")
     pytest.skip(detail)
+    # Both calls above raise. Written out rather than left implicit because
+    # the type-check runs with `--no-site-packages`, so pytest's own
+    # `NoReturn` annotations are not visible to it and the declared return
+    # type would otherwise be unprovable.
+    raise AssertionError("unreachable")
 
 
 @pytest.fixture(scope="module")
