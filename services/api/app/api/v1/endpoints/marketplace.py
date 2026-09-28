@@ -375,6 +375,23 @@ async def install_marketplace_item(
             detail=f"Marketplace item not found: {body.type}:{body.id}",
         )
 
+    # 4,388 of the 7,155 catalogue entries are rules the detection engine does
+    # not load. Installing one flips a per-tenant flag over a rule that can
+    # never match, which is a no-op wearing the costume of an action. The
+    # console says "Cannot install" and offers no button — but that was the
+    # only thing stopping it: a POST straight at this route installed a
+    # reference-only rule and answered 200, so the control was styled as
+    # prevented rather than prevented. The catalogue decides, not the caller.
+    if match.get("executable") is False:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{body.type}:{body.id} is reference-only — the detection engine does not "
+                "load it, so installing it would enable nothing."
+                + (f" Reason: {match['quarantine_reason']}" if match.get("quarantine_reason") else "")
+            ),
+        )
+
     sha = _content_sha256(match)
 
     tenant_id = str(current_user.tenant_id)

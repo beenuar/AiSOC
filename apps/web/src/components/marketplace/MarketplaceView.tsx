@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { formatTagLabel } from './tagLabel';
+import { AUTH_TOKEN_KEY } from '@/lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -488,12 +489,50 @@ type TierFilter = 'all' | 'stable' | 'beta' | 'imported' | 'community';
 // smaller than it is; the stat cards and the per-card banner carry the split.
 type RunsFilter = 'all' | 'executable' | 'reference';
 
-// Fetch the installed-set, but treat 401/404 as "not signed in / API offline"
-// so the marketplace stays usable in static demos and unauthenticated previews.
+/**
+ * The bearer token the rest of the console authenticates with.
+ *
+ * These three calls sent `credentials: 'include'` and nothing else. The API
+ * authenticates a `Authorization: Bearer` JWT held in localStorage, not a
+ * cookie, so every one of them was anonymous: install answered 401, the
+ * installed-set answered 401, and neither said so.
+ */
+function authHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Whether this browser holds a session at all. */
+function signedIn(): boolean {
+  return Boolean(authHeaders().Authorization);
+}
+
+/** The API's `detail`, when it sent one, so a refusal can say why. */
+async function failureDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === 'string' && body.detail) return body.detail;
+  } catch {
+    /* not JSON */
+  }
+  return `HTTP ${res.status}`;
+}
+
+/**
+ * Fetch the installed-set. A 401 with no session is "nobody is signed in",
+ * which is the static-preview case and not an error; a 401 *with* a session
+ * is a real failure and must not be flattened into an empty list.
+ */
 async function fetchInstalled(url: string): Promise<InstalledResponse | null> {
-  const res = await fetch(url, { credentials: 'include' });
-  if (res.status === 401 || res.status === 404) return null;
-  if (!res.ok) throw new Error(`installed: HTTP ${res.status}`);
+  const res = await fetch(url, { credentials: 'include', headers: authHeaders() });
+  if (res.status === 404) return null;
+  if (res.status === 401 && !signedIn()) return null;
+  if (!res.ok) throw new Error(`installed: ${await failureDetail(res)}`);
   return (await res.json()) as InstalledResponse;
 }
 
@@ -559,13 +598,16 @@ export function MarketplaceView() {
       try {
         const res = await fetch('/api/v1/marketplace/install', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           credentials: 'include',
           body: JSON.stringify({ type: item.type, id: item.id }),
         });
-        if (!res.ok && res.status !== 401 && res.status !== 404) {
-          throw new Error(`install: HTTP ${res.status}`);
-        }
+        // 401 and 404 used to be swallowed here, and the optimistic flag was
+        // never rolled back — so against a real API the button answered 401,
+        // the card said "Installed", the header counted it, and nothing had
+        // been installed. A control that reports success it did not achieve
+        // is worse than one that is greyed out.
+        if (!res.ok) throw new Error(await failureDetail(res));
         await refreshInstalled();
       } catch (err) {
         // Roll the optimistic flag back; surface a one-line toast.
@@ -600,10 +642,12 @@ export function MarketplaceView() {
         const url = `/api/v1/marketplace/install?type=${encodeURIComponent(
           item.type,
         )}&id=${encodeURIComponent(item.id)}`;
-        const res = await fetch(url, { method: 'DELETE', credentials: 'include' });
-        if (!res.ok && res.status !== 401 && res.status !== 404) {
-          throw new Error(`uninstall: HTTP ${res.status}`);
-        }
+        const res = await fetch(url, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error(await failureDetail(res));
         await refreshInstalled();
       } catch (err) {
         setLocalInstalled((prev) => {
