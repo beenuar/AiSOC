@@ -113,3 +113,10 @@ services/connectors/tests/connectors/test_snowflake.py:private-key:17
 # Kubernetes audit connector config fixture; "tok-abcdef-1234567890" is an
 # invented inbox token for a schema assertion.
 services/connectors/tests/test_kubernetes_audit.py:generic-api-key:218
+
+# A 48-character hex string in test_a_real_secret_is_accepted. It is the
+# positive half of the published-credential guard: the checker has to accept
+# something that looks like a real secret, or a checker that refused every
+# value would pass the negative tests and ship a production stack that cannot
+# start. Generated for the fixture, never used anywhere.
+tests/test_production_compose_gate.py:generic-api-key:458
