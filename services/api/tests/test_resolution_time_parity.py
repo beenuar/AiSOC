@@ -52,10 +52,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 DSN = os.environ.get("DATABASE_URL", "")
 REQUIRED = os.environ.get("MSSP_ISOLATION_REQUIRED", "").strip() not in ("", "0", "false")
 
-pytestmark = pytest.mark.skipif(
-    "postgres" not in DSN and not REQUIRED,
-    reason="needs a live Postgres with the migration chain applied (integration.yml)",
-)
+# The skip lives on the `db` fixture rather than on the module, because not
+# every test here needs a database. A module-level `pytestmark` also skipped
+# the one test that does not, so the check on whether the two surfaces share a
+# definition ran only where Postgres did — which is the narrower half of the
+# places it is meant to hold.
 
 # Fixed ids so a failure names something greppable.
 ORG = uuid.UUID("0a100000-0000-0000-0000-000000000001")
@@ -68,6 +69,8 @@ _ALL_TENANTS = (TENANT, TENANT_IDLE)
 
 @pytest_asyncio.fixture
 async def db():
+    if "postgres" not in DSN and not REQUIRED:
+        pytest.skip("needs a live Postgres with the migration chain applied (integration.yml)")
     engine = create_async_engine(DSN)
     try:
         async with engine.connect() as probe:
@@ -248,24 +251,140 @@ async def test_the_dashboard_and_the_portfolio_agree_on_the_same_rows(db) -> Non
     assert await tenant_case_mttr_minutes(db, TENANT_IDLE) is None
 
 
-def test_the_portfolio_query_is_built_from_the_shared_definition() -> None:
-    """A no-database gate against the two queries drifting apart again.
+@pytest.mark.asyncio
+async def test_a_case_that_never_reached_the_closed_label_still_counts(db) -> None:
+    """`closed_at` is the fact and `status` is a label, so a row carrying the
+    timestamp counts whatever the label says.
+
+    The pre-change dashboard filtered `status = 'resolved'` and missed every
+    completed case; filtering `status = 'closed'` instead would miss this one.
+    Neither query may read the label at all, and the way to assert that is a
+    row whose label is wrong and whose timestamp is right.
+    """
+    await _case(
+        db,
+        tenant=TENANT,
+        number=f"PAR-{TENANT.hex[:6]}-6",
+        opened_minutes_ago=300,
+        duration_minutes=90,
+        status="resolved",
+    )
+    await db.commit()
+
+    week_ago = datetime.now(UTC) - timedelta(days=7)
+    assert await tenant_cases_closed(db, TENANT, week_ago) == 3
+    # 60, 120 and 90 — the mean is unchanged, so the row was counted rather
+    # than skipped into a coincidentally equal figure.
+    assert await tenant_case_mttr_minutes(db, TENANT) == 90.0
+
+
+class _EmptyResult:
+    """What `db.execute` hands back when the statement is never run."""
+
+    def mappings(self):
+        return []
+
+
+class _RecordingSession:
+    """Records the statement and the bound parameters instead of executing.
+
+    Enough of the `AsyncSession` surface for both MTTR queries to be *built*,
+    which is the part under test. No database is involved, so this runs
+    wherever the suite does rather than only where Postgres does.
+    """
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+        self.parameters: list[dict] = []
+
+    def _record(self, statement, params):
+        self.statements.append(str(statement))
+        self.parameters.append(dict(params or {}))
+
+    async def scalar(self, statement, params=None):
+        self._record(statement, params)
+        return None
+
+    async def execute(self, statement, params=None):
+        self._record(statement, params)
+        return _EmptyResult()
+
+
+async def _sql_and_parameters(build) -> tuple[str, dict]:
+    session = _RecordingSession()
+    await build(session)
+    assert session.statements, "the surface under test issued no statement at all"
+    mttr = [(sql, params) for sql, params in zip(session.statements, session.parameters, strict=True) if "closed_at" in sql]
+    assert mttr, "no statement this surface sent mentions the column MTTR is computed from"
+    return mttr[0]
+
+
+async def _dashboard_mttr_query() -> tuple[str, dict]:
+    return await _sql_and_parameters(lambda session: tenant_case_mttr_minutes(session, TENANT))
+
+
+async def _portfolio_mttr_query() -> tuple[str, dict]:
+    scope = PortfolioScope(org_id=ORG, tenant_ids=frozenset(_ALL_TENANTS), portfolio_wide=True)
+    return await _sql_and_parameters(lambda session: tenant_rollups(session, scope))
+
+
+@pytest.mark.asyncio
+async def test_both_surfaces_send_the_shared_expression_and_predicate() -> None:
+    """The two queries must be built from one definition, asserted on the SQL
+    they send rather than on the text of the function that builds it.
+
+    This replaces an assertion that the literal string ``"{MTTR_MINUTES_EXPR}"``
+    appeared in ``inspect.getsource(tenant_rollups)`` — the un-interpolated
+    f-string placeholder. That was backwards in both directions: renaming the
+    local, switching to ``.format()`` or lifting the query into a constant
+    would all have failed it without changing a single byte of SQL, while an
+    expression that had become wrong would still have contained the
+    placeholder and passed.
 
     The portfolio computes MTTR inside one bound cross-tenant statement on
     purpose — one round trip for the whole portfolio — so it interpolates the
-    shared fragments rather than calling the shared function. That is only
-    safe while it really does interpolate them.
+    shared fragments rather than calling the shared function. What has to
+    remain true is that the fragments reaching the database are the shared
+    ones, and that is what the rendered statement says.
     """
-    import inspect
+    dashboard_sql, _ = await _dashboard_mttr_query()
+    portfolio_sql, _ = await _portfolio_mttr_query()
 
-    from app.services import mssp_portfolio
+    for surface, sql in (("dashboard", dashboard_sql), ("portfolio", portfolio_sql)):
+        assert MTTR_MINUTES_EXPR in sql, f"the {surface} MTTR query no longer contains the shared expression"
+        assert CLOSED_CASE_PREDICATE in sql, f"the {surface} MTTR query no longer contains the shared predicate"
 
-    source = inspect.getsource(mssp_portfolio.tenant_rollups)
-    assert "{MTTR_MINUTES_EXPR}" in source, "portfolio MTTR no longer uses the shared expression"
-    assert "{CLOSED_CASE_PREDICATE}" in source, "portfolio MTTR no longer uses the shared predicate"
-    # And the fragments themselves are still about the column that carries the
-    # fact, not the status label that has had several spellings.
-    assert "closed_at" in CLOSED_CASE_PREDICATE
-    assert "status" not in CLOSED_CASE_PREDICATE
+    # And the shared fragments are still about the column that carries the
+    # fact rather than the label that has had several spellings. Asserted
+    # here rather than against the constants alone because what matters is
+    # what the database is asked, and `test_a_case_that_never_reached_the_
+    # closed_label_still_counts` above proves the same property against rows.
+    assert "closed_at" in CLOSED_CASE_PREDICATE and "status" not in CLOSED_CASE_PREDICATE
     assert "closed_at" in MTTR_MINUTES_EXPR
-    assert MTTR_WINDOW == timedelta(days=30)
+
+
+@pytest.mark.asyncio
+async def test_both_surfaces_bind_the_same_window() -> None:
+    """One definition of the expression is not enough if the two ask about
+    different spans of time.
+
+    Nothing asserted this before. The dashboard binds ``since`` and the
+    portfolio binds ``mttr_since``, computed in two different modules, and a
+    window that drifted in one of them would leave both figures individually
+    defensible and the pair inconsistent — which is the exact symptom that
+    started this file.
+    """
+    before = datetime.now(UTC)
+    _, dashboard_parameters = await _dashboard_mttr_query()
+    _, portfolio_parameters = await _portfolio_mttr_query()
+    after = datetime.now(UTC)
+
+    dashboard_since = dashboard_parameters["since"]
+    portfolio_since = portfolio_parameters["mttr_since"]
+
+    # Both are `now - MTTR_WINDOW`, evaluated microseconds apart, so they are
+    # compared against the interval this test itself spans rather than for
+    # exact equality.
+    assert abs(dashboard_since - portfolio_since) <= (after - before)
+    for name, since in (("dashboard", dashboard_since), ("portfolio", portfolio_since)):
+        assert before - MTTR_WINDOW <= since <= after - MTTR_WINDOW, f"{name} does not window on MTTR_WINDOW"
