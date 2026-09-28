@@ -135,6 +135,50 @@ def prod() -> dict:
     return _services(PROD)
 
 
+class TestTheDocumentedCommandIsTheOneThatWorks:
+    """The deployment page and this file must name the same invocation.
+
+    The production stack was written with `include:` and a single `-f`, which
+    resolves on Compose 5.x and is rejected by 2.x with
+    `services.<name> conflicts with imported resource` — `include` imports a
+    model, and overriding a service it imported is an error. Measured against
+    v2.29.7 and v2.39.4: both fail. So the documented production command
+    worked on almost no installation, and nothing noticed because the smoke
+    job only ever drove `docker-compose.yml`.
+
+    These are static assertions rather than a subprocess call, so they hold on
+    a runner with no Docker; the compose-smoke workflow exercises the real
+    binary.
+    """
+
+    def test_the_production_file_does_not_import_the_base(self) -> None:
+        document = yaml.load(PROD.read_text(encoding="utf-8"), Loader=_ComposeLoader)  # noqa: S506
+        assert "include" not in (document or {}), (
+            "`include:` plus an override of an imported service is rejected by every "
+            "released Compose 2.x. Use two `-f` flags instead."
+        )
+
+    def test_the_docs_give_both_files_in_order(self) -> None:
+        page = (REPO / "apps" / "docs" / "docs" / "deployment" / "docker.md").read_text(encoding="utf-8")
+        assert "-f docker-compose.yml -f docker-compose.prod.yml" in page, (
+            "the deployment page must give both files, base first — the overlay alone "
+            "does not resolve on Compose 2.x"
+        )
+        assert "-f docker-compose.prod.yml up" not in page.replace(
+            "-f docker-compose.yml -f docker-compose.prod.yml up", ""
+        ), "the page still shows the single-file form somewhere"
+
+    def test_the_smoke_workflow_drives_the_same_command(self) -> None:
+        """A workflow that exercises a different invocation than the docs
+        publish proves nothing about the documented one."""
+        flow = (REPO / ".github" / "workflows" / "compose-smoke.yml").read_text(encoding="utf-8")
+        if "docker-compose.prod.yml" in flow:
+            assert "-f docker-compose.yml -f docker-compose.prod.yml" in flow
+            assert flow.count("-f docker-compose.prod.yml") == flow.count(
+                "-f docker-compose.yml -f docker-compose.prod.yml"
+            ), "some invocation still passes the overlay alone"
+
+
 class TestTheBypassIsUnreachable:
     def test_no_service_runs_in_a_dev_class_environment(self, prod: dict) -> None:
         assert not _dev_environments(prod)

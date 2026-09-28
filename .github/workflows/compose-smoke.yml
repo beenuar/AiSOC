@@ -215,18 +215,18 @@ jobs:
           sed 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=aisoc_dev_secret|' /tmp/prod-real.env > /tmp/prod-published.env
 
           echo "::group::published credential — must refuse"
-          if docker compose --env-file /tmp/prod-published.env -f docker-compose.prod.yml \
+          if docker compose --env-file /tmp/prod-published.env -f docker-compose.yml -f docker-compose.prod.yml \
                up --no-build --exit-code-from preflight-secrets preflight-secrets; then
             echo "::error::the production stack started on aisoc_dev_secret"
             exit 1
           fi
-          docker compose --env-file /tmp/prod-published.env -f docker-compose.prod.yml down -v
+          docker compose --env-file /tmp/prod-published.env -f docker-compose.yml -f docker-compose.prod.yml down -v
           echo "::endgroup::"
 
           echo "::group::real credentials — must start"
-          docker compose --env-file /tmp/prod-real.env -f docker-compose.prod.yml \
+          docker compose --env-file /tmp/prod-real.env -f docker-compose.yml -f docker-compose.prod.yml \
             up --no-build --exit-code-from preflight-secrets preflight-secrets
-          docker compose --env-file /tmp/prod-real.env -f docker-compose.prod.yml down -v
+          docker compose --env-file /tmp/prod-real.env -f docker-compose.yml -f docker-compose.prod.yml down -v
           echo "::endgroup::"
 
       - name: Detect build-context changes

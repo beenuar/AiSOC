@@ -1,6 +1,6 @@
 # AiSOC — production compose.
 #
-#     docker compose -f docker-compose.prod.yml up -d
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # This is the file `apps/docs/docs/deployment/docker.md` has pointed at since
 # the deployment page was written. It did not exist, which is what discussion
@@ -10,11 +10,19 @@
 # `services/api/app/api/v1/dev_auth.py` resolves an unauthenticated request to
 # a demo user whose role is `admin`.
 #
-# It uses the Compose Spec `include` directive, the same way
-# `infra/compose/docker-compose.dev.yml` does, so there is exactly one
+# It is an overlay over `docker-compose.yml`, so there is exactly one
 # definition of every service and this file holds only what production changes.
 # A standalone copy would have drifted from the base within a release, which is
 # the failure this repository keeps finding.
+#
+# It was written with the Compose Spec `include` directive and a single `-f`,
+# which is how `infra/compose/docker-compose.dev.yml` pulls the base in. That
+# does not work here: `include` imports a model, and overriding a service it
+# imported is rejected with `services.<name> conflicts with imported resource`.
+# Measured rather than assumed — `-f docker-compose.prod.yml` alone fails on
+# Compose v2.29.7 and v2.39.4 and resolves only on 5.1.3, so the documented
+# production command worked on almost no installation. Two `-f` flags are the
+# ordinary override form and resolve identically on all three.
 #
 # WHAT THIS FILE GUARANTEES
 #
@@ -40,8 +48,6 @@
 #   are not in a compose file. `docs/runbooks/HARDENING.md` is the checklist
 #   and this file is the starting posture, not the finished one.
 
-include:
-  - ./docker-compose.yml
 
 services:
   # ---------------------------------------------------------------------------

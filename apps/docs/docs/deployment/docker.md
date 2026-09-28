@@ -118,12 +118,14 @@ COMPOSE_PROFILES=connectors,osquery,slack docker compose up -d
 
 ```bash
 make env                                      # generates the six service secrets
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-The production file `include`s `docker-compose.yml` and overrides what
-production changes, so there is one definition of every service and the two
-cannot drift apart. It differs from the development stack in three ways that
+The production file is an overlay over `docker-compose.yml` and changes only
+what production changes, so there is one definition of every service and the
+two cannot drift apart. Both `-f` flags are required and the order matters —
+the overlay comes second. A single `-f docker-compose.prod.yml` resolves on
+Compose 5.x and fails on 2.x with `conflicts with imported resource`. It differs from the development stack in three ways that
 matter:
 
 - **The auth bypass is unreachable.** `ENVIRONMENT` and `AISOC_DEV_MODE` are
