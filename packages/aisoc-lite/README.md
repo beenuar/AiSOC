@@ -10,6 +10,13 @@ npx aisoc triage --demo
 ✓ AiSOC triaged 200 alerts: 12 TP, 171 FP suppressed (85.5% noise), 17 need review — in 0.1s [deterministic · no LLM]
 ```
 
+**`aisoc` is ready, unpublished, so the command above does not resolve today.**
+`release.yml` builds and packs it on every tag, but npm configures trusted
+publishing on a package's settings page and a package that has never been
+published has no settings page — the first upload needs a token, which is an
+account action rather than a code change. Until then, run it from a clone:
+`pnpm --filter aisoc build && node packages/aisoc-lite/dist/cli.js triage --demo`.
+
 This is the zero-install front door to [AiSOC](https://github.com/beenuar/AiSOC), the open-source, self-hostable AI SOC. The full Docker stack is a ~3.5-minute commitment; this CLI gets you a verdict in under a minute.
 
 ## Why it's trustworthy

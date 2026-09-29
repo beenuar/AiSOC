@@ -35,6 +35,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because its version line is independent (0.x) while its peer tracks the
   Storybook major exactly — the previous hold used
   `update-types: semver-major`, which cannot hold a 0.x dependency at all.
+### Fixed
+
+- **Nine publish jobs reported success having uploaded nothing.** On the
+  v12.2.0 release run all 59 jobs were green, eight of them named
+  `npm — publish <pkg>` or `PyPI — publish <pkg>`, and all eight packages
+  returned 404 from their registry. Only the final upload step is
+  credential-gated, so each job built the artefact, reached the upload,
+  skipped it on a missing credential, and exited 0. A reader of the Actions
+  page saw eight green publishes for packages that do not exist.
+
+  The credential gate is correct and unchanged — the blocker is an account
+  action, not code, and the release must still complete without it, because
+  the images and the GitHub Release genuinely do publish. What changed is
+  that the decision is made once, in a new `package-credentials` job, and
+  then carried to three places a reader can see: the job titles in the
+  Actions list (`npm — pack only, NOT uploaded: aisoc`), a line in each job's
+  log, and a run summary written by the new `package-report` job naming every
+  package, whether the registry holds it, and why each skipped one was
+  skipped. `secrets` is unavailable in a job-level `name:` or `if:`, which is
+  why the decision needs its own job: `needs` is readable there and a secret
+  is not.
+
+- **Nothing asked the registry after a release.** `package-report` now runs
+  `scripts/check_published_packages.py --require-network`, which reads a new
+  committed manifest, `.github/release-packages.yml`, and enforces it in
+  three directions: against `release.yml`'s publish matrices both ways, so a
+  package the workflow builds and the manifest does not declare cannot go
+  unchecked; `published: true` against the registry **at the version in the
+  tree**, which is the direction a release run cannot check itself; and
+  `published: false` against the registry, so the knowingly-not-published set
+  shrinks in a commit when a credential arrives rather than quietly ceasing
+  to be true. `tests/test_package_install_claims.py` now reads that same
+  manifest and the same registry query instead of its own copy of both — the
+  copy covered five of the eight packages and had already drifted, which is
+  how `packages/aisoc-lite/README.md` came to advertise
+  `npx aisoc triage --demo` with no caveat while `aisoc` 404s on npm.
+
+- **Three more steps in the same workflows could pass without doing their
+  work.** `softprops/action-gh-release` defaults `fail_on_unmatched_files` to
+  false, so a release advertising a source tarball, an SBOM and a checksum
+  file would have been created without any of them that stopped matching —
+  green. Both halves are now closed: the assets are asserted present and
+  non-empty before the release is created, and the action is told to fail on
+  an unmatched file. `chart-publish`'s condition reduced to "this is a push"
+  (`release` runs only on a push, so the second arm implied the first),
+  which made its `Explain a packaged-but-unpushed chart` step unreachable —
+  it now requires the manifests instead, so the chart is linted, packaged and
+  checked against the registry on a dispatch too and the notice is reachable
+  and true. And `publish-images.yml` produced an empty tag list for the demo
+  image on any dispatch from a branch other than `main`, failing several
+  lines later on `tags[0]: unbound variable` after `imagetools create` had
+  already been handed no tag; it now says what happened.
+
+### Added
+
+- **`release.yml` accepts `packages_only` on `workflow_dispatch`.** Builds,
+  packs and validates every package and runs the publication report, with the
+  image rebuild skipped and no upload reachable — the preflight refuses to
+  arm an upload on a dispatch however well credentialled the repository is,
+  because a registry will not accept a version twice. The packaging half of a
+  release otherwise runs only on a tag push, which is the worst possible
+  moment to discover it is broken.
 
 ## [12.2.0] - 2026-09-28
 

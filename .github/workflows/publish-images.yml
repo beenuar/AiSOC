@@ -403,6 +403,18 @@ jobs:
             exit 1
           fi
           mapfile -t tags < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          # Every tag above is `enable=`d on a condition, and for the demo
+          # image both conditions are ref-dependent — so a dispatch from any
+          # branch but `main` produces an empty tag list. The job did fail,
+          # on `tags[0]: unbound variable` several lines further down and
+          # after `imagetools create` had already been handed no `--tag` at
+          # all. A build that produced two architectures and can name none of
+          # them has done no publishing, and should say that rather than
+          # leave an operator reading a shell diagnostic.
+          if [ "${#tags[@]}" -eq 0 ]; then
+            echo "::error::no tag is enabled for ${IMAGE} on ref ${GITHUB_REF}, so the built digests would be unreachable. Dispatch from \`main\`, or add a tag rule for this ref." >&2
+            exit 1
+          fi
           docker buildx imagetools create \
             "${tags[@]/#/--tag=}" \
             $(printf "${IMAGE}@sha256:%s " *)

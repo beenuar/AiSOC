@@ -14,17 +14,28 @@ on:
   #
   # Dispatch this from `main` so the current workflow definition runs, and
   # name the tag to publish; the build checks that tag out for its source.
-  # The GitHub Release, npm and PyPI jobs are push-only and stay skipped,
-  # because re-publishing a package version is not a thing registries allow
-  # and re-cutting a release note is not a thing anyone wants.
+  # The GitHub Release stays skipped, because re-cutting a release note is not
+  # a thing anyone wants, and no package is ever *uploaded* on a dispatch,
+  # because re-publishing a package version is not a thing registries allow.
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag whose images should be (re)published, e.g. v11.0.0'
+        description: 'Existing release tag whose images should be (re)published, e.g. v11.0.0. Ignored when packages_only is set.'
         required: true
         type: string
       promote_stable:
         description: 'Move the `stable` tag onto this release. A major does not move it automatically, because a major means an operator must act.'
+        required: false
+        default: false
+        type: boolean
+      # A workflow change nobody can exercise is a claim. The packaging half
+      # of a release otherwise runs only on a tag push, which is the worst
+      # possible moment to discover it is wrong — so this runs it on demand:
+      # build, pack, validate and report, with the image rebuild skipped and
+      # no upload reachable. It is also how a maintainer checks that every
+      # package is still publishable before cutting a tag.
+      packages_only:
+        description: 'Run only the packaging and publication report. Skips the image rebuild, uploads nothing, and ignores `tag`.'
         required: false
         default: false
         type: boolean
@@ -190,6 +201,33 @@ jobs:
           done
           cat checksums.txt
 
+      # `action-gh-release` defaults `fail_on_unmatched_files` to **false**,
+      # so a `files:` entry that matches nothing is dropped and the release is
+      # created without it — green. The SBOM is produced by a third-party
+      # action into a path this job constructs by string, which is exactly the
+      # kind of pairing that silently stops matching one day. An advertised
+      # asset that is absent is a claim the release page makes and cannot
+      # keep, so both halves are closed: named here, and enforced by the
+      # action below.
+      - name: Every advertised release asset exists and is not empty
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for asset in \
+            "dist/aisoc-${VERSION}-source.tar.gz" \
+            "dist/aisoc-sbom-${VERSION}.spdx.json" \
+            "dist/checksums.txt"; do
+            if [ ! -s "$asset" ]; then
+              echo "::error::${asset} is missing or empty, and the release advertises it." >&2
+              missing=$((missing + 1))
+            else
+              echo "ok: ${asset} ($(wc -c < "$asset") bytes)"
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
       - name: Create Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
@@ -197,10 +235,80 @@ jobs:
           body_path: release-body.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
           files: |
             dist/aisoc-${{ steps.version.outputs.VERSION }}-source.tar.gz
             dist/aisoc-sbom-${{ steps.version.outputs.VERSION }}.spdx.json
             dist/checksums.txt
+
+  # ── Which uploads are armed, decided once and named in the job titles ──
+  #
+  # The defect this job exists to fix: on the v12.2.0 release run, all eight
+  # `npm — publish …` / `PyPI — publish …` jobs reported **success** and all
+  # eight packages returned 404. Only the final upload step is credential-
+  # gated, so each job built the artefact, reached the upload, skipped it, and
+  # exited 0. The Actions page showed eight green publishes for nothing.
+  #
+  # The gate itself is right — the blocker is an account action, not code, and
+  # the release must still complete without it, because the images and the
+  # GitHub Release genuinely do publish. What was wrong is the signal.
+  #
+  # A job's `name:` can read `needs`, so deciding here and naming the answer
+  # there makes the Actions list itself honest: `npm — publish aisoc` when an
+  # upload can happen, `npm — pack only, NOT uploaded: aisoc` when it cannot.
+  # It has to be a separate job because `secrets` is not available in a
+  # job-level `name:` or `if:` — only in a job `env:` — so the NPM_TOKEN half
+  # of the question cannot be asked where the answer is needed.
+  package-credentials:
+    name: Packages — which uploads are armed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || inputs.packages_only
+    timeout-minutes: 5
+    outputs:
+      npm: ${{ steps.probe.outputs.npm }}
+      pypi: ${{ steps.probe.outputs.pypi }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - id: probe
+        env:
+          NPM_TRUSTED: ${{ vars.AISOC_NPM_TRUSTED_PUBLISHING }}
+          PYPI_TRUSTED: ${{ vars.AISOC_PYPI_TRUSTED_PUBLISHING }}
+          # Nothing is uploaded on a dispatch even with a credential present:
+          # a registry refuses a version it already holds, so a republish of
+          # the package half is not a thing that can succeed.
+          UPLOADS_POSSIBLE: ${{ github.event_name == 'push' }}
+        run: |
+          set -euo pipefail
+          npm=unarmed
+          pypi=unarmed
+          if [ "$UPLOADS_POSSIBLE" = "true" ]; then
+            if [ "$NPM_TRUSTED" = "true" ] || [ -n "$NPM_TOKEN" ]; then npm=armed; fi
+            if [ "$PYPI_TRUSTED" = "true" ]; then pypi=armed; fi
+          fi
+          echo "npm=$npm" >> "$GITHUB_OUTPUT"
+          echo "pypi=$pypi" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Package uploads"
+            echo
+            echo "| Registry | This run | Why |"
+            echo "| --- | --- | --- |"
+            if [ "$npm" = "armed" ]; then
+              echo "| npm | uploads | a credential is configured |"
+            elif [ "$UPLOADS_POSSIBLE" != "true" ]; then
+              echo "| npm | packs only | not a tag push; a registry will not accept a version twice |"
+            else
+              echo "| npm | packs only | neither trusted publishing nor \`NPM_TOKEN\` is configured |"
+            fi
+            if [ "$pypi" = "armed" ]; then
+              echo "| PyPI | uploads | trusted publishing is enabled |"
+            elif [ "$UPLOADS_POSSIBLE" != "true" ]; then
+              echo "| PyPI | packs only | not a tag push; a registry will not accept a version twice |"
+            else
+              echo "| PyPI | packs only | \`AISOC_PYPI_TRUSTED_PUBLISHING\` is not set |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "npm=$npm pypi=$pypi"
 
   # Build & push Docker images
   #
@@ -232,7 +340,9 @@ jobs:
     needs: release
     # `needs` alone would skip this whenever `release` is skipped, which is
     # every dispatched run — the one path that exists to publish images.
-    if: always() && needs.release.result != 'failure' && needs.release.result != 'cancelled'
+    # `packages_only` is the one dispatch that deliberately leaves the
+    # registry alone, so the whole image chain below sits out with it.
+    if: always() && !inputs.packages_only && needs.release.result != 'failure' && needs.release.result != 'cancelled'
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -636,10 +746,16 @@ jobs:
   # specifiers to real versions, which npm would otherwise reject. The tarball
   # is then handed to `npm publish`, which is what supports `--provenance`.
   npm-publish:
-    name: npm — publish ${{ matrix.pkg }}
+    # The job title states what the job did, so a reader does not have to open
+    # a log to find out whether anything was uploaded. `needs` is one of the
+    # few contexts available in a job `name:`, which is why the credential
+    # question is answered in its own job above.
+    name: npm — ${{ needs.package-credentials.outputs.npm == 'armed' && 'publish' || 'pack only, NOT uploaded:' }} ${{ matrix.pkg }}
     runs-on: ubuntu-latest
-    needs: release
-    if: github.event_name == 'push'
+    needs: [release, package-credentials]
+    # `always()` because `release` is skipped on a dispatch and a skip
+    # propagates down a `needs` chain unless each job restates what it needs.
+    if: always() && needs.package-credentials.result == 'success' && needs.release.result != 'failure' && needs.release.result != 'cancelled'
     permissions:
       contents: read
       id-token: write # npm provenance attestation
@@ -701,13 +817,28 @@ jobs:
       # Republishing an unchanged version is a hard error on npm, and package
       # versions move independently of the monorepo tag, so most releases will
       # legitimately have nothing to push for some packages.
+      #
+      # `npm view … >/dev/null 2>&1` treated *every* failure as "not
+      # published" and threw the reason away with it, so a registry outage, a
+      # rate limit and a genuine 404 were one answer. The direction is safe —
+      # an unknown becomes an attempted publish, which npm rejects if it was
+      # wrong — but an operator reading the log could not tell which happened.
+      # E404 is the only answer that means absent; anything else is recorded
+      # as unknown, out loud.
       - name: Is this version already on npm?
         id: exists
+        env:
+          SPEC: ${{ matrix.pkg }}@${{ steps.pack.outputs.version }}
         run: |
-          set -euo pipefail
-          if npm view "${{ matrix.pkg }}@${{ steps.pack.outputs.version }}" version >/dev/null 2>&1; then
+          set -uo pipefail
+          if output=$(npm view "$SPEC" version 2>&1); then
+            echo "$SPEC is already on npm ($output)."
             echo "already=true" >> "$GITHUB_OUTPUT"
+          elif grep -q 'E404' <<< "$output"; then
+            echo "$SPEC is not on npm yet."
+            echo "already=false" >> "$GITHUB_OUTPUT"
           else
+            echo "::warning title=npm::Could not establish whether $SPEC is published; npm said: ${output//$'\n'/ }. Treating it as absent, which means an upload will be attempted and the registry gets the last word."
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -716,7 +847,7 @@ jobs:
       # fails with ENEEDAUTH when there is no token, so the upgrade is what
       # makes the token-free path reachable at all rather than a nicety.
       - name: Upgrade npm for trusted publishing
-        if: vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        if: needs.package-credentials.outputs.npm == 'armed' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
         run: |
           set -euo pipefail
           npm install -g npm@latest
@@ -727,7 +858,7 @@ jobs:
       # unrotated in repository settings. Provenance is generated
       # automatically on this path, so `--provenance` is not passed.
       - name: Publish to npm (trusted publishing)
-        if: steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        if: needs.package-credentials.outputs.npm == 'armed' && steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
         run: npm publish "${{ steps.pack.outputs.tarball }}" --access public
 
       # The fallback, for as long as it is needed. npm configures a trusted
@@ -736,18 +867,29 @@ jobs:
       # very first upload of each package needs a token, and every upload
       # after it does not.
       - name: Publish to npm (token)
-        if: steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN != ''
+        if: needs.package-credentials.outputs.npm == 'armed' && steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN != ''
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish "${{ steps.pack.outputs.tarball }}" --access public --provenance
 
-      - name: Explain a skipped publish
-        if: steps.exists.outputs.already == 'true' || (vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN == '')
+      # Reached whenever nothing was uploaded, which — while no credential
+      # exists — is every run. It states the outcome in the log; the job's own
+      # title states it in the Actions list, and `Packages — publication
+      # report` states it in the run summary. Three places, one decision.
+      - name: Say plainly that nothing was uploaded
+        if: needs.package-credentials.outputs.npm != 'armed' || steps.exists.outputs.already == 'true'
+        env:
+          ARMED: ${{ needs.package-credentials.outputs.npm }}
+          ALREADY: ${{ steps.exists.outputs.already }}
+          PKG: ${{ matrix.pkg }}
+          VERSION: ${{ steps.pack.outputs.version }}
         run: |
-          if [ "${{ steps.exists.outputs.already }}" = "true" ]; then
-            echo "::notice title=npm::${{ matrix.pkg }}@${{ steps.pack.outputs.version }} is already published, nothing to do."
+          if [ "$ALREADY" = "true" ]; then
+            echo "::notice title=npm::${PKG}@${VERSION} is already on npm, so this release uploaded nothing for it."
+          elif [ "${{ github.event_name }}" != "push" ]; then
+            echo "::notice title=npm::${PKG} was built, packed and validated. Nothing was uploaded: a dispatched run never publishes, because a registry will not accept a version twice."
           else
-            echo "::warning title=npm::Neither trusted publishing nor NPM_TOKEN is configured, so ${{ matrix.pkg }} was built and packed but not uploaded. See docs/operations/publishing.md."
+            echo "::warning title=npm::${PKG} was built, packed and validated, and NOT uploaded — neither trusted publishing nor NPM_TOKEN is configured. npm still has no ${PKG}. See docs/operations/publishing.md."
           fi
 
   # ── Publish the PyPI packages ──────────────────────────────────────────────
@@ -757,10 +899,10 @@ jobs:
   # relationship can be registered before the project exists — that is how the
   # first upload of each of these works. Setup: docs/operations/publishing.md.
   pypi-publish:
-    name: PyPI — publish ${{ matrix.pkg }}
+    name: PyPI — ${{ needs.package-credentials.outputs.pypi == 'armed' && 'publish' || 'pack only, NOT uploaded:' }} ${{ matrix.pkg }}
     runs-on: ubuntu-latest
-    needs: release
-    if: github.event_name == 'push'
+    needs: [release, package-credentials]
+    if: always() && needs.package-credentials.result == 'success' && needs.release.result != 'failure' && needs.release.result != 'cancelled'
     permissions:
       contents: read
       id-token: write # PyPI trusted publishing
@@ -796,16 +938,64 @@ jobs:
       # `skip-existing` because package versions move independently of the
       # monorepo tag, so a release often has nothing new for a given package.
       - name: Publish to PyPI
-        if: vars.AISOC_PYPI_TRUSTED_PUBLISHING == 'true'
+        if: needs.package-credentials.outputs.pypi == 'armed'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: ${{ matrix.dir }}/dist
           skip-existing: true
 
-      - name: Explain a skipped publish
-        if: vars.AISOC_PYPI_TRUSTED_PUBLISHING != 'true'
+      - name: Say plainly that nothing was uploaded
+        if: needs.package-credentials.outputs.pypi != 'armed'
+        env:
+          PKG: ${{ matrix.pkg }}
         run: |
-          echo "::warning title=PyPI::Trusted publishing is not enabled, so ${{ matrix.pkg }} was built and validated but not uploaded. Set the AISOC_PYPI_TRUSTED_PUBLISHING repository variable to 'true' once the pending publishers exist — see docs/operations/publishing.md."
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "::notice title=PyPI::${PKG} was built and twine-checked. Nothing was uploaded: a dispatched run never publishes, because a registry will not accept a version twice."
+          else
+            echo "::warning title=PyPI::${PKG} was built and twine-checked, and NOT uploaded — AISOC_PYPI_TRUSTED_PUBLISHING is not set, so the upload step did not run. PyPI still has no ${PKG}. See docs/operations/publishing.md."
+          fi
+
+  # ── Ask the registries what this release actually published ────────────
+  #
+  # The loop the package half never closed, and the same one `docker-verify`
+  # closes for images. A release is the set of artefacts it published, not the
+  # set of jobs that finished, so the question has to be put to npm and PyPI
+  # rather than to the workflow's own statuses — which is exactly how eight
+  # green publish jobs coexisted with eight 404s.
+  #
+  # `.github/release-packages.yml` declares which packages are expected to be
+  # on their registry and, for each one that is not, why. The gate fails when
+  # a package declared published does not resolve (a job claimed an upload
+  # that did not happen) and equally when one declared unpublished does (the
+  # knowingly-absent set has to shrink in a commit, not in silence).
+  #
+  # It writes the run summary either way, so the answer is on the run page
+  # without opening a log: every package, its version in the tree, whether the
+  # registry holds it, and the reason for each one that was packed and not
+  # uploaded.
+  package-report:
+    name: Packages — publication report
+    runs-on: ubuntu-latest
+    needs: [package-credentials, npm-publish, pypi-publish]
+    # `always()` so the report still runs — and still tells the truth — when a
+    # package fails to build. A report that only appears on the happy path is
+    # not a report.
+    if: always() && needs.package-credentials.result == 'success'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      # `--require-network` because an unreachable registry during a release
+      # is an unanswered question, and this is the one job whose entire
+      # purpose is to answer it. Elsewhere the same gate skips offline so a
+      # contributor on a train is not told the README is wrong.
+      - name: Every package the release claims to have published resolves
+        run: python3 scripts/check_published_packages.py --require-network --summary "$GITHUB_STEP_SUMMARY"
 
   # ── Publish the Helm chart ────────────────────────────────────────────────
   #
@@ -831,7 +1021,19 @@ jobs:
     # with 17 image-missing findings and then passed unchanged on a re-run.
     # The gate was right both times; the ordering was not.
     needs: [release, docker-manifest]
-    if: always() && (github.event_name == 'push' || needs.release.result == 'success')
+    # Was `always() && (github.event_name == 'push' || needs.release.result ==
+    # 'success')`. `release` runs only on a push, so the second arm implied
+    # the first and the whole condition reduced to "this is a push" — which
+    # made the `Explain a packaged-but-unpushed chart` step below, whose `if`
+    # is `github.event_name != 'push'`, unreachable. A branch that documents
+    # what happens on a dispatch, and cannot run on one, is a comment wearing
+    # a step's clothing.
+    #
+    # Requiring the manifests instead fixes both ends: the chart is linted,
+    # packaged and checked against the registry on a dispatch too (where the
+    # notice is now reachable and honest), and on a push it no longer starts
+    # when the images it names were never built.
+    if: always() && needs.docker-manifest.result == 'success'
     timeout-minutes: 15
     permissions:
       contents: read

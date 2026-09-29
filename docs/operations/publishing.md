@@ -6,10 +6,69 @@ one-time setup below, so a release never fails just because a registry
 credential has not been configured yet.
 
 Until that setup is done the release still runs: each package is built,
-packed and `twine check`ed, and the job emits a warning explaining that the
-upload was skipped. That way the pipeline cannot silently rot, which is the
-failure mode that let `npx aisoc` sit in the README while no such package
-existed.
+packed and `twine check`ed, and nothing is uploaded. That way the pipeline
+cannot silently rot, which is the failure mode that let `npx aisoc` sit in the
+README while no such package existed.
+
+## Telling an upload from a skip
+
+A green publish job is not a published package. On the v12.2.0 release run all
+59 jobs reported success — eight of them named `npm — publish <pkg>` or
+`PyPI — publish <pkg>` — and all eight packages returned 404. Only the final
+upload step is credential-gated, so each job built the artefact, reached the
+upload, skipped it, and exited 0.
+
+Three things now carry that fact to a reader, all from one decision made in
+the `Packages — which uploads are armed` job:
+
+1. **The job title.** With no credential the job is called
+   `npm — pack only, NOT uploaded: aisoc`, not `npm — publish aisoc`. Visible
+   in the Actions list without opening anything.
+2. **The run summary.** `Packages — publication report` writes a table of
+   every package, its version in the tree, whether the registry holds it, and
+   the reason for each one that was packed and not uploaded.
+3. **The registry, asked directly.** That same job runs
+   `scripts/check_published_packages.py --require-network`, which is the only
+   check here that does not take the workflow's word for anything.
+
+The release still completes without a credential, because the images and the
+GitHub Release genuinely do publish and must not be blocked by a package that
+cannot.
+
+### `.github/release-packages.yml`
+
+Every package the release uploads is declared there, with `published: true`
+or `false` and, when false, the reason. The gate enforces it in three
+directions, so none of them can drift in silence:
+
+- against `release.yml`'s npm and PyPI matrices, both ways — a package the
+  workflow builds and the file does not declare is one nothing checks;
+- `published: true` must resolve on the registry, **at the version in the
+  tree**. This is the direction a release run cannot check itself: a job that
+  claims an upload and performed none fails here;
+- `published: false` must 404. When a credential arrives and an upload
+  succeeds, the entry has to be corrected in a commit — the knowingly-absent
+  set shrinks visibly rather than quietly ceasing to be true.
+
+So the sequence when you finish the setup below is: publish, then flip that
+package's `published` to `true` and delete its `reason`. The gate fails until
+you do, and fails again if you do it early.
+
+### Exercising the package half without cutting a tag
+
+```bash
+gh workflow run release.yml --ref main -f tag=v0.0.0 -f packages_only=true
+```
+
+Builds, packs and validates all eight packages, runs the publication report,
+and skips the image rebuild entirely. Nothing is uploaded: the preflight
+refuses to arm an upload on a dispatch however well credentialled the
+repository is, because a registry will not accept a version twice. `tag` is
+required by the form and ignored on this path.
+
+Use it to check that every package is still publishable before tagging —
+otherwise a packaging break is discovered on a tag push, which is the worst
+possible moment.
 
 ## What gets published
 
@@ -180,9 +239,15 @@ gh workflow run release.yml --ref main -f tag=vX.Y.Z
 ```
 
 Dispatch it from `main` so the current workflow definition runs; the build
-checks the named tag out for its source. The GitHub Release, npm and PyPI jobs
-are push-only and stay skipped, because a registry will not accept a package
-version twice.
+checks the named tag out for its source. The GitHub Release stays skipped, and
+no package is uploaded, because a registry will not accept a package version
+twice.
+
+A package half that only partly published has no equivalent repair: npm and
+PyPI both refuse a second upload of a version that already exists. Bump the
+package's version and cut a new tag. `Packages — publication report` is what
+tells you it happened — it fails the release when a package declared
+published does not resolve at the version in the tree.
 
 ## Verifying a publish
 
