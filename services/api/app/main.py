@@ -36,6 +36,7 @@ from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
 from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
+from app.workers.approval_expiry import run_forever as run_approval_expiry
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.retention_purge import run_forever as run_retention_purge
@@ -62,6 +63,10 @@ _HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
 # ClickHouse mutation with mutations_sync=1 blocks until it lands. 30m keeps
 # a second replica from starting a concurrent sweep mid-delete.
 _RETENTION_PURGE_LOCK_TTL_SECONDS = 1800
+# Shorter than the others: the sweep is a single bounded UPDATE, so a lock
+# held for half an hour after a crashed replica would leave approvals
+# un-expired for far longer than the work takes.
+_APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
 # A shadow-reconciliation pass makes up to SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK
 # vendor searches, each bounded at 120s. 30m covers a slow pass without letting
 # a second replica start one on top of it, which would double a customer's
@@ -475,6 +480,36 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "reconciled. Set SHADOW_RECONCILE_ENABLED=true to poll them"
         )
 
+    # Approval-SLA expiry (9b). `agent_approvals` has carried an `expires_at`
+    # and an `expired` status since migration 009; nothing wrote the status
+    # and nothing swept the column, so a console-raised approval nobody
+    # answered waited forever instead of timing out to its declared safe
+    # default. Expiring dispatches nothing -- `/decide` still accepts an
+    # expired row -- so this removes the pretence that the request is live
+    # without spending the decision on the operator's behalf.
+    approval_expiry_task: asyncio.Task | None = None
+    if settings.APPROVAL_EXPIRY_ENABLED:
+        try:
+            approval_expiry_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="approval_expiry",
+                    ttl_seconds=_APPROVAL_EXPIRY_LOCK_TTL_SECONDS,
+                    worker=run_approval_expiry,
+                ),
+                name="approval_expiry_worker",
+            )
+            logger.info("approval_expiry worker started")
+        except Exception as exc:
+            logger.warning("approval_expiry worker failed to start", error=str(exc))
+    else:
+        # Said out loud: with this off, a pending approval never times out,
+        # and an operator reading the queue cannot tell an abandoned request
+        # from one still being considered.
+        logger.info(
+            "approval_expiry worker disabled; approvals with an expires_at will never move to 'expired'. "
+            "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
+        )
+
     # Gap-closure Phase 8.1. The consumer for the `NEW_IOC` events
     # `services/threatintel` has always emitted and nothing has ever read.
     #
@@ -533,6 +568,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("hunt_scheduler worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("hunt_scheduler worker shutdown error", error=type(exc).__name__)
+
+    if approval_expiry_task is not None and not approval_expiry_task.done():
+        approval_expiry_task.cancel()
+        try:
+            await approval_expiry_task
+        except asyncio.CancelledError:
+            logger.debug("approval_expiry worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("approval_expiry worker shutdown error", error=type(exc).__name__)
 
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()

@@ -352,6 +352,17 @@ class Settings(BaseSettings):
     )
     RETENTION_WORKER_INTERVAL_SECONDS: int = 21600  # 6h
 
+    # Approval-SLA expiry (deferral 9b). On by default, unlike the retention
+    # purge: that one deletes data, this one marks an already-abandoned
+    # request as abandoned and dispatches nothing. Leaving it off would keep
+    # the state it closes, where a pending containment waits forever and
+    # nobody can tell it from one still under consideration.
+    APPROVAL_EXPIRY_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("APPROVAL_EXPIRY_ENABLED", "AISOC_APPROVAL_EXPIRY_ENABLED"),
+    )
+    APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
+
     # Shadow-reconciliation sweep (gap-closure Phase 2.1, D15). Polls each
     # measuring tenant's own SIEM for the closures their analysts made there,
     # so a tenant whose queue lives in Splunk ES still accumulates the track
