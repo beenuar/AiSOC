@@ -17,9 +17,22 @@ on:
 
 permissions:
   contents: read
+  # `security-events` covers code scanning ONLY. Dependabot alerts need
+  # `vulnerability-alerts`, and because naming any permission sets every
+  # unnamed one to `none`, omitting it here was not a default — it was a
+  # denial. That is why every digest recorded "Dependabot: skipped (token
+  # lacks permission…)" and then graded the repository A/100 anyway.
   security-events: read
+  vulnerability-alerts: read
   pull-requests: write
   issues: write
+
+# Secret scanning is deliberately absent above and cannot be added: GitHub
+# documents that its alerts "cannot be read with this permission and require a
+# GitHub App or a personal access token", so `GITHUB_TOKEN` has no route to
+# them at all. The digest reports itself incomplete rather than grading as
+# though it had looked, which is the honest state until someone supplies an
+# app or a PAT.
 
 concurrency:
   group: aisoc-selfscan-${{ github.ref }}

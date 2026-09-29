@@ -190,6 +190,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Five tests pin all of it, and all five fail against the pre-fix tree.
 
+- **The digest's Dependabot blindness had a one-line root cause, and the docs
+  shipped it to every adopter.** `security-events: read` covers code scanning
+  only; Dependabot alerts need `vulnerability-alerts: read`, and GitHub's
+  workflow-syntax reference says so outright — "For Dependabot alerts, use the
+  `vulnerability-alerts` permission." The second half is what made it a denial
+  rather than a default: "If you specify the access for any of these
+  permissions, all of those that are not specified are set to `none`." So
+  `aisoc-selfscan.yml`, by naming four permissions and not that one, actively
+  denied the source it then graded as clean. It is now granted.
+
+  Secret scanning cannot be fixed the same way and is documented rather than
+  papered over: GitHub states its alerts "cannot be read with this permission
+  and require a GitHub App or a personal access token", so `GITHUB_TOKEN` has
+  no route to them at all and the digest will keep reporting itself incomplete
+  until someone supplies one.
+
+  Both copy-paste snippets in `apps/docs/docs/integrations/github-action.md`
+  recommended the same incomplete block while the action's default `sources` is
+  `dependabot,code-scanning,secret-scanning`, so anyone following the docs got
+  two of three sources silently skipped. Both are corrected and a `Permissions`
+  section states which grant each source needs and which one is unreachable.
+
+- **The digest's week-over-week delta has never rendered, and the docs promised
+  it.** `renderDigest` takes a `previous` result, and the action's only
+  production call site passes `null`, so every "(no change vs last week)" and
+  "(▲ +N vs last week)" branch is unreachable — while the integration page
+  advertised "the week-over-week change in act-now findings". The page now says
+  plainly that the field does not render and what restoring it would need.
+  Ironically, had the delta ever worked, the body would have changed weekly and
+  the frozen `updated_at` above would never have happened.
+
 ## [12.2.0] - 2026-09-28
 
 ### Fixed

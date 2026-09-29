@@ -35,7 +35,8 @@ on:
   pull_request:
 permissions:
   contents: read
-  security-events: read
+  security-events: read       # code scanning
+  vulnerability-alerts: read  # Dependabot — a separate permission, see below
   pull-requests: write
 jobs:
   triage:
@@ -64,7 +65,8 @@ on:
     - cron: '17 13 * * 1' # Mondays
 permissions:
   contents: read
-  security-events: read
+  security-events: read       # code scanning
+  vulnerability-alerts: read  # Dependabot — a separate permission, see below
   issues: write
 jobs:
   digest:
@@ -75,18 +77,55 @@ jobs:
           mode: digest
 ```
 
-Refreshes a single `aisoc-digest`-labelled issue each week with an A–F posture
-grade and the week-over-week change in act-now findings.
+Refreshes a single `aisoc-digest`-labelled issue each week with the run's UTC
+timestamp, the sources it managed to read, and an A–F posture grade over those
+sources.
+
+The digest carries a week-over-week delta field, and **it does not render
+today**: the action's only call site passes no previous result, so the
+comparison has nothing to compare against. It is left in place because the
+renderer is shared, but nothing in the published body will show a change
+figure until a caller supplies last week's result.
 
 ## Inputs
 
 | Input | Default | Description |
 |---|---|---|
-| `github-token` | `${{ github.token }}` | Needs `security-events: read`; `pull-requests: write` for comments; `issues: write` for the digest. |
+| `github-token` | `${{ github.token }}` | Needs `security-events: read` for code scanning **and** `vulnerability-alerts: read` for Dependabot; `pull-requests: write` for comments; `issues: write` for the digest. See [Permissions](#permissions). |
 | `mode` | `job-summary` | `job-summary` \| `pr-comment` \| `digest` |
 | `min-severity` | `low` | Lowest severity to include (`info`→`critical`). |
 | `fail-on` | `none` | Fail the job on `needs_review` or `true_positive` findings (gate mode). |
 | `sources` | `dependabot,code-scanning,secret-scanning` | Which signals to pull. |
+
+## Permissions
+
+The three sources need three different grants, and only two of them are
+reachable by `GITHUB_TOKEN` at all.
+
+| Source | Permission | Reachable by `GITHUB_TOKEN`? |
+|---|---|---|
+| Code scanning | `security-events: read` | yes |
+| Dependabot | `vulnerability-alerts: read` | yes |
+| Secret scanning | — | **no**, needs a GitHub App or a PAT |
+
+Two traps are worth stating outright, because the digest on this repository
+fell into both and reported `grade A (100/100)` for weeks while blind to two of
+its three sources.
+
+**`security-events` does not cover Dependabot.** GitHub's workflow syntax
+reference is explicit: "For Dependabot alerts, use the `vulnerability-alerts`
+permission. Secret scanning alerts cannot be read with this permission and
+require a GitHub App or a personal access token."
+
+**Naming any permission denies every unnamed one.** "If you specify the access
+for any of these permissions, all of those that are not specified are set to
+`none`." So a `permissions:` block that lists `security-events` and omits
+`vulnerability-alerts` is not taking a default — it is denying Dependabot.
+
+A source the action cannot read is reported as skipped, and a digest with any
+skipped source refuses to publish a headline grade: it reads `incomplete (N of
+M sources readable)` and scopes the grade to what answered. Zero findings from
+a source nobody could read is not zero findings.
 
 ## Outputs
 

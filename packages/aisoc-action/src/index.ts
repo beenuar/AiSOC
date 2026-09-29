@@ -72,6 +72,11 @@ async function run(): Promise<void> {
   if (mode === "pr-comment") {
     await upsertPrComment(client, ctx.owner, ctx.repo, ctx.prNumber, renderComment(result, notes));
   } else if (mode === "digest") {
+    // `previous` is null and this is the only production call site, so the
+    // week-over-week delta in `renderDigest` never renders. The field is kept
+    // because the renderer is shared and tested, but the docs no longer
+    // promise a change figure the action cannot produce — restoring it needs
+    // somewhere to persist last week's result, which does not exist yet.
     await upsertDigestIssue(client, ctx.owner, ctx.repo, renderDigest(result, null, notes, { scanned, skipped }));
   }
 
