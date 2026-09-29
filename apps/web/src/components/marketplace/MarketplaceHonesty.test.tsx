@@ -125,7 +125,7 @@ describe('the catalogue distinguishes what runs from what does not', () => {
     render(<MarketplaceView />);
     // `Total` is not the only number a reader sees: both halves of the split
     // are stat cards of their own, each with its count.
-    const cards = screen.getAllByText('Executable').map((label) => label.closest('div'));
+    const cards = screen.getAllByText('Installable').map((label) => label.closest('div'));
     const statCard = cards.find((card) => card?.className.includes('text-center'));
     expect(statCard).toBeTruthy();
     expect(within(statCard as HTMLElement).getByText('1')).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe('the catalogue distinguishes what runs from what does not', () => {
     const user = userEvent.setup();
     render(<MarketplaceView />);
 
-    await user.click(screen.getByRole('button', { name: /Executable\s*\(1\)/ }));
+    await user.click(screen.getByRole('button', { name: /Installable\s*\(1\)/ }));
     expect(screen.getByText('AWS root console login')).toBeInTheDocument();
     expect(screen.queryByText('a_scheduled_task_was_created')).toBeNull();
 

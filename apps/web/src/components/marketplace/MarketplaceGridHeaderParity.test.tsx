@@ -104,7 +104,7 @@ function renderedCardCount(container: HTMLElement): number {
  * type filter also has a button labelled `All`.
  */
 function runsFilter(container: HTMLElement) {
-  const group = container.querySelector('[title^="Executable = loaded by the detection engine"]');
+  const group = container.querySelector('[title^="Installable = every entry"]');
   if (!group) throw new Error('runs filter group not found');
   return within(group as HTMLElement);
 }
@@ -129,7 +129,7 @@ describe('the grid agrees with its own header under every filter', () => {
     expect(renderedCardCount(container)).toBe(headerShowingCount());
 
     // `Executable` — the two playbooks plus the one loadable rule.
-    await user.click(runsFilter(container).getByRole('button', { name: /^Executable\s*\(\d+\)$/ }));
+    await user.click(runsFilter(container).getByRole('button', { name: /^Installable\s*\(\d+\)$/ }));
     expect(renderedCardCount(container)).toBe(headerShowingCount());
 
     // `Reference only` — the filter where the orphaned children showed up as

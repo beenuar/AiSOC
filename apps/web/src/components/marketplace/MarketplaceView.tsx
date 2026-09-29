@@ -843,7 +843,7 @@ export function MarketplaceView() {
   // count rows carrying a `quarantine_reason` — 4,213 against the 4,388 the
   // engine does not load — so the published figure and the truth table's
   // were two numbers nothing compared.
-  const executableCount = useMemo(
+  const installableCount = useMemo(
     () => catalogue.filter((i) => i.executable !== false).length,
     [catalogue],
   );
@@ -949,14 +949,24 @@ export function MarketplaceView() {
       )}
 
       {/* Stats.
-          `Executable` and `Reference only` lead, and they partition the
+          `Installable` and `Reference only` lead, and they partition the
           catalogue: every entry is one or the other and the two sum to
           `Total`. `Total` alone was the headline for a long time, over a
-          catalogue where 85% of the entries cannot fire. */}
+          catalogue where 85% of the entries cannot fire.
+
+          The left card says `Installable`, not `Executable`, and the
+          distinction is not pedantry. It counts every entry the engine loads
+          *plus* the playbooks and plugins, which are shipped installable
+          content but are not engine rules and carry no `executable` field.
+          Labelled `Executable` it read 2,767 under a tooltip saying "loaded
+          by the detection engine" — false for the 164 that are not rules, and
+          164 above the 2,603 the truth table and the README publish for
+          exactly that claim. Two live surfaces disagreeing about the same
+          word is the tell; `Detections` below carries the rule figure. */}
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           {[
-            { label: 'Executable',     value: executableCount,    color: 'text-emerald-400', title: 'Loaded by the detection engine — these can fire.' },
+            { label: 'Installable',    value: installableCount,   color: 'text-emerald-400', title: 'Detection rules the engine loads, plus every playbook and plugin — everything here can be installed — these can fire.' },
             { label: 'Reference only', value: referenceOnlyCount, color: 'text-amber-400',   title: 'Present on disk and not loaded by the engine. They cannot fire; they are here for provenance and for porting.' },
             { label: 'Total',          value: stats.total,        color: 'text-zinc-100',    title: 'Every entry in the catalogue, executable or not.' },
             { label: 'Playbooks',      value: stats.playbooks,    color: 'text-purple-300' },
@@ -1022,11 +1032,11 @@ export function MarketplaceView() {
             capability, and the two disagree in both directions. */}
         <div
           className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
-          title="Executable = loaded by the detection engine. Reference only = present on disk and not loaded, so it cannot fire."
+          title="Installable = every entry you can install: the detection rules the engine loads, plus the playbooks and plugins, which are not rules. Reference only = present on disk and not loaded by the engine, so it cannot fire."
         >
           {([
             ['all', 'All', undefined],
-            ['executable', 'Executable', executableCount],
+            ['executable', 'Installable', installableCount],
             ['reference', 'Reference only', referenceOnlyCount],
           ] as const).map(([value, label, count]) => (
             <button
