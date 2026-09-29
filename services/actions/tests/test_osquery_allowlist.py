@@ -67,12 +67,29 @@ class TestRenderQuery:
             render_query("running_processes", bad_param="evil")
 
     def test_sql_injection_via_directory_raises(self) -> None:
-        with pytest.raises(AllowlistError, match="disallowed characters"):
+        # Refused because a path may not contain a quote or a semicolon, not
+        # because this particular payload was recognised. The full injection
+        # surface is covered in test_osquery_allowlist_injection.py.
+        with pytest.raises(AllowlistError, match="quotes, backticks, semicolons"):
             render_query("recent_files", directory="/tmp'; DROP TABLE processes; --")
 
-    def test_sql_comment_in_param_raises(self) -> None:
-        with pytest.raises(AllowlistError, match="disallowed characters"):
-            render_query("recent_files", directory="/tmp -- comment")
+    def test_sql_comment_in_param_is_an_ordinary_directory_name(self) -> None:
+        """`--` inside a quoted literal is a filename, not a comment.
+
+        This assertion is inverted from the version that shipped before
+        GHSA-p37g-cjqx-56hq, and deliberately. The old code refused `--`
+        anywhere in a value, which read as a comment-injection defence but was
+        really a denylist standing in for one — it missed the quote that
+        actually breaks out, while refusing legitimate paths like
+        `/opt/my--tool`. Now a quote is unrepresentable, so the value cannot
+        leave its literal and `--` inside it is inert; the module asserts at
+        import that every string parameter is quoted, which is what makes that
+        true rather than hoped for.
+        """
+        sql = render_query("recent_files", directory="/tmp -- comment")
+        assert sql.count("'") == 2  # still exactly the template's own quotes
+        assert sql.count(";") == 1  # still exactly one statement
+        assert "WHERE directory = '/tmp -- comment'" in sql
 
     def test_returns_string(self) -> None:
         result = render_query("running_processes")
