@@ -90,6 +90,10 @@ class M365AuditConnector(BaseConnector):
         # Microsoft 365 Unified Audit Log — control-plane / mailbox audit events.
         return (Capability.PULL_AUDIT,)
 
+    #: Ingest cursor (10b). Management Activity API records carry `CreationTime` and `Id`; normalize() already reads both.
+    checkpoint_time_field = ("CreationTime",)
+    checkpoint_id_field = ("Id",)
+
     def __init__(self, tenant_id: str, client_id: str, client_secret: str):
         self._tenant_id = tenant_id
         self._client_id = client_id
@@ -251,7 +255,7 @@ class M365AuditConnector(BaseConnector):
                         # Some content types wrap the array; tolerate both.
                         events.extend(body.get("value", []))
 
-        return [self.normalize(e) for e in events]
+        return [self.normalize(e) for e in self.apply_checkpoint(events)]
 
     # ----------------------- normalize --------------------------
 

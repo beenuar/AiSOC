@@ -70,6 +70,11 @@ class OktaConnector(BaseConnector):
             Capability.REVOKE_SESSION,
         )
 
+    #: Ingest cursor (10b). Okta System Log events carry `published` and a
+    #: `uuid`; normalize() already reads both (created_at / external_id).
+    checkpoint_time_field = ("published",)
+    checkpoint_id_field = ("uuid",)
+
     def __init__(self, domain: str, api_token: str):
         self._domain = domain.rstrip("/")
         self._api_token = api_token
@@ -120,7 +125,7 @@ class OktaConnector(BaseConnector):
                 if resp.status_code == 200:
                     events.extend(resp.json())
 
-        return [self.normalize(e) for e in events]
+        return [self.normalize(e) for e in self.apply_checkpoint(events)]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         outcome = raw.get("outcome", {})

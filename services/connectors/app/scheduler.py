@@ -442,14 +442,20 @@ class ConnectorScheduler:
             await self._record_failure(target.id)
             return
 
-        # Seed the connector's ingest checkpoint (#529) if it supports one, so a
-        # restart resumes from the last-accepted event instead of re-scanning.
-        setter = getattr(connector, "set_checkpoint", None)
-        if callable(setter):
-            try:
-                setter((target.connector_config or {}).get("checkpoint"))
-            except Exception:  # never let checkpoint seeding break a poll
-                logger.debug("connector.scheduler.checkpoint_seed_failed id=%s", connector_id)
+        # Seed the connector's ingest checkpoint (#529) so a restart resumes
+        # from the last-accepted event instead of re-scanning.
+        #
+        # This used to be `getattr(connector, "set_checkpoint", None)`. The
+        # method is on BaseConnector now (10b), so the call is direct — and
+        # the reason that matters is that the getattr had no failing state.
+        # It was simply absent on eighty-three of the eighty-four connectors,
+        # so the seed silently did nothing for almost all of them at
+        # `logger.debug`, and nothing could report which. Whether a connector
+        # checkpoints is now a question its class answers.
+        try:
+            connector.set_checkpoint((target.connector_config or {}).get("checkpoint"))
+        except Exception:  # never let checkpoint seeding break a poll
+            logger.debug("connector.scheduler.checkpoint_seed_failed id=%s", connector_id)
 
         # The schema lives in connector_config; use it for fetch lookback.
         # We deliberately default to the same poll interval, so a 5-min
@@ -573,14 +579,12 @@ class ConnectorScheduler:
         # Advance the persisted checkpoint only now that ingest has accepted the
         # batch (#529). A failed push returned earlier, so reaching here means
         # the page was accepted — this is the "advance only after accept" rule.
-        getter = getattr(connector, "get_checkpoint", None)
-        if callable(getter):
-            try:
-                new_checkpoint = getter()
-            except Exception:  # never let checkpoint bookkeeping break a poll
-                new_checkpoint = None
-            if isinstance(new_checkpoint, dict) and new_checkpoint:
-                await self._record_checkpoint(target.id, new_checkpoint)
+        try:
+            new_checkpoint = connector.get_checkpoint()
+        except Exception:  # never let checkpoint bookkeeping break a poll
+            new_checkpoint = None
+        if isinstance(new_checkpoint, dict) and new_checkpoint:
+            await self._record_checkpoint(target.id, new_checkpoint)
 
         # If drift was detected, persist that fact *before* marking the
         # poll successful so the UI reflects "drifted" status alongside

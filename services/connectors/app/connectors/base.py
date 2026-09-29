@@ -437,6 +437,120 @@ class BaseConnector(ABC):
         """Normalize a raw event to a common AiSOC alert schema."""
         return raw
 
+    # ----------------------------- ingest checkpoints (10b) -------------------
+    #
+    # The durable half of this shipped already: ``connector_repo.record_checkpoint``
+    # persists a cursor into ``connector_config.checkpoint``, and the scheduler
+    # seeds it before each poll and advances it only after ingest accepted the
+    # batch, so a failed push never moves it forward.
+    #
+    # What was missing was adoption, and the reason it stayed missing is worth
+    # keeping. The scheduler reached the connector through
+    # ``getattr(connector, "set_checkpoint", None)``, which is simply absent on
+    # a connector that has not implemented it — so eighty-three of the
+    # eighty-four silently did nothing, at ``logger.debug``, and there was no
+    # way to ask a connector whether it checkpoints at all. A duck-typed
+    # optional protocol has no failing state; it only has a quiet one.
+    #
+    # So the contract lives here. The default is still not-checkpointing —
+    # that has to stay true, because a connector whose cursor fields nobody has
+    # identified must not pretend to have one — but it is now *declared*
+    # not-checkpointing, which :meth:`checkpoints` can answer and a gate can
+    # count.
+    #
+    # Adopting is two class attributes. A connector names the field carrying
+    # each row's event time and the field carrying a stable per-row id, and the
+    # generic machinery below does the rest: order by ``(time, id)``, drop
+    # anything at or before the incoming cursor (which is what suppresses the
+    # duplicates an overlapping poll window produces), and stage the advanced
+    # value for the scheduler to persist.
+    #
+    # The tie-breaker is not optional. Two events in the same second are
+    # ordinary, and a cursor on time alone either loses the second one or
+    # replays the first forever.
+
+    #: Field on a raw row carrying its event time. ``None`` means this
+    #: connector does not checkpoint, which is the honest default.
+    checkpoint_time_field: tuple[str, ...] = ()
+
+    #: Field carrying a stable per-row identifier, used to break ties within
+    #: the same timestamp. Required alongside ``checkpoint_time_field``.
+    checkpoint_id_field: tuple[str, ...] = ()
+
+    #: Staged by :meth:`apply_checkpoint`, read by the scheduler after ingest
+    #: accepts the batch. Declared here so it has one type rather than being
+    #: introduced inside a branch.
+    _incoming_checkpoint: dict[str, str] | None = None
+    _next_checkpoint: dict[str, str] | None = None
+
+    @classmethod
+    def checkpoints(cls) -> bool:
+        """Whether this connector resumes from a persisted cursor.
+
+        The question the ``getattr`` could not answer. A connector that
+        returns False re-reads its overlap window after a restart, which is
+        safe and means a long outage loses events older than that window.
+        """
+        return bool(cls.checkpoint_time_field and cls.checkpoint_id_field)
+
+    def set_checkpoint(self, checkpoint: dict[str, Any] | None) -> None:
+        """Seed the poll with the last-accepted cursor (the scheduler owns it)."""
+        if isinstance(checkpoint, dict) and (checkpoint.get("time") or checkpoint.get("id")):
+            self._incoming_checkpoint = {"time": str(checkpoint.get("time") or ""), "id": str(checkpoint.get("id") or "")}
+        else:
+            self._incoming_checkpoint = None
+
+    def get_checkpoint(self) -> dict[str, str] | None:
+        """The advanced cursor after a fetch, or ``None`` if nothing moved.
+
+        The scheduler persists this only once ingest has accepted the batch,
+        so a failed ingest never advances it.
+        """
+        return self._next_checkpoint
+
+    def _row_time(self, row: dict[str, Any]) -> str:
+        return self._first_present(row, self.checkpoint_time_field)
+
+    def _row_id(self, row: dict[str, Any]) -> str:
+        return self._first_present(row, self.checkpoint_id_field)
+
+    @staticmethod
+    def _first_present(row: dict[str, Any], fields: tuple[str, ...]) -> str:
+        for field_name in fields:
+            value = row.get(field_name)
+            if value not in (None, ""):
+                return str(value)
+        return ""
+
+    def apply_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Order, de-duplicate against the cursor, and stage the advance.
+
+        A no-op for a connector that does not declare its cursor fields, so
+        it is safe to call unconditionally from ``fetch_alerts``.
+        """
+        if not self.checkpoints():
+            return rows
+
+        ordered = sorted(rows, key=lambda r: (self._row_time(r), self._row_id(r)))
+        cursor = self._incoming_checkpoint or {}
+        cursor_key = (str(cursor.get("time") or ""), str(cursor.get("id") or ""))
+
+        fresh: list[dict[str, Any]] = []
+        for row in ordered:
+            if cursor_key[0] and (self._row_time(row), self._row_id(row)) <= cursor_key:
+                continue
+            fresh.append(row)
+
+        # Staged, never persisted here. Advancing on read rather than on
+        # accept is the bug the scheduler's ordering exists to avoid: a batch
+        # that ingest rejects must be re-read, not skipped.
+        if fresh:
+            last = fresh[-1]
+            self._next_checkpoint = {"time": self._row_time(last), "id": self._row_id(last)}
+        else:
+            self._next_checkpoint = None
+        return fresh
+
     # ----------------------------- federated search --------------------------
 
     # Connectors that opt into federated search override ``supports_federated_search``

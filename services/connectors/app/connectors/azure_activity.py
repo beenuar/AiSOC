@@ -94,6 +94,10 @@ class AzureActivityConnector(BaseConnector):
         # Azure Activity Logs are control-plane audit events, not security alerts.
         return (Capability.PULL_AUDIT,)
 
+    #: Ingest cursor (10b). Activity Log entries carry `eventTimestamp` and `eventDataId`; normalize() falls back to `id` and so does this.
+    checkpoint_time_field = ("eventTimestamp",)
+    checkpoint_id_field = ("eventDataId", "id")
+
     def __init__(
         self,
         tenant_id: str,
@@ -201,7 +205,7 @@ class AzureActivityConnector(BaseConnector):
                     break
                 events.extend(resp.json().get("value", []))
 
-        return [self.normalize(e) for e in events]
+        return [self.normalize(e) for e in self.apply_checkpoint(events)]
 
     # ----------------------- normalize --------------------------
 

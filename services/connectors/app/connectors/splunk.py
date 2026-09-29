@@ -100,6 +100,11 @@ class SplunkConnector(BaseConnector):
             Capability.CREATE_NOTABLE_EVENT,
         )
 
+    #: Splunk stamps `_time` on every result and `_cd` is its stable
+    #: per-event address; `event_id` wins when a saved search projects one.
+    checkpoint_time_field = ("_time", "event_time")
+    checkpoint_id_field = ("event_id", "_cd")
+
     def __init__(
         self,
         base_url: str,
@@ -116,27 +121,8 @@ class SplunkConnector(BaseConnector):
             self._page_size = max(1, int(page_size))
         except (TypeError, ValueError):
             self._page_size = _DEFAULT_PAGE_SIZE
-        # Checkpoint plumbing (#529). ``_checkpoint`` is the last-accepted
-        # (event_time, tie-breaker id) fed in by the scheduler before a poll;
-        # ``_next_checkpoint`` is the advanced value the scheduler persists
-        # *after* ingest accepts the batch. Both are ``{"time","id"}`` dicts.
-        self._checkpoint: dict[str, str] | None = None
-        self._next_checkpoint: dict[str, str] | None = None
-
-    def set_checkpoint(self, checkpoint: dict[str, Any] | None) -> None:
-        """Seed the poll with the last-accepted checkpoint (scheduler-owned)."""
-        if isinstance(checkpoint, dict) and (checkpoint.get("time") or checkpoint.get("id")):
-            self._checkpoint = {"time": str(checkpoint.get("time") or ""), "id": str(checkpoint.get("id") or "")}
-        else:
-            self._checkpoint = None
-
-    def get_checkpoint(self) -> dict[str, str] | None:
-        """Return the advanced checkpoint after a fetch, or None if unchanged.
-
-        The scheduler persists this only once ingest has accepted the batch, so
-        a failed ingest never advances the checkpoint (#529).
-        """
-        return self._next_checkpoint
+        # Checkpoint plumbing (#529) lives on BaseConnector (10b); the two
+        # cursor fields declared above are all this connector contributes.
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -251,32 +237,15 @@ class SplunkConnector(BaseConnector):
             offset += len(page)
         return rows
 
-    @staticmethod
-    def _event_time(row: dict[str, Any]) -> str:
-        return str(row.get("_time") or row.get("event_time") or "")
-
-    @staticmethod
-    def _event_tiebreak(row: dict[str, Any]) -> str:
-        return str(row.get("event_id") or row.get("_cd") or "")
-
     def _order_and_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Sort by a stable (event_time, tie-breaker) tuple, drop anything at or
-        before the incoming checkpoint (suppresses overlapping-window
-        duplicates), and stage the advanced checkpoint for the scheduler."""
-        ordered = sorted(rows, key=lambda r: (self._event_time(r), self._event_tiebreak(r)))
-        cp = self._checkpoint or {}
-        cp_key = (str(cp.get("time") or ""), str(cp.get("id") or ""))
-        fresh: list[dict[str, Any]] = []
-        for row in ordered:
-            if cp_key[0] and (self._event_time(row), self._event_tiebreak(row)) <= cp_key:
-                continue
-            fresh.append(row)
-        if fresh:
-            last = fresh[-1]
-            self._next_checkpoint = {"time": self._event_time(last), "id": self._event_tiebreak(last)}
-        else:
-            self._next_checkpoint = None
-        return fresh
+        """Order, drop anything at or before the cursor, and stage the advance.
+
+        The implementation moved to :meth:`BaseConnector.apply_checkpoint` in
+        10b so the other eighty-three connectors can adopt it by declaring two
+        field names; this connector kept the behaviour and the tests that pin
+        it. Retained as a named method because those tests drive it directly.
+        """
+        return self.apply_checkpoint(rows)
 
     async def query(self, unified: UnifiedQuery) -> list[dict[str, Any]]:
         """Run a translated SPL search and return raw rows.

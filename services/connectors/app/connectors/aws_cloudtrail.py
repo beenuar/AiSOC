@@ -286,6 +286,10 @@ class AWSCloudTrailConnector(BaseConnector):
     def capabilities(cls) -> tuple[Capability, ...]:
         return (Capability.PULL_ALERTS,)
 
+    #: Ingest cursor (10b). `lookup_events` returns `EventTime` and `EventId` on every record; normalize() already reads both.
+    checkpoint_time_field = ("EventTime",)
+    checkpoint_id_field = ("EventId",)
+
     def __init__(
         self,
         region: str = "us-east-1",
@@ -385,7 +389,11 @@ class AWSCloudTrailConnector(BaseConnector):
                     )
                     continue
 
-        return [self.normalize(e) for e in all_events]
+        # Once, over the aggregate: the lookup helper runs per event name,
+        # so a cursor applied there would order and de-duplicate each name's
+        # page against the others' and advance the checkpoint several times
+        # per poll.
+        return [self.normalize(e) for e in self.apply_checkpoint(all_events)]
 
     @staticmethod
     def _lookup_for_attribute(
