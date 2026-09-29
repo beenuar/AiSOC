@@ -157,6 +157,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      # The gate reads `.github/release-packages.yml` and `release.yml`'s
+      # publish matrices, so it needs a YAML parser. Installed rather than
+      # worked around: the alternative is a gate that drops its
+      # manifest-versus-workflow check when the import fails, which is the
+      # silent skip this whole area is being fixed for.
+      - run: python -m pip install --quiet pyyaml
+
       # `--require-network` on a hosted runner: the script skips when a
       # registry is unreachable so a contributor on a plane is not told the
       # README is wrong, but a runner that cannot reach npm has not checked

@@ -67,9 +67,12 @@ STALE_LABEL = re.compile(r"v\d+\.\d+\+?\s*\(once\b", re.I)
 
 def _published(package) -> bool:
     try:
-        return gate.is_published(package.registry, package.name)
+        return bool(gate.is_published(package.registry, package.name))
     except gate.Offline as exc:
+        # `pytest.skip` raises, but the gate module is loaded by path so its
+        # exception type is untyped and the handler reads as falling through.
         pytest.skip(f"{exc}; cannot establish publication")
+        raise  # unreachable
 
 
 @pytest.mark.parametrize("package", ADVERTISED, ids=[p.name for p in ADVERTISED])

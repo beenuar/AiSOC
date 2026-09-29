@@ -254,7 +254,7 @@ def _check_registry_state(packages: list[Package], observed: dict[str, set[str] 
             failures.append(
                 f"{package.slug} is declared published and the registry returns 404. A release job reported success and uploaded nothing."
             )
-        elif package.published and package.version(root) not in versions:
+        elif package.published and versions is not None and package.version(root) not in versions:
             failures.append(
                 f"{package.slug} is declared published, but version {package.version(root)} — the version in the tree — "
                 f"is not on the registry (it holds {len(versions)} other version(s)). The last release did not upload it."

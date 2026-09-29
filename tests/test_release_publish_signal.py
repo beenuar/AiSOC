@@ -214,6 +214,7 @@ def test_the_packages_only_input_exists_so_the_path_can_be_exercised() -> None:
     workflow = _workflow()
     # PyYAML parses a bare `on:` key as the boolean True.
     triggers = workflow.get("on", workflow.get(True))
+    assert triggers, "release.yml declares no triggers at all"
     assert "packages_only" in triggers["workflow_dispatch"]["inputs"]
     assert "inputs.packages_only" in workflow["jobs"]["docker-build"]["if"], (
         "a packages-only dispatch would still rebuild and re-push every image"
