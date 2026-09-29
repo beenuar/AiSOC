@@ -34,11 +34,27 @@ for a whole branch, `git rebase --signoff main`.
 If you've never contributed to AiSOC before, here's the shortest path from
 "nice repo" to "merged PR":
 
-1. **Run the demo so you know what you're contributing to.** Either open
-   the repo in [GitHub Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)
-   (zero install, ~5 min) or run `pnpm aisoc:demo` locally. When the
-   browser opens at `/cases/INC-RT-001?tab=ledger`, click through the
-   Investigation Ledger so you've seen what the agent does.
+1. **Run the stack so you know what you're contributing to.** Either open the
+   repo in [GitHub Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)
+   (zero install) or run it locally:
+   ```bash
+   make up      # the CORE profile — the real pipeline
+   make smoke   # prove it: one real event in, a retrievable alert out
+   ```
+   `make up` generates the secrets in `.env`, creates an administrator and
+   prints its password once. Sign in at <http://localhost:3000>. `make doctor`
+   diagnoses a stack that will not come up.
+
+   Then `make demo` loads labelled synthetic data on top, including the LockBit
+   ransomware case at `/cases/INC-RT-001?tab=ledger` — click through the
+   Investigation Ledger so you have seen what the agent does. Every seeded row
+   carries `is_synthetic=true` and the console labels it.
+
+   Do **not** use `pnpm aisoc:demo` to judge whether AiSOC works. It brings up
+   `infra/compose/docker-compose.demo.yml`, which has no ingest service, no
+   fusion service and `AISOC_DISABLE_KAFKA=true` — a UI preview over rows
+   written straight into Postgres. The file says so in its own header. It is
+   useful for looking at the interface and nothing else.
 2. **Find a good first issue.** Browse the open
    [`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
    list and leave a comment on one saying you'd like to work on it. If

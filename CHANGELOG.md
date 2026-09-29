@@ -36,6 +36,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Storybook major exactly — the previous hold used
   `update-types: semver-major`, which cannot hold a 0.x dependency at all.
 
+### Fixed
+
+- **`CONTRIBUTING.md`'s "your first 30 minutes" sent a first-time contributor
+  to the one stack the repository says cannot demonstrate the product.** Step 1
+  told them to run `pnpm aisoc:demo`, which brings up
+  `infra/compose/docker-compose.demo.yml` — nine services with no ingest
+  service, no fusion service and `AISOC_DISABLE_KAFKA=true`. That file's own
+  header says it plainly: *"This stack does NOT run the AiSOC pipeline… Use it
+  to look at the interface. Do not use it to evaluate whether AiSOC works — it
+  cannot answer that question."* It then names `make up` and `make smoke` as
+  the path that does.
+
+  This is the same defect the v8.1.1 adoption audit found in `./install.sh` and
+  fixed there — the most-followed path into the project did not run the
+  project. `CONTRIBUTING.md` was never brought along, so the fix held for
+  installers and not for contributors. Step 1 now runs `make up` and `make
+  smoke` (the CORE profile and the golden-pipeline proof), says that `make up`
+  prints a generated administrator password once, and keeps the LockBit case at
+  `/cases/INC-RT-001?tab=ledger` where it belongs — behind `make demo`, with
+  its synthetic labelling stated. The UI-only preview is still mentioned,
+  labelled as what it is.
+
 ## [12.2.0] - 2026-09-28
 
 ### Fixed
