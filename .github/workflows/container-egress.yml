@@ -37,8 +37,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: container-egress-${{ github.ref }}
-  cancel-in-progress: true
+  # Keyed per commit, and only a pull-request run may be discarded. Shared
+  # across commits with `cancel-in-progress: true`, a push to main still
+  # queued when the next push arrived would lose its run — and this job is
+  # the only thing that watches a running container for outbound calls, so
+  # the commit that dropped it would carry no evidence either way.
+  group: container-egress-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   container-egress:
