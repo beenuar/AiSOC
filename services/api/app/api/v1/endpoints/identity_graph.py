@@ -1,17 +1,33 @@
-"""Identity-centric correlation graph endpoints."""
+"""Identity-centric correlation graph endpoints.
+
+Authorization
+-------------
+Writes require ``settings:write``, the same permission as the entity upserts
+in ``graph.py`` and for the same reason: a node, an edge or an alert-to-
+identity link is correlation infrastructure that every later investigation
+reads as fact. A forged edge between an attacker-controlled account and a
+service identity does not show up as a bad row, it shows up as a conclusion,
+and nothing downstream re-derives it.
+
+``cases:write`` was the alternative — these are written during correlation
+work — and was rejected because it would put graph mutation in the hands of
+every investigating role including ``api_service``, when no first-party
+caller posts here at all. This is an integration surface; an integration's
+API key can be scoped for it explicitly.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.identity_graph import AlertIdentityLink, IdentityEdge, IdentityNode
@@ -108,8 +124,8 @@ async def list_nodes(
 @router.post("/nodes", response_model=NodeOut, status_code=status.HTTP_201_CREATED)
 async def create_node(
     body: NodeCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> IdentityNode:
     node = IdentityNode(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(node)
@@ -172,8 +188,8 @@ async def list_edges(
 @router.post("/edges", response_model=EdgeOut, status_code=status.HTTP_201_CREATED)
 async def create_edge(
     body: EdgeCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> IdentityEdge:
     edge = IdentityEdge(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(edge)
@@ -190,8 +206,8 @@ async def create_edge(
 @router.post("/alert-links", response_model=AlertLinkOut, status_code=status.HTTP_201_CREATED)
 async def link_alert_to_identity(
     body: AlertLinkCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> AlertIdentityLink:
     link = AlertIdentityLink(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(link)

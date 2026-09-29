@@ -102,7 +102,12 @@ AUTHZ_CALLS = frozenset(
 #: surface took `lake:query` (a hunt is a stored query; authoring and running
 #: it are one entitlement) and the three detection-drafting routes took
 #: `rules:read` (they persist nothing, so the floor is entitlement to read
-#: detection logic; promoting a draft is separately `rules:write`).
+#: detection logic; promoting a draft is separately `rules:write`), then 61
+#: once the asset inventory and both entity graphs took `settings:write` (CMDB
+#: data and correlation infrastructure, matching `/graph/context/import`, which
+#: already required it), insider threat took `cases:write` (investigative
+#: judgement about a subject) and `/identity-timeline/build` took `alerts:read`
+#: (a read-shaped POST over the only table it queries).
 #:
 #: Four routes under `/mssp/organizations` remain in this count and are not
 #: debt: they authorize through `_admin_scope`, an organisation owner/admin
@@ -110,7 +115,7 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 77
+MAX_UNAUTHORIZED = 61
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:

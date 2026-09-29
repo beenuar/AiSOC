@@ -1,17 +1,32 @@
-"""Insider-threat module endpoints."""
+"""Insider-threat module endpoints.
+
+Authorization
+-------------
+Writes require ``cases:write``. Watchlisting a person, recording an indicator
+against them and acknowledging one are investigative acts about a subject —
+the same class of judgement as working a case, held by every investigating
+role and withheld from ``viewer``. It was ``viewer`` that mattered: a
+read-only account could put an employee on the watchlist with a reason of its
+choosing, or manufacture indicators against one.
+
+``settings:write`` was the alternative and is the wrong shape. It would
+restrict the module to tenant administrators, which takes insider-threat work
+away from the analysts the module exists for, and watchlisting a subject is
+not tenant configuration.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.insider_threat import InsiderIndicator, InsiderPeerGroup, UserRiskProfile
@@ -128,8 +143,8 @@ async def get_profile(
 async def update_watchlist(
     profile_id: uuid.UUID,
     body: WatchlistUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
 ) -> UserRiskProfile:
     profile = await db.get(UserRiskProfile, profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
@@ -171,8 +186,8 @@ async def list_indicators(
 @router.post("/indicators", response_model=IndicatorOut, status_code=status.HTTP_201_CREATED)
 async def create_indicator(
     body: IndicatorCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
 ) -> InsiderIndicator:
     profile = await db.get(UserRiskProfile, body.profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
@@ -190,8 +205,8 @@ async def create_indicator(
 @router.post("/indicators/{indicator_id}/acknowledge", response_model=IndicatorOut)
 async def acknowledge_indicator(
     indicator_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
 ) -> InsiderIndicator:
     indicator = await db.get(InsiderIndicator, indicator_id)
     if not indicator or indicator.tenant_id != current_user.tenant_id:
@@ -222,8 +237,8 @@ async def list_peer_groups(
 @router.post("/peer-groups", response_model=PeerGroupOut, status_code=status.HTTP_201_CREATED)
 async def create_peer_group(
     body: PeerGroupCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
 ) -> InsiderPeerGroup:
     group = InsiderPeerGroup(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(group)

@@ -1,16 +1,33 @@
-"""Asset inventory and vulnerability management endpoints."""
+"""Asset inventory and vulnerability management endpoints.
+
+Authorization
+-------------
+Writes require ``settings:write``. An asset row is CMDB data — criticality,
+owner, business context — and the graph's own CMDB import
+(``POST /graph/context/import``) already requires the same permission, so the
+two doors onto the same class of data agree. It is the tenant's inventory of
+record rather than investigative working material: an analyst reads it while
+triaging and does not curate it, and a wrong criticality silently mis-ranks
+every alert that touches the host.
+
+There is no first-party caller: the console does not reach ``/assets`` and
+nothing inside the platform posts to it, so this is an integration surface,
+and an integration authenticates with an API key whose scopes are granted
+deliberately. Before this it was reachable by ``viewer``, which could delete
+the inventory row for a tier-1 host.
+"""
 
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.asset import Asset, AssetVulnerability
@@ -119,8 +136,8 @@ async def list_assets(
 @router.post("", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
 async def create_asset(
     body: AssetCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> Asset:
     data = body.model_dump()
     asset = Asset(
@@ -169,8 +186,8 @@ async def get_asset(
 async def update_asset(
     asset_id: uuid.UUID,
     body: AssetUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> Asset:
     asset = await db.get(Asset, asset_id)
     if not asset or asset.tenant_id != current_user.tenant_id:
@@ -188,8 +205,8 @@ async def update_asset(
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_asset(
     asset_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> None:
     asset = await db.get(Asset, asset_id)
     if not asset or asset.tenant_id != current_user.tenant_id:
@@ -206,8 +223,8 @@ async def delete_asset(
 @router.post("/vulnerabilities", response_model=VulnerabilityOut, status_code=status.HTTP_201_CREATED)
 async def create_vulnerability(
     body: VulnerabilityCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> AssetVulnerability:
     # ensure asset belongs to this tenant
     asset = await db.get(Asset, body.asset_id)

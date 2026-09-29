@@ -868,6 +868,13 @@ async def get_mitre_coverage_compat(
 # ─── Write Endpoints ──────────────────────────────────────────────────────────
 
 
+# The four entity upserts below require `settings:write`, the same permission
+# as `/context/import` above. They write the graph every investigation reads as
+# fact, and `upsert_alert_graph` links an alert to hosts, users, IOCs and ATT&CK
+# techniques — a forged link is not a visibly bad row, it is a wrong conclusion
+# nothing downstream re-derives. No first-party caller posts here: the platform
+# writes this graph in-process through `app.services.graph_service`, so these
+# routes exist for integrations, which authenticate with a scoped API key.
 @router.post(
     "/entities/host",
     status_code=status.HTTP_201_CREATED,
@@ -875,7 +882,7 @@ async def get_mitre_coverage_compat(
 )
 async def upsert_host(
     payload: UpsertHostRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, str]:
     """Create or update a Host node in the knowledge graph."""
     await graph_service.upsert_host(
@@ -896,7 +903,7 @@ async def upsert_host(
 )
 async def upsert_user(
     payload: UpsertUserRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, str]:
     """Create or update a User node in the knowledge graph."""
     await graph_service.upsert_user(
@@ -917,7 +924,7 @@ async def upsert_user(
 )
 async def upsert_alert_graph(
     payload: UpsertAlertGraphRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, str]:
     """
     Create or update an Alert node and link it to Host, User, IOC, and Technique nodes.
@@ -943,7 +950,7 @@ async def upsert_alert_graph(
 )
 async def upsert_case_graph(
     payload: UpsertCaseGraphRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, str]:
     """Create or update a Case node and link it to Alert nodes."""
     await graph_service.upsert_case_node(
