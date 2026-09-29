@@ -44,6 +44,19 @@ ceilings:
     # argument to `urlopen`, and counting it is better than suppressing it.
     # `entries:` below stays empty on purpose: a ceiling counts a finding, a
     # suppression hides it.
+    #
+    # Unchanged at v12.1.0, and the reason is worth recording rather than
+    # smoothing over. Fixing GHSA-w754-prh8-m56j removed one ERROR
+    # (`use-defused-xml`, which fired on the PAN-OS client's
+    # `xml.sax.saxutils` import — string escaping with no parser and no XXE
+    # surface, which the rule cannot distinguish from parsing; replaced with
+    # `html.escape`). CI measured 39/101 at that point and asked for the
+    # ceiling to be lowered. Adding the rest of the release commit took the
+    # measurement back to 40/102, and **I could not attribute which file
+    # contributed the returning finding** — the scan covered the same 2,265
+    # files both times and `main` had not moved. Left at the measured value
+    # rather than lowered on a number that then moved under it; the honest
+    # state is that the net is unchanged and one finding is unexplained.
     total: 102
     error: 40
     measured_with: "1.86.0"

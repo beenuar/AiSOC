@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.1.0] - 2026-09-28
+
+### Security
+
+- **XML injection in the PAN-OS user-id client turned containment into its
+  opposite** ([GHSA-w754-prh8-m56j](https://github.com/beenuar/AiSOC/security/advisories/GHSA-w754-prh8-m56j)).
+  `_xml_register` and `_xml_unregister` interpolated `ip` and `tag` from
+  `ActionRequest.parameters` into a user-id message with f-strings, so a value
+  closing the `ip` attribute could append further payloads to the same message.
+
+  The injected payload is valid PAN-OS, which is what raises this above a
+  parsing curiosity: reproduced against the shipped code, `block_ip` emitted
+  well-formed XML containing an `unregister` for an address of the caller's
+  choosing, so the containment action released a block instead of applying one
+  and the firewall answered success.
+
+  Validated before escaped, in that order deliberately. Escaping alone stops
+  the injection and still hands the firewall a string that is not an address,
+  where it matches nothing and reports success — trading a loud failure for a
+  silent one on a containment path. Only the three forms PAN-OS registers are
+  accepted (single address, CIDR network, hyphenated range, with family and
+  ordering checked); tags are restricted to `[A-Za-z0-9._-]{1,127}`.
+
+- **The incident report's fallback renderer emitted untrusted HTML.** Found by
+  sweeping for the shape above. `_md_to_html` wraps the report in `<pre>` when
+  the `markdown` package is absent and interpolated the Markdown raw, plus the
+  case id raw into `<title>`. The sibling renderer in `orchestrator/report.py`
+  already escapes both, and its comment says why in as many words — one copy of
+  the lesson was written down and the other did the thing it warns against. The
+  content is model output and connector-supplied entity names.
+
+- **Eight advisories fixed in 12.0.0 are now published.** No code change; they
+  had remained in triage since the release that fixed them.
+
 ### Changed
 
 - **Six of the eight `PARTIAL` rows in the claim-to-gate matrix closed, and

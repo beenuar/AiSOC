@@ -37,8 +37,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: container-egress-${{ github.ref }}
-  cancel-in-progress: true
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Keyed on the commit rather than the ref, because a group shared across
+  # commits cancels a run still pending when the next push queues — and a
+  # cancelled run reports `cancelled` rather than `failure`, so a commit
+  # nothing graded sits under a tick that does not look wrong.
+  # Gate: scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   container-egress:
