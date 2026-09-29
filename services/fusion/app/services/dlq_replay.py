@@ -250,7 +250,7 @@ async def _build_consumer(topic: str, partition: int, start_offset: int, factory
         # already in trouble, and committing offsets from a one-shot read
         # would move the live consumer's position.
         enable_auto_commit=False,
-        value_deserializer=lambda m: _decode(m),
+        value_deserializer=_decode,
     )
     await consumer.start()
     target = TopicPartition(topic, partition)
@@ -267,7 +267,7 @@ async def _build_producer(factory: Any) -> Any:
 
     producer = AIOKafkaProducer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
-        value_serializer=lambda v: _encode(v),
+        value_serializer=_encode,
     )
     await producer.start()
     return producer
