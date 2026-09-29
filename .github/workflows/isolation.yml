@@ -22,6 +22,7 @@ on:
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
+      - "scripts/check_route_authz.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
@@ -44,6 +45,7 @@ on:
       - "services/**"
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
+      - "scripts/check_route_authz.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
@@ -154,6 +156,19 @@ jobs:
 
       - name: Every route authenticates or records why it is public
         run: python scripts/check_route_auth.py
+
+      # Authentication is not authorization. Every route in `remediation.py`
+      # passed the gate above and a `viewer` could still raise the tenant's
+      # autonomy tier to L4 and pre-approve a high blast-radius verb
+      # (GHSA-wj5c-88hg-5926). This asks the other question.
+      - name: Route-authz gate self-test (detects a removed permission)
+        run: python scripts/check_route_authz.py --self-test
+
+      - name: Identity-only write-route inventory
+        run: python scripts/check_route_authz.py --inventory
+
+      - name: State-changing routes that authorize do not decrease
+        run: python scripts/check_route_authz.py
 
       # A route can authenticate perfectly and still never run. `DELETE
       # /autonomy-policy/grants` sat behind `DELETE /{action}` from the day it
