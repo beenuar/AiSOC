@@ -1,12 +1,13 @@
 # AiSOC v8 — progress tracker
 
-**Last updated:** 2026-09-25
-**Current release:** `v10.0.0` (2026-09-25) · **Next:** unscheduled.
+**Last updated:** 2026-09-28
+**Current release:** `v12.2.0` (2026-09-28) · **Next:** unscheduled.
 Packaging is no longer named against a version: it slipped v8.0 to v8.1 to
 v8.2 for the same reason each time, and the blocker is registry credentials
-rather than code. See `[10.0.0]` in `CHANGELOG.md` for what v10.0 closed and
-what it knowingly left open — it is a major because upgrading requires an
-operator action, not because the v8 line is superseded.
+rather than code. Each major since v10.0 has been a major for the same kind of
+reason — upgrading requires an operator action — not because the v8 line is
+superseded. See the per-version sections of `CHANGELOG.md` for what each one
+closed and what it knowingly left open.
 
 This tracker is the at-a-glance view of what has landed across the v8 line and
 what is still open. It is deliberately short and dated. When it disagrees with
@@ -18,6 +19,19 @@ the tree, the tree wins — and the tracker is the thing to fix.
 > linked here for "v8.1 packaging work in flight" and a reader found a June
 > snapshot with no packaging in it. A tracker that is not updated is worse than
 > no tracker, because it is read as current.
+>
+> Its root-level predecessor `AISOC_V8_PROGRESS.md` is the sharper version of
+> the same lesson, and the reason issue
+> [#362](https://github.com/beenuar/AiSOC/issues/362) was closed rather than
+> refreshed. That issue existed so the wave-2 backlog would be readable
+> "without needing to read `AISOC_V8_PROGRESS.md`", and pointed at the file
+> anyway — a link that has returned **404 since 2026-06-30**, when
+> [#368](https://github.com/beenuar/AiSOC/pull/368) deleted the root tracker
+> and created this one in the same commit. Every item #362 listed is recorded
+> here (wave-2, in the table below) or in
+> [`ROADMAP.md`](../../ROADMAP.md) (wave-3), so there was nothing left to
+> migrate. A tracking issue for a release four majors old is a tracker nobody
+> reads; this file is the one to keep current.
 
 ---
 
