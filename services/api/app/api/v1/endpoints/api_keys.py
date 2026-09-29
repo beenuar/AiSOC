@@ -26,9 +26,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -139,7 +139,7 @@ def _api_key_to_out(ak: ApiKey) -> ApiKeyOut:
 async def create_api_key(
     body: CreateApiKeyRequest,
     db: DBSession,
-    current_user: Annotated[Any, require_permission("users:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
 ) -> CreateApiKeyResponse:
     """
     Create a new scoped API key for the current tenant.
@@ -217,7 +217,7 @@ async def update_api_key(
     key_id: uuid.UUID,
     body: UpdateApiKeyRequest,
     db: DBSession,
-    current_user: Annotated[Any, require_permission("users:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
 ) -> ApiKeyOut:
     """Update an API key's name, scopes, or expiry."""
     result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
@@ -251,7 +251,7 @@ async def update_api_key(
 async def revoke_api_key(
     key_id: uuid.UUID,
     db: DBSession,
-    current_user: Annotated[Any, require_permission("users:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
 ) -> None:
     """Revoke (deactivate) an API key. The key can no longer be used for authentication."""
     result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))

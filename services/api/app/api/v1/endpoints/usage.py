@@ -15,7 +15,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -93,7 +93,7 @@ async def get_usage(
 @router.get("/reconciliation")
 async def get_reconciliation(
     db: DBSession,
-    current_user: Annotated[Any, require_permission("settings:read")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:read"))],
     start: Annotated[str | None, Query()] = None,
     end: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
@@ -117,7 +117,7 @@ async def get_reconciliation(
 @router.get("/export.csv")
 async def export_month(
     db: DBSession,
-    current_user: Annotated[Any, require_permission("reports:read")],
+    current_user: Annotated[AuthUser, Depends(require_permission("reports:read"))],
     month: Annotated[str | None, Query(description="YYYY-MM; defaults to the current month")] = None,
 ) -> Response:
     """A month of usage as CSV, labelled with the organisation it belongs to."""

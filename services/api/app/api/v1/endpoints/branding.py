@@ -18,7 +18,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
@@ -104,7 +104,7 @@ async def put_branding(
     body: BrandingIn,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, Any]:
     """Set branding for the organisation the caller's tenant belongs to."""
     org_id = await _require_org(db, current_user.tenant_id)
@@ -139,7 +139,7 @@ async def upload_asset(
     kind: str,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
     file: Annotated[UploadFile, File()],
 ) -> dict[str, Any]:
     """Upload a logo or favicon.
@@ -274,7 +274,7 @@ async def delete_asset(
     kind: str,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
 ) -> None:
     """Remove an asset, returning that surface to the wordmark."""
     org_id = await _require_org(db, current_user.tenant_id)

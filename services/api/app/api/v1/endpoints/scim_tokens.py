@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -96,7 +96,7 @@ async def create_scim_token(
     body: CreateScimTokenRequest,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
 ) -> CreatedScimTokenOut:
     """Mint a SCIM credential for this tenant."""
     expires_at = None
@@ -133,7 +133,7 @@ async def rotate_scim_token(
     body: RotateScimTokenRequest,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
 ) -> CreatedScimTokenOut:
     """Replace a credential, leaving the old one working for a grace window."""
     result = await db.execute(select(ScimToken).where(ScimToken.id == token_id, ScimToken.tenant_id == current_user.tenant_id))
@@ -171,7 +171,7 @@ async def revoke_scim_token(
     token_id: uuid.UUID,
     db: DBSession,
     request: Request,
-    current_user: Annotated[Any, require_permission("settings:write")],
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
 ) -> None:
     """Revoke a credential immediately.
 

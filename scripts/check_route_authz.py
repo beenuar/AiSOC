@@ -119,6 +119,12 @@ def _authorizing_names(tree: ast.Module) -> set[str]:
     for node in ast.walk(tree):
         # Alias assignments: NAME = Annotated[..., Depends(require_permission(...))]
         if isinstance(node, ast.Assign):
+            # An alias can carry the discarded shape too, and then every route
+            # using it is credited for a permission FastAPI never calls. The
+            # alias is the worse place for it: one edit silently disarms a
+            # whole module.
+            if _discarded_in_annotation(node.value):
+                continue
             if any(_calls_authz(node.value)):
                 for target in node.targets:
                     if isinstance(target, ast.Name):
@@ -153,8 +159,54 @@ def _calls_authz(node: ast.AST) -> list[str]:
     return found
 
 
+def _discarded_in_annotation(annotation: ast.expr | None) -> list[str]:
+    """``require_permission(...)`` sitting in ``Annotated`` metadata unwrapped.
+
+    ``Annotated[Any, require_permission("users:write")]`` has no ``Depends()``.
+    FastAPI honours only ``Annotated`` metadata that is a ``Depends`` or a
+    ``FieldInfo`` and silently drops everything else, so the permission is
+    never checked and the parameter degrades into a query parameter. Eleven
+    routes across four modules shipped like this, and they read as gated —
+    which is worse than an obviously missing dependency, because a reviewer,
+    `_authorizing_names` and the ratchet all count them as authorizing.
+    """
+    if not isinstance(annotation, ast.Subscript):
+        return []
+    base = annotation.value
+    if (getattr(base, "id", None) or getattr(base, "attr", None)) != "Annotated":
+        return []
+    metadata = annotation.slice.elts[1:] if isinstance(annotation.slice, ast.Tuple) else []
+    found: list[str] = []
+    for item in metadata:
+        if isinstance(item, ast.Call):
+            name = item.func.attr if isinstance(item.func, ast.Attribute) else getattr(item.func, "id", None)
+            if name == "require_permission":
+                found.append(ast.unparse(item))
+    return found
+
+
+def find_discarded_permissions(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> list[tuple[str, str]]:
+    """Discarded permissions in *fn*'s own signature.
+
+    Reported rather than folded into the ratchet because the ceiling is a debt
+    balance and this is not debt. There is no correct reason to write it, so
+    it has no ceiling: one occurrence fails the gate.
+    """
+    return [
+        (arg.arg, source)
+        for arg in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]
+        for source in _discarded_in_annotation(arg.annotation)
+    ]
+
+
 def _route_authorizes(fn: ast.FunctionDef | ast.AsyncFunctionDef, authorizing: set[str]) -> bool:
     """True when this handler makes an authorization decision."""
+    # A permission that FastAPI discards is not an authorization decision,
+    # whatever it looks like. Checked first because `_calls_authz` below walks
+    # the argument subtree and would match the call itself, crediting the
+    # route for enforcement that never happens.
+    if find_discarded_permissions(fn):
+        return False
     # In the signature: Depends(require_permission("x")), or an alias of one.
     if _calls_authz(fn.args):
         return True
@@ -173,6 +225,32 @@ def _route_authorizes(fn: ast.FunctionDef | ast.AsyncFunctionDef, authorizing: s
 
 def _names_used(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+
+
+def collect_discarded(root: Path | None = None) -> list[str]:
+    """Every ``require_permission`` in the tree that FastAPI will never call.
+
+    Not restricted to state-changing routes: two of the eleven found were on
+    reads, and a read permission that enforces nothing is the same bug with a
+    smaller blast radius.
+    """
+    base = root or route_scan.REPO_ROOT
+    out: list[str] = []
+    for path in sorted((base / "services" / SERVICE / "app" / "api").rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):  # pragma: no cover - not ours to fix
+            continue
+        shown = path.relative_to(base)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                for parameter, source in find_discarded_permissions(node):
+                    out.append(f"{shown}:{node.lineno} {node.name}() parameter '{parameter}' annotates {source} with no Depends()")
+            elif isinstance(node, ast.Assign):
+                for source in _discarded_in_annotation(node.value):
+                    alias = ", ".join(t.id for t in node.targets if isinstance(t, ast.Name)) or "<alias>"
+                    out.append(f"{shown}:{node.lineno} alias '{alias}' annotates {source} with no Depends()")
+    return out
 
 
 def collect(root: Path | None = None) -> list[RouteVerdict]:
@@ -250,9 +328,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     ungated = [r for r in rows if not r["authorized"]]
+    discarded = collect_discarded()
 
     if args.json:
-        print(json.dumps({"total": len(rows), "unauthorized": len(ungated), "routes": ungated}, indent=2))
+        print(json.dumps({"total": len(rows), "unauthorized": len(ungated), "discarded": discarded, "routes": ungated}, indent=2))
         return 0
 
     if args.inventory:
@@ -269,6 +348,19 @@ def main(argv: list[str] | None = None) -> int:
     print(f"state-changing routes in services/{SERVICE}: {len(rows)}")
     print(f"  authorize:        {len(rows) - len(ungated)}")
     print(f"  identity only:    {len(ungated)}  (ceiling {args.max_unauthorized})")
+    print(f"  discarded perms:  {len(discarded)}  (ceiling 0)")
+
+    # No ceiling, and no exemptions: there is no correct reason to write a
+    # permission where FastAPI cannot see it. Reported separately from the
+    # ratchet so the diagnostic names the actual mistake — the permission is
+    # present and spelled correctly, it is simply not wired to anything.
+    if discarded:
+        print(f"\nFAIL: {len(discarded)} permission(s) declared as Annotated metadata with no Depends().")
+        print("FastAPI honours only Depends/FieldInfo metadata and drops the rest, so these are never checked")
+        print("and the parameter becomes a query parameter. Write Annotated[AuthUser, Depends(require_permission('x'))].")
+        for line in discarded:
+            print(f"  {line}")
+        return 1
 
     # Forward: the debt may not grow.
     if len(ungated) > args.max_unauthorized:
@@ -324,12 +416,39 @@ def _self_test() -> int:
 
         after = [r for r in collect(scratch) if not r["authorized"]]
 
-    gained = len(after) - len(before)
-    if gained != 3:
-        print(f"FAIL: removing authorization from remediation.py's 3 write routes changed the count by {gained}, not 3")
-        return 1
+        gained = len(after) - len(before)
+        if gained != 3:
+            print(f"FAIL: removing authorization from remediation.py's 3 write routes changed the count by {gained}, not 3")
+            return 1
 
-    print(f"self-test OK: identity-only routes {len(before)} -> {len(after)} when remediation.py's permissions are removed")
+        # Second defect: the permission is still there and still correct, but
+        # written where FastAPI never reads it. Unwrapping `Depends` is the
+        # exact edit that produced the eleven shipped instances.
+        (scratch / target).write_text(original, encoding="utf-8")
+        if collect_discarded(scratch):
+            print("FAIL: self-test baseline already reports discarded permissions; the scratch tree is not clean")
+            return 2
+
+        unwrapped = original.replace("Depends(require_permission(_WRITE))", "require_permission(_WRITE)")
+        if unwrapped == original:
+            print("FAIL: self-test could not produce the discarded shape; remediation.py's dependency spelling changed")
+            return 2
+        (scratch / target).write_text(unwrapped, encoding="utf-8")
+
+        discarded = collect_discarded(scratch)
+        if len(discarded) != 1:
+            print(f"FAIL: unwrapping Depends() on the WriteUser alias was detected {len(discarded)} time(s), not 1")
+            return 1
+
+        # And it must stop crediting them, or the ratchet keeps counting a
+        # route as gated while it enforces nothing.
+        still_credited = [r for r in collect(scratch) if r["module"].endswith("remediation.py") and r["authorized"]]
+        if still_credited:
+            print(f"FAIL: {len(still_credited)} route(s) using a discarded alias are still counted as authorizing")
+            return 1
+
+    print(f"self-test OK: identity-only routes {len(before)} -> {len(after)} when remediation.py's permissions are removed;")
+    print("unwrapping Depends() on the WriteUser alias is reported once and stops crediting all 3 routes it gates")
     return 0
 
 
