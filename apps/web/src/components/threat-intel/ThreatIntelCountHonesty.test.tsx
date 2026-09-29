@@ -77,13 +77,17 @@ describe('an unreachable indicator store is not a count of zero', () => {
     expect(screen.getByText(/^— indicators$/)).toBeInTheDocument();
   });
 
-  it('does not print a zero when the read failed', () => {
+  it('does not print a zero when the read failed, and names the failure', () => {
     swrError.value = new Error('503 Service Unavailable');
 
     render(<ThreatIntelView />);
 
     expect(screen.queryByText(/^0 indicators$/)).toBeNull();
     expect(screen.getByText(/^— indicators$/)).toBeInTheDocument();
+    // A request that never completed is a different thing from a route that
+    // answered and said it could not read its store, and the copy must say
+    // which. This was destructured and spent on `${error ? '' : ''}`.
+    expect(screen.getByText(/503 Service Unavailable/)).toBeInTheDocument();
   });
 
   it('still counts a genuinely empty store as zero', () => {

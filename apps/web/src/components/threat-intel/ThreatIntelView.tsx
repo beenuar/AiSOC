@@ -268,7 +268,17 @@ export function ThreatIntelView() {
   // confident zero over it. `threatIntelApi.lookup` already treats the same
   // flag as a failed lookup; the list did not.
   const storeUnknown = !data || data.degraded === true;
-  const degradedReason = data?.reason?.trim() || null;
+
+  // Two distinct ways to not know, and the operator needs to be told which.
+  // `reason` is the route answering 200 and saying it could not read its
+  // store; `error` is the request never completing. The latter used to be
+  // destructured and spent on `${error ? '' : ''}` — a no-op that read as a
+  // use — so a transport failure fell through to the same generic sentence
+  // as everything else.
+  const transportFailure =
+    error instanceof Error ? error.message : error ? String(error) : null;
+  const notMeasuredReason =
+    data?.reason?.trim() || transportFailure || 'The threat-intel service did not answer';
 
   // Not `?? MOCK_INDICATORS`. `fallbackData` above already withholds the
   // sample set outside the hosted demo; repeating the constant here put it
@@ -423,10 +433,10 @@ export function ThreatIntelView() {
                 storeUnknown
                   ? isLoading
                     ? 'Reading indicators from the threat-intel service.'
-                    : // The route's own `reason` when it sent one, because
-                      // "did not answer (ConnectError)" tells an operator
-                      // where to look and a generic sentence does not.
-                      `${degradedReason ?? 'The threat-intel service did not answer'}. This is not a report that no indicators exist.`
+                  : // The route's own `reason` when it sent one, because
+                    // "did not answer (ConnectError)" tells an operator
+                    // where to look and a generic sentence does not.
+                    `${notMeasuredReason}. This is not a report that no indicators exist.`
                   : 'Connect a TI feed (MISP, OTX, AbuseIPDB, GreyNoise, internal STIX/TAXII) from Settings → Connectors to start enriching alerts with reputation context.'
               }
               className="bg-transparent py-8"
