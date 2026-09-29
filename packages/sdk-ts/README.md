@@ -14,10 +14,11 @@ TypeScript client SDK for [AiSOC](https://github.com/beenuar/AiSOC) — auto-gen
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC && pnpm --filter @aisoc/sdk-ts install
 
-# v8.0+ (once @aisoc/sdk lands on npm):
-npm install @aisoc/sdk
-# or
-pnpm add @aisoc/sdk
+# Not yet on npm — the upload is blocked on registry credentials,
+# which is an account action rather than a code change. Until then, install
+# from source with the command above.
+#   npm install @aisoc/sdk
+#   pnpm add @aisoc/sdk
 ```
 
 ## Quick start

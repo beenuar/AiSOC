@@ -2,44 +2,40 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v12.1.0`, released 2026-09-28 — the release where two services stopped serving unauthenticated and started refusing to serve instead. **Read the BREAKING section of the changelog before upgrading.** The actions service had skipped authentication entirely whenever its token was empty and `AISOC_DEV_MODE` was set, and compose defaults that flag on while nothing generated the token, so every stock install dispatched `isolate_host`, `disable_user`, `block_ip` and `run_script` to anything that could reach the port; the realtime edge verified connection tickets against a constant committed to this repository and treated an unset internal token as authorized; and a `viewer` role could write to cases on all nine write routes where the permission was enforced nowhere. Each was a reported vulnerability — four advisories across the three items — and each now returns 503 or 401 until the credential it needs is set, which is the intended failure and the reason this is a major. The upgrade action for all three is `make up`, because `scripts/ensure_env.py` backfills generated secrets into an **existing** `.env` and not only a new one. Alongside that, hunting stopped being a library of hunts somebody had already written: an agent turns a hypothesis into a plan whose fields and operators are closed enums, so there is no string it can produce that becomes SQL text, and the hunt corpus went from 5 to 68. Every product claim is backed by a failing CI test (claim-to-gate matrix at the v12.0.0 cut: 236 rows — 228 GATED / 8 PARTIAL / 0 NO GATE, counted by `scripts/check_claim_gate_matrix.py`, which is the figure to recount rather than to quote). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v12.2.0`, released 2026-09-28 — the release where two services stopped serving unauthenticated and started refusing to serve instead. **Read the BREAKING section of the changelog before upgrading.** The actions service had skipped authentication entirely whenever its token was empty and `AISOC_DEV_MODE` was set, and compose defaults that flag on while nothing generated the token, so every stock install dispatched `isolate_host`, `disable_user`, `block_ip` and `run_script` to anything that could reach the port; the realtime edge verified connection tickets against a constant committed to this repository and treated an unset internal token as authorized; and a `viewer` role could write to cases on all nine write routes where the permission was enforced nowhere. Each was a reported vulnerability — four advisories across the three items — and each now returns 503 or 401 until the credential it needs is set, which is the intended failure and the reason this is a major. The upgrade action for all three is `make up`, because `scripts/ensure_env.py` backfills generated secrets into an **existing** `.env` and not only a new one. Alongside that, hunting stopped being a library of hunts somebody had already written: an agent turns a hypothesis into a plan whose fields and operators are closed enums, so there is no string it can produce that becomes SQL text, and the hunt corpus went from 5 to 68. Every product claim is backed by a failing CI test (claim-to-gate matrix at the v12.0.0 cut: 236 rows — 228 GATED / 8 PARTIAL / 0 NO GATE, counted by `scripts/check_claim_gate_matrix.py`, which is the figure to recount rather than to quote). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `12.1.0`. The **v12.1.0** release (2026-09-28) is a security and
-correctness release. Its theme is narrower than v12.0.0's and worth stating
-plainly: several controls were reading a description of the system rather than
-the system, and reported success about the case they could not see.
+`VERSION` is `12.2.0`. The **v12.2.0** release (2026-09-28) finishes the
+verification work v12.1.0 started, and its one user-facing correction is an
+honesty fix rather than a feature.
 
-**v12.1.0 highlights (September 28, 2026)**
-- **A firewall containment action could be made to release a block.** The PAN-OS
-  user-id client interpolated the caller's `ip` and `tag` into XML with
-  f-strings, and the injected payload is valid PAN-OS — so `block_ip` emitted a
-  message telling the firewall to *unregister* an address of the attacker's
-  choosing, and the firewall answered success
-  ([GHSA-w754-prh8-m56j](https://github.com/beenuar/AiSOC/security/advisories/GHSA-w754-prh8-m56j)).
-- **The published API image answered 500 to every `/api/v1` request.** A tracing
-  middleware raised on the FastAPI version the lock resolved. CI installed the
-  same package with no version bound, resolved a newer one, and passed — so CI
-  and production were running different code, and the version CI never graded
-  was the broken one.
-- **Sigma rules were evaluated by substring containment**, which cannot express
-  a boolean, so every multi-clause rule matched nothing while reporting no
-  error. The published executable-rule count does not rest on that path and did
-  not change.
-- **Eight advisories fixed in v12.0.0 are now published.** They had remained in
-  triage since the release that fixed them.
-- **A marketplace catalogue of 7,155 items now says which are executable** —
-  2,767 executable against 4,388 reference-only, tied to the detection truth
-  table rather than to a flag that the compiler does not rewrite.
-- **The audit hash chain can no longer fork.** Appends are serialized per tenant
-  and a unique index makes two rows claiming the same predecessor
-  unrepresentable; measured at 500 concurrent appends, 0 forks against 401
-  before.
+**v12.2.0 highlights (September 28, 2026)**
+- **Four package READMEs told you to install packages that do not exist.** Each
+  deferred to `v8.0+`, a release that shipped four major versions ago, so the
+  label read as availability. None of the eight first-party packages has ever
+  been uploaded — the registries return 404 for all eight — while the release
+  workflow's publish jobs report success, because only the upload step is
+  credential-gated. A gate now asks the registry instead of trusting the
+  workflow.
+- **The claim-to-gate matrix is complete**: 238 rows, all GATED, no PARTIAL
+  and no NO GATE. Phase 4 stays unchecked, because a funded hosted-model key
+  is not something code can supply.
+- **Completion bounds now reach the bundled model.** They had been rendered as
+  `max_completion_tokens`, which Ollama ignores silently, so every investigator
+  call was effectively unbounded — one ran to 40,960 tokens.
+- **CI installs each service's committed lock as an exact closure**, so the
+  version CI grades is the version the image ships.
 
-The full inventory — 16 entries — lives under `[12.1.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+The full inventory — 11 entries — lives under `[12.2.0]` in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
+## v12.1.0 (2026-09-28)
+
+A security and correctness release: several controls were reading a description of the system rather than the system. Full detail under `[12.1.0]` in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

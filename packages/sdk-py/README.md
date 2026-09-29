@@ -14,8 +14,10 @@ Async Python client SDK for [AiSOC](https://github.com/beenuar/AiSOC).
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC && pip install -e packages/sdk-py
 
-# v8.0+ (once aisoc-sdk lands on PyPI):
-pip install aisoc-sdk
+# Not yet on PyPI — the upload is blocked on registry credentials,
+# which is an account action rather than a code change. Until then, install
+# from source with the command above.
+#   pip install aisoc-sdk
 ```
 
 ## Quick start

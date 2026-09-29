@@ -12,8 +12,10 @@ response actions, and data-source connectors.
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC && pip install -e "packages/plugin-sdk-py[dev]"
 
-# v8.0+ (once aisoc-plugin-sdk lands on PyPI):
-pip install aisoc-plugin-sdk
+# Not yet on PyPI — the upload is blocked on registry credentials,
+# which is an account action rather than a code change. Until then, install
+# from source with the command above.
+#   pip install aisoc-plugin-sdk
 ```
 
 ## Quick Start

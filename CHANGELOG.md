@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.2.0] - 2026-09-28
+
+### Fixed
+
+- **Four package READMEs deferred publication to a release that had already
+  shipped.** Each offered its install command under `v8.0+ (once <package>
+  lands on PyPI)`; v8.0 shipped four major versions ago, so by v12 the label
+  read as availability rather than as a caveat. None of the eight first-party
+  packages has ever been uploaded — asking the registries directly returns
+  **404 for all eight** — and the release workflow's publish jobs report
+  *success* regardless, because only the final upload step is
+  credential-gated and this repository's sole secret is `FLY_API_TOKEN`. The
+  job runs, skips the upload, and goes green.
+
+  The state is deliberate and the blocker is an account action rather than a
+  code change; what was wrong was what the READMEs said about it. They now say
+  it in the present tense, and `tests/test_package_install_claims.py` asks the
+  registry rather than trusting a workflow: a package that is not published
+  must carry the disclaimer, and one that later is published stops requiring
+  it, so publishing cannot leave a stale "not yet" behind either.
+
+### Changed
+
+- The claim-to-gate matrix reaches **238 rows, 238 GATED, 0 PARTIAL, 0 NO
+  GATE**. The final two rows were not blocked on a scheduling window, as the
+  tracker said: the live-agent workflow dispatched a class that exists nowhere
+  in the service, so its first-ever run failed in 92 seconds. The groundedness
+  floor is now 0.40, set from twelve runs across two environments rather than
+  from the local runs alone, which are a point mass under greedy decoding.
+  Phase 4 stays unchecked; every figure here came from a locally-served model
+  and no hosted provider has been exercised.
+
+- **Completion bounds now reach the bundled model.** Every investigator call
+  was unbounded — one ran to 40,960 tokens over twenty minutes — and the
+  obvious repair would have been inert, because langchain renders the bound as
+  `max_completion_tokens` and Ollama reads only `max_tokens`, ignoring the new
+  name in silence. Measured at a limit of 64: 64 tokens and `finish_reason:
+  length` under the legacy name, 72 and `stop` under the new one.
+
+- **CI installs each service's committed lock as an exact closure**, so the
+  version CI grades is the version the image ships.
+
+
 ### Fixed
 
 - **The live-agent eval had never run, and could not have.** `live-agent-eval.yml`

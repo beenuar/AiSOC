@@ -11,10 +11,11 @@ Developer CLI for building, validating, and publishing AiSOC plugins and detecti
 git clone https://github.com/beenuar/AiSOC.git
 cd AiSOC && pip install -e packages/aisoc-cli
 
-# v8.0+ (once aisoc-cli lands on PyPI):
-pipx install aisoc-cli       # recommended (isolated venv)
-# or:
-pip install aisoc-cli
+# Not yet on PyPI — the upload is blocked on registry credentials,
+# which is an account action rather than a code change. Until then, install
+# from source with the command above.
+#   pipx install aisoc-cli     # recommended (isolated venv)
+#   pip install aisoc-cli
 ```
 
 ## Commands
