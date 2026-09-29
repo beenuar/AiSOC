@@ -2,16 +2,34 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v12.3.0`, released 2026-09-29 — the release that closed six lettered sub-phases, and every one of them was the same shape: a mechanism built in an earlier phase, tested, and pointed at almost nothing. The registry that pins the prompts a model receives held 3 of 22 and now holds all 22, so a prompt can no longer be reworded without a lock change and an eval re-grade. Approvals raised in the console and never answered waited forever on a column nothing swept, and now expire to a safe default read back from the other half of the system rather than restated. Dead letters became replayable from the Kafka offset the consumer used to discard, re-validated by the same validator that refused them. The ingest checkpoint stopped being a duck-typed optional method that 83 of 84 connectors silently lacked and became a declared contract. A storage cost model whose only reader was the gate that checked it now reports a tenant's projected $/mo beside its LLM $/mo. And the demo stack gained a time budget, which is what found a port probe that let Docker start Postgres with no network attached while three health checks read green — 3m06s to 1m39s once it was fixed. There is **no BREAKING section this time**; upgrading is `make up`. Both grading-integrity controls are now required rather than advisory, taking branch protection to 24 contexts, and only the two that actually report on a pull request were added, because GitHub counts a skipped required check as passing. Every product claim is backed by a failing CI test (claim-to-gate matrix at this cut: 239 rows — 239 GATED / 0 PARTIAL / 0 NO GATE, counted by `scripts/check_claim_gate_matrix.py`, which is the figure to recount rather than to quote). None of the eight first-party npm/PyPI packages has been uploaded — the registries still return 404 for all eight — and that remains credential-blocked rather than done. The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v12.3.1`, released 2026-09-29 — a security patch on top of v12.3.0, and the reason it exists separately is that a fix living on `main` is not a fix anyone has. Two reported advisories: a **critical** SQL injection in the osquery allowlist, where a denylist scanning rendered SQL for `--`, `/*` and `;` had never listed `'`, so a value could close a quoted literal and replace the WHERE clause — and reproducing it showed all six query templates were injectable, not the one reported, because the numeric parameters were never coerced either. Each parameter now declares what it is and anything else is refused rather than escaped, because an escaped path still reaches the endpoint, matches nothing, and reads to an operator as a clean host. The second is a **high** missing-authorization hole where every remediation write route authenticated and none authorized, so a `viewer` could raise the tenant to autonomy L4 and pre-approve a high blast-radius verb; the permission it needed already existed and was simply never enforced, which is the third time on this repository. The gate that should have caught it passed throughout, because it asks whether a route authenticates — so a second gate now asks whether it authorizes, and measures 103 of 246 state-changing routes making no authorization decision, as a ceiling that can only fall. Upgrading is `make up`. v12.3.0 (same day) closed six lettered sub-phases; its notes are below. None of the eight first-party npm/PyPI packages has been uploaded — the registries return 404 for all eight — and that remains credential-blocked rather than done. The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `12.3.0`. The **v12.3.0** release (2026-09-29) is a feature
-release with no breaking changes: six lettered sub-phases closed, plus the
-publish-signal and digest honesty fixes and two CI controls promoted from
-advisory to required.
+`VERSION` is `12.3.1`. The **v12.3.1** release (2026-09-29) is a security
+patch: two reported advisories fixed, no feature change and nothing breaking.
+It follows v12.3.0 the same day because a fix that sits on `main` is not a fix
+anyone running the published images has.
+
+**v12.3.1 highlights (September 29, 2026)**
+- **GHSA-p37g-cjqx-56hq (critical) — SQL injection in the osquery allowlist.**
+  A denylist that scanned rendered SQL for `--`, `/*` and `;` had never
+  listed `'`. All six templates were injectable, not the one reported, since
+  the numeric parameters were never coerced. Parameters now declare a type
+  and anything else is refused, not escaped.
+- **GHSA-wj5c-88hg-5926 (high) — missing function-level authorization.** Every
+  remediation write route authenticated and none authorized, so a `viewer`
+  could raise the tenant to L4 and pre-approve a high blast-radius verb. Now
+  enforced on all six routes, including one the advisory does not name.
+- **The router also committed before serialising**, returning HTTP 500 on a
+  write that had already landed — so the regression tests assert the
+  transaction did not commit rather than checking a status code.
+- **A gate that asks whether a route authorizes**, not merely whether it
+  authenticates: 103 of 246 state-changing routes make no authorization
+  decision, recorded as a ceiling that can only fall.
+
 
 **v12.3.0 highlights (September 29, 2026)**
 - **Six deferrals closed, one recurring shape.** 8b (every shipped prompt
