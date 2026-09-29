@@ -146,6 +146,19 @@ def completions_url_for_base(base_url: str) -> str:
     return f"{base}/v1/chat/completions"
 
 
+def _needs_legacy_max_tokens(base_url: str | None) -> bool:
+    """True when the endpoint reads ``max_tokens`` rather than its newer name.
+
+    Anything that is not OpenAI's own API. OpenAI rejects ``max_tokens`` for
+    its newer models and wants ``max_completion_tokens``; every
+    OpenAI-compatible server in this project's path — Ollama, vLLM, LiteLLM —
+    still reads the legacy name, and Ollama ignores the new one in silence.
+    """
+    if not base_url:
+        return False
+    return "api.openai.com" not in base_url.lower()
+
+
 def make_chat_model(
     role: str,
     *,
@@ -195,6 +208,22 @@ def make_chat_model(
     assert_routable(model, base_url)
     if base_url:
         params["base_url"] = base_url
+    if max_tokens is not None and _needs_legacy_max_tokens(base_url):
+        # langchain-openai 1.x renders the typed `max_tokens` field onto the
+        # wire as `max_completion_tokens`, OpenAI's newer name for it. Ollama
+        # reads only `max_tokens` and ignores the new name silently, so a
+        # bound set here reached the bundled local model as no bound at all.
+        # Measured directly against Ollama with qwen2.5:0.5b, asking for 500
+        # numbered lines with a limit of 64:
+        #
+        #     max_tokens            -> 64 tokens,   finish_reason "length"
+        #     max_completion_tokens -> 72 tokens,   finish_reason "stop"
+        #
+        # `extra_body` puts the legacy name back on the request beside the
+        # new one. It is added only for a non-OpenAI endpoint because OpenAI
+        # itself rejects `max_tokens` outright for its newer models, and the
+        # bundled gateway drops what a provider does not support anyway.
+        params["extra_body"] = {"max_tokens": max_tokens, **(kwargs.pop("extra_body", None) or {})}
     api_key = (override or {}).get("api_key") or resolve_api_key(model)
     if api_key:
         params["api_key"] = api_key

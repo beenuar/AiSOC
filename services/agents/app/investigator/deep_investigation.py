@@ -46,6 +46,8 @@ from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
 
+from .limits import max_completion_tokens
+
 logger = structlog.get_logger()
 
 #: Off by default is wrong here — a shipped capability nobody enables is the
@@ -475,7 +477,7 @@ async def run_deep_investigation(
     tokens_before = governor.spent_tokens(tenant_id)
 
     try:
-        model = llm if llm is not None else make_chat_model("investigation")
+        model = llm if llm is not None else make_chat_model("investigation", max_tokens=max_completion_tokens())
 
         registry = default_registry()
         for tool in investigation_tools(tenant_id):

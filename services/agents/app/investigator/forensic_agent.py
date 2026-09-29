@@ -24,6 +24,7 @@ from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .limits import max_completion_tokens
 from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
     sanitize_text,
@@ -55,7 +56,7 @@ Respond ONLY with a JSON object:
 
 async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     model = resolve_model_alias("investigation")
-    llm = make_chat_model("investigation", temperature=0)
+    llm = make_chat_model("investigation", temperature=0, max_tokens=max_completion_tokens())
 
     # Defence-in-depth: alert_summary, recon.summary, and the enrichment cache
     # can all carry attacker-controlled strings (banners, dark-web excerpts,

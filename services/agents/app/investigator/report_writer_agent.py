@@ -23,6 +23,7 @@ from app.llm.factory import make_chat_model, resolve_model_alias
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .limits import max_completion_tokens
 from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
     sanitize_text,
@@ -169,7 +170,7 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
     logger.info("report_writer.start", case_id=state.case_id)
 
     model = resolve_model_alias("report")
-    llm = make_chat_model("report", temperature=0)
+    llm = make_chat_model("report", temperature=0, max_tokens=max_completion_tokens())
 
     context = _build_context(state)
     bundle_append = format_bundle_prompt_append(state.context_bundle)
