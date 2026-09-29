@@ -668,13 +668,18 @@ async def list_investigation_tools(
     }
 
 
+# `lake:query` because that is literally what a pivot is: `dispatch` runs a
+# typed primitive against the tenant's event lake and returns rows from it.
+# The tenant comes from the session, so this was never a cross-tenant read —
+# it was a `viewer`, a role deliberately given no lake access at all, reading
+# raw events through a route that only checked for a session.
 @router.post(
     "/investigate/query",
     summary="Run one typed investigation primitive against the event lake",
 )
 async def run_investigation_tool(
     request: InvestigationToolRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("lake:query"))],
 ) -> dict[str, Any]:
     """Execute one pivot. Tenant comes from the session, never the request."""
     result = await dispatch(request.tool, str(current_user.tenant_id), request.args)

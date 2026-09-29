@@ -18,6 +18,17 @@ Endpoints
 ---------
 * ``POST /nl-query/translate``      Translate NL → ES|QL / SPL / KQL.
 * ``POST /nl-query/execute``        Translate + execute against Elasticsearch.
+
+Authorization
+-------------
+Both require ``lake:query``. Execute obviously does. Translate does because
+it is the first half of the same request — the console calls them in
+sequence, the output is a query against the caller's own telemetry, and
+there is no coherent entitlement that lets a principal compose a lake query
+it may not run. ``lake:query`` covers every role that hunts and excludes
+``viewer``, which is what was wrong: a read-only role could spend the
+tenant's LLM budget translating and, on ``/execute``, read raw events the
+lake permissions exist to keep from it.
 """
 
 from __future__ import annotations
@@ -27,15 +38,15 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from urllib.parse import urlparse
 
 import httpx
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.core.config import settings
 from app.db.clickhouse import (
@@ -438,7 +449,7 @@ async def _execute_against_lake(
 )
 async def translate_query(
     body: NLQueryTranslateRequest,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
 ) -> NLQueryTranslateResponse:
     translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
     return NLQueryTranslateResponse(
@@ -462,7 +473,7 @@ async def translate_query(
 )
 async def execute_query(
     body: NLQueryExecuteRequest,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
     db: TenantDBSession,
 ) -> NLQueryExecuteResponse:
     translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)

@@ -14,6 +14,16 @@ Endpoints
 * ``POST /detection-loop/suggest``            Trigger FP → Sigma draft.
 * ``GET  /detection-loop/suggestions``        List LLM-drafted suggestions.
 * ``GET  /detection-loop/suggestions/{id}``   Detail of one suggestion.
+
+Authorization
+-------------
+``POST /suggest`` requires ``rules:read``. The route reads the triggering
+rule's body out of ``aisoc_detection_rules`` and returns a draft of it, so
+the floor is that the caller may read detection content — which a ``viewer``
+may not, and which is what made this route a small disclosure of the
+tenant's detection logic as well as an ungated LLM spend. The draft is
+persisted as a proposal by the DAC lifecycle, which is gated on
+``rules:write``; drafting needs the read, promoting needs the write.
 """
 
 from __future__ import annotations
@@ -23,13 +33,13 @@ import logging
 import textwrap
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
@@ -180,7 +190,7 @@ _SUGGESTIONS: dict[uuid.UUID, dict[str, Any]] = {}
 async def suggest_fp_fix(
     body: SuggestRequest,
     db: TenantDBSession,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
 ) -> SuggestionResponse:
     """Retrieve the triggering rule + alert evidence, then draft a Sigma improvement.
 

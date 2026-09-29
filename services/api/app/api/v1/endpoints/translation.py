@@ -9,6 +9,17 @@ Endpoints
 ---------
 * ``POST /translation/translate``   Translate a rule from one format to multiple targets.
 * ``GET  /translation/formats``     List supported source/target formats.
+
+Authorization
+-------------
+``POST /translate`` requires ``rules:read`` — deliberately the read and not
+the write. It persists nothing: a caller hands in rule text and gets rule
+text back. What it does need is entitlement to the detection surface at all,
+and ``rules:read`` is exactly that: held by ``tenant_admin``, ``soc_lead``
+and ``threat_hunter``, withheld from ``viewer``. ``rules:write`` would be
+stronger than the act and would diverge from the drafting routes in
+``nl_detection.py`` and ``detection_loop.py``, which make the same
+read-to-draft, write-to-persist distinction.
 """
 
 from __future__ import annotations
@@ -16,12 +27,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
@@ -248,7 +259,7 @@ def _fallback_templates(req: TranslateRequest) -> dict[str, Any]:
     status_code=status.HTTP_200_OK,
     summary="Translate a detection rule across formats",
 )
-async def translate_rule(body: TranslateRequest, user: AuthUser) -> TranslateResponse:
+async def translate_rule(body: TranslateRequest, user: Annotated[AuthUser, Depends(require_permission("rules:read"))]) -> TranslateResponse:
     if not body.target_formats:
         raise HTTPException(status_code=400, detail="At least one target_format is required.")
 

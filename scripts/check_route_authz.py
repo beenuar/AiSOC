@@ -98,7 +98,11 @@ AUTHZ_CALLS = frozenset(
 #: the three write routes in `remediation.py`, then 90 once the MSSP write
 #: surface took a permission (rule packs and overrides `rules:write`,
 #: delegations `users:write`, adoption and organisation founding
-#: `settings:write`, provider notes `cases:write`).
+#: `settings:write`, provider notes `cases:write`), then 77 once the hunt
+#: surface took `lake:query` (a hunt is a stored query; authoring and running
+#: it are one entitlement) and the three detection-drafting routes took
+#: `rules:read` (they persist nothing, so the floor is entitlement to read
+#: detection logic; promoting a draft is separately `rules:write`).
 #:
 #: Four routes under `/mssp/organizations` remain in this count and are not
 #: debt: they authorize through `_admin_scope`, an organisation owner/admin
@@ -106,7 +110,7 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 90
+MAX_UNAUTHORIZED = 77
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:

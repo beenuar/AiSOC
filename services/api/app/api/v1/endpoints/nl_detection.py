@@ -209,8 +209,15 @@ def _template_fallback(request: NLDetectionRequest) -> dict[str, str | None]:
 # ---------------------------------------------------------------------------
 
 
+# `/translate` drafts and `/propose` persists, so they take the read and the
+# write of the same resource. `rules:read` rather than `rules:write` on the
+# drafting half because nothing is stored: rule text in, rule text out. It is
+# still a real refusal — `viewer` holds neither, and the roles that may author
+# detection content are exactly the roles that may draft it.
 @router.post("/translate", response_model=NLDetectionResponse)
-async def translate_detection(payload: NLDetectionRequest, user: AuthUser) -> NLDetectionResponse:
+async def translate_detection(
+    payload: NLDetectionRequest, user: Annotated[AuthUser, Depends(require_permission("rules:read"))]
+) -> NLDetectionResponse:
     """Convert a plain-English threat description into multi-platform detection rules."""
     if not payload.description.strip():
         raise HTTPException(

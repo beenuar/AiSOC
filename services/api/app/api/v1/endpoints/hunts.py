@@ -20,6 +20,22 @@ remain visible only to the tenant that created them once they are owned.
 Legacy rows created before migration 043 with ``tenant_id IS NULL`` are
 silently treated as orphans — they are *not* returned to anyone, ensuring no
 cross-tenant data leakage during the rollout window.
+
+Authorization
+-------------
+Writes require ``lake:query``. A hunt is a stored query over telemetry —
+``run_hunt`` executes it against Elasticsearch — so authoring one and running
+one are the same entitlement, and storing a query you may not run is
+meaningless. ``lake:query`` is held by ``tenant_admin``, ``soc_lead``,
+``soc_analyst`` and ``threat_hunter``, and withheld from ``viewer`` and
+``api_service``.
+
+``rules:write`` was the other candidate and is the wrong one. It is not held
+by ``soc_analyst``, and the analyst is who this module is for — the summary
+above says so. Gating the workbench on it would have taken the hunt surface
+away from the role that uses it most, which is an outage rather than a fix.
+Detection *content* authoring is gated on ``rules:*`` elsewhere; a hypothesis
+is not a rule.
 """
 
 from __future__ import annotations
@@ -29,14 +45,14 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
@@ -247,7 +263,9 @@ async def list_hunts(
 
 
 @router.post("", response_model=HuntResponse, status_code=status.HTTP_201_CREATED, summary="Create hunt hypothesis")
-async def create_hunt(body: CreateHuntRequest, db: DBSession, user: AuthUser) -> HuntResponse:
+async def create_hunt(
+    body: CreateHuntRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("lake:query"))]
+) -> HuntResponse:
     mitre = body.mitre_technique or body.mitre_tactic
     # In air-gapped mode the LLM call is refused (AirgapViolation); fall back to
     # the deterministic query templates so hunt creation still succeeds offline
@@ -307,7 +325,9 @@ async def get_hunt(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> HuntRes
 
 
 @router.patch("/{hunt_id}", response_model=HuntResponse, summary="Update hunt")
-async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession, user: AuthUser) -> HuntResponse:
+async def update_hunt(
+    hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("lake:query"))]
+) -> HuntResponse:
     sets = ["updated_at = :now"]
     params: dict[str, Any] = {
         "id": hunt_id,
@@ -367,7 +387,9 @@ async def update_hunt(hunt_id: uuid.UUID, body: UpdateHuntRequest, db: DBSession
 
 
 @router.post("/{hunt_id}/run", response_model=HuntRunResponse, status_code=status.HTTP_200_OK, summary="Execute hunt query")
-async def run_hunt(hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user: AuthUser) -> HuntRunResponse:
+async def run_hunt(
+    hunt_id: uuid.UUID, body: RunHuntRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("lake:query"))]
+) -> HuntRunResponse:
     hunt_row = (
         await db.execute(
             text("SELECT * FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=hunt_id, tenant_id=user.tenant_id)
@@ -489,7 +511,9 @@ async def list_runs(hunt_id: uuid.UUID, db: DBSession, user: AuthUser) -> list[H
 
 
 @router.post("/{hunt_id}/findings", response_model=HuntResponse, summary="Append findings")
-async def add_findings(hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSession, user: AuthUser) -> HuntResponse:
+async def add_findings(
+    hunt_id: uuid.UUID, body: AddFindingsRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("lake:query"))]
+) -> HuntResponse:
     existing = (
         await db.execute(
             text("SELECT findings FROM aisoc_hunts WHERE id = :id AND tenant_id = :tenant_id").bindparams(

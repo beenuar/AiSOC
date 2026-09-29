@@ -30,27 +30,37 @@ by side because they answer different jobs-to-be-done.
 Authorisation
 ~~~~~~~~~~~~~
 
-Saved hunts are *tenant-shared* (every analyst in the tenant sees every
-saved hunt — like a shared knowledge base) and gated on authentication
-only. Authoring permission inherits from the role; for now, anyone with
-read access to the ``/hunt`` page can save and delete. A finer
-``hunt:save`` / ``hunt:delete`` split is a deliberate v1.x follow-up if
-multi-team tenants ask for it.
+Saved hunts are *tenant-shared*: every analyst in the tenant sees every
+saved hunt, like a shared knowledge base.
+
+Reads are authentication-only for that reason. Writes are not, and used not
+to be either — "anyone with read access to the ``/hunt`` page can save and
+delete" was true of ``viewer``, a role with no write permission of any kind,
+which could therefore delete another team's saved hunt out of a shared list.
+
+Writing one requires ``lake:query``. A saved hunt *is* a stored query, and
+the run route executes it against the lake, so being able to store one you
+may not run is meaningless; the two are one entitlement. It is held by
+``tenant_admin``, ``soc_lead``, ``soc_analyst`` and ``threat_hunter`` —
+every role that hunts — and withheld from ``viewer`` and ``api_service``.
+The ``hunt:save`` / ``hunt:delete`` split this docstring used to defer is
+still deferred, and is now about which *team* may delete a shared row rather
+than about whether a read-only role may.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, delete, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 
 # Defer import of the NL translator helpers — `nl_query.py` already does the
 # vendored-tree resolution dance at import time and we want the same module
@@ -344,7 +354,7 @@ async def list_saved_hunts(
 )
 async def create_saved_hunt(
     payload: CreateSavedHuntRequest,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
     db: TenantDBSession,
 ) -> SavedHuntModel:
     """Translate the NL question and persist the hunt."""
@@ -418,7 +428,7 @@ async def get_saved_hunt(
 )
 async def delete_saved_hunt(
     hunt_id: str,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
     db: TenantDBSession,
 ) -> None:
     """Delete a saved hunt owned by the caller's tenant."""
@@ -450,7 +460,7 @@ async def delete_saved_hunt(
 )
 async def run_saved_hunt(
     hunt_id: str,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
     db: TenantDBSession,
 ) -> RunSavedHuntResponse:
     """Re-translate the saved NL question and stamp ``last_run_at``.
