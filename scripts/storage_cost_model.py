@@ -23,6 +23,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -105,10 +107,63 @@ def _print_table(result: dict) -> None:
     print(f"  ({result['disclaimer']})")
 
 
+#: The API service's copy of this model. It cannot import this module — the
+#: container has neither ``scripts/`` nor a git checkout, and ``repo_root()``
+#: above shells out to git at import — so the constants are mirrored there,
+#: the same constraint that put a second LLM price table in
+#: ``cost_dashboard._PUBLIC_PRICING``. A second copy of a number is a second
+#: place for it to drift, so ``--check`` reads it back. Without this, 6b would
+#: have closed "the model has no consumer" by creating a consumer that could
+#: silently start quoting different prices.
+CONSUMER = "services/api/app/services/storage_cost.py"
+
+_CONSUMER_CONSTANTS = {
+    "RATE_CARD_USD_PER_GB_MONTH": lambda: RATE_CARD_USD_PER_GB_MONTH,
+    "RETENTION_DAYS": lambda: SCENARIO["retention_days"],
+    "COMPRESSION_RATIO": lambda: SCENARIO["compression_ratio"],
+}
+
+
+def check_consumer() -> list[str]:
+    """Read the API's mirrored constants back and report any disagreement.
+
+    Parsed rather than imported, for the same reason the API cannot import
+    this file: the gate runs in a dep-light lint job and must not pull in
+    FastAPI, pydantic and the ClickHouse driver to compare three literals.
+    """
+    path = ROOT / CONSUMER
+    if not path.exists():
+        return [f"{CONSUMER} is missing — the model's only consumer is gone, so this gate now checks a constant nothing reads"]
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: dict[str, object] = {}
+    for node in tree.body:
+        target: str | None = None
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target, value = node.targets[0].id, node.value
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target, value = node.target.id, node.value
+        if target in _CONSUMER_CONSTANTS and value is not None:
+            with contextlib.suppress(ValueError):
+                found[target] = ast.literal_eval(value)
+
+    problems: list[str] = []
+    for name, expected in _CONSUMER_CONSTANTS.items():
+        if name not in found:
+            problems.append(f"{CONSUMER} no longer declares {name}; the mirror cannot be checked, so it is not a mirror")
+        elif found[name] != expected():
+            problems.append(
+                f"{CONSUMER}:{name} is {found[name]!r}, this model says {expected()!r} — "
+                "the console would quote a price this model does not"
+            )
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", dest="as_json", action="store_true")
-    parser.add_argument("--check", action="store_true", help="fail if committed JSON is stale")
+    parser.add_argument("--check", action="store_true", help="fail if committed JSON or the API's mirrored constants are stale")
     args = parser.parse_args()
 
     result = compute(SCENARIO, RATE_CARD_USD_PER_GB_MONTH)
@@ -125,7 +180,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"OK: storage cost model current — ${result['usd_per_raw_tb_ingested']}/raw-TB")
+        drift = check_consumer()
+        if drift:
+            print(f"ERROR: the model and {CONSUMER} disagree:", file=sys.stderr)
+            for problem in drift:
+                print(f"  - {problem}", file=sys.stderr)
+            return 1
+        print(f"OK: storage cost model current — ${result['usd_per_raw_tb_ingested']}/raw-TB, and {CONSUMER} mirrors it")
         return 0
 
     if args.as_json:

@@ -198,6 +198,7 @@ function DashboardBody({ data }: { data: CostDashboard }) {
       <ModelTable data={data} />
       <CasesAndActions data={data} />
       <ByokPanel data={data} />
+      <StoragePanel data={data} />
     </>
   );
 }
@@ -525,6 +526,102 @@ function ByokPanel({ data }: { data: CostDashboard }) {
         price for contributes nothing here rather than a guess. Savings approximate what an equivalent
         hosted call would have cost; they are an estimate, not a billing-grade figure.
       </p>
+    </section>
+  );
+}
+
+function fmtGb(gb: number): string {
+  if (gb >= 1000) return `${(gb / 1000).toFixed(2)} TB`;
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  return `${(gb * 1000).toFixed(0)} MB`;
+}
+
+/**
+ * ADR-0005 / 6b — storage $/mo beside LLM $/mo.
+ *
+ * Kept visually distinct from the LLM figures above and never added to them.
+ * The spend above is measured or imputed from a real call; this is a model
+ * run over one measurement, so the two answer different questions and a
+ * single total would label one number two ways.
+ *
+ * When the lake is absent there is no measurement, and the panel says so with
+ * the reason rather than rendering a zero — the same contract the measured /
+ * estimated / unpriced trichotomy holds for spend.
+ */
+function StoragePanel({ data }: { data: CostDashboard }) {
+  const s = data.storage;
+
+  if (!s.measured) {
+    return (
+      <section
+        className="rounded-xl border border-gray-700 bg-gray-900 p-5"
+        data-testid="storage-panel"
+        data-storage="not-measured"
+      >
+        <p className="text-xs uppercase tracking-wide text-gray-400">Storage cost</p>
+        <p className="mt-1 text-lg font-semibold text-white">Not measured</p>
+        <p className="mt-3 text-sm text-gray-400">{s.unmeasured_reason}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="rounded-xl border border-gray-700 bg-gray-900 p-5"
+      data-testid="storage-panel"
+      data-storage="projected"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-gray-400">Storage cost</p>
+          <p className="mt-1 text-lg font-semibold text-white">
+            ~{fmtUsd(s.monthly_usd ?? 0)}/mo projected at full retention
+          </p>
+        </div>
+        <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-200">
+          Modelled, not billed
+        </span>
+      </div>
+      <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-3">
+        <Stat
+          label="Ingest measured"
+          value={fmtGb((s.raw_bytes_measured ?? 0) / 1e9)}
+          hint={`${fmtNumber(s.events_measured ?? 0)} events in this window`}
+        />
+        <Stat
+          label="Daily rate"
+          value={`${(s.raw_tb_per_day ?? 0).toFixed(4)} TB/day`}
+          hint={`compressed ~${s.compression_ratio}x in the lake`}
+        />
+        <Stat
+          label="Per raw TB ingested"
+          value={`~${fmtUsd(s.usd_per_raw_tb_ingested ?? 0)}`}
+          hint="reference list prices"
+        />
+      </dl>
+      <table className="mt-4 w-full text-left text-sm" data-testid="storage-tiers">
+        <thead>
+          <tr className="border-b border-gray-800 text-xs uppercase tracking-wide text-gray-500">
+            <th className="py-2 font-medium">Tier</th>
+            <th className="py-2 text-right font-medium">Retention</th>
+            <th className="py-2 text-right font-medium">Resident</th>
+            <th className="py-2 text-right font-medium">$/GB-mo</th>
+            <th className="py-2 text-right font-medium">$/mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.tiers.map((t) => (
+            <tr key={t.tier} className="border-b border-gray-900 last:border-0">
+              <td className="py-2 text-gray-300">{t.tier.replace('_', ' ')}</td>
+              <td className="py-2 text-right text-gray-400">{t.retention_days}d</td>
+              <td className="py-2 text-right text-gray-400">{fmtGb(t.resident_gb)}</td>
+              <td className="py-2 text-right text-gray-400">{t.rate_usd_per_gb_month}</td>
+              <td className="py-2 text-right text-gray-300">{fmtUsd(t.monthly_usd)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-4 text-xs text-gray-500">{s.disclaimer}</p>
     </section>
   );
 }

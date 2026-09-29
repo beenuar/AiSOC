@@ -153,12 +153,45 @@ honest unit economic looks like for a SOC product, and we'd rather do
 that with a small cohort of design partners than with a public price
 sheet that we have to walk back later.
 
-What we **do** care about is making LLM cost visible from day one. The
+What we **do** care about is making cost visible from day one. The
 [LLM cost dashboard](https://tryaisoc.com/costs) (rolled out as WS-H1 of
 the v1.0 buyer-value plan) tracks every model call with token counts,
 provider, and run cost, scoped per tenant. When the beta exits and
 pricing lands, that dashboard is what we'll bill against — so
 customers can see the bill being built in real-time today.
+
+### Storage, and why its number is shaped differently
+
+LLM spend and storage spend are both on that page and they are **not the
+same kind of number**, so the console keeps them apart and never adds them
+together.
+
+LLM cost is measured: the gateway reports what a call cost, and where it
+cannot, the figure is re-priced from a published list price and labelled an
+estimate.
+
+Storage cost is **projected**. There is no per-tenant storage invoice to
+read, so the console measures the one thing it can — the uncompressed bytes
+your events occupied in the event lake over the window — and runs the
+committed storage cost model over it
+([ADR-0005](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0005-storage-consolidation.md),
+worked example in `docs/decisions/storage-cost-model.json`,
+drift-gated by `.github/workflows/perf.yml`). At the model's reference
+scenario of 1 TB/day that comes out at about **$902/month**, or **$30 per
+raw TB ingested**, across a hot/warm/cold ladder at reference list prices.
+
+Three things follow, and the panel states each of them:
+
+- It is a model, not your provider's bill. Verify against your own region
+  and negotiated rates before planning against it.
+- The model's retention shape (30 days hot / 60 warm / 275 cold) is the
+  sizing scenario, not necessarily what your deployment runs — the shipped
+  ClickHouse tiering SQL is two tiers over 90 days, and per-tenant retention
+  policies override both.
+- The event lake runs in the `full` profile. On a CORE deployment there is
+  no ingest volume to measure, so the panel reads **"Not measured"** with the
+  reason. It does not read `$0.00`, because a confident zero for a tenant
+  nobody measured is indistinguishable from free storage.
 
 ## Operator runbook (for the AiSOC community)
 

@@ -5812,6 +5812,38 @@ export interface ByokSavings {
   savings_usd: number;
 }
 
+export interface StorageTierProjection {
+  tier: string;
+  retention_days: number;
+  resident_gb: number;
+  rate_usd_per_gb_month: number;
+  monthly_usd: number;
+}
+
+/**
+ * ADR-0005 / 6b — projected storage cost beside the measured LLM spend.
+ *
+ * A projection, never a bill: it runs the committed storage cost model over
+ * one measurement (the uncompressed bytes this tenant's events occupied in
+ * the lake) at reference list prices. `measured` is the field that matters —
+ * when it is false every money field is `null`, not `0`, because the lake
+ * runs in the `full` profile and a confident zero for a tenant nobody
+ * measured reads as free storage.
+ */
+export interface StorageCostProjection {
+  measured: boolean;
+  /** Why there is no projection. Null when there is one. */
+  unmeasured_reason: string | null;
+  raw_bytes_measured: number | null;
+  events_measured: number | null;
+  raw_tb_per_day: number | null;
+  monthly_usd: number | null;
+  usd_per_raw_tb_ingested: number | null;
+  tiers: StorageTierProjection[];
+  compression_ratio: number;
+  disclaimer: string;
+}
+
 export interface CostDashboard {
   tenant_id: string;
   period: DashboardPeriod;
@@ -5821,6 +5853,7 @@ export interface CostDashboard {
   top_cases: TopCostCase[];
   action_counts: ActionCount[];
   byok_savings: ByokSavings;
+  storage: StorageCostProjection;
 }
 
 /**

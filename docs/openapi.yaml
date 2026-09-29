@@ -20843,12 +20843,15 @@ components:
           title: Action Counts
         byok_savings:
           $ref: '#/components/schemas/ByokSavings'
+        storage:
+          $ref: '#/components/schemas/StorageCostProjection'
       type: object
       required:
       - tenant_id
       - period
       - headline
       - byok_savings
+      - storage
       title: CostDashboard
       description: Top-level deterministic snapshot.
     CostHeadline:
@@ -31341,6 +31344,94 @@ components:
       - capability
       title: StepDispatchRequest
       description: One playbook step, expressed as the verb it names.
+    StorageCostProjection:
+      properties:
+        measured:
+          type: boolean
+          title: Measured
+        unmeasured_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unmeasured Reason
+        raw_bytes_measured:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Raw Bytes Measured
+        events_measured:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Events Measured
+        raw_tb_per_day:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Raw Tb Per Day
+        monthly_usd:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Monthly Usd
+        usd_per_raw_tb_ingested:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Usd Per Raw Tb Ingested
+        tiers:
+          items:
+            $ref: '#/components/schemas/StorageTierProjection'
+          type: array
+          title: Tiers
+        compression_ratio:
+          type: number
+          title: Compression Ratio
+          default: 8.0
+        disclaimer:
+          type: string
+          title: Disclaimer
+          default: Projected from your measured ingest volume using the committed
+            storage cost model (docs/decisions/storage-cost-model.json) at reference
+            list prices. This is a model, not your provider's bill — verify against
+            your own region and negotiated rates.
+      type: object
+      required:
+      - measured
+      title: StorageCostProjection
+      description: 'Projected storage cost for a tenant, or an honest statement that
+        there is none.
+
+
+        ``measured`` is the field that matters. When it is false every money field
+
+        is ``None`` — not ``0.0`` — and ``unmeasured_reason`` says why.'
+    StorageTierProjection:
+      properties:
+        tier:
+          type: string
+          title: Tier
+        retention_days:
+          type: integer
+          title: Retention Days
+        resident_gb:
+          type: number
+          title: Resident Gb
+        rate_usd_per_gb_month:
+          type: number
+          title: Rate Usd Per Gb Month
+        monthly_usd:
+          type: number
+          title: Monthly Usd
+      type: object
+      required:
+      - tier
+      - retention_days
+      - resident_gb
+      - rate_usd_per_gb_month
+      - monthly_usd
+      title: StorageTierProjection
+      description: One retention tier's share of the projected monthly storage cost.
     SubmissionResponse:
       properties:
         id:

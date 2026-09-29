@@ -117,6 +117,22 @@ function fixture(overrides: Partial<CostDashboard> = {}): CostDashboard {
       unpriced_tokens: 0,
       savings_usd: 0,
     },
+    storage: {
+      measured: true,
+      unmeasured_reason: null,
+      raw_bytes_measured: 3_000_000_000,
+      events_measured: 412_000,
+      raw_tb_per_day: 0.0001,
+      monthly_usd: 0.09,
+      usd_per_raw_tb_ingested: 30.07,
+      tiers: [
+        { tier: 'hot_block', retention_days: 30, resident_gb: 0.38, rate_usd_per_gb_month: 0.08, monthly_usd: 0.03 },
+        { tier: 'warm_object', retention_days: 60, resident_gb: 0.75, rate_usd_per_gb_month: 0.023, monthly_usd: 0.02 },
+        { tier: 'cold_archive', retention_days: 275, resident_gb: 3.44, rate_usd_per_gb_month: 0.0125, monthly_usd: 0.04 },
+      ],
+      compression_ratio: 8.0,
+      disclaimer: 'Projected from your measured ingest volume using the committed storage cost model.',
+    },
     ...overrides,
   };
 }
@@ -343,6 +359,40 @@ describe('CostDashboardView — a window nothing measured', () => {
     // The single most important assertion in this file: a page rendering
     // 1,287 real LLM calls must not print a currency amount it did not
     // measure. Not "$0.00", not "<$0.01", not a default-rate estimate.
+    //
+    // The storage panel is removed from the text first, and only that panel.
+    // It is a projection over its own, separate measurement — the bytes the
+    // tenant's events occupied in the lake — so it can legitimately carry a
+    // figure in a window where no LLM call was priced. Excluding it by
+    // node rather than by loosening the pattern keeps this assertion exactly
+    // as strict as it was for every LLM surface, and the storage panel's own
+    // honesty (labelled a model; "Not measured" rather than $0.00 when the
+    // lake is absent) is asserted in its own describe block below.
+    screen.getByTestId('storage-panel').remove();
+
+    expect(document.body.textContent).not.toMatch(/\$\d/);
+  });
+
+  it('still says not measured for storage when the lake is absent', () => {
+    const payload = unmeasured();
+    payload.storage = {
+      measured: false,
+      unmeasured_reason: 'no lake on this deployment',
+      raw_bytes_measured: null,
+      events_measured: null,
+      raw_tb_per_day: null,
+      monthly_usd: null,
+      usd_per_raw_tb_ingested: null,
+      tiers: [],
+      compression_ratio: 8.0,
+      disclaimer: 'Projected from your measured ingest volume.',
+    };
+    seed(30, payload);
+    render(<CostDashboardView />);
+
+    // With both halves unmeasured, the original whole-body guarantee holds
+    // with nothing excluded — which is what makes the exclusion above an
+    // exemption for a measured figure, not a hole.
     expect(document.body.textContent).not.toMatch(/\$\d/);
   });
 
@@ -423,5 +473,54 @@ describe('CostDashboardView — estimates are labelled', () => {
     expect(
       within(headline).getByText('list-price estimate over 400 calls — not billed'),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * ADR-0005 / 6b. The storage figure is a model run over one measurement, and
+ * it sits beside a measured LLM spend. Two things must hold on every render:
+ * it is never presented as billed, and an absent lake reads as "not measured"
+ * rather than as $0.00 — a confident zero for a tenant nobody measured is how
+ * a deployment comes to look like it stores data for free.
+ */
+describe('CostDashboardView — storage is a projection, not a bill', () => {
+  it('labels the projection and never calls it billed', () => {
+    seed(30, fixture());
+    render(<CostDashboardView />);
+
+    const panel = screen.getByTestId('storage-panel');
+    expect(panel).toHaveAttribute('data-storage', 'projected');
+    expect(within(panel).getByText('Modelled, not billed')).toBeInTheDocument();
+    expect(within(panel).getByText(/projected at full retention/)).toBeInTheDocument();
+    expect(within(panel).getByTestId('storage-tiers')).toBeInTheDocument();
+  });
+
+  it('says not measured, with the reason, when the lake is absent', () => {
+    const base = fixture();
+    seed(30, {
+      ...base,
+      storage: {
+        measured: false,
+        unmeasured_reason:
+          'Ingest volume is counted in the ClickHouse event lake, which runs in the `full` profile.',
+        raw_bytes_measured: null,
+        events_measured: null,
+        raw_tb_per_day: null,
+        monthly_usd: null,
+        usd_per_raw_tb_ingested: null,
+        tiers: [],
+        compression_ratio: 8.0,
+        disclaimer: 'Projected from your measured ingest volume.',
+      },
+    });
+    render(<CostDashboardView />);
+
+    const panel = screen.getByTestId('storage-panel');
+    expect(panel).toHaveAttribute('data-storage', 'not-measured');
+    expect(within(panel).getByText('Not measured')).toBeInTheDocument();
+    expect(within(panel).getByText(/full. profile/)).toBeInTheDocument();
+    // The failure this guards: an unmeasured projection rendering as money.
+    expect(within(panel).queryByText(/\$0\.00/)).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('storage-tiers')).not.toBeInTheDocument();
   });
 });

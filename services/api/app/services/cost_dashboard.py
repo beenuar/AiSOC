@@ -69,6 +69,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.storage_cost import (
+    NO_LAKE_REASON,
+    StorageCostProjection,
+    measure_and_project,
+    not_measured,
+)
+
 # ---------------------------------------------------------------------------
 # Public list pricing for BYOK imputation.
 #
@@ -280,6 +287,11 @@ class CostDashboard(BaseModel):
     top_cases: list[TopCostCase] = Field(default_factory=list)
     action_counts: list[ActionCount] = Field(default_factory=list)
     byok_savings: ByokSavings
+    #: Projected storage cost beside the measured LLM spend (ADR-0005 / 6b).
+    #: Deliberately a sibling of the LLM figures and never summed with them:
+    #: one number cannot be labelled two ways, and adding a model to a
+    #: measurement is how the model stops looking like one.
+    storage: StorageCostProjection
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +348,10 @@ class DashboardInputs:
     cost_rows: list[CostRow] = field(default_factory=list)
     audit_rows: list[AuditRow] = field(default_factory=list)
     llm: LlmContext = field(default_factory=lambda: LlmContext(provider="none", is_local=False))
+    #: ADR-0005 / 6b. Storage is a projection over a measured ingest volume,
+    #: never a measured spend, so it arrives already labelled and the default
+    #: is "not measured" rather than an empty projection reading zero.
+    storage: StorageCostProjection = field(default_factory=lambda: not_measured(NO_LAKE_REASON))
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +627,7 @@ def build_dashboard_from_rows(inputs: DashboardInputs) -> CostDashboard:
         top_cases=_top_cases(inputs.cost_rows),
         action_counts=_action_counts(inputs.audit_rows),
         byok_savings=_byok_savings(inputs.cost_rows, inputs.llm),
+        storage=inputs.storage,
     )
 
 
@@ -738,6 +755,7 @@ async def build_cost_dashboard(
 
     cost_rows = await _fetch_cost_rows(db, tenant_id, start, end)
     audit_rows = await _fetch_audit_rows(db, tenant_id, start, end)
+    storage = await measure_and_project(tenant_id, start=start, end=end, window_days=window_days)
 
     inputs = DashboardInputs(
         tenant_id=tenant_id,
@@ -749,6 +767,7 @@ async def build_cost_dashboard(
             provider=llm_provider or "unknown",
             is_local=bool(is_local),
         ),
+        storage=storage,
     )
     return build_dashboard_from_rows(inputs)
 
@@ -765,6 +784,7 @@ __all__ = [
     "DashboardPeriod",
     "LlmContext",
     "ModelBreakdown",
+    "StorageCostProjection",
     "TopCostCase",
     "build_cost_dashboard",
     "build_dashboard_from_rows",
