@@ -50,7 +50,7 @@ explicitly coordinating a stack of dependent PRs with a maintainer.
 ### PR Template
 
 Every pull request uses the
-[default PR template](https://github.com/beenuar/AiSOC/blob/main/.github/PULL_REQUEST_TEMPLATE/pull_request_template.md).
+[default PR template](https://github.com/beenuar/AiSOC/blob/main/.github/pull_request_template.md).
 The required sections are:
 
 - **Summary** — 2–3 sentences describing what changed and why.
