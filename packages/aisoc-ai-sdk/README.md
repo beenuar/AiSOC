@@ -20,7 +20,7 @@ the detection engine, promoted, triaged.
 ## Install
 
 ```bash
-pip install -e packages/aisoc-ai-sdk   # PyPI publish lands in v8.1
+pip install -e packages/aisoc-ai-sdk   # not yet on PyPI; install from source
 ```
 
 ## Use

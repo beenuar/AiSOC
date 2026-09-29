@@ -3,6 +3,12 @@
 Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document classifies every headline claim in `README.md` against the code that is supposed to back it. It changes no code.
 
 - Repo state audited: `main` @ `982ef2ca`, `VERSION` 7.5.0.
+- **This is a dated Phase 0 snapshot, not a current-state document.** The
+  maintained inventory of what actually works is
+  [`REPOSITORY_REALITY.md`](REPOSITORY_REALITY.md); read that first. Findings
+  below that have since been closed carry an inline note saying so, in the
+  release that closed them. Anything without such a note was still open when
+  last re-read and should be re-verified against the tree before it is quoted.
 - Method: source-level reconciliation (read the code, not the docs) across the agent, eval harness, data spine, connectors, SOAR, storage, supply chain, and governance surfaces.
 
 ## Status legend
@@ -54,6 +60,10 @@ Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document 
 ## Overclaims (ranked)
 
 1. **"No data exfiltration / runs entirely on your infrastructure."** The default investigation path uses a cloud LLM (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) and reasons over raw evidence. There is no PII pseudonymization (`services/agents/app/privacy/` does not exist), so usernames, hostnames, internal IPs, file paths, and command lines are sent verbatim to a third-party provider. The claim is only true in the local-model / air-gapped configuration, which is not the default and has no egress-blocked CI proof. Fix in Phase 1.4 + Phase 2.
+   **Partly closed.** `services/agents/app/privacy/` now exists (`redactor.py`,
+   with `services/agents/tests/test_privacy_redactor.py`), and
+   [`docs/trust/data-flows.md`](../trust/data-flows.md) describes the redactor as
+   the shipped default. The egress-blocked CI proof is still outstanding.
 2. **"6000+ imported detection rules."** ~5921 of 6113 imported rules live under `_quarantine/` (`enabled: false`) because their upstream query language (SPL / YARA-L / CAR pseudocode) does not execute on the engine. The coverage heatmap (`scripts/build_marketplace.py::coverage_block`) counts MITRE tags on rule metadata, not rules that fire. Fix in Phase 4 Tier 3 + Phase 10.
    **Closed in v11.2.0.** Published counts now lead with the executable figure beside the library one (2,603 of 6,991), and 1,770 Sigma rules were translated into the matcher's own language after each was replayed through its real connector and the real engine and watched to fire. The blocker was never the quarantine flag: Windows events nest their payload under `System`/`EventData`, one level below the namespace the matcher reads, so no Windows rule could fire whatever its `enabled:` said.
 3. **"Detection-as-Code ... CI rejects any candidate that regresses MITRE accuracy."** True in letter, misleading in spirit: the gate never evaluates the proposed rule (see Circular Gates). Fix in Phase 4.
@@ -64,7 +74,10 @@ Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document 
 
 1. **The Kafka spine end-to-end.** No CI proves raw event -> OCSF normalize -> enrich -> fuse -> alert row -> WS frame -> agent -> ledger. `compose-smoke.yml` boots the stack but only probes `/health` + web 200. Everything else in `ci.yml` is offline/mocked. Fix in Phase 3.1.
 2. **Prompt-injection defenses.** `services/agents/app/investigator/prompt_sanitizer.py` (envelope wrap + injection redaction) and `services/agents/app/llm/contract.py` (fail-closed input contract) are real and wired in, but `services/agents/tests/test_prompt_sanitizer.py` is not in the agents job's hardcoded file list in `.github/workflows/ci.yml`, so the defense is effectively ungated. Fix in Phase 1.1.
-3. **Cross-tenant isolation outside Postgres.** `services/threatintel/app/storage/qdrant.py` has zero tenant scoping (global collections, no `tenant_id` filter). Neo4j/Redis/ClickHouse/Kafka have no isolation tests. `cross-tenant-rbac.yml` is nightly, Postgres-only, 3 endpoints, and asserts against compiled SQL (no live DB). Fix in Phase 1.3.
+3. **Cross-tenant isolation outside Postgres.** **Closed for Qdrant.**
+   `services/threatintel/app/storage/qdrant.py` now carries
+   `tenant_scope_filter()` and a mandatory-filter contract; public feed intel
+   is global on purpose. When this was written it had no tenant scoping at all. Neo4j/Redis/ClickHouse/Kafka have no isolation tests. `cross-tenant-rbac.yml` is nightly, Postgres-only, 3 endpoints, and asserts against compiled SQL (no live DB). Fix in Phase 1.3.
 4. **SOAR rollback + post-action verification.** `rollback()` is real only for the `aws_sg` path in `services/actions/app/executors/network.py`; other vendors return `True` without a reverse call, and the live-actions layer omits rollback entirely. There is no post-action verification that a containment actually took effect. Fix in Phase 9.
 5. **Backup/restore.** `backup.sh` / `restore.sh` exist; nothing tests them and no RTO/RPO is published. Fix in Phase 3.3.
 6. **Approval SLA timers.** `services/slack-bot/app/services/approval_timeout.py` is in-memory; a restart wipes pending approvals (fail-safe default is reject, but the timer state is lost). Fix in Phase 9.
@@ -78,9 +91,14 @@ Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document 
 
 ## Internal inconsistencies found (fix in Phase 2 / Phase 12)
 
-- **License disagreement.** `README.md` L229 and `LICENSE` say MIT; `.github/LICENSES.md` L3 says "AiSOC ships under Apache-2.0" and marks native detections Apache-2.0.
+- ~~**License disagreement.** `README.md` L229 and `LICENSE` say MIT; `.github/LICENSES.md` L3 says "AiSOC ships under Apache-2.0" and marks native detections Apache-2.0.~~
+  **Closed.** `.github/LICENSES.md` now says MIT throughout, matching `LICENSE`
+  and the README.
 - **Referenced-but-missing CI guard.** `docs/decisions/0002-compliance-claims.md` asserts a CI check at `scripts/audit_compliance_claims.py` exists and fails the build on unqualified framework names. That script does not exist and no workflow references it.
-- **Stale internal reference.** `AGENTS.md` and `packages/aisoc-sandbox/src/aisoc_sandbox/investigation.py` reference `services/.../llm_safety.py`; the real file is `services/agents/app/investigator/prompt_sanitizer.py`.
+- ~~**Stale internal reference.** `AGENTS.md` and `packages/aisoc-sandbox/src/aisoc_sandbox/investigation.py` reference `services/.../llm_safety.py`; the real file is `services/agents/app/investigator/prompt_sanitizer.py`.~~
+  **Closed.** `services/api/app/services/llm_safety.py` was subsequently written
+  and is on disk, imported by seven endpoint modules. The reference is no longer
+  stale.
 - **AGENTS.md eval claim is wrong.** It states only `mitre_accuracy` measures the live agent; per the code, `mitre_accuracy` is an offline keyword extractor and no PR-gated suite runs the live agent.
 
 ## Prompt premises that are already satisfied (build the delta, do not rebuild)

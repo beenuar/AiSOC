@@ -47,10 +47,11 @@ malformed, or older than `AISOC_TEAMS_CALLBACK_MAX_AGE_SECONDS` (default
 
 | Variable                                | Required | Description                                              |
 | --------------------------------------- | -------- | -------------------------------------------------------- |
-| `AISOC_TEAMS_APP_ID`                    | yes      | Microsoft App ID for the bot registration.               |
-| `AISOC_TEAMS_APP_PASSWORD`              | yes      | Bot framework secret.                                    |
-| `AISOC_TEAMS_CALLBACK_SECRET`           | yes      | Shared HMAC secret used to sign + verify card payloads.  |
-| `AISOC_TEAMS_CALLBACK_MAX_AGE_SECONDS`  | no       | Replay window for signed payloads. Default `600`.        |
+| `AISOC_TEAMS_APP_ID`                    | not read | Declared for the Bot Framework registration, but no code in this service reads it today. |
+| `AISOC_TEAMS_APP_PASSWORD`              | not read | Same — the outbound Bot Framework client is not wired yet. |
+| `AISOC_TEAMS_CALLBACK_SECRET`           | yes      | Shared HMAC secret used to sign + verify card payloads (`app/main.py`). |
+| `AISOC_TEAMS_CALLBACK_MAX_AGE_SECONDS`  | no       | Replay window for signed payloads. Default `600` (`app/callbacks.py`). |
+| `AISOC_TEAMS_HMAC_MODULE_PATH`          | no       | Test hook: redirects the HMAC signer module lookup (`app/services/hmac_signer.py`). |
 | `AISOC_API_BASE_URL`                    | yes      | `services/api` base URL — same env var as the Slack bot. |
 | `AISOC_ACTIONS_BASE_URL`                | yes      | `services/actions` base URL.                             |
 | `AISOC_API_SERVICE_TOKEN`               | yes      | API key with `cases:read,cases:write`.                   |
@@ -66,5 +67,5 @@ poetry run pytest tests/
 Coverage:
 
 * `tests/test_cards.py` — Adaptive Card factory output shape.
-* `tests/test_callbacks.py` — HMAC verify, replay rejection, audit row,
-  upstream-failure path.
+* `tests/test_callbacks_approver.py` — HMAC verify, replay rejection, audit
+  row, upstream-failure path.

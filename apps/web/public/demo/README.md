@@ -54,7 +54,7 @@ records a different, older product tour of a *deployed* instance
 (`apps/web/e2e/demo/screencast.spec.ts`) and uploads it as a workflow artefact;
 it does not write into this directory. Re-recording the deployment walkthrough
 means driving a real deployment again — the written form of every step is in
-[`apps/docs/docs/deployment/walkthrough.md`](../../../docs/docs/deployment/walkthrough.md),
+[`apps/docs/docs/deployment/walkthrough.mdx`](../../../docs/docs/deployment/walkthrough.mdx),
 including the recording method, so it can be reproduced rather than guessed at.
 
 Keep the budget in mind if you replace them: these files are committed, so

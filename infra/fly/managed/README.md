@@ -1,15 +1,24 @@
 # AiSOC Managed-Mode Deployment (Fly.io)
 
+> ## Status: nothing here is deployed
+>
+> No managed tenant is running on Fly.io. The Fly organisation has overdue
+> invoices and every app was reclaimed for non-payment —
+> [`../README.md`](../README.md) carries the measured `dig`/`curl` output.
+> `tenants/` holds only `_example.yaml`. Read this directory as the
+> provisioning *design* and the scripts that implement it, not as a
+> description of a live estate.
+
 > **Phase 4.2 / T6.1 completion** — the paved-path provisioning surface for
 > single-tenant AiSOC stacks on Fly.io. Each customer gets a dedicated set of
 > Fly apps + a managed Postgres cluster; isolation lives at the infra layer,
 > not just at the application's row-level-security boundary.
 
-This directory is parallel to `infra/fly/` (which hosts the public demo at
-`tryaisoc.com`). The managed-mode pattern uses the **same images and the same
-fly.toml shape** as the demo — the difference is that every Fly app name and
-hostname is parameterised on a per-customer slug, so we can run N customers
-in the same Fly org without colliding.
+This directory is parallel to `infra/fly/`, which held the public demo at
+`tryaisoc.com` before the apps were reclaimed. The managed-mode pattern uses
+the **same images and the same fly.toml shape** as that demo — the difference
+is that every Fly app name and hostname is parameterised on a per-customer
+slug, so N customers can run in the same Fly org without colliding.
 
 ## Why a separate `infra/fly/managed/` directory
 

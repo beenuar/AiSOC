@@ -1,7 +1,7 @@
 # AiSOC v8 — progress tracker
 
-**Last updated:** 2026-09-28
-**Current release:** `v12.2.0` (2026-09-28) · **Next:** unscheduled.
+**Last updated:** 2026-09-29
+**Current release:** `v12.3.2` (2026-09-29) · **Next:** unscheduled.
 Packaging is no longer named against a version: it slipped v8.0 to v8.1 to
 v8.2 for the same reason each time, and the blocker is registry credentials
 rather than code. Each major since v10.0 has been a major for the same kind of
@@ -143,8 +143,8 @@ script.
 | README rewritten for adoption | done |
 | Consolidated `Makefile` | done |
 | The three packages that could not be built at the v8.1.0 tag | done |
-| CrowdStrike has no normalizer profile and uses the generic one | open — recorded in the reality audit |
-| OpenSearch is started by `full` and read by nothing | open — recorded, not drawn into a diagram |
+| CrowdStrike has no normalizer profile and uses the generic one | withdrawn — the wrong diagnosis. The connector does take the canonical path; the real faults were an unread `behaviors[].user_name` and a canonical field map that recognised only `actor`. Both fixed in v9.0 — see `docs/audit/REPOSITORY_REALITY.md` |
+| OpenSearch is started by `full` and read by nothing | withdrawn — checked against `services/api`, which holds no OpenSearch client, and never against `services/threatintel`, which uses one unconditionally. Retracted in `docs/audit/REPOSITORY_REALITY.md` under "Correction (v9.0)" |
 
 ---
 

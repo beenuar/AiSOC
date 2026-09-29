@@ -14,10 +14,18 @@ pnpm docker:dev
 # 2. Seed the database with the demo tenant + baseline alerts/cases
 pnpm seed:demo
 
-# 3. Stream live events into the ingest service
-pnpm demo:produce         # ~24 events/sec across 6 connectors
-pnpm demo:produce:fast    # 480 events/sec — for stress demos
+# 3. Mint the ingest credential — /v1/ingest refuses requests without one
+make ingest-token
+
+# 4. Stream live events into the ingest service
+AISOC_INGEST_TOKEN=<the token> pnpm demo:produce      # 120 events/sec across 6 connectors
+AISOC_INGEST_TOKEN=<the token> pnpm demo:produce:fast # 480 events/sec — for stress demos
 ```
+
+The throughput is `rate x batch x len(profiles)`: the default `--rate 4`
+(batches per second, **per connector**) times `--batch 5` times the six
+connector profiles is 120 events/sec. `demo:produce:fast` passes
+`--rate 8 --batch 10`, which is 480.
 
 ## Flags
 
@@ -28,8 +36,10 @@ pnpm demo:produce:fast    # 480 events/sec — for stress demos
 | `--rate`       | `4`                                                           | Batches per second per connector   |
 | `--batch`      | `5`                                                           | Events per batch                   |
 | `--duration`   | `0`                                                           | How long to run (0 = forever)      |
+| `--token`      | `$AISOC_INGEST_TOKEN` (empty)                                 | **Required.** `/v1/ingest` refuses requests without one; mint it with `make ingest-token` |
 
-Environment variables `INGEST_URL` and `TENANT_ID` are honored as defaults.
+Environment variables `INGEST_URL`, `TENANT_ID` and `AISOC_INGEST_TOKEN` are
+honored as defaults.
 
 ## Design notes
 

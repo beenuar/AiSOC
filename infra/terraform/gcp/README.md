@@ -150,7 +150,7 @@ cheaper sandbox; the smallest sensible production is `db-custom-2-7680` +
 This is the **skeleton**, not the full migration. Known gaps:
 
 - **No long-running services.** `services/agents`, `services/realtime`,
-  `services/connectors`, `services/alert-fusion`, `services/threatintel`, and
+  `services/connectors`, `services/fusion`, `services/threatintel`, and
   `services/fusion` need persistent compute. Cloud Run v2 *does* support sidecar
   workloads up to 60 minutes per request, but the websocket fan-out and the
   APScheduler-driven connector polling don't fit cleanly. The recommended

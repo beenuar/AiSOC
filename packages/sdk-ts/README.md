@@ -1,18 +1,18 @@
 # @aisoc/sdk
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
-[![npm release](https://img.shields.io/badge/npm-coming%20in%20v8.0-f59e0b)](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md)
+[![npm release](https://img.shields.io/badge/npm-not%20yet%20published-f59e0b)](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md)
 
 TypeScript client SDK for [AiSOC](https://github.com/beenuar/AiSOC) — auto-generated types from `docs/openapi.yaml`, hand-crafted ergonomic API.
 
-> **Status — monorepo today, npm in v8.0.** Until the package lands on npm, use the monorepo source path below. The import path (`@aisoc/sdk`) and API surface stay identical once it ships.
+> **Status — monorepo today, not yet on npm.** `npm install @aisoc/sdk` does not resolve; use the monorepo source path below. The import path (`@aisoc/sdk`) and API surface stay identical once it ships.
 
 ## Installation
 
 ```bash
 # Today (from this monorepo):
 git clone https://github.com/beenuar/AiSOC.git
-cd AiSOC && pnpm --filter @aisoc/sdk-ts install
+cd AiSOC && pnpm --filter @aisoc/sdk install
 
 # Not yet on npm — the upload is blocked on registry credentials,
 # which is an account action rather than a code change. Until then, install

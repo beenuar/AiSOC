@@ -10,7 +10,7 @@ Tools for pulling detection content from upstream open-source projects and conve
 | [`car_importer.py`](car_importer.py) | [mitre-attack/car](https://github.com/mitre-attack/car) | `detections/car-imports/` | working |
 | [`chronicle_importer.py`](chronicle_importer.py) | [chronicle/detection-rules](https://github.com/chronicle/detection-rules) | `detections/chronicle-imports/` | scaffolded |
 | [`splunk_importer.py`](splunk_importer.py) | [splunk/security_content](https://github.com/splunk/security_content) | `detections/splunk-imports/` | scaffolded |
-| [`import.py`](import.py) | (orchestrator) | runs every importer in turn | working |
+| [`import_orchestrator.py`](import_orchestrator.py) | (orchestrator) | runs every importer in turn | working |
 
 ## Provenance schema
 

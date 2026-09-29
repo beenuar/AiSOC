@@ -3,7 +3,7 @@
 > Companion to `landing-page-brief.md` §6 and
 > `landing-page-design-tokens.md`. One recipe per IA section, in the
 > same order with the same ID. The frontend engineer (Subagent F) reads
-> this while implementing `apps/web/src/app/(marketing)/page.tsx`.
+> this while implementing the landing page at `apps/web/src/app/page.tsx`.
 >
 > **Library catalog:**
 > - Aceternity UI — `https://ui.aceternity.com/components`
@@ -85,7 +85,7 @@
   - MagicUI **Border Beam** — frame. `duration={10}`, `colorFrom="#3b82f6"`, `colorTo="#8b5cf6"`, `borderWidth={1.5}`.
   - Aceternity **Container Scroll Animation** (`/components/container-scroll-animation`) — *optional*, tilts demo on scroll. `titleComponent={null}`. Skip first ship if it bloats bundle.
   - Aceternity **Spotlight** — soft glow. Reuse hero with `fill="var(--color-brand-700)"`.
-- **Custom:** 90-second muted video at `apps/web/public/demo/inc-rt-001.mp4` + Vimeo fallback. Caption overlay (`INC-RT-001 · LockBit 3.0 · step 14 of 32`) is an absolutely-positioned `<div>`. Lazy-load via `IntersectionObserver` once 30% in viewport. Poster at `apps/web/public/demo/inc-rt-001-poster.avif`.
+- **Custom:** muted walkthrough video at `apps/web/public/demo/demo.mp4` + fallback. Caption overlay is an absolutely-positioned `<div>`. Lazy-load via `IntersectionObserver` once 30% in viewport. Poster at `apps/web/public/demo/demo-poster.png`. (This bullet previously named `inc-rt-001.mp4`/`.avif`, which were never committed.)
 - **Anatomy:** `Demo` → `DemoHeading`, `DemoFrame` (Border Beam wraps `<video>`), `DemoCaptionOverlay`, `DemoCta`.
 - **States:** Autoplay muted, loop, inline. Hover → caption + scrub controls. <768 controls always visible. Reduced-motion → freezes on poster, "Play replay" button centred.
 - **Failure:** `<video>` fails → poster + "Watch on Vimeo" link. Border Beam fails → static `brand-500/30` border. Vimeo blocked → CTA changes to "Run this yourself."
@@ -201,7 +201,7 @@ Three sub-section bands with anchor IDs `features-detect`,
 ## §15 — `faq`
 
 - **Primitives:**
-  - **Radix Accordion** (existing at `apps/web/src/components/ui/accordion.tsx`) — `type="multiple"`, `defaultValue={['faq-q1','faq-q2']}`.
+  - **Radix Accordion** (to add — there is no `Accordion` component in `apps/web/src` today) — `type="multiple"`, `defaultValue={['faq-q1','faq-q2']}`.
   - Aceternity **Tracing Beam** (`/components/tracing-beam`) — *optional* left-edge beam. Skip first ship.
 - **Custom:** Each question carries `id={faq-q{n}}` for analytics. Answers may include `<code>`; respect mono token.
 - **Anatomy:** `Faq` → `FaqHeading`, `FaqAccordion` (Radix), each → `FaqQuestion`, `FaqAnswer`.

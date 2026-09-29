@@ -189,9 +189,9 @@ Ranked. Five total. Each one cites the shipped feature behind it.
   `.github/workflows/wet-eval.yml` once it runs (T5.5).
 - **Persona.** Detection engineer primary, CISO secondary.
 
-### V4 — Connect 69 sources in three clicks, MIT-licensed plugin SDK in three languages
+### V4 — Connect 84 sources in three clicks, MIT-licensed plugin SDK in three languages
 
-- **Proof.** `services/connectors/app/connectors/__init__.py` registers 69
+- **Proof.** `services/connectors/app/connectors/__init__.py` registers 84
   connector classes spanning EDR / SIEM / cloud / IAM / SaaS / VCS /
   network. Each one renders a schema-driven form, encrypts secrets via
   `CredentialVault`, and starts polling on a per-instance schedule. The
@@ -769,8 +769,8 @@ that need extra care:
 
 - The four-agent diagram in §6.e must remain legible at 360 px. Step
   labels collapse to two-letter glyphs (D · T · H · R) below 640 px.
-- The connector grid in §6.i must not flash a single-column list of 69
-  logos on phone; show 18 logos plus a "See all 69" link.
+- The connector grid in §6.i must not flash a single-column list of 84
+  logos on phone; show 18 logos plus a "See all 84" link.
 
 ---
 

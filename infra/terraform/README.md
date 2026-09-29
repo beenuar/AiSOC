@@ -14,17 +14,13 @@ infra/terraform/
     ├── rds/             # PostgreSQL RDS
     ├── elasticache/     # Redis (sharded)
     ├── kafka/           # MSK
-    ├── opensearch/      # OpenSearch (optional)
-    ├── clickhouse/      # Self-managed ClickHouse on EC2 (optional)
-    ├── databases/       # Helper module that wires DSNs into k8s secrets
-    ├── kubernetes/      # In-cluster bootstrap (CRDs, namespaces, addons)
-    ├── network/         # Extra security groups + private endpoints
-    └── vault/           # HashiCorp Vault (optional)
+    └── osquery-tls/     # osquery TLS enrollment endpoint
 ```
 
-`main.tf` deploys the **core** stack: `vpc`, `eks`, `rds`, `elasticache`,
-`kafka`. The other modules under `modules/` are optional add-ons — wire them
-in by extending `main.tf` if you need OpenSearch, ClickHouse, or Vault.
+`main.tf` instantiates all six: `vpc`, `eks`, `rds`, `elasticache`, `kafka`
+and `osquery_tls`. There are no other modules — ClickHouse, Neo4j, Qdrant
+and OpenSearch are not provisioned by this stack and would need modules
+written for them.
 
 ## What you get
 

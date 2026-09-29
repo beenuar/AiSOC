@@ -10,8 +10,8 @@ infra/helm/
 │   ├── Chart.yaml             # appVersion tracks the AiSOC release
 │   ├── values.yaml            # All knobs live here
 │   ├── templates/             # Service deployments, HPA, PDB, ingress, etc.
-│   └── charts/                # Reserved for vendored sub-charts (currently empty)
-└── charts/                    # Reserved for additional umbrella charts (currently empty)
+│   └── charts/                # Vendored sub-charts (postgresql, redis)
+
 ```
 
 ## What it deploys
@@ -26,6 +26,8 @@ shared `Ingress`. The default `services` map covers:
 - `agents` — Python AI agents (`ghcr.io/beenuar/aisoc-agents`)
 - `web` — Next.js UI (`ghcr.io/beenuar/aisoc-web`)
 - `realtime` — WebSocket service (`ghcr.io/beenuar/aisoc-realtime`)
+- `alert-fusion` — correlation and alert promotion (`ghcr.io/beenuar/aisoc-fusion`;
+  the chart's service key is `alert-fusion`, the source tree is `services/fusion`)
 
 Three feature services have their own templates rather than the generic
 deployment because their pod specs differ:

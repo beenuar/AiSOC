@@ -3,10 +3,13 @@
 Each scenario in this directory is a small, self-contained alert
 fixture you can walk through the AiSOC agent funnel two ways:
 
-1. **Real ingest** — `pnpm aisoc:submit examples/alerts/<name>.json`
-   posts the events to the running stack (started by `pnpm aisoc:demo`).
-   Fusion deduplicates, the four agents reason, and the result lands
-   in the [Investigation Rail](../apps/docs/docs/console/investigation-rail.md).
+1. **Real ingest** — `aisoc submit examples/alerts/<name>.json`
+   posts the events to the running stack (started by `make up`). The CLI is
+   `packages/aisoc-cli`; install it with `pip install -e packages/aisoc-cli`
+   from the repo root. It POSTs to `/api/v1/alerts/submit`, which writes the
+   alert row directly, so the result lands in the
+   [Investigation Rail](../apps/docs/docs/console/investigation-rail.md)
+   within a second without waiting on the Kafka pipeline.
 
 2. **Offline simulator** — `aisoc-sandbox demo --scenario <name>` runs
    the same scenario through a zero-dependency in-memory simulator.

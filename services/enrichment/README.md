@@ -36,9 +36,11 @@ pipeline, the AI Copilot, the case workspace, and the hunt UI.
 | VirusTotal   | IP, domain, URL, hash   | API key   | `VIRUSTOTAL_API_KEY`                    |
 | AbuseIPDB    | IP                      | API key   | `ABUSEIPDB_API_KEY`                     |
 | GreyNoise    | IP                      | API key   | `GREYNOISE_API_KEY`                     |
-| Shodan       | IP                      | API key   | `SHODAN_API_KEY`                        |
-| URLScan      | URL, domain             | API key   | `URLSCAN_API_KEY`                       |
-| IPinfo       | IP                      | API key   | `IPINFO_API_KEY`                        |
+
+Shodan (`SHODAN_API_KEY`), URLScan (`URLSCAN_API_KEY`) and IPinfo
+(`IPINFO_API_KEY`) are read from the environment but have **no client
+implementation yet** — there is no constructor for them and they are not in
+the fan-out, so setting those keys changes nothing today.
 
 ### Commercial
 
@@ -131,7 +133,7 @@ For each enrich request the service:
 ### Enrich an IOC
 
 ```
-POST /v1/enrich
+POST /enrich
 Content-Type: application/json
 
 {
@@ -143,10 +145,18 @@ Content-Type: application/json
 
 Response: a JSON-encoded `EnrichmentResult`.
 
+### Enrich a batch of IOCs
+
+```
+POST /enrich/bulk
+```
+
+Takes a list of the same objects and returns a list of results.
+
 ### Health
 
 ```
-GET /healthz
+GET /health
 ```
 
 Returns `200 OK` once the cache and at least one provider are reachable.
@@ -160,7 +170,8 @@ cd services/enrichment
 
 # minimal config: VirusTotal only
 export VIRUSTOTAL_API_KEY=...
-export REDIS_ADDR=localhost:6379
+export REDIS_URL=redis://localhost:6379/1
+export HTTP_PORT=8082          # the default
 
 go run .
 ```

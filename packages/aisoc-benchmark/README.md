@@ -7,7 +7,7 @@ This package is the boundary that makes it a standard instead: implement one
 method, get graded on the same incidents by the same code.
 
 ```bash
-pip install -e packages/aisoc-benchmark          # published to PyPI in v8.1
+pip install -e packages/aisoc-benchmark          # not yet on PyPI; install from source
 
 aisoc-benchmark corpus                            # what is in the corpus
 aisoc-benchmark run --agent-url https://your-agent/investigate \

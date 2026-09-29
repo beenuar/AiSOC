@@ -9,14 +9,20 @@ The connector tails `/var/log/audit/audit.log` directly and matches on
 the `key=` field every rule attaches via `-k aisoc_*`. The connector's
 severity heuristic is a pure function of the key prefix:
 
-| Key prefix          | Severity |
-| ------------------- | -------- |
-| `aisoc_critical_*`  | `high`   |
-| `aisoc_priv_esc_*`  | `medium` |
-| `aisoc_persistence_*` | `medium` |
-| `aisoc_exec`        | `medium` |
-| `aisoc_watch_*`     | `low`    |
-| `aisoc_audit_*`     | `low`    |
+| Key prefix            | Severity   |
+| --------------------- | ---------- |
+| `aisoc_critical_*`    | `critical` |
+| `aisoc_priv_esc_*`    | `high`     |
+| `aisoc_persistence_*` | `medium`   |
+| `aisoc_exec`          | `medium`   |
+| `aisoc_watch_*`       | `low`      |
+| `aisoc_audit_*`       | `low`      |
+
+Highest-priority match wins, so an explicit `aisoc_critical_*` key beats the
+generic `aisoc_exec` bucket. The table above is `_KEY_SEVERITY_PREFIXES` in
+[`auditd.py`](../../services/connectors/app/connectors/auditd.py); a
+modification of a path in `_HIGH_RISK_PATHS` (`/etc/passwd` and friends) is
+lifted to `high` regardless of the key.
 
 This means the SOC analyst sees the same severity in the AiSOC console
 as the rule author intended at policy-write time — no second-guessing.
@@ -42,7 +48,7 @@ sudo augenrules --load
 sudo auditctl -l | grep aisoc_
 ```
 
-You should see ~30 rules with `key=aisoc_*` attached. If you see zero,
+You should see 47 rules with `key=aisoc_*` attached. If you see zero,
 re-check that `audit.rules.d` isn't being clobbered by a CIS / STIG
 benchmark profile and that `auditd` itself is running
 (`systemctl status auditd`).
@@ -69,22 +75,31 @@ sudo usermod -aG adm aisoc
 
 ## What gets detected, end-to-end
 
-Every rule in `aisoc.rules` is wired into at least one detection rule
-that already ships with AiSOC. The full mapping:
+The profile emits 47 rules across 22 distinct `aisoc_*` keys. The Linux
+endpoint detections that consume this telemetry live under
+`detections/endpoint/`; the ones most directly tied to the keys in this
+profile are:
 
-| `audit.rules` key                | Detection rule(s)                                                                 |
-| -------------------------------- | --------------------------------------------------------------------------------- |
-| `aisoc_critical_exec_tmp`        | `detections/endpoint/linux-exec-from-tmp.yaml`                                    |
-| `aisoc_critical_memfd`           | `detections/endpoint/linux-memfd-create.yaml`                                     |
-| `aisoc_critical_identity_write`  | `detections/endpoint/linux-passwd-shadow-write.yaml`                              |
-| `aisoc_critical_sudoers_write`   | `detections/endpoint/linux-sudoers-modification.yaml`                             |
-| `aisoc_critical_pam_write`       | `detections/endpoint/linux-pam-modification.yaml`                                 |
-| `aisoc_critical_ssh_config`      | `detections/endpoint/linux-sshd-config-modification.yaml`                         |
-| `aisoc_critical_authorized_keys` | `detections/endpoint/linux-authorized-keys-write.yaml`                            |
-| `aisoc_persistence_cron`         | `detections/endpoint/linux-cron-persistence.yaml`                                 |
-| `aisoc_persistence_systemd`      | `detections/endpoint/linux-systemd-persistence.yaml`                              |
-| `aisoc_priv_esc_module_load`     | `detections/endpoint/linux-kernel-module-load.yaml`                               |
-| `aisoc_audit_self_tamper`        | `detections/endpoint/linux-auditctl-disable.yaml`                                 |
+| `audit.rules` key prefix    | Related detections in `detections/endpoint/`                                          |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `aisoc_critical_memfd`      | `linux-memfd-create-then-execve.yaml`, `linux-fileless-via-procfd.yaml`                 |
+| `aisoc_critical_exec_tmp`   | `linux-chmod-plus-x-tmp.yaml`, `linux-large-stage-tmp.yaml`, `linux-ld-preload-set-tmp.yaml` |
+| `aisoc_critical_identity_write` | `linux-passwd-modified.yaml`, `linux-shadow-read.yaml`                              |
+| `aisoc_critical_sudoers_write`  | `linux-auditd-sudoers-tampering.yaml`, `linux-sudoers-d-add.yaml`, `linux-nopasswd-sudo-line.yaml` |
+| `aisoc_critical_pam_write`  | `linux-pam-d-modified.yaml`                                                             |
+| `aisoc_critical_ssh_config` | `linux-auditd-ssh-config-tampering.yaml`, `linux-ssh-config-permitrootlogin-yes.yaml`   |
+| `aisoc_critical_authorized_keys` | `linux-authorized-keys-bulk-append.yaml`, `fim-ssh-authorized-keys-changed.yaml`   |
+| `aisoc_persistence_cron`    | `linux-cron-d-write.yaml`, `linux-anacron-job-add.yaml`, `linux-at-job-create.yaml`     |
+| `aisoc_persistence_systemd` | `linux-auditd-systemd-persistence.yaml`, `linux-systemd-timer-create.yaml`              |
+| `aisoc_persistence_initd`   | `linux-initd-script-add.yaml`                                                           |
+| `aisoc_priv_esc_module_load`| `linux-auditd-kernel-module-load.yaml`, `linux-kernel-module-load-insmod.yaml`          |
+| `aisoc_audit_self_tamper`   | `linux-auditctl-disable.yaml`, `linux-auditd-stopped.yaml`                              |
+| `aisoc_watch_nss`           | `linux-nss-module-installed.yaml`                                                       |
+
+This is a topical index, not a wiring contract: a detection fires on the
+normalised event, not on the audit key, so enabling a key does not guarantee
+a specific rule matches on your hosts. `docs/detections/truth-table.md` is
+the generated record of which rules the engine actually loads.
 
 If you author a new rule against this profile, follow the same
 convention — pick a key with a documented prefix, and the rest of the

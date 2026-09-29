@@ -16,31 +16,25 @@ normalises raw events into OCSF, and forwards them to the ingest pipeline.
   instance, 5-min default cadence, configurable per-instance.
 - **Federated search** — translate a single query into SPL, KQL, and ES|QL
   and fan out to connected SIEMs.
-- **Four-tier severity** — vendor-native ladders collapse into
-  `info | low | medium | high` in every connector's `normalize()` method.
+- **Five-tier severity** — every connector's `normalize()` emits one of
+  `info | low | medium | high | critical`. A vendor ladder that publishes a
+  distinct `critical` must map to `critical` and must **not** be collapsed
+  into `high`; 50 of the connector modules rely on that tier today.
 
 ---
 
 ## Supported connectors
 
-| Connector              | Category | Source                       |
-|------------------------|----------|------------------------------|
-| AWS Security Hub       | cloud    | SecurityHub findings         |
-| Azure Activity         | cloud    | Azure Resource Graph API     |
-| Azure Defender         | cloud    | Microsoft Defender for Cloud |
-| Azure Entra            | iam      | Microsoft Entra ID (AAD)     |
-| Cloudflare             | cloud    | Cloudflare security events   |
-| CrowdStrike            | edr      | CrowdStrike Falcon           |
-| Elastic                | siem     | Elasticsearch / Elastic SIEM |
-| GCP Cloud Audit        | cloud    | Google Cloud Logging API     |
-| GCP SCC                | cloud    | Security Command Center      |
-| GitHub                 | vcs      | GitHub Audit Log API         |
-| Google Workspace       | saas     | Google Reports API           |
-| M365 Audit             | saas     | Office 365 Management API    |
-| Microsoft Sentinel     | siem     | Azure Log Analytics          |
-| Okta                   | iam      | Okta System Log API          |
-| Splunk                 | siem     | Splunk REST API              |
-| Tailscale              | network  | Tailscale audit log API      |
+84 connectors are registered in `_CONNECTOR_CLASSES`
+(`app/connectors/__init__.py`), which is the only source of truth. The count
+and its per-category breakdown are generated into
+[`apps/web/src/data/connector-count.json`](../../apps/web/src/data/connector-count.json)
+by `scripts/generate_connector_count.py`, and `--check` gates it in CI, so a
+hand-written table here would go stale the day the next connector lands.
+
+Per-connector setup walkthroughs live under
+[`apps/docs/docs/connectors/`](../../apps/docs/docs/connectors/) and are
+indexed in the docs sidebar.
 
 ---
 

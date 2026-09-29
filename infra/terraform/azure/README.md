@@ -156,7 +156,7 @@ For the cheapest sandbox set `postgres_sku = "B_Standard_B1ms"` and
 This is the **skeleton**, not the full migration. Known gaps:
 
 - **No long-running services.** `services/agents`, `services/realtime`,
-  `services/connectors`, `services/alert-fusion`, `services/threatintel`, and
+  `services/connectors`, `services/fusion`, `services/threatintel`, and
   `services/fusion` need always-on compute. Run them as dedicated Container
   Apps with `min_replicas > 0` (KEDA can still scale on queue depth) or move
   them to AKS sharing this VNet, Postgres, and Redis.

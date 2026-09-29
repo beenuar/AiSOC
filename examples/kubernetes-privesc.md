@@ -17,8 +17,8 @@
 # Offline simulator:
 aisoc-sandbox demo --scenario kubernetes-privesc
 
-# Real stack:
-pnpm aisoc:submit examples/alerts/kubernetes-privesc.json
+# Real stack (after `make up`, with `pip install -e packages/aisoc-cli`):
+aisoc submit examples/alerts/kubernetes-privesc.json
 ```
 
 ## What the agent does, step by step

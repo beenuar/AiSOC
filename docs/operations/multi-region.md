@@ -1,7 +1,8 @@
 # AiSOC Multi-Region Operations
 
 > **Audience**: Platform / SRE teams running AiSOC in production across multiple cloud regions.
-> **Last updated**: auto-generated (see `scripts/generate_runbook.py`)
+> **Last updated**: maintained by hand. `scripts/generate_runbook.py` exists but
+> needs a live OTel endpoint, so nothing in CI regenerates this page.
 
 ---
 
@@ -190,7 +191,7 @@ AiSOC emits **OpenTelemetry** traces, metrics, and structured logs to a configur
 | `api` | `http_request_duration_p99` | < 500 ms |
 | `api` | `http_error_rate` | < 0.5 % |
 | `ingest` | `event_ingestion_lag_p99` | < 2 s |
-| `alert-fusion` | `alert_fusion_latency_p99` | < 5 s |
+| `alert-fusion` (the Helm service key for `services/fusion`) | `alert_fusion_latency_p99` | < 5 s |
 | `agents` | `agent_run_duration_p95` | < 30 s |
 | All | Pod ready ratio | > 99 % |
 
@@ -240,21 +241,31 @@ RB-NNN-<slug>.md
 
 ### Available runbooks
 
-| ID | Slug | Trigger |
-|---|---|---|
-| RB-001 | `api-high-latency` | `http_request_duration_p99 > 500ms` |
-| RB-002 | `postgres-replica-lag` | Replication lag > 30 s |
-| RB-003 | `region-failover` | Region health check failure |
-| RB-004 | `ingest-pipeline-stall` | Ingest lag > 30 s |
-| RB-005 | `agent-runner-oom` | OOMKilled in `agents` pods |
-| RB-006 | `cert-expiry` | TLS cert expires in < 14 days |
+The committed runbooks live in [`docs/runbooks/`](../runbooks/) and are indexed
+by [`docs/runbooks/README.md`](../runbooks/README.md), which maps each one to
+the Prometheus alert that fires it in `infra/docker/alerts/aisoc.rules.yml`:
 
-To regenerate all runbooks:
+| File | Trigger |
+|---|---|
+| [`http-latency-high.md`](../runbooks/http-latency-high.md) | p99 request latency above the SLO |
+| [`http-5xx-high.md`](../runbooks/http-5xx-high.md) | 5xx rate above the SLO |
+| [`database-incident.md`](../runbooks/database-incident.md) | Postgres unavailable or replicating badly |
+| [`kafka-consumer-lag.md`](../runbooks/kafka-consumer-lag.md) | Consumer lag above threshold |
+| [`detection-pipeline-stalled.md`](../runbooks/detection-pipeline-stalled.md) | Events stop becoming alerts |
+| [`service-down.md`](../runbooks/service-down.md) | A service fails its health check |
+| [`action-executor-failures.md`](../runbooks/action-executor-failures.md) | Response actions failing |
+
+An earlier revision of this page listed six `RB-00N` runbooks under
+`docs/operations/runbooks/`. That directory has never existed and no `RB-*`
+file is tracked anywhere; the table above is the real set.
+
+`scripts/generate_runbook.py` can draft a runbook from live traces, but it
+needs a reachable OTel endpoint and is not wired into CI:
 
 ```bash
 OTEL_ENDPOINT=http://tempo:4317 \
   python scripts/generate_runbook.py \
-  --output docs/operations/runbooks/ \
+  --output docs/runbooks/ \
   --lookback-hours 168    # 1 week of traces
 ```
 

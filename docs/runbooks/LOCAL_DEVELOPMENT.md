@@ -12,12 +12,18 @@ This runbook walks you from a freshly cloned repository to a running AiSOC stack
 | Docker Compose | v2.20 | Multi-service orchestration |
 | Node.js | 20.x | Frontend (`apps/web`) and `services/realtime` |
 | pnpm | 8.x | Workspace package manager |
-| Go | 1.21 | `services/ingest`, `services/enrichment` |
+| Go | 1.26 | `services/ingest`, `services/enrichment` (both `go.mod` files declare `go 1.26`) |
 | Python | 3.11 | All FastAPI services and the agent runner |
 | Poetry | 1.8 | Python service dependency management |
 | `gh` CLI | 2.40+ | Optional, used by some helper scripts |
 
-Memory budget: the full stack uses **~6 GB RAM** with all services running. If you only need a subset, use the targeted commands in §4.
+Memory budget: the CORE profile (`make up`) needs **8 GB memory and 20 GB free
+disk in the Docker VM**; the `full` profile (`make up-full`) needs roughly
+12 GB. The per-profile service counts and memory figures are published in the
+deployment-profile table in [`README.md`](../../README.md), which
+`scripts/check_profile_service_counts.py` gates against the compose files —
+read them there rather than restating them here. If you only need a subset,
+use the targeted commands in §4.
 
 ---
 
@@ -359,4 +365,5 @@ docker system prune -f         # reclaim build cache
 
 * [System Design](../architecture/SYSTEM_DESIGN.md)
 * [API Reference](../api/API_REFERENCE.md)
-* [PROGRESS.md](../../PROGRESS.md)
+* [What actually works](../audit/REPOSITORY_REALITY.md)
+* [CHANGELOG.md](../../CHANGELOG.md)

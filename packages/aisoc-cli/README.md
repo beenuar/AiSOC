@@ -2,7 +2,7 @@
 
 Developer CLI for building, validating, and publishing AiSOC plugins and detection rules.
 
-> **Status — monorepo today, PyPI in v8.0.** The CLI ships from this monorepo and is fully functional today. The PyPI release lands with v8.0. The CLI name (`aisoc`) and command surface stay identical once it ships.
+> **Status — monorepo today, not yet on PyPI.** The CLI ships from this monorepo and is fully functional today. `pip install aisoc-cli` does not resolve: the upload is blocked on registry credentials, which is an account action rather than a code change. The CLI name (`aisoc`) and command surface stay identical once it ships.
 
 ## Installation
 

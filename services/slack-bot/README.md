@@ -88,9 +88,10 @@ container). Point Slack's request URL at
 
 ## Slack app review checklist
 
-Before submitting to the Slack app directory (target: end of week 12 in the
-buyer-value plan), confirm every box below. The manifest under
-`marketplace/slack-app/manifest.json` should match this configuration
+Before submitting to the Slack app directory, confirm every box below. There
+is no committed Slack app manifest — `marketplace/` holds only `index.json`
+and `curated.json` — so the manifest you upload to Slack must match this
+configuration
 verbatim.
 
 ### App configuration

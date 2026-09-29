@@ -16,7 +16,7 @@ We deeply appreciate everyone who takes the time to report a security issue resp
 | [**@mangod12**](https://github.com/mangod12) | Reported [#159](https://github.com/beenuar/AiSOC/issues/159) — proposed cross-tenant isolation tests + nightly CI for RBAC regression. Directly informed the tenant-isolation hardening work that landed in [PR #221](https://github.com/beenuar/AiSOC/pull/221). |
 | [**@jay-cyble**](https://github.com/jay-cyble) (Jay Vasant) | Reported [#130](https://github.com/beenuar/AiSOC/issues/130) — a structured review of 13 security & UI issues found via code review + live-site inspection. Multiple findings were used to drive follow-up hardening tickets. |
 
-If you want to report a vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new) and read [SECURITY.md](SECURITY.md) first.
+If you want to report a vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/beenuar/AiSOC/security/advisories/new) and read [SECURITY.md](../SECURITY.md) first.
 
 ---
 

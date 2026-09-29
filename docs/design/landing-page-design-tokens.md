@@ -303,7 +303,8 @@ Not allowed inside any landing component:
 3. Inline `rgba()` shadows — use `landing.shadow.*` (§6).
 4. Inline `cubic-bezier()` — use `landing.ease.*` (§7).
 5. Tailwind arbitrary values (`text-[14.5px]`, `bg-[#123456]`) outside
-   the OG image generator at `apps/web/src/app/og/route.tsx` (Satori
+   the OG image generator (to add — the only Satori route in the tree today
+   is `apps/web/src/app/r/[slug]/opengraph-image.tsx`) (Satori
    demands literal hex).
 6. `font-bold` on body copy — body is `400`, headings `600`/`700`.
 7. The word `severity` outside product screenshots.

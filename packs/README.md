@@ -19,7 +19,7 @@ queries:
   <query_name>:
     sql: SELECT ...              # SQL query string
     interval: 60                 # Poll interval in seconds
-    severity: high               # info | low | medium | high
+    severity: high               # info | low | medium | high | critical
     description: ...
     mitre: [T1098]               # Optional MITRE ATT&CK technique IDs
     references:
@@ -32,7 +32,7 @@ file_paths:                      # Optional FIM paths section
 
 ## Compiling to Canonical Osquery JSON
 
-The `pack_loader` (in `services/api/app/services/pack_loader.py`) reads all YAML files and exposes them as validated `OsqueryPack` Pydantic models.
+The `pack_loader` (in `services/osquery-tls/app/services/pack_loader.py`) reads all YAML files and exposes them as validated `OsqueryPack` Pydantic models.
 
 The `pack_resolver` (in `services/osquery-tls/app/services/pack_resolver.py`) takes an enrolled node's tenant ID, looks up assigned packs, and compiles them into the osquery TLS config JSON shape:
 
@@ -46,7 +46,7 @@ The `pack_resolver` (in `services/osquery-tls/app/services/pack_resolver.py`) ta
 
 ## Rendering for osctrl / FleetDM
 
-Use `GET /v1/packs/{id}/render?format=osctrl|fleetdm|osquery-json` to download a pack in the native format for manual import into your fleet manager. See [docs/packs/distribution.md](../apps/docs/docs/packs/distribution.md) for import walkthroughs.
+Use `GET /api/v1/osquery/packs/{pack_id}/render?format=osctrl|fleetdm|osquery-json` to download a pack in the native format for manual import into your fleet manager. The handler is `render_pack` in [`services/osquery-tls/app/api/v1/endpoints/packs.py`](../services/osquery-tls/app/api/v1/endpoints/packs.py).
 
 ## Curated Packs
 
@@ -61,6 +61,10 @@ Use `GET /v1/packs/{id}/render?format=osctrl|fleetdm|osquery-json` to download a
 ## Contributing
 
 1. Copy an existing pack as a template.
-2. Validate with `python scripts/validate_packs.py packs/<your-pack>.yaml`.
+2. Validate by loading it: from `services/osquery-tls/`, run
+   `python -c "from app.services.pack_loader import get_all_packs; print(len(get_all_packs()))"`.
+   `get_all_packs()` parses every YAML in this directory into an `OsqueryPack`
+   model and raises on a malformed pack. There is no standalone validation
+   script.
 3. Add a fixture under `detections/fixtures/` if the pack drives detections.
 4. Update the table above and open a PR.

@@ -1,5 +1,12 @@
 # Product Hunt assets
 
+> **Before posting:** `aisoc` is built and packed on every tag but has never
+> been uploaded — `npx aisoc` does not resolve today, and the blocker is an
+> npm credential rather than code. Either publish first, or replace the
+> command in the copy below with the from-clone form
+> (`pnpm --filter aisoc build && node packages/aisoc-lite/dist/cli.js triage --demo`).
+> `packages/aisoc-lite/README.md` carries the same caveat.
+
 ## Name
 
 AiSOC

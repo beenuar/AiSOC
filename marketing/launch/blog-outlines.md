@@ -22,7 +22,10 @@ run. Keep them engineering-first; the CTA is "run this", not "book a demo".
   (public IOCs, ATT&CK techniques) and why.
 - The immutability guarantee (DB trigger) and the non-RLS public read.
 - The OG image pipeline for unfurls.
-- **Run it:** publish a demo run, open `tryaisoc.com/r/demo-lockbit`.
+- **Run it:** publish a demo run and open `/r/demo-lockbit` **on your own
+  deployment** — replays are served by the instance that produced them, so on a
+  local stack that is `http://localhost:3000/r/demo-lockbit`. There is no hosted
+  public instance, so a `tryaisoc.com/r/demo-lockbit` link in the copy would 404.
 
 ## 3. "Grading your ATT&CK coverage in the browser" (W2 — the free tools)
 
@@ -30,7 +33,9 @@ run. Keep them engineering-first; the CTA is "run this", not "book a demo".
 - Parsing Sigma tags client-side; the prevalence-ranked catalog.
 - The A–F grade and the "top uncovered" list as a shareable artifact.
 - SEO as distribution: 30 programmatic format-pair pages.
-- **Run it:** paste your rules at `tryaisoc.com/tools/coverage`.
+- **Run it:** paste your rules into the coverage tool on your own deployment.
+  Verify any `tryaisoc.com/tools/coverage` link returns 200 before it goes in
+  the published copy.
 
 ## 4. "A GitHub Action that triages your own security alerts" (W4)
 

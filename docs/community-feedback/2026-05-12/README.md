@@ -1,10 +1,17 @@
 # AiSOC — Community-Feedback-Driven Roadmap (2026-05-12)
 
-This directory captures the **active** planning artifacts for AiSOC, derived
-from a community-feedback synthesis pass on 2026-05-12. It supersedes the
-"deferred beyond v7" sections of [`/ROADMAP.md`](../../../ROADMAP.md) for
-day-to-day prioritization while leaving the major-version history intact for
-traceability.
+> **Status: a dated snapshot, not the current plan.** These artefacts were
+> produced by a community-feedback synthesis pass on **2026-05-12**, against
+> the v7.1 line. The tree has since moved several majors past that. They are
+> kept as received — `scripts/check_deferral_tracker.py` excludes this
+> directory for exactly that reason — so the `F`-ID trail from feedback to
+> shipped work survives. For what is planned now, read
+> [`/ROADMAP.md`](../../../ROADMAP.md); for what actually works, read
+> [`/docs/audit/REPOSITORY_REALITY.md`](../../audit/REPOSITORY_REALITY.md).
+
+This directory captures the planning artifacts derived from that synthesis
+pass. No second pass has been run, so there is no later dated directory
+beside it.
 
 ## Contents
 
@@ -19,17 +26,19 @@ traceability.
 - **`F-IDs` are stable.** Every issue, PR, and commit that addresses a feedback
   theme should reference the matching `F` ID in its body so the trail back to
   the originating feedback survives refactors.
-- **The "Now" bucket is the work-in-flight queue.** Items here are expected to
-  ship within 30 days of the doc's date and are tracked in
-  [`/PROGRESS.md`](../../../PROGRESS.md) under the active version line
-  (currently v7.1.x).
+- **The "Now" bucket was the work-in-flight queue as of 2026-05-12**, scoped
+  to the 30 days after that date on the v7.1 line. It is history now. This
+  README previously pointed at a root `PROGRESS.md` for its status; that file
+  is gitignored and has never been committed, so the pointer resolved to
+  nothing. Release-by-release status lives in
+  [`/CHANGELOG.md`](../../../CHANGELOG.md).
 - **"Next" and "Later" are intent, not commitment.** They get re-prioritized
   on the next synthesis pass.
-- **Path & module references in the issue drafts are authoritative.** Where
-  the draft conflicts with reality on `main`, the draft wins (file the
-  reconciliation as a Stage-0 task before starting the work). The drafts in
-  this directory have already been path-corrected against the v7.1.0
-  baseline.
+- **Path & module references in the issue drafts are *not* authoritative.**
+  They were path-corrected against the v7.1.0 baseline and nothing since.
+  Where a draft conflicts with `main`, **`main` wins** — this README used to
+  say the opposite, which on a v12 tree would send a contributor to rename
+  working code to match a snapshot from eight majors ago.
 
 ## Reconciliation notes (carried forward)
 
@@ -47,13 +56,14 @@ therefore built fresh on `main`, not on top of those primitives.
 2. Open a GitHub issue using the draft body (or reference the file if the
    draft is faithful enough to skip re-typing). Apply the `area:subarea`
    labels listed in the draft.
-3. Branch off `main`, implement against the acceptance criteria, satisfy the
+3. Re-verify every path the draft names against `main` before you start.
+4. Branch off `main`, implement against the acceptance criteria, satisfy the
    eval gates listed in [`/AGENTS.md`](../../../AGENTS.md) when relevant.
-4. PR title format: `[F<id>] <area>: <change>` so the feedback trail is
+5. PR title format: `[F<id>] <area>: <change>` so the feedback trail is
    visible in `git log`.
-5. Update `PROGRESS.md` checkboxes as items land.
 
 ## Next synthesis pass
 
-Plan: re-run the synthesis on a 30-day cadence. The next dated directory will
-live alongside this one (e.g. `docs/community-feedback/2026-06-12/`).
+The 2026-05-12 pass planned a 30-day cadence. It was not repeated, and
+`2026-05-12/` remains the only dated directory here. A future pass would land
+beside it under its own date.

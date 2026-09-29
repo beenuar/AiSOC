@@ -16,21 +16,22 @@
 # Offline simulator (< 5 s, no Docker):
 aisoc-sandbox demo --scenario lateral-movement
 
-# Real stack (after `pnpm aisoc:demo`):
-pnpm aisoc:submit examples/alerts/lateral-movement.json
+# Real stack (after `make up`, with `pip install -e packages/aisoc-cli`):
+aisoc submit examples/alerts/lateral-movement.json
 ```
 
 ## What the agent does, step by step
 
 ### Step 0 · DetectAgent · detect
 
-Matches the two Okta `user.session.start` events against the 800+
-native Sigma ruleset. The `okta-impossible-travel` rule fires on the
+Matches the two Okta `user.session.start` events against the executable
+detection corpus (2,603 rules as of this writing — `docs/detections/truth-table.md`
+carries the generated count). The `okta-impossible-travel` rule fires on the
 geographical delta + the sub-10-minute time window, and Fusion lifts
 the per-alert confidence by another notch because both sessions
 authenticated through the same `FACTOR_PROVIDER`.
 
-> would-call `rules.match({"rule_count": "800+", "technique_set": ["T1078", "T1078.004"]})`
+> would-call `rules.match({"technique_set": ["T1078", "T1078.004"]})`
 >
 > would-call `fusion.score({"window_minutes": 15})`
 

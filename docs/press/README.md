@@ -19,14 +19,17 @@ accurately. Please keep quotes and stats consistent with the
 > Unlike closed-source AI SOC products, the agent and the substrate are open:
 > every prompt, tool call, piece of evidence, and rationale is stored in an
 > Investigation Ledger and replayable, and a public eval harness gates every
-> change. You can try it in 60 seconds with `npx aisoc triage --demo` — no
+> change. The wedge CLI is `npx aisoc triage --demo` — but `aisoc` is ready and
+> unpublished, so that command does not resolve yet; run it from a clone with
+> `pnpm --filter aisoc build && node packages/aisoc-lite/dist/cli.js triage --demo`. No
 > account, no Docker, no API key — or self-host the full stack so no data leaves
 > your perimeter.
 
 ## Fast facts
 
 - **License:** MIT
-- **Try it:** `npx aisoc triage --demo` (deterministic, offline, <1s)
+- **Try it:** `npx aisoc triage --demo` (deterministic, offline, <1s) — **not
+  yet on npm**; from a clone, `pnpm --filter aisoc build && node packages/aisoc-lite/dist/cli.js triage --demo`
 - **Live demo:** https://tryaisoc.com
 - **Source:** https://github.com/beenuar/AiSOC
 - **Orchestrator:** ~600-line LangGraph in `services/agents/`

@@ -17,8 +17,8 @@
 # Offline simulator:
 aisoc-sandbox demo --scenario aws-credential-exfil
 
-# Real stack:
-pnpm aisoc:submit examples/alerts/aws-credential-exfil.json
+# Real stack (after `make up`, with `pip install -e packages/aisoc-cli`):
+aisoc submit examples/alerts/aws-credential-exfil.json
 ```
 
 ## What the agent does, step by step

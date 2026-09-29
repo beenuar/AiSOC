@@ -2,7 +2,7 @@
 
 This runbook is the operator's checklist for taking an AiSOC deployment from "it boots" to "I would put real customer telemetry through it." It assumes you are running the platform from official images on Kubernetes via the Helm chart in [`infra/helm/aisoc/`](../../infra/helm/aisoc/), or via the production Compose profile.
 
-If you only need a quick local demo, use [`pnpm aisoc:demo`](../../README.md#quickstart) instead — that flow intentionally skips most of the controls below.
+If you only need a quick local demo, use [`make up && make demo`](../../README.md#quick-start) instead — that flow intentionally skips most of the controls below.
 
 ---
 
@@ -27,7 +27,7 @@ If you only need a quick local demo, use [`pnpm aisoc:demo`](../../README.md#qui
   - the public API on `/api/*`,
   - the realtime websocket on `/ws/*`,
   - the MCP endpoint on `/mcp/*` (only if you actually expose it).
-  Everything else (Postgres, NATS, OpenSearch, Redis, the eval harness) must stay on the cluster network.
+  Everything else (Postgres, Kafka, OpenSearch, Redis, ClickHouse, Neo4j, Qdrant, the eval harness) must stay on the cluster network.
 - [ ] Apply Kubernetes `NetworkPolicy` resources from the chart so each service only reaches its required dependencies.
 - [ ] Set sane CORS defaults: explicit allow-list of origins, no wildcard `*` once you have a real frontend hostname.
 - [ ] Enable rate limiting middleware (see [`services/api/app/middleware/`](../../services/api/app/middleware/)) and tune the per-token / per-API-key limits to your load profile.
@@ -54,12 +54,18 @@ If you only need a quick local demo, use [`pnpm aisoc:demo`](../../README.md#qui
 ## 5. Observability and audit
 
 - [ ] Forward audit logs to an immutable sink (S3 Object Lock, GCS Bucket Lock, or a SIEM with WORM storage).
-- [ ] Verify the Investigation Ledger periodically:
+- [ ] Read back the Investigation Ledger for a recent run and confirm the
+  decision record is intact. There is **no** `/ledger/verify` route — an
+  earlier revision of this runbook published one and it never existed. The
+  ledger surface is `GET /api/v1/ledger/{run_id}/published` and the replay
+  routes beside it (`services/api/app/api/v1/endpoints/replay.py`):
   ```bash
-  curl -fsSL "$AISOC_API/api/v1/ledger/verify?case_id=$CASE_ID" \
+  curl -fsSL "$AISOC_API/api/v1/ledger/$RUN_ID/published" \
     -H "Authorization: Bearer $TOKEN"
   ```
-  Add this to a synthetic check that pages on a non-200 response.
+  Add this to a synthetic check that pages on a non-200 response. The
+  ledger/replay contract itself is gated in CI by
+  `scripts/check_ledger_replay_contract.py`.
 - [ ] Wire OpenTelemetry traces from all services to your collector and keep at least 7 days of trace data for incident response.
 - [ ] Send platform metrics (`/metrics`) to Prometheus or a managed equivalent. Alert on saturation, p99 latency, and 5xx rates per service.
 

@@ -1,6 +1,13 @@
 # AiSOC API Reference
 
-This document describes the REST endpoints exposed by AiSOC services. For the auto-generated, exhaustive schema visit `/docs` (Swagger) on each running service.
+This document describes the REST endpoints exposed by AiSOC services. For the
+auto-generated, exhaustive schema visit `/api/docs` (Swagger) on a running API
+service — the app mounts it there, not at `/docs`.
+
+> The maintained, published API reference is
+> [`apps/docs/docs/api/rest.md`](../../apps/docs/docs/api/rest.md) on the docs
+> portal. This page is the longer-form companion; where the two disagree, the
+> generated OpenAPI schema at `/api/openapi.json` wins.
 
 | Service | Base URL (local) |
 |---------|-------------------|
@@ -10,14 +17,14 @@ This document describes the REST endpoints exposed by AiSOC services. For the au
 | Fusion | `http://localhost:8003` |
 | Threat Intel | `http://localhost:8005` |
 | Purple Team | `http://localhost:8006` |
-| Connectors | (internal scheduler — no external port) |
+| Connectors | `http://localhost:8088` |
 
 All examples assume:
 
 ```bash
 # AISOC_ADMIN_PASSWORD is the password `make bootstrap` printed. There is no
 # default credential — each deployment generates its own at first run.
-export AISOC_TOKEN="$(curl -sX POST http://localhost:8000/v1/auth/login \
+export AISOC_TOKEN="$(curl -sX POST http://localhost:8000/api/v1/auth/login \
   -H 'content-type: application/json' \
   -d "{\"email\":\"admin@aisoc.internal\",\"password\":\"$AISOC_ADMIN_PASSWORD\"}" \
   | jq -r .access_token)"
@@ -26,17 +33,17 @@ export AISOC_TENANT="00000000-0000-0000-0000-000000000001"
 
 ---
 
-## 1. Graph (Neo4j) — `/v1/graph`
+## 1. Graph (Neo4j) — `/api/v1/graph`
 
 Service: `services/api`.
 
-### 1.1 `GET /v1/graph/attack-path/{case_id}`
+### 1.1 `GET /api/v1/graph/attack-path/{case_id}`
 
 Reconstructs the kill-chain for a case by traversing `(:Case)-[:CONTAINS]->(:Alert)-[:USES]->(:Technique)-[:PART_OF]->(:Tactic)`.
 
 ```bash
 curl -H "authorization: Bearer $AISOC_TOKEN" \
-  http://localhost:8000/v1/graph/attack-path/$CASE_ID
+  http://localhost:8000/api/v1/graph/attack-path/$CASE_ID
 ```
 
 **Response**
@@ -55,19 +62,21 @@ curl -H "authorization: Bearer $AISOC_TOKEN" \
 }
 ```
 
-### 1.2 `GET /v1/graph/blast-radius`
+### 1.2 `GET /api/v1/graph/blast-radius/{entity_type}/{entity_id}`
 
 Returns 1-3 hop neighborhood of a node, used to gate high-impact actions.
+`entity_type` and `entity_id` are **path** segments; only `max_hops` is a
+query parameter.
 
-| Query param | Required | Description |
-|-------------|----------|-------------|
-| `entity_type` | yes | One of `host`, `user`, `ioc` |
-| `entity_id` | yes | Node identifier |
-| `max_hops` | no (default `2`) | 1-3 |
+| Parameter | Where | Description |
+|-----------|-------|-------------|
+| `entity_type` | path | One of `host`, `user`, `ioc` |
+| `entity_id` | path | Node identifier |
+| `max_hops` | query (default `2`) | 1-3 |
 
 ```bash
 curl -H "authorization: Bearer $AISOC_TOKEN" \
-  "http://localhost:8000/v1/graph/blast-radius?entity_type=host&entity_id=HOST-42&max_hops=2"
+  "http://localhost:8000/api/v1/graph/blast-radius/host/HOST-42?max_hops=2"
 ```
 
 **Response**
@@ -84,11 +93,12 @@ curl -H "authorization: Bearer $AISOC_TOKEN" \
 }
 ```
 
-### 1.3 `GET /v1/graph/neighbors`
+### 1.3 `GET /api/v1/graph/neighbors/{entity_type}/{entity_id}`
 
-1-hop neighborhood for the SOC console "context" panel.
+1-hop neighborhood for the SOC console "context" panel. Same path-parameter
+shape as blast radius.
 
-### 1.4 `GET /v1/graph/mitre-coverage`
+### 1.4 `GET /api/v1/graph/mitre-coverage`
 
 Aggregated counts of distinct techniques observed per tenant.
 
@@ -98,11 +108,11 @@ Aggregated counts of distinct techniques observed per tenant.
 
 ---
 
-## 2. Detection Rules — `/v1/rules`
+## 2. Detection Rules — `/api/v1/rules`
 
 Service: `services/api`.
 
-### 2.1 `GET /v1/rules`
+### 2.1 `GET /api/v1/rules`
 
 | Query param | Description |
 |-------------|-------------|
@@ -110,7 +120,7 @@ Service: `services/api`.
 | `enabled` | `true`/`false` |
 | `severity` | `low`-`critical` |
 
-### 2.2 `POST /v1/rules`
+### 2.2 `POST /api/v1/rules`
 
 ```json
 {
@@ -123,7 +133,7 @@ Service: `services/api`.
 }
 ```
 
-### 2.3 `POST /v1/rules/{id}/execute`
+### 2.3 `POST /api/v1/rules/{id}/execute`
 
 Run a single rule on demand against the last `lookback` of telemetry.
 
@@ -148,7 +158,7 @@ Run a single rule on demand against the last `lookback` of telemetry.
 }
 ```
 
-### 2.4 `POST /v1/rules/hunt`
+### 2.4 `POST /api/v1/rules/hunt`
 
 Multi-rule, time-bounded threat hunt.
 
@@ -161,25 +171,25 @@ Multi-rule, time-bounded threat hunt.
 }
 ```
 
-### 2.5 `PATCH /v1/rules/{id}` / `DELETE /v1/rules/{id}`
+### 2.5 `PATCH /api/v1/rules/{id}` / `DELETE /api/v1/rules/{id}`
 
 Standard CRUD with optimistic concurrency via `If-Match` ETag.
 
 ---
 
-## 3. Detection Proposals (Detection-as-Code) — `/v1/detection-proposals`
+## 3. Detection Proposals (Detection-as-Code) — `/api/v1/detection-proposals`
 
 Service: `services/api`.
 
 The DAC lifecycle manages detection rule proposals from creation through eval-gated promotion into the live rule set. Every proposal carries an eval result from `scripts/run_evals.py`; candidates that regress MITRE accuracy by ≥ 1 pp cannot be promoted.
 
-### 3.1 `GET /v1/detection-proposals`
+### 3.1 `GET /api/v1/detection-proposals`
 
 | Query param | Description |
 |-------------|-------------|
 | `status` | `draft` · `in_review` · `approved` · `rejected` · `promoted` |
 
-### 3.2 `POST /v1/detection-proposals`
+### 3.2 `POST /api/v1/detection-proposals`
 
 ```json
 {
@@ -190,17 +200,17 @@ The DAC lifecycle manages detection rule proposals from creation through eval-ga
 }
 ```
 
-### 3.3 `GET /v1/detection-proposals/{id}`
+### 3.3 `GET /api/v1/detection-proposals/{id}`
 
 Returns proposal detail including comments and attached eval results.
 
-### 3.4 `POST /v1/detection-proposals/{id}/comment`
+### 3.4 `POST /api/v1/detection-proposals/{id}/comment`
 
 ```json
 { "body": "Looks good — verified against last 30 days of telemetry." }
 ```
 
-### 3.5 `POST /v1/detection-proposals/{id}/eval`
+### 3.5 `POST /api/v1/detection-proposals/{id}/eval`
 
 Attach eval result (metric deltas from `scripts/run_evals.py`).
 
@@ -213,7 +223,7 @@ Attach eval result (metric deltas from `scripts/run_evals.py`).
 }
 ```
 
-### 3.6 `POST /v1/detection-proposals/{id}/decide`
+### 3.6 `POST /api/v1/detection-proposals/{id}/decide`
 
 ```json
 { "decision": "approve" }
@@ -221,27 +231,27 @@ Attach eval result (metric deltas from `scripts/run_evals.py`).
 
 Valid decisions: `approve`, `reject`.
 
-### 3.7 `POST /v1/detection-proposals/{id}/promote`
+### 3.7 `POST /api/v1/detection-proposals/{id}/promote`
 
 Promotes an approved proposal into `detection_rules`. Returns the new rule ID.
 
-### 3.8 `GET /v1/detection-proposals/baseline`
+### 3.8 `GET /api/v1/detection-proposals/baselines`
 
 Current eval baseline metrics used as the promotion gate reference.
 
-### 3.9 `POST /v1/detection-proposals/baseline`
+### 3.9 `POST /api/v1/detection-proposals/baselines`
 
 Reset eval baseline to the latest harness run (admin-only).
 
 ---
 
-## 4. Federated Search — `/v1/federated`
+## 4. Federated Search — `/api/v1/federated`
 
 Service: `services/api` → `services/connectors`.
 
 Fan out a single query to connected SIEMs. The API translates the query into each target's native dialect (SPL for Splunk, KQL for Sentinel, ES|QL for Elastic).
 
-### 4.1 `POST /v1/federated/query`
+### 4.1 `POST /api/v1/federated/search`
 
 ```json
 {
@@ -264,11 +274,13 @@ Fan out a single query to connected SIEMs. The API translates the query into eac
 
 ---
 
-## 5. Threat Intel IOC Search — `/v1/iocs`
+## 5. Threat Intel IOC Search — `/api/v1/iocs`
 
-Service: `services/threatintel`.
+Service: `services/threatintel` (port 8005). Note the full prefix: the route
+is declared on the app, so it is `/api/v1/iocs/search` on the threat-intel
+service, not on the core API.
 
-### 5.1 `GET /v1/iocs/search`
+### 5.1 `GET /api/v1/iocs/search`
 
 | Query param | Description |
 |-------------|-------------|
@@ -277,44 +289,18 @@ Service: `services/threatintel`.
 | `actor` | Filter by named actor |
 | `since` | ISO timestamp |
 
-### 5.2 `POST /v1/iocs/semantic`
-
-Vector similarity search against Qdrant.
-
-```json
-{
-  "text": "powershell encoded base64 mshta DownloadString",
-  "k": 10,
-  "min_score": 0.6
-}
-```
-
-### 5.3 `GET /v1/iocs/{value}`
-
-Resolve a single indicator with all enrichment + actor links.
-
-### 5.4 `GET /v1/feeds/status`
-
-```json
-{
-  "feeds": [
-    { "name": "mitre-taxii", "last_run": "…", "ioc_count": 12345 },
-    { "name": "cisa-kev",    "last_run": "…", "ioc_count": 1023 }
-  ]
-}
-```
-
-### 5.5 `POST /v1/feeds/{name}/poll`
-
-Trigger an immediate poll (admin-only).
+This is the only IOC route the service exposes. Earlier revisions of this page
+also listed `POST /iocs/semantic`, `GET /iocs/{value}`, `GET /feeds/status` and
+`POST /feeds/{name}/poll`; none of them was ever implemented. IOC records the
+core API stores are at `GET`/`POST /api/v1/threat-intel/iocs`.
 
 ---
 
-## 6. ML Fusion — `/ml`
+## 6. ML Fusion — `/api/v1/fusion`
 
-Service: `services/fusion`.
+Service: `services/fusion` (port 8003), proxied by the core API.
 
-### 6.1 `GET /ml/status`
+### 6.1 `GET /api/v1/fusion/ml/status`
 
 ```json
 {
@@ -331,56 +317,33 @@ Service: `services/fusion`.
 }
 ```
 
-### 6.2 `POST /ml/feedback`
-
-Submitted by analysts when triaging an alert.
-
-```json
-{
-  "alert_id": "…",
-  "tenant_id": "…",
-  "analyst_id": "alice@corp",
-  "is_true_positive": true,
-  "assigned_priority": 2,
-  "notes": "Confirmed lateral movement"
-}
-```
-
-### 6.3 `POST /ml/retrain`
-
-Force a retrain. Returns the new model metadata.
-
-```json
-{ "status": "scheduled", "job_id": "…" }
-```
+`POST /ml/feedback` and `POST /ml/retrain` exist on the fusion service itself
+(`services/fusion/app/api/router.py`) but are **not** proxied by the core API,
+so they are reachable only from inside the compose network at
+`http://fusion:8003/ml/feedback` and `http://fusion:8003/ml/retrain`.
 
 ---
 
 ## 7. Vulnerability Match Stream
 
-Vulnerability matches are surfaced both via Kafka (`vulnerability.matches` topic) and the API:
-
-### 7.1 `GET /v1/vulnerabilities`
-
-Lists recent KEV-correlated matches with host context joined from Neo4j.
-
-| Query param | Description |
-|-------------|-------------|
-| `cve` | Filter by CVE ID |
-| `host_id` | Filter by host |
-| `kev_only` | `true`/`false` (default `true`) |
+Vulnerability matches are surfaced on the Kafka `vulnerability.matches` topic.
+There is no `GET /api/v1/vulnerabilities` route; this page previously claimed
+one. KEV exposure is read through the posture surface
+(`services/api/app/api/v1/endpoints/posture.py`).
 
 ---
 
-## 8. Cases — `/v1/cases`
+## 8. Cases — `/api/v1/cases`
 
-Unchanged from v1, but now joined with Neo4j attack paths via `GET /v1/cases/{id}/attack-path`.
+Standard CRUD. The attack path for a case is read from the graph surface —
+`GET /api/v1/graph/attack-path/{case_id}` (§1.1) — not from a route under
+`/cases`.
 
 ---
 
 ## 9. Hunt-as-Code — `/api/v1/hunts`
 
-Service: `services/agents`.
+Service: `services/api` (`app/api/v1/endpoints/hunts.py`).
 
 YAML hunt definitions live in `hunts/`. Each file declares a hypothesis,
 MITRE ATT&CK tags, log sources, indicators, expected outcomes, and an
@@ -399,17 +362,17 @@ Single hunt definition (hypothesis, MITRE tags, indicators, schedule).
 
 Run a hunt on demand. Returns run output including findings.
 
-### 9.4 `GET /api/v1/hunts/runs`
+### 9.4 `GET /api/v1/hunts/{hunt_id}/runs`
 
-Recent hunt runs (DB-backed). Query param: `limit` (default 50, max 500).
+Recent runs for one hunt (DB-backed). Query param: `limit`.
 
-### 9.5 `GET /api/v1/hunts/findings`
+### 9.5 `GET /api/v1/hunts/{hunt_id}/findings`
 
-Recent findings across all hunts. Query params: `hunt_id`, `status`, `limit`.
+Recent findings for one hunt. Query params: `status`, `limit`.
 
-### 9.6 `POST /api/v1/hunts/reload`
-
-Reload the corpus from disk and re-sync the catalog table.
+Both are scoped to a single hunt; there are no corpus-wide `/hunts/runs` or
+`/hunts/findings` routes, and no `POST /hunts/reload`. The corpus is loaded at
+startup.
 
 ---
 
@@ -429,15 +392,16 @@ ratios of ≥ 50:1.
 Entity risk data is stored in Redis hashes (per entity, namespaced by
 tenant) with ZSET-backed top-N sorted queues for O(log N) reads.
 
-> Entity risk is accessed internally by the fusion engine. The web
-> console reads the queue via the `/entity-risk` endpoints on the
-> API service (see the Docusaurus REST reference for the public surface).
+> Entity risk is accessed internally by the fusion engine. The web console
+> reads the queue through the API's fusion proxy:
+> `GET /api/v1/fusion/entity-risk/queue`, `/entity-risk/stats` and
+> `/entity-risk/{entity_type}/{entity_value}`.
 
 ---
 
 ## 11. Authentication
 
-* JWT issued by `POST /v1/auth/login`.
+* JWT issued by `POST /api/v1/auth/login`.
 * API keys via `Authorization: ApiKey <key>` header.
 * All requests must specify a tenant context — either implicit (from JWT) or explicit (`X-Tenant-Id` header for service-to-service calls).
 
@@ -453,7 +417,7 @@ All endpoints return RFC 7807 Problem Details:
   "title": "Sigma rule failed validation",
   "status": 422,
   "detail": "Unknown field 'EventID' in selection 'sel_powershell'",
-  "instance": "/v1/rules"
+  "instance": "/api/v1/rules"
 }
 ```
 
@@ -464,8 +428,7 @@ All endpoints return RFC 7807 Problem Details:
 | Tier | Requests/min |
 |------|--------------|
 | Default | 600 |
-| `/v1/rules/hunt` | 30 |
-| `/ml/retrain` | 6 |
+| `/api/v1/rules/hunt` | 30 |
 
 Limits are tenant-scoped and enforced by Redis.
 
@@ -473,4 +436,5 @@ Limits are tenant-scoped and enforced by Redis.
 
 ## 14. Versioning
 
-The API follows semver via the URL prefix `/v1`. Breaking changes will move to `/v2` and the previous version remains supported for at least 6 months.
+The API follows semver via the URL prefix `/api/v1`. Breaking changes will move
+to `/api/v2` and the previous version remains supported for at least 6 months.

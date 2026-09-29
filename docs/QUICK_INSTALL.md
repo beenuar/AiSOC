@@ -5,9 +5,8 @@ machine to a running AiSOC dashboard in your browser, with **zero assumed
 prerequisites**, in a single command.
 
 If you already have Docker, Node 22, pnpm 8+, and git installed, you don't need
-these scripts — just run `pnpm aisoc:demo` from a clone. These installers exist
-for the case where you don't (or you're handing the repo to someone who
-doesn't).
+these scripts — just run `make up` from a clone. These installers exist for the
+case where you don't (or you're handing the repo to someone who doesn't).
 
 ## TL;DR
 
@@ -25,9 +24,25 @@ Open PowerShell **as Administrator** and run:
 iwr -useb https://raw.githubusercontent.com/beenuar/AiSOC/main/install.ps1 | iex
 ```
 
-When the script finishes, your default browser opens at
-`http://localhost:3000/cases/INC-RT-001?tab=ledger` with `demo@example.com`
-already auto-logged-in and a real LockBit 3.0 investigation mid-flight.
+When the script finishes it starts the CORE stack with `make up`, creates the
+first administrator, prints that password **once**, and then runs the golden
+pipeline end to end — one real event through Kafka, fusion and detection, read
+back as an alert from the API. If that check fails the installer exits
+non-zero and says so; "the containers started" is not "it works".
+
+The console is at `http://localhost:3000` and Swagger at
+`http://localhost:8000/api/docs`. Sign in as `admin@aisoc.internal` with the
+generated password. The console starts **empty** — that is correct, because
+nothing has been connected yet. `make demo` loads clearly-labelled synthetic
+data if you want something to look at.
+
+> Earlier revisions of this page said the browser opened on a seeded LockBit
+> investigation at `/cases/INC-RT-001?tab=ledger` under a `demo@example.com`
+> auto-login. That was the old `pnpm aisoc:demo` handoff, which started a
+> different nine-service compose file with no ingest and no fusion, populated
+> by a seed script writing rows straight into Postgres. It was removed
+> precisely because a reader saw a full console and concluded the platform
+> worked without ever having run it.
 
 ## What gets installed
 
@@ -38,12 +53,12 @@ needs, and only if they are missing or too old:
 | ---------------------- | --------------------------------- | ---------------------- | -------------------------------- |
 | `git`                  | distro package manager            | `winget Git.Git`       | clone the repo                   |
 | Docker Engine + Compose v2 | distro package manager (Linux), `brew install --cask docker` (macOS) | `winget Docker.DockerDesktop` (+ WSL2) | run the AiSOC stack |
-| Node.js 22 LTS         | NodeSource (Linux), `brew` (macOS) | `winget OpenJS.NodeJS.LTS` | drive `pnpm aisoc:demo` |
+| Node.js 22 LTS         | NodeSource (Linux), `brew` (macOS) | `winget OpenJS.NodeJS.LTS` | build the console and run the repo's tooling |
 | pnpm 8+                | `corepack enable` + `corepack prepare pnpm@latest` | same                  | install Node deps                |
 
 **It does not install:** Python, Go, Rust, Postgres, Redis, Kafka,
 ClickHouse, OpenSearch, Neo4j, Qdrant, or anything else. Those run inside
-Docker containers via `pnpm aisoc:demo`, never on your host.
+Docker containers, started by `make up`, never on your host.
 
 **It does not modify:** your dotfiles, your shell init, your existing Docker
 installation, your existing Node installation, or any system packages outside
@@ -92,9 +107,13 @@ the `docker` group to take effect.
 
 ```text
 --no-install        Skip the dependency-install phase (use what's on PATH).
---no-launch         Set everything up but don't run pnpm aisoc:demo at the end.
---no-pull           Forwarded to aisoc:demo to skip image pull.
---rebuild           Forwarded to aisoc:demo to build images from source.
+--no-launch         Set everything up but don't start the stack at the end.
+--no-pull           Accepted for backward compatibility. It no longer does
+                    anything: the handoff is `make up`, which runs
+                    `docker compose up -d` and honours AISOC_PULL_POLICY.
+--rebuild           Accepted for backward compatibility; same note as above.
+                    To build from source, run `docker compose build` in the
+                    clone before `make up`.
 --clone-dir DIR     Where to clone the repo when running as a one-liner.
                     Default: $HOME/aisoc
 --branch BR         Git branch to clone. Default: main.
@@ -114,9 +133,9 @@ the `docker` group to take effect.
 
 ```text
 -NoInstall          Skip the dependency-install phase.
--NoLaunch           Set everything up but don't run pnpm aisoc:demo.
--NoPull             Forwarded to aisoc:demo.
--Rebuild            Forwarded to aisoc:demo.
+-NoLaunch           Set everything up but don't start the stack.
+-NoPull             No longer applies; the script warns and continues.
+-Rebuild            Adds --build to the compose up it runs.
 -CloneDir PATH      Where to clone. Default: $env:USERPROFILE\aisoc
 -Branch NAME        Git branch. Default: main.
 -SkipPreflight      Skip the up-front environment checks.
@@ -188,10 +207,10 @@ clone that branch instead of `main`.
 **I want to put the clone somewhere specific.** `./install.sh --clone-dir
 ~/code/aisoc` (default is `$HOME/aisoc`).
 
-**I want to build images from source instead of pulling from GHCR.**
-`./install.sh --rebuild` forwards `--rebuild` to `pnpm aisoc:demo`. This is
-slower (~10-15 min cold) but lets you run an unreleased branch without waiting
-for image publishing.
+**I want to build images from source instead of pulling from GHCR.** Clone the
+branch, then run `docker compose build` followed by `make up`. This is slower
+(~10-15 min cold) but lets you run an unreleased branch without waiting for
+image publishing. On Windows, `install.ps1 -Rebuild` does this for you.
 
 ## Uninstalling
 
@@ -285,7 +304,7 @@ If preflight flags one of these as in use:
    - Linux/macOS: `lsof -nP -iTCP:3000 -sTCP:LISTEN`
    - Windows: `Get-NetTCPConnection -LocalPort 3000 | Select OwningProcess; Get-Process -Id <pid>`
 2. Either stop that process, or set the matching `AISOC_*_PORT` env var
-   in `.env` (or in your shell) and re-run `pnpm aisoc:demo`.
+   in `.env` (or in your shell) and re-run `make up`.
 
 Preflight only **warns** if a port is taken by a process that looks like
 an existing AiSOC container — re-running the installer on a machine that
@@ -295,7 +314,7 @@ already has the demo running won't fail preflight.
 
 The installer adds you to the `docker` group, but the new membership only
 takes effect for new shells. The installer works around this for the same
-session by piping `pnpm aisoc:demo` through `sg docker -c`. If you open a
+session by piping `make up` through `sg docker -c`. If you open a
 fresh terminal afterwards and still see the error, log out and back in (or
 reboot) to pick up the new group.
 
@@ -371,26 +390,26 @@ then re-run the installer.
 
 The installer launches your browser via `xdg-open` (Linux), `open` (macOS),
 or `Start-Process` (Windows). If your environment doesn't have a browser
-configured (e.g. SSH session, headless CI), open
-`http://localhost:3000/cases/INC-RT-001?tab=ledger` in any browser on the
-host yourself.
+configured (e.g. SSH session, headless CI), open `http://localhost:3000` in
+any browser on the host yourself.
 
-### `pnpm aisoc:demo` fails after a successful install
+### The stack fails after a successful install
 
-Run `pnpm aisoc:doctor` from inside the clone — it pinpoints which container
-or port is unhealthy. Common causes:
+Run `make doctor` from inside the clone (or `pnpm aisoc:doctor`) — it
+pinpoints which container or port is unhealthy, and `make smoke` re-runs the
+end-to-end pipeline check. Common causes:
 
 - One of the bound ports is already in use → see
   [Port conflicts](#port-conflicts) above for the table of ports and
   the env vars to change them.
 - Docker daemon out of disk → `docker system prune -a` and retry.
 - Corporate proxy blocking `ghcr.io` → either configure Docker's
-  HTTP proxy or run `./install.sh --rebuild` to build from source.
+  HTTP proxy or run `docker compose build` to build from source.
 
-If `aisoc:demo` finishes "successfully" but no browser opens, that's
-usually an `AISOC_NO_BROWSER=1` env var leaking from a previous CI run, or
-a headless environment (SSH session, no `$DISPLAY`). The URL is printed in
-the final banner — open it manually.
+If the install finishes successfully but no browser opens, that is usually an
+`AISOC_NO_BROWSER=1` env var leaking from a previous CI run, or a headless
+environment (SSH session, no `$DISPLAY`). The URL is printed in the final
+banner — open it manually.
 
 ## Security notes
 

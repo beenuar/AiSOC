@@ -134,7 +134,7 @@ plus a `STANDARD_HA` Redis.
 This is a **skeleton**, not the full GCP migration:
 
 - **No long-running services.** `services/agents`, `services/realtime`,
-  `services/connectors`, `services/alert-fusion`, `services/threatintel`, and
+  `services/connectors`, `services/fusion`, `services/threatintel`, and
   `services/fusion` need persistent compute. The websocket fan-out and the
   APScheduler-driven connector polling don't fit Cloud Run's request lifecycle
   cleanly. The recommended follow-up is GKE Autopilot for those workloads,

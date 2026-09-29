@@ -8,7 +8,7 @@ AiSOC instance running on Fly.io, fronted by a Cloudflare Tunnel. It is
 
 **Always-on fallback:** open the repo in
 [GitHub Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1).
-The devcontainer at [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json)
+The devcontainer at [`.devcontainer/devcontainer.json`](../../.devcontainer/devcontainer.json)
 will bring up Node 22, Python 3.11, Go 1.26, Docker-in-Docker, and the
 GitHub CLI for you. Then:
 
@@ -76,7 +76,7 @@ cloudflared tunnel info tryaisoc
 cloudflared tunnel route dns tryaisoc tryaisoc.com
 ```
 
-The deploy script ([`infra/fly/fly-demo-deploy.sh`](infra/fly/fly-demo-deploy.sh))
+The deploy script ([`infra/fly/fly-demo-deploy.sh`](../../infra/fly/fly-demo-deploy.sh))
 is idempotent — re-running is safe. It runs migrations and the demo
 seed (`python -m app.scripts.seed_demo`) as the release_command, so
 the `INC-RT-001` LockBit case is always present after a successful
@@ -84,7 +84,7 @@ deploy.
 
 ## After the deploy: customer-journey checklist
 
-The user has repeatedly flagged broken items post-deploy, so after every
+Broken items are repeatedly found only after a deploy, so after every
 deploy to `tryaisoc.com`, walk the journey:
 
 - [ ] Landing page (`/`) renders without console errors.
@@ -108,5 +108,5 @@ and should be fixed before declaring the deploy done.
 
 If demand for an always-on hosted demo gets significant enough to
 warrant funding it, the funding model lives in
-[`.github/FUNDING.yml`](.github/FUNDING.yml). Until then, this file is
+[`.github/FUNDING.yml`](../../.github/FUNDING.yml). Until then, this file is
 the operations runbook.

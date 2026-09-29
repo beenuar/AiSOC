@@ -99,9 +99,9 @@ machine. Render doesn't have native cron, so the options are:
 1. **Render Cron Job service** (~$1/mo) — add a 7th service of type `cron`
    to `render.yaml` that runs the seed script on a schedule. Skipped from
    the Blueprint by default to keep the cost story simple.
-2. **GitHub Actions workflow** — `.github/workflows/render-demo-reset.yml`
-   that hits the deployed api on a schedule. Free, but tied to your GH Actions
-   minutes budget.
+2. **GitHub Actions workflow** — add a scheduled workflow of your own that
+   hits the deployed api. Free, but tied to your GH Actions minutes budget.
+   There is no such workflow in this repository today.
 3. **Skip it** — for a personal evaluation deploy, the demo data will drift
    over time but won't break.
 
