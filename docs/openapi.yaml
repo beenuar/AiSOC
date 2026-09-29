@@ -109,6 +109,24 @@ paths:
       security:
       - HTTPBearer: []
   /api/v1/api-keys:
+    get:
+      tags:
+      - api-keys
+      summary: List Api Keys
+      description: List all API keys for the current tenant (raw keys are never returned).
+      operationId: list_api_keys_api_v1_api_keys_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ApiKeyOut'
+                type: array
+                title: Response List Api Keys Api V1 Api Keys Get
+      security:
+      - HTTPBearer: []
     post:
       tags:
       - api-keys
@@ -118,18 +136,12 @@ paths:
 
         The raw key value is returned **only once** in this response.'
       operationId: create_api_key_api_v1_api_keys_post
-      parameters:
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateApiKeyRequest'
+        required: true
       responses:
         '201':
           description: Successful Response
@@ -143,24 +155,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-    get:
-      tags:
-      - api-keys
-      summary: List Api Keys
-      description: List all API keys for the current tenant (raw keys are never returned).
-      operationId: list_api_keys_api_v1_api_keys_get
       security:
       - HTTPBearer: []
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ApiKeyOut'
-                title: Response List Api Keys Api V1 Api Keys Get
   /api/v1/api-keys/{key_id}:
     get:
       tags:
@@ -197,6 +193,8 @@ paths:
       summary: Update Api Key
       description: Update an API key's name, scopes, or expiry.
       operationId: update_api_key_api_v1_api_keys__key_id__patch
+      security:
+      - HTTPBearer: []
       parameters:
       - name: key_id
         in: path
@@ -205,11 +203,6 @@ paths:
           type: string
           format: uuid
           title: Key Id
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
         required: true
         content:
@@ -236,6 +229,8 @@ paths:
       description: Revoke (deactivate) an API key. The key can no longer be used for
         authentication.
       operationId: revoke_api_key_api_v1_api_keys__key_id__delete
+      security:
+      - HTTPBearer: []
       parameters:
       - name: key_id
         in: path
@@ -244,11 +239,6 @@ paths:
           type: string
           format: uuid
           title: Key Id
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       responses:
         '204':
           description: Successful Response
@@ -2621,12 +2611,9 @@ paths:
 
         can run the same check the test runs, against their own rows.'
       operationId: get_reconciliation_api_v1_usage_reconciliation_get
+      security:
+      - HTTPBearer: []
       parameters:
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       - name: start
         in: query
         required: false
@@ -2666,12 +2653,9 @@ paths:
       description: A month of usage as CSV, labelled with the organisation it belongs
         to.
       operationId: export_month_api_v1_usage_export_csv_get
+      security:
+      - HTTPBearer: []
       parameters:
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       - name: month
         in: query
         required: false
@@ -6945,43 +6929,37 @@ paths:
 
         analyst looking at a differently-branded product from their colleague.'
       operationId: get_branding_api_v1_branding_get
-      security:
-      - HTTPBearer: []
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: object
                 additionalProperties: true
+                type: object
                 title: Response Get Branding Api V1 Branding Get
+      security:
+      - HTTPBearer: []
     put:
       tags:
       - branding
       summary: Put Branding
       description: Set branding for the organisation the caller's tenant belongs to.
       operationId: put_branding_api_v1_branding_put
-      parameters:
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BrandingIn'
+        required: true
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: object
                 additionalProperties: true
+                type: object
                 title: Response Put Branding Api V1 Branding Put
         '422':
           description: Validation Error
@@ -6989,6 +6967,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/branding/assets/{kind}:
     post:
       tags:
@@ -7003,6 +6983,8 @@ paths:
 
         writer and the stored bytes are trusted thereafter.'
       operationId: upload_asset_api_v1_branding_assets__kind__post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: kind
         in: path
@@ -7010,11 +6992,6 @@ paths:
         schema:
           type: string
           title: Kind
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
         required: true
         content:
@@ -7042,6 +7019,8 @@ paths:
       summary: Delete Asset
       description: Remove an asset, returning that surface to the wordmark.
       operationId: delete_asset_api_v1_branding_assets__kind__delete
+      security:
+      - HTTPBearer: []
       parameters:
       - name: kind
         in: path
@@ -7049,11 +7028,6 @@ paths:
         schema:
           type: string
           title: Kind
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       responses:
         '204':
           description: Successful Response
@@ -9667,36 +9641,30 @@ paths:
       summary: List Scim Tokens
       description: List this tenant's SCIM credentials. Secrets are never returned.
       operationId: list_scim_tokens_api_v1_scim_tokens_get
-      security:
-      - HTTPBearer: []
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: array
                 items:
                   $ref: '#/components/schemas/ScimTokenOut'
+                type: array
                 title: Response List Scim Tokens Api V1 Scim Tokens Get
+      security:
+      - HTTPBearer: []
     post:
       tags:
       - scim
       summary: Create Scim Token
       description: Mint a SCIM credential for this tenant.
       operationId: create_scim_token_api_v1_scim_tokens_post
-      parameters:
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateScimTokenRequest'
+        required: true
       responses:
         '201':
           description: Successful Response
@@ -9710,6 +9678,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/scim-tokens/{token_id}/rotate:
     post:
       tags:
@@ -9717,6 +9687,8 @@ paths:
       summary: Rotate Scim Token
       description: Replace a credential, leaving the old one working for a grace window.
       operationId: rotate_scim_token_api_v1_scim_tokens__token_id__rotate_post
+      security:
+      - HTTPBearer: []
       parameters:
       - name: token_id
         in: path
@@ -9725,11 +9697,6 @@ paths:
           type: string
           format: uuid
           title: Token Id
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       requestBody:
         required: true
         content:
@@ -9763,6 +9730,8 @@ paths:
 
         through it.'
       operationId: revoke_scim_token_api_v1_scim_tokens__token_id__delete
+      security:
+      - HTTPBearer: []
       parameters:
       - name: token_id
         in: path
@@ -9771,11 +9740,6 @@ paths:
           type: string
           format: uuid
           title: Token Id
-      - name: current_user
-        in: query
-        required: true
-        schema:
-          title: Current User
       responses:
         '204':
           description: Successful Response
