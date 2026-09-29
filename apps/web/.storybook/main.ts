@@ -1,5 +1,5 @@
 /**
- * T3.8 — Storybook 9 config for AiSOC console.
+ * T3.8 — Storybook 10 config for AiSOC console.
  *
  * We use the @storybook/react-vite framework instead of -nextjs because:
  *   1. Vite is dramatically faster for the design-system iteration loop
@@ -29,7 +29,7 @@ const config: StorybookConfig = {
   },
   // NOTE: We intentionally do NOT use `staticDirs: ['../public']` here,
   // AND we disable Vite's auto-detection of `apps/web/public/` in
-  // `viteFinal` (`publicDir: false`). Storybook 9.1 + Node 22/24 hits a
+  // `viteFinal` (`publicDir: false`). Storybook + Node 22/24 hits a
   // `fs.cp` race in CI when copying nested directories — see
   // https://github.com/storybookjs/storybook/issues/16732 and the
   // underlying still-open Node issue

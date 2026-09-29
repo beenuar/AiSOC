@@ -61,6 +61,23 @@ updates:
         # went unnoticed. Grouping them means the next in-major bump is one
         # pull request that moves both or neither.
         patterns: ["vitest", "@vitest/*"]
+      storybook:
+        # Storybook requires `storybook` core and every `@storybook/*`
+        # package to share one major, so they must move as one pull
+        # request or not at all. The family was previously held on v9 by
+        # two `ignore` entries; the workspace is on 10.x now and the hold
+        # is gone, but the *reason* it was needed survives the migration —
+        # ungrouped, dependabot proposes them piecemeal (it opened a lone
+        # `@storybook/addon-themes` 9 -> 10 while core stayed on 9) and the
+        # Storybook build fails on the major mismatch.
+        #
+        # `@storybook/test-runner` is listed explicitly even though
+        # `@storybook/*` already matches it, because its version line is
+        # independent (0.x) while its *peer* tracks the Storybook major
+        # exactly: 0.23 peers `^8.2.0 || ^9.0.0`, 0.24 peers `^10.0.0`. A
+        # pattern that only looked like it covered the package is how the
+        # previous hold covered nothing on this one.
+        patterns: ["storybook", "@storybook/*", "@storybook/test-runner"]
     ignore:
       # Hold `eslint` on v9: ESLint 10 removed the `context.getFilename()`
       # API that `eslint-plugin-react` (bundled via `eslint-config-next`)
@@ -76,38 +93,17 @@ updates:
       # the whole toolchain re-verified — not a drive-by dependency bump.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-      # Hold the Storybook family on v9. Storybook requires every
-      # `@storybook/*` package (and `storybook` core) to share one major;
-      # dependabot proposes them piecemeal (e.g. addon-themes 10 while core
-      # is 9), which breaks the Storybook build. Bump the whole stack to 10
-      # in one coordinated migration PR, then drop this ignore.
-      - dependency-name: "storybook"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@storybook/*"
-        update-types: ["version-update:semver-major"]
-      # `@storybook/test-runner` needs its *minor* channel held too, and the
-      # reason is a property of the rule shape rather than of this package:
-      # `update-types: ["version-update:semver-major"]` cannot hold a 0.x
-      # dependency, because for 0.x the breaking change arrives in the minor
-      # slot. It is the only pre-1.0 member of the family, so the
-      # `@storybook/*` rule above covered every other member and silently
-      # covered nothing on this one.
+      # NOTE: the Storybook family is no longer held. The workspace is on
+      # 10.x (core + addon-a11y + addon-themes + react-vite at 10.6.0,
+      # test-runner at 0.24.5) and the coordination requirement is now
+      # carried by the `storybook` group above, which is the durable form
+      # of the constraint: an `ignore` only postpones the major, a group
+      # makes the family move together whenever it moves.
       #
-      # Measured on the 0.23.0 -> 0.24.5 proposal: 0.23.0 declares
-      # `peerDependencies: { storybook: "^0.0.0-0 || ^8.2.0 || ^9.0.0" }` and
-      # 0.24.5 declares `"^0.0.0-0 || ^10.0.0 || ... || ^11.0.0-0"`. Its
-      # version line is independent of Storybook's, the way the Expo entry
-      # below describes, but its *peer* tracks the Storybook major exactly —
-      # so 0.24 is the Storybook 10 line of this package and installs against
-      # this workspace's `storybook@9.1.20` as an unsatisfied peer.
-      #
-      # Nothing in CI can catch that: no workflow runs `test-storybook`, and
-      # the only Storybook job runs `pnpm build-storybook`, which never loads
-      # the runner. The proposal was green on all 22 required checks while
-      # migrating the whole jest tree 29 -> 30 underneath it. Lift this with
-      # the rest of the family in the Storybook 10 migration.
-      - dependency-name: "@storybook/test-runner"
-        update-types: ["version-update:semver-minor"]
+      # Nothing in CI runs `test-storybook`; the only Storybook jobs are
+      # `pnpm build-storybook` and the Playwright visual diff, neither of
+      # which loads the runner. Its peer on `storybook` is satisfied by
+      # the group, not by a check.
       # Hold `vitest` and `@vitest/*` on v4. The group above keeps the family
       # together inside a major; the major itself needs more than a group,
       # because two of the three things it breaks are not dependency edges

@@ -1,7 +1,7 @@
 /**
  * Visual regression suite for AiSOC's Storybook design system.
  *
- * Phase 4.7 — Storybook 9 already enumerates every design-system story
+ * Phase 4.7 — Storybook 10 already enumerates every design-system story
  * we have under `apps/web/stories/**` and `apps/web/src/**`. Rather
  * than maintain a hand-rolled list of routes (which would require
  * mocking the entire backend on every release), we build Storybook

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Storybook migrated 9.1 → 10.6 across the workspace, and the family hold
+  became a family group.** `storybook`, `@storybook/addon-a11y`,
+  `@storybook/addon-themes` and `@storybook/react-vite` move to 10.6.0 and
+  `@storybook/test-runner` to 0.24.5, in one pull request, because Storybook
+  requires core and every addon to share a major and dependabot had been
+  proposing them piecemeal. Measured on this migration: `pnpm build-storybook`
+  succeeds and indexes **65 stories from 16 story files** (the same set
+  Storybook 9 indexed), the 33 DOM snapshots in
+  `apps/web/src/test/__snapshots__/` are **byte-identical** — no regeneration
+  was needed — and the full `apps/web` suite stays at 79 files / 814 tests
+  passing with `type-check`, `lint` (0 errors, 76 warnings, unchanged from 9.1)
+  and `next build` all green.
+
+  Storybook 10 also *clears* peer warnings 9.1 could not: `@storybook/react-vite`
+  9.1 declared `vite@^5 || ^6 || ^7` against this workspace's Vite 8, and
+  `storybook` 9.1 pulled an `esbuild@^0.28.1` peer it did not satisfy. Both are
+  gone at 10.6.
+
+  The two `ignore` entries that pinned the family to v9 are removed and
+  replaced by a `storybook` dependabot group. That is the durable form of the
+  constraint: an `ignore` only postpones the major, while a group makes the
+  family move together whenever it moves. `@storybook/test-runner` is named
+  explicitly in the group even though `@storybook/*` already matches it,
+  because its version line is independent (0.x) while its peer tracks the
+  Storybook major exactly — the previous hold used
+  `update-types: semver-major`, which cannot hold a 0.x dependency at all.
+
 ## [12.2.0] - 2026-09-28
 
 ### Fixed

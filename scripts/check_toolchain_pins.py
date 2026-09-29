@@ -173,16 +173,28 @@ UNLOCKED_INSTALL_EXEMPT: dict[str, str] = {
 # That scoping means a `vite` bump can pull a different esbuild through the
 # override without any esbuild line changing in the diff, so the resolved set
 # is pinned here and a change has to be made deliberately.
+#
+# 0.25.12 used to be listed here as "bundled by Next.js", which was the wrong
+# provenance. Next declares esbuild in no dependency section of its manifest
+# and vendors no esbuild under `dist/compiled` (only terser), so a copy Next
+# bundles cannot appear in the lockfile at all. The entry that did appear was
+# `storybook@9.1.20`, which declared `esbuild: 0.25.12` and
+# `esbuild-register: 3.6.0(esbuild@0.25.12)` outright — and because esbuild is
+# a *peer* of Vite 8 rather than a dependency, that pin also satisfied Vite's
+# peer and produced a `vite@8.3.0(...)(esbuild@0.25.12)(...)` instance that the
+# `vite>esbuild` override never reached. Storybook 10.6.0 declares
+# `esbuild: 0.28.1`, so 0.25.12 left the tree with it and the Vite instance no
+# longer carries an esbuild suffix. The scoping rule above is unaffected and
+# still enforced by `check_esbuild_overrides`; only the attribution was wrong.
 EXPECTED_ESBUILD: dict[str, str] = {
-    "0.25.12": "bundled by Next.js — must not be overridden, see above",
     "0.28.1": "the version the scoped tsup/vite/bundle-require overrides ask for",
 }
 
 # `apps/mobile` and `services/realtime` resolve esbuild too, and neither is
 # checked against EXPECTED_ESBUILD above. That is deliberate and is not the
-# one-directional hole it resembles: the pinned *resolved set* exists because
-# Next bundles its own esbuild and a replacement breaks Turbopack's font
-# import map, and Next lives only in the root workspace. What does apply
+# one-directional hole it resembles: the pinned *resolved set* exists because a
+# workspace-wide replacement breaks Turbopack's font import map, and Next lives
+# only in the root workspace. What does apply
 # everywhere is the *scoping* rule — no install root may override esbuild
 # workspace-wide — and `check_esbuild_overrides` now enforces that against
 # every root rather than against the repository root alone.

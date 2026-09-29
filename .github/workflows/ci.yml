@@ -103,7 +103,7 @@ jobs:
   # ──────────────────────────────────────────────
   # T3.8 — Storybook design-system gate.
   # Builds the static Storybook bundle (proves the design-system
-  # primitives compile under the Vite-based Storybook 9 toolchain
+  # primitives compile under the Vite-based Storybook 10 toolchain
   # AND that the shims work) and uploads it as an artifact so the
   # marketing team can grab screenshots from a PR build.
   # Visual-regression DOM snapshots run as part of `pnpm test`

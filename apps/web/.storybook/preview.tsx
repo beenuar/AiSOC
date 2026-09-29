@@ -1,5 +1,5 @@
 /**
- * T3.8 — Storybook 9 preview config.
+ * T3.8 — Storybook 10 preview config.
  *
  * Wraps every story in:
  *   1. The global stylesheet (Tailwind v4 + custom theme tokens from
