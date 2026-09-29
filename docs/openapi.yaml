@@ -10872,13 +10872,11 @@ paths:
       description: 'Create an operator organisation around the caller''s own tenant.
 
 
-        The creator becomes its owner. Available to any authenticated user
+        The creator becomes its owner. The home tenant is taken from the caller''s
 
-        because there is no organisation to be a member of yet — the
+        session rather than the body, so nobody can found an organisation on top
 
-        home tenant is taken from the caller''s session rather than the body, so
-
-        nobody can found an organisation on top of somebody else''s tenant.'
+        of somebody else''s tenant.'
       operationId: create_organization_api_v1_mssp_organizations_post
       requestBody:
         content:

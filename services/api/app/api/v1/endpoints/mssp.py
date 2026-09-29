@@ -13,6 +13,44 @@ organisation model (migration 058), where the operator is its own object
 with members, per-member roles, and per-member tenant grants. Cross-tenant
 reads resolve their tenant list through
 `app.services.org_scope.resolve_portfolio_scope` and nothing else.
+
+Authorization
+-------------
+The two generations authorize through two different vocabularies, and that is
+deliberate rather than an oversight.
+
+The tenant-parented routes take a tenant-role permission. `_require_own_child`
+answers "is this child mine?" and says nothing about whether the caller may
+act on it, so before these constants existed a `viewer` who happened to sit in
+a managing tenant could push a rule pack into a customer, grant themselves a
+role over one, or delete a critical detection from one — the same shape as
+GHSA-wj5c-88hg-5926, one tenant boundary further out. The mapping is by what
+the row does, not by which table it lands in:
+
+* `rules:write` for rule packs and rule overrides. They are detection content;
+  an `exclude` override is read back by the effective-rule resolver keyed on
+  the *child's* tenant id and removes the rule from the ruleset their hunts
+  run against, so authoring one is authoring detection content for somebody
+  else's estate.
+* `users:write` for delegations. A delegation grants a role in another tenant,
+  which is user administration and nothing else.
+* `settings:write` for adoption. It changes the caller's tenant topology, and
+  it is the symmetric half of a consent invite the child writes through
+  `PATCH /tenants/me/settings` — also `settings:write`. Requiring less on this
+  side than the side that consents would be incoherent.
+* `cases:write` for provider notes. They are operator working material about a
+  managed customer, which is what every investigating role already holds and
+  what `viewer` deliberately does not. `settings:write` was the alternative and
+  is too strong: annotating a customer is not administering a tenant.
+
+The organisation routes authorize through `_admin_scope`, which requires an
+organisation `owner` or `admin`. That is the correct entitlement for a
+portfolio-scoped act and it is not interchangeable with a tenant role:
+`create_organization` is self-service, so an operator's founding member may
+hold any tenant role at all, and adding a tenant-role permission on top would
+lock them out of the organisation they own. `scripts/check_route_authz.py`
+counts only `require_permission`, so those four routes still appear in its
+ledger; they are authorized, by something it does not read.
 """
 
 from __future__ import annotations
@@ -20,13 +58,14 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
@@ -122,8 +161,8 @@ async def list_child_tenants(
 @router.post("/children/{child_id}/onboard", status_code=status.HTTP_200_OK)
 async def onboard_child_tenant(
     child_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, str]:
     """Link an existing tenant as a child, if that tenant invited the caller.
 
@@ -202,8 +241,8 @@ async def list_notes(
 @router.post("/notes", response_model=TenantNoteOut, status_code=status.HTTP_201_CREATED)
 async def create_note(
     body: TenantNoteCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
 ) -> MSSPTenantNote:
     await _require_own_child(db, current_user, body.child_id)
     note = MSSPTenantNote(
@@ -242,8 +281,8 @@ async def list_delegations(
 @router.post("/delegations", response_model=DelegationOut, status_code=status.HTTP_201_CREATED)
 async def create_delegation(
     body: DelegationCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("users:write"))],
 ) -> MSSPDelegation:
     await _require_own_child(db, current_user, body.child_tenant_id)
     delegation = MSSPDelegation(
@@ -262,8 +301,8 @@ async def create_delegation(
 @router.delete("/delegations/{delegation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_delegation(
     delegation_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("users:write"))],
 ) -> None:
     delegation = await db.get(MSSPDelegation, delegation_id)
     if not delegation or delegation.parent_tenant_id != current_user.tenant_id:
@@ -475,8 +514,8 @@ async def list_rule_packs(
 @router.post("/rule-packs", response_model=RulePackOut, status_code=status.HTTP_201_CREATED)
 async def create_rule_pack(
     body: RulePackCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> MSSPRulePack:
     """Create a new rule pack (parent tenant only)."""
     pack = MSSPRulePack(
@@ -509,8 +548,8 @@ async def get_rule_pack(
 async def update_rule_pack(
     pack_id: uuid.UUID,
     body: RulePackUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> MSSPRulePack:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -531,8 +570,8 @@ async def update_rule_pack(
 @router.delete("/rule-packs/{pack_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_rule_pack(
     pack_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> None:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -545,8 +584,8 @@ async def delete_rule_pack(
 async def add_rule_to_pack(
     pack_id: uuid.UUID,
     body: RulePackRuleAdd,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> dict[str, str]:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -566,8 +605,8 @@ async def add_rule_to_pack(
 async def remove_rule_from_pack(
     pack_id: uuid.UUID,
     rule_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> None:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -582,8 +621,8 @@ async def remove_rule_from_pack(
 async def assign_pack_to_child(
     pack_id: uuid.UUID,
     body: PackAssignmentCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> MSSPRulePackAssignment:
     pack = await db.get(MSSPRulePack, pack_id)
     if not pack or pack.parent_tenant_id != current_user.tenant_id:
@@ -607,8 +646,8 @@ async def assign_pack_to_child(
 @router.post("/overrides", response_model=RuleOverrideOut, status_code=status.HTTP_201_CREATED)
 async def create_rule_override(
     body: RuleOverrideCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> MSSPRuleOverride:
     if body.action not in ("exclude", "customize"):
         raise HTTPException(status_code=422, detail="action must be 'exclude' or 'customize'")
@@ -650,8 +689,8 @@ async def list_overrides(
 @router.delete("/overrides/{override_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_override(
     override_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("rules:write"))],
 ) -> None:
     override = await db.get(MSSPRuleOverride, override_id)
     if not override:
@@ -1022,16 +1061,23 @@ class TenantGrant(BaseModel):
 @router.post("/organizations", response_model=OrganizationOut, status_code=status.HTTP_201_CREATED)
 async def create_organization(
     body: OrganizationCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> Organization:
     """Create an operator organisation around the caller's own tenant.
 
-    The creator becomes its owner. Available to any authenticated user
-    because there is no organisation to be a member of yet — the
-    home tenant is taken from the caller's session rather than the body, so
-    nobody can found an organisation on top of somebody else's tenant.
+    The creator becomes its owner. The home tenant is taken from the caller's
+    session rather than the body, so nobody can found an organisation on top
+    of somebody else's tenant.
     """
+    # Requires `settings:write` — the same permission as adoption, and for the
+    # same reason. There is no organisation to be a member of yet, so
+    # `_admin_scope` cannot be the control here; what founding one does is make
+    # the founder its owner, which is what the org-scoped routes below check
+    # for. Leaving this open meant a `viewer` could become an administering
+    # principal in one request and grant org roles and per-tenant scope from
+    # there. Rationale kept out of the docstring because FastAPI publishes that
+    # verbatim in docs/openapi.yaml.
     existing = (await db.execute(select(Organization).where(Organization.slug == body.slug))).scalar_one_or_none()
     if existing is not None:
         raise HTTPException(status_code=409, detail="Organisation slug already taken")

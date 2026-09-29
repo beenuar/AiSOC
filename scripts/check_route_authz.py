@@ -95,8 +95,18 @@ AUTHZ_CALLS = frozenset(
 
 #: The measured ceiling. Lower it whenever routes are gated; never raise it.
 #: 2026-09-29: 106 on the v12.3.0 tree, 103 once GHSA-wj5c-88hg-5926 closed
-#: the three write routes in `remediation.py`.
-MAX_UNAUTHORIZED = 103
+#: the three write routes in `remediation.py`, then 90 once the MSSP write
+#: surface took a permission (rule packs and overrides `rules:write`,
+#: delegations `users:write`, adoption and organisation founding
+#: `settings:write`, provider notes `cases:write`).
+#:
+#: Four routes under `/mssp/organizations` remain in this count and are not
+#: debt: they authorize through `_admin_scope`, an organisation owner/admin
+#: check, which is the right vocabulary for a portfolio-scoped act and is not
+#: interchangeable with a tenant role. This gate reads `require_permission`
+#: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
+#: still resolve that scope.
+MAX_UNAUTHORIZED = 90
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:
