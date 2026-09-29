@@ -42,8 +42,9 @@ MAX_EXCERPT = 2000
 
 _INSERT_SQL = """
 INSERT INTO aisoc_dead_letters
-    (tenant_id, topic, reason, schema_version, payload_excerpt, source_event_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+    (tenant_id, topic, reason, schema_version, payload_excerpt, source_event_id,
+     topic_partition, kafka_offset)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 """
 
 
@@ -95,6 +96,11 @@ class PostgresDLQ(DeadLetterQueue):
                     letter.schema_version,
                     excerpt,
                     letter.source_event_id,
+                    # Nullable, and left null rather than guessed when the
+                    # refusal came from a path with no Kafka record behind it
+                    # — a fabricated offset replays somebody else's message.
+                    letter.partition,
+                    letter.offset,
                 )
         except Exception as exc:  # noqa: BLE001 - see the module docstring
             # Losing the record of a dropped event is bad. Stopping the

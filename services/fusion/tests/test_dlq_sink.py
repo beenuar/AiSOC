@@ -34,8 +34,11 @@ def _pool(execute: AsyncMock | None = None) -> MagicMock:
     return pool
 
 
-def _letter(**overrides) -> DeadLetter:
-    base = {
+def _letter(**overrides: object) -> DeadLetter:
+    # Annotated `object` rather than left bare: DeadLetter gained int
+    # `partition` / `offset` fields in 5b, so an inferred `dict[str, str]`
+    # here would make every override of one of those a type error.
+    base: dict[str, object] = {
         "topic": "aisoc.raw_events",
         "reason": "schema_validation_failed",
         "schema_version": "v1",
@@ -44,7 +47,7 @@ def _letter(**overrides) -> DeadLetter:
         "tenant_id": str(uuid.uuid4()),
     }
     base.update(overrides)
-    return DeadLetter(**base)
+    return DeadLetter(**base)  # type: ignore[arg-type]  # a test builder over a heterogeneous dict
 
 
 class TestRecording:

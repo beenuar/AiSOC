@@ -7708,6 +7708,89 @@ paths:
                   Reconciliation Get
       security:
       - HTTPBearer: []
+  /api/v1/health/dead-letters/replay:
+    post:
+      tags:
+      - health
+      summary: Replay Dead Letters
+      description: 'Re-read a bounded range of refused messages and replay what now
+        passes.
+
+
+        The action that follows a dead-letter queue, and the one Phase 5 left
+
+        undone: the backlog was reportable and nothing could drain it.
+
+
+        Safe rather than merely possible, in four ways.
+
+
+        *Deliberate.* The range is `(topic, partition, start_offset)`, supplied by
+
+        the caller. There is no "replay the backlog" — the excerpt stored on a
+
+        dead-letter row is a truncated triage record, not the event, so the
+
+        replay re-reads the real message from Kafka and the operator says which.
+
+
+        *Bounded.* `max_messages` is capped at 1000 by this request model, again
+
+        by the fusion service, and again by a CHECK constraint on the audit
+
+        table. A bound in one place is a bound the next caller skips.
+
+
+        *Authorised and attributable.* `connectors:write` rather than the
+
+        identity-only dependency the sibling GET carries, because this one
+
+        re-injects production traffic. The row records who asked.
+
+
+        *Observable, and honest about failure.* One `aisoc_dlq_replays` row per
+
+        request including dry runs, written before fusion is called so an
+
+        attempt that hangs still left evidence, and a failed replay reports the
+
+        reason rather than a zero that reads like "nothing to do".
+
+
+        The property that makes it safe at all is in fusion: every message is
+
+        re-validated by the validator that refused it, and one that still fails
+
+        is refused again instead of being produced. Replaying a poison batch into
+
+        the consumer that rejected it reproduces the outage, so a preview whose
+
+        `would_pass` is zero is the answer "your fix has not landed".
+
+
+        Defaults to a dry run. Pass `execute: true` once the preview is clean.'
+      operationId: replay_dead_letters_api_v1_health_dead_letters_replay_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DlqReplayRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DlqReplayResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/insights/soc:
     get:
       tags:
@@ -21975,6 +22058,88 @@ components:
       type: object
       title: DismissTuningRequest
       description: Body for ``POST /detection/tuning/{rule_id}/dismiss``.
+    DlqReplayRequest:
+      properties:
+        topic:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Topic
+        partition:
+          type: integer
+          minimum: 0.0
+          title: Partition
+        start_offset:
+          type: integer
+          minimum: 0.0
+          title: Start Offset
+        max_messages:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Max Messages
+          default: 100
+        execute:
+          type: boolean
+          title: Execute
+          default: false
+      type: object
+      required:
+      - topic
+      - partition
+      - start_offset
+      title: DlqReplayRequest
+      description: An explicit, bounded range of refused messages to re-check.
+    DlqReplayResponse:
+      properties:
+        replay_id:
+          type: string
+          format: uuid
+          title: Replay Id
+        status:
+          type: string
+          title: Status
+        executed:
+          type: boolean
+          title: Executed
+        messages_read:
+          type: integer
+          title: Messages Read
+          default: 0
+        would_pass:
+          type: integer
+          title: Would Pass
+          default: 0
+        refused:
+          type: integer
+          title: Refused
+          default: 0
+        produced:
+          type: integer
+          title: Produced
+          default: 0
+        refusals:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Refusals
+        produced_offsets:
+          items:
+            type: integer
+          type: array
+          title: Produced Offsets
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+      type: object
+      required:
+      - replay_id
+      - status
+      - executed
+      title: DlqReplayResponse
+      description: What the replay found, and what it did about it.
     DriftEntry:
       properties:
         ruleId:

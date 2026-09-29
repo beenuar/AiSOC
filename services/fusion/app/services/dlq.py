@@ -46,6 +46,12 @@ class DeadLetter:
     payload_excerpt: str
     source_event_id: str | None = None
     tenant_id: str | None = None
+    #: Where the refused message actually lives. The excerpt above is a
+    #: triage record and is truncated on purpose; these are how the faithful
+    #: copy is found again for a replay (deferral 5b). Optional because a
+    #: dead letter can be raised from a path that never saw a Kafka record.
+    partition: int | None = None
+    offset: int | None = None
     ts: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     @classmethod
@@ -58,6 +64,8 @@ class DeadLetter:
         payload: Any,
         source_event_id: str | None = None,
         tenant_id: str | None = None,
+        partition: int | None = None,
+        offset: int | None = None,
     ) -> DeadLetter:
         try:
             excerpt = json.dumps(payload, default=str)[:_MAX_PAYLOAD_CHARS]
@@ -70,6 +78,8 @@ class DeadLetter:
             payload_excerpt=excerpt,
             source_event_id=source_event_id,
             tenant_id=tenant_id,
+            partition=partition,
+            offset=offset,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -80,6 +90,8 @@ class DeadLetter:
             "payload_excerpt": self.payload_excerpt,
             "source_event_id": self.source_event_id,
             "tenant_id": self.tenant_id,
+            "partition": self.partition,
+            "offset": self.offset,
             "ts": self.ts,
         }
 

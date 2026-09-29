@@ -176,7 +176,7 @@ class FusionWorker:
                 if not self._running:
                     break
                 try:
-                    await self._process_message(msg.value, topic=msg.topic)
+                    await self._process_message(msg.value, topic=msg.topic, partition=msg.partition, offset=msg.offset)
                 except Exception as exc:
                     _METRICS["errors"] += 1
                     logger.error("Failed to process message", error=str(exc), exc_info=True)
@@ -215,8 +215,16 @@ class FusionWorker:
         schema_version: str = "v1",
         source_event_id: str | None = None,
         tenant_id: str | None = None,
+        partition: int | None = None,
+        offset: int | None = None,
     ) -> None:
-        """Route a poison message to the DLQ instead of dropping it silently."""
+        """Route a poison message to the DLQ instead of dropping it silently.
+
+        ``partition`` and ``offset`` are carried through because the excerpt
+        stored alongside them is a triage record, not the event: replaying a
+        refused message means re-reading it from Kafka, and these are the only
+        way back to it (deferral 5b).
+        """
         _METRICS["dead_lettered"] += 1
         await safe_record(
             self._dlq,
@@ -227,10 +235,14 @@ class FusionWorker:
                 payload=payload,
                 source_event_id=source_event_id,
                 tenant_id=tenant_id,
+                partition=partition,
+                offset=offset,
             ),
         )
 
-    async def _process_message(self, payload: dict, topic: str | None = None) -> None:
+    async def _process_message(
+        self, payload: dict, topic: str | None = None, partition: int | None = None, offset: int | None = None
+    ) -> None:
         resolved_topic = topic or settings.kafka_topic_alerts_raw
 
         # Phase A4 — UEBA anomaly stream: warm the per-entity signal cache and
@@ -256,6 +268,8 @@ class FusionWorker:
                 schema_version=validation.schema_version,
                 source_event_id=validation.source_event_id,
                 tenant_id=validation.tenant_id,
+                partition=partition,
+                offset=offset,
             )
             return
 
@@ -306,6 +320,8 @@ class FusionWorker:
                     schema_version=validation.schema_version,
                     source_event_id=validation.source_event_id,
                     tenant_id=validation.tenant_id,
+                    partition=partition,
+                    offset=offset,
                 )
                 return
 

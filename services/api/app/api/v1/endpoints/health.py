@@ -75,18 +75,20 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import and_, func, select, text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, CurrentUser, DBSession, require_permission
 from app.api.v1.endpoints.metrics import PipelineHealth, PipelineStage
 from app.core.config import settings
+from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 from app.models.connector import Connector
 from app.services.audit_hash import verify_chain_breaks
 from app.services.connector_freshness import compute_freshness
+from app.services.dlq_replay_gateway import DlqReplayRequest, DlqReplayResponse, run_replay
 from app.services.fleet_health import assess_fleet
 from app.services.replay_evaluation.vendors import replayable_connector_ids
 
@@ -930,3 +932,45 @@ async def get_shadow_reconciliation_health(
             for r in rows
         ],
     }
+
+
+@router.post("/dead-letters/replay", response_model=DlqReplayResponse)
+async def replay_dead_letters(
+    request: DlqReplayRequest,
+    user: Annotated[CurrentUser, Depends(require_permission("connectors:write"))],
+    db: TenantDBSession,
+) -> DlqReplayResponse:
+    """Re-read a bounded range of refused messages and replay what now passes.
+
+    The action that follows a dead-letter queue, and the one Phase 5 left
+    undone: the backlog was reportable and nothing could drain it.
+
+    Safe rather than merely possible, in four ways.
+
+    *Deliberate.* The range is `(topic, partition, start_offset)`, supplied by
+    the caller. There is no "replay the backlog" — the excerpt stored on a
+    dead-letter row is a truncated triage record, not the event, so the
+    replay re-reads the real message from Kafka and the operator says which.
+
+    *Bounded.* `max_messages` is capped at 1000 by this request model, again
+    by the fusion service, and again by a CHECK constraint on the audit
+    table. A bound in one place is a bound the next caller skips.
+
+    *Authorised and attributable.* `connectors:write` rather than the
+    identity-only dependency the sibling GET carries, because this one
+    re-injects production traffic. The row records who asked.
+
+    *Observable, and honest about failure.* One `aisoc_dlq_replays` row per
+    request including dry runs, written before fusion is called so an
+    attempt that hangs still left evidence, and a failed replay reports the
+    reason rather than a zero that reads like "nothing to do".
+
+    The property that makes it safe at all is in fusion: every message is
+    re-validated by the validator that refused it, and one that still fails
+    is refused again instead of being produced. Replaying a poison batch into
+    the consumer that rejected it reproduces the outage, so a preview whose
+    `would_pass` is zero is the answer "your fix has not landed".
+
+    Defaults to a dry run. Pass `execute: true` once the preview is clean.
+    """
+    return await run_replay(db, tenant_id=user.tenant_id, requested_by=user.user_id, request=request)

@@ -4,6 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.models.alert import AnalystFeedback, FusedAlert, FusionDecision, RawAlert
 from app.security.tenant_scope import (
@@ -11,6 +12,7 @@ from app.security.tenant_scope import (
     require_console_or_service_auth,
     scoped_tenant_or_403,
 )
+from app.services.dlq_replay import MAX_REPLAY_MESSAGES, ReplayRefused, replay_from_offset
 from app.workers.consumer import FusionWorker
 
 #: The console reaches this service *directly* through a Next rewrite when
@@ -205,3 +207,57 @@ async def score_confidence(alert: RawAlert, principal: ScopedPrincipal):
         "confidence_score": scored.confidence_score,
         "rationale": [f.model_dump() for f in scored.confidence_rationale],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dead-letter replay (deferral 5b)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class DlqReplayRequest(BaseModel):
+    """A bounded, explicit range to re-read and re-validate.
+
+    Every field is required except ``execute``, which defaults to a dry run.
+    There is no "replay the backlog" shape: a range somebody typed is a range
+    somebody is accountable for, and an inferred one is a mis-click away from
+    re-injecting a week of traffic.
+    """
+
+    topic: str
+    partition: int = Field(ge=0)
+    start_offset: int = Field(ge=0)
+    max_messages: int = Field(default=100, ge=1, le=MAX_REPLAY_MESSAGES)
+    #: Off by default at every layer. A replay nobody previewed is a replay
+    #: nobody has checked the cause of.
+    execute: bool = False
+
+
+@router.post("/dlq/replay")
+async def replay_dead_letters(request: DlqReplayRequest, principal: ScopedPrincipal) -> dict:
+    """Re-read a range of refused messages and produce only what now passes.
+
+    This service owns the execution because it owns the three things a safe
+    replay needs in one place: the topic, the producer, and the validator
+    that refused the messages in the first place. The operator door is
+    ``POST /api/v1/health/dead-letters/replay`` on the API, which holds the
+    permission, the tenant session and the audit row — the same split as
+    ``siem_writeback`` and the playbook action bridge, and for the same
+    reason.
+
+    A message that still fails validation is refused a second time rather
+    than produced. That is the property that stops a replay reproducing the
+    outage that filled the queue.
+    """
+    try:
+        outcome = await replay_from_offset(
+            topic=request.topic,
+            partition=request.partition,
+            start_offset=request.start_offset,
+            max_messages=request.max_messages,
+            execute=request.execute,
+        )
+    except ReplayRefused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 — a broker fault is a 502, not a 500
+        raise HTTPException(status_code=502, detail=f"replay could not run: {type(exc).__name__}: {exc}") from exc
+    return outcome.as_dict()
