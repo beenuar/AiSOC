@@ -10,6 +10,19 @@ Endpoints
 * ``GET  /phishing/submissions``  List submissions.
 * ``GET  /phishing/{id}``         Get a submission.
 * ``POST /phishing/{id}/retriage`` Re-run triage (e.g. after analyst correction).
+
+Authorization
+-------------
+Both writes require ``cases:write``. A submission is investigative working
+material that can open a case — the module does exactly that — so it is the
+same entitlement as working one, and it is held by ``api_service`` too, which
+the summary above needs: automated ingestion submits here with a scoped API
+key.
+
+``viewer`` is refused, which is the point. Each submission runs LLM triage on
+attacker-supplied email text and persists a verdict and extracted IOCs, so an
+ungated route was both an unmetered spend and a way to seed indicators from
+an account entitled to read only.
 """
 
 from __future__ import annotations
@@ -19,13 +32,13 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
@@ -273,7 +286,9 @@ def _row_to_submission(row: Any) -> SubmissionResponse:
 @router.post(
     "/submit", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED, summary="Submit artifact for phishing triage"
 )
-async def submit(body: SubmitRequest, db: DBSession, user: AuthUser) -> SubmissionResponse:
+async def submit(
+    body: SubmitRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("cases:write"))]
+) -> SubmissionResponse:
     try:
         result = await _triage(body.artifact_kind, body.raw_content or "", body.urls)
     except AirgapViolation:
@@ -362,7 +377,9 @@ async def get_submission(submission_id: uuid.UUID, db: DBSession, user: AuthUser
 
 
 @router.post("/{submission_id}/retriage", response_model=SubmissionResponse, summary="Re-run triage on submission")
-async def retriage(submission_id: uuid.UUID, db: DBSession, user: AuthUser) -> SubmissionResponse:
+async def retriage(
+    submission_id: uuid.UUID, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("cases:write"))]
+) -> SubmissionResponse:
     existing = (
         await db.execute(
             text("SELECT * FROM aisoc_phishing_submissions WHERE id = :id AND tenant_id = :tenant_id").bindparams(

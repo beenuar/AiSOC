@@ -17,6 +17,36 @@ POST   /community/playbooks/submit          – submit a playbook
 GET    /community/playbooks                 – browse community playbooks
 POST   /community/playbooks/{id}/install    – install playbook
 PUT    /community/playbooks/{id}/curate     – admin: approve/reject playbook
+
+Authorization
+-------------
+Every write here either speaks publicly on the tenant's behalf or brings
+third-party content into it, and none of them checked anything: the review
+and curate routes required `plugins:admin` / `playbooks:admin` while the
+routes that *submitted* and *installed* required only a session. A `viewer`
+could publish a signed plugin as the tenant, and install one.
+
+The mapping is by content type, matching the permission that governs
+authoring that type locally — you should not be able to publish or install
+what you could not have written:
+
+* `plugins:admin` for the publisher keys and for plugin publish/install. A
+  plugin is code: installing one is an execution surface, and publishing one
+  is the tenant signing something. The keys take the same permission because
+  a signing key exists only in order to publish, so leaving that surface open
+  let an unentitled caller pre-stage a publisher identity for the tenant.
+* `rules:write` for detection publish/install — the same permission that
+  authors a detection rule.
+* `playbooks:write` for playbook submit/install — the same permission that
+  authors a playbook. Installing one creates executable automation.
+
+`POST /plugins/{id}/rate` is deliberately **left ungated** and counted in
+`scripts/check_route_authz.py`'s ledger. It is the one act here where every
+authenticated principal is a legitimate actor, the vocabulary has no
+permission for expressing an opinion, and requiring an administrative one
+would mean only administrators may rate. The real integrity question is
+one-vote-per-user, which the in-memory counter cannot express at all — that
+is a storage and product decision, not an authorization gap.
 """
 
 from __future__ import annotations
@@ -146,7 +176,7 @@ class PublisherKeyOut(BaseModel):
 @router.post("/publishers/keys", response_model=PublisherKeyOut, status_code=201)
 async def add_publisher_key(
     body: PublisherKeyIn,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("plugins:admin"))],
     db: TenantDBSession,
 ) -> PublisherKeyOut:
     """Register a public key you will sign submissions with.
@@ -183,7 +213,7 @@ async def list_publisher_keys(
 @router.delete("/publishers/keys/{fingerprint}", status_code=204)
 async def revoke_publisher_key(
     fingerprint: str,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("plugins:admin"))],
     db: TenantDBSession,
 ) -> None:
     """Revoke a key.
@@ -210,7 +240,7 @@ async def revoke_publisher_key(
 @router.post("/plugins/publish", status_code=201)
 async def publish_plugin(
     request: Request,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("plugins:admin"))],
     db: TenantDBSession,
 ) -> dict[str, Any]:
     """Submit a signed plugin tarball for community review."""
@@ -332,7 +362,7 @@ async def get_community_plugin(plugin_id: str) -> CommunityPluginOut:
 @router.post("/plugins/{plugin_id}/install")
 async def install_community_plugin(
     plugin_id: str,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("plugins:admin"))],
 ) -> dict[str, str]:
     """Install a community plugin to the current instance."""
     p = _community_plugins.get(plugin_id)
@@ -392,7 +422,7 @@ async def review_community_plugin(
 @router.post("/detections/publish", status_code=201)
 async def publish_detection(
     content: str = Body(..., media_type="text/plain"),
-    current_user: AuthUser = None,  # type: ignore[assignment]
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))] = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Submit a Sigma detection rule for community review."""
     import yaml as _yaml
@@ -488,7 +518,7 @@ async def get_community_detection(detection_id: str) -> dict[str, Any]:
 @router.post("/detections/{detection_id}/install")
 async def install_community_detection(
     detection_id: str,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
 ) -> dict[str, str]:
     """Install a community detection rule to the tenant."""
     d = _community_detections.get(detection_id)
@@ -504,7 +534,7 @@ async def install_community_detection(
 @router.post("/playbooks/submit", status_code=201)
 async def submit_playbook(
     definition: dict[str, Any] = Body(...),
-    current_user: AuthUser = None,  # type: ignore[assignment]
+    current_user: Annotated[AuthUser, Depends(require_permission("playbooks:write"))] = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Submit a community playbook."""
     name = definition.get("name", "")
@@ -566,7 +596,7 @@ async def list_community_playbooks(
 @router.post("/playbooks/{playbook_id}/install")
 async def install_community_playbook(
     playbook_id: str,
-    current_user: AuthUser,
+    current_user: Annotated[AuthUser, Depends(require_permission("playbooks:write"))],
 ) -> dict[str, str]:
     """Install a community playbook to the tenant."""
     p = _community_playbooks.get(playbook_id)

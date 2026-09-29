@@ -32,6 +32,23 @@ table was never noticed. Both ends are wired here — the optional
 ``reason_code`` on an override writes, and ``/context-statements`` reads —
 because wiring only the read would have been a query against a table nothing
 populates, which is the same defect wearing a different hat.
+
+Authorization
+-------------
+Both writes require ``alerts:write``. They change an alert's ``disposition``
+— one alert on an override, a confirmed batch on a re-disposition — which is
+the same act ``alerts.py`` already gates on ``alerts:write``, and the two
+doors onto that column now agree.
+
+It matters more here than on a single alert. An override is persisted into
+institutional memory as a per-signature prior, and a *trusted* benign prior
+auto-resolves matching repeat alerts without re-triage. So an ungated
+override was not one wrong verdict; it was a durable instruction to the
+platform to stop looking, writable by a ``viewer``.
+
+``threat_hunter`` holds no ``alerts:write`` and is therefore refused, which
+is consistent with the role's documented posture of handing off rather than
+dispositioning.
 """
 
 from __future__ import annotations
@@ -45,7 +62,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, text, update
 
-from app.api.v1.deps import AuthUser, CurrentUser, DBSession
+from app.api.v1.deps import AuthUser, CurrentUser, DBSession, require_permission
 from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
 from app.db.rls import set_rls_context
 from app.models.alert import Alert
@@ -180,7 +197,7 @@ class AlertOverrideResponse(BaseModel):
 @router.post("/alert-override", response_model=AlertOverrideResponse)
 async def submit_alert_override(
     payload: AlertOverrideRequest,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
     db: DBSession,
 ) -> AlertOverrideResponse:
     """Record an analyst verdict correction on an alert and surface
@@ -322,7 +339,7 @@ class RedispositionApplyResponse(BaseModel):
 @router.post("/redisposition/apply", response_model=RedispositionApplyResponse)
 async def apply_redisposition_endpoint(
     payload: RedispositionApplyRequest,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
     db: DBSession,
 ) -> RedispositionApplyResponse:
     """Bulk-update the disposition on past alerts the analyst confirmed.

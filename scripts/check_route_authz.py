@@ -122,13 +122,26 @@ AUTHZ_CALLS = frozenset(
 #: a product decision; `test_platform_route_permissions.py` pins it ungated so
 #: changing that takes a decision rather than a drive-by edit.
 #:
+#: 28 once community publishing/installation took the permission that governs
+#: authoring each content type locally (`plugins:admin`, `rules:write`,
+#: `playbooks:write`), marketplace install/uninstall took `settings:write`,
+#: STIX publication took `threat_intel:write`, alert-disposition feedback took
+#: `alerts:write` and phishing submission took `cases:write`.
+#:
+#: `POST /community/plugins/{id}/rate` is left in the count for the same kind
+#: of reason as `/kb/query`: every authenticated principal is a legitimate
+#: rater, there is no permission for holding an opinion, and requiring an
+#: administrative one would mean only administrators may rate. The integrity
+#: question there is one-vote-per-user, which the in-memory counter cannot
+#: express — storage and product, not authorization.
+#:
 #: Four routes under `/mssp/organizations` remain in this count and are not
 #: debt: they authorize through `_admin_scope`, an organisation owner/admin
 #: check, which is the right vocabulary for a portfolio-scoped act and is not
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 45
+MAX_UNAUTHORIZED = 28
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:

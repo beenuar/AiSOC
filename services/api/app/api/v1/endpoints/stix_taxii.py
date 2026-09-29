@@ -6,17 +6,32 @@ the target host is allowed by the air-gap policy), POSTs to
 downstream MISP instance via :mod:`app.services.misp_push`. The push
 is opt-in per request (``?push_to_misp=true``) unless ``MISP_PUSH_AUTO``
 is enabled.
+
+Authorization
+-------------
+All three writes require ``threat_intel:write``, which already existed for
+exactly this and is held by ``tenant_admin``, ``soc_lead`` and
+``threat_hunter``. Publishing a STIX indicator is authoring threat intel, and
+these routes can *leave the platform*: with MISP configured, a published
+indicator is mirrored downstream, so an ungated route let any authenticated
+session — including ``viewer`` — push an indicator of its choosing into the
+tenant's MISP instance under the tenant's credentials.
+
+``/misp/dry-run`` takes the same permission as the live push rather than a
+read: it is a preview of an outbound publication, and gating the rehearsal
+more weakly than the act is how a dry run becomes reconnaissance.
 """
 
 import logging
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 from app.core.airgap import AirgapViolation
 from app.core.config import settings
 from app.services.misp_push import (
@@ -347,7 +362,7 @@ async def _push_bundle_or_swallow(bundle: STIXBundle) -> MispPushResult | None:
 )
 async def create_indicator(
     body: STIXIndicatorCreate,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     push_to_misp: bool | None = Query(
         default=None,
         description=("Mirror this indicator to the configured MISP instance. Defaults to the value of MISP_PUSH_AUTO."),
@@ -391,7 +406,7 @@ async def list_bundles(user: AuthUser) -> BundleListResponse:
 )
 async def create_bundle(
     body: STIXBundleCreate,
-    user: AuthUser,
+    user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))],
     push_to_misp: bool | None = Query(
         default=None,
         description=(
@@ -467,7 +482,9 @@ async def misp_push_health(user: AuthUser) -> MispPushHealth:
 
 
 @router.post("/misp/dry-run", response_model=MispDryRunResponse, tags=["MISP push"])
-async def misp_push_dry_run(body: MispDryRunRequest, user: AuthUser) -> MispDryRunResponse:
+async def misp_push_dry_run(
+    body: MispDryRunRequest, user: Annotated[AuthUser, Depends(require_permission("threat_intel:write"))]
+) -> MispDryRunResponse:
     """Show the MISP event payload that *would* be pushed, without sending it.
 
     Useful for operators tuning STIX → MISP mappings, and for proving
