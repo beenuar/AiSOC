@@ -271,6 +271,11 @@ RATCHET: dict[str, str] = {
         "writes back to the connector row the sweep above already selected, by primary key"
     ),
     "services/api/app/workers/oauth_refresh.py::_record_failure::Connector": "records the failure of that same swept row, by primary key",
+    "services/api/app/workers/approval_expiry.py::run_once::agent_approvals": (
+        "counts pending approvals that carry no expires_at, across every tenant, for one operator log line. "
+        "The sweep it sits beside is tenant-wide by nature and calls assert_cross_tenant_session first, so a "
+        "tenant predicate here would report one tenant's gap as the whole estate's"
+    ),
     # -- the row is addressed by an opaque capability, and yields the tenant --
     "services/honeytokens/app/api/routes.py::webhook_trigger::Honeytoken": (
         "canary callback: the token id is the capability and the row supplies the tenant it belongs to"
@@ -325,7 +330,15 @@ RATCHET: dict[str, str] = {
 #: the identical query as raw SQL, which would have moved it out of this
 #: gate's view without changing what it reads, and that is worse than an entry
 #: with a reason beside it.
-MAX_RATCHET = 34
+#:
+#: 34 -> 35 (deferral 9b): `approval_expiry.run_once`'s no-deadline count. The
+#: worker expires stale approvals across every tenant and asserts an unbound
+#: session before it does, so the aggregate beside it is tenant-wide for the
+#: same reason. The count feeds one log line and returns no tenant's rows. It
+#: was moved out of module scope to earn this entry: keyed on `<module>` the
+#: waiver would have matched any later unscoped query in the same file, which
+#: is an allowlist wearing a ratchet's name.
+MAX_RATCHET = 35
 
 
 # ---------------------------------------------------------------------------

@@ -81,11 +81,6 @@ _SWEEP_SQL = text(
     """
 )
 
-#: Counted, not swept. An approval with no deadline is one whose creator did
-#: not set one, and a worker that invented deadlines would start expiring
-#: containments on a schedule nobody chose.
-_NO_DEADLINE_SQL = text("SELECT count(*) FROM agent_approvals WHERE status = 'pending' AND expires_at IS NULL")
-
 _NOTE = (
     "Expired automatically: the approval window elapsed with no decision. "
     f"Safe default is '{SAFE_DEFAULT}' — nothing was dispatched, and this request can still be decided."
@@ -124,7 +119,14 @@ async def run_once(*, db: AsyncSession | None = None) -> ExpirySweep:
             level = str(row["risk_level"] or "unknown")
             sweep.by_risk[level] = sweep.by_risk.get(level, 0) + 1
 
-        sweep.pending_without_deadline = int((await db.execute(_NO_DEADLINE_SQL)).scalar_one())
+        # Counted, not swept. An approval with no deadline is one whose creator
+        # did not set one, and a worker that invented deadlines would start
+        # expiring containments on a schedule nobody chose. Deliberately
+        # tenant-wide, like the sweep above, and on the ratchet as such: the
+        # statement lives here rather than at module scope so the waiver names
+        # this function and cannot be inherited by some later query.
+        no_deadline_sql = text("SELECT count(*) FROM agent_approvals WHERE status = 'pending' AND expires_at IS NULL")
+        sweep.pending_without_deadline = int((await db.execute(no_deadline_sql)).scalar_one())
         await db.commit()
     finally:
         if own_session:
