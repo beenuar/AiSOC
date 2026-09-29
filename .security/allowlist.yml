@@ -44,8 +44,17 @@ ceilings:
     # argument to `urlopen`, and counting it is better than suppressing it.
     # `entries:` below stays empty on purpose: a ceiling counts a finding, a
     # suppression hides it.
-    total: 102
-    error: 40
+    #
+    # 102 -> 101 and 40 -> 39 at v12.1.0. The removed ERROR is
+    # `use-defused-xml`, which fired on the PAN-OS client's
+    # `xml.sax.saxutils` import while fixing GHSA-w754-prh8-m56j. That module
+    # is string escaping with no parser and no XXE surface, but the rule
+    # cannot tell escaping from parsing — so the import was replaced with
+    # `html.escape`, which emits the same XML entities and pulls in no XML
+    # machinery. Lowered rather than left: a ceiling that stays above what
+    # the tree measures lets the number drift back up for free.
+    total: 101
+    error: 39
     measured_with: "1.86.0"
   checkov:
     failed: 219
