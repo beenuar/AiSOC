@@ -1,6 +1,6 @@
 # The lettered deferrals
 
-**Last updated:** 2026-09-28 (v12.0.0)
+**Last updated:** 2026-09-29 (v12.2.0)
 
 Eight sub-phases of the hardening program were deferred with a letter suffix
 — 3.5+, 5b, 6b, 7b+, 8b, 9b, 10b, 11b. Six of them were named in `ROADMAP.md`,
@@ -41,14 +41,31 @@ decision is worse than admitting the record was lost.
 **From the phase line:** *"heavy-demo-stack Playwright E2E + demo-timing gate
 tracked as non-blocking 3.5+"*.
 
-**Status: open.** Playwright E2E exists against the hermetic stack. What does
-not exist is a run against the full demo stack, or a gate on how long the demo
-takes to become usable.
+**Status: both halves built, in [#1040](https://github.com/beenuar/AiSOC/pull/1040).**
+`apps/web/e2e/demo-stack/` asserts against the stack `pnpm aisoc:demo`
+starts — kept separate from `journey`, which stubs the network, and from
+`screenshots`, whose own header calls its tests recorders rather than
+assertions. `docs/perf/demo-timing.json` records the runs the bound came
+from and `scripts/check_demo_timing.py` enforces it, refusing a declaration
+without its provenance and a ceiling below the worst run it cites.
 
-**Why it is worth doing:** `packages/aisoc-sandbox` has a cold-start gate
-(`aisoc-sandbox demo` in under 30 s) and the devcontainer has one. The demo
-stack — the thing `make demo` starts and a first-time reader actually meets —
-has neither, so it can get slower indefinitely without anyone noticing.
+**Two defects the gate found while being written.** `isPortFree` binds
+127.0.0.1 and claimed to be "the same test Docker is going to run"; Docker's
+allocator refuses a port another *container* holds, so the demo took 5432
+anyway and postgres started with no network attached — postgres healthy, API
+healthy, seed exited 1, console empty. And the harness polled `/v1/cases`
+where the API serves `/api/v1/cases`, which is why the showcase lookup cost
+exactly 60 s on every run. Fixing the first took the stack from 3m06s to
+1m39s.
+
+**What stays open, recorded beside the number rather than implicitly.**
+`seed_demo.py` still fails on a fresh demo stack, so the console has no
+cases in it: the ORM maps `CaseTask` to `case_tasks` while migration 027
+creates `aisoc_case_tasks` with a different column set. `create_all` papered
+over it until `061_runtime_app_role.sql` took `CREATE` on schema public
+away, and the permission error is swallowed as "create_all skipped (likely
+already applied)". Reconciling two designs for one table is a schema change,
+not a timing gate.
 
 ---
 
@@ -56,14 +73,26 @@ has neither, so it can get slower indefinitely without anyone noticing.
 
 **From the phase line:** *"backfill/replay-from-offset tracked as 5b"*.
 
-**Status: open.** Phase 5 shipped the schema registry, the dead-letter queue
-and event-time watermarking. What is missing is the operator action that
-follows a DLQ: having captured a poison batch, replay it from a given Kafka
-offset after fixing the cause.
+**Status: closed in [#1036](https://github.com/beenuar/AiSOC/pull/1036).**
+`POST /api/v1/health/dead-letters/replay` re-reads a bounded range from a
+given `(topic, partition, offset)`, re-validates it and produces what now
+passes.
 
-**Why it is worth doing:** a dead-letter queue nobody can drain is an audit
-trail, not a recovery mechanism. `GET /api/v1/health/dead-letters` reports the
-backlog and nothing consumes it.
+The row could never have been the thing replayed: `aisoc_dead_letters`
+stores a 2,000-character excerpt, truncated on purpose. The faithful copy is
+in Kafka, and reaching it needed the partition and offset the consumer had
+in hand and discarded — now carried through `_dead_letter` and persisted,
+nullable, because a fabricated offset replays somebody else's message.
+
+The property that matters is not the bound or the permission: **a message is
+re-validated by the validator that refused it, and one that still fails is
+refused again rather than produced.** Replaying a poison batch into the
+consumer that rejected it reproduces the outage, so a preview whose
+`would_pass` is zero is the answer "your fix has not landed". Dry run is the
+default at three layers, and on a dry run the producer is never constructed.
+Proved against Redpanda with a negative control: deleting `consumer.seek()`
+makes the live test fail, which every fake-client test in the suite would
+have passed.
 
 ---
 
@@ -74,24 +103,22 @@ managed-mode sizing guide and the LLM-cost dashboard so a tenant's storage
 $/mo shows next to its LLM $/mo"* —
 [`docs/decisions/0005-storage-consolidation.md`](../decisions/0005-storage-consolidation.md).
 
-**Status: open, and it was on no list of these until now.** Phase 6 shipped
-the model and its drift gate, and both are real: `scripts/storage_cost_model.py`
-computes ≈$902/mo and ≈$30/raw-TB at 1 TB/day, `docs/decisions/storage-cost-model.json`
-is the committed worked example, and `.github/workflows/perf.yml` fails when
-the two diverge.
+**Status: closed in [#1019](https://github.com/beenuar/AiSOC/pull/1019).**
+`GET /api/v1/costs/dashboard` carries a `storage` block and the console
+renders it. It rests on one measurement — the uncompressed bytes a tenant's
+events occupied in the lake over the window — and runs the committed model
+over it.
 
-Neither half of the follow-up exists. `services/api/app/services/cost_dashboard.py`
-and `apps/web/src/app/(admin)/costs/page.tsx` mention storage nowhere — the
-dashboard reports LLM spend only — and the "Billing and cost transparency"
-section of `apps/docs/docs/operations/managed-instance.md` points at that LLM
-dashboard and says nothing about storage. Outside the ADR, the CHANGELOG and
-the perf workflow, the model's only readers are two ClickHouse tiering files
-citing it in a comment.
-
-**Why it is worth doing:** the ADR's stated reason for computing the number
-at all was sizing and the managed-mode pricing shape (ADR-0003). A cost model
-whose only consumer is the gate that checks the cost model is a well-tested
-constant.
+Three properties are asserted rather than asserted-to: it is badged a
+projection and no field is named `*_cost_usd`, so the naming is itself the
+label; it is a sibling of the headline and never a term in it, because one
+number cannot be labelled two ways; and on a CORE deployment, where the lake
+does not run, every money field is null with the reason attached rather than
+a confident `$0.00`. The rate card is mirrored into the API because the
+script cannot be imported there, and `storage_cost_model.py --check` now
+reads the mirror back — closing "the model has no consumer" by adding one
+that could silently quote different prices would have been the worse
+outcome.
 
 ---
 
@@ -100,14 +127,34 @@ constant.
 **From the phase line:** *"7b+ (posture collection, effective-permissions
 snapshot loader, bi-temporal valid_from/valid_to, fusion-time ContextBundle)"*.
 
-**Status: partially closed, and the remaining gap is precisely named.**
+**Status: still open, and still exactly one thing.** No connector answers
+`__posture_snapshot__`, so four of the five effective-permissions resolvers
+return 412. Bi-temporal `valid_from`/`valid_to` landed in T1.2 and the
+resolvers themselves all ship reporting `coverage: "full"`.
 
-v8.1's audit found all five effective-permissions resolvers already shipped
-and reporting `coverage: "full"`. The gap is not the resolvers: **no connector
-answers `__posture_snapshot__`, so four of the five return 412.** Bi-temporal
-`valid_from`/`valid_to` landed in T1.2.
+**Re-derived rather than restated, because the shape of the remaining work
+was not previously written down.** `__posture_snapshot__` is not a method or
+an attribute — it is a sentinel `resource_id` passed to
+`get_resource_config(resource_id, at_ts)`, and a connector answers it by
+branching on the literal value and returning a reconciled snapshot in the
+shape its resolver expects. Only five of the 84 connectors implement
+`get_resource_config` at all, and of the four providers that 412
+(`aws_security_hub`, `azure_entra`, `gcp_scc`, `google_workspace`), two
+implement it for an unrelated id shape and two do not implement it at all.
+Okta is the one that works, and it works because `posture_loader` assembles
+its snapshot from several ordinary `get_resource_config` reads rather than
+from the sentinel.
 
-So what remains of 7b is one thing: a connector-side posture snapshot.
+So closing this is four provider-specific snapshot collectors over real
+vendor APIs — IAM policies and SCPs for AWS, role assignments for Azure,
+IAM bindings for GCP, roles and privileges for Workspace — each returning
+the shape its resolver already consumes, and each needing credentials to
+verify against. That is a piece of work in its own right, not a loose end,
+and it is left open rather than part-built.
+
+`services/api/tests/test_posture_snapshot_coverage.py` already encodes the
+gap as data, with a test per provider that fails the moment a connector
+starts referencing the sentinel. That test is the thing to delete last.
 
 ---
 
@@ -117,24 +164,28 @@ So what remains of 7b is one thing: a connector-side posture snapshot.
 tracked as 8b; this seeds the registry + gate with the canonical
 triage/summary prompts"* — `services/agents/app/llm/prompt_registry.py`.
 
-**Status: open, and the gap is countable.** Phase 8 shipped the registry, the
-committed `prompts.lock.json` and `scripts/check_prompt_lock.py --check`,
-which fails when a prompt's text changes without a version bump. That is the
-mechanism making the `AGENTS.md` rule — a prompt change obliges an eval
-re-grade — enforceable rather than aspirational.
+**Status: closed in [#1016](https://github.com/beenuar/AiSOC/pull/1016).**
+Coverage went from 3 registered / 1 read / 21 shipped-unpinned to 22
+registered / 22 read / 0 shipped-unpinned.
 
-It is enforceable over three prompts. One production module reads the
-registry: `services/agents/app/hunt/agent.py` takes `hunt.system`.
-`triage.system` and `summary.system` are registered, hash-pinned and gated,
-and nothing under `services/agents/app/` asks for either — while ten modules
-there still declare a module-level `_SYSTEM_PROMPT` of their own, the triage,
-cloud, identity, insider-threat and phishing agents and the recon, forensic,
-responder, report-writer and playbook-drafter among them.
+The gate runs in both directions now. `inline-prompt` catches a module-level
+string reaching a system-message sink, detected by what the constant *is*
+rather than by its name — a sweep for `_SYSTEM_PROMPT` missed
+`deep_investigation._SYSTEM_PREAMBLE` and the ten-prompt
+`contextual._SYSTEM_PROMPTS` dict — and follows assignment to a fixed point,
+because three of the twelve reached their sink through a local first.
+`unread-prompt` catches the other direction: `summary.system` was hash-pinned
+for a summariser this service does not have.
 
-**Why it is worth doing:** every prompt still inline can be edited without a
-version bump, without a lock change, and therefore without the re-grade —
-which is the exact hole the registry was written to close, left open for all
-but one of them.
+**`register()` no longer strips, and the measurement is the reason.** Ten of
+the migrated prompts ended in a newline, and trimming it changed the
+completion for six of those ten on `qwen2.5:0.5b` at temperature 0 — against
+a control where the same prompt asked twice was identical 10/10. A
+normalisation the author cannot see is an undeclared prompt change performed
+by the registry itself. All 21 migrated prompts hash identically to the
+literal they were moved from, so no model call changed; the one deliberate
+text change is `triage.system` v1 → v2, a placeholder nobody read replaced
+by the production prompt.
 
 ---
 
@@ -143,35 +194,24 @@ but one of them.
 **From the phase line:** *"live-router wiring + durable approval-SLA timer
 table tracked as 9b"*.
 
-**Status: substantially closed, and what is left is narrower than this
-section used to say.**
+**Status: closed in [#1038](https://github.com/beenuar/AiSOC/pull/1038).**
+The live-router half and the durable timer table had already landed; what
+remained was every approval the ChatOps bot never sees.
 
-The live-router half is done: `services/api/app/api/v1/endpoints/approvals.py`
-now carries a decision through to `services/actions` and records on the row
-whether it executed, and `POST /actions` consults the confidence × impact
-matrix rather than blast radius alone. Durable storage arrived with
-`055_action_records.sql`.
+`agent_approvals` has carried an `expires_at` and an `expired` status since
+migration 009, and nothing wrote that status and no worker swept the column,
+so a console-raised approval nobody answered waited forever — invisibly,
+because the row stayed `pending` and nobody could tell it from one still
+under consideration. `app/workers/approval_expiry.py` sweeps it.
 
-**The timer table landed too, and this section was wrong about it.** It
-recorded the Slack bot's `ApprovalTimeoutScheduler` as in-process only. A
-Postgres-backed store had in fact existed since Phase B3
-(`services/slack-bot/app/services/timer_store.py`) — and it genuinely was not
-durable, for a reason worth keeping: it created `approval_timers` itself with
-`CREATE TABLE IF NOT EXISTS`, outside every migration chain, so once
-`061_runtime_app_role.sql` took `CREATE` on schema public away from the
-runtime role that call raised at startup and `main.py` fell back to the
-in-memory store. Durable approval timers silently stopped being durable.
-`062_approval_timers.sql` brought the table into the chain with a `tenant_id`
-and an RLS policy; the store now refuses to create it and names the migration
-instead, and `recover()` re-arms surviving timers on start.
-
-**What remains is every approval the bot never sees.** The expiry lives in
-`services/slack-bot`, a `chatops`-profile service, and is armed per ChatOps
-approval. The API's own `agent_approvals` row carries an `expires_at` and its
-status vocabulary includes `expired`; nothing writes that status, and no
-worker under `services/api/app/workers/` sweeps the column. An approval
-raised in the console and never answered still waits forever rather than
-timing out to its declared safe default.
+Three decisions worth keeping. The safe default is `rejected` and is read
+back from the two places that already declare it rather than restated, since
+two halves timing out differently would be worse than either. Expiring is
+not deciding: nothing is dispatched, and `/decide` still accepts an
+`expired` row, so a human returning to a timed-out request can still act —
+a test pins that guard. And an approval with no `expires_at` is *counted*,
+not given one, because inventing a window would start expiring containments
+on a schedule nobody chose.
 
 ---
 
@@ -180,26 +220,24 @@ timing out to its declared safe default.
 **From the phase line:** *"Live-vendor sandbox smoke + rate-limit/checkpoint
 durability tracked as 10b"*.
 
-**Status: one half is credential-blocked; the other has a mechanism and one
-adopter.**
+**Status: one half closed in [#1039](https://github.com/beenuar/AiSOC/pull/1039);
+the other is credential-blocked and stays open.**
 
-Live-vendor smoke needs sandbox accounts with real vendors — an account
-action, the same class of blocker as the npm publish and the funded eval key,
-not an engineering task. It stays open and says so.
+**Checkpoint adoption: 1 connector of 84 → 5.** The durable machinery
+already worked; what was missing was adoption, and the reason it stayed
+missing is the point. The scheduler reached the connector through
+`getattr(connector, "set_checkpoint", None)`, absent on 83 of 84 — a
+duck-typed optional protocol has no failing state, only a quiet one, and
+nothing could report which connectors resumed. The contract is on
+`BaseConnector` now, adopting is two class attributes, `checkpoints()`
+answers the question, and a test asserts the adopter set is exactly the
+recorded one so losing one fails loudly. `splunk` moved onto the shared
+machinery with its eight existing tests unchanged. The remaining 79 are
+recorded as not-checkpointing rather than described as done.
 
-**Checkpoint durability is no longer absent, which this section used to say
-it was.** `services/connectors/app/db/connector_repo.py::record_checkpoint`
-persists a connector's ingest checkpoint into `connector_config.checkpoint`,
-and `services/connectors/app/scheduler.py` seeds it back into the connector
-before each poll and writes the advanced value only after the batch was
-accepted, so a failed ingest never moves it forward.
-
-What is missing is adoption. `splunk` is the only one of the 84 connectors
-implementing `set_checkpoint`/`get_checkpoint`; the scheduler seeds through a
-`getattr(connector, "set_checkpoint", None)` that is simply absent on the
-other 83. For those, poll state still does not survive a restart — the
-connector re-reads its overlap window, which is safe, and means a long outage
-silently loses events older than that window.
+**Live-vendor sandbox smoke stays open.** It needs sandbox accounts with
+real vendors — an account action, the same class of blocker as the npm
+publish and the funded eval key, not an engineering task.
 
 ---
 
