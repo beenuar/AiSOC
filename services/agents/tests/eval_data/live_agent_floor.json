@@ -28,6 +28,13 @@
       "note": "62 LLM calls placed; the lowest run observed anywhere"
     },
     {
+      "mean": 0.5933,
+      "incidents": 10,
+      "runs": 1,
+      "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36517390566 on main",
+      "note": "62 LLM calls placed; the first run of this workflow to complete with the floor asserted, and the highest observed"
+    },
+    {
       "mean": 0.5364,
       "incidents": 20,
       "runs": 16,
@@ -35,5 +42,5 @@
       "note": "not the gated slice - recorded because sixteen identical runs show the measurement is a property of the prefix rather than of the run"
     }
   ],
-  "derivation": "The four agents decode greedily at temperature 0, and on one machine that makes the measurement a point mass: seven local runs over the 10-incident prefix returned 0.5561 to four decimal places, and sixteen over the 20-incident prefix returned 0.5364. It is not a point mass across machines. Two GitHub-runner runs of the same slice returned 0.5821 and 0.5329, a spread of 0.0492, because a quantised model decoding greedily on a different kernel diverges at the margins. The floor is set from that spread rather than from the local stability, which would have been the misleading number to use. 0.40 sits 0.1329 below the lowest run observed anywhere and about 2.7 times the observed cross-runner spread, and it is deliberately conservative because the runner-side sample is only two runs. It still fails anything a quarter worse than today. Raise it only with fresh runs recorded here; a floor above the lowest run it cites is refused by scripts/check_live_agent_floor.py, because that floor would red every run from the day it landed."
+  "derivation": "The four agents decode greedily at temperature 0, and on one machine that makes the measurement a point mass: seven local runs over the 10-incident prefix returned 0.5561 to four decimal places, and sixteen over the 20-incident prefix returned 0.5364. It is not a point mass across machines. Three GitHub-runner runs of the same slice returned 0.5821, 0.5329 and 0.5933 - a spread of 0.0604 - because a quantised model decoding greedily on a different kernel diverges at the margins. The floor is set from that spread rather than from the local stability, which would have been the misleading number to use. 0.40 sits 0.1329 below the lowest run observed anywhere and about 2.2 times the observed cross-runner spread. It still fails anything a quarter worse than today. Raise it only with fresh runs recorded here; a floor above the lowest run it cites is refused by scripts/check_live_agent_floor.py, because that floor would red every run from the day it landed."
 }

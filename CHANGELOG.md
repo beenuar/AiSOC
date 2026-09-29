@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The live-agent eval had never run, and could not have.** `live-agent-eval.yml`
+  reached `main` with 0 runs, and this was recorded as a scheduling accident.
+  Dispatching it produced a 92-second failure: its live path imported
+  `InvestigatorAgent`, a class that exists nowhere in `services/agents` — the
+  only one by that name is in the historical prototype under `plans/`. The
+  import always raised, the harness always degraded to substrate records, and
+  `--wet-require-live` always exited 3, correctly refusing to publish substrate
+  numbers as live-agent performance. It now dispatches
+  `app.investigator.run_investigation`, the four-agent pipeline the console's
+  investigate button drives.
+
+  Three more defects on the same path would each have published a number nobody
+  measured. Groundedness was scored per incident and then dropped before the
+  report was written, so a successful run published none. MITRE accuracy read
+  `expected_mitre_tactics`, a key the corpus does not have, so the expected set
+  was always empty and a live run would have reported `0.0000` — graded and
+  failed, for a comparison that never happened. And a self-hosted model was
+  priced against the gpt-4o rate card at $0.037 per investigation, because
+  `cost_usd` falls back to the headline model for an unknown one; an unpriced
+  model now reports `measured: false` and says why.
+
+- **Every LLM call in the investigator pipeline was unbounded, and the bound
+  would not have reached the model anyway.** Against `qwen2.5:0.5b` on a
+  GitHub-hosted runner one call generated 40,960 completion tokens over twenty
+  minutes — the model's whole context — where the same call locally returned
+  200 tokens in two seconds. Greedy decoding is only deterministic for a fixed
+  kernel. `app/investigator/limits.py` bounds completions at 2048, against a
+  largest legitimate reply of 876 measured across the pipeline; the eval's
+  groundedness is unchanged to four decimal places, so nothing real is
+  truncated, while latency p95 fell from 127.96s to 8.24s.
+
+  Separately, `langchain-openai` 1.x renders the typed `max_tokens` field onto
+  the wire as `max_completion_tokens`, and Ollama reads only `max_tokens` and
+  ignores the new name in silence — measured at 64 tokens against 72 for the
+  same limit. Any bound the platform set was a no-op against the model it
+  bundles as its zero-credential default. The factory now also sends the legacy
+  name, and only to a non-OpenAI endpoint.
+
+- **A run that placed no LLM call at all reported as live.** With the model pins
+  unset, every agent caught its provider error and used its deterministic path;
+  the report came back tagged `mode: live` with a groundedness of 0.8050 at
+  0.11 seconds per investigation — faster than a network round trip.
+  `--wet-require-live` could not see that shape because records existed and the
+  stack had imported. The harness now refuses a run that placed no call, and
+  every report carries `llm_calls_placed` beside the mean.
+
+- **The scanner ratchet's version-drift arm skipped tfsec in silence.** It read
+  `if version and measured_with and ...`, and tfsec's JSON carries no version
+  field, so the `measured_with: "1.28.13"` in `.security/allowlist.yml` was
+  never compared against anything. A version the gate cannot establish is now a
+  failure rather than a skip — for every scanner, present and future — and
+  tfsec's comes from the binary's own `--version`, cross-checked against a
+  report version in both directions when both exist. `_versions_pinned` could
+  not see a curled binary's pin either, which silently exempted tfsec from the
+  test that keeps pin and ceiling in step.
+
+### Added
+
+- **A measured groundedness floor, and a gate that asserts it.**
+  `scripts/check_live_agent_floor.py` fails `live-agent-eval.yml` below **0.40
+  over a deterministic 10-incident slice**. The number came from runs: seven
+  local ones returned 0.5561 to four decimal places, because the agents decode
+  greedily at temperature 0 and on one machine the measurement is a point mass;
+  three GitHub-runner runs returned 0.5821, 0.5329 and 0.5933, so it is not a
+  point mass across machines, and the floor is set from that spread rather than
+  from the local stability. Every figure is a locally-served `qwen2.5:0.5b` over
+  a 10-incident slice — **no hosted provider has been exercised and this floor
+  describes none**. The declaration in
+  `services/agents/tests/eval_data/live_agent_floor.json` carries every run
+  behind it, and the loader refuses a floor above its own evidence. The gate also
+  refuses a substrate-tagged report, a run that placed no LLM call, a smaller
+  sample than the floor was derived over, and another model unless asked
+  deliberately.
+
+- **A running container is watched for outbound calls, not just its declared
+  defaults.** `scripts/check_container_egress.py` starts images built from the
+  commit under test on a `--internal` docker network with a DNS sinkhole as
+  their only resolver, and classifies every name asked for with the same
+  predicate the services enforce air-gap policy with. Two controls, because zero
+  observations is what a correct run and a blind probe both look like: a canary
+  wired identically must be seen, and a container that emitted no log line and
+  asked for no name is a finding. `container-egress.yml` also builds an image
+  that deliberately resolves a public name and requires the gate to fail on it.
+
+### Changed
+
+- The claim-to-gate matrix reaches **238 rows / 238 GATED / 0 PARTIAL / 0 NO
+  GATE**, recounted with `scripts/check_claim_gate_matrix.py`. The last two
+  PARTIAL rows closed by building the gate they named. Two rows that had gone
+  stale in the repository's favour were corrected at the same time: the egress
+  row still said container integration "is not built", and the scanner row
+  claimed the version arm covered all three scanners.
+
 ## [12.1.0] - 2026-09-28
 
 ### Security
