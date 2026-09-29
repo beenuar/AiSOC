@@ -260,6 +260,10 @@ class WetEvalRecord:
     # reporting a flattering 1.0 for output that was never produced.
     groundedness: float | None = None
     hallucinated: list[str] = field(default_factory=list)
+    #: How many LLM calls the run actually placed. Zero means every agent fell
+    #: through to its deterministic path, which produces plausible records
+    #: that no model wrote.
+    llm_calls: int = 0
 
     @property
     def total_tokens(self) -> int:
@@ -491,6 +495,7 @@ def _live_records(
         # reported usage across all four agents' calls. Only estimated when
         # the provider surfaced nothing at all.
         cost_summary = getattr(state, "cost_summary", None) or {}
+        llm_calls = int(cost_summary.get("call_count") or 0)
         prompt_tokens = int(cost_summary.get("prompt_tokens") or 0)
         completion_tokens = int(cost_summary.get("completion_tokens") or 0)
         if prompt_tokens == 0 and completion_tokens == 0:
@@ -521,6 +526,7 @@ def _live_records(
                 severity=str(inc.get("severity") or "medium").lower(),
                 groundedness=grounded_score,
                 hallucinated=hallucinated,
+                llm_calls=llm_calls,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 latency_seconds=round(latency_s, 4),
@@ -620,6 +626,9 @@ def _groundedness_block(records: list[WetEvalRecord]) -> dict[str, Any]:
     return {
         "measured": True,
         "scored_incidents": len(scored),
+        # Beside the number, because a reader cannot otherwise tell the
+        # model's output from the deterministic fallback's.
+        "llm_calls_placed": sum(r.llm_calls for r in records),
         "mean": round(mean(scored), 4),
         "median": round(median(scored), 4),
         "min": round(min(scored), 4),
@@ -814,6 +823,22 @@ def compute_wet_eval(
         records, warnings, degraded = _live_records(incidents_path, model=model, limit=limit)
         if require_live and degraded:
             raise RuntimeError("require_live=True but the live path fell back to substrate numbers:\n  - " + "\n  - ".join(warnings))
+        # The agent stack imported, the pipeline ran, records came back — and
+        # not one LLM call was placed, because every agent caught its provider
+        # error and used its deterministic fallback. That produces a report
+        # tagged `live` full of numbers no model wrote, which is exactly what
+        # `require_live` exists to refuse; it just could not see this shape.
+        # Observed for real: a workflow that set a dead model env var sent
+        # every agent at a gateway alias the local server had never heard of,
+        # and the run reported a groundedness of 0.8050 at 0.11s per
+        # investigation — faster than a network round trip.
+        placed = sum(r.llm_calls for r in records)
+        if require_live and records and placed == 0:
+            raise RuntimeError(
+                f"require_live=True but not one LLM call was placed across {len(records)} investigation(s). "
+                "Every agent fell through to its deterministic path, so these numbers describe the fallback "
+                "and not the model. Check the model pins reach a model the endpoint serves."
+            )
         # Degrade-cleanly: if the live path could not produce records
         # we re-tag the report as ``dry_run`` so consumers don't think
         # they're looking at real numbers.

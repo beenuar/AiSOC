@@ -21,11 +21,16 @@ name: Live agent eval (local model)
 #     live-agent performance. A gate that can pass without calling the model is
 #     worse than no gate.
 #
-# Not a PR gate yet, on purpose. It follows the observe-then-ratchet convention
-# already used by security.yml: prove the job is stable and establish a floor
-# from real runs first, then promote it to `pull_request` and make the
-# threshold blocking. Promoting it before the floor is grounded in measurements
-# would just be inventing a number.
+# The floor now exists and is asserted on every run — see
+# `scripts/check_live_agent_floor.py` and the runs recorded in
+# `services/agents/tests/eval_data/live_agent_floor.json`. It was derived from
+# measurements, which is why it took a working job to get one.
+#
+# Still not a PR gate, and now for a measured reason rather than a cautious
+# one: a slice adds minutes to a run and a 0.5b model's output is a property
+# of the machine it is decoded on, so a threshold tight enough to be useful
+# would be tight enough to flake on a runner nobody controls. Scheduled plus
+# on-demand, failing hard when the floor is breached, is what that supports.
 
 on:
   workflow_dispatch:
@@ -37,7 +42,14 @@ on:
       incidents:
         description: 'How many incidents to dispatch'
         type: string
-        default: '20'
+        # Ten, measured rather than chosen. The default was 20, and the first
+        # run that got as far as dispatching the agent hit `timeout-minutes`
+        # with the slice unfinished, because one unbounded completion can
+        # take twenty minutes on a runner. That cause is fixed in
+        # `app/investigator/limits.py`; this keeps a margin anyway, because
+        # GitHub reports a timeout as `cancelled` rather than `failed`, so a
+        # weekly run that measured nothing would not look like a failure.
+        default: '10'
   schedule:
     - cron: '0 3 * * 2'
 
@@ -59,10 +71,10 @@ jobs:
   live-agent:
     name: Dispatch the real agent against a local model
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       OLLAMA_MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
-      INCIDENT_LIMIT: ${{ github.event.inputs.incidents || '20' }}
+      INCIDENT_LIMIT: ${{ github.event.inputs.incidents || '10' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -136,6 +148,14 @@ jobs:
             --wet-limit "$INCIDENT_LIMIT" \
             --out live-agent-eval.json \
             --wet-out live-agent-eval.wet.json
+
+      # The assertion. Until this existed the job measured and reported and
+      # nothing could fail, which is why the two claim-matrix rows resting on
+      # it stayed PARTIAL. The floor is read out of a committed file that
+      # records the runs it was derived from, so the number cannot be edited
+      # apart from its evidence.
+      - name: The measured groundedness floor
+        run: python3 scripts/check_live_agent_floor.py --report live-agent-eval.wet.json
 
       - name: Summarise
         if: always()

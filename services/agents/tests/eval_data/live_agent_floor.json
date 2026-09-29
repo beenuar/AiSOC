@@ -1,0 +1,39 @@
+{
+  "axis": "groundedness",
+  "metric": "mean fraction of the concrete indicators the agent asserted (IPs, hashes, CVEs, MITRE techniques, domains) that appear in the evidence it was handed, over a deterministic prefix of services/agents/tests/eval_data/synthetic_incidents.json",
+  "model": "qwen2.5:0.5b",
+  "served_by": "Ollama, locally. No hosted provider was involved in any run below and this floor describes none. A hosted model would need its own runs and its own floor.",
+  "incidents": 10,
+  "floor_mean": 0.4,
+  "observations": [
+    {
+      "mean": 0.5561,
+      "incidents": 10,
+      "runs": 7,
+      "where": "developer machine (Apple silicon, Ollama 0.30.7)",
+      "note": "identical to four decimal places across all seven; three were taken after the completion bound landed and returned the same value, so the bound truncates nothing the agents legitimately write"
+    },
+    {
+      "mean": 0.5821,
+      "incidents": 10,
+      "runs": 1,
+      "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36508200093",
+      "note": "62 LLM calls placed"
+    },
+    {
+      "mean": 0.5329,
+      "incidents": 10,
+      "runs": 1,
+      "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36509668438",
+      "note": "62 LLM calls placed; the lowest run observed anywhere"
+    },
+    {
+      "mean": 0.5364,
+      "incidents": 20,
+      "runs": 16,
+      "where": "developer machine, over the 20-incident prefix",
+      "note": "not the gated slice - recorded because sixteen identical runs show the measurement is a property of the prefix rather than of the run"
+    }
+  ],
+  "derivation": "The four agents decode greedily at temperature 0, and on one machine that makes the measurement a point mass: seven local runs over the 10-incident prefix returned 0.5561 to four decimal places, and sixteen over the 20-incident prefix returned 0.5364. It is not a point mass across machines. Two GitHub-runner runs of the same slice returned 0.5821 and 0.5329, a spread of 0.0492, because a quantised model decoding greedily on a different kernel diverges at the margins. The floor is set from that spread rather than from the local stability, which would have been the misleading number to use. 0.40 sits 0.1329 below the lowest run observed anywhere and about 2.7 times the observed cross-runner spread, and it is deliberately conservative because the runner-side sample is only two runs. It still fails anything a quarter worse than today. Raise it only with fresh runs recorded here; a floor above the lowest run it cites is refused by scripts/check_live_agent_floor.py, because that floor would red every run from the day it landed."
+}
