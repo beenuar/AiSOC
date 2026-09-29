@@ -208,7 +208,7 @@ class TestSchemaValidity:
         """The prompt used to restate the vocabulary by hand and had drifted:
         it offered ``webhook`` as a trigger, which no validator in the repo
         accepts, and capped ``retry_max`` at 5 against a model allowing 25."""
-        prompt = nl_drafter._SYSTEM_PROMPT
+        prompt = nl_drafter._system_prompt()
         for step_type in _ALL_STEP_TYPES:
             assert f"``{step_type.value}``" in prompt, f"{step_type.value} missing from the drafter prompt"
         assert "webhook" not in prompt, "prompt offers a trigger no validator accepts"

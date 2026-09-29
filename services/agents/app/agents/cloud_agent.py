@@ -20,43 +20,11 @@ from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.prompt_registry import prompt_text
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """\
-You are the Cloud Infrastructure Analysis Agent of an AI Security Operations
-Centre.
-
-Given a security alert related to cloud infrastructure (AWS, Azure, GCP, or
-other providers), perform a deep investigation and produce a structured
-assessment.
-
-Evaluate the following patterns:
-1. Storage exposure — publicly accessible S3 buckets, GCS buckets, or Azure
-   Blob containers.  Check ACL and bucket policy for unintended public access.
-2. Security group / firewall misconfigs — overly permissive inbound rules
-   (0.0.0.0/0 on sensitive ports), missing egress restrictions.
-3. IAM anomalies — principals with excessive privileges, unused admin
-   credentials, cross-account role assumption from unknown accounts.
-4. Unusual API activity — high-volume enumeration (ListBuckets, DescribeInstances),
-   calls from unexpected regions or IP ranges, service actions rarely used by
-   the principal.
-5. Infrastructure drift — resources deployed outside of IaC, manual changes to
-   production, disabled CloudTrail / audit logging.
-
-You MUST respond with a JSON object and nothing else:
-{
-  "verdict": "true_positive" | "false_positive" | "benign",
-  "confidence": <float 0.0–1.0>,
-  "cloud_indicators": ["<indicator1>", "<indicator2>", ...],
-  "risk_category": "storage_exposure" | "security_group_misconfig" |
-                   "iam_anomaly" | "unusual_api" | "infra_drift" | "unknown",
-  "cloud_provider": "aws" | "azure" | "gcp" | "other",
-  "rationale": "<2-4 sentence explanation>"
-}
-"""
 
 
 def _build_cloud_context(state: InvestigationState) -> str:
@@ -206,7 +174,7 @@ async def run_cloud(
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT),
+                SystemMessage(content=prompt_text("cloud.system")),
                 HumanMessage(content=prompt_context),
             ],
         )

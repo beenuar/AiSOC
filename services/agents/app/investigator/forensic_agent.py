@@ -21,6 +21,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.cost_telemetry import record_llm_call
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model, resolve_model_alias
+from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
@@ -33,25 +34,6 @@ from .state import ForensicFindings, InvestigatorState, StepKind
 from .tools import sha256_of
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """You are the ForensicAgent of an AI Security Operations Centre.
-Given a security alert and its enrichment data, produce:
-1. A chronological timeline of events (at most 15 entries).
-2. A list of forensic artefacts (file paths, registry keys, network indicators).
-3. A root-cause hypothesis (one sentence).
-4. An estimated blast radius (what systems/data were or could be affected).
-5. A confidence score (0.0–1.0) for your analysis.
-
-Respond ONLY with a JSON object:
-{
-  "timeline": [{"ts": "ISO8601 or relative", "event": "...", "src": "..."}],
-  "artefacts": ["C:\\\\path\\\\to\\\\file.exe", "HKCU\\\\..."],
-  "root_cause_hypothesis": "...",
-  "blast_radius": "...",
-  "confidence": 0.75,
-  "summary": "Two-sentence forensic summary."
-}
-"""
 
 
 async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
@@ -82,15 +64,16 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"
 
+    system_prompt = prompt_text("forensic.system")
     messages = [
-        SystemMessage(content=_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=prompt),
     ]
 
     prompt_hash = state.log_llm_prompt(
         agent="ForensicAgent",
         prompt=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ],
         model=model,

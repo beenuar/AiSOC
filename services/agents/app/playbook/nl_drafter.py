@@ -491,45 +491,37 @@ def _validate_against_schema(payload: dict[str, Any]) -> tuple[bool, str | None]
 # ---------------------------------------------------------------------------
 
 
-_SYSTEM_PROMPT = """\
-You are AiSOC's playbook drafter. Convert the analyst's prompt into a JSON
-playbook the AiSOC platform can render in its React Flow editor.
+def _system_prompt() -> str:
+    """The registered drafter template with the live vocabulary filled in.
 
-Rules — follow exactly:
+    Filled from the enum and the bounds module rather than restated, because
+    a hand-written copy of the vocabulary in a prompt is one more place for
+    it to drift — this list previously offered ``webhook`` as a trigger,
+    which no validator in the repo accepts, and capped ``retry_max`` at 5
+    against a model that allows 25.
 
-1. Return **only** a JSON object, no markdown fence, no commentary.
-2. Required top-level keys: ``id``, ``name``, ``version``, ``trigger``,
-   ``steps``. The ``id`` must be kebab-case 3-63 chars matching
-   ``^[a-z0-9][a-z0-9-]{2,62}$``. The ``version`` must be semantic,
-   e.g. ``"1.0.0"``.
-3. ``trigger`` must contain ``on`` (one of ``alert`` / ``case`` /
-   ``schedule`` / ``manual``). Severities, when present,
-   must be an array of any of: ``info`` / ``low`` / ``medium`` /
-   ``high`` / ``critical``.
-4. Each step must declare a ``type``, one of exactly:
-   __STEP_TYPES__.
-5. Each step must carry a short, action-oriented ``name``, an ``id``
-   (8-32 char hex), an ``on_failure`` ∈ ``abort`` / ``continue`` /
-   ``retry``, ``retry_max`` (0-__MAX_RETRIES__), and
-   ``timeout_seconds`` (1-__MAX_TIMEOUT__).
-6. The output's ``enabled`` MUST be ``false``. A human reviews before
-   enabling.
-7. Do NOT invent fields not in the schema. Do NOT emit prose. JSON only.
-"""
+    Token substitution rather than ``str.format`` because the prompt contains
+    a regex with brace quantifiers that format would try to interpret. The
+    pinned artifact is therefore the template: what the author wrote is what
+    the lock hashes, and the enum is substituted on the way out.
+    """
+    # Imported here, not at module scope, for the same reason `safe_ainvoke`
+    # below is: `app/playbook/__init__.py` re-exports this module, so anything
+    # this file imports at module scope is imported by everyone who touches
+    # `app.playbook.models`. `app.llm.__init__` pulls in langchain_core, and
+    # `scripts/validate_playbooks.py` and `check_playbook_schema_parity.py`
+    # both run in a dep-light job that does not install it. A top-level import
+    # here took three gates down with a ModuleNotFoundError. The registry
+    # module itself is stdlib-only; its package is not.
+    from app.llm.prompt_registry import prompt_text  # noqa: PLC0415
 
-# Filled from the enum and the bounds module rather than restated, because a
-# hand-written copy of the vocabulary in a prompt is one more place for it to
-# drift — this list previously offered ``webhook`` as a trigger, which no
-# validator in the repo accepts, and capped ``retry_max`` at 5 against a
-# model that allows 25.
-#
-# Token substitution rather than ``str.format`` because the prompt contains
-# a regex with brace quantifiers that format would try to interpret.
-_SYSTEM_PROMPT = (
-    _SYSTEM_PROMPT.replace("__STEP_TYPES__", ", ".join(f"``{st.value}``" for st in StepType))
-    .replace("__MAX_RETRIES__", str(ABSOLUTE_MAX_RETRIES))
-    .replace("__MAX_TIMEOUT__", str(ABSOLUTE_MAX_TIMEOUT_SECONDS))
-)
+    return (
+        prompt_text("playbook_drafter.system")
+        .replace("__STEP_TYPES__", ", ".join(f"``{st.value}``" for st in StepType))
+        .replace("__MAX_RETRIES__", str(ABSOLUTE_MAX_RETRIES))
+        .replace("__MAX_TIMEOUT__", str(ABSOLUTE_MAX_TIMEOUT_SECONDS))
+    )
+
 
 _USER_TEMPLATE = """\
 Analyst prompt:
@@ -578,7 +570,7 @@ async def _llm_draft(prompt: str) -> Playbook | None:
     from app.llm import safe_ainvoke  # local import — heavy module
 
     messages = [
-        ("system", _SYSTEM_PROMPT),
+        ("system", _system_prompt()),
         ("user", _USER_TEMPLATE.format(prompt=prompt)),
     ]
     try:

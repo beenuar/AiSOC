@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.cost_telemetry import record_llm_call
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model, resolve_model_alias
+from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
@@ -29,23 +30,6 @@ from .state import InvestigatorState, ReconFindings, StepKind
 from .tools import enrich_ioc, extract_iocs, map_to_mitre, sha256_of
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """You are the ReconAgent of an AI Security Operations Centre.
-Your task is to analyse a security alert and:
-1. List all unique IOCs (IPs, domains, URLs, file hashes) found in the alert.
-2. Identify probable MITRE ATT&CK techniques based on the alert description.
-3. Hypothesise which threat-actor group(s) may be responsible, citing your evidence.
-4. Summarise the attack surface at risk.
-
-Respond ONLY with a JSON object matching this schema:
-{
-  "iocs": [{"type": "ip|domain|url|hash", "value": "..."}],
-  "mitre_techniques": ["T1566", ...],
-  "threat_actors": ["APT28", ...],
-  "attack_surface": {"affected_systems": [...], "data_at_risk": "..."},
-  "summary": "One-paragraph reconnaissance summary."
-}
-"""
 
 
 async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
@@ -80,15 +64,16 @@ async def _llm_recon(state: InvestigatorState) -> dict[str, Any]:
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"
 
+    system_prompt = prompt_text("recon.system")
     messages = [
-        SystemMessage(content=_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=prompt),
     ]
 
     prompt_hash = state.log_llm_prompt(
         agent="ReconAgent",
         prompt=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ],
         model=model,

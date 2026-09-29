@@ -20,6 +20,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.cost_telemetry import record_llm_call
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model, resolve_model_alias
+from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
@@ -32,24 +33,6 @@ from .state import InvestigatorState, ResponderPlan, StepKind
 from .tools import sha256_of
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """You are the ResponderAgent of an AI Security Operations Centre.
-Based on the forensic findings, generate a concrete incident response plan.
-All actions are DRY-RUN only — do NOT perform any real actions.
-
-Respond ONLY with a JSON object:
-{
-  "recommended_actions": [
-    {"priority": 1, "action": "...", "rationale": "...", "risk": "low|medium|high"}
-  ],
-  "containment_steps": ["Step 1: ...", "Step 2: ..."],
-  "eradication_steps": ["..."],
-  "recovery_steps": ["..."],
-  "estimated_effort_hours": 4.0,
-  "risk_level": "low|medium|high|critical",
-  "summary": "Two-sentence response summary."
-}
-"""
 
 
 async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
@@ -86,15 +69,16 @@ async def _llm_responder(state: InvestigatorState) -> dict[str, Any]:
     if bundle_append:
         prompt = f"{prompt}\n\n{bundle_append}"
 
+    system_prompt = prompt_text("responder.system")
     messages = [
-        SystemMessage(content=_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=prompt),
     ]
 
     prompt_hash = state.log_llm_prompt(
         agent="ResponderAgent",
         prompt=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ],
         model=model,

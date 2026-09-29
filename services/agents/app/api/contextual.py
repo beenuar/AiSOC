@@ -46,6 +46,7 @@ from pydantic import BaseModel, Field
 
 from app.llm import safe_ainvoke, safe_astream
 from app.llm.factory import make_chat_model, resolve_api_key, resolve_model_alias
+from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 from app.security.tenant_scope import require_console_or_service_auth
 
@@ -253,69 +254,22 @@ _FOLLOW_UPS: dict[tuple[str, str], list[ContextualSuggestion]] = {
 }
 
 
-_SYSTEM_PROMPTS: dict[tuple[str, str], str] = {
-    ("alerts", "explain"): (
-        "You are an expert SOC analyst. Given an alert, explain what it means, "
-        "why it likely fired, what attacker behavior it points at, and what an "
-        "analyst should look at next. Output concise Markdown with these "
-        "sections: ## What this alert means / ## Likely attacker behavior / "
-        "## Suggested next steps. Be precise and avoid speculation."
-    ),
-    ("alerts", "false_positive"): (
-        "You are an expert SOC analyst. Decide whether an alert is most likely "
-        "a true positive, a false positive, or unknown. Output Markdown with: "
-        "## Verdict (one of: True positive, Likely false positive, Unknown) / "
-        "## Confidence (0-100%) / ## Signals supporting TP / "
-        "## Signals supporting FP / ## Recommended action."
-    ),
-    ("alerts", "find_similar"): (
-        "You are an expert SOC analyst. Given an alert, propose how to find "
-        "related alerts in the SIEM. Output Markdown with: "
-        "## Similarity criteria / ## KQL or ES|QL query to find similar / "
-        "## Why these alerts cluster together. Include the actual query."
-    ),
-    ("cases", "draft_comms"): (
-        "You are a senior security incident communicator. Draft a customer-"
-        "facing notification for the given case. Match tone to severity. Be "
-        "factual, avoid blame, and only disclose confirmed facts. Output "
-        "Markdown with: ## Subject line / ## Body / ## Notes for reviewer."
-    ),
-    ("cases", "exec_summary"): (
-        "You are an incident commander writing for the C-suite. Produce a one-"
-        "paragraph executive summary covering impact, current status, ETA to "
-        "resolution, and the single ask of the executive (if any). Plain prose, "
-        "no bullets unless absolutely necessary. Markdown."
-    ),
-    ("cases", "post_mortem"): (
-        "You are a senior SRE writing a blameless post-mortem. Output Markdown "
-        "with: ## Summary / ## Impact / ## Timeline / ## Root cause / "
-        "## What went well / ## What went poorly / ## Action items (with owners "
-        "and due dates as TODO)."
-    ),
-    ("detections", "why_noisy"): (
-        "You are a detection engineer. Given a Sigma/KQL/EQL detection rule, "
-        "diagnose why it produces excessive false positives. Output Markdown "
-        "with: ## Likely sources of FPs / ## Common environments where this "
-        "fires legitimately / ## What we would tune."
-    ),
-    ("detections", "tighten"): (
-        "You are a detection engineer. Propose a tighter version of the given "
-        "rule that preserves true positives but reduces false positives. "
-        "Output Markdown with: ## Proposed changes / ## Updated rule (in a "
-        "code block in the same DSL as the input) / ## Risks of the change."
-    ),
-    ("playbooks", "explain"): (
-        "You are a SOC automation engineer. Walk through the given playbook "
-        "step-by-step in plain English. Output Markdown with: ## What it does / "
-        "## Step-by-step / ## Approval gates / ## Rollback path."
-    ),
-    ("playbooks", "improve"): (
-        "You are a SOC automation engineer reviewing a playbook for "
-        "production-readiness. Output Markdown with: ## Strengths / "
-        "## Gaps / ## Suggested improvements (concrete, ordered by impact) / "
-        "## Risks if shipped as-is."
-    ),
-}
+#: The (page, action) pairs this endpoint serves. The prompt text for each
+#: lives in the registry as ``contextual.<page>.<action>``; this tuple is the
+#: routing table, so an unknown pair is a 400 rather than a KeyError raised
+#: from inside the model call.
+_CONTEXTUAL_ACTIONS: tuple[tuple[str, str], ...] = (
+    ("alerts", "explain"),
+    ("alerts", "false_positive"),
+    ("alerts", "find_similar"),
+    ("cases", "draft_comms"),
+    ("cases", "exec_summary"),
+    ("cases", "post_mortem"),
+    ("detections", "why_noisy"),
+    ("detections", "tighten"),
+    ("playbooks", "explain"),
+    ("playbooks", "improve"),
+)
 
 
 def _serialize_entity(entity: dict[str, Any] | None, entity_id: str) -> str:
@@ -332,13 +286,13 @@ def _serialize_entity(entity: dict[str, Any] | None, entity_id: str) -> str:
 def _build_messages(req: ContextualActionRequest) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for the (page, action) pair."""
     key = (req.page, req.action)
-    if key not in _SYSTEM_PROMPTS:
+    if key not in _CONTEXTUAL_ACTIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown contextual action: page={req.page!r} action={req.action!r}",
         )
 
-    system = _SYSTEM_PROMPTS[key]
+    system = prompt_text(f"contextual.{req.page}.{req.action}")
     entity_blob = _serialize_entity(req.entity, req.entity_id)
 
     user_lines = [

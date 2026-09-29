@@ -20,46 +20,11 @@ from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.prompt_registry import prompt_text
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """\
-You are the Insider Threat Analysis Agent of an AI Security Operations Centre.
-
-Given a security alert that may indicate insider-threat activity, perform a
-thorough investigation and produce a structured assessment.
-
-Evaluate the following behavioural patterns:
-1. Data exfiltration — large file transfers, bulk downloads from sensitive
-   repositories, unusually high print volumes, or mass email forwarding to
-   external addresses.
-2. Off-hours access — login or system activity during atypical hours for the
-   user's baseline schedule.
-3. Privilege abuse — accessing systems or data outside the user's role,
-   creating unauthorised accounts, elevating own privileges, or disabling
-   security controls.
-4. Removable media / USB — USB mass storage device connections, especially on
-   hosts where removable media is policy-prohibited.
-5. Communication to personal accounts — sending corporate data to personal
-   email (gmail, outlook, yahoo), personal cloud storage (Dropbox, Google
-   Drive), or messaging apps.
-6. Resignation / termination indicators — user is on notice period, recently
-   received negative performance review, or has submitted resignation.
-
-You MUST respond with a JSON object and nothing else:
-{
-  "verdict": "true_positive" | "false_positive" | "benign",
-  "confidence": <float 0.0–1.0>,
-  "threat_indicators": ["<indicator1>", "<indicator2>", ...],
-  "threat_category": "data_exfiltration" | "off_hours_access" |
-                     "privilege_abuse" | "removable_media" |
-                     "personal_comms" | "flight_risk" | "unknown",
-  "user_risk_level": "low" | "medium" | "high" | "critical",
-  "rationale": "<2-4 sentence explanation>"
-}
-"""
 
 
 def _build_insider_context(state: InvestigationState) -> str:
@@ -224,7 +189,7 @@ async def run_insider_threat(
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT),
+                SystemMessage(content=prompt_text("insider_threat.system")),
                 HumanMessage(content=prompt_context),
             ],
         )

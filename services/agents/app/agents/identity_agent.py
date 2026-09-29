@@ -19,43 +19,11 @@ from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.prompt_registry import prompt_text
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """\
-You are the Identity & Authentication Analysis Agent of an AI Security
-Operations Centre.
-
-Given a security alert related to identity, authentication, or access
-control, perform a deep investigation and produce a structured assessment.
-
-Evaluate the following patterns:
-1. Impossible travel — two logins from geographically distant locations
-   within a physically impossible time window.  Consider VPNs as possible
-   benign explanations but still flag them.
-2. Credential stuffing / password spraying — many failed login attempts
-   across different accounts from the same source, or one account from
-   many sources.
-3. Brute force — repeated failed attempts on a single account within a
-   short time window.
-4. Privilege escalation — a user gaining admin rights, adding themselves
-   to privileged groups, or accessing resources far beyond their normal
-   scope.
-5. Anomalous session behaviour — concurrent sessions from different
-   devices, token replay, MFA bypass attempts.
-
-You MUST respond with a JSON object and nothing else:
-{
-  "verdict": "true_positive" | "false_positive" | "benign",
-  "confidence": <float 0.0–1.0>,
-  "identity_indicators": ["<indicator1>", "<indicator2>", ...],
-  "attack_type": "impossible_travel" | "credential_stuffing" | "brute_force" |
-                 "privilege_escalation" | "session_anomaly" | "unknown",
-  "rationale": "<2-4 sentence explanation>"
-}
-"""
 
 
 def _build_identity_context(state: InvestigationState) -> str:
@@ -201,7 +169,7 @@ async def run_identity(
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT),
+                SystemMessage(content=prompt_text("identity.system")),
                 HumanMessage(content=prompt_context),
             ],
         )

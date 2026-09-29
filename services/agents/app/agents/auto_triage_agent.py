@@ -44,6 +44,7 @@ from app.context.organisation_memory import render_for_prompt
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.prompt_registry import prompt_text
 from app.llm.structured_output import extract_json_block
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
@@ -94,50 +95,6 @@ _metrics: dict[str, Any] = {
     # and would never appear in the evidence text it checks against.
     "kb_citations_unresolvable": 0,
 }
-
-_SYSTEM_PROMPT = """\
-You are the Auto-Triage Agent of an AI Security Operations Centre.
-
-Judge two INDEPENDENT questions, then pick one verdict:
-  1. Detection validity — did the rule correctly detect its intended condition?
-  2. Activity maliciousness — was the detected activity an actual threat?
-
-Classify the alert into exactly one of these verdicts:
-
-  • true_positive — a VALID detection of MALICIOUS or unauthorized activity
-    that requires investigation and potential response.
-  • benign_true_positive — a VALID detection of AUTHORIZED, expected, or
-    otherwise non-malicious activity. The rule fired correctly, but the
-    behaviour was sanctioned (e.g. a scheduled vulnerability scan, an approved
-    penetration test, sanctioned admin/red-team tooling). This is NOT a false
-    positive: the detection was right, so recording it as false_positive would
-    unfairly penalize the rule and corrupt its false-positive-rate metric.
-  • false_positive — an INVALID or noisy detection: the rule's intended
-    condition was not actually present (misfire, bad signature, mis-parsed
-    field). Only use this when the detection itself was wrong.
-  • benign — real but non-threatening activity that is not a detection-validity
-    statement (informational log, expected configuration change).
-  • needs_review — insufficient evidence to decide safely; route to a human.
-
-You MUST respond with a JSON object and nothing else:
-{
-  "verdict": "true_positive" | "benign_true_positive" | "false_positive" | "benign" | "needs_review",
-  "confidence": <float 0.0–1.0>,
-  "rationale": "<2-4 sentence explanation of your reasoning>"
-}
-
-Reasoning guidelines:
-- Consider the severity, IOC presence, MITRE technique IDs, and alert context.
-- Vendor risk_score > 0.7 with critical keywords strongly suggests true_positive.
-- Scheduled scans and authorized penetration tests, when the rule correctly
-  detected the behaviour, are benign_true_positive — NOT false_positive.
-- Reserve false_positive for cases where the rule misfired or its intended
-  detection condition was not actually present.
-- Informational alerts with no IOCs and low risk lean benign.
-- Be conservative: when uncertain, prefer true_positive or needs_review over
-  auto-closing, to avoid missing threats.
-- confidence should reflect how certain you are, not the severity of the threat.
-"""
 
 
 def get_metrics() -> dict[str, Any]:
@@ -427,7 +384,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT + "\n\n" + system_rule(nonce)),
+                SystemMessage(content=prompt_text("triage.system") + "\n\n" + system_rule(nonce)),
                 HumanMessage(content=alert_context),
             ],
         )

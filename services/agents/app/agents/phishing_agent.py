@@ -20,35 +20,11 @@ from app.context import ContextBundle
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
+from app.llm.prompt_registry import prompt_text
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm, summarize_structure_for_llm
 
 logger = structlog.get_logger()
-
-_SYSTEM_PROMPT = """\
-You are the Phishing Analysis Agent of an AI Security Operations Centre.
-
-Given a security alert related to email or messaging, perform a deep phishing
-analysis and produce a structured assessment.
-
-Evaluate the following indicators:
-1. Sender reputation — domain age, SPF/DKIM/DMARC alignment, known abuse lists.
-2. URL analysis — mismatched display text vs. href, newly registered domains,
-   URL shorteners hiding destinations, IDN homograph attacks.
-3. Attachment analysis — executable extensions masquerading as documents,
-   password-protected archives, macro-enabled Office docs.
-4. Language patterns — urgency/fear language ("account suspended", "act now"),
-   impersonation of authority figures, grammatical anomalies.
-5. Header anomalies — reply-to mismatch, forged X-headers, unusual routing.
-
-You MUST respond with a JSON object and nothing else:
-{
-  "verdict": "true_positive" | "false_positive" | "benign",
-  "confidence": <float 0.0–1.0>,
-  "phishing_indicators": ["<indicator1>", "<indicator2>", ...],
-  "rationale": "<2-4 sentence explanation>"
-}
-"""
 
 
 def _build_phishing_context(state: InvestigationState) -> str:
@@ -193,7 +169,7 @@ async def run_phishing(
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=_SYSTEM_PROMPT),
+                SystemMessage(content=prompt_text("phishing.system")),
                 HumanMessage(content=prompt_context),
             ],
         )
