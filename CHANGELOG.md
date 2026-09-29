@@ -129,14 +129,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as the defect this repository has been burned by before: a tracker whose
   own reference does not resolve.
 
-  Nothing needed migrating, which is why closing was the right outcome. All six
-  wave-2 T-IDs are already audited against the tree in
-  `docs/roadmap/v8-progress.md`, which cites #362 as its source — four done,
-  two recorded as partial with the specific remainder named — and every
-  wave-3 candidate already carries a disposition in `ROADMAP.md`. The tracker
-  header still read `v10.0.0` while the tree read `12.2.0`, so redirecting to
-  it first meant making it true: it is now dated, and carries the reason #362
-  was closed so the next reader does not have to reconstruct it.
+  Almost nothing needed migrating — the six wave-2 T-IDs are already audited
+  against the tree in `docs/roadmap/v8-progress.md`, in a table that cites #362
+  as its source, and every wave-3 candidate already carries a disposition in
+  `ROADMAP.md`. Re-auditing before closing was still worth doing rather than
+  assumed, because it found two things wrong in the tracker itself. **Lacework
+  has no `get_resource_config`**, so T1.2 covers three of the four providers
+  the ticket named and not four — five connectors implement the method and
+  `lacework.py`, which is registered, does not; that gap was recorded nowhere
+  and is now in the T1.2 row. And T3.6 still listed a durable approval store as
+  outstanding after it had landed: `PostgresTimerStore` is wired in
+  `services/slack-bot/app/main.py` behind migration `062_approval_timers.sql`,
+  so the genuine remainder there is only the Teams proactive card push.
+
+  The tracker header also read `v10.0.0` while the tree read `12.2.0`, so
+  redirecting to it meant making it true first: it is now dated, and carries
+  the reason #362 was closed so the next reader does not have to reconstruct
+  it.
 
 ## [12.2.0] - 2026-09-28
 
