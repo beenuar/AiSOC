@@ -13,6 +13,31 @@ Endpoints
 * ``GET  /compliance/evidence/{id}``       Get single evidence item.
 * ``POST /compliance/evidence/{id}/review`` Accept or reject an evidence item.
 * ``GET  /compliance/report``              Generate a compliance posture report.
+
+Authorization
+-------------
+Collecting evidence requires ``reports:write`` — an evidence item is an
+audit-grade artefact, and this is the permission the platform already uses
+for producing those. Reviewing one requires ``settings:write``, which is
+deliberately a *different* permission rather than the same one.
+
+Two permissions because an evidence item's ``status`` is the assertion an
+auditor relies on, and one permission for both would let whoever collected an
+item accept it. Splitting them gives a role-level separation: a ``soc_lead``
+holds ``reports:write`` and can collect but not accept; accepting needs a
+tenant administrator.
+
+That is a coarser control than the person-level separation of duties
+``services/actions`` enforces on response approvals, and the reason is a
+schema fact rather than a choice: migration 013's
+``aisoc_compliance_evidence`` records ``reviewed_by`` and no collector at all,
+so there is nobody to compare an approver against. Adding a ``collected_by``
+column is the prerequisite for the stronger check and is not done here — a
+separation of duties cannot be evaluated against nobody, and pretending
+otherwise would be worse than the coarse control.
+
+Before either, every route here was reachable by ``viewer``: a read-only
+account could append to the hash chain and then accept its own entries.
 """
 
 from __future__ import annotations
@@ -22,13 +47,13 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, require_permission
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +254,9 @@ async def list_framework_controls(framework_id: str) -> ControlsResponse:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger evidence collection job",
 )
-async def trigger_evidence_collection(body: CollectJobRequest, user: AuthUser) -> CollectJobResponse:
+async def trigger_evidence_collection(
+    body: CollectJobRequest, user: Annotated[AuthUser, Depends(require_permission("reports:write"))]
+) -> CollectJobResponse:
     if body.framework not in FRAMEWORKS:
         raise HTTPException(status_code=404, detail=f"Framework '{body.framework}' not found.")
     return CollectJobResponse(
@@ -242,7 +269,9 @@ async def trigger_evidence_collection(body: CollectJobRequest, user: AuthUser) -
 
 
 @router.post("/evidence", response_model=EvidenceResponse, status_code=status.HTTP_201_CREATED, summary="Collect evidence item")
-async def collect_evidence(body: CollectEvidenceRequest, db: DBSession, user: AuthUser) -> EvidenceResponse:
+async def collect_evidence(
+    body: CollectEvidenceRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("reports:write"))]
+) -> EvidenceResponse:
     prev_hash = await _latest_hash(db, body.framework, user.tenant_id)
     new_hash = _compute_hash(prev_hash, body.summary, body.raw_payload)
     now = datetime.now(UTC)
@@ -334,7 +363,12 @@ async def get_evidence(evidence_id: uuid.UUID, db: DBSession, user: AuthUser) ->
 
 
 @router.post("/evidence/{evidence_id}/review", response_model=EvidenceResponse, summary="Accept or reject evidence")
-async def review_evidence(evidence_id: uuid.UUID, body: ReviewEvidenceRequest, db: DBSession, user: AuthUser) -> EvidenceResponse:
+async def review_evidence(
+    evidence_id: uuid.UUID,
+    body: ReviewEvidenceRequest,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> EvidenceResponse:
     now = datetime.now(UTC)
     q = text("""
         UPDATE aisoc_compliance_evidence

@@ -1,13 +1,24 @@
-"""Air-gap deployment configuration endpoints."""
+"""Air-gap deployment configuration endpoints.
+
+Authorization
+-------------
+Both writes require ``settings:write``, which is what they are: ``PUT /config``
+edits the deployment's own configuration and ``POST /airgap/bundle`` triggers
+an offline update bundle. Nothing about either was ever analyst work, and the
+config route mutates process-wide state — a module-level ``_config`` — so on
+the pre-fix tree one ``viewer`` request changed the answer every other caller
+got.
+"""
 
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.api.v1.deps import AuthUser
+from app.api.v1.deps import AuthUser, require_permission
 
 router = APIRouter(prefix="/deployment", tags=["Deployment"])
 
@@ -95,7 +106,9 @@ async def get_deployment_config(user: AuthUser) -> DeploymentConfig:
 
 
 @router.put("/config", response_model=DeploymentConfig)
-async def update_deployment_config(body: DeploymentConfigUpdate, user: AuthUser) -> DeploymentConfig:
+async def update_deployment_config(
+    body: DeploymentConfigUpdate, user: Annotated[AuthUser, Depends(require_permission("settings:write"))]
+) -> DeploymentConfig:
     """Update deployment configuration fields."""
     global _config
 
@@ -169,7 +182,7 @@ async def get_airgap_status(user: AuthUser) -> AirgapStatus:
 
 
 @router.post("/airgap/bundle", response_model=BundleJob, status_code=status.HTTP_202_ACCEPTED)
-async def create_airgap_bundle(user: AuthUser) -> BundleJob:
+async def create_airgap_bundle(user: Annotated[AuthUser, Depends(require_permission("settings:write"))]) -> BundleJob:
     """Trigger creation of an offline update bundle for air-gapped deployments."""
     return BundleJob(
         job_id=str(uuid.uuid4()),

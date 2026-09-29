@@ -107,7 +107,20 @@ AUTHZ_CALLS = frozenset(
 #: data and correlation infrastructure, matching `/graph/context/import`, which
 #: already required it), insider threat took `cases:write` (investigative
 #: judgement about a subject) and `/identity-timeline/build` took `alerts:read`
-#: (a read-shaped POST over the only table it queries).
+#: (a read-shaped POST over the only table it queries), then 45 once posture,
+#: EASM scanning, deployment config and knowledge-base curation took
+#: `settings:write` / `settings:read`, report templates and compliance evidence
+#: collection took `reports:write`, and evidence *review* took `settings:write`
+#: — deliberately a different permission from collection, so a `soc_lead`
+#: cannot accept the evidence it produced.
+#:
+#: `POST /kb/query` is left in this count on purpose. The vocabulary has no
+#: knowledge-base permission: every candidate is held by every role including
+#: machine keys, or is admin-only and would take the runbooks away from the
+#: analysts who need them mid-incident. Which entitlement governs reading the
+#: library, and whether LLM synthesis needs a stronger one than retrieval, is
+#: a product decision; `test_platform_route_permissions.py` pins it ungated so
+#: changing that takes a decision rather than a drive-by edit.
 #:
 #: Four routes under `/mssp/organizations` remain in this count and are not
 #: debt: they authorize through `_admin_scope`, an organisation owner/admin
@@ -115,7 +128,7 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 61
+MAX_UNAUTHORIZED = 45
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:

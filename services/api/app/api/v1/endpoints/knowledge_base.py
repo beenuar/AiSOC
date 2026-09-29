@@ -13,6 +13,29 @@ Endpoints
 * ``POST /kb/query``        Semantic/keyword search + optional LLM synthesis.
 * ``GET  /kb/runbooks/for-triage`` Internal: retrieval for the agents service,
   with a point-in-time cutoff. Gap-closure Phase 6.3.
+
+Authorization
+-------------
+``POST /ingest`` and ``DELETE /documents/{id}`` require ``settings:write``.
+The knowledge base is the tenant's operational content of record — runbooks,
+policies, SOPs — and the delete is wider than its path suggests: it removes
+*every chunk sharing the document's title*, tenant-wide, so one request from a
+``viewer`` erased a runbook for everybody. It is also what the agents service
+retrieves during triage, so a document planted here is a document the model
+is told to follow.
+
+``POST /query`` is deliberately **left ungated** and counted in
+``scripts/check_route_authz.py``'s ledger. Searching the runbook library is
+something every role should be able to do, and the vocabulary has no
+knowledge-base permission: every candidate is either held by every role
+including machine keys (``cases:read``, ``reports:read``) or restricted to
+tenant administrators (``settings:read``), which would take the runbooks away
+from the analysts who need them mid-incident. Choosing one on the strength of
+its role list rather than what the route does would be reverse-engineering a
+permission from the answer. The open questions are whether reading the
+library is an entitlement at all and whether LLM synthesis — which spends the
+tenant's budget — needs a stronger one than retrieval; both are product
+decisions, not gaps to be papered over.
 """
 
 from __future__ import annotations
@@ -23,11 +46,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.endpoints.alert_writeback import service_token_valid
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.db.rls import set_rls_context
@@ -156,7 +179,9 @@ async def _synthesise(question: str, chunks: list[KBChunk]) -> str | None:
 @router.post(
     "/ingest", response_model=list[KBDocResponse], status_code=status.HTTP_201_CREATED, summary="Ingest document into knowledge base"
 )
-async def ingest(body: IngestRequest, db: DBSession, user: AuthUser) -> list[KBDocResponse]:
+async def ingest(
+    body: IngestRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("settings:write"))]
+) -> list[KBDocResponse]:
     chunks = chunk_text(body.content)
     now = datetime.now(UTC)
     rows = []
@@ -225,7 +250,9 @@ async def get_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> KBDo
 
 
 @router.delete("/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None, summary="Remove KB document")
-async def delete_document(doc_id: uuid.UUID, db: DBSession, user: AuthUser) -> None:
+async def delete_document(
+    doc_id: uuid.UUID, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("settings:write"))]
+) -> None:
     existing = (
         await db.execute(
             text("SELECT title FROM aisoc_kb_documents WHERE id = :id AND tenant_id = :tenant_id").bindparams(

@@ -1,9 +1,20 @@
-"""EASM (External Attack Surface Management) endpoints (Tier 3.6)."""
+"""EASM (External Attack Surface Management) endpoints (Tier 3.6).
+
+Authorization
+-------------
+``POST /scan`` requires ``settings:write``. ``scoped_tenant_or_403`` already
+intersected the requested tenant with the caller's scope, but scoping answers
+*whose* estate, not *whether this caller may probe it* — and this route runs
+passive reconnaissance connectors and, when enabled, an **active TCP connect
+probe** against hosts the tenant claims to own. Launching outbound scanning
+traffic is an administrative act, and it was reachable by any authenticated
+session including ``viewer``.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -11,7 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.deps import CurrentUser, get_current_user, require_permission
 from app.core.config import get_settings
 from app.db.database import get_db
 from app.models.easm import ExternalAsset, ExternalAssetDrift, ExternalAssetType
@@ -59,8 +70,8 @@ async def _run_scan_job(
 async def trigger_easm_scan(
     body: ScanRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> dict[str, Any]:
     """
     Trigger an EASM discovery scan for a tenant (Tier 3.6).

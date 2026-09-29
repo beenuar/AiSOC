@@ -1,17 +1,36 @@
-"""Cloud Security Posture Management (CSPM/KSPM) endpoints."""
+"""Cloud Security Posture Management (CSPM/KSPM) endpoints.
+
+Authorization
+-------------
+Posture is cloud configuration hygiene, so the writes take ``settings:write``
+and the stateless previews take ``settings:read``.
+
+``suppress_finding`` is the one that matters. It writes ``status`` =
+``suppressed`` with a reason and stands the finding down, which is a policy
+exception over the tenant's own cloud estate — the CSPM equivalent of the
+pre-approval GHSA-wj5c-88hg-5926 let a ``viewer`` install. Before this, a
+read-only account could suppress every finding in the tenant one id at a
+time, and the dashboard would go green.
+
+``cspm_scan`` and ``destination_preview`` persist nothing: one evaluates a
+resource snapshot supplied in the request, the other renders the payload a
+destination would send. ``settings:read`` rather than the write because
+nothing changes, and rather than nothing because they are still features of
+an administrative surface that an API key should have to be scoped for.
+"""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.posture import PostureFinding, PostureScanRun
@@ -124,8 +143,8 @@ async def list_findings(
 @router.post("/findings", response_model=FindingOut, status_code=status.HTTP_201_CREATED)
 async def ingest_finding(
     body: FindingCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> PostureFinding:
     finding = PostureFinding(**body.model_dump(), tenant_id=current_user.tenant_id)
     db.add(finding)
@@ -150,8 +169,8 @@ async def get_finding(
 async def suppress_finding(
     finding_id: uuid.UUID,
     body: SuppressRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> PostureFinding:
     f = await db.get(PostureFinding, finding_id)
     if not f or f.tenant_id != current_user.tenant_id:
@@ -168,8 +187,8 @@ async def suppress_finding(
 @router.post("/findings/{finding_id}/resolve", response_model=FindingOut)
 async def resolve_finding(
     finding_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
 ) -> PostureFinding:
     f = await db.get(PostureFinding, finding_id)
     if not f or f.tenant_id != current_user.tenant_id:
@@ -246,7 +265,7 @@ class CspmScanResponse(BaseModel):
 @router.post("/scan", response_model=CspmScanResponse)
 async def cspm_scan(
     body: CspmScanRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:read"))],
 ) -> CspmScanResponse:
     """Agentless CSPM MVP (W6.2): evaluate a cloud-resource snapshot against the
     misconfiguration checks, returning findings + a severity summary + the
@@ -269,7 +288,7 @@ class DestinationPreviewRequest(BaseModel):
 @router.post("/destinations/preview")
 async def destination_preview(
     body: DestinationPreviewRequest,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:read"))],
 ) -> dict[str, Any]:
     """Preview the exact payload a destination would send (W6.3) — no send."""
     if body.kind == "opsgenie":
