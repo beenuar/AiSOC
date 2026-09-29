@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [13.0.0] - 2026-09-29
+
+### BREAKING
+
+- **75 state-changing routes in `services/api` now require a permission they did not require before, and some of them refuse roles other than `viewer`.** That is the reason this is a major rather than the third patch in a day. v12.3.1 and v12.3.2 closed the same class of defect on nine and eleven routes, and both were patches because only `viewer` — a role holding five read permissions and no write of any kind — lost anything. This release is different: several surfaces move to `settings:write`, which `soc_analyst`, `soc_lead` and `threat_hunter` do **not** hold, so principals a deployment may reasonably consider legitimate will start receiving HTTP 403 where they previously received 200.
+
+  Read this before upgrading if your operators are not tenant administrators, or if you hold API keys with narrow scope lists.
+
+  | Surface | Now requires | Roles that lose access |
+  | --- | --- | --- |
+  | `POST/PATCH/DELETE /assets`, `POST /assets/vulnerabilities` | `settings:write` | `soc_analyst`, `soc_lead`, `threat_hunter`, `viewer` |
+  | `POST /identity-graph/{nodes,edges,alert-links}` | `settings:write` | as above |
+  | `POST /graph/entities/{host,user,alert,case}` | `settings:write` | as above |
+  | `POST /posture/findings`, `…/{id}/suppress`, `…/{id}/resolve` | `settings:write` | as above |
+  | `POST /posture/scan`, `POST /posture/destinations/preview` | `settings:read` | as above |
+  | `POST /easm/scan` | `settings:write` | as above |
+  | `PUT /deployment/config`, `POST /deployment/airgap/bundle` | `settings:write` | as above |
+  | `POST /kb/ingest`, `DELETE /kb/documents/{id}` | `settings:write` | as above |
+  | `POST /compliance/evidence/{id}/review` | `settings:write` | as above (including `soc_lead`, which may still *collect*) |
+  | `POST /marketplace/install`, `DELETE /marketplace/install` | `settings:write` | as above |
+  | `POST /mssp/children/{id}/onboard`, `POST /mssp/organizations` | `settings:write` | as above |
+  | `POST /mssp/delegations`, `DELETE /mssp/delegations/{id}` | `users:write` | as above |
+  | `POST /community/publishers/keys`, `DELETE …/{fingerprint}`, `POST /community/plugins/publish`, `POST /community/plugins/{id}/install` | `plugins:admin` | every role except the wildcard `admin` / `platform_admin` — `plugins:admin` is not in `ROLE_PERMISSIONS` |
+  | `POST /community/playbooks/submit`, `POST /community/playbooks/{id}/install` | `playbooks:write` | `soc_analyst`, `soc_lead`, `threat_hunter`, `viewer` |
+  | `POST /reports/templates`, `DELETE /reports/templates/{id}`, `POST /reports/generate`, `POST /compliance/evidence`, `POST /compliance/evidence/collect` | `reports:write` | `soc_analyst`, `threat_hunter`, `viewer` |
+  | `POST /community/detections/publish`, `POST /community/detections/{id}/install`, and the eight MSSP rule-pack and rule-override routes | `rules:write` | `soc_analyst`, `viewer` |
+  | `POST /threatintel/stix/indicators`, `…/bundles`, `…/misp/dry-run` | `threat_intel:write` | `soc_analyst`, `viewer` |
+  | `POST /feedback/alert-override`, `POST /feedback/redisposition/apply` | `alerts:write` | `threat_hunter`, `viewer` |
+  | `POST /phishing/submit`, `POST /phishing/{id}/retriage`, `POST /mssp/notes`, and the four `/insider-threat` writes | `cases:write` | `viewer` |
+  | `POST /hunts`, `PATCH /hunts/{id}`, `POST /hunts/{id}/run`, `POST /hunts/{id}/findings`, `POST /saved-hunts`, `DELETE /saved-hunts/{id}`, `POST /saved-hunts/{id}/run`, `POST /nl-query/translate`, `POST /nl-query/execute`, `POST /graph/investigate/query` | `lake:query` | `viewer`, `api_service` |
+  | `POST /nl-detection/translate`, `POST /translation/translate`, `POST /detection-loop/suggest` | `rules:read` | `soc_analyst`, `viewer` |
+  | `POST /identity-timeline/build` | `alerts:read` | no role — the refusal is against an API key scoped elsewhere |
+
+  **What to do.** If a legitimate operator is refused, grant them a role that holds the permission, or add the permission to a custom role through the RBAC tables (`roles` / `role_permissions`, migration 003) — `require_permission_db` consults those before falling back to the static map. If a machine credential is refused, add the permission to the key's `scopes`; `scopes` are an explicit list and a resource wildcard such as `settings:*` is honoured. Nothing here changes the permission *vocabulary*: every string used already existed and was already withheld from `viewer`, so no migration is required and no new permission needs defining.
+
+  **`docs/openapi.yaml` is unchanged** apart from one corrected description. Adding a dependency to a parameter that was already the authenticated principal alters neither the request schema nor the security scheme, so `scripts/openapi_diff.py` reports no breaking change. The break is in behaviour, which is exactly why it is announced here rather than inferred from the spec.
+
+### Security
+
+- **103 of 246 state-changing routes authenticated the caller and then checked nothing — 42% of the write surface. 75 of them now authorize.** `scripts/check_route_authz.py` had measured this since v12.3.1 and its comment called `MAX_UNAUTHORIZED` "a debt balance, not a target". This release works the balance down by resource area, per route, using only permissions that already existed. The routes are grouped by what the row they write *is*, not by which table it lands in, and every choice is recorded in the module it applies to.
+
+- **The MSSP write surface was the worst single module: seventeen identity-only routes.** `_require_own_child` answers whose child a tenant id is and says nothing about whether the caller may act on it, so a `viewer` sitting in a managing tenant could push a rule pack into a customer, grant itself a role inside one, adopt one, or delete a critical detection from one — GHSA-wj5c-88hg-5926's shape one tenant boundary further out. An `exclude` override is read back by the effective-rule resolver keyed on the **child's** tenant id and removes the rule from the ruleset their hunts run against, so the victim's only symptom is a hunt that stops matching.
+
+- **`POST /mssp/organizations` was an escalation into the one part of that module that *did* authorize.** The four routes under `/mssp/organizations` check `_admin_scope` — an organisation `owner`/`admin` role — and are correct. But founding an organisation makes the caller the `owner` that check accepts, and its docstring said the route was "available to any authenticated user", so a read-only role could mint itself an administering principal in one request and then grant org roles and per-tenant scope. It was found by the structural test asserting no state-changing route in the module is unguarded, not by reading the module, which is the argument for writing that test at all.
+
+- **`community.py` had the moderation step gated and the thing being moderated open.** `PUT /plugins/{id}/review` required `plugins:admin` and `PUT /playbooks/{id}/curate` required `playbooks:admin`, while the routes that *submitted* and *installed* required only a session — so a `viewer` could publish a signed plugin as the tenant and install one. Publishing and installing now take the permission that governs authoring that content type locally, on the principle that you should not be able to publish or install what you could not have written.
+
+- **`POST /feedback/alert-override` was not one wrong verdict.** It writes an alert's `disposition` *and* persists a per-signature prior into institutional memory, where a trusted benign prior auto-resolves matching repeat alerts without re-triage. Ungated it was a durable instruction to the platform to stop looking, writable by a read-only account. It now requires `alerts:write`, the same permission `alerts.py` already requires for the column it writes.
+
+- **Two outbound surfaces were reachable by a session alone.** `POST /easm/scan` runs passive reconnaissance and, when enabled, an active TCP connect probe against hosts the tenant claims; `scoped_tenant_or_403` answered *whose* estate, never whether this caller may probe it. The three `/threatintel/stix` writes mirror published indicators into a configured MISP instance under the tenant's credentials. `/misp/dry-run` takes the same permission as the live push rather than a read, because gating a rehearsal more weakly than the act is how a dry run becomes reconnaissance, and a test asserts the two never diverge.
+
+- **`DELETE /kb/documents/{id}` is wider than its path suggests** — it removes every chunk sharing the document's title, tenant-wide — and the agents service retrieves those documents during triage, so a document planted through `POST /kb/ingest` is a document the model is told to follow. Both now require `settings:write`.
+
+- **Compliance evidence collection and review take two *different* permissions.** `reports:write` collects, `settings:write` reviews, so a `soc_lead` can produce an evidence item and cannot accept it. One permission for both would let whoever produced an artefact sign it off, which is the whole point of the artefact. This is a role-level separation and deliberately weaker than the person-level separation of duties `services/actions` enforces on response approvals: migration 013's `aisoc_compliance_evidence` records `reviewed_by` and **no collector column at all**, so there is nobody to compare an approver against. Adding `collected_by` is the prerequisite for the stronger check and is not done here — a separation of duties cannot be evaluated against nobody, and claiming one that cannot fire would be worse than the coarse control.
+
+### Changed
+
+- `MAX_UNAUTHORIZED` **103 → 28**. The gate fails when the real count drops below the ceiling as well as when it rises, so the number moved with each of the five changes rather than in one edit at the end: 103 → 90 → 77 → 61 → 45 → 28.
+
+- **Two permission choices were rejected for causing an outage, and the rejections are pinned by tests rather than argued in prose.** `rules:write` for the hunt workbench would have locked out `soc_analyst`, which holds no `rules:*` permission at all and is the role the `/hunt` page exists for — the console's own client calls `saved-hunts` create/delete/run and `/nl-query/translate`. `settings:write` for `/insider-threat` would have taken watchlisting and indicator recording away from the analysts the module is for. The hunt surface takes `lake:query` (a hunt is a stored query and the run routes execute it, so authoring and running are one entitlement) and insider threat takes `cases:write`.
+
+- **Twenty-eight routes are deliberately still counted, each with a recorded reason.** Eight SCIM routes authenticate a `ScimPrincipal` — a purpose-bound provisioning credential with no role and no scopes, which `require_permission` cannot apply to; giving SCIM tokens scopes is a product decision. Four `/mssp/organizations` routes authorize through `_admin_scope`, the right vocabulary for a portfolio-scoped act and not interchangeable with a tenant role, since `create_organization` is self-service and an operator's founding member may hold any tenant role. Eleven are self-scoped to the caller's own row (`/saved-views`, `/passkeys`, `/push`, `PATCH /auth/me/preferences`, `PUT /oncall/me`). `POST /realtime/ticket` is session-bound and a permission would cut the live feed off from viewers who legitimately watch it. `/shifts` has an in-process mock store and lead-only versus analyst-wide is a product decision. `POST /kb/query` and `POST /community/plugins/{id}/rate` have no fitting permission in the vocabulary — every candidate is either held by every role including machine keys or restricted to tenant administrators — and choosing one on the strength of its role list rather than on what the route does would be reverse-engineering a permission from the answer. The last two are pinned *ungated* by tests, so changing them takes a decision and an edit rather than a drive-by.
+
+### Fixed
+
+- Three new suites, 314 tests, prove every gated route in both directions: a principal *without* the permission is refused with `db.commit` never awaited, and a holder is admitted. The commit assertion is separate from the status code because a handler that writes before FastAPI serialises has already done the damage on a request that then returns 500, so `!= 200` is not evidence of a refusal — the defect v12.3.1 found on `remediation.py`. The permission is read out of the resolved dependency tree rather than the source, so the `Annotated[Any, require_permission("x")]` shape v12.3.2 fixed would report nothing here.
+
+- Measured against the pre-fix tree, the five suites fail **30 of 49**, **35 of 55**, **41 of 64**, **45 of 65** and **44 of 68**. The tests that pass on both trees are the entitled-caller and read cases, which is precisely why they are not the proof. `services/api` goes **3,537 → 3,819 passing** with no unrelated test moving, which is the signal that no permission was applied too broadly.
+
 ## [12.3.2] - 2026-09-29
 
 ### Security

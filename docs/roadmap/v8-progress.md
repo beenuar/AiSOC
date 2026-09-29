@@ -1,7 +1,7 @@
 # AiSOC v8 — progress tracker
 
 **Last updated:** 2026-09-29
-**Current release:** `v12.3.2` (2026-09-29) · **Next:** unscheduled.
+**Current release:** `v13.0.0` (2026-09-29) · **Next:** unscheduled.
 Packaging is no longer named against a version: it slipped v8.0 to v8.1 to
 v8.2 for the same reason each time, and the blocker is registry credentials
 rather than code. Each major since v10.0 has been a major for the same kind of

@@ -2,13 +2,58 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v12.3.2`, released 2026-09-29 — a second security patch the same day, and the reason is the same one v12.3.1 existed for: eleven more write routes were found declaring a permission that never ran. `Annotated[Any, require_permission("users:write")]` carries no `Depends()`, and FastAPI honours only `Annotated` metadata that is a `Depends` or a `FieldInfo` — everything else is silently dropped, so the check never happened and `current_user` degraded into a required query parameter. The tell was the status code: a `viewer` hitting these routes got **422, not 403**, which reads as a malformed request rather than a refusal. v12.3.1 was a security patch on top of v12.3.0, and the reason it exists separately is that a fix living on `main` is not a fix anyone has. Two reported advisories: a **critical** SQL injection in the osquery allowlist, where a denylist scanning rendered SQL for `--`, `/*` and `;` had never listed `'`, so a value could close a quoted literal and replace the WHERE clause — and reproducing it showed all six query templates were injectable, not the one reported, because the numeric parameters were never coerced either. Each parameter now declares what it is and anything else is refused rather than escaped, because an escaped path still reaches the endpoint, matches nothing, and reads to an operator as a clean host. The second is a **high** missing-authorization hole where every remediation write route authenticated and none authorized, so a `viewer` could raise the tenant to autonomy L4 and pre-approve a high blast-radius verb; the permission it needed already existed and was simply never enforced, which is the third time on this repository. The gate that should have caught it passed throughout, because it asks whether a route authenticates — so a second gate now asks whether it authorizes, and measures 103 of 246 state-changing routes making no authorization decision, as a ceiling that can only fall. Upgrading is `make up`. v12.3.0 (same day) closed six lettered sub-phases; its notes are below. None of the eight first-party npm/PyPI packages has been uploaded — the registries return 404 for all eight — and that remains credential-blocked rather than done. The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v13.0.0`, released 2026-09-29. **It is a major because it breaks behaviour, not a schema:** 75 state-changing API routes now require a permission they did not require before, and unlike the two patches earlier the same day, some of them refuse roles other than `viewer` — several surfaces move to `settings:write`, which `soc_analyst`, `soc_lead` and `threat_hunter` do not hold, so operators who are not tenant administrators will meet HTTP 403 where they previously got 200. The `### BREAKING` section of [`CHANGELOG.md`](CHANGELOG.md) lists every affected route, the permission it now takes, the roles that lose it, and what to do; `docs/openapi.yaml` is unchanged apart from one corrected description, which is exactly why the break is announced rather than left to be inferred from the spec. What it fixes is the debt the previous two patches measured but did not work down: `scripts/check_route_authz.py` reported **103 of 246 state-changing routes in `services/api` authenticating the caller and then checking nothing** — 42% of the write surface — and that figure is now **28**, every remaining route carrying a recorded reason. The worst module was MSSP, where `_require_own_child` established whose child a tenant was and nothing established whether the caller could act on it, so a `viewer` in a managing tenant could push a rule pack into a customer, grant itself a role inside one, or delete a critical detection from one. `community.py` had the moderation step gated and the thing being moderated open. Every permission used already existed and was already withheld from `viewer`, so there is no migration and no new permission to define. Upgrading is `make up`. v12.3.2 earlier the same day was the second security patch of the day: eleven more write routes were found declaring a permission that never ran. `Annotated[Any, require_permission("users:write")]` carries no `Depends()`, and FastAPI honours only `Annotated` metadata that is a `Depends` or a `FieldInfo` — everything else is silently dropped, so the check never happened and `current_user` degraded into a required query parameter. The tell was the status code: a `viewer` hitting these routes got **422, not 403**, which reads as a malformed request rather than a refusal. v12.3.1 was a security patch on top of v12.3.0, and the reason it exists separately is that a fix living on `main` is not a fix anyone has. Two reported advisories: a **critical** SQL injection in the osquery allowlist, where a denylist scanning rendered SQL for `--`, `/*` and `;` had never listed `'`, so a value could close a quoted literal and replace the WHERE clause — and reproducing it showed all six query templates were injectable, not the one reported, because the numeric parameters were never coerced either. Each parameter now declares what it is and anything else is refused rather than escaped, because an escaped path still reaches the endpoint, matches nothing, and reads to an operator as a clean host. The second is a **high** missing-authorization hole where every remediation write route authenticated and none authorized, so a `viewer` could raise the tenant to autonomy L4 and pre-approve a high blast-radius verb; the permission it needed already existed and was simply never enforced, which is the third time on this repository. The gate that should have caught it passed throughout, because it asks whether a route authenticates — so a second gate now asks whether it authorizes, and measures 103 of 246 state-changing routes making no authorization decision, as a ceiling that can only fall. Upgrading is `make up`. v12.3.0 (same day) closed six lettered sub-phases; its notes are below. None of the eight first-party npm/PyPI packages has been uploaded — the registries return 404 for all eight — and that remains credential-blocked rather than done. The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `12.3.2`. The **v12.3.2** release (2026-09-29) wires eleven
+`VERSION` is `13.0.0`. The **v13.0.0** release (2026-09-29) works the
+identity-only route debt down from **103 to 28** across five reviewed changes
+by resource area, using only permissions that already existed in
+`ROLE_PERMISSIONS`. It is a major because the break is behavioural: several
+surfaces move to `settings:write`, which `soc_analyst`, `soc_lead` and
+`threat_hunter` do not hold, so this is the first of these three releases where
+a principal other than `viewer` loses access. Read the `### BREAKING` section
+of [`CHANGELOG.md`](CHANGELOG.md) before upgrading — it names every route, the
+permission it now requires, the roles that lose it, and the two ways to restore
+access (a role that holds the permission, or the permission added to a custom
+role or an API key's `scopes`). Two permission choices were rejected for
+causing an outage rather than fixing a hole, and the rejections are pinned by
+tests: `rules:write` on the hunt workbench would have locked out
+`soc_analyst`, the role the `/hunt` page exists for, and `settings:write` on
+`/insider-threat` would have taken watchlisting away from the analysts the
+module is for.
+
+**v13.0.0 highlights (September 29, 2026)**
+- **75 routes gated, 28 deliberately left.** The remainder is not a backlog
+  with no owner: eight SCIM routes authenticate a purpose-bound provisioning
+  credential that has no role for `require_permission` to consult, four
+  `/mssp/organizations` routes authorize through an organisation owner/admin
+  check that a tenant role cannot substitute for, eleven are self-scoped to
+  the caller's own row, and the last five carry a stated product question.
+  `POST /kb/query` and `POST /community/plugins/{id}/rate` are pinned
+  *ungated* by tests, so changing them takes a decision.
+- **`POST /mssp/organizations` was an escalation into the part of that module
+  that did authorize.** Founding an organisation makes the caller the `owner`
+  that `_admin_scope` accepts, and the route was open to any authenticated
+  user, so a read-only role could mint itself an administering principal in
+  one request. It was found by a structural test asserting no state-changing
+  route in the module is unguarded, not by reading the module.
+- **Compliance evidence collection and review now take two different
+  permissions**, so a `soc_lead` can produce an evidence item and cannot
+  accept it. That is a role-level separation and weaker than the person-level
+  separation of duties `services/actions` enforces on response approvals —
+  migration 013 records `reviewed_by` and no collector column, so there is
+  nobody to compare an approver against, and the stronger check is not
+  claimed anywhere.
+- **314 new tests, per route and in both directions.** Against the pre-fix
+  tree the five suites fail 30/49, 35/55, 41/64, 45/65 and 44/68; `services/api`
+  goes 3,537 → 3,819 passing with no unrelated test moving.
+
+**v12.3.2 highlights (September 29, 2026)**
+
+The **v12.3.2** release wires eleven
 `require_permission` dependencies that FastAPI had been discarding, found
 by sweeping the sibling modules for the omission behind
 GHSA-wj5c-88hg-5926. The **v12.3.1** release earlier the same day is a

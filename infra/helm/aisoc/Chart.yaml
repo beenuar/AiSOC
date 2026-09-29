@@ -8,7 +8,7 @@ version: 5.9.2
 # exists for no image, so every pod of a default install would have gone to
 # ImagePullBackOff. scripts/check_published_images.py resolves it the same
 # way the templates do and fails when it names nothing.
-appVersion: "v12.3.2"
+appVersion: "v13.0.0"
 
 keywords:
   - security
