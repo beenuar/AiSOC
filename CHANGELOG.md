@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.3.0] - 2026-09-29
+
+### Added
+
+- **Six lettered sub-phases closed, each one a mechanism that already worked with almost nothing pointed at it.** The shape repeated so exactly that it is worth stating once: the machinery shipped in an earlier phase, was tested, and had one caller or none, so the gap was adoption rather than capability and nothing in CI could see it.
+- **8b — every shipped prompt is registered, and the registry is gated in both directions.** Phase 8 built the registry, the committed `prompts.lock.json` and `scripts/check_prompt_lock.py`, then pinned one prompt. Twenty-one system prompts a model actually received were declared inline across twelve modules under `services/agents/app/`, so each could be reworded with no version bump, no lock change and therefore no eval re-grade — the precise hole the registry exists to close. Registered prompts go 3 → 22, registered prompts with a reader 1 → 22, and unpinned prompts the service sends 21 → 0. The gate now fails on an inline constant reaching a system message (through an f-string, a `('system', …)` tuple or a `{'role': 'system'}` mapping), on a registered prompt nothing reads, on lock drift, and on an empty registry — refusing a tree it cannot load rather than calling it clean.
+- **9b — approvals nobody answered now expire.** `agent_approvals` has carried `expires_at` and an `expired` status since migration 009; nothing ever wrote that status and no worker swept the column, so an approval raised in the console and never answered waited forever, indistinguishable from one still under consideration. `services/api/app/workers/approval_expiry.py` sweeps every tenant on a 5-minute tick. The safe default is `rejected`, read back from `services/slack-bot` and migration 062 rather than restated, so the two halves of the system cannot time out two different ways. Pending approvals that carry no deadline are counted and reported rather than given one, because a worker that invented deadlines would start expiring containments on a schedule nobody chose.
+- **5b — dead letters can be replayed from the Kafka offset, once the cause is fixed.** `aisoc_dead_letters` stores a deliberately truncated 2,000-character excerpt: the payload is the thing the pipeline refused, so it is untrusted by definition and the row is a triage record, not a replay buffer. The faithful copy is in Kafka, and reaching it needs the partition and offset the consumer had in hand and discarded — now carried through `_dead_letter` and persisted nullable, because a fabricated offset replays somebody else's message. The safety property is neither the bound nor the permission: every replayed message is re-validated by the same validator that refused it, and one that still fails is refused again rather than produced.
+- **10b — the ingest checkpoint is a declared contract, and 84 connectors were asked to honour it.** `connector_repo.record_checkpoint` already persisted a cursor and the scheduler already advanced it only after ingest accepted a batch. It reached the connector through `getattr(connector, "set_checkpoint", None)`, and on 83 of 84 connectors that attribute is simply absent — a duck-typed optional protocol has no failing state, only a quiet one, so the seed no-opped at `logger.debug` for almost every connector and nothing could answer whether a given connector checkpoints. Adopting is now two declared class attributes, the field carrying a row's event time and the field carrying a stable per-row id, with `apply_checkpoint()` ordering on both. The tie-breaker is not optional: two events in the same second are ordinary, and a cursor on time alone either loses the second or replays the first forever, so `checkpoints()` returns False unless both are declared. Not checkpointing is still the default, and is now *declared* rather than absent.
+- **6b — a tenant's projected storage cost is shown beside its LLM cost.** `scripts/storage_cost_model.py` and the committed worked example in `docs/decisions/storage-cost-model.json` were real and gated by `perf.yml`, and outside the ADR, the CHANGELOG and that workflow the model's only readers were two comments. A cost model whose only consumer is the gate that checks the cost model is a well-tested constant. `GET /api/v1/costs/dashboard` now carries a `storage` block, rendered under the BYOK panel, resting on one measurement — the uncompressed bytes a tenant's events occupied in the lake over the window, with the tenant bound as a query parameter rather than formatted into the SQL.
+- **3.5+ — the demo stack has a measured time budget and a Playwright run that asserts against it.** Building the gate is what found the defect: `isPortFree` bound `127.0.0.1` under a comment claiming it was "the same test Docker is going to run, so the answer is authoritative". It is not — when another container publishes a port Docker's allocator refuses it while a host bind on `127.0.0.1` still succeeds, so the probe called 5432 free, compose took it, and Docker started postgres with no network attached rather than failing it. Nothing reported an error: postgres read `running (healthy)`, the api's liveness-only probe read `healthy`, the seed exited 1 with one line of DNS failure, and the console opened to an empty case list — which is what any reader with a local Postgres on 5432 met. The allocator now also reads Docker's own published ports, and the measured effect is **3m06s → 1m39s**, because every `depends_on: service_healthy` had been waiting out its retries.
+
+- **`release.yml` accepts `packages_only` on `workflow_dispatch`.** Builds,
+  packs and validates every package and runs the publication report, with the
+  image rebuild skipped and no upload reachable — the preflight refuses to
+  arm an upload on a dispatch however well credentialled the repository is,
+  because a registry will not accept a version twice. The packaging half of a
+  release otherwise runs only on a tag push, which is the worst possible
+  moment to discover it is broken.
+
+- **`scripts/check_required_check_substance.py`** — a required check that reports success while its work was skipped is the third way a grading can be absent without anything going red, after a discarded push (`check_workflow_concurrency.py`) and a cancelled run (`check_main_run_cancellations.py`). It closes it from both ends, wired into `grading-integrity.yml`. Statically it enumerates every path through a required check's job and refuses one that runs strictly less assertive work than another path through the same job — so two ways of booting one stack both pass, and announcing that nothing was checked does not. Against the Actions API it requires every successful push run on `main` to have taken a complete path. Which steps count is derived by evaluating each `if:` under a simulated protected-branch push (`scripts/gh_expr.py`), not from a list of step names, so a rename cannot silently empty it. All 22 required contexts are inventoried in `.github/required-checks.json`, compared against branch protection whenever a token can read it, and the gate refuses a missing token, an empty fetch, a context whose job is not in the tree, and a window that has held no runs for seven days.
+
+- Building it surfaced a defect in reading the Actions API that is worth recording, because any gate reading run history can hit it. **The workflow-runs endpoint is not stable across pages and can serve a stale but internally consistent snapshot.** Asking for 250 runs returned 250 rows holding 157 unique ids, with the first row of page 1 five weeks older than the newest run that existed; and on another attempt a single page came back ending six weeks short while a second read of the same endpoint agreed with it. So the window is one page, capped at 100 and refused above that rather than silently truncated; rows are deduplicated and sorted locally; and freshness is checked against the branch's **commit list** — a different endpoint — because no amount of re-reading the runs endpoint can detect that it is stale. A workflow whose push trigger carries a `paths:` filter is exempt from that oracle and is named in the output as not freshness-verified.
+
 ### Changed
 
 - **Storybook migrated 9.1 → 10.6 across the workspace, and the family hold
@@ -35,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because its version line is independent (0.x) while its peer tracks the
   Storybook major exactly — the previous hold used
   `update-types: semver-major`, which cannot hold a 0.x dependency at all.
+
+- **Both grading-integrity controls are now required, and only the two that can be.** `No workflow can discard a push to main` and `No required check can skip its own assertions` ran on every pull request and were in nobody's branch protection, so a change reintroducing either shape would have merged with the gate sitting there reporting it. Branch protection goes 22 → 24 contexts and `.github/required-checks.json` moves with it, because that file is what the substance gate cross-checks against the API when `GITHUB_TOKEN` cannot read protection, and changing one without the other is the drift the gate was written to detect. Their two sibling jobs that read run history — `No run on main ended cancelled` and `No run on main passed without doing its work` — carry `if: github.event_name != 'pull_request'` and therefore *skip* on a PR, and GitHub counts a skipped required check as passing, so requiring either would have recreated precisely the defect. Verified against a live pull request before the change: the two required report, the two excluded are SKIPPED.
+- **`mcp` is held on 1.x, with the measurement that shows why the 2.0 major cannot land automatically.** Installing both versions and reading the signatures: 1.30.0 takes `url, headers, timeout, sse_read_timeout, terminate_on_close, httpx_client_factory, auth`; 2.2.0 takes `url, http_client, terminate_on_close`. `streamablehttp_client` is spelled `streamable_http_client`, so `services/agents/app/mcp/client.py` fails at import and takes 25 test modules with it, and the single call site passes three of the five parameters that went away. One of those three is the `_CappedTransport` factory that stops a third-party MCP server over-reading into the agent, and 2.x requires `httpx2` where 1.30.0 requires `httpx` — a different distribution, while ten services here declare `httpx >=0.26,<0.29` — so the cap has to be rebuilt against a new HTTP stack. Held majors only, so 1.x advisories still arrive.
+- **Seventeen dependency updates**, each verified rather than taken on a green suite where the version is the behaviour. Three SQLAlchemy 2.1.0 → 2.1.1 bumps (api, actions, agents) were checked against the greenlet hazard that reddened this repository before: every service declares `sqlalchemy` with the `["asyncio"]` extra, every workflow install line carries it too, and all three lock diffs leave `greenlet` untouched. Also `uvicorn` 0.54.0 across api, actions and agents; `boto3`, `webauthn`, `aiosqlite` and `markdown`; and on the web side `framer-motion`, `tailwind-merge`, `vite`, `prettier`, `@testing-library/react`, `@xyflow/react` and `@types/node`.
+
 ### Fixed
 
 - **Nine publish jobs reported success having uploaded nothing.** On the
@@ -88,18 +117,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines later on `tags[0]: unbound variable` after `imagetools create` had
   already been handed no tag; it now says what happened.
 
-### Added
-
-- **`release.yml` accepts `packages_only` on `workflow_dispatch`.** Builds,
-  packs and validates every package and runs the publication report, with the
-  image rebuild skipped and no upload reachable — the preflight refuses to
-  arm an upload on a dispatch however well credentialled the repository is,
-  because a registry will not accept a version twice. The packaging half of a
-  release otherwise runs only on a tag push, which is the worst possible
-  moment to discover it is broken.
-
-### Fixed
-
 - **`CONTRIBUTING.md`'s "your first 30 minutes" sent a first-time contributor
   to the one stack the repository says cannot demonstrate the product.** Step 1
   told them to run `pnpm aisoc:demo`, which brings up
@@ -147,15 +164,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the reason #362 was closed so the next reader does not have to reconstruct
   it.
 
-### Fixed
-
 - **`docker compose up — full stack` reported success without booting anything on 27 of its last 100 successful push runs on `main`,** including 4 of the most recent 20. The relevance filter it uses on a pull request — where only the changed area needs grading — also bound pushes, and a push diffs only its own commits, so a squash merge touching no build context produced a commit on `main` that nothing had ever booted. It now grades every commit that lands, with the exemption written into each step's condition rather than promised inside a shell script, so it can be proved rather than trusted. `integration.yml` gained the same treatment on the job output that carries its filter: `Backup → destroy → restore` had already been made unconditional on a push in #986 and has run in full on every push since, but only because a `run:` block says so, where nothing could check it. Measured over the same window, that check was substantive on 26 of 100; the other 20 required checks were 100 of 100.
+
 - Measured cost of always running both on a push, over the same 100 runs: **+32 s** for the disaster-recovery job (22 s to 54 s) and **+5.05 min** for the compose smoke (9 s to 312 s), so **+5.6 runner-minutes per merge**. Added merge latency is **zero at the median**: the two finish 4.4 and 5.7 minutes after their run is created, inside the **17.2-minute** median critical path, and `Python — Tests` was the last required check to finish on **73 of the 73** commits where the full set reported. A nightly schedule was considered and declined for a measured reason — `main` takes 25–40 pushes a day, so a daily run would exercise these gates *less* often than pushes now do.
-
-### Added
-
-- **`scripts/check_required_check_substance.py`** — a required check that reports success while its work was skipped is the third way a grading can be absent without anything going red, after a discarded push (`check_workflow_concurrency.py`) and a cancelled run (`check_main_run_cancellations.py`). It closes it from both ends, wired into `grading-integrity.yml`. Statically it enumerates every path through a required check's job and refuses one that runs strictly less assertive work than another path through the same job — so two ways of booting one stack both pass, and announcing that nothing was checked does not. Against the Actions API it requires every successful push run on `main` to have taken a complete path. Which steps count is derived by evaluating each `if:` under a simulated protected-branch push (`scripts/gh_expr.py`), not from a list of step names, so a rename cannot silently empty it. All 22 required contexts are inventoried in `.github/required-checks.json`, compared against branch protection whenever a token can read it, and the gate refuses a missing token, an empty fetch, a context whose job is not in the tree, and a window that has held no runs for seven days.
-- Building it surfaced a defect in reading the Actions API that is worth recording, because any gate reading run history can hit it. **The workflow-runs endpoint is not stable across pages and can serve a stale but internally consistent snapshot.** Asking for 250 runs returned 250 rows holding 157 unique ids, with the first row of page 1 five weeks older than the newest run that existed; and on another attempt a single page came back ending six weeks short while a second read of the same endpoint agreed with it. So the window is one page, capped at 100 and refused above that rather than silently truncated; rows are deduplicated and sorted locally; and freshness is checked against the branch's **commit list** — a different endpoint — because no amount of re-reading the runs endpoint can detect that it is stale. A workflow whose push trigger carries a `paths:` filter is exempt from that oracle and is named in the output as not freshness-verified.
 
 - **The weekly security digest graded a repository A/100 across sources it
   could not read, and could not tell a reader when it last ran.** Two defects
@@ -220,6 +231,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plainly that the field does not render and what restoring it would need.
   Ironically, had the delta ever worked, the body would have changed weekly and
   the frozen `updated_at` above would never have happened.
+
+- **A marketplace card counting playbooks was labelled Executable.** The figure was right and the word was wrong, which is the harder kind of error to see: a reader takes "executable" in this repository to mean a detection rule that has been replayed and observed to fire, and the card was counting shipped playbook packs. Relabelled to say what it counts.
 
 ## [12.2.0] - 2026-09-28
 

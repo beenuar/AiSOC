@@ -2,15 +2,44 @@
 
 This file mirrors what used to live in the "What's new" section of [`README.md`](README.md). The complete, machine-readable inventory (with file paths, env-var diffs, and per-release test counts) lives in [`CHANGELOG.md`](CHANGELOG.md).
 
-> **TL;DR for first-time visitors:** AiSOC is on `v12.2.0`, released 2026-09-28 — the release where two services stopped serving unauthenticated and started refusing to serve instead. **Read the BREAKING section of the changelog before upgrading.** The actions service had skipped authentication entirely whenever its token was empty and `AISOC_DEV_MODE` was set, and compose defaults that flag on while nothing generated the token, so every stock install dispatched `isolate_host`, `disable_user`, `block_ip` and `run_script` to anything that could reach the port; the realtime edge verified connection tickets against a constant committed to this repository and treated an unset internal token as authorized; and a `viewer` role could write to cases on all nine write routes where the permission was enforced nowhere. Each was a reported vulnerability — four advisories across the three items — and each now returns 503 or 401 until the credential it needs is set, which is the intended failure and the reason this is a major. The upgrade action for all three is `make up`, because `scripts/ensure_env.py` backfills generated secrets into an **existing** `.env` and not only a new one. Alongside that, hunting stopped being a library of hunts somebody had already written: an agent turns a hypothesis into a plan whose fields and operators are closed enums, so there is no string it can produce that becomes SQL text, and the hunt corpus went from 5 to 68. Every product claim is backed by a failing CI test (claim-to-gate matrix at the v12.0.0 cut: 236 rows — 228 GATED / 8 PARTIAL / 0 NO GATE, counted by `scripts/check_claim_gate_matrix.py`, which is the figure to recount rather than to quote). The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
+> **TL;DR for first-time visitors:** AiSOC is on `v12.3.0`, released 2026-09-29 — the release that closed six lettered sub-phases, and every one of them was the same shape: a mechanism built in an earlier phase, tested, and pointed at almost nothing. The registry that pins the prompts a model receives held 3 of 22 and now holds all 22, so a prompt can no longer be reworded without a lock change and an eval re-grade. Approvals raised in the console and never answered waited forever on a column nothing swept, and now expire to a safe default read back from the other half of the system rather than restated. Dead letters became replayable from the Kafka offset the consumer used to discard, re-validated by the same validator that refused them. The ingest checkpoint stopped being a duck-typed optional method that 83 of 84 connectors silently lacked and became a declared contract. A storage cost model whose only reader was the gate that checked it now reports a tenant's projected $/mo beside its LLM $/mo. And the demo stack gained a time budget, which is what found a port probe that let Docker start Postgres with no network attached while three health checks read green — 3m06s to 1m39s once it was fixed. There is **no BREAKING section this time**; upgrading is `make up`. Both grading-integrity controls are now required rather than advisory, taking branch protection to 24 contexts, and only the two that actually report on a pull request were added, because GitHub counts a skipped required check as passing. Every product claim is backed by a failing CI test (claim-to-gate matrix at this cut: 239 rows — 239 GATED / 0 PARTIAL / 0 NO GATE, counted by `scripts/check_claim_gate_matrix.py`, which is the figure to recount rather than to quote). None of the eight first-party npm/PyPI packages has been uploaded — the registries still return 404 for all eight — and that remains credential-blocked rather than done. The latest GitHub release with notes and downloads: <https://github.com/beenuar/AiSOC/releases/latest>.
 
 ---
 
 ## What's new
 
-`VERSION` is `12.2.0`. The **v12.2.0** release (2026-09-28) finishes the
-verification work v12.1.0 started, and its one user-facing correction is an
-honesty fix rather than a feature.
+`VERSION` is `12.3.0`. The **v12.3.0** release (2026-09-29) is a feature
+release with no breaking changes: six lettered sub-phases closed, plus the
+publish-signal and digest honesty fixes and two CI controls promoted from
+advisory to required.
+
+**v12.3.0 highlights (September 29, 2026)**
+- **Six deferrals closed, one recurring shape.** 8b (every shipped prompt
+  registered, 3 -> 22, with the gate failing in both directions), 9b
+  (approvals nobody answered now expire, safe default `rejected`), 5b (dead
+  letters replayable from the Kafka offset, re-validated by the validator that
+  refused them), 10b (the ingest checkpoint is a declared contract rather than
+  an optional method 83 of 84 connectors lacked), 6b (a tenant's projected
+  storage $/mo beside its LLM $/mo), and 3.5+ (the demo stack has a measured
+  budget, 3m06s -> 1m39s).
+- **A skipped upload no longer reports as a successful publish**, and
+  something finally asks the registry after a release instead of reading the
+  workflow's own result.
+- **The weekly security digest stopped grading a repository A/100 across
+  sources it could not read.** It had headlined an all-clear derived from one
+  of three declared sources, and a byte-identical body each week froze
+  `updated_at` so six consecutive successful runs looked abandoned.
+- **Both grading-integrity controls are required now**, taking branch
+  protection to 24 contexts, and deliberately only the two that report on a
+  pull request: their two siblings skip there, and a skipped required check
+  counts as passing.
+- **A marketplace card counting playbooks was labelled Executable** — the
+  number was right and the word was wrong, which in this repository means
+  something specific.
+- **Seventeen dependency updates**, with the SQLAlchemy 2.1.1 bumps checked
+  against the greenlet hazard that reddened this repo before, and the `mcp`
+  2.0 major refused with the signature diff that shows why.
+
 
 **v12.2.0 highlights (September 28, 2026)**
 - **Four package READMEs told you to install packages that do not exist.** Each
