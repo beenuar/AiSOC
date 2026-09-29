@@ -151,8 +151,8 @@ importers:
         specifier: ^2.5.1
         version: 2.5.1(react@19.3.0)
       tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
+        specifier: ^3.7.0
+        version: 3.7.0
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)
@@ -19088,8 +19088,8 @@ packages:
       '@pkgr/core': 0.3.6
     dev: true
 
-  /tailwind-merge@3.6.0:
-    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
+  /tailwind-merge@3.7.0:
+    resolution: {integrity: sha512-XPPUyAc+cvspz3lHTcR/QgPfW2A0lv/xQNIjX3HGhLR+Nq2lHaLq5MtTesHn8GUr3W3DguT2KT5x3NVgRtYwmA==}
     dev: false
 
   /tailwindcss@4.3.3:
