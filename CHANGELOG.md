@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Helm chart's own `version` did not move with v13.0.0, so `helm push` republished an existing chart version pointing at a different application.** Every release before it bumped both coordinates — `appVersion` to the application tag and `version` up the chart's own ladder (5.9.0 → 5.9.1 → 5.9.2) — and v13.0.0 bumped only `appVersion`, so `ghcr.io/beenuar/charts/aisoc:5.9.2` now means `v12.3.2` or `v13.0.0` depending on when it was pulled. A chart version is immutable by convention and nothing in CI enforces that it moves, which is why this was invisible: `scripts/check_published_images.py` reads `appVersion` because that is what becomes an image tag, and never looks at `version`. The chart is now **6.0.0** — a major rather than a minor, because the application it installs has a breaking change and a chart consumer running `helm upgrade` gets it whatever the templates did. The already-overwritten 5.9.2 cannot be un-published; this makes the coordinate honest from here on.
+
 ## [13.0.0] - 2026-09-29
 
 ### BREAKING
