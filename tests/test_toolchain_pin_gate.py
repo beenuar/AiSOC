@@ -387,8 +387,22 @@ def test_a_moved_esbuild_resolution_fails(tmp_path):
 
 
 def test_a_stale_expectation_fails(tmp_path):
-    scan = _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, [sorted(gate.EXPECTED_ESBUILD)[0]])
-    assert any("stale" in p for p in gate.check_esbuild_overrides(tmp_path, scan))
+    """EXPECTED_ESBUILD naming a version the lockfile no longer resolves.
+
+    The resolved version below is deliberately outside EXPECTED_ESBUILD rather
+    than a slice of it. Dropping one entry from the expected set only leaves
+    something missing while the set holds two or more, so a fixture built from
+    `sorted(EXPECTED_ESBUILD)[0]` silently stopped exercising this direction
+    the moment the set shrank to one — which is what happened when Storybook 9
+    took `0.25.12` with it. A version the set does not contain keeps `resolved`
+    non-empty (an empty one short-circuits the check) and leaves every expected
+    version missing, whatever the set's size.
+    """
+    scan = _write_workspace(tmp_path, {"vite>esbuild": "^0.28.1"}, ["0.30.0"])
+    problems = gate.check_esbuild_overrides(tmp_path, scan)
+    assert any("stale" in p for p in problems)
+    for version in gate.EXPECTED_ESBUILD:
+        assert any("stale" in p and version in p for p in problems)
 
 
 # ── Cross-root override propagation ──────────────────────────────────────────

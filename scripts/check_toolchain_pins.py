@@ -2081,9 +2081,7 @@ def _fixture(root: Path) -> None:
         ),
         encoding="utf-8",
     )
-    (root / "pnpm-lock.yaml").write_text(
-        "lockfileVersion: '6.0'\n  /esbuild@0.28.1:\n  /esbuild@0.25.12:\n  /image-size@2.0.4:\n", encoding="utf-8"
-    )
+    (root / "pnpm-lock.yaml").write_text("lockfileVersion: '6.0'\n  /esbuild@0.28.1:\n  /image-size@2.0.4:\n", encoding="utf-8")
 
     # A second install root, shaped like `apps/mobile`: its own manifest and
     # its own lockfile, outside the workspace the root one describes. The
