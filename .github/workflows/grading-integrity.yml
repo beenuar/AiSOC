@@ -14,12 +14,25 @@ name: Grading integrity
 #                       timeout kill, or a concurrency shape it has not
 #                       learned to read.
 #
-# Why either is needed: a cancelled run reports `cancelled`, not `failure`, so
-# nothing goes red; and a job whose `needs:` dependency was cancelled never
-# starts, so it produces no check run at all. Measured before the fix, of the
-# last 1,000 push-triggered runs on `main`, 259 ended `cancelled` — `ci.yml`
-# alone 36 of 51 — and only 51% of the required-check x commit pairs over the
-# last 30 commits actually graded. Nothing anywhere was red.
+#   substantive-shape   reads the workflow files again, for a third failure
+#   substantive-runs    mode the first two are blind to: the run happened, the
+#                       check is green, and the work inside it was skipped.
+#                       Prevention refuses a required check that can reach a
+#                       path doing strictly less than another path through the
+#                       same job; detection asks the API whether any run on
+#                       `main` actually took one.
+#
+# Why any of them is needed: a cancelled run reports `cancelled`, not
+# `failure`, so nothing goes red; a job whose `needs:` dependency was
+# cancelled never starts, so it produces no check run at all; and a job that
+# skipped its assertions reports exactly the same green tick as one that ran
+# them. Measured before the concurrency fix, of the last 1,000 push-triggered
+# runs on `main`, 259 ended `cancelled` — `ci.yml` alone 36 of 51 — and only
+# 51% of the required-check x commit pairs over the last 30 commits actually
+# graded. Measured before the substance fix, over the 100 most recent
+# successful push runs on `main`, `docker compose up — full stack` booted
+# nothing on 27 of them and `Backup → destroy → restore (Postgres via S3)`
+# rehearsed nothing on 74. Nothing anywhere was red.
 
 on:
   push:
@@ -92,6 +105,52 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/check_main_run_cancellations.py
 
+  substantive-shape:
+    name: No required check can skip its own assertions
+    # No event filter. This half reads only the workflow files, so it answers
+    # the same on a pull request as on a push — and a job that skips on pull
+    # requests is the one shape this whole workflow exists to refuse. It is
+    # therefore also the half that can safely be made a required check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      - name: The gate detects the shape it claims to
+        run: python3 scripts/check_required_check_substance.py --self-test
+
+      - name: Every required check grades every commit that lands
+        run: python3 scripts/check_required_check_substance.py --static
+
+  substantive-runs:
+    name: No run on main passed without doing its work
+    # Only where there is history to read, for the same reason as
+    # `cancelled-runs`: a pull request cannot change what already ran on
+    # `main`, so asking there would grade the base branch.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      - name: The gate detects the condition it claims to
+        run: python3 scripts/check_required_check_substance.py --self-test
+
+      # No `continue-on-error`. A gate whose subject is "a green tick that
+      # means nothing" cannot itself be allowed to produce one.
+      - name: Ask the Actions API what each required check actually executed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_required_check_substance.py
+
   gate-self-test:
     name: The grading-integrity gates still work
     if: github.event_name == 'pull_request'
@@ -105,3 +164,5 @@ jobs:
       - run: python -m pip install --quiet pyyaml
       - name: The cancellation detector detects a cancellation
         run: python3 scripts/check_main_run_cancellations.py --self-test
+      - name: The substance detector detects a skipped assertion
+        run: python3 scripts/check_required_check_substance.py --self-test

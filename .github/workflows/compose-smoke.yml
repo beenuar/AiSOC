@@ -87,12 +87,31 @@ jobs:
       # The workflow-level path filter used to answer this, at the cost of the
       # job not reporting at all when it said no. Now the job answers it and
       # reports either way.
+      #
+      # The answer only binds a pull request. Measured over the 100 most
+      # recent successful push runs on `main` (2026-09-25 to 2026-09-29), this
+      # job took its skip path on 27 of them — including 4 of the most recent
+      # 20 — while reporting the same green tick as the 73 that booted the
+      # stack.
+      # Filtering by diff is right for a branch, where only the changed area
+      # needs grading, and wrong for the branch everything lands on: a push
+      # diffs only its own commits, so a squash merge that touched no build
+      # context produced a commit on `main` that nothing had ever booted.
+      # Gate: scripts/check_required_check_substance.py.
       - name: Is any of this PR's diff under the compose surface?
         id: relevant
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "manual dispatch: always run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Every step below also carries `|| github.event_name == 'push'`, so
+          # this is belt and braces rather than the only guarantee — and it is
+          # the half that puts the reason in the log.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "push to ${{ github.ref_name }}: grading this commit in full"
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -151,7 +170,7 @@ jobs:
           fi
 
       - name: Nothing to smoke — reporting a verdict anyway
-        if: steps.relevant.outputs.run != 'true'
+        if: steps.relevant.outputs.run != 'true' && github.event_name != 'push'
         run: |
           {
             echo "## Compose smoke — not exercised"
@@ -166,7 +185,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Show runner capacity
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: |
           echo "## Runner snapshot" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -178,7 +197,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Seed environment file
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: |
           cp .env.example .env
           # Override the image tag so smoke runs always pull a known-good
@@ -191,7 +210,7 @@ jobs:
           echo "Resolved AISOC_VERSION=${AISOC_VERSION}"
 
       - name: Validate compose file
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: docker compose config --quiet
 
       # `docker-compose.prod.yml` shipped sixteen passing assertions about
@@ -203,7 +222,7 @@ jobs:
       # exit status — a static read of the same file cannot tell the
       # difference between these two runs.
       - name: A published credential cannot start the production stack
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         env:
           COMPOSE_PROJECT_NAME: aisoc-prodguard
         run: |
@@ -238,7 +257,7 @@ jobs:
 
       - name: Detect build-context changes
         id: dockerfile_changes
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: |
           # The published GHCR image becomes stale the moment ANY file inside
           # a service's build context changes — not only the Dockerfile. A PR
@@ -352,7 +371,7 @@ jobs:
           fi
 
       - name: Pre-pull published images
-        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild != 'true'
+        if: (steps.relevant.outputs.run == 'true' || github.event_name == 'push') && steps.dockerfile_changes.outputs.rebuild != 'true'
         run: |
           # Best-effort pull. We don't fail the build here — services that
           # don't yet publish will fall through to the local build step
@@ -360,11 +379,11 @@ jobs:
           docker compose pull --ignore-pull-failures --quiet || true
 
       - name: Boot stack (pull-by-default)
-        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild != 'true'
+        if: (steps.relevant.outputs.run == 'true' || github.event_name == 'push') && steps.dockerfile_changes.outputs.rebuild != 'true'
         run: docker compose up -d --quiet-pull
 
       - name: Boot stack (force rebuild)
-        if: steps.relevant.outputs.run == 'true' && steps.dockerfile_changes.outputs.rebuild == 'true'
+        if: (steps.relevant.outputs.run == 'true' || github.event_name == 'push') && steps.dockerfile_changes.outputs.rebuild == 'true'
         run: docker compose up -d --build
 
       # "Green" has meant two very different things here and the log did not
@@ -380,7 +399,7 @@ jobs:
       # intended.
       - name: Which services were built, and which were pulled
         id: provenance
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: |
           set -uo pipefail
           python3 - <<'PYPROV' | tee -a "$GITHUB_STEP_SUMMARY"
@@ -468,7 +487,7 @@ jobs:
 
       - name: Wait for stack to converge
         id: converge
-        if: steps.relevant.outputs.run == 'true'
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: |
           set -u
           deadline=$(( $(date +%s) + HEALTH_BUDGET_SECONDS ))
@@ -519,7 +538,7 @@ jobs:
           exit 1
 
       - name: Record success summary
-        if: success() && steps.relevant.outputs.run == 'true'
+        if: success() && (steps.relevant.outputs.run == 'true' || github.event_name == 'push')
         run: |
           {
             echo "## Smoke result"
@@ -535,7 +554,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Capture forensics on failure
-        if: failure() && steps.relevant.outputs.run == 'true'
+        if: failure() && (steps.relevant.outputs.run == 'true' || github.event_name == 'push')
         run: |
           echo "## Compose state"
           docker compose ps || true
@@ -550,5 +569,5 @@ jobs:
           free -h || true
 
       - name: Teardown
-        if: always() && steps.relevant.outputs.run == 'true'
+        if: always() && (steps.relevant.outputs.run == 'true' || github.event_name == 'push')
         run: docker compose down -v --remove-orphans

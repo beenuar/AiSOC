@@ -57,7 +57,19 @@ ceilings:
     # files both times and `main` had not moved. Left at the measured value
     # rather than lowered on a number that then moved under it; the honest
     # state is that the net is unchanged and one finding is unexplained.
-    total: 102
+    #
+    # 102 -> 103 (error unchanged at 40). The added WARNING is a third
+    # `dynamic-urllib-use-detected`, on scripts/check_required_check_substance.py,
+    # which asks the Actions API which steps each required check actually
+    # executed. It is byte-for-byte the same `_get` helper the two findings
+    # above already count: the URL is built from a fixed API root and the
+    # function refuses anything not starting with it, so the `file://` read
+    # the rule warns about is unreachable — but the rule fires on any
+    # non-literal argument to `urlopen`. Measured in isolation with
+    # semgrep 1.86.0 on the same rule set the workflow uses: 205 rules over
+    # the two new files, exactly 1 finding. Counted rather than suppressed,
+    # for the reason stated at the bottom of this file.
+    total: 103
     error: 40
     measured_with: "1.86.0"
   checkov:

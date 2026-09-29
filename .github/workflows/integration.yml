@@ -73,12 +73,27 @@ jobs:
     name: What this change touches
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # The push exemption is written here, in the expression, as well as in the
+    # shell below that computes the other half. Two reasons it is worth saying
+    # twice.
+    #
+    # It is the only form a reader — or a gate — can *evaluate*. A promise
+    # made inside a `run:` block is invisible to static analysis, so the
+    # guarantee "every commit that lands is graded in full" could be deleted
+    # from the shell without anything noticing. Spelled here it cannot:
+    # scripts/check_required_check_substance.py resolves this expression
+    # under a simulated push and requires the steps below to come out
+    # unconditional.
+    #
+    # And it is belt and braces. Either mechanism alone is sufficient; losing
+    # both at once takes two edits, in two places, each of which fails that
+    # gate.
     outputs:
-      spine: ${{ steps.areas.outputs.spine }}
-      migrations: ${{ steps.areas.outputs.migrations }}
-      backup: ${{ steps.areas.outputs.backup }}
-      upgrade: ${{ steps.areas.outputs.upgrade }}
-      replay: ${{ steps.areas.outputs.replay }}
+      spine: ${{ github.event_name == 'push' || steps.areas.outputs.spine }}
+      migrations: ${{ github.event_name == 'push' || steps.areas.outputs.migrations }}
+      backup: ${{ github.event_name == 'push' || steps.areas.outputs.backup }}
+      upgrade: ${{ github.event_name == 'push' || steps.areas.outputs.upgrade }}
+      replay: ${{ github.event_name == 'push' || steps.areas.outputs.replay }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
