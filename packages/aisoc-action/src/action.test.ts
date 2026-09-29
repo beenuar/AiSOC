@@ -57,9 +57,25 @@ describe("fetchAlerts", () => {
         return [];
       },
     };
-    const { alerts, notes } = await fetchAlerts(octokit, "o", "r", ["dependabot", "code-scanning", "secret-scanning"]);
+    const { alerts, notes, scanned, skipped } = await fetchAlerts(octokit, "o", "r", [
+      "dependabot",
+      "code-scanning",
+      "secret-scanning",
+    ]);
     expect(alerts).toHaveLength(2);
     expect(notes.join(" ")).toMatch(/Secret scanning: skipped/);
+    // A skipped source and a clean source both contribute zero alerts. The
+    // caller has to be able to tell them apart without parsing the prose.
+    expect(scanned).toEqual(["Dependabot", "Code scanning"]);
+    expect(skipped).toEqual(["Secret scanning"]);
+  });
+
+  it("reports a source that answered with nothing as read, not skipped", async () => {
+    const octokit: OctokitLike = { paginate: async () => [] };
+    const { alerts, skipped, scanned } = await fetchAlerts(octokit, "o", "r", ["dependabot", "code-scanning"]);
+    expect(alerts).toHaveLength(0);
+    expect(skipped).toEqual([]);
+    expect(scanned).toEqual(["Dependabot", "Code scanning"]);
   });
 });
 
@@ -94,5 +110,72 @@ describe("render", () => {
     const md = renderDigest(result, prev, []);
     expect(md).toMatch(/vs last week/);
     expect(priorityLine(result)).toContain("exploitable");
+  });
+
+  const AT = new Date("2026-09-28T20:06:00Z");
+
+  it("digest dates itself, so a stale one is visible on the issue", () => {
+    // Without a stamp the body is byte-identical any week nothing changed, so
+    // GitHub's PATCH is a no-op and `updated_at` freezes. Six consecutive
+    // weekly runs succeeded while issue #510 appeared five weeks stale, which
+    // reads as an abandoned generator rather than a quiet one.
+    const md = renderDigest(triageBatch([]), null, [], {
+      scanned: ["Dependabot", "Code scanning", "Secret scanning"],
+      skipped: [],
+      generatedAt: AT,
+    });
+    expect(md).toContain("**Generated** 2026-09-28 20:06 UTC");
+
+    const later = renderDigest(triageBatch([]), null, [], {
+      scanned: ["Dependabot", "Code scanning", "Secret scanning"],
+      skipped: [],
+      generatedAt: new Date("2026-10-05T20:06:00Z"),
+    });
+    expect(later).not.toEqual(md);
+  });
+
+  it("a fully-read clean queue still publishes the grade", () => {
+    const md = renderDigest(triageBatch([]), null, [], {
+      scanned: ["Dependabot", "Code scanning", "Secret scanning"],
+      skipped: [],
+      generatedAt: AT,
+    });
+    expect(md).toContain("grade A (100/100)");
+    expect(md).not.toMatch(/incomplete/i);
+    expect(md).not.toContain("not an all-clear");
+    expect(md).toContain("Sources read: Dependabot, Code scanning, Secret scanning.");
+  });
+
+  it("refuses to headline a grade when a declared source could not be read", () => {
+    // The defect this pins: `safe()` turns a 403 into an empty array, an empty
+    // queue grades A/100, and the digest published "grade A (100/100) — 0 open
+    // findings" with the skip demoted to a blockquote. Zero findings from a
+    // source nobody could read is not zero findings.
+    const md = renderDigest(triageBatch([]), null, [
+      "Dependabot: skipped (token lacks permission or the feature is not enabled).",
+      "Secret scanning: skipped (token lacks permission or the feature is not enabled).",
+    ], {
+      scanned: ["Code scanning"],
+      skipped: ["Dependabot", "Secret scanning"],
+      generatedAt: AT,
+    });
+    expect(md).toContain("incomplete (1 of 3 sources readable)");
+    expect(md).not.toMatch(/^## .*grade A \(100\/100\)/m);
+    expect(md).toContain("not an all-clear");
+    expect(md).toContain("Dependabot and Secret scanning could not be read");
+    // The grade survives, explicitly scoped to what answered.
+    expect(md).toContain("Across the sources that answered (Code scanning), the grade would be **A (100/100)**");
+    expect(md).toContain("(from Code scanning)");
+  });
+
+  it("names no readable source when every source was skipped", () => {
+    const md = renderDigest(triageBatch([]), null, ["Dependabot: skipped (not enabled for this repository)."], {
+      scanned: [],
+      skipped: ["Dependabot", "Code scanning", "Secret scanning"],
+      generatedAt: AT,
+    });
+    expect(md).toContain("incomplete (0 of 3 sources readable)");
+    expect(md).toContain("no readable source");
+    expect(md).not.toContain("Sources read:");
   });
 });

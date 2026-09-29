@@ -324,34 +324,57 @@ function mapSecretScanning(a) {
     timestamp: a.created_at
   };
 }
-async function safe(fetchFn, label, notes) {
+async function safe(fetchFn, label, notes, scanned, skipped) {
   try {
-    return await fetchFn();
+    const rows = await fetchFn();
+    scanned.push(label);
+    return rows;
   } catch (err) {
     const status = err?.status ?? err?.response?.status;
     if (status === 403) notes.push(`${label}: skipped (token lacks permission or the feature is not enabled).`);
     else if (status === 404) notes.push(`${label}: skipped (not enabled for this repository).`);
     else notes.push(`${label}: skipped (${err?.message ?? "error"}).`);
+    skipped.push(label);
     return [];
   }
 }
 async function fetchAlerts(client, owner, repo, sources) {
   const alerts = [];
   const notes = [];
+  const scanned = [];
+  const skipped = [];
   const q = "?state=open";
   if (sources.includes("dependabot")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/dependabot/alerts${q}`), "Dependabot", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/dependabot/alerts${q}`),
+      "Dependabot",
+      notes,
+      scanned,
+      skipped
+    );
     alerts.push(...rows.map((r) => mapDependabot(r)));
   }
   if (sources.includes("code-scanning")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/code-scanning/alerts${q}`), "Code scanning", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/code-scanning/alerts${q}`),
+      "Code scanning",
+      notes,
+      scanned,
+      skipped
+    );
     alerts.push(...rows.map((r) => mapCodeScanning(r)));
   }
   if (sources.includes("secret-scanning")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/secret-scanning/alerts${q}`), "Secret scanning", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/secret-scanning/alerts${q}`),
+      "Secret scanning",
+      notes,
+      scanned,
+      skipped
+    );
     alerts.push(...rows.map((r) => mapSecretScanning(r)));
   }
-  return { alerts, notes };
+  return { alerts, notes, scanned, skipped };
 }
 
 // ../report-card/dist/index.js
@@ -424,26 +447,45 @@ function renderComment(result, notes) {
   );
   return lines.join("\n");
 }
-function renderDigest(result, previous, notes) {
+function utcStamp(when) {
+  const iso = when.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+function renderDigest(result, previous, notes, coverage = { scanned: [], skipped: [] }) {
   const { grade, score } = postureGrade(result);
   const s = result.summary;
   const delta = previous ? s.truePositive - previous.summary.truePositive : null;
   const deltaStr = delta === null ? "" : delta === 0 ? " (no change vs last week)" : delta > 0 ? ` (\u25B2 +${delta} vs last week)` : ` (\u25BC ${delta} vs last week)`;
-  return [
-    COMMENT_MARKER,
-    `## \u{1F6E1}\uFE0F AiSOC weekly security posture \u2014 grade ${grade} (${score}/100)`,
+  const { scanned, skipped } = coverage;
+  const partial = skipped.length > 0;
+  const declared = scanned.length + skipped.length;
+  const stamp = utcStamp(coverage.generatedAt ?? /* @__PURE__ */ new Date());
+  const heading = partial ? `## \u{1F6E1}\uFE0F AiSOC weekly security posture \u2014 incomplete (${scanned.length} of ${declared} sources readable)` : `## \u{1F6E1}\uFE0F AiSOC weekly security posture \u2014 grade ${grade} (${score}/100)`;
+  const lines = [COMMENT_MARKER, heading, "", `**Generated** ${stamp}`];
+  if (partial) {
+    const scope = scanned.length ? `the sources that answered (${scanned.join(", ")})` : "no readable source";
+    lines.push(
+      "",
+      `> \u26A0\uFE0F **This is not an all-clear.** ${skipped.join(" and ")} could not be read, so a finding there is absent from the counts below rather than absent from the repository. Across ${scope}, the grade would be **${grade} (${score}/100)**.`
+    );
+  }
+  lines.push(
     "",
-    `- **${s.total}** open findings triaged`,
+    `- **${s.total}** open findings triaged${partial ? ` (from ${scanned.length ? scanned.join(", ") : "no readable source"})` : ""}`,
     `- **${s.truePositive}** act-now${deltaStr}`,
     `- **${s.needsReview}** need review`,
     `- **${s.suppressed}** low-signal noise`,
     "",
     priorityLine(result),
-    "",
-    ...notes.length ? notes.map((n) => `> ${n}`) : [],
+    ""
+  );
+  if (scanned.length) lines.push(`> Sources read: ${scanned.join(", ")}.`);
+  if (notes.length) lines.push(...notes.map((n) => `> ${n}`));
+  lines.push(
     "",
     "<sub>Generated weekly by [AiSOC](https://github.com/beenuar/AiSOC). Deterministic; nothing leaves your CI.</sub>"
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 // src/index.ts
@@ -464,7 +506,12 @@ async function run() {
   const ctx = getContext();
   const client = new GitHubClient(token);
   info(`AiSOC: triaging security signals for ${ctx.owner}/${ctx.repo} (sources: ${sources.join(", ")})`);
-  const { alerts, notes } = await fetchAlerts(client, ctx.owner, ctx.repo, sources);
+  const { alerts, notes, scanned, skipped } = await fetchAlerts(client, ctx.owner, ctx.repo, sources);
+  if (skipped.length) {
+    warning(
+      `AiSOC: ${skipped.length} of ${sources.length} declared source(s) could not be read (${skipped.join(", ")}). A source that returns nothing because the token cannot read it is not a source that found nothing \u2014 the posture grade is scoped to ${scanned.length ? scanned.join(", ") : "no readable source"}.`
+    );
+  }
   const filtered = alerts.filter((a) => atLeast(a.severity, minSeverity));
   const result = triageBatch(filtered, { deterministic: true });
   setOutput("total", String(result.summary.total));
@@ -486,7 +533,7 @@ async function run() {
   if (mode === "pr-comment") {
     await upsertPrComment(client, ctx.owner, ctx.repo, ctx.prNumber, renderComment(result, notes));
   } else if (mode === "digest") {
-    await upsertDigestIssue(client, ctx.owner, ctx.repo, renderDigest(result, null, notes));
+    await upsertDigestIssue(client, ctx.owner, ctx.repo, renderDigest(result, null, notes, { scanned, skipped }));
   }
   if (failOn !== "none") {
     const escalate = result.summary.truePositive;
@@ -518,8 +565,10 @@ async function upsertDigestIssue(client, owner, repo, body) {
     const issues = await client.paginate(`/repos/${owner}/${repo}/issues?state=open&labels=aisoc-digest`);
     if (issues[0]) {
       await client.request("PATCH", `/repos/${owner}/${repo}/issues/${issues[0].number}`, { body });
+      info(`AiSOC: refreshed digest issue #${issues[0].number}.`);
     } else {
       await client.request("POST", `/repos/${owner}/${repo}/issues`, { title, body, labels: ["aisoc-digest"] });
+      info("AiSOC: opened a new digest issue.");
     }
   } catch (err) {
     warning(`Could not create/update the digest issue (${err.message}).`);

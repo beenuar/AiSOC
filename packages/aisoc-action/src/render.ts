@@ -81,25 +81,83 @@ export function renderComment(result: TriageResult, notes: string[]): string {
   return lines.join("\n");
 }
 
-export function renderDigest(result: TriageResult, previous: TriageResult | null, notes: string[]): string {
+/**
+ * Which declared sources the digest actually managed to read, and when it ran.
+ *
+ * Both halves exist because of the same defect. A source the token cannot read
+ * contributes zero findings, `postureGrade` sees an empty queue and returns
+ * A/100, and the digest headlined that as an all-clear with the "skipped" note
+ * demoted to a blockquote underneath — reporting clean because it could not
+ * look. And with nothing in the body tied to the run, a week where nothing
+ * changed rendered a byte-identical body, so GitHub's PATCH was a no-op and
+ * the issue's `updated_at` froze. A live weekly generator then read as an
+ * abandoned one: six consecutive scheduled runs succeeded while the issue
+ * appeared five weeks stale.
+ */
+export interface DigestCoverage {
+  scanned: string[];
+  skipped: string[];
+  /** Injectable so the rendering is deterministic under test. */
+  generatedAt?: Date;
+}
+
+function utcStamp(when: Date): string {
+  const iso = when.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+
+export function renderDigest(
+  result: TriageResult,
+  previous: TriageResult | null,
+  notes: string[],
+  coverage: DigestCoverage = { scanned: [], skipped: [] },
+): string {
   const { grade, score } = postureGrade(result);
   const s = result.summary;
   const delta = previous ? s.truePositive - previous.summary.truePositive : null;
   const deltaStr =
     delta === null ? "" : delta === 0 ? " (no change vs last week)" : delta > 0 ? ` (▲ +${delta} vs last week)` : ` (▼ ${delta} vs last week)`;
-  return [
-    COMMENT_MARKER,
-    `## 🛡️ AiSOC weekly security posture — grade ${grade} (${score}/100)`,
+
+  const { scanned, skipped } = coverage;
+  const partial = skipped.length > 0;
+  const declared = scanned.length + skipped.length;
+  const stamp = utcStamp(coverage.generatedAt ?? new Date());
+
+  // A grade is only a posture statement if every declared source answered.
+  // When one did not, the headline says so instead of publishing a number a
+  // reader would take for an all-clear, and the grade is explicitly scoped to
+  // what was read.
+  const heading = partial
+    ? `## 🛡️ AiSOC weekly security posture — incomplete (${scanned.length} of ${declared} sources readable)`
+    : `## 🛡️ AiSOC weekly security posture — grade ${grade} (${score}/100)`;
+
+  const lines = [COMMENT_MARKER, heading, "", `**Generated** ${stamp}`];
+
+  if (partial) {
+    const scope = scanned.length ? `the sources that answered (${scanned.join(", ")})` : "no readable source";
+    lines.push(
+      "",
+      `> ⚠️ **This is not an all-clear.** ${skipped.join(" and ")} could not be read, so a finding there is absent from the counts below rather than absent from the repository. Across ${scope}, the grade would be **${grade} (${score}/100)**.`,
+    );
+  }
+
+  lines.push(
     "",
-    `- **${s.total}** open findings triaged`,
+    `- **${s.total}** open findings triaged${partial ? ` (from ${scanned.length ? scanned.join(", ") : "no readable source"})` : ""}`,
     `- **${s.truePositive}** act-now${deltaStr}`,
     `- **${s.needsReview}** need review`,
     `- **${s.suppressed}** low-signal noise`,
     "",
     priorityLine(result),
     "",
-    ...(notes.length ? notes.map((n) => `> ${n}`) : []),
+  );
+
+  if (scanned.length) lines.push(`> Sources read: ${scanned.join(", ")}.`);
+  if (notes.length) lines.push(...notes.map((n) => `> ${n}`));
+
+  lines.push(
     "",
     "<sub>Generated weekly by [AiSOC](https://github.com/beenuar/AiSOC). Deterministic; nothing leaves your CI.</sub>",
-  ].join("\n");
+  );
+  return lines.join("\n");
 }

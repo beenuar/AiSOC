@@ -157,6 +157,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`scripts/check_required_check_substance.py`** — a required check that reports success while its work was skipped is the third way a grading can be absent without anything going red, after a discarded push (`check_workflow_concurrency.py`) and a cancelled run (`check_main_run_cancellations.py`). It closes it from both ends, wired into `grading-integrity.yml`. Statically it enumerates every path through a required check's job and refuses one that runs strictly less assertive work than another path through the same job — so two ways of booting one stack both pass, and announcing that nothing was checked does not. Against the Actions API it requires every successful push run on `main` to have taken a complete path. Which steps count is derived by evaluating each `if:` under a simulated protected-branch push (`scripts/gh_expr.py`), not from a list of step names, so a rename cannot silently empty it. All 22 required contexts are inventoried in `.github/required-checks.json`, compared against branch protection whenever a token can read it, and the gate refuses a missing token, an empty fetch, a context whose job is not in the tree, and a window that has held no runs for seven days.
 - Building it surfaced a defect in reading the Actions API that is worth recording, because any gate reading run history can hit it. **The workflow-runs endpoint is not stable across pages and can serve a stale but internally consistent snapshot.** Asking for 250 runs returned 250 rows holding 157 unique ids, with the first row of page 1 five weeks older than the newest run that existed; and on another attempt a single page came back ending six weeks short while a second read of the same endpoint agreed with it. So the window is one page, capped at 100 and refused above that rather than silently truncated; rows are deduplicated and sorted locally; and freshness is checked against the branch's **commit list** — a different endpoint — because no amount of re-reading the runs endpoint can detect that it is stale. A workflow whose push trigger carries a `paths:` filter is exempt from that oracle and is named in the output as not freshness-verified.
 
+- **The weekly security digest graded a repository A/100 across sources it
+  could not read, and could not tell a reader when it last ran.** Two defects
+  in `packages/aisoc-action`, both found by asking why issue #510 showed an
+  unqualified "grade A (100/100), 0 open findings" that had not moved since
+  2026-08-24.
+
+  `fetchAlerts` degrades a 403/404 on any source into a note plus an empty
+  array. Zero alerts from a source the token cannot read is then
+  indistinguishable from zero alerts from a clean one, `postureGrade` sees an
+  empty queue and returns A/100 unconditionally, and the digest headlined that
+  as the repository's posture with the skip demoted to a blockquote beneath the
+  numbers. #510's own body records **Dependabot and secret scanning as
+  skipped** — two of its three declared sources — so the all-clear was derived
+  from code scanning alone. `fetchAlerts` now returns `scanned` and `skipped`
+  alongside the alerts, and a digest with any skipped source refuses to
+  headline a grade: it reads `incomplete (N of M sources readable)`, leads with
+  "this is not an all-clear", names which sources were unreadable, and scopes
+  the grade explicitly to the ones that answered. A fully-read clean queue
+  still publishes `grade A (100/100)` exactly as before.
+
+  The staleness was a second defect with the same root: nothing in the body was
+  tied to the run. A week where nothing changed rendered a byte-identical body,
+  GitHub's `PATCH` was a no-op, and `updated_at` froze — so **six consecutive
+  scheduled runs succeeded** (2026-08-31 through 2026-09-28) while the issue
+  read five weeks abandoned. The digest now carries a `**Generated** <UTC>`
+  stamp, so the body changes every week and a genuinely stopped generator is
+  visible on the issue itself rather than inferable only from the Actions tab.
+  `upsertDigestIssue` also logs on success with the issue number; previously
+  the run log ended at the triage headline whether the issue was written or
+  not, so "did the digest publish?" could not be answered from a green run.
+
+  Five tests pin all of it, and all five fail against the pre-fix tree.
+
 ## [12.2.0] - 2026-09-28
 
 ### Fixed

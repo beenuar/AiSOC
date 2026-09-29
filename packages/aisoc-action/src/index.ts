@@ -39,7 +39,14 @@ async function run(): Promise<void> {
   const client = new GitHubClient(token);
 
   info(`AiSOC: triaging security signals for ${ctx.owner}/${ctx.repo} (sources: ${sources.join(", ")})`);
-  const { alerts, notes } = await fetchAlerts(client, ctx.owner, ctx.repo, sources);
+  const { alerts, notes, scanned, skipped } = await fetchAlerts(client, ctx.owner, ctx.repo, sources);
+  if (skipped.length) {
+    warning(
+      `AiSOC: ${skipped.length} of ${sources.length} declared source(s) could not be read (${skipped.join(", ")}). ` +
+        `A source that returns nothing because the token cannot read it is not a source that found nothing — ` +
+        `the posture grade is scoped to ${scanned.length ? scanned.join(", ") : "no readable source"}.`,
+    );
+  }
 
   const filtered = alerts.filter((a) => atLeast(a.severity, minSeverity));
   const result = triageBatch(filtered, { deterministic: true });
@@ -65,7 +72,7 @@ async function run(): Promise<void> {
   if (mode === "pr-comment") {
     await upsertPrComment(client, ctx.owner, ctx.repo, ctx.prNumber, renderComment(result, notes));
   } else if (mode === "digest") {
-    await upsertDigestIssue(client, ctx.owner, ctx.repo, renderDigest(result, null, notes));
+    await upsertDigestIssue(client, ctx.owner, ctx.repo, renderDigest(result, null, notes, { scanned, skipped }));
   }
 
   if (failOn !== "none") {
@@ -106,8 +113,13 @@ async function upsertDigestIssue(client: GitHubClient, owner: string, repo: stri
     const issues = (await client.paginate(`/repos/${owner}/${repo}/issues?state=open&labels=aisoc-digest`)) as { number: number }[];
     if (issues[0]) {
       await client.request("PATCH", `/repos/${owner}/${repo}/issues/${issues[0].number}`, { body });
+      // Logged on success, not only on failure. The run log previously ended
+      // at the triage headline whether the issue was written or not, so "did
+      // the digest publish?" could not be answered from a green run.
+      info(`AiSOC: refreshed digest issue #${issues[0].number}.`);
     } else {
       await client.request("POST", `/repos/${owner}/${repo}/issues`, { title, body, labels: ["aisoc-digest"] });
+      info("AiSOC: opened a new digest issue.");
     }
   } catch (err) {
     warning(`Could not create/update the digest issue (${(err as Error).message}).`);

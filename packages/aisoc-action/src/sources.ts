@@ -17,6 +17,18 @@ export interface OctokitLike {
 export interface FetchResult {
   alerts: Alert[];
   notes: string[];
+  /**
+   * Which declared sources were actually read, and which were not.
+   *
+   * `safe()` turns a 403/404 into a note and an empty array, which makes a
+   * source nobody could read indistinguishable from a source that was read
+   * and found clean — and downstream, zero findings grades as A/100. Callers
+   * need the two apart to avoid publishing an all-clear they did not earn, so
+   * the split is part of the result rather than something a reader has to
+   * recover by pattern-matching the prose in `notes`.
+   */
+  scanned: string[];
+  skipped: string[];
 }
 
 function sev(value: string | undefined): Severity {
@@ -93,14 +105,23 @@ export function mapSecretScanning(a: Record<string, any>): Alert {
   };
 }
 
-async function safe(fetchFn: () => Promise<unknown[]>, label: string, notes: string[]): Promise<unknown[]> {
+async function safe(
+  fetchFn: () => Promise<unknown[]>,
+  label: string,
+  notes: string[],
+  scanned: string[],
+  skipped: string[],
+): Promise<unknown[]> {
   try {
-    return await fetchFn();
+    const rows = await fetchFn();
+    scanned.push(label);
+    return rows;
   } catch (err: any) {
     const status = err?.status ?? err?.response?.status;
     if (status === 403) notes.push(`${label}: skipped (token lacks permission or the feature is not enabled).`);
     else if (status === 404) notes.push(`${label}: skipped (not enabled for this repository).`);
     else notes.push(`${label}: skipped (${err?.message ?? "error"}).`);
+    skipped.push(label);
     return [];
   }
 }
@@ -113,19 +134,39 @@ export async function fetchAlerts(
 ): Promise<FetchResult> {
   const alerts: Alert[] = [];
   const notes: string[] = [];
+  const scanned: string[] = [];
+  const skipped: string[] = [];
   const q = "?state=open";
 
   if (sources.includes("dependabot")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/dependabot/alerts${q}`), "Dependabot", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/dependabot/alerts${q}`),
+      "Dependabot",
+      notes,
+      scanned,
+      skipped,
+    );
     alerts.push(...rows.map((r) => mapDependabot(r as Record<string, any>)));
   }
   if (sources.includes("code-scanning")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/code-scanning/alerts${q}`), "Code scanning", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/code-scanning/alerts${q}`),
+      "Code scanning",
+      notes,
+      scanned,
+      skipped,
+    );
     alerts.push(...rows.map((r) => mapCodeScanning(r as Record<string, any>)));
   }
   if (sources.includes("secret-scanning")) {
-    const rows = await safe(() => client.paginate(`/repos/${owner}/${repo}/secret-scanning/alerts${q}`), "Secret scanning", notes);
+    const rows = await safe(
+      () => client.paginate(`/repos/${owner}/${repo}/secret-scanning/alerts${q}`),
+      "Secret scanning",
+      notes,
+      scanned,
+      skipped,
+    );
     alerts.push(...rows.map((r) => mapSecretScanning(r as Record<string, any>)));
   }
-  return { alerts, notes };
+  return { alerts, notes, scanned, skipped };
 }
