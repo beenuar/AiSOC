@@ -338,10 +338,54 @@ const DEFAULT_PORTS: PortMap = {
 // every signature would be more code than the values are worth.
 let allocatedPorts: PortMap = { ...DEFAULT_PORTS };
 
+// Ports already published by a running container, from Docker's own
+// allocator. This is not the same question as "can I bind it", and the
+// difference is what made a demo stack come up with an unreachable
+// database.
+//
+// The host-bind probe below used to be described as "the same test Docker
+// is going to run, so the answer is authoritative". It is not. When another
+// *container* publishes a port, Docker's allocator refuses the bind
+// ("Bind for 0.0.0.0:5432 failed: port is already allocated") while a Node
+// bind on 127.0.0.1 can still succeed, because Docker Desktop forwards
+// through a proxy rather than holding the host socket the whole time. So
+// the probe said 5432 was free, compose tried it, and Docker started the
+// postgres container **with no network attached** rather than failing it.
+//
+// The downstream shape of that is the reason it is worth this much comment:
+// nothing reported an error. Postgres said `running (healthy)`, the API
+// said `healthy` — its probe is liveness only — the seed exited 1 with one
+// line of DNS failure nobody reads, and the console opened to an empty
+// cases list. A first-time reader with any local Postgres on 5432 meets a
+// demo that looks up and has no data in it.
+function dockerPublishedPorts(): Set<number> {
+  try {
+    const out = execSync("docker ps --format '{{.Ports}}'", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10_000,
+    });
+    const taken = new Set<number>();
+    // "0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp" — the host side is the
+    // number before the arrow, and only host-published ports can collide.
+    for (const match of out.matchAll(/(?:^|[\s,])(?:[\d.]+|\[[^\]]+\]):(\d+)->/g)) {
+      taken.add(Number(match[1]));
+    }
+    return taken;
+  } catch {
+    // No docker, or it did not answer. Fall back to the bind probe alone
+    // rather than refusing every port — a wrong "busy" is as bad as a
+    // wrong "free" here.
+    return new Set();
+  }
+}
+
 // Tests an actual bind on 127.0.0.1. Connect-based probes give false
-// negatives for ports whose owner doesn't accept() fast enough; binding
-// is the same test Docker is going to run, so the answer is authoritative.
-function isPortFree(port: number): Promise<boolean> {
+// negatives for ports whose owner doesn't accept() fast enough. Necessary
+// but not sufficient — see `dockerPublishedPorts` above for the half it
+// cannot see.
+function isPortFree(port: number, dockerTaken: Set<number>): Promise<boolean> {
+  if (dockerTaken.has(port)) return Promise.resolve(false);
   return new Promise((resolve) => {
     const tester = createServer();
     tester.once("error", () => resolve(false));
@@ -360,9 +404,9 @@ function isPortFree(port: number): Promise<boolean> {
 // small (50) because a host that has 50 consecutive ports in this range
 // busy is almost certainly misconfigured and silently rerouting the user
 // would create more confusion than failing fast.
-async function pickFreePort(start: number, max = 50): Promise<number> {
+async function pickFreePort(start: number, dockerTaken: Set<number>, max = 50): Promise<number> {
   for (let p = start; p < start + max; p++) {
-    if (await isPortFree(p)) return p;
+    if (await isPortFree(p, dockerTaken)) return p;
   }
   throw new Error(
     `no free TCP port near ${start} (checked ${start}..${start + max - 1}). ` +
@@ -379,11 +423,13 @@ async function allocatePorts(): Promise<{
   // default and only moves if forced.
   const ports = { ...DEFAULT_PORTS };
   const reserved = new Set<number>();
+  // Read once: `docker ps` per candidate port would be dozens of forks.
+  const dockerTaken = dockerPublishedPorts();
   const reassigned: Array<{ service: keyof PortMap; from: number; to: number }> = [];
   for (const service of Object.keys(DEFAULT_PORTS) as Array<keyof PortMap>) {
     const def = DEFAULT_PORTS[service];
-    let free = await pickFreePort(def);
-    while (reserved.has(free)) free = await pickFreePort(free + 1);
+    let free = await pickFreePort(def, dockerTaken);
+    while (reserved.has(free)) free = await pickFreePort(free + 1, dockerTaken);
     ports[service] = free;
     reserved.add(free);
     if (free !== def) reassigned.push({ service, from: def, to: free });
@@ -759,7 +805,7 @@ async function findSeededCase(
     // case_number would be cleaner but the cases list endpoint doesn't
     // currently expose that filter, and the volume is trivially small.
     const res = await fetchJson(
-      `http://localhost:${allocatedPorts.api}/v1/cases?page_size=50`,
+      `http://localhost:${allocatedPorts.api}/api/v1/cases?page_size=50`,
       4000
     );
     if (res && Array.isArray(res.items) && res.items.length > 0) {
@@ -792,7 +838,7 @@ async function kickoffInvestigation(caseId: string): Promise<boolean> {
   // a heuristic plan, which is still demo-worthy.
   log(c.dim("kicking off agent investigation…"));
   const result = await postJson(
-    `http://localhost:${allocatedPorts.api}/v1/cases/${caseId}/investigate`,
+    `http://localhost:${allocatedPorts.api}/api/v1/cases/${caseId}/investigate`,
     {},
     10000
   );
@@ -851,7 +897,7 @@ async function openInBrowser(
   console.log(`
 ${c.bold(c.green("AiSOC demo is up."))}
   ${c.bold("Web:")}        ${url}
-  ${c.bold("API:")}        http://localhost:${allocatedPorts.api}/docs
+  ${c.bold("API:")}        http://localhost:${allocatedPorts.api}/api/docs
   ${c.bold("Realtime:")}   ws://localhost:${allocatedPorts.realtime}
 
 ${c.dim("Useful commands:")}

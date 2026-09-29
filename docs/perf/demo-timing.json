@@ -1,0 +1,41 @@
+{
+  "metric": "wall-clock milliseconds from `pnpm aisoc:demo --no-open` starting to the demo stack being usable: Docker verified, images resolved, `docker compose up` returned, and the API answering /health. Excludes the showcase-case lookup and the browser open, which are not stack startup.",
+  "harness": "scripts/aisoc-demo.ts --results-file, summed over every phase except 'Locating the showcase ransomware investigation' and 'Opening browser'",
+  "stack": "infra/compose/docker-compose.demo.yml, 9 services, project aisoc-demo",
+  "not_a_production_slo": true,
+  "slo_disclaimer": "A regression ceiling, not a service level objective. It fires when the demo stack takes minutes instead of seconds, which is the thing a first-time reader meets; it says nothing about production startup.",
+
+  "ceiling_ms": 117015,
+  "ceiling_derivation": "Three times the worst observation below (39005 ms). Deliberately generous, and for the reason `.github/workflows/perf.yml` already records about its own floors: a gate tuned close to a wall-clock measurement gets disabled the first week it flaps. A shared GitHub runner is not a warm laptop, and this must fire on a catastrophic regression - an image that stopped being pulled, a healthcheck that stopped converging, a service added to the demo profile by accident - rather than on scheduling jitter. Three times, not a round two minutes, because the number has to come from the measurement.",
+
+  "observations": [
+    {
+      "total_to_usable_ms": 39005,
+      "total_run_ms": 99266,
+      "compose_up_ms": 35157,
+      "where": "local, Apple Silicon, Docker Desktop, warm daemon and warm image cache",
+      "measured_at": "2026-09-29",
+      "note": "First run after the port-probe fix. The same stack measured 122391 ms of compose-up before it, because postgres was starting with no network attached and every `depends_on: service_healthy` waited out its retries."
+    },
+    {
+      "total_to_usable_ms": 38285,
+      "total_run_ms": 98535,
+      "compose_up_ms": 35083,
+      "where": "local, Apple Silicon, Docker Desktop, warm daemon and warm image cache",
+      "measured_at": "2026-09-29",
+      "note": "Full `down -v` between runs, so the database and Kafka volumes were recreated each time."
+    },
+    {
+      "total_to_usable_ms": 38146,
+      "total_run_ms": 98380,
+      "compose_up_ms": 35150,
+      "where": "local, Apple Silicon, Docker Desktop, warm daemon and warm image cache",
+      "measured_at": "2026-09-29",
+      "note": "Spread across the three runs is 859 ms, which is why the ceiling is not derived from the spread the way the groundedness floor is - see ceiling_derivation."
+    }
+  ],
+
+  "known_open_defects": [
+    "The showcase-case lookup takes a constant 60 s and then reports `showcaseCaseFound: false` on every run. It is excluded from this metric because it is a timeout, not a measurement. Two causes were found: the harness queried `/v1/cases` where the API serves `/api/v1/cases` (fixed here), and `seed_demo.py` still fails on a fresh stack because the ORM maps `CaseTask` to `case_tasks` while migration 027 creates `aisoc_case_tasks` with a different column set. `create_all` used to paper over the mismatch; migration 061 took CREATE on schema public away from the runtime role, and the resulting permission error is swallowed as `create_all skipped (likely already applied)`. Not fixed here - reconciling two different designs for one table is a schema change, not a timing gate - and recorded so the number above is not read as a clean demo."
+  ]
+}

@@ -33,6 +33,9 @@ const PROJECT = (process.env.PLAYWRIGHT_PROJECT ?? "").toLowerCase();
 const IS_VISUAL = PROJECT === "visual";
 const IS_JOURNEY = PROJECT === "journey";
 const IS_SCREENSHOTS = PROJECT === "screenshots";
+// 3.5+ — assertions against the live demo stack, as opposed to the hermetic
+// journey project and the screenshot recorders.
+const IS_DEMO_STACK = PROJECT === "demo-stack";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -82,8 +85,10 @@ export default defineConfig({
   use: {
     baseURL: IS_VISUAL
       ? "http://127.0.0.1:6007"
-      : IS_JOURNEY
-        ? "http://localhost:3100"
+      : IS_DEMO_STACK
+        ? (process.env.AISOC_DEMO_WEB_URL ?? "http://localhost:3000")
+        : IS_JOURNEY
+          ? "http://localhost:3100"
         : IS_SCREENSHOTS
           ? (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000")
           : (process.env.AISOC_SCREENCAST_URL ?? "http://localhost:3000"),
@@ -118,6 +123,18 @@ export default defineConfig({
         // Force 1× DPR so screenshots have a deterministic pixel count
         // regardless of the developer's Retina display vs. the CI VM.
         deviceScaleFactor: 1,
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+    {
+      // 3.5+ — assertions against the stack `pnpm aisoc:demo` starts. Kept
+      // separate from `journey`, which stubs the network: these two answer
+      // different questions and merging them would let a hermetic pass
+      // stand in for a live one.
+      name: "demo-stack",
+      testMatch: /demo-stack\/.*\.spec\.ts$/,
+      use: {
+        ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
       },
     },

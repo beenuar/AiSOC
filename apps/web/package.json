@@ -19,7 +19,8 @@
     "test-storybook": "test-storybook",
     "visual": "PLAYWRIGHT_PROJECT=visual playwright test --project=visual",
     "visual:update": "PLAYWRIGHT_PROJECT=visual playwright test --project=visual --update-snapshots",
-    "e2e": "PLAYWRIGHT_PROJECT=journey playwright test --project=journey"
+    "e2e": "PLAYWRIGHT_PROJECT=journey playwright test --project=journey",
+    "e2e:demo-stack": "PLAYWRIGHT_PROJECT=demo-stack playwright test --project=demo-stack"
   },
   "dependencies": {
     "@aisoc/report-card": "workspace:*",

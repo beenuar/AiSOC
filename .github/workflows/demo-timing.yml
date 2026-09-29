@@ -1,0 +1,157 @@
+name: Demo stack · timing gate + E2E
+
+# Deferral 3.5+. `packages/aisoc-sandbox` has a cold-start gate and the
+# devcontainer has one. The demo stack — the thing `pnpm aisoc:demo` starts
+# and a first-time reader actually meets — had neither a Playwright run
+# against it nor any bound on how long it takes to become usable, so it
+# could get slower indefinitely with nobody noticing.
+#
+# Two jobs' worth of work in one, deliberately: booting the stack is the
+# slow part, and measuring it and then asserting against it are the same
+# boot. Splitting them would double a three-minute cost to gain nothing.
+#
+# The ceiling is not chosen here. `docs/perf/demo-timing.json` records every
+# run it was derived from with the hardware and the method, and
+# `scripts/check_demo_timing.py` refuses a declaration that does not carry
+# them — the same structure `check_live_agent_floor.py` uses. It is a
+# regression ceiling and not an SLO: three times the worst observed run,
+# because a gate tuned close to a wall-clock measurement gets disabled the
+# first week it flaps on a shared runner.
+
+on:
+  pull_request:
+    paths:
+      - 'infra/compose/docker-compose.demo.yml'
+      - 'scripts/aisoc-demo.ts'
+      - 'scripts/check_demo_timing.py'
+      - 'docs/perf/demo-timing.json'
+      - 'apps/web/e2e/demo-stack/**'
+      - '.github/workflows/demo-timing.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/compose/docker-compose.demo.yml'
+      - 'scripts/aisoc-demo.ts'
+      - 'scripts/check_demo_timing.py'
+      - 'docs/perf/demo-timing.json'
+      - 'apps/web/e2e/demo-stack/**'
+  schedule:
+    # Weekly. The demo stack pulls moving `:latest` tags, so it can regress
+    # without a commit here — which is precisely the drift a path-filtered
+    # workflow alone would never see.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: demo-timing-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  demo-stack:
+    name: Demo stack boots inside budget and answers
+    runs-on: ubuntu-latest
+    # compose-smoke budgets 25 minutes for the larger root stack; this one is
+    # nine services. Generous so a slow image pull is not a failure.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Before anything is booted. A declaration missing its provenance, or
+      # a ceiling already below the runs it cites, is a gate failure on its
+      # own terms and there is no point spending three minutes to find out.
+      - name: The gate can grade, and proves it still detects each violation
+        run: |
+          python3 scripts/check_demo_timing.py --self-test
+          python3 scripts/check_demo_timing.py
+
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Kafka's log dir corrupts silently when the runner fills up, and a
+      # broker that reports healthy while refusing every request is a much
+      # worse failure than an out-of-disk error. Same reclaim golden-pipeline
+      # does, for the same reason.
+      - name: Reclaim disk before booting
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          df -h /
+
+      - name: Boot the demo stack and record per-phase timings
+        run: pnpm aisoc:demo --no-open --results-file demo-timing-run.json
+
+      - name: Grade the boot against the recorded ceiling
+        run: python3 scripts/check_demo_timing.py --record demo-timing-run.json
+
+      - name: Playwright against the live stack
+        working-directory: apps/web
+        env:
+          AISOC_DEMO_WEB_URL: http://localhost:3000
+          AISOC_DEMO_API_URL: http://localhost:8000
+        run: pnpm e2e:demo-stack
+
+      # A green run proves the stack booted. It does not prove the gate would
+      # notice if it stopped, which is the property that makes it worth
+      # having — so the ceiling is asserted against a deliberately impossible
+      # value and must fail.
+      - name: The gate fails when the stack is over budget
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib
+          doc = json.loads(pathlib.Path("docs/perf/demo-timing.json").read_text())
+          doc["ceiling_ms"] = max(o["total_to_usable_ms"] for o in doc["observations"])
+          doc["observations"] = [{"total_to_usable_ms": 1, "where": "negative control"}]
+          pathlib.Path("/tmp/impossible.json").write_text(json.dumps(doc))
+          PY
+          mkdir -p /tmp/probe/docs/perf
+          cp /tmp/impossible.json /tmp/probe/docs/perf/demo-timing.json
+          if python3 scripts/check_demo_timing.py --repo-root /tmp/probe --record demo-timing-run.json; then
+            echo "::error::the timing gate passed a run over its ceiling — it proves nothing"
+            exit 1
+          fi
+          echo "confirmed: the gate fails a run over budget"
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -f infra/compose/docker-compose.demo.yml ps -a || true
+          docker compose -f infra/compose/docker-compose.demo.yml logs --tail 150 || true
+
+      - name: Publish the measurement
+        if: always()
+        run: |
+          {
+            echo "## Demo stack timing"
+            echo ""
+            echo '```'
+            python3 scripts/check_demo_timing.py --record demo-timing-run.json 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tear down
+        if: always()
+        # The demo stack runs under its own project name (`aisoc-demo`, set
+        # inside the compose file). A bare `docker compose down` here would
+        # target the root project and leave this one running, which is the
+        # bug console-visuals.yml still has.
+        run: docker compose -f infra/compose/docker-compose.demo.yml down -v || true
