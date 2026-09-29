@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [12.3.2] - 2026-09-29
+
+### Security
+
+- **Eleven routes carried a permission FastAPI never called.** Closing GHSA-wj5c-88hg-5926 in v12.3.1 left the obvious question: where else does a write surface authenticate and not authorize? Sweeping the sibling modules found it eleven more times, in a shape that is harder to see because the permission is present and correctly spelled — `current_user: Annotated[Any, require_permission("users:write")]`, with no `Depends()`. FastAPI honours only `Annotated` metadata that is a `Depends` or a `FieldInfo` and silently drops everything else, so the permission was never checked and `current_user` degraded into a required query parameter. `POST /api-keys`, `PATCH` and `DELETE /api-keys/{id}`, `PUT /branding`, `POST` and `DELETE /branding/assets/*`, `POST /scim-tokens`, `POST /scim-tokens/{id}/rotate`, `DELETE /scim-tokens/{id}`, `GET /usage/reconciliation` and `GET /usage/export.csv` answered 422 to a `viewer` token rather than 403, and 500 if the caller supplied the principal the URL was asking for — so these routes were both unauthorized and unusable, minting API keys and rotating SCIM tokens among them. All eleven now use the idiom the rest of the service uses and refuse a `viewer` with 403.
+
+- **The published API contract had been saying so all along.** Because FastAPI could not see the dependency it documented `current_user` as a required query parameter on all eleven routes, and that was in the committed `docs/openapi.yaml` — the contract integrators build against was asking callers to supply their own principal in the URL. The regenerated spec drops exactly eleven of them with the 422 responses that existed only to reject a request that omitted it. `scripts/openapi_diff.py` reports no breaking change: removing a required query parameter relaxes the contract, and no client could have been sending one usefully.
+
+### Changed
+
+- **`scripts/check_route_authz.py` no longer credits a permission it cannot see.** The gate added in v12.3.1 counted eight of the nine broken write routes among those that authorize, because it matched the `require_permission` call and not its wiring — the same one-directional blindness that let `check_route_auth.py` report OK on `remediation.py`, one level up. A `require_permission` left in `Annotated` metadata is now reported with **no ceiling and no exemptions**, since there is no correct reason to write it, and it no longer counts as authorization. The alias form is covered too: `WriteUser = Annotated[CurrentUser, Depends(require_permission(_WRITE))]` is one line gating three routes, so unwrapping it disarms all three at once, and the self-test now performs that exact edit and asserts it is reported once *and* that all three `remediation.py` write routes stop being credited.
+
+- `MAX_UNAUTHORIZED` stays at **103** and is untouched by this release. It read 103 before only because the gate was crediting the nine broken write routes; with the crediting removed the true figure on v12.3.1 is 112, and wiring them returns it to 103 honestly. The ceiling did not move, but it now means what it says.
+
+### Fixed
+
+- Measured against v12.3.1 and this release: discarded permissions **11 → 0**, identity-only write routes **112 → 103**, and the new regression suite `services/api/tests/test_discarded_permission_dependencies.py` **23 failed / 2 passed → 25 passed**. Every pre-fix failure is an assertion about the defect — the permission absent from the resolved dependency tree, the principal arriving as a query parameter, a `viewer` reaching a handler — and none is an `ImportError`. The two that pass on both trees are the controls that stop the rest passing for the wrong reason: that `viewer` holds none of the permissions under test, and that `tenant_admin` is still not refused.
+
 ## [12.3.1] - 2026-09-29
 
 ### Security
