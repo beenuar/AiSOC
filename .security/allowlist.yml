@@ -58,6 +58,38 @@ ceilings:
     # rather than lowered on a number that then moved under it; the honest
     # state is that the net is unchanged and one finding is unexplained.
     #
+    # That +/-1 was reproduced on 2026-09-29, which upgrades it from a
+    # one-off nobody could attribute to a property of the scan. Four
+    # dependency pull requests, all based on 7d3e90a7, all changing nothing
+    # but a `poetry.lock`, ran this job within thirteen minutes of each other
+    # against a ceiling of 102/40:
+    #
+    #   #1023  102 findings, error=40  -> pass
+    #   #1035  102 findings, error=40  -> pass
+    #   #1031  101 findings, error=39  -> FAIL (stale-ceiling)
+    #   #1037  101 findings, error=39  -> FAIL (stale-ceiling)
+    #
+    # Every one reported `Ran 387 rules on 2267 files`, so it is not the
+    # corpus and not the rule set. The obvious mechanism was checked and
+    # **eliminated**: all four also reported the identical `Partially
+    # scanned: 8 files` and `Scan skipped: 5 files`, so a file semgrep failed
+    # to fully parse is not where the finding goes. The count simply differs
+    # between runs of the same tree, and it moves `error` and `total`
+    # together, which is why both sub-ceilings trip at once.
+    #
+    # Two consequences worth stating rather than discovering again. First,
+    # this ratchet can fail a pull request that cannot possibly have changed
+    # a finding — a lockfile-only dependency bump is the case observed twice
+    # here, and a re-run clears it, so read a stale-ceiling failure on such a
+    # change as this rather than as a stale branch. Second, and the reason
+    # this is not merely noise: a gate that under-counts by one can just as
+    # easily under-count a *real* finding into invisibility, because the
+    # ratchet only fails on a count that disagrees with the ceiling and 39
+    # against a ceiling of 39 would be silent. The ceiling stays at the
+    # measured value; what is missing is an attribution, and the way to get
+    # one is to retain `semgrep.json` as a run artefact and diff two runs of
+    # the same tree. Nothing here does that yet.
+    #
     # 102 -> 103 (error unchanged at 40). The added WARNING is a third
     # `dynamic-urllib-use-detected`, on scripts/check_required_check_substance.py,
     # which asks the Actions API which steps each required check actually
