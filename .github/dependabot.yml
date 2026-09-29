@@ -310,6 +310,25 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
+    ignore:
+      # Hold `mcp` on 1.x. The 2.0 major is not a version bump this service
+      # can take automatically, measured by installing both and reading the
+      # signatures: `streamablehttp_client` is spelled
+      # `streamable_http_client`, and its `headers`, `timeout`,
+      # `sse_read_timeout`, `httpx_client_factory` and `auth` parameters
+      # collapsed into one caller-built `http_client`. The single call site
+      # (`app/mcp/client.py:207`) passes three of those five, and one of them
+      # is the `_CappedTransport` factory that stops a third-party MCP server
+      # over-reading into the agent. 2.x also requires `httpx2` rather than
+      # `httpx` — a different distribution, while ten services here declare
+      # `httpx >=0.26,<0.29` — so the transport cap has to be rebuilt against
+      # a new HTTP stack. That is a migration with a security surface, and it
+      # arrives as its own reviewed change; see #1033, closed for these
+      # reasons. Majors only, so 1.x security advisories still reach us,
+      # which is the trade the `sqlglot` note above declines to make for a
+      # dependency where a single-path bump is itself the signal.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
 
   # ── Go (enrichment) ──────────────────────────────────────────
   - package-ecosystem: gomod
