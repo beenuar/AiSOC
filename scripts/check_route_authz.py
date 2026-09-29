@@ -45,6 +45,7 @@ import ast
 import json
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -53,6 +54,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # original at import time so this gate would go on scanning the real checkout
 # while believing it was pointed somewhere else.
 import check_route_tenant_scope as route_scan  # noqa: E402
+
+
+class RouteVerdict(TypedDict):
+    """One state-changing route and whether it authorizes.
+
+    A TypedDict rather than a loose ``dict[str, object]`` so the fields the
+    inventory sorts and joins on are typed where they are produced.
+    """
+
+    module: str
+    function: str
+    methods: list[str]
+    route_path: str
+    lineno: int
+    authorized: bool
+
 
 #: Verbs that change state. GET and HEAD are out of scope: this gate is about
 #: who may *write*, and read authorization is a different (real) question with
@@ -158,7 +175,7 @@ def _names_used(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
 
 
-def collect(root: Path | None = None) -> list[dict[str, object]]:
+def collect(root: Path | None = None) -> list[RouteVerdict]:
     """Every state-changing route in ``services/api``, with its authz verdict."""
     base = root or route_scan.REPO_ROOT
     routes = [r for r in route_scan.collect_routes(base) if r.service == SERVICE]
@@ -176,7 +193,7 @@ def collect(root: Path | None = None) -> list[dict[str, object]]:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 handlers[route.path, node.name] = node
 
-    out: list[dict[str, object]] = []
+    out: list[RouteVerdict] = []
     for route in routes:
         if not (set(route.methods) & MUTATING):
             continue
@@ -203,7 +220,7 @@ def collect(root: Path | None = None) -> list[dict[str, object]]:
     return out
 
 
-def _refuse_empty_corpus(rows: list[dict[str, object]]) -> str | None:
+def _refuse_empty_corpus(rows: list[RouteVerdict]) -> str | None:
     """A gate that scanned nothing must fail, not pass.
 
     ``security_audit.py`` once credited a tree with no manifests. The same
@@ -239,9 +256,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.inventory:
-        by_module: dict[str, list[dict[str, object]]] = {}
+        by_module: dict[str, list[RouteVerdict]] = {}
         for row in ungated:
-            by_module.setdefault(str(row["module"]), []).append(row)
+            by_module.setdefault(row["module"], []).append(row)
         for module in sorted(by_module):
             print(f"\n{module}")
             for row in sorted(by_module[module], key=lambda r: r["lineno"]):
