@@ -151,10 +151,7 @@ bootstrapped into.
       identity has its own tenant ([#1070](https://github.com/beenuar/AiSOC/pull/1072))
 - [x] **S1b** The nine vendored shims, the three `require_service_auth` copies, slack-bot and
       realtime push ([#1070](https://github.com/beenuar/AiSOC/pull/1072))
-- [ ] **S1d** Production-class defaults on every documented path: `install.sh`, `install.ps1`,
-      `make up`, the dev overlay, the single-host guide, the walkthrough, `make smoke` asserting an
-      anonymous write returns 401, and the gate that resolves the environment each documented path
-      produces
+- [x] **S1d** Production-class defaults on every documented path ([#1073](https://github.com/beenuar/AiSOC/pull/1073))
 
 ## S2 to S13
 
@@ -181,6 +178,37 @@ bootstrapped into.
 - [ ] Reserve the PyPI and npm names the packages will use (`aisoc` on PyPI
       belongs to an unrelated project).
 - [ ] File the advisories against the release once the batch has landed.
+
+### D9. Flipping the default to production stops the API booting, until two more secrets exist
+
+Found by starting the stack, not by a test. `enforce_secure_defaults` refuses
+to boot when `METRICS_TOKEN` or `JWT_SECRET` is empty and the environment is
+not development-class, and `ensure_env.py` generated neither, because in a
+development-class environment that check only warns. So the posture change on
+its own would have turned "anonymous administrator" into "the API will not
+start". Both are generated now, taking `make env` from twelve secrets to
+fourteen.
+
+Two adjacent defects surfaced in the same hour, both of the same shape as one
+this repository has hit before — a value in `.env` that cannot reach the
+container that needs it:
+
+* neither secret was declared on the `api` service in `docker-compose.yml`, so
+  generating them was not sufficient;
+* `ingest-worker` hardcoded `JWT_SECRET: dev_secret_key_change_in_production`
+  as a bare literal. That value is in `INSECURE_SECRET_KEY_DEFAULTS`, so
+  anyone who read this repository held the key the service verified with, and
+  no `.env` value could displace it.
+
+### D10. The first live verification graded a cached image
+
+The probe stack came up from `ghcr.io/beenuar/aisoc-core-api:latest`, which
+was already on the machine, so the first three posture results described the
+pre-fix API rather than this branch. They looked plausible: production refused
+and development admitted, which is true of both trees. The tell was the third
+case, where a published bind address failed to refuse — a control that does
+not exist in the old code. Rebuild before probing, and prefer a probe that has
+a case the old code cannot pass.
 
 ### D8. Two documents publish the claim-matrix row count in prose
 

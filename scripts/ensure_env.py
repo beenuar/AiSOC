@@ -147,6 +147,20 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Bearer for slack-bot's /internal/approval-card (agents -> slack-bot). Sent as X-AiSOC-Internal-Token.",
     ),
+    # The two `enforce_secure_defaults` refuses to boot without once
+    # ENVIRONMENT is production, which it now is by default. Neither was
+    # generated while `development` was the default, because in a
+    # development-class environment the check only warns. So flipping the
+    # default without adding these would have turned "anonymous admin" into
+    # "the API will not start", which is a worse first run and not a fix.
+    "METRICS_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Bearer for /metrics. Prometheus sends it; without it the endpoint is unauthenticated.",
+    ),
+    "JWT_SECRET": (
+        lambda: secrets.token_urlsafe(32),
+        "HS256 key for the session tokens the SAML and OIDC callbacks issue.",
+    ),
     # The datastore passwords. `.env.example` shipped these as
     # `aisoc_dev_secret` / `aisoc_app_dev_secret` / `redis_dev_secret` /
     # `clickhouse_dev_secret`, and `docker-compose.prod.yml` guarded each one

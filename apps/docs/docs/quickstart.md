@@ -429,7 +429,7 @@ You should see the operator commands: `serve`, `db`, `mcp`, `submit`,
 aisoc serve
 ```
 
-Under the hood this runs `docker compose -f infra/compose/docker-compose.dev.yml up -d`
+Under the hood this runs `docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d`
 against the dev profile. The command resolves the repo root automatically, so
 it works from any subdirectory.
 
@@ -559,7 +559,7 @@ run `pnpm build`.
 ### 7. Tear down
 
 ```bash
-docker compose -f infra/compose/docker-compose.dev.yml down
+docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml down
 ```
 
 Or keep the stack running and re-submit different fixtures — `aisoc

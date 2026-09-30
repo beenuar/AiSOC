@@ -181,12 +181,19 @@ class TestTheBypassIsUnreachable:
     def test_no_service_runs_in_a_dev_class_environment(self, prod: dict) -> None:
         assert not _dev_environments(prod)
 
-    def test_the_development_file_would_fail_this(self) -> None:
-        """The contrast is the point: this is what production differs from."""
-        assert _dev_environments(_services(DEV)), (
-            "docker-compose.yml no longer resolves to a dev-class environment with an empty "
-            ".env, so this gate is comparing production against nothing and proves less than "
-            "it claims"
+    def test_the_developer_overlay_would_fail_this(self) -> None:
+        """The contrast is the point: this is what production differs from.
+
+        It used to compare against `docker-compose.yml`, because that file
+        resolved to a dev-class environment with an empty `.env` — which was
+        the defect, not a baseline. The base is production now, so comparing
+        against it would prove nothing, and this test said so itself rather
+        than passing vacuously. The developer overlay is the honest contrast.
+        """
+        overlay = REPO / "infra" / "compose" / "docker-compose.dev.yml"
+        assert _dev_environments(_services(overlay)), (
+            f"{overlay.name} no longer resolves to a dev-class environment, so this gate is "
+            "comparing production against nothing and proves less than it claims"
         )
 
     def test_environment_and_dev_mode_are_literals_not_variables(self, prod: dict) -> None:

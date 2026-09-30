@@ -377,6 +377,22 @@ jobs:
         run: python3 scripts/check_console_auth_headers.py --self-test
       - name: Verify every console API call carries a credential
         run: python3 scripts/check_console_auth_headers.py
+      # The console half proves a credential is sent and the route gates prove
+      # the server requires one. Neither asks the question that actually bit:
+      # what posture does a documented `make up` produce? ENVIRONMENT
+      # defaulted to `development` in the compose file and in `.env.example`,
+      # and in a development-class environment the API served an
+      # uncredentialed request as an administrator. So the default value of a
+      # string decided whether a host was anonymous, and no test read it.
+      #
+      # Static, with no Docker, so it runs in the jobs that matter. It also
+      # checks the opposite direction: the developer overlay must still turn
+      # the conveniences on, because four of its five rules are satisfied by
+      # deleting the developer path rather than making it explicit.
+      - name: Deployment posture gate — self-test
+        run: python3 scripts/check_deployment_auth_posture.py --self-test
+      - name: Verify every documented path is production-class
+        run: python3 scripts/check_deployment_auth_posture.py
       # Sending a customer file to a third party is a disclosure, and for the
       # first commercial provider wired here it is a disclosure to the public
       # internet: a stored report carries `visibility: "public"` and

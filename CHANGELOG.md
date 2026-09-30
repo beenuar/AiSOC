@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- **`make up` now starts a production-class stack, and `AISOC_DEV_MODE` no longer defaults to on.** The value of `ENVIRONMENT` used to decide whether an uncredentialed request was served as an administrator, and it defaulted to `development` in `docker-compose.yml`, in `.env.example`, and therefore in the `.env` that `make env` writes. Nobody chose that; it was a fallback.
+
+  | Path | Before | Now |
+  |---|---|---|
+  | `make up`, `install.sh`, `install.ps1`, `docker compose up -d` | `ENVIRONMENT=development`, anonymous access on | `ENVIRONMENT=production`, anonymous access off |
+  | `AISOC_DEV_MODE` on ten services | `1` | `0` |
+  | Signing in | automatic, as a demo administrator | the account `make bootstrap` printed |
+  | The developer experience | the default | `make up-dev` |
+
+  `make up-dev` layers `infra/compose/docker-compose.dev.yml`, which sets `ENVIRONMENT=development`, `AISOC_DEV_MODE=1` and `AISOC_DEV_AUTH_BYPASS=1`. That file used to be a fifteen-line `include` alias that set nothing; `include` imports a model whose services may not be overridden, so it could never have carried an override. It is an ordinary two-`-f` overlay now, and the six documented commands that passed it with a single `-f` were corrected.
+
+  **Two more secrets are generated**, taking `make env` from twelve to fourteen: `METRICS_TOKEN` and `JWT_SECRET`. `enforce_secure_defaults` refuses to boot without either once `ENVIRONMENT` is production, and it only warns in a development-class environment — so flipping the default without generating them would have turned "anonymous administrator" into "the API will not start", which is a worse first run and not a fix. This was found by booting the stack, not by a test.
+
+
 - **An unauthenticated request is no longer an administrator, and `AISOC_DEV_MODE` no longer admits an uncredentialed caller.** If you rely on either, here is what changes and how to get it back.
 
   | What used to work | What happens now | How to restore it |
@@ -61,6 +75,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The server-side prefetch in `apps/web/src/app/(app)/cases/page.tsx` was removed rather than credentialed. It sent a build-time tenant id and no token, so it served one fixed tenant's cases to whoever loaded the page; a server render has no session to borrow, so there was no authenticated version of that call to keep. The `initialCases` prop it fed went with it, along with the two assertions in `CasesViewSsr.test.tsx` that only described it — the two covering the demo gate remain, since that is the direction with a production path.
 
   The gate that keeps it closed is wired into `ci.yml` beside the sample-data gate, and runs `--self-test` first. Three blind spots in its own first draft are pinned as cases, each of which had made it silently miss real findings: a generic type argument (`useSWR<Role[]>(...)`) hid both settings SWR sites, a multi-line arrow fetcher was truncated at the first newline so nine calls on the honeytokens and purple-team pages read as "imported, judged elsewhere", and an inline fetcher whose URL is the SWR key has no API path at the call site to match on at all.
+
+- **Every documented way to start AiSOC produced the anonymous posture, and `docker-compose.prod.yml` was selected by nothing.** The file exists and is correct: `ENVIRONMENT: production` and `AISOC_DEV_MODE: 0` as literals on all six Python services. But `Makefile` `up:` and `up-full:` never passed `-f docker-compose.prod.yml`, and `install.sh` and `install.ps1` contain zero occurrences of either variable. So the fix was never "write a production compose"; it was that the default had to be the safe one.
+
+  `scripts/check_deployment_auth_posture.py` keeps it that way. It resolves `${VAR:-default}` against the env file each documented path uses, for every service in the compose file, with no Docker — a gate that needs a daemon does not run in the jobs that matter. It found **28 findings across 12 services** before this change. It also checks the opposite direction, that the developer overlay still sets all three flags, because four of its five rules are satisfied by deleting the developer path rather than making it explicit, and a gate that can be satisfied by deletion is not measuring what it claims to.
+
+  Compose now passes `AISOC_PUBLISHED_BIND_ADDRS` to all twelve services that read the bypass flags, derived from `AISOC_CONSOLE_BIND_ADDR` and `AISOC_BIND_ADDR`. A container binds `0.0.0.0` internally and cannot tell whether anyone else can reach it, so a service that is never told cannot refuse. The consequence is that following the single-host guide, which instructs `AISOC_CONSOLE_BIND_ADDR=0.0.0.0`, now switches the shim off by itself.
+
+  **Verified live, against a rebuilt image rather than the cached one.** Three postures on a real container: `make up` answers 401 to every anonymous request with no bypass variable set at all; `make up-dev` on loopback answers 200 and logs `ANONYMOUS ACCESS IS ENABLED … in tenant …00de`, the demo tenant rather than the operator's; and `make up-dev` with the console published on `0.0.0.0` answers 401 and logs the refusal naming the address. The first run of that probe graded a cached pre-fix image and had to be discarded, which is the reason the image is rebuilt rather than reused.
+
+- **`make smoke` now proves an anonymous write is refused**, on the API port and through the console proxy. Two doors, and only one was ever described: the proxy forwards `/api/v1/*`, so a stack that refuses on `:8000` and serves on `:3000` is still anonymous to anyone with a browser, and `:3000` is the port the single-host guide tells operators to publish. A connection error is reported as a skip rather than a pass, because "nothing answered" and "the right thing answered" must not print the same word.
+
+- **`ingest-worker` shipped a published secret as a bare literal.** `JWT_SECRET: dev_secret_key_change_in_production` was hardcoded in `docker-compose.yml`, and that value is in `INSECURE_SECRET_KEY_DEFAULTS` — so anyone who read this repository held the key the service verified with, and no `.env` value could displace it. It is interpolated now and `make env` generates it. Found while wiring the two missing secrets into the API, which had the mirror-image defect: neither was declared on the `api` service at all, so a value in `.env` could not reach the container.
+
+- **Two stale claims on the single-host guide.** It said the datastores keep "the development passwords this repository ships in `.env.example`" and that `AISOC_BIND_ADDR` "hands out the shipped development passwords". `.env.example` ships those fields empty and `make env` generates a real password for each, so both sentences described a state that no longer existed. The `AISOC_BIND_ADDR` warning is still a warning, for the reason that is actually true: it makes the datastores reachable from the network rather than from this host alone.
 
 - **An anonymous caller was an administrator in the operator's own tenant, on every documented deployment.** Three things had to be true at once and all three were, by default:
 

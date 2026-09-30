@@ -404,6 +404,12 @@ services:
       # was passed to either side before, which is why both guards there were
       # running on a published constant or not running at all.
       AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:-}
+      # Both are required for the API to boot now that ENVIRONMENT defaults
+      # to production, and neither was interpolated here — so a value in .env
+      # could not reach the container, which is the same shape that once left
+      # AISOC_SERVICE_TOKEN unreachable to this one service.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      JWT_SECRET: ${JWT_SECRET:-}
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
       # The credential this service presents when it proxies the connector
       # catalog and "Test connection" to the connectors service.
@@ -440,7 +446,11 @@ services:
       # Was a bare literal, so `.env`'s documented ENVIRONMENT was ignored and
       # `production` changed nothing — including the dev auth bypass in
       # app/api/v1/dev_auth.py, which could not be switched off from .env at all.
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # Issue #478 — LiteLLM gateway. This service's live LLM endpoints
       # (translation, hunts, KB, phishing, NL-detection) route here by default:
@@ -502,7 +512,11 @@ services:
       # operator set it, and `JWT_SECRET must be set in non-development
       # environments` never fired on the one service taking events off the
       # network.
-      ENV: ${ENVIRONMENT:-development}
+      ENV: ${ENVIRONMENT:-production}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       HTTP_PORT: 8080
       METRICS_PORT: 9090
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -514,7 +528,11 @@ services:
       # DATABASE_URL the Python services use.
       DATABASE_DSN: postgres://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc?sslmode=disable
       LOG_LEVEL: info
-      JWT_SECRET: dev_secret_key_change_in_production
+      # A bare literal, and a published one: `dev_secret_key_change_in_production`
+      # is in INSECURE_SECRET_KEY_DEFAULTS, so anyone who read this repository
+      # held the key this service verified with. Interpolated now, and `make
+      # env` generates it.
+      JWT_SECRET: ${JWT_SECRET:-}
       # /v1/ingest requires a credential. Two shapes are accepted: a
       # per-tenant push token minted with `make ingest-token` (resolved
       # through DATABASE_DSN above), and this shared service token, which
@@ -589,7 +607,11 @@ services:
       # service token is configured and dev mode is off, and this service
       # received none of the three — the same trio `connectors` and
       # `threatintel` already carry.
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       SECRET_KEY: ${SECRET_KEY:-}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
@@ -674,7 +696,11 @@ services:
       # configured *and* dev mode is off — which is what every tenant-scoped
       # route here answered: 503, with no credential material to verify
       # against and nothing in the image supplying any.
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       SECRET_KEY: ${SECRET_KEY:-}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       # The agents service's own service credential, used in both directions:
@@ -861,7 +887,11 @@ services:
       # service token is configured and dev mode is off, and this service
       # received none of the three — the same trio `connectors` and
       # `threatintel` already carry.
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       SECRET_KEY: ${SECRET_KEY:-}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       # The ingest service is registered as `ingest-worker` in this compose
@@ -921,7 +951,11 @@ services:
       # require_service_auth returns 503 on every mutating route without it
       # in any other environment, which is the intended failure.
       AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
     networks:
       - aisoc
     restart: unless-stopped
@@ -974,8 +1008,12 @@ services:
       # purple-team and slack-bot, and not on connectors. Dev mode only applies
       # when nothing is configured, so once `make env` generates a real
       # AISOC_SERVICE_TOKEN this flag stops having any effect.
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/6
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
@@ -1050,7 +1088,11 @@ services:
       # Same credential the API presents when it proxies /threat-intel/indicators.
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       MISP_URL: ${MISP_URL:-}
       MISP_API_KEY: ${MISP_API_KEY:-}
       OTX_API_KEY: ${OTX_API_KEY:-}
@@ -1096,7 +1138,11 @@ services:
       CLICKHOUSE_URL: http://aisoc:${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}@clickhouse:8123/aisoc
       CORE_API_URL: http://api:8000
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
     # A detached consumer used to read as `running`. /readyz answers 503 when
     # the subscription is gone or the schema is not at head, so `docker compose
     # ps` and `make _wait` now see the difference.
@@ -1151,7 +1197,11 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CORE_API_URL: http://api:8000
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
     # A detached consumer used to read as `running`. /readyz answers 503 when
     # the subscription is gone or the schema is not at head, so `docker compose
     # ps` and `make _wait` now see the difference.
@@ -1204,7 +1254,11 @@ services:
       CORE_API_URL: http://api:8000
       ATTCK_DATA_PATH: /app/data/enterprise-attack.json
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
     # A detached consumer used to read as `running`. /readyz answers 503 when
     # the subscription is gone or the schema is not at head, so `docker compose
     # ps` and `make _wait` now see the difference.
@@ -1284,7 +1338,11 @@ services:
       SLACK_APPROVALS_CHANNEL: ${SLACK_APPROVALS_CHANNEL:-}
       # Shared with the agents service, which calls /internal/approval-card.
       AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
-      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-1}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
     networks:
       - aisoc
     restart: unless-stopped

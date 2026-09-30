@@ -1,15 +1,106 @@
-# AiSOC — developer compose entrypoint.
+# AiSOC — the developer overlay.
 #
-# This file is a thin alias over `docker-compose.yml` so that the Quickstart
-# guide and demo scripts can use a stable, dev-flavoured command:
+# Layer this on top of the root compose file to turn on the conveniences a
+# contributor wants on a laptop and nobody wants on a reachable host:
 #
-#     docker compose -f infra/compose/docker-compose.dev.yml up -d
+#     docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d
 #
-# It uses the Compose Spec `include` directive (Docker Compose v2.20+) to
-# pull in the full stack from the repo-root `docker-compose.yml` without
-# duplicating any service definitions. Override files (e.g.
-# `docker-compose.local.yml`) can still be layered on top with additional
-# `-f` flags.
+# or simply `make up-dev`, which passes both files for you.
+#
+# Two `-f` flags, not `include:`. This file used to be a fifteen-line alias
+# that pulled the root file in through the Compose Spec `include` directive
+# and added nothing at all. `include` imports a *model* whose services may not
+# be overridden, so it could never have carried the overrides below; an
+# ordinary overlay can, and works on every Compose v2 the project supports.
+#
+# What it turns on, and why each is off by default
+# ------------------------------------------------
+# `ENVIRONMENT=development` selects table autocreate, the docs UI, relaxed
+# `/metrics`, human-readable logs, GraphiQL and an ephemeral credential-vault
+# key. It also used to be the single condition under which the API served a
+# request with no bearer token as an administrator, and it defaulted to this
+# value in the root compose file and in `.env.example`. So every stock
+# `docker compose up` ran anonymous, and nobody chose it.
+#
+# `AISOC_DEV_MODE=1` is the same story on the other nine services: it lets
+# them admit an uncredentialed caller when neither `SECRET_KEY` nor a service
+# token is configured.
+#
+# `AISOC_DEV_AUTH_BYPASS=1` is the flag that actually enables the anonymous
+# path now. It exists because the two above mean nine other things between
+# them, and a flag that means nine things cannot be refused for one of them.
+# It is set here and nowhere else in the repository.
+#
+# The bypass is still refused on a published address
+# --------------------------------------------------
+# Even with all three set, a service declines to serve an anonymous caller
+# when `AISOC_PUBLISHED_BIND_ADDRS` names anything that is not loopback. The
+# root compose file derives that from `AISOC_CONSOLE_BIND_ADDR` and
+# `AISOC_BIND_ADDR`, so publishing the console on `0.0.0.0` turns the bypass
+# off by itself. That is deliberate: this overlay makes a laptop convenient,
+# not a server open.
 
-include:
-  - ../../docker-compose.yml
+services:
+  api:
+    environment:
+      ENVIRONMENT: development
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  ingest-worker:
+    environment:
+      ENV: development
+      ENVIRONMENT: development
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  fusion:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  agents:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  actions:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  connectors:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+      ENVIRONMENT: development
+
+  threatintel:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  osquery-tls:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  ueba:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  honeytokens:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  purple-team:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
+  slack-bot:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
