@@ -834,7 +834,7 @@ async def _admin_scope(scope: PortfolioScope = Depends(_scope)) -> PortfolioScop
     return scope
 
 
-def _require_org_grant_scope(granter: str, requested: str, *, current: str | None) -> None:
+def _require_org_grant_scope(granter: str | None, requested: str, *, current: str | None) -> None:
     """Refuse an organisation role above the granter's own.
 
     ``ORG_ROLES`` is ordered by authority, unlike the tenant roles, so this is
@@ -842,9 +842,15 @@ def _require_org_grant_scope(granter: str, requested: str, *, current: str | Non
     the same property `app.core.role_grants` enforces there: nobody confers
     what they do not hold. ``current`` covers the other half, since demoting
     the sitting ``owner`` is how an ``admin`` would clear the way.
+
+    ``granter`` is ``str | None`` because ``PortfolioScope.org_role`` is.
+    ``_admin_scope`` has already refused a non-administering caller by the
+    time this runs, so ``None`` should be unreachable — an unrecognised or
+    absent role lands on a ceiling of -1 and confers nothing, which is the
+    direction to fail in if that ever stops being true.
     """
     rank = {role: index for index, role in enumerate(reversed(ORG_ROLES))}
-    ceiling = rank.get(granter, -1)
+    ceiling = rank.get(granter or "", -1)
     if rank.get(requested, len(ORG_ROLES)) > ceiling:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
