@@ -148,9 +148,9 @@ bootstrapped into.
 
 - [x] **S1c** Console credential on every call ([#1069](https://github.com/beenuar/AiSOC/pull/1069))
 - [x] **S1a** The bypass needs an explicit opt-in, refuses a reachable bind address, and the demo
-      identity has its own tenant ([#1070](https://github.com/beenuar/AiSOC/pull/1070))
+      identity has its own tenant ([#1070](https://github.com/beenuar/AiSOC/pull/1071))
 - [x] **S1b** The nine vendored shims, the three `require_service_auth` copies, slack-bot and
-      realtime push ([#1070](https://github.com/beenuar/AiSOC/pull/1070))
+      realtime push ([#1070](https://github.com/beenuar/AiSOC/pull/1071))
 - [ ] **S1d** Production-class defaults on every documented path: `install.sh`, `install.ps1`,
       `make up`, the dev overlay, the single-host guide, the walkthrough, `make smoke` asserting an
       anonymous write returns 401, and the gate that resolves the environment each documented path
