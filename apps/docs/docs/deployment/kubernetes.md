@@ -69,6 +69,29 @@ chart on every tag, and re-checks that its `appVersion` names images that
 exist. Until the first release carrying that job, install from a checkout as
 shown below.
 
+### The chart's version, and one coordinate that meant two things
+
+`Chart.yaml` carries two versions. `appVersion` is the application, and is
+what every unpinned `tag:` in `values.yaml` falls back to. `version` is the
+chart's own, and it is what `--version` selects.
+
+**If you pinned `--version 5.9.2`, pull it again and check what you have.**
+v12.3.2 published chart 5.9.2 with `appVersion: v12.3.2`; v13.0.0 bumped
+`appVersion` and left the chart version alone, and `helm push` overwrote the
+existing version rather than refusing it. `charts/aisoc:5.9.2` therefore names
+`v13.0.0` today and named `v12.3.2` before 29 September 2026. The replaced
+bytes are gone and cannot be restored — the coordinate is honest from 6.0.0
+onward, and 5.9.2 stays ambiguous forever.
+
+`scripts/check_chart_version.py` is what stops the next one. It refuses a
+release whose `appVersion` moved while the chart version did not, refuses a
+chart edit with no version bump, and asks GHCR whether the version about to be
+pushed already exists holding different content — comparing the unpacked
+files, because `helm package` output is not byte-reproducible. What it does
+not decide is whether a bump is a major, a minor or a patch: nothing in a diff
+knows whether a renamed `values.yaml` key breaks your values file, so that
+judgement stays with a human.
+
 `scripts/check_published_images.py` resolves every one of these against GHCR
 daily, so a name or tag that stops existing fails a build rather than a
 `helm install`. It asks whether the tag exists and whether the image behind it

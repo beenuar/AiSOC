@@ -1040,6 +1040,11 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # check_chart_version.py reads every release tag to find a chart
+          # version declared twice, and compares this tree against the commit
+          # it descends from. Neither is in a depth-1 checkout.
+          fetch-depth: 0
       - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
           version: v3.18.5
@@ -1071,6 +1076,21 @@ jobs:
           set -euo pipefail
           python -m pip install --quiet pyyaml
           python3 scripts/check_published_images.py --require-network --list
+
+      # `helm push` overwrites an existing version without a word, so this is
+      # the last moment anything can refuse. v13.0.0 pushed 5.9.2 on top of
+      # the chart v12.3.2 had published because `appVersion` moved and
+      # `version` did not; the replaced bytes cannot be recovered, which is
+      # why this has to run *before* the push rather than verify after it.
+      #
+      # `--require-network` unlike the pull-request job: a registry that
+      # cannot be reached at the moment of publication leaves the one question
+      # this step exists to answer unanswered, and a release is not the place
+      # to assume the answer.
+      - name: The chart version is not already published naming something else
+        run: |
+          set -euo pipefail
+          python3 scripts/check_chart_version.py --check --require-network
 
       - name: Log in to GHCR
         if: github.event_name == 'push'

@@ -255,3 +255,44 @@ jobs:
             --set 'networkPolicy.allowedEgressCIDRs={10.0.0.0/8}' \
             > /dev/null
           echo "OK: the API server accepted every object in the chart."
+
+  # ── The chart's own version ───────────────────────────────────────────────
+  #
+  # `appVersion` was gated from the day check_published_images.py landed;
+  # `version` was read by nothing. v13.0.0 bumped the first and left the
+  # second at 5.9.2, so `helm push` republished a version v12.3.2 had already
+  # published, and `charts/aisoc:5.9.2` now names a different application than
+  # it did in September. The bytes are not recoverable.
+  #
+  # Separate from `render` because it answers a different question and needs a
+  # different checkout: identity rather than validity, and the whole history
+  # rather than one commit. Deliberately *not* a required context — this
+  # workflow is path-filtered to `infra/helm/**`, and a required check that
+  # never reports blocks every pull request that does not touch the chart.
+  version:
+    name: Helm — the chart's version names one chart only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Tags and the fork point. The gate reads what every release
+          # declared and compares this tree against where it branched; a
+          # depth-1 checkout has neither and the gate refuses rather than
+          # reporting a clean verdict about a history it could not see.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+
+      - name: The gate still detects what it claims to
+        run: python3 scripts/check_chart_version.py --self-test
+
+      # No `--require-network` here, matching check_published_images.py: a
+      # contributor on a train should not be told the chart is wrong because
+      # GHCR was unreachable. The check that catches the v13.0.0 defect reads
+      # git alone and runs either way; only the registry comparison skips, and
+      # it says so. The release job below does require the network, because an
+      # unanswered registry at the moment of a push is the whole question.
+      - name: The chart's version has not been reused for different content
+        run: python3 scripts/check_chart_version.py --check
