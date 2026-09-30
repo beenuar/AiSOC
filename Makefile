@@ -45,7 +45,7 @@ CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail 
 console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:3000)
 
 .PHONY: help install env up up-full pull down restart status doctor smoke demo logs clean \
-        bootstrap ingest-token test test-unit test-integration test-e2e stats papers \
+        bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
 help:
@@ -264,6 +264,13 @@ doctor:
 ingest-token:
 	@$(COMPOSE) run --rm -T api python -m app.scripts.mint_ingest_token $(ARGS)
 
+# A short-lived bearer for the account `make bootstrap` created, so a script
+# can read the API the way the console does. The sibling of `ingest-token`:
+# reading used to need no credential at all, because an uncredentialed request
+# resolved to a demo administrator and every documented path produced one.
+api-token:
+	@$(COMPOSE) run --rm -T api python -m app.scripts.mint_api_token $(ARGS)
+
 # The golden pipeline. One real event, through the real spine, observed from
 # outside. This is the only claim of "it works" the project makes.
 #
@@ -275,7 +282,11 @@ smoke:
 	  echo "Could not mint an ingest token — is the stack up? Try 'make doctor'."; \
 	  exit 1; \
 	}; \
-	AISOC_INGEST_TOKEN="$$token" $(PYTHON) tests/e2e/golden_pipeline/run_golden_pipeline.py
+	api="$$($(COMPOSE) run --rm -T api python -m app.scripts.mint_api_token --quiet)" || { \
+	  echo "Could not mint an API token — has 'make bootstrap' run? Try 'make doctor'."; \
+	  exit 1; \
+	}; \
+	AISOC_INGEST_TOKEN="$$token" AISOC_API_TOKEN="$$api" $(PYTHON) tests/e2e/golden_pipeline/run_golden_pipeline.py
 
 demo:
 	@echo "Loading synthetic demo data. Every row is tagged is_synthetic=true"

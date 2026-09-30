@@ -165,6 +165,24 @@ jobs:
           fi
           echo "confirmed: a second mint reused the existing push token"
 
+      # The alert reads need a credential too. They used to succeed with none,
+      # because an uncredentialed request resolved to a demo administrator in
+      # a development-class environment and every documented path produced
+      # one — so this workflow was reading the API as an anonymous admin
+      # without anybody having decided that. Minted through the shipped
+      # command, for the same reason the ingest token is.
+      - name: Mint the API credential the alert reads need
+        run: |
+          set -euo pipefail
+          docker compose run --rm -T api python -m app.scripts.bootstrap_admin >/dev/null 2>&1 || true
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_api_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_api_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_API_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Golden pipeline — one real event end to end
         run: python3 tests/e2e/golden_pipeline/run_golden_pipeline.py
 

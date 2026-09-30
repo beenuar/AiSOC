@@ -30,6 +30,8 @@ Environment:
                                python -m app.scripts.mint_ingest_token --quiet`
     AISOC_INGEST_URL      default http://localhost:8081
     AISOC_API_URL         default http://localhost:8000
+    AISOC_API_TOKEN       required — the bearer the alert reads need. Mint
+                          one with `make api-token`; `make smoke` does it.
     AISOC_TENANT_ID       default the seeded canonical tenant
     AISOC_GOLDEN_TIMEOUT  seconds to wait for the alert (default 90)
 
@@ -58,6 +60,13 @@ API_URL = os.environ.get("AISOC_API_URL", "http://localhost:8000").rstrip("/")
 TENANT_ID = os.environ.get("AISOC_TENANT_ID", "00000000-0000-0000-0000-000000000001")
 TIMEOUT_SECONDS = int(os.environ.get("AISOC_GOLDEN_TIMEOUT", "90"))
 INGEST_TOKEN = os.environ.get("AISOC_INGEST_TOKEN", "").strip()
+# The API refuses an uncredentialed read. It used to serve one, because a
+# request with no bearer token resolved to a demo administrator in a
+# development-class environment and every documented path produced one —
+# so this harness was reading the API as an anonymous admin without
+# anybody having decided that.
+API_TOKEN = os.environ.get("AISOC_API_TOKEN", "").strip()
+API_AUTH = {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
 
 #: Unique per run so a re-run cannot pass by finding the previous run's alert
 #: — the failure mode that makes an end-to-end test permanently green.
@@ -208,7 +217,7 @@ def main() -> int:
     alert: dict | None = None
     last_status = 0
     while time.time() < deadline:
-        last_status, body = _request("GET", f"{API_URL}/api/v1/alerts?limit=50")
+        last_status, body = _request("GET", f"{API_URL}/api/v1/alerts?limit=50", headers=API_AUTH)
         if last_status == 200:
             try:
                 items = json.loads(body).get("items", [])
@@ -222,22 +231,39 @@ def main() -> int:
             break
         time.sleep(3)
 
+    # A read that was refused is not a pipeline failure, and saying so saves
+    # an operator from reading Kafka logs about a working consumer. The first
+    # version of this spent 90 seconds on a 401 and then suggested three
+    # things to check, none of which was the credential.
+    refused = last_status in (401, 403)
     if not r.record(
         "event traversed the spine and became an alert",
         alert is not None,
-        "" if alert else (f"no alert carrying run id {RUN_ID} after {TIMEOUT_SECONDS}s (last API status {last_status})"),
+        ""
+        if alert
+        else (
+            f"the API refused the read (HTTP {last_status}). This harness needs a bearer "
+            "token: set AISOC_API_TOKEN, or run `make smoke`, which mints one."
+            if refused
+            else f"no alert carrying run id {RUN_ID} after {TIMEOUT_SECONDS}s (last API status {last_status})"
+        ),
     ):
-        print("\n  The event was accepted but never became an alert. Check, in order:")
-        print("    docker compose logs fusion | tail -60      # consumer + promotion")
-        print("    docker compose exec kafka kafka-topics --bootstrap-server localhost:29092 --list")
-        print("    docker compose exec postgres psql -U aisoc -d aisoc -c 'select count(*) from alerts;'")
+        if refused:
+            print("\n  The event reached ingest; the API would not let this harness read it.")
+            print('    AISOC_API_TOKEN="$(docker compose run --rm -T api \\')
+            print('      python -m app.scripts.mint_api_token --quiet)"')
+        else:
+            print("\n  The event was accepted but never became an alert. Check, in order:")
+            print("    docker compose logs fusion | tail -60      # consumer + promotion")
+            print("    docker compose exec kafka kafka-topics --bootstrap-server localhost:29092 --list")
+            print("    docker compose exec postgres psql -U aisoc -d aisoc -c 'select count(*) from alerts;'")
         return _finish(r)
 
     assert alert is not None  # for type checkers; guarded above
 
     # ── 7. The alert is retrievable individually, not just in a list ─────
     alert_id = alert.get("id")
-    status, body = _request("GET", f"{API_URL}/api/v1/alerts/{alert_id}")
+    status, body = _request("GET", f"{API_URL}/api/v1/alerts/{alert_id}", headers=API_AUTH)
     r.record("alert is retrievable by id from the API", status == 200, f"HTTP {status}" if status != 200 else str(alert_id))
 
     # ── 8. Provenance survived the journey ───────────────────────────────

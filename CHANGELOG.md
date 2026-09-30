@@ -66,6 +66,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
     The `'default'` fallback deserves naming separately: it is not a tenant. Migration 001 seeds the canonical tenant with that *slug* and the demo seed renames it, so every subscription that reached the fallback was filed under a Redis key belonging to nobody, silently. `tenantOf` now throws and the routes answer 400.
 
+- **The golden pipeline was reading the API as an anonymous administrator.** `tests/e2e/golden_pipeline/run_golden_pipeline.py` drives one real event through the spine and then asks the API whether it became an alert. That read carried no credential and succeeded, because an uncredentialed request resolves to a demo administrator in a development-class environment and every documented path produced one — so the project's only end-to-end claim of "it works" was being made through the bypass, without anybody having decided that.
+
+  The harness now carries a bearer token, minted by `app.scripts.mint_api_token` — the sibling of `mint_ingest_token`, and a shipped command for the same reason: the step that calls it also covers a path an operator can follow (`make api-token`). It creates nothing, refuses when no account exists, and refuses the demo tenant outright, because a real token scoped to the tenant the shim hands anonymous callers would make the bypass reachable from outside the bypass.
+
+  A refused read is now reported as refused. The first version spent 90 seconds on a 401 and then suggested checking Kafka, the fusion consumer and the alerts table — three things that were all working.
+
+  Two things caught by gates rather than by the suite: `scripts/check_tenant_query_predicates.py` flagged the first draft for selecting "the most privileged active account anywhere", which is unscoped against a table with no row-level security and a vague target on a multi-tenant deployment; and every test passed while `DEFAULT_TENANT_ID` was not imported at all, because each one supplied a tenant explicitly and none reached the default branch. Ruff found it.
+
 - **A test-isolation trap worth recording, because it cost a diagnosis.** The first draft of the new API test file called `importlib.reload` on `app.api.v1.deps`, copying an older test in the same directory. That rebinds every function object in the module, so the `dependency_overrides` other test modules keyed on the old objects stop matching and their routes fall through to real authentication: **146 tests failed across three unrelated files, every one of which passes in isolation.** The older test got away with it only because its filename sorts near the end of the suite. Neither file reloads anything now, and neither needs to — the shim reads `os.environ` at call time precisely so that it does not.
 
 ## [14.0.0] - 2026-09-29
