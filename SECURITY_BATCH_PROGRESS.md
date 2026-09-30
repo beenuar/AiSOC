@@ -167,9 +167,11 @@ bootstrapped into.
 
 ## Maintainer actions
 
-- [ ] Check whether `tryaisoc.com` runs with a dev-class `ENVIRONMENT` or
-      serves more than one real tenant. If it does, assess exposure for S1 to
-      S4 and rotate anything those routes could reach.
+- [ ] Check whether the managed instance runs with a dev-class `ENVIRONMENT`
+      or serves more than one real tenant. If it does, assess exposure for S1
+      to S4 and rotate anything those routes could reach. (Named neutrally on
+      purpose: `scripts/check_hosted_hostname.py` keeps the managed hostname
+      out of this repository, and a tracker is not a reason to exempt it.)
 - [ ] Reserve the PyPI and npm names the packages will use (`aisoc` on PyPI
       belongs to an unrelated project).
 - [ ] File the advisories against the release once the batch has landed.
