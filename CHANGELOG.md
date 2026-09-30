@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Ten newly-disclosed advisories in two transitive dependencies.** `axios` moved to `>=1.20.0` through a `pnpm.overrides` entry (six high-severity advisories against the 1.x line, all patched in 1.20.0: GHSA-c29m-xwm3-cm6r, GHSA-mghh-pgcx-3jjj, GHSA-3pq3-5fj3-cg6v, GHSA-542g-h47m-68v8, GHSA-m8m8-qj5v-23w3, GHSA-r4gj-5m52-g5wh). A seventh, GHSA-x97p-jq2g-jp4f, covers 0.28.0 to 0.34.0, a line nothing in this tree resolves, so the bound is written against 1.x rather than spanning both.
+
+  `urllib3` moved to 2.8.0 in `services/agents/poetry.lock`, which was the only one of seven service lockfiles still on 2.7.0 (CVE-2026-97687, CVE-2026-97688, CVE-2026-97689). Nothing declares either package: both arrive transitively, which is why an override and a lock refresh are the fix rather than a version bump.
+
+  Worth recording separately: `main` was green at `079fdb69` while every open pull request was red on this, because the advisories were published after `main` last ran. A stale-green default branch hiding a breaker that reds the whole queue is a shape this repository has hit before.
+
 ## [14.0.0] - 2026-09-29
 
 ### BREAKING
