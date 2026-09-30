@@ -15,10 +15,12 @@
 # A standalone copy would have drifted from the base within a release, which is
 # the failure this repository keeps finding.
 #
-# It was written with the Compose Spec `include` directive and a single `-f`,
-# which is how `infra/compose/docker-compose.dev.yml` pulls the base in. That
-# does not work here: `include` imports a model, and overriding a service it
+# It was written with the Compose Spec `include` directive and a single `-f`.
+# That does not work: `include` imports a model, and overriding a service it
 # imported is rejected with `services.<name> conflicts with imported resource`.
+# `infra/compose/docker-compose.dev.yml` had the same shape and has since
+# moved to a two-`-f` overlay for the same reason — it could never have
+# carried an override, which is why it carried nothing.
 # Measured rather than assumed — `-f docker-compose.prod.yml` alone fails on
 # Compose v2.29.7 and v2.39.4 and resolves only on 5.1.3, so the documented
 # production command worked on almost no installation. Two `-f` flags are the

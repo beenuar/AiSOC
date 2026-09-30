@@ -70,14 +70,34 @@ class TestTheDocumentedSwitchReachesEveryService:
             f"these services hardcode a dev-class environment, so `ENVIRONMENT=production` in .env does not reach them: {offenders}"
         )
 
+    #: The one file whose job is to be development, so the one file allowed
+    #: to pin it. Everything else must interpolate, or an operator's
+    #: `ENVIRONMENT=production` does not reach the service.
+    DEV_OVERLAY_NAME = "docker-compose.dev.yml"
+
     @pytest.mark.parametrize("path", COMPOSE_FILES, ids=lambda p: p.name)
     def test_no_tracked_compose_file_pins_one(self, path: pathlib.Path) -> None:
-        """The dev overlay is allowed to *be* development — by interpolation.
+        """Every compose file except the developer overlay interpolates.
 
         Included because the next service to hardcode one is as likely to land
-        in the overlay as in the root file, and a gate that reads one file is
+        in an overlay as in the root file, and a gate that reads one file is
         the shape that let this through.
+
+        The developer overlay is exempt, and pins the literal deliberately.
+        This assertion used to exempt it on the grounds that it interpolated
+        too, which was true only because the file was a fifteen-line `include`
+        alias that set nothing at all. Now that it carries the switch, an
+        interpolated value there would let a stray `ENVIRONMENT=production` in
+        `.env` silently defeat the overlay an operator passed on purpose.
         """
+        if path.name == self.DEV_OVERLAY_NAME:
+            offenders = _literal_dev_envs(path)
+            assert offenders, (
+                f"{path.name} is the developer overlay and no longer pins a dev-class "
+                "environment, so `make up-dev` would produce the same posture as `make up` "
+                "and this suite would still be green"
+            )
+            return
         assert not _literal_dev_envs(path)
 
     def test_the_gate_detects_the_literal_it_was_written_for(self, tmp_path: pathlib.Path) -> None:

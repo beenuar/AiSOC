@@ -35,8 +35,30 @@ The console is the **only** port a browser needs. The bundle it serves calls
 same-origin paths — `/api/v1/alerts`, `/ws/…` — and the Next.js server
 forwards them to the API, the agents service and the realtime gateway over the
 internal Docker network. Publishing one port therefore exposes one service,
-and Postgres, Redis, Kafka and Neo4j stay on loopback with the development
-passwords this repository ships in `.env.example`.
+and Postgres, Redis, Kafka and Neo4j stay on loopback with the credentials
+`make env` generated for this install.
+
+:::info Publishing the console also switches off anonymous access
+`docker compose up -d` runs production-class: `ENVIRONMENT` defaults to
+`production` and `AISOC_DEV_MODE` to `0`, so a request carrying no bearer
+token gets a `401`. You do not have to set anything for that.
+
+Setting `AISOC_CONSOLE_BIND_ADDR=0.0.0.0` reinforces it. Compose passes the
+published addresses to each service as `AISOC_PUBLISHED_BIND_ADDRS`, and a
+service refuses the development auth shim outright when any of them is not
+loopback — even if someone sets `AISOC_DEV_AUTH_BYPASS=1` by hand. A container
+binds `0.0.0.0` internally and cannot work this out for itself, which is why
+the addresses are passed in rather than inferred.
+
+This used to be the other way round. `ENVIRONMENT` defaulted to `development`
+here and in `.env.example`, and in a development-class environment the API
+resolved an uncredentialed request to a demo user with the `admin` role whose
+tenant was the same one `make bootstrap` put your real account in. Following
+this page therefore published an anonymous administrator over your own data.
+If you are upgrading, nothing is required: the default changed. What changed
+for you is that `make up` no longer signs you in automatically — use
+`make up-dev` on a laptop if you want that back.
+:::
 
 ```bash
 docker compose up -d
@@ -53,8 +75,9 @@ readable by anything on the path.
 
 There is a second variable, `AISOC_BIND_ADDR`, which moves **every** binding
 including the datastores. It exists for an isolated network where you want
-`psql` from another machine. On a routable network it hands out the shipped
-development passwords, so rotate them first, or leave it alone and use an SSH
+`psql` from another machine. `make env` generates a real password for each
+datastore, so these are not shipped literals any more, but they are now
+reachable from the network rather than from this host alone. Prefer an SSH
 tunnel.
 
 ### Also set the console's own address

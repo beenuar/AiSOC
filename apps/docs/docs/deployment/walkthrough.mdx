@@ -61,6 +61,20 @@ the only port a browser needs — its Next.js server proxies same-origin paths t
 the API, the agents service and the realtime gateway over the internal network
 — so publishing one port exposes one service and the datastores stay private.
 
+Publishing it also hardens authentication rather than weakening it. The stack
+runs production-class by default, so a request with no bearer token gets a
+`401`; and because compose passes the published addresses to each service as
+`AISOC_PUBLISHED_BIND_ADDRS`, a non-loopback value makes every service refuse
+the development auth shim outright, even if somebody sets
+`AISOC_DEV_AUTH_BYPASS=1` by hand.
+
+That is the opposite of how this page used to read. `ENVIRONMENT` defaulted to
+`development` in the compose file and in `.env.example`, and in a
+development-class environment an uncredentialed request resolved to a demo
+user carrying the `admin` role, in the same tenant your real administrator was
+about to be created in. If you want the signed-in-automatically experience on
+a laptop, that is now `make up-dev`.
+
 The second decides which address AiSOC *tells* people to use. `make up` and
 `make bootstrap` both print it when the administrator is created. Leave it at
 the default and a server deployment prints `http://localhost:3000`, which

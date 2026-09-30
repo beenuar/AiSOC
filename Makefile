@@ -44,7 +44,7 @@ PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail -n1 | tr -d '\r')
 console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:3000)
 
-.PHONY: help install env up up-full pull down restart status doctor smoke demo logs clean \
+.PHONY: help install env up up-dev up-full pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
@@ -139,6 +139,29 @@ bootstrap:
 # 8123 stopped the stack after eight containers had already started, with
 # `Bind for 0.0.0.0:8123 failed: port is already allocated` naming neither the
 # process holding it nor what to do.
+# The developer path, explicit. `make up` is production-class now: an
+# uncredentialed request gets a 401, because the value of ENVIRONMENT used to
+# decide whether a host was anonymous and it defaulted to `development`.
+# This target layers the overlay that turns the conveniences back on.
+#
+# Two `-f` flags rather than `include:`, which imports a model whose services
+# may not be overridden. The overlay was written that way and could therefore
+# never have carried an override, which is why it carried nothing.
+#
+# The bypass is still refused if the stack publishes a non-loopback address,
+# so this makes a laptop convenient rather than a server open.
+up-dev: env _ports _refresh
+	$(COMPOSE) -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d
+	@$(MAKE) --no-print-directory _wait
+	@echo ""
+	@echo "  Console:  $(console_url)"
+	@echo "  API:      http://localhost:8000/api/docs"
+	@echo ""
+	@echo "  Anonymous access is ON. This overlay is for a laptop, not a host"
+	@echo "  anyone else can reach."
+	@echo ""
+	@$(MAKE) --no-print-directory bootstrap
+
 up-full: env _ports _refresh
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait PROFILE=full
@@ -277,7 +300,7 @@ api-token:
 # The token is minted first because ingest is authenticated: the endpoint
 # takes a credential that carries its own tenant rather than a header
 # naming one. Minting here keeps `make smoke` a single command.
-smoke:
+smoke: _anonymous_write_is_refused
 	@token="$$($(COMPOSE) run --rm -T api python -m app.scripts.mint_ingest_token --quiet)" || { \
 	  echo "Could not mint an ingest token — is the stack up? Try 'make doctor'."; \
 	  exit 1; \
@@ -287,6 +310,33 @@ smoke:
 	  exit 1; \
 	}; \
 	AISOC_INGEST_TOKEN="$$token" AISOC_API_TOKEN="$$api" $(PYTHON) tests/e2e/golden_pipeline/run_golden_pipeline.py
+
+# Both surfaces, because they are different doors and only one of them was
+# ever described. The console proxy forwards /api/v1/* to the API, so a stack
+# that refuses on :8000 and serves on :3000 is still anonymous to anyone with
+# a browser — and :3000 is the one the single-host guide tells operators to
+# publish.
+#
+# A connection error is a skip, not a pass: "nothing answered" and "the right
+# thing answered" must not print the same word.
+_anonymous_write_is_refused:
+	@echo "Checking that an unauthenticated write is refused…"
+	@for target in "http://localhost:8000/api/v1/cases" "http://localhost:3000/api/v1/cases"; do \
+	  code=$$(curl -s -o /dev/null -w '%{http_code}' -X POST "$$target" \
+	    -H 'Content-Type: application/json' -d '{"title":"anonymous write probe"}' \
+	    --max-time 10 2>/dev/null || echo 000); \
+	  if [ "$$code" = "000" ]; then \
+	    echo "  SKIP  $$target did not answer (not running?)"; \
+	  elif [ "$$code" = "401" ] || [ "$$code" = "403" ]; then \
+	    echo "  OK    $$target refused with $$code"; \
+	  else \
+	    echo "  FAIL  $$target answered $$code to a request carrying no credential."; \
+	    echo "        An uncredentialed caller must never be served. If you meant to"; \
+	    echo "        run the developer overlay, that is 'make up-dev' and it is not"; \
+	    echo "        safe on a host anyone else can reach."; \
+	    exit 1; \
+	  fi; \
+	done
 
 demo:
 	@echo "Loading synthetic demo data. Every row is tagged is_synthetic=true"

@@ -79,7 +79,7 @@ aisoc db upgrade
 #    which ships a partially-applied schema silently.
 
 # 5. Start the API service back up.
-docker compose -f infra/compose/docker-compose.dev.yml up -d api
+docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d api
 
 # 6. Verify health and remove the maintenance gate.
 curl -fsS http://localhost:8000/healthz
@@ -120,7 +120,7 @@ pnpm install --frozen-lockfile
 # Additive migrations (the common case) are backward compatible, so the previous
 # code runs against the newer schema. If a migration was destructive, restore the
 # snapshot instead — the CHANGELOG flags those as irreversible.
-docker compose -f infra/compose/docker-compose.dev.yml up -d api
+docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up -d api
 ```
 
 Major releases occasionally ship one-way migrations (e.g. column drops). When that's the case, the CHANGELOG flags the migration as "irreversible" and the only rollback is restoring from the database snapshot you took in step 2 of the pre-upgrade checklist.
