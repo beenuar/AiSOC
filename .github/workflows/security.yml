@@ -358,3 +358,128 @@ jobs:
         run: /tmp/tfsec infra/terraform --format json --out tfsec.json --soft-fail
       - name: Ratchet the tfsec finding count
         run: python3 scripts/check_scanner_ratchet.py --tool tfsec --report tfsec.json --tool-version "$TFSEC_VERSION"
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TEMPORARY — proof jobs for the absorbed-failure fix. Never merged; this
+  # block exists only on the throwaway branch `test/absorbed-failure-proof`.
+  #
+  # The injected failure is identical in all four: the scan runs normally and
+  # writes a complete, correct report, and then the step fails. That is the
+  # case the pre-fix shape permits and that neither the Actions API nor any
+  # amount of run history can see — `continue-on-error` rewrites the failed
+  # step's conclusion to `success`, and the ratchet is satisfied because the
+  # report really is complete.
+  #
+  # A-vs-B on one commit, one runner image, one set of registry conditions,
+  # so the only difference between each pair is the guard step.
+  # ══════════════════════════════════════════════════════════════════════════
+
+  control-a-checkov-prefix:
+    name: "[control A] checkov PRE-fix shape — good report, then the step fails"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Exactly the pre-fix shape: install inside the absorbed step, `|| true`,
+      # no `id`, nothing reading the outcome.
+      - name: checkov (terraform + helm)
+        continue-on-error: true
+        run: |
+          pip install --quiet checkov==3.2.334
+          checkov -d infra/terraform -d infra/helm --quiet --compact \
+            -o json --output-file-path . || true
+          echo "INJECTED: the report above is complete and correct; the step now fails."
+          exit 1
+      - name: Ratchet the checkov finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
+
+  control-b-checkov-postfix:
+    name: "[control B] checkov POST-fix shape — good report, then the step fails"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Set up checkov for the control
+        run: pip install --quiet checkov==3.2.334
+      - name: checkov (terraform + helm)
+        id: checkov
+        continue-on-error: true
+        run: |
+          status=0
+          checkov -d infra/terraform -d infra/helm --quiet --compact \
+            -o json --output-file-path . || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "::error title=iac-checkov::checkov exited $status — that is the scan failing to run, not a finding"
+            exit "$status"
+          fi
+          echo "INJECTED: the report above is complete and correct; the step now fails."
+          exit 1
+      - name: The scan itself did not fail
+        if: steps.checkov.outcome == 'failure'
+        run: |
+          echo "::error title=iac-checkov::checkov did not complete, so the count below would describe a partial scan"
+          exit 1
+      - name: Ratchet the checkov finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
+
+  control-c-semgrep-prefix:
+    name: "[control C] semgrep PRE-fix shape — good report, then the step fails"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Set up semgrep for the control
+        run: pip install --quiet semgrep==1.86.0
+      - name: Scan
+        continue-on-error: true
+        run: |
+          semgrep --json --output semgrep.json --disable-version-check \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/python \
+            --config p/typescript \
+            --config p/react \
+            --exclude plans/ \
+            services/ apps/ packages/ scripts/
+          echo "INJECTED: the report above is complete; the step now fails."
+          exit 1
+      - name: Ratchet the finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool semgrep --report semgrep.json
+
+  control-d-semgrep-postfix:
+    name: "[control D] semgrep POST-fix shape — good report, then the step fails"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Set up semgrep for the control
+        run: pip install --quiet semgrep==1.86.0
+      - name: Scan
+        id: scan
+        continue-on-error: true
+        run: |
+          semgrep --json --output semgrep.json --disable-version-check \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/python \
+            --config p/typescript \
+            --config p/react \
+            --exclude plans/ \
+            services/ apps/ packages/ scripts/
+          echo "INJECTED: the report above is complete; the step now fails."
+          exit 1
+      - name: The scan itself did not fail
+        if: steps.scan.outcome == 'failure'
+        run: |
+          echo "::error title=semgrep::semgrep exited non-zero, so the count below would describe a partial run."
+          exit 1
+      - name: Ratchet the finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool semgrep --report semgrep.json
