@@ -24,8 +24,13 @@ finding, and the console suite is 816 tests green with a clean type-check.
 
 Numbers re-derived at the start, to be used instead of the plan's:
 
-- **CORE is 17 compose services**, being those with no `profiles:` key, which
-  is what `make up` starts. 16 if one-shot `ollama-pull` is excluded. See D3.
+- **CORE is 16 compose services**, and the tree already has an authoritative
+  answer: `scripts/check_profile_service_counts.py` reports `core 16, full 22`
+  and validates every published figure against `docker-compose.yml`. 16 counts
+  the long-running services and excludes the one-shot `ollama-pull`, which is
+  the right convention. Parity 1.2 is therefore not "derive the count" but
+  "point the four disagreeing strings at the gate that already derives it".
+  See D3.
 - Claim matrix: **241 rows, 241 GATED, 0 PARTIAL, 0 NO GATE**.
 - `scripts/` holds 183 `.py` files, 84 of them named `check_*.py`.
 - Next migration number: **076**. Next ADR: **0009**.
@@ -64,19 +69,23 @@ against `ROUTER_PREFIX_DEFAULT = "/investigations"`, with a bidirectional
 server-only allowlist. It is a working pattern to widen, not a greenfield
 build. `scripts/check_sdk_surface.py` is SDK-only as the plan says.
 
-### D3. There is no `core` profile, so the CORE count has no single source
+### D3. There is no `core` profile, and the count already has a source
 
 Plan item 1.2 says to "take the real count from `docker compose config` for the
 CORE profile". There is no `core` profile in `docker-compose.yml`, so that
-command cannot answer the question. CORE is the set of services declaring no
-profile, which is 17 of the 32 declared: actions, agents, api, connectors,
-fusion, ingest-worker, kafka, litellm, ollama, ollama-pull, postgres, qdrant,
-realtime, redis, threatintel, web, zookeeper.
+command cannot answer the question — CORE is the set of services declaring no
+profile.
 
-Four places in the tree disagree with each other about it: `install.sh:784`
-says 10 while naming 9 on the next line, `walkthrough.mdx:80` says fifteen,
-`Makefile:157` says fifteen, and `scripts/generate_slo_alerts.py:5` says 17. So
-1.2 needs one derivation the others read from, not four string edits.
+But the derivation the plan asks for already exists.
+`scripts/check_profile_service_counts.py` reports `core 16, full 22`, holds 18
+published figures against the compose file, and refuses any new figure that no
+`CLAIM_SITES` entry validates. It refused one during this batch, correctly: a
+claim-matrix row published a service count that nothing checked.
+
+So 1.2 is not "derive the count". It is "point the four disagreeing strings at
+the gate that already derives it": `install.sh:784` says 10 while naming 9 on
+the next line, `walkthrough.mdx:80` says fifteen, `Makefile:157` says fifteen,
+and `scripts/generate_slo_alerts.py:5` says 17.
 
 ### D4. Three counts in 1.1 and 1.2 are wrong in different directions
 

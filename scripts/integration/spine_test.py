@@ -65,6 +65,19 @@ def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+#: The bearer the API reads and the realtime ticket need. These calls used
+#: to carry no credential at all and succeeded, because an uncredentialed
+#: request resolved to a demo administrator and every documented path
+#: produced one. Minted by `app.scripts.mint_api_token`; the workflow sets it.
+API_TOKEN = os.environ.get("AISOC_API_TOKEN", "").strip()
+
+
+def api_headers() -> dict[str, str]:
+    """Headers for a call to the API. Empty when no token was supplied, so a
+    401 names the missing variable rather than looking like an outage."""
+    return {"Authorization": f"Bearer {API_TOKEN}"} if API_TOKEN else {}
+
+
 def ingest_headers() -> dict[str, str]:
     """Credential plus the tenant the credential is expected to cover.
 
@@ -180,14 +193,14 @@ async def post_detection_event(client: httpx.AsyncClient) -> None:
 
 
 async def count_alerts_titled(client: httpx.AsyncClient, title: str) -> int:
-    r = await client.get(f"{API}/api/v1/alerts", params={"page_size": 200}, timeout=10)
+    r = await client.get(f"{API}/api/v1/alerts", params={"page_size": 200}, headers=api_headers(), timeout=10)
     r.raise_for_status()
     items = r.json().get("items", [])
     return sum(1 for a in items if a.get("title") == title)
 
 
 async def get_alert_titled(client: httpx.AsyncClient, title: str) -> dict | None:
-    r = await client.get(f"{API}/api/v1/alerts", params={"page_size": 200}, timeout=10)
+    r = await client.get(f"{API}/api/v1/alerts", params={"page_size": 200}, headers=api_headers(), timeout=10)
     r.raise_for_status()
     for a in r.json().get("items", []):
         if a.get("title") == title:
@@ -196,7 +209,7 @@ async def get_alert_titled(client: httpx.AsyncClient, title: str) -> dict | None
 
 
 async def mint_ws_ticket(client: httpx.AsyncClient) -> str:
-    r = await client.post(f"{API}/api/v1/realtime/ticket", timeout=10)
+    r = await client.post(f"{API}/api/v1/realtime/ticket", headers=api_headers(), timeout=10)
     r.raise_for_status()
     return r.json()["token"]
 

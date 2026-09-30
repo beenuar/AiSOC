@@ -319,6 +319,23 @@ jobs:
           fi
           echo "confirmed: /v1/ingest refused an unauthenticated push with $code"
 
+      # The spine test reads the API and mints a realtime ticket. Both used
+      # to succeed with no credential, because an uncredentialed request
+      # resolved to a demo administrator and every documented path produced
+      # one. Minted through the shipped command, for the same reason the
+      # ingest token is.
+      - name: Mint the API credential the spine test needs
+        run: |
+          set -euo pipefail
+          docker compose run --rm -T api python -m app.scripts.bootstrap_admin >/dev/null 2>&1 || true
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_api_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_api_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_API_TOKEN=$token" >> "$GITHUB_ENV"
+
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py
 
